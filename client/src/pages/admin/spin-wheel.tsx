@@ -27,6 +27,7 @@ import PrizeConfigScratch, {
 import PrizeConfigInstant, {
   InstantPrizeData,
 } from "@/components/admin/prize-config-instant";
+import { Textarea } from "@/components/ui/textarea";
 
 interface CompetitionFormData {
   title: string;
@@ -140,10 +141,11 @@ function CompetitionForm({
 
         <div>
           <Label>Description</Label>
-          <Input
+          <Textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             placeholder="Competition description"
+            rows={5}
           />
         </div>
 
@@ -524,7 +526,7 @@ export default function AdminSpinWheel() {
                     data-testid={`button-draw-${competition.id}`}
                   >
                     <Trophy className="w-4 h-4" />
-                  </Button>
+                  </Button> */}
                   <Button
                     variant="outline"
                     size="sm"
@@ -533,7 +535,7 @@ export default function AdminSpinWheel() {
                   >
                     <Edit className="w-4 h-4" />
                   </Button>
-                  <Button
+                  {/* <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setDeleteConfirm(competition.id)}

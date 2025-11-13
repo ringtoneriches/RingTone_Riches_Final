@@ -1,9 +1,15 @@
-import { neon } from "@neondatabase/serverless";
+import pkg from 'pg';
+const { Client } = pkg;
 
-// This script seeds the production database with data from development
-// Run this with: DATABASE_URL=<your-production-db-url> tsx scripts/seed-production.ts
+const client = new Client({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false, // Railway requires SSL on some plans
+  }
+});
 
-const sql = neon(process.env.DATABASE_URL!);
+await client.connect();
+
 
 async function seedProduction() {
   console.log("🌱 Starting production database seeding...\n");
@@ -350,24 +356,41 @@ Enter today for just 75p and you could be unboxing your brand-new iPhone 17 Pro 
       }
     ];
 
+       const insertCompetitionQuery = `
+      INSERT INTO competitions (
+        id, title, description, image_url, type, ticket_price, 
+        max_tickets, sold_tickets, prize_data, is_active, 
+        ringtone_points, display_order
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, 
+        $7, $8, $9, $10, 
+        $11, $12
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        title = EXCLUDED.title,
+        description = EXCLUDED.description,
+        image_url = EXCLUDED.image_url,
+        is_active = EXCLUDED.is_active,
+        display_order = EXCLUDED.display_order;
+    `;
+
     for (const comp of competitions) {
-      await sql`
-        INSERT INTO competitions (
-          id, title, description, image_url, type, ticket_price, 
-          max_tickets, sold_tickets, prize_data, is_active, 
-          ringtone_points, display_order
-        ) VALUES (
-          ${comp.id}, ${comp.title}, ${comp.description}, ${comp.image_url}, 
-          ${comp.type}, ${comp.ticket_price}, ${comp.max_tickets}, ${comp.sold_tickets}, 
-          ${comp.prize_data}, ${comp.is_active}, ${comp.ringtone_points}, ${comp.display_order}
-        ) ON CONFLICT (id) DO UPDATE SET
-          title = EXCLUDED.title,
-          description = EXCLUDED.description,
-          image_url = EXCLUDED.image_url,
-          is_active = EXCLUDED.is_active,
-          display_order = EXCLUDED.display_order
-      `;
+      await client.query(insertCompetitionQuery, [
+        comp.id,
+        comp.title,
+        comp.description,
+        comp.image_url,
+        comp.type,
+        comp.ticket_price,
+        comp.max_tickets,
+        comp.sold_tickets,
+        comp.prize_data,
+        comp.is_active,
+        comp.ringtone_points,
+        comp.display_order,
+      ]);
     }
+
     console.log(`✅ Seeded ${competitions.length} competitions\n`);
 
     // Seed Scratch Card Images
@@ -395,34 +418,43 @@ Enter today for just 75p and you could be unboxing your brand-new iPhone 17 Pro 
       { id: "8d295045-574c-47d5-8eac-786e30f3373f", image_name: "Tower of Pisa", image_key: "tower_pisa", reward_type: "try_again", reward_value: 0, weight: 50, max_wins: null, display_order: 19 }
     ];
 
+     const insertScratchQuery = `
+      INSERT INTO scratch_card_images (
+        id, image_name, image_key, reward_type, reward_value, 
+        weight, max_wins, quantity_won, is_active, display_order
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, 0, true, $8
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        image_name = EXCLUDED.image_name,
+        reward_type = EXCLUDED.reward_type,
+        reward_value = EXCLUDED.reward_value,
+        weight = EXCLUDED.weight,
+        display_order = EXCLUDED.display_order;
+    `;
+
     for (const img of scratchImages) {
-      await sql`
-        INSERT INTO scratch_card_images (
-          id, image_name, image_key, reward_type, reward_value, 
-          weight, max_wins, quantity_won, is_active, display_order
-        ) VALUES (
-          ${img.id}, ${img.image_name}, ${img.image_key}, ${img.reward_type}, 
-          ${img.reward_value}, ${img.weight}, ${img.max_wins}, 
-          0, true, ${img.display_order}
-        ) ON CONFLICT (id) DO UPDATE SET
-          image_name = EXCLUDED.image_name,
-          reward_type = EXCLUDED.reward_type,
-          reward_value = EXCLUDED.reward_value,
-          weight = EXCLUDED.weight,
-          display_order = EXCLUDED.display_order
-      `;
+      await client.query(insertScratchQuery, [
+        img.id,
+        img.image_name,
+        img.image_key,
+        img.reward_type,
+        img.reward_value,
+        img.weight,
+        img.max_wins,
+        img.display_order,
+      ]);
     }
+
     console.log(`✅ Seeded ${scratchImages.length} scratch card images\n`);
 
     console.log("✨ Production database seeding completed successfully!");
-    console.log("\n📝 Summary:");
-    console.log(`   - ${competitions.length} competitions created`);
-    console.log(`   - ${scratchImages.length} scratch card images created`);
-    console.log("\n💡 Note: You'll still need to create an admin user via the registration page.");
-    
-  } catch (error) {
-    console.error("❌ Error seeding production database:", error);
-    throw error;
+  } catch (err) {
+    console.error("❌ Error seeding production database:", err);
+    throw err;
+  } finally {
+    await client.end();
   }
 }
 

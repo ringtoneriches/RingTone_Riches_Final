@@ -4,9 +4,9 @@ import { sql } from "drizzle-orm";
 
 export async function autoSeedProduction() {
   // Only run in production
-  if (process.env.NODE_ENV !== "production") {
-    return;
-  }
+  // if (process.env.NODE_ENV !== "production") {
+  //   return;
+  // }
 
   try {
     console.log("🔍 Checking if production database needs seeding...");

@@ -18,12 +18,12 @@ export default function CompetitionCard({ competition, authenticated = false }: 
     ? (competition.soldTickets! / competition.maxTickets) * 100 
     : 0;
 
-  const shortDescription =
-    competition.type === "spin"
-      ? "Spin the wheel to win!"
-      : competition.type === "scratch"
-      ? "Scratch to reveal your prize!"
-      : "Enter the draw to win!";
+   const shortDescription =
+     competition.type === "spin"
+       ? "Rev it. Spin it. Win it! 🏎️ Unlock massive cash & ringtone rewards – WIN UP TO £15,000 INSTANTLY! 💷"
+       : competition.type === "scratch"
+       ? "Scratch your way to legendary wins around the world! 🌍💰-WIN UP TO £5,000 INSTANTLY! 💷"
+       : "";
 
   const isHot = progressPercentage > 60;
   const isAlmostSoldOut = progressPercentage > 85;
