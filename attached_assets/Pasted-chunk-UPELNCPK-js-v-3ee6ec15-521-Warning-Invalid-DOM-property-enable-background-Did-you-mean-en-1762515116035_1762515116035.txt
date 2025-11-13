@@ -1,0 +1,44 @@
+chunk-UPELNCPK.js?v=3ee6ec15:521 Warning: Invalid DOM property `enable-background`. Did you mean `enableBackground`?
+    at svg
+    at span
+    at li
+    at ul
+    at div
+    at div
+    at div
+    at div
+    at footer
+    at Footer
+    at div
+    at Landing (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit.dev/src/pages/landing.tsx:27:50)
+    at Route (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=3ee6ec15:280:16)
+    at Switch (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=3ee6ec15:336:17)
+    at Router (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit.dev/src/App.tsx?v=lj3cI9X71PUKmhGNN-pDN:57:42)
+    at Provider (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…unner/workspace/node_modules/.vite/deps/chunk-W53MJ4E3.js?v=3ee6ec15:44:15)
+    at TooltipProvider (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…kspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=3ee6ec15:154:5)
+    at QueryClientProvider (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…rkspace/node_modules/.vite/deps/@tanstack_react-query.js?v=3ee6ec15:3093:3)
+    at App
+
+chunk-UPELNCPK.js?v=3ee6ec15:521 Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+    at Landing (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit.dev/src/pages/landing.tsx:27:50)
+    at Route (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=3ee6ec15:280:16)
+    at Switch (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=3ee6ec15:336:17)
+    at Router (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit.dev/src/App.tsx?v=lj3cI9X71PUKmhGNN-pDN:57:42)
+    at Provider (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…unner/workspace/node_modules/.vite/deps/chunk-W53MJ4E3.js?v=3ee6ec15:44:15)
+    at TooltipProvider (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…kspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=3ee6ec15:154:5)
+    at QueryClientProvider (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…rkspace/node_modules/.vite/deps/@tanstack_react-query.js?v=3ee6ec15:3093:3)
+    at App
+/api/auth/user:1 
+ Failed to load resource: the server responded with a status of 401 (Unauthorized)
+2
+chunk-UPELNCPK.js?v=3ee6ec15:521 Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+    at Landing (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit.dev/src/pages/landing.tsx:27:50)
+    at Route (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=3ee6ec15:280:16)
+    at Switch (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=3ee6ec15:336:17)
+    at Router (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit.dev/src/App.tsx?v=lj3cI9X71PUKmhGNN-pDN:57:42)
+    at Provider (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…unner/workspace/node_modules/.vite/deps/chunk-W53MJ4E3.js?v=3ee6ec15:44:15)
+    at TooltipProvider (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…kspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=3ee6ec15:154:5)
+    at QueryClientProvider (https://0caf887b-389c-44ae-a5ba-08690d882fc8-00-1s3whwon0s8c3.picard.replit…rkspace/node_modules/.vite/deps/@tanstack_react-query.js?v=3ee6ec15:3093:3)
+    at App
+﻿
+

@@ -1,0 +1,45 @@
+
+Just to confirm what we need doing with The Landmark Loot and The Luxury Car Spin wheel game.
+
+We already have the skill question system in place, which keeps everything compliant and means we’re running skill-based prize competitions, not gambling products.
+
+Now we need to make sure both The Landmark Loot and The Luxury Car Spin are clearly structured and presented as competitions with instant wins, so they’re treated the same as the other Ringtone Riches competitions (gadgets, tax-free cash, etc.).
+
+Here’s what needs doing:
+
+1. Random Ticket Numbers
+	•	Every scratch card or spin purchased should generate a unique random ticket number.
+	•	For example, if a player buys 5 cards or spins, they receive 5 unique ticket numbers.
+	•	Each ticket equals one competition entry for the monthly Landmark Loot £100 Cash Draw or Luxury Car Spin £100 Cash Draw.
+
+2. Order Confirmation Emails (important for compliance)
+	•	Use the Word documents I sent (The Landmark Loot and The Luxury Car Spin) as a guide.
+	•	These emails should act as a competition entry receipt rather than just an order confirmation.
+	•	Each email should include:
+• The skill question and the customer’s answer (we already have this data).
+• Their random ticket number(s) (one per spin or scratch card).
+• The competition name and the draw month (always the end of each month).
+• The £100 monthly cash prize mentioned clearly in the email.
+• Entry fee and payment method placeholders.
+• The Ringtone Riches logo GIF at the top for branding.
+
+The purpose of this is to show that every purchase is a competition entry, proving it’s a skill-based competition and not gambling. When someone buys spins or scratch cards, the confirmation email should clearly show:
+“You’ve entered The Landmark Loot / The Luxury Car Spin competition – £100 monthly cash draw,” along with their skill question, answer, and assigned ticket numbers.
+
+This makes the email a record of competition entry, not just a payment receipt.
+
+3. Competition Draw
+	•	A £100 cash prize will be drawn each month for both The Landmark Loot and The Luxury Car Spin.
+	•	All valid entries (correct skill answers) go into the monthly draw automatically.
+	•	Instant wins from the scratch cards or wheel are separate, but still linked to the same ticket number.
+
+4. Terminology
+	•	Keep wording as “Competition Entry”, “Entry Fee”, and “Prize Draw”.
+	•	Avoid anything that sounds like gambling such as “bet”, “stake”, or “wager”.
+
+In summary:
+	•	Each scratch card or spin equals one competition entry with a random ticket number.
+	•	Instant wins are an additional bonus feature.
+	•	Every valid card or spin also goes into the £100 monthly draw.
+
+This structure ensures that The Landmark Loot and The Luxury Car Spin are fully compliant as skill-based competitions rather than gambling.
