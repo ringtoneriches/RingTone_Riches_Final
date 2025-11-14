@@ -124,11 +124,11 @@ export default function ScratchGamePage() {
       <Header />
 
       {/* Countdown Timer */}
-      {competition?.endDate && (
+      {/* {competition?.endDate && (
         <div className="flex justify-center py-6">
           <CountdownTimer endDate={competition.endDate} />
         </div>
-      )}
+      )} */}
 
       <section className="container mx-auto px-4 py-8 text-center">
         {/* <h1 className="text-4xl font-bold mb-4">

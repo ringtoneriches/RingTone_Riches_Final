@@ -136,11 +136,11 @@ export default function SpinGamePage() {
       <Header />
       <div className="flex flex-col justify-center items-center">
         {/* Countdown Timer */}
-        {competition?.endDate && (
+        {/* {competition?.endDate && (
           <div className="py-6">
             <CountdownTimer endDate={competition.endDate} />
           </div>
-        )}
+        )} */}
       </div>
       <main className="container mx-auto   text-center">
         <SpinWheel 
