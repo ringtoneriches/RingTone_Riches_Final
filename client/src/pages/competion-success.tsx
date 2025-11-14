@@ -36,7 +36,7 @@ export default function CheckoutSuccess() {
 
             const redirectUrl = data.competitionId
               ? `/competition/${data.competitionId}`
-              : "/account";
+              : "/wallet";
             setTimeout(() => setLocation(redirectUrl), 2000);
           } else {
             toast({
@@ -67,7 +67,7 @@ export default function CheckoutSuccess() {
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
 
         // Redirect to account after showing success
-        setTimeout(() => setLocation("/account"), 2500);
+        setTimeout(() => setLocation("/wallet"), 2500);
       }
     };
 

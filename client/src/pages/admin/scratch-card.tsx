@@ -26,7 +26,6 @@ import PrizeConfigScratch, {
 import PrizeConfigInstant, {
   InstantPrizeData,
 } from "@/components/admin/prize-config-instant";
-import { Textarea } from "@/components/ui/textarea";
 
 interface CompetitionFormData {
   title: string;
@@ -36,6 +35,7 @@ interface CompetitionFormData {
   ticketPrice: string;
   maxTickets: string;
   ringtonePoints: string;
+  endDate?: string;
   prizeData?: SpinPrizeData | ScratchPrizeData | InstantPrizeData;
 }
 
@@ -60,8 +60,9 @@ function CompetitionForm({
     imageUrl: data?.imageUrl || "",
     type: fixedType || data?.type || "instant",
     ticketPrice: data?.ticketPrice || "0.99",
-    maxTickets: data?.maxTickets?.toString() || "1000",
+    maxTickets: data?.maxTickets?.toString() || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
+    endDate: data?.endDate ? new Date(data.endDate).toISOString().slice(0, 16) : "",
     prizeData: data?.prizeData as any,
   });
   const [uploading, setUploading] = useState(false);
@@ -140,12 +141,11 @@ function CompetitionForm({
 
         <div>
           <Label>Description</Label>
-           <Textarea
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-          placeholder="Competition description"
-          rows={5}
-        />
+          <Input
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            placeholder="Competition description"
+          />
         </div>
 
         <div>
@@ -188,7 +188,7 @@ function CompetitionForm({
                   alt="Preview"
                   className="h-20 w-20 object-cover rounded border"
                 />
-                  <span className="truncate max-w-xs">{form.imageUrl.split("/").slice(-1)[0]}</span>
+                <span className="truncate">{form.imageUrl}</span>
               </div>
             )}
           </div>
@@ -263,6 +263,21 @@ function CompetitionForm({
             />
           </div>
         </div>
+
+        <div>
+          <Label>Competition End Date & Time (Optional)</Label>
+          <Input
+            type="datetime-local"
+            value={form.endDate || ""}
+            onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+            placeholder="Select end date and time"
+            data-testid="input-endDate"
+            className="text-white"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Leave empty to use the default countdown timer. Set to display a custom countdown on the competition page.
+          </p>
+        </div>
       </TabsContent>
 
       <TabsContent
@@ -331,12 +346,19 @@ export default function AdminScratchCard() {
 
   const createMutation = useMutation({
     mutationFn: async (formData: CompetitionFormData) => {
-      const res = await apiRequest("/api/admin/competitions", "POST", {
+      const payload: any = {
         ...formData,
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
         maxTickets: parseInt(formData.maxTickets),
         ringtonePoints: parseInt(formData.ringtonePoints),
-      });
+      };
+      
+      // Convert datetime-local to ISO timestamp if provided
+      if (formData.endDate) {
+        payload.endDate = new Date(formData.endDate).toISOString();
+      }
+      
+      const res = await apiRequest("/api/admin/competitions", "POST", payload);
       return res.json();
     },
     onSuccess: () => {
@@ -362,12 +384,19 @@ export default function AdminScratchCard() {
       id: string;
       data: CompetitionFormData;
     }) => {
-      const res = await apiRequest(`/api/admin/competitions/${id}`, "PUT", {
+      const payload: any = {
         ...data,
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
         maxTickets: parseInt(data.maxTickets),
         ringtonePoints: parseInt(data.ringtonePoints),
-      });
+      };
+      
+      // Convert datetime-local to ISO timestamp if provided
+      if (data.endDate) {
+        payload.endDate = new Date(data.endDate).toISOString();
+      }
+      
+      const res = await apiRequest(`/api/admin/competitions/${id}`, "PUT", payload);
       return res.json();
     },
     onSuccess: () => {
@@ -399,6 +428,26 @@ export default function AdminScratchCard() {
     onError: (error: any) => {
       toast({
         title: "Failed to delete competition",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateDisplayOrderMutation = useMutation({
+    mutationFn: async ({ id, displayOrder }: { id: string; displayOrder: number }) => {
+      const res = await apiRequest(`/api/admin/competitions/${id}/display-order`, "PATCH", {
+        displayOrder,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions"] });
+      toast({ title: "Display order updated successfully" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update display order",
         description: error.message,
         variant: "destructive",
       });
@@ -500,6 +549,41 @@ export default function AdminScratchCard() {
                           {competition.isActive ? "Active" : "Inactive"}
                         </span>
                       </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-muted-foreground">Display Order: </span>
+                      <Input
+                        type="number"
+                        min="0"
+                        defaultValue={competition.displayOrder ?? 999}
+                        onBlur={(e) => {
+                          const parsedValue = parseInt(e.target.value);
+                          const newOrder = isNaN(parsedValue) ? 999 : parsedValue;
+                          const currentOrder = competition.displayOrder ?? 999;
+                          if (newOrder !== currentOrder) {
+                            updateDisplayOrderMutation.mutate({
+                              id: competition.id,
+                              displayOrder: newOrder,
+                            });
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const parsedValue = parseInt((e.target as HTMLInputElement).value);
+                            const newOrder = isNaN(parsedValue) ? 999 : parsedValue;
+                            const currentOrder = competition.displayOrder ?? 999;
+                            if (newOrder !== currentOrder) {
+                              updateDisplayOrderMutation.mutate({
+                                id: competition.id,
+                                displayOrder: newOrder,
+                              });
+                            }
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        className="w-24"
+                        data-testid={`input-display-order-${competition.id}`}
+                      />
                     </div>
                   </div>
                 </div>

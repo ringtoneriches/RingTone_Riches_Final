@@ -110,6 +110,7 @@ export default function ScratchCardTest({ onScratchComplete, mode = "tight", scr
   const rafRef = useRef<number | null>(null);
   const scratchSoundRef = useRef<HTMLAudioElement | null>(null);
 const hasCompletedRef = useRef(false);
+  const imagesLockedRef = useRef(false); // 🔒 Lock images when scratching starts
   const [revealed, setRevealed] = useState(false);
   const [percentScratched, setPercentScratched] = useState(0);
   const [sessionKey, setSessionKey] = useState(0); // 👈 for reset
@@ -196,10 +197,11 @@ const hasCompletedRef = useRef(false);
 
   // Setup new scratch card session (visual only - result comes from server)
   useEffect(() => {
-    // Generate random images for display - will be updated with result after scratching
+    // Generate random images for display - will be locked once scratching starts
     const randomImages = getRandomImages(6);
     setImages(randomImages);
     setIsWinner(false);
+    imagesLockedRef.current = false; // 🔓 Reset lock for new session
     initCanvas();
   }, [sessionKey]);
 
@@ -285,6 +287,11 @@ const hasCompletedRef = useRef(false);
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     
+    // 🔒 Lock images on first scratch (prevents changes DURING scratching)
+    if (!imagesLockedRef.current) {
+      imagesLockedRef.current = true;
+    }
+    
     // Make brush size responsive based on canvas size
     const brush = Math.max(15, canvas.clientWidth * 0.09);
     
@@ -344,8 +351,11 @@ const hasCompletedRef = useRef(false);
         const result = await response.json();
         const prizeWon = result.prize || { type: "none", value: "Lose" };
         
-        // Update images to show win/loss FIRST, before clearing overlay
-        if (prizeWon.type !== "none") {
+        // ✅ SERVER CONTROLS DISPLAY: Update images based on server result BEFORE clearing overlay
+        // This prevents visual changes - overlay is still on when we update images
+        // When overlay clears, user sees the pattern matching the server's decision
+        if (prizeWon.type !== "none" && prizeWon.value !== "Lose") {
+          // Winner: Show matching pattern (3 same images)
           const chosen = landmarkImages[Math.floor(Math.random() * landmarkImages.length)];
           const winIndices = [0, 1, 4];
           const winningImages = getRandomImages(6);
@@ -353,6 +363,25 @@ const hasCompletedRef = useRef(false);
           setImages(winningImages);
           setIsWinner(true);
         } else {
+          // Loser: Ensure no 3 matching images
+          const randomImages = getRandomImages(6);
+          // Make sure positions 0, 1, 4 don't have matching images
+          const usedNames = new Set();
+          const finalImages = randomImages.map((img, idx) => {
+            if ([0, 1, 4].includes(idx)) {
+              // Ensure these positions are all different
+              let candidate = img;
+              while (usedNames.has(candidate.name)) {
+                const alternatives = landmarkImages.filter(l => !usedNames.has(l.name));
+                if (alternatives.length === 0) break;
+                candidate = alternatives[Math.floor(Math.random() * alternatives.length)];
+              }
+              usedNames.add(candidate.name);
+              return candidate;
+            }
+            return img;
+          });
+          setImages(finalImages);
           setIsWinner(false);
         }
         
@@ -374,7 +403,8 @@ const hasCompletedRef = useRef(false);
           return updated;
         });
 
-        // Clear overlay on success
+        // Small delay to ensure images update, then clear overlay
+        await new Promise(resolve => setTimeout(resolve, 100));
         clearOverlayInstant();
 
         // Auto-reset after short delay (only on success)

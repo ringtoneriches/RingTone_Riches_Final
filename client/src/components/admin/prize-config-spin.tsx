@@ -108,30 +108,49 @@ export default function PrizeConfigSpin({
     0
   );
 
-  const isValid = totalProbability === 100;
+  // Match backend validation: allow 0.01% tolerance
+  const isValid = Math.abs(totalProbability - 100) < 0.01;
+  const probabilityDiff = totalProbability - 100;
 
   const handleSave = () => {
     if (!isValid) {
       toast({
         title: "Invalid Configuration",
-        description: "Total probability must equal 100%",
+        description: `Total probability must equal 100%. Current total: ${totalProbability.toFixed(2)}%. ${
+          probabilityDiff > 0 
+            ? `Remove ${probabilityDiff.toFixed(2)}%` 
+            : `Add ${Math.abs(probabilityDiff).toFixed(2)}%`
+        }`,
         variant: "destructive",
       });
       return;
     }
 
-    onSave({
-      type: "spin",
-      maxSpinsPerUser: maxSpinsPerUser ? parseInt(maxSpinsPerUser) : null,
-      segments: segments.map((seg) => ({
+    // Convert segments with precise probability parsing
+    const processedSegments = segments.map((seg) => {
+      // Parse probability with high precision to avoid floating point errors
+      const prob = parseFloat(Number(seg.probability).toFixed(2));
+      
+      return {
         ...seg,
         rewardValue:
           seg.rewardType === "cash" || seg.rewardType === "points"
             ? Number(seg.rewardValue)
             : seg.rewardValue,
-        probability: Number(seg.probability),
+        probability: prob,
         maxWins: seg.maxWins !== null ? Number(seg.maxWins) : null,
-      })),
+      };
+    });
+
+    // Verify total again before sending
+    const finalTotal = processedSegments.reduce((sum, seg) => sum + seg.probability, 0);
+    console.log('Saving with segments:', processedSegments);
+    console.log('Final total before save:', finalTotal);
+
+    onSave({
+      type: "spin",
+      maxSpinsPerUser: maxSpinsPerUser ? parseInt(maxSpinsPerUser) : null,
+      segments: processedSegments,
     });
   };
 
@@ -261,16 +280,34 @@ export default function PrizeConfigSpin({
           ))}
 
           <div
-            className={`flex items-center gap-2 p-3 rounded-lg ${
+            className={`p-4 rounded-lg border-2 ${
               isValid
-                ? "bg-green-500/10 text-green-500"
-                : "bg-red-500/10 text-red-500"
+                ? "bg-green-500/10 text-green-600 border-green-500"
+                : probabilityDiff > 0
+                ? "bg-yellow-500/10 text-yellow-600 border-yellow-500"
+                : "bg-red-500/10 text-red-600 border-red-500"
             }`}
           >
-            <AlertCircle className="w-5 h-5" />
-            <span className="text-sm font-medium">
-              Total Probability: {totalProbability}% {isValid ? "✓" : "- Must equal 100%"}
-            </span>
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle className="w-6 h-6" />
+              <span className="text-lg font-bold">
+                Total: {totalProbability.toFixed(2)}%
+              </span>
+            </div>
+            {!isValid && (
+              <div className="text-sm font-medium ml-8">
+                {probabilityDiff > 0 ? (
+                  <>❌ Too high! Remove <strong>{Math.abs(probabilityDiff).toFixed(2)}%</strong></>
+                ) : (
+                  <>❌ Too low! Add <strong>{Math.abs(probabilityDiff).toFixed(2)}%</strong> more</>
+                )}
+              </div>
+            )}
+            {isValid && (
+              <div className="text-sm font-medium ml-8">
+                ✓ Perfect! Ready to save
+              </div>
+            )}
           </div>
         </div>
       </div>

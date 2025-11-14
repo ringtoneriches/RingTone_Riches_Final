@@ -82,10 +82,18 @@ const BeAware = () => {
               <li><strong>Account Closure:</strong> If you feel a longer break is needed, you can ask for your account to be permanently closed.</li>
             </ul>
             <p className="mt-4">
-              Your well-being always comes first at <span className="font-semibold">Ringtone Riches</span>.
-              If you ever feel your participation is getting out of hand, please reach out — we are here to help you stay in control and keep things fun.
-              Remember, competitions should always be an enjoyable form of entertainment, not a source of stress.
-              Play smart, stay aware, and enjoy the thrill of Ringtone Riches responsibly.
+             Your well-being always comes first at Ringtone Riches. If you ever feel your participation is getting out of hand, please reach out — we are here to help you stay in control and keep things fun. Remember, competitions should always be an enjoyable form of entertainment, not a source of stress.
+            </p>
+          </section>
+
+          
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold mb-3 text-primary">Independent Support</h2>
+            <p className="mb-4">
+              If you ever need independent help, advice, or someone to talk to, you can contact: 
+            </p>
+            <p className="mb-4">
+              BeGambleAware.org or call 0808 8020 133 (UK, freephone and confidential).
             </p>
           </section>
         </div>

@@ -85,7 +85,7 @@ export interface IStorage {
   getUserTransactions(userId: string): Promise<Transaction[]>;
   
   // Winner operations
-  getRecentWinners(limit: number): Promise<Winner[]>;
+  getRecentWinners(limit: number, showcaseOnly?: boolean): Promise<Winner[]>;
   getWinner(id: string): Promise<Winner | undefined>;
   createWinner(winner: Omit<Winner, 'id' | 'createdAt'>): Promise<Winner>;
   updateWinner(id: string, data: Partial<Omit<Winner, 'id' | 'createdAt'>>): Promise<Winner>;
@@ -404,14 +404,20 @@ async getUserRingtonePoints(userId: string): Promise<number> {
   }
 
   // Winner operations
-  async getRecentWinners(limit: number): Promise<any[]> {
-  return await db
+  async getRecentWinners(limit: number, showcaseOnly: boolean = false): Promise<any[]> {
+  const query = db
     .select()
     .from(winners)
     .leftJoin(users, eq(winners.userId, users.id))
     .leftJoin(competitions, eq(winners.competitionId, competitions.id))
     .orderBy(desc(winners.createdAt))
     .limit(limit);
+  
+  if (showcaseOnly) {
+    return await query.where(eq(winners.isShowcase, true));
+  }
+  
+  return await query;
 }
 
 async getWinner(id: string): Promise<Winner | undefined> {

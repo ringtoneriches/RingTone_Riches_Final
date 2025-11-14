@@ -1,6 +1,6 @@
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery } from "@tanstack/react-query";
-import { TrendingUp, Users, Trophy, DollarSign, Settings, BarChart3, Sparkles } from "lucide-react";
+import { TrendingUp, Users, Trophy, DollarSign, Settings, BarChart3, Sparkles, PoundSterling } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
           <StatCard
             title="Total Revenue"
             value={`£${parseFloat(data?.stats.totalRevenue?.toString() || "0").toFixed(2)}`}
-            icon={DollarSign}
+            icon={PoundSterling }
             color="bg-green-600"
             gradient="from-green-500 to-green-700"
             delay={300}

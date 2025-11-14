@@ -78,6 +78,7 @@ export default function CompetitionPage() {
     enabled: !!id,
   });
 
+  console.log("✅ Competition data:", competition);
   const { data: userTickets = [] } = useQuery<any[]>({
     queryKey: ["/api/user/tickets"],
     enabled: isAuthenticated,
@@ -280,9 +281,15 @@ const purchaseTicketMutation = useMutation({
     }
   };
 
-  const scrollToRange = () => {
-    rangeRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+ const scrollToRange = () => {
+  if (!rangeRef.current) return;
+
+  const top =
+    rangeRef.current.getBoundingClientRect().top + window.scrollY - 180;
+
+  window.scrollTo({ top, behavior: "smooth" });
+};
+
 
   // Type-specific gradient styles - GOLD BASE with type accents
   const getGradientStyles = () => {
@@ -541,11 +548,13 @@ const purchaseTicketMutation = useMutation({
                     <div className="absolute inset-0 bg-gradient-to-br from-[#facc15]/5 via-[#f59e0b]/5 to-[#d97706]/5"></div>
                     
                     <div className="relative z-10">
-                      {competition.type !== "spin" && competition.type !== "scratch" && (
+                      
                         <div className="mb-5">
-                          <CountdownTimer />
+                          <CountdownTimer 
+                            endDate={competition.endDate}
+                          />
                         </div>
-                      )}
+                      
                       
                       {/* PREMIUM Eye-Catching Title - Mobile Optimized */}
                       <div className="relative mb-4 md:mb-5">
@@ -715,7 +724,7 @@ const purchaseTicketMutation = useMutation({
 
 
       {/* 🎯 PREMIUM Entry Selector with Gold Theme */}
-<section ref={rangeRef} className="py-6 md:py-8 relative overflow-hidden">
+<section  className="py-6 md:py-8 relative overflow-hidden">
   {/* Enhanced Gold Background */}
   <div className="absolute inset-0 bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A]">
     {/* Gold Glow Orbs */}
@@ -730,7 +739,11 @@ const purchaseTicketMutation = useMutation({
     <div className="absolute top-1/2 right-1/3 w-1 h-1 bg-[#facc15] rounded-full animate-sparkle-float" style={{animationDelay: "2.2s"}}></div>
   </div>
 
-  <div className="container mx-auto px-3 md:px-4 text-center max-w-3xl relative z-10">
+  <div
+  ref={rangeRef}
+  className="container mx-auto px-3 md:px-4 text-center max-w-3xl relative z-10 "
+>
+
     {/* Compact Header with Gradient Text - Brand Colors */}
     <h2 className="text-xl md:text-2xl font-bold mb-2 md:mb-3 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] bg-clip-text text-transparent break-words leading-tight" style={{ wordBreak: "break-word" }}>
       ⚡ Select Your Entries

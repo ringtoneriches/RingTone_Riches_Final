@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, act } from "react";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import CompetitionCard from "@/components/competition-card";
@@ -132,7 +132,14 @@ export default function Home() {
                   </span>
                 </h2>
                 <p className="text-muted-foreground text-sm md:text-lg font-semibold">
-                  {filteredCompetitions.length} amazing prizes waiting for you!
+                  {
+    activeFilter === "all"
+      ? `${filteredCompetitions.length} amazing prizes waiting for you!`
+      : 
+      `Huge cash prizes waiting for you!`
+      
+  }
+                 
                 </p>
               </div>
 

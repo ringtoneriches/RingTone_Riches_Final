@@ -6,6 +6,7 @@ import { Edit, Trash2, Search, AlertTriangle, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   Dialog,
   DialogContent,
@@ -47,7 +48,7 @@ type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
 export default function AdminUsers() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth() as { user: User | null };
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
@@ -94,14 +95,13 @@ export default function AdminUsers() {
     return { dateFrom, dateTo };
   }, [dateFilter, customDateFrom, customDateTo]);
 
-  // Structured query key for proper cache invalidation
-  const { data: users, isLoading } = useQuery<User[]>({
-    queryKey: ["/api/admin/users", { dateFrom, dateTo, search: searchTerm }],
+  // Fetch users (only date filtering on backend)
+  const { data: allUsers, isLoading } = useQuery<User[]>({
+    queryKey: ["/api/admin/users", { dateFrom, dateTo }],
     queryFn: async () => {
       const queryParams = new URLSearchParams();
       if (dateFrom) queryParams.append("dateFrom", dateFrom);
       if (dateTo) queryParams.append("dateTo", dateTo);
-      if (searchTerm) queryParams.append("search", searchTerm);
       
       const url = queryParams.toString() 
         ? `/api/admin/users?${queryParams.toString()}`
@@ -112,6 +112,24 @@ export default function AdminUsers() {
       return res.json();
     },
   });
+
+  // Client-side filtering for instant search (no reload)
+  const users = useMemo(() => {
+    if (!allUsers) return [];
+    
+    if (!searchInput.trim()) return allUsers;
+    
+    const searchLower = searchInput.toLowerCase().trim();
+    return allUsers.filter((user) => {
+      const fullName = `${user.firstName || ""} ${user.lastName || ""}`.toLowerCase().trim();
+      const email = user.email?.toLowerCase() || "";
+      
+      return (
+        fullName.includes(searchLower) ||
+        email.includes(searchLower)
+      );
+    });
+  }, [allUsers, searchInput]);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
@@ -344,8 +362,8 @@ export default function AdminUsers() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
           <Input
             placeholder="Search users by email or name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="pl-10"
             data-testid="input-search-users"
           />

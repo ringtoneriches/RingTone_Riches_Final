@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { Download, Filter, Search, Ticket, Trash2, Calendar } from "lucide-react";
+import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -55,7 +56,7 @@ type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
 
 export default function AdminEntriesPage() {
   const { toast } = useToast();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [competitionFilter, setCompetitionFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customDateFrom, setCustomDateFrom] = useState("");
@@ -92,14 +93,13 @@ export default function AdminEntriesPage() {
     return { dateFrom, dateTo };
   }, [dateFilter, customDateFrom, customDateTo]);
 
-  // Structured query key for proper cache invalidation
+  // Fetch entries (only date filtering on backend)
   const { data: entries = [], isLoading } = useQuery<Entry[]>({
-    queryKey: ["/api/admin/entries", { dateFrom, dateTo, search: searchQuery }],
+    queryKey: ["/api/admin/entries", { dateFrom, dateTo }],
     queryFn: async () => {
       const queryParams = new URLSearchParams();
       if (dateFrom) queryParams.append("dateFrom", dateFrom);
       if (dateTo) queryParams.append("dateTo", dateTo);
-      if (searchQuery) queryParams.append("search", searchQuery);
       
       const url = queryParams.toString() 
         ? `/api/admin/entries?${queryParams.toString()}`
@@ -149,13 +149,35 @@ export default function AdminEntriesPage() {
     ).values()
   );
 
-  // Filter entries based on competition filter (backend handles search and date filtering)
-  const filteredEntries = entries.filter((entry) => {
-    if (!entry.user || !entry.competition) return false;
-    const matchesCompetition =
-      competitionFilter === "all" || entry.competition.id === competitionFilter;
-    return matchesCompetition;
-  });
+  // Client-side filtering for instant search (no reload)
+  const filteredEntries = useMemo(() => {
+    return entries.filter((entry) => {
+      if (!entry.user || !entry.competition) return false;
+      
+      // Competition filter
+      const matchesCompetition =
+        competitionFilter === "all" || entry.competition.id === competitionFilter;
+      if (!matchesCompetition) return false;
+      
+      // Search filter (instant, client-side)
+      if (searchInput.trim()) {
+        const searchLower = searchInput.toLowerCase().trim();
+        const ticketNumber = entry.ticketNumber?.toLowerCase() || "";
+        const userName = `${entry.user.firstName || ""} ${entry.user.lastName || ""}`.toLowerCase().trim();
+        const email = entry.user.email?.toLowerCase() || "";
+        const competitionTitle = entry.competition.title?.toLowerCase() || "";
+        
+        return (
+          ticketNumber.includes(searchLower) ||
+          userName.includes(searchLower) ||
+          email.includes(searchLower) ||
+          competitionTitle.includes(searchLower)
+        );
+      }
+      
+      return true;
+    });
+  }, [entries, competitionFilter, searchInput]);
 
   const handleDeleteEntry = (entryId: string) => {
     setEntryToDelete(entryId);
@@ -302,8 +324,8 @@ export default function AdminEntriesPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
             placeholder="Search by ticket number, user name, or email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="pl-10"
             data-testid="input-search-entries"
           />
@@ -391,7 +413,7 @@ export default function AdminEntriesPage() {
                   <TableCell>
                     {entry.competition ? (
                       <span className="capitalize px-2 py-1 text-xs rounded-full bg-primary/10 text-primary">
-                        {entry.competition.type === "instant" ? "Competition" : entry.competition.type}
+                        {entry.competition.type}
                       </span>
                     ) : (
                       <span className="text-muted-foreground text-xs">-</span>

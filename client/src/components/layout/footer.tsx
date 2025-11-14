@@ -131,18 +131,18 @@ export default function Footer() {
                 Competitions
               </a>
               <a
-                href="/be-aware"
-                className="block text-muted-foreground hover:text-primary transition-colors"
-                data-testid="link-be-aware"
-              >
-                Be Aware
-              </a>
-              <a
                 href="/play-responsible"
                 className="block text-muted-foreground hover:text-primary transition-colors"
                 data-testid="link-how-to-play"
               >
                 How to Play
+              </a>
+              <a
+                href="/be-aware"
+                className="block text-muted-foreground hover:text-primary transition-colors"
+                data-testid="link-be-aware"
+              >
+                Be Aware
               </a>
             </div>
           </div>

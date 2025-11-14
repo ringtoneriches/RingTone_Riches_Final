@@ -45,6 +45,7 @@ import AdminSettings from "./pages/admin/settings";
 import AdminWithdrawals from "./pages/admin/withdrawals";
 import AdminEntries from "./pages/admin/entries";
 import AdminPastWinners from "./pages/admin/past-winners";
+import ScrollToTop from "./lib/ScrollToTop ";
 
 
 function HomePage() {
@@ -116,6 +117,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
+        <ScrollToTop />
         <Router />
       </TooltipProvider>
     </QueryClientProvider>

@@ -67,6 +67,7 @@ export const competitions = pgTable("competitions", {
   isActive: boolean("is_active").default(true),
   ringtonePoints: integer("ringtone_points").default(0),
   displayOrder: integer("display_order").default(999), // Lower numbers appear first
+  endDate: timestamp("end_date"), // Optional countdown timer end date
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -138,6 +139,7 @@ export const winners = pgTable("winners", {
   prizeDescription: text("prize_description").notNull(),
   prizeValue: text("prize_value").notNull(),
   imageUrl: text("image_url"),
+  isShowcase: boolean("is_showcase").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

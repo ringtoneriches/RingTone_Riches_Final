@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Search, Trash2, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,7 +38,7 @@ type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
 
 export default function AdminOrders() {
   const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
@@ -73,14 +74,13 @@ export default function AdminOrders() {
     return { dateFrom, dateTo };
   }, [dateFilter, customDateFrom, customDateTo]);
 
-  // Structured query key for proper cache invalidation
-  const { data: orders, isLoading } = useQuery<Order[]>({
-    queryKey: ["/api/admin/orders", { dateFrom, dateTo, search: searchTerm }],
+  // Fetch orders (only date filtering on backend)
+  const { data: allOrders, isLoading } = useQuery<Order[]>({
+    queryKey: ["/api/admin/orders", { dateFrom, dateTo }],
     queryFn: async () => {
       const queryParams = new URLSearchParams();
       if (dateFrom) queryParams.append("dateFrom", dateFrom);
       if (dateTo) queryParams.append("dateTo", dateTo);
-      if (searchTerm) queryParams.append("search", searchTerm);
       
       const url = queryParams.toString() 
         ? `/api/admin/orders?${queryParams.toString()}`
@@ -91,6 +91,28 @@ export default function AdminOrders() {
       return res.json();
     },
   });
+
+  // Client-side filtering for instant search (no reload)
+  const orders = useMemo(() => {
+    if (!allOrders) return [];
+    
+    if (!searchInput.trim()) return allOrders;
+    
+    const searchLower = searchInput.toLowerCase().trim();
+    return allOrders.filter((order) => {
+      const fullName = `${order.user.firstName || ""} ${order.user.lastName || ""}`.toLowerCase().trim();
+      const email = order.user.email?.toLowerCase() || "";
+      const competition = order.competition?.toLowerCase() || "";
+      const orderId = order.id?.toLowerCase() || "";
+      
+      return (
+        fullName.includes(searchLower) ||
+        email.includes(searchLower) ||
+        competition.includes(searchLower) ||
+        orderId.includes(searchLower)
+      );
+    });
+  }, [allOrders, searchInput]);
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -248,8 +270,8 @@ export default function AdminOrders() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
           <Input
             placeholder="Search orders by user email or competition..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="pl-10"
             data-testid="input-search-orders"
           />

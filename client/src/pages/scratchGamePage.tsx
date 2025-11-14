@@ -9,6 +9,7 @@ import { PrizeModal } from "@/components/games/prize-modal";
 import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
+import CountdownTimer from "@/pages/countdownTimer";
 
 export default function ScratchGamePage() {
   const { competitionId, orderId } = useParams();
@@ -121,6 +122,13 @@ export default function ScratchGamePage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
+
+      {/* Countdown Timer */}
+      {competition?.endDate && (
+        <div className="flex justify-center py-6">
+          <CountdownTimer endDate={competition.endDate} />
+        </div>
+      )}
 
       <section className="container mx-auto px-4 py-8 text-center">
         {/* <h1 className="text-4xl font-bold mb-4">

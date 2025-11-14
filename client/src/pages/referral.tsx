@@ -171,7 +171,7 @@ export default function Referral() {
                 <li>• Share your unique referral link with friends</li>
                 <li>• They sign up using your link and make their first entry</li>
                 <li>• You earn £5 bonus credit when they complete their first competition entry</li>
-                <li>• Your friend gets 100 Ringtune Points as a welcome bonus</li>
+                <li>• Your friend gets 100 Ringtone Points as a welcome bonus</li>
                 <li>• Unlimited referrals - the more friends, the more you earn!</li>
               </ul>
             </div>

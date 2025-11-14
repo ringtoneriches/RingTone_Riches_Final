@@ -29,6 +29,7 @@ interface CompetitionFormData {
   ticketPrice: string;
   maxTickets: string;
   ringtonePoints: string;
+  endDate?: string;
   prizeData?: SpinPrizeData | ScratchPrizeData | InstantPrizeData;
 }
 
@@ -55,6 +56,7 @@ function CompetitionForm({
     ticketPrice: data?.ticketPrice || "0.99",
     maxTickets: data?.maxTickets?.toString() || "1000",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
+    endDate: data?.endDate ? new Date(data.endDate).toISOString().slice(0, 16) : "",
     prizeData: data?.prizeData as any,
   });
   const [uploading, setUploading] = useState(false);
@@ -178,7 +180,7 @@ function CompetitionForm({
                 alt="Preview" 
                 className="h-20 w-20 object-cover rounded border"
               />
-                <span className="truncate max-w-xs">{form.imageUrl.split("/").slice(-1)[0]}</span>
+              <span className="truncate">{form.imageUrl}</span>
             </div>
           )}
         </div>
@@ -242,6 +244,20 @@ function CompetitionForm({
             />
           </div>
         </div>
+
+        <div>
+          <Label>Competition End Date & Time (Optional)</Label>
+          <Input
+            type="datetime-local"
+            value={form.endDate || ""}
+            onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+            placeholder="Select end date and time"
+            data-testid="input-endDate"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Leave empty to use the default countdown timer. Set to display a custom countdown on the competition page.
+          </p>
+        </div>
       </TabsContent>
 
       <TabsContent value="prizes" className="mt-4 max-h-[60vh] sm:max-h-[60vh] overflow-y-auto pr-1 sm:pr-2">
@@ -295,12 +311,19 @@ export default function AdminCompetitions() {
 
   const createMutation = useMutation({
     mutationFn: async (formData: CompetitionFormData) => {
-      const res = await apiRequest("/api/admin/competitions", "POST", {
+      const payload: any = {
         ...formData,
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
         maxTickets: parseInt(formData.maxTickets),
         ringtonePoints: parseInt(formData.ringtonePoints),
-      });
+      };
+      
+      // Convert datetime-local to ISO timestamp if provided
+      if (formData.endDate) {
+        payload.endDate = new Date(formData.endDate).toISOString();
+      }
+      
+      const res = await apiRequest("/api/admin/competitions", "POST", payload);
       return res.json();
     },
     onSuccess: () => {
@@ -326,12 +349,19 @@ export default function AdminCompetitions() {
       id: string;
       data: CompetitionFormData;
     }) => {
-      const res = await apiRequest(`/api/admin/competitions/${id}`, "PUT", {
+      const payload: any = {
         ...data,
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
         maxTickets: parseInt(data.maxTickets),
         ringtonePoints: parseInt(data.ringtonePoints),
-      });
+      };
+      
+      // Convert datetime-local to ISO timestamp if provided
+      if (data.endDate) {
+        payload.endDate = new Date(data.endDate).toISOString();
+      }
+      
+      const res = await apiRequest(`/api/admin/competitions/${id}`, "PUT", payload);
       return res.json();
     },
     onSuccess: () => {
@@ -446,7 +476,7 @@ export default function AdminCompetitions() {
                             : "bg-primary/20 text-primary"
                         }`}
                       >
-                        {/* {competition.type.toUpperCase()} */}
+                        {competition.type === "instant" && "Competition"}
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">

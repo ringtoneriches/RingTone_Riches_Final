@@ -16,26 +16,25 @@ import prize1 from "../../../../attached_assets/Car/astonmartin.png";
 import prize2 from "../../../../attached_assets/Car/audi.png";
 import prize3 from "../../../../attached_assets/Car/bentley.png";
 import prize4 from "../../../../attached_assets/Car/bmw.png";
-import prize5 from "../../../../attached_assets/Car/ferrari-emblem-1.svg";
+import prize5 from "../../../../attached_assets/Car/ferrari-emblem-1.png";
 import prize6 from "../../../../attached_assets/Car/ford.png";
 import prize7 from "../../../../attached_assets/Car/honda.png";
 import prize8 from "../../../../attached_assets/Car/jaguar.png";
 import prize9 from "../../../../attached_assets/Car/lamborghini.png";
 import prize10 from "../../../../attached_assets/Car/landrover.png";
 import prize11 from "../../../../attached_assets/Car/lexus.png";
-import prize12 from "../../../../attached_assets/spin/MercedesBenz.svg";
+import prize12 from "../../../../attached_assets/Car/maercedes.png";
 import prize13 from "../../../../attached_assets/Car/maserati.png";
 import prize14 from "../../../../attached_assets/Car/mclaren.png";
 import prize15 from "../../../../attached_assets/Car/mini.png";
-import prize16 from "../../../../attached_assets/spin/Nissan.svg";
+import prize16 from "../../../../attached_assets/Car/nissan.png";
 import prize17 from "../../../../attached_assets/Car/porsche.png";
 import prize18 from "../../../../attached_assets/Car/Rolls-Royce_Motors-Logo.wine.png";
 import prize19 from "../../../../attached_assets/Car/toyota.png";
 import prize20 from "../../../../attached_assets/Car/wv.png";
 
 import pointer from "../../../../attached_assets/pointer.png";
-
-
+import ring from "../../../../attached_assets/ring.png";
 
 // Icon mapping for admin configuration - uses car PNG images
 const ICON_MAP: Record<string, any> = {
@@ -236,79 +235,96 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     }
   }, [spinHistory, orderId]);
 
-  // Load all images - convert icon paths from admin config with progressive loading
+  // ✅ ROBUST IMAGE PRELOAD - Wait for actual completion, trigger redraws on late loads
   useEffect(() => {
     if (segments.length === 0) return;
 
-    // Reset state when segments change to prevent stale images
     setLoadedImages([]);
     setAllImagesLoaded(false);
 
-    // Initialize with empty images array
+    let isMounted = true;
     const imagesArray: HTMLImageElement[] = new Array(segments.length);
     let loadedCount = 0;
-    let isMounted = true;
-    let updateTimer: NodeJS.Timeout | null = null;
-    
-    // Debounced update to prevent excessive re-renders while still showing progress
-    const scheduleUpdate = () => {
-      if (updateTimer) clearTimeout(updateTimer);
-      updateTimer = setTimeout(() => {
-        if (isMounted) {
-          setLoadedImages([...imagesArray]);
-          if (loadedCount === segments.length) {
-            setAllImagesLoaded(true);
-          }
+
+    // Create array of promises for parallel image loading
+    const imageLoadPromises = segments.map((segment, index) => {
+      return new Promise<void>((resolve, reject) => {
+        // Handle cross/lose segments immediately
+        if (segment.isCross || segment.icon === "❌") {
+          imagesArray[index] = new Image();
+          loadedCount++;
+          resolve();
+          return;
         }
-      }, 50); // 50ms debounce prevents flicker but still feels responsive
-    };
-    
-    segments.forEach((segment, index) => {
-      if (segment.isCross || segment.icon === "❌") {
-        // For cross segments, create empty image
+
         const img = new Image();
-        imagesArray[index] = img;
-        loadedCount++;
-        scheduleUpdate();
-        return;
-      }
-
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      
-      // Timeout fallback - resolve after 2 seconds even if not loaded
-      const timeout = setTimeout(() => {
-        if (!imagesArray[index] && isMounted) {
-          imagesArray[index] = new Image();
-          loadedCount++;
-          scheduleUpdate();
-        }
-      }, 2000);
-
-      img.onload = () => {
-        clearTimeout(timeout);
-        if (isMounted) {
-          imagesArray[index] = img;
-          loadedCount++;
-          scheduleUpdate();
-        }
-      };
-      
-      img.onerror = () => {
-        clearTimeout(timeout);
-        if (isMounted) {
-          imagesArray[index] = new Image();
-          loadedCount++;
-          scheduleUpdate();
-        }
-      };
-      
-      img.src = segment.icon as string;
+        // Remove crossOrigin for local files - it can cause issues
+        // img.crossOrigin = "anonymous";
+        
+        img.onload = async () => {
+          try {
+            // Use decode() to ensure image is fully ready for canvas
+            await img.decode();
+            if (isMounted) {
+              imagesArray[index] = img;
+              loadedCount++;
+              // Trigger incremental update for smooth loading
+              setLoadedImages([...imagesArray]);
+              if (loadedCount === segments.length) {
+                setAllImagesLoaded(true);
+              }
+            }
+            resolve();
+          } catch (decodeError) {
+            // decode() failed, but image loaded - still usable
+            if (isMounted) {
+              imagesArray[index] = img;
+              loadedCount++;
+              setLoadedImages([...imagesArray]);
+              if (loadedCount === segments.length) {
+                setAllImagesLoaded(true);
+              }
+            }
+            resolve();
+          }
+        };
+        
+        img.onerror = () => {
+          console.warn(`Failed to load image for segment ${index}: ${segment.icon}`);
+          if (isMounted) {
+            imagesArray[index] = new Image(); // Use blank fallback
+            loadedCount++;
+            setLoadedImages([...imagesArray]);
+            if (loadedCount === segments.length) {
+              setAllImagesLoaded(true);
+            }
+          }
+          reject(new Error(`Image load failed: ${segment.icon}`));
+        };
+        
+        // Start loading immediately - ALL images load in parallel
+        img.src = segment.icon as string;
+      });
     });
+
+    // Wait for all images - with generous 10 second timeout as safety net
+    Promise.allSettled(imageLoadPromises).then(() => {
+      if (isMounted && loadedCount === segments.length) {
+        setAllImagesLoaded(true);
+      }
+    });
+
+    // Safety timeout: if nothing loads after 10 seconds, show wheel anyway
+    const safetyTimeout = setTimeout(() => {
+      if (isMounted && !allImagesLoaded) {
+        console.warn('Image loading timeout - showing wheel with loaded images');
+        setAllImagesLoaded(true);
+      }
+    }, 10000);
 
     return () => {
       isMounted = false;
-      if (updateTimer) clearTimeout(updateTimer);
+      clearTimeout(safetyTimeout);
     };
   }, [segments]);
 
@@ -464,7 +480,8 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     });
 
     ctx.restore(); // Restore transformation
-    // 🟡 Outer ring (wheel border)
+
+     // 🟡 Outer ring (wheel border)
 ctx.beginPath();
 ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
 
@@ -489,7 +506,6 @@ gradient.addColorStop(1.00, "#94712aff");   // dark
 ctx.strokeStyle = gradient;
 ctx.lineWidth = isMobile ? 6 : 8; // thicker ring like your image
 ctx.stroke();
-
 
     // 🎯 Center circle
     ctx.beginPath();
@@ -814,32 +830,34 @@ ctx.stroke();
     }
   };
 
-  // Draw wheel immediately and redraw when images load or rotation changes
+  // Draw wheel ONLY when all images are loaded - prevents partial rendering
   useEffect(() => {
-    if (segments.length > 0) {
+    if (segments.length > 0 && allImagesLoaded) {
       drawWheel();
     }
   }, [allImagesLoaded, rotation, segments]);
 
-  // Handle window resize
+  // Handle window resize - only redraw if images are loaded
   useEffect(() => {
     const handleResize = () => {
-      if (segments.length > 0) {
+      if (segments.length > 0 && allImagesLoaded) {
         drawWheel();
       }
     };
 
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [segments]);
+  }, [segments, allImagesLoaded]);
 
-  // Show loading state while wheel configuration is being fetched
-  if (!wheelConfig || segments.length === 0) {
+  // Show loading state while wheel configuration OR images are being fetched
+  if (!wheelConfig || segments.length === 0 || !allImagesLoaded) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
         <div className="text-center">
           <div className="animate-spin w-12 h-12 border-4 border-yellow-400 border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-yellow-400 text-lg">Loading wheel...</p>
+          <p className="text-yellow-400 text-lg">
+            {!allImagesLoaded ? 'Loading wheel images...' : 'Loading wheel...'}
+          </p>
         </div>
       </div>
     );
@@ -877,10 +895,8 @@ ctx.stroke();
         />
       </video>
 
-      
-
       <div className="relative w-full max-w-2xl aspect-square flex items-center justify-center z-10">
-        <img
+         <img
     src={pointer}
     alt="pointer"
     className="
@@ -897,15 +913,15 @@ ctx.stroke();
     "
   />
         {/* Wheel ring overlay */}
-        {/* <img
-          src="https://res.cloudinary.com/dziy5sjas/image/upload/v1761047804/wheel_basnqc.png"
+         <img
+          src={ring}
           alt="Wheel Ring"
-          className="absolute -top-4 sm:top-14 sm:left-16 md:left-0 md:-top-0 inset-0 w-[108%] h-[108%] sm:w-[80%] sm:h-[80%] md:w-full md:h-full object-cover z-20 pointer-events-none"
-        /> */}
+         className="absolute left-3 -top-4 sm:top-16 sm:left-18 md:left-3 md:-top-4 inset-0 w-[108%] h-[108%] sm:w-[80%] sm:h-[80%] md:w-[105%] md:h-[105%] object-cover z-0 pointer-events-none"
+        />
 
         <canvas
           ref={canvasRef}
-          className="pointer-events-none"
+          className="pointer-events-none z-10"
           style={{
             display: "block",
             maxWidth: "100%",
@@ -923,7 +939,7 @@ ctx.stroke();
           playsInline
           disablePictureInPicture
           disableRemotePlayback
-          className="absolute w-32 h-32 md:w-52 md:h-52 rounded-full object-cover pointer-events-none border-2 border-yellow-400"
+          className="absolute w-32 h-32 md:w-52 md:h-52 rounded-full object-cover pointer-events-none border-2 border-yellow-400 z-10"
         >
           <source
             src="https://res.cloudinary.com/dziy5sjas/video/upload/v1761140835/Middlevideo_s9eiiy.mp4"

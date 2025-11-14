@@ -20,6 +20,9 @@
   @apply h-5 w-5 rounded-full bg-white border-2 border-yellow-600 cursor-pointer;
 }
 
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
 
 :root {
   /* Dark theme colors matching RingToneRiches design */

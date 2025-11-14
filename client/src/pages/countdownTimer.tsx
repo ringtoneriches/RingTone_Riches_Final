@@ -4,7 +4,11 @@ import Countdown, { zeroPad } from "react-countdown";
 const GLOBAL_START_DATE = new Date("2025-10-30T00:00:00Z"); // <-- same for all users
 const GLOBAL_END_DATE = new Date(GLOBAL_START_DATE.getTime() + 60 * 24 * 60 * 60 * 1000);
 
-const CountdownTimer = () => {
+interface CountdownTimerProps {
+  endDate?: string | Date | null;
+}
+
+const CountdownTimer = ({ endDate }: CountdownTimerProps) => {
   const renderer = ({
     days,
     hours,
@@ -22,14 +26,20 @@ const CountdownTimer = () => {
         <Colon />
         <TimeBox label="Mins" value={minutes} />
         <Colon />
-        <TimeBox label="Secs" value={seconds} />
+        <TimeBox label="Sec" value={seconds} />
       </div>
     );
   };
 
+  // Use provided endDate or fallback to global default
+const targetDate = endDate
+  ? new Date(endDate).getTime()
+  : GLOBAL_END_DATE.getTime();
+
+
   return (
     <div className="p-4 bg-black/30 rounded-2xl shadow-md w-full max-w-lg mx-auto">
-      <Countdown date={GLOBAL_END_DATE} renderer={renderer} />
+      <Countdown date={targetDate} renderer={renderer} />
     </div>
   );
 };

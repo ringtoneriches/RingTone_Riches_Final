@@ -13,7 +13,7 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
   const [, setLocation] = useLocation();
 
   const instantCompetitions = competitions
-    .filter((c) => c.type === "instant")
+    .filter((c) => c.type === "scratch" || c.type === "spin" || c.type === "instant")
     .slice(0, 5);
 
   const sliderSettings = {

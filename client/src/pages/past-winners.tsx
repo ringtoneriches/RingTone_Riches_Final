@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import { useState } from "react";
+import { ArrowBigLeft, ArrowBigRight } from "lucide-react";
 
 interface WinnerWithDetails {
   id: string;
@@ -19,16 +20,44 @@ interface WinnerWithDetails {
 }
 
 export default function PastWinners() {
+
+  const [currentPage , setCurrentPage] = useState(1);
+  const itemsPerPage = 50
   
-  const { data: winnersData = [], isLoading } = useQuery<WinnerWithDetails[]>({
-     queryKey: ["/api/admin/winners"],
-   });
+ const { data: winnersData = [], isLoading } = useQuery({
+  queryKey: ["/api/winners"],
+  queryFn: async () => {
+    const res = await fetch("/api/winners");
+    const json = await res.json();
 
-  console.log("API Response:", winnersData);
-  console.log("Loading:", isLoading);
-  console.log("winnersData length:", winnersData?.length);
+    return json.map((item: any) => ({
+      id: item.winners.id,
+      prizeDescription: item.winners.prizeDescription,
+      prizeValue: item.winners.prizeValue?.replace("£", "") ?? "0",
+      imageUrl: item.winners.imageUrl,
+      createdAt: item.winners.createdAt,
 
-  return (
+      user: {
+        firstName: item.users?.firstName ?? "",
+        lastName: item.users?.lastName ?? "",
+      },
+
+      competition: {
+        title: item.competitions?.title ?? "",
+      },
+    }));
+  },
+});
+
+  const totalPages = Math.ceil(winnersData.length / itemsPerPage);
+   const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedWinners = winnersData.slice(startIndex, startIndex + itemsPerPage);
+
+  // console.log("API Response:", winnersData);
+  // console.log("Loading:", isLoading);
+  // console.log("winnersData length:", winnersData?.length);
+
+   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
 
@@ -63,7 +92,7 @@ export default function PastWinners() {
                 </div>
               ))}
             </div>
-          ) : winnersData.length === 0 ? (
+          ) : paginatedWinners.length === 0 ? (
             <div className="text-center py-16">
               <div className="max-w-md mx-auto space-y-4">
                 <h3 className="text-2xl font-bold text-foreground">
@@ -75,44 +104,69 @@ export default function PastWinners() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {winnersData.map((winner) => (
-                <div
-                  key={winner.id}
-                  className="bg-card rounded-xl border border-border overflow-hidden hover:transform hover:scale-105 transition-transform"
-                >
-                  {winner.imageUrl && (
-                    <img
-                      src={winner.imageUrl}
-                      alt={winner.prizeDescription}
-                      className="w-full h-48 object-cover"
-                    />
-                  )}
-                  <div className="p-6 space-y-3">
-                    <h3 className="font-bold text-lg line-clamp-2">
-                      {winner.prizeDescription}
-                    </h3>
-                    <p className="text-muted-foreground">
-                      {winner.competition?.title || "Competition"}
-                    </p>
-                    <div className="flex justify-between items-center">
-                      <p className="text-primary font-bold text-xl">
-                        £{parseFloat(winner.prizeValue).toLocaleString()}
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {paginatedWinners.map((winner: any) => (
+                  <div
+                    key={winner.id}
+                    className="bg-card rounded-xl border border-border overflow-hidden hover:transform hover:scale-105 transition-transform"
+                  >
+                    {winner.imageUrl && (
+                      <img
+                        src={winner.imageUrl}
+                        alt={winner.prizeDescription}
+                        className="w-full h-48 object-cover"
+                      />
+                    )}
+                    <div className="p-6 space-y-3">
+                      <h3 className="font-bold text-lg line-clamp-2">
+                        {winner.prizeDescription}
+                      </h3>
+                      <p className="text-muted-foreground">
+                        {winner.competition?.title || "Competition"}
                       </p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(winner.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="pt-2 border-t border-border">
-                      <p className="text-sm text-muted-foreground">Winner</p>
-                      <p className="font-medium">
-                        {winner.user?.firstName} {winner.user?.lastName?.charAt(0)}.
-                      </p>
+                      <div className="flex justify-between items-center">
+                        <p className="text-primary font-bold text-xl">
+                          £{parseFloat(winner.prizeValue).toLocaleString()}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(winner.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="pt-2 border-t border-border">
+                        <p className="text-sm text-muted-foreground">Winner</p>
+                        <p className="font-medium">
+                          {winner.user?.firstName} {winner.user?.lastName?.charAt(0)}.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+
+              {/* Pagination Buttons */}
+              <div className="flex justify-center mt-10 gap-4">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                  className="px-2 py-1 bg-primary text-white rounded disabled:opacity-30"
+                >
+                  <ArrowBigLeft />
+                </button>
+
+                <span className="text-lg font-medium">
+                  Page {currentPage} of {totalPages}
+                </span>
+
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                  className="px-2 py-1 bg-primary text-white rounded disabled:opacity-30"
+                >
+                 <ArrowBigRight />
+                </button>
+              </div>
+            </>
           )}
         </div>
       </section>

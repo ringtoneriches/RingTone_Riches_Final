@@ -9,6 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { PrizeModal } from "@/components/games/prize-modal";
 import SpinWheel from "@/components/games/spinwheeltest";
 import { useLocation } from "wouter";
+import CountdownTimer from "@/pages/countdownTimer";
 
 
 export default function SpinGamePage() {
@@ -134,10 +135,12 @@ export default function SpinGamePage() {
     <div className="min-h-screen  bg-background text-foreground">
       <Header />
       <div className="flex flex-col justify-center items-center">
-
-  
-        
-       
+        {/* Countdown Timer */}
+        {competition?.endDate && (
+          <div className="py-6">
+            <CountdownTimer endDate={competition.endDate} />
+          </div>
+        )}
       </div>
       <main className="container mx-auto   text-center">
         <SpinWheel 

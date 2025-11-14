@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, Upload } from "lucide-react";
+import { Plus, Edit, Trash2, Upload, ArrowBigRight, ArrowBigLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -114,6 +114,7 @@ function WinnerForm({
     imageUrl: data?.imageUrl || "",
   });
   const [uploading, setUploading] = useState(false);
+ 
 
   // Fetch users for selection
   const { data: users = [] } = useQuery<User[]>({
@@ -124,6 +125,8 @@ function WinnerForm({
   const { data: competitions = [] } = useQuery<Competition[]>({
     queryKey: ["/api/competitions"],
   });
+
+  
 
   const handleImageUpload = async (file: File) => {
     setUploading(true);
@@ -300,12 +303,17 @@ export default function AdminPastWinners() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingWinner, setEditingWinner] = useState<Winner | undefined>();
   const [deletingWinner, setDeletingWinner] = useState<Winner | undefined>();
+   const [currentPage , setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
 
   // Fetch winners with user and competition details
   const { data: winnersData = [], isLoading } = useQuery<WinnerWithDetails[]>({
     queryKey: ["/api/admin/winners"],
   });
 
+  const totalPages= Math.ceil(winnersData.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedWinners  = winnersData.slice(startIndex , startIndex + itemsPerPage);
   // Create winner mutation
   const createMutation = useMutation({
     mutationFn: async (data: WinnerPayload) => {
@@ -413,7 +421,7 @@ export default function AdminPastWinners() {
 
         {isLoading ? (
           <div className="text-center py-8">Loading winners...</div>
-        ) : winnersData.length === 0 ? (
+        ) : paginatedWinners.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             No winners found. Add your first winner to get started.
           </div>
@@ -431,7 +439,7 @@ export default function AdminPastWinners() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {winnersData.map((item) => (
+                {paginatedWinners.map((item) => (
                   <TableRow key={item.winners.id}>
                     <TableCell>
                       <div>
@@ -484,6 +492,34 @@ export default function AdminPastWinners() {
           </div>
         )}
 
+         {/* PAGINATION */}
+        <div className="flex justify-center items-center gap-4 my-6">
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage((p) => p - 1)}
+            disabled={currentPage === 1}
+          >
+            <ArrowBigLeft />
+          </Button>
+
+          <span className="font-medium">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage((p) => p + 1)}
+            disabled={currentPage === totalPages}
+          >
+             <ArrowBigRight />
+          </Button>
+        </div>
+
+        {/* ENTRY COUNT */}
+        <p className="text-center text-sm text-muted-foreground">
+          Showing {paginatedWinners.length} of {winnersData.length} filtered entries
+        </p>
+
         {/* Add/Edit Dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -532,6 +568,8 @@ export default function AdminPastWinners() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+     
+
     </AdminLayout>
   );
 }

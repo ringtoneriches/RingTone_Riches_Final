@@ -38,7 +38,6 @@ import { and, asc, desc, eq, inArray, sql, like, gte, lte, or } from "drizzle-or
 import { z } from "zod";
 import { sendOrderConfirmationEmail, sendWelcomeEmail } from "./email";
 import { wsManager } from "./websocket";
-import { upload } from "./cloudinary";
 
 // Default spin wheel configuration - 26 segments with 6 evenly-distributed black segments
 // Color palette: Black #000000, Red #FE0000, White #FFFFFF, Blue #1E54FF, Yellow #FEED00, Green #00A223
@@ -119,33 +118,45 @@ const spinConfigSchema = z.object({
   isVisible: z.boolean().optional(),
 });
 
-// const uploadDir = path.join(process.cwd(), "attached_assets", "competitions");
-// if (!fs.existsSync(uploadDir)) {
-//   fs.mkdirSync(uploadDir, { recursive: true });
-// }
+const uploadDir = path.join(process.cwd(), "attached_assets", "competitions");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
-// const upload = multer({
-//   storage: multer.diskStorage({
-//     destination: (req, file, cb) => {
-//       cb(null, uploadDir);
-//     },
-//     filename: (req, file, cb) => {
-//       const uniqueName = `${Date.now()}-${nanoid(8)}${path.extname(file.originalname)}`;
-//       cb(null, uniqueName);
-//     },
-//   }),
-//   fileFilter: (req, file, cb) => {
-//     const allowedTypes = /jpeg|jpg|png|gif|webp/;
-//     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-//     const mimetype = allowedTypes.test(file.mimetype);
-//     if (extname && mimetype) {
-//       cb(null, true);
-//     } else {
-//       cb(new Error("Only image files are allowed"));
-//     }
-//   },
-//   limits: { fileSize: 5 * 1024 * 1024 },
-// });
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueName = `${Date.now()}-${nanoid(8)}${path.extname(file.originalname)}`;
+      cb(null, uniqueName);
+    },
+  }),
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (extname && mimetype) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed"));
+    }
+  },
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+const fixDates = (data: any) => {
+  const dateFields = ["startDate", "endDate", "expiryDate", "publishedAt"]; // <-- add your real date columns
+
+  for (const field of dateFields) {
+    if (data[field]) {
+      data[field] = new Date(data[field]); // convert to Date object
+    }
+  }
+
+  return data;
+};
 // Initialize Stripe only if keys are available
 // let stripe: Stripe | null = null;
 // if (process.env.STRIPE_SECRET_KEY) {
@@ -177,7 +188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
-       const imagePath =  req.file.path; 
+      const imagePath = `/attached_assets/competitions/${req.file.filename}`;
       return res.status(200).json({ imagePath });
     } catch (error: any) {
       console.error("File upload error:", error);
@@ -1248,6 +1259,7 @@ app.post("/api/play-spin-wheelll", isAuthenticated, async (req: any, res) => {
         prizeDescription: selectedSegment.label,
         prizeValue: `£${amount}`,
         imageUrl: null,
+        isShowcase: false,
       });
     } else if (selectedSegment.rewardType === "points" && selectedSegment.rewardValue) {
       const points = typeof selectedSegment.rewardValue === 'number'
@@ -1277,6 +1289,7 @@ app.post("/api/play-spin-wheelll", isAuthenticated, async (req: any, res) => {
         prizeDescription: selectedSegment.label,
         prizeValue: `${points} Ringtones`,
         imageUrl: null,
+        isShowcase: false,
       });
     }
 
@@ -1436,6 +1449,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
           prizeDescription: selectedSegment.label,
           prizeValue: `£${amount}`,
           imageUrl: null,
+          isShowcase: false,
         });
 
         totalCash += amount;
@@ -1462,6 +1476,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
           prizeDescription: selectedSegment.label,
           prizeValue: `${points} Ringtones`,
           imageUrl: null,
+          isShowcase: false,
         });
 
         totalPoints += points;
@@ -2027,6 +2042,7 @@ app.post("/api/play-scratch-carddd", isAuthenticated, async (req: any, res) => {
         prizeDescription: "Scratch Card Prize",
         prizeValue: `£${amount}`,
         imageUrl: null,
+        isShowcase: false,
       });
 
       prizeResponse = { type: "cash", value: amount.toFixed(2) };
@@ -2059,6 +2075,7 @@ app.post("/api/play-scratch-carddd", isAuthenticated, async (req: any, res) => {
         prizeDescription: "Scratch Card Prize",
         prizeValue: `${points} Ringtones`,
         imageUrl: null,
+        isShowcase: false,
       });
 
       prizeResponse = { type: "points", value: points.toString() };
@@ -2071,6 +2088,7 @@ app.post("/api/play-scratch-carddd", isAuthenticated, async (req: any, res) => {
         prizeDescription: `Scratch Card Prize - ${selectedPrize.label}`,
         prizeValue: selectedPrize.label,
         imageUrl: null,
+        isShowcase: false,
       });
 
       prizeResponse = { type: "physical", value: selectedPrize.label };
@@ -2273,6 +2291,7 @@ app.post("/api/reveal-all-scratch-cards", isAuthenticated, async (req: any, res)
             prizeDescription: "Scratch Card Prize",
             prizeValue: `£${amount}`,
             imageUrl: null,
+            isShowcase: false,
           });
 
           prizeResponse = { type: "cash", value: amount.toFixed(2) };
@@ -2297,6 +2316,7 @@ app.post("/api/reveal-all-scratch-cards", isAuthenticated, async (req: any, res)
             prizeDescription: "Scratch Card Prize",
             prizeValue: `${points} Ringtones`,
             imageUrl: null,
+            isShowcase: false,
           });
 
           prizeResponse = { type: "points", value: points.toString() };
@@ -2309,6 +2329,7 @@ app.post("/api/reveal-all-scratch-cards", isAuthenticated, async (req: any, res)
             prizeDescription: `Scratch Card Prize - ${selectedPrize.imageName}`,
             prizeValue: selectedPrize.imageName,
             imageUrl: null,
+            isShowcase: false,
           });
 
           prizeResponse = { type: "physical", value: selectedPrize.imageName };
@@ -3152,7 +3173,7 @@ app.get("/api/admin/entries/download/:competitionId", isAuthenticated, isAdmin, 
 // ====== WINNERS PUBLIC ENDPOINTS ======
 app.get("/api/winners", async (req, res) => {
   try{
-    const winners = await storage.getRecentWinners(5);
+    const winners = await storage.getRecentWinners(50, true); // Only showcase winners for public
     console.log("🧩 Winners from storage:", winners);
     res.json(winners);
   } catch (error) {
@@ -3186,6 +3207,7 @@ app.post("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
       prizeDescription,
       prizeValue,
       imageUrl: imageUrl === null || imageUrl === "" ? null : imageUrl,
+      isShowcase: true, // Manual admin entries are showcase winners
     });
 
     res.json(winner);
@@ -3362,7 +3384,7 @@ app.post("/api/admin/competitions", isAuthenticated, isAdmin, async (req: any, r
 app.put("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: any, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+     const updateData = fixDates(req.body);
     
     const [updatedCompetition] = await db
       .update(competitions)

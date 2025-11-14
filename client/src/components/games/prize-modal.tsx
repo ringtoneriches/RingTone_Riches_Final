@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import money from "../../../../attached_assets/money.png";
 
 interface PrizeModalProps {
   isOpen: boolean;
@@ -61,7 +62,7 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
     
     if (prize.type === 'cash') {
       return {
-        icon: '💰',
+        icon: money,
         text: `£${prize.value}`,
         subtext: 'Cash Prize!'
       };
@@ -89,6 +90,25 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
   };
 
   const prizeInfo = getPrizeDisplay();
+
+  const renderPrizeIcon = () => {
+  if (!isWinner) return "😔";
+
+  // If icon is an image path, render image
+  if (typeof prizeInfo.icon === "string" && prizeInfo.icon.includes(".")) {
+    return (
+      <img
+        src={prizeInfo.icon}
+        alt="Prize Icon"
+        className="w-16 h-16 object-contain"
+      />
+    );
+  }
+
+  // Otherwise assume emoji
+  return prizeInfo.icon;
+};
+
 
   return (
     <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -132,7 +152,8 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
                 ? 'bg-gradient-to-br from-[#FACC15]/30 to-[#F59E0B]/30 border-2 border-[#FACC15]/40 shadow-lg shadow-[#FACC15]/20' 
                 : 'bg-gray-800/60 border-2 border-gray-700/40'
             } ${isWinner ? 'animate-bounce' : ''}`}>
-              {isWinner ? prizeInfo.icon : '😔'}
+             {renderPrizeIcon()}
+
             </div>
 
             {/* Title */}
@@ -188,7 +209,7 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
               } transition-all duration-300 shadow-lg`}
               data-testid="button-continue"
             >
-              {isWinner ? '🎉 Awesome!' : 'Try Again'}
+              {isWinner ? '🎉 Fantastic!' : 'Try Again'}
             </Button>
           </div>
         </div>
