@@ -9,7 +9,7 @@ const BRAND_COLOR = '#FACC15';
 // Logo URL - Update this with your deployed logo URL
 // For now using a placeholder - replace with actual hosted URL when deployed
 // Example: const LOGO_URL = 'https://yourdomain.com/logo.gif';
-const LOGO_URL = 'https://via.placeholder.com/200x80/FACC15/1a1a1a?text=Ringtone+Riches';
+const LOGO_URL = 'https://res.cloudinary.com/dziy5sjas/image/upload/v1763133744/Logo_1758885093860_cwp9kg.gif';
 
 // Order confirmation email payload type
 export interface OrderConfirmationPayload {
