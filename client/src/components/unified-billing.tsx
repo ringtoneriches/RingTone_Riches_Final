@@ -81,6 +81,7 @@ export default function UnifiedBilling({ orderId, orderType }: UnifiedBillingPro
   const order = orderData?.order;
   const user = orderData?.user;
   const competition = orderData?.competition;
+
   const itemCost = orderType === 'competition' 
     ? parseFloat(competition?.ticketPrice || '0') 
     : parseFloat(orderData?.scratchCost || orderData?.spinCost || '2');
@@ -101,42 +102,51 @@ export default function UnifiedBilling({ orderId, orderType }: UnifiedBillingPro
       const finalAmount = totalAmount - walletUsed - finalPointsUsed;
       
       const needsCashflows = finalAmount > 0;
-      const res = await apiRequest(getPaymentEndpoint(needsCashflows), "POST", data);
+
+      const res = await apiRequest(getPaymentEndpoint(needsCashflows), "POST", {
+        ...data,
+        orderId,
+      });
       return res.json();
     },
+
     onSuccess: (data) => {
       setIsProcessing(false);
+
+      // ⭐ IMPORTANT FIX: Append orderId to Cashflows redirect
       if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
+        const url = new URL(data.redirectUrl);
+        url.searchParams.append("orderId", orderId);
+        window.location.href = url.toString();
         return;
       }
+
       if (data.success) {
         toast({
           title: "Purchase Successful 🎉",
           description: data.message || `Your purchase is complete!`,
         });
+
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         queryClient.invalidateQueries({ queryKey: [getEndpoint(), orderId] });
 
         const competitionId = data.competitionId || order?.competitionId;
-        
+
+        // Wallet-only or points-only purchase
         setTimeout(() => {
           if (orderType === 'spin') {
             setLocation(`/spin/${competitionId}/${orderId}`);
-          } else if (orderType === 'scratch') {
+          } 
+          else if (orderType === 'scratch') {
             setLocation(`/scratch/${competitionId}/${orderId}`);
-          } else {
+          } 
+          else {
             setLocation(`/success/competition?orderId=${orderId}`);
           }
         }, 1500);
-      } else {
-        toast({
-          title: "Payment Failed",
-          description: data.message || "Something went wrong",
-          variant: "destructive",
-        });
       }
     },
+
     onError: (error: any) => {
       setIsProcessing(false);
       toast({
@@ -167,6 +177,7 @@ export default function UnifiedBilling({ orderId, orderType }: UnifiedBillingPro
     }
 
     setIsProcessing(true);
+
     const payload: any = {
       orderId,
       useWalletBalance: selectedMethods.walletBalance,
@@ -198,24 +209,18 @@ export default function UnifiedBilling({ orderId, orderType }: UnifiedBillingPro
 
   if (isLoading)
     return (
-      <div className="flex justify-center items-center h-[70vh] bg-gradient-to-br from-zinc-950 via-black to-zinc-900 text-yellow-400">
-        <div className="text-center">
-          <div className="animate-spin w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-lg">Loading your order...</p>
-        </div>
+      <div className="flex justify-center items-center h-[70vh] bg-black text-yellow-400">
+        <p>Loading order...</p>
       </div>
     );
 
   if (!order)
     return (
-      <div className="flex justify-center items-center h-[70vh] bg-gradient-to-br from-zinc-950 via-black to-zinc-900 text-yellow-400">
-        <div className="text-center">
-          <AlertCircle className="w-16 h-16 mx-auto mb-4 text-red-500" />
-          <p className="text-lg">Invalid or expired order.</p>
-        </div>
+      <div className="flex justify-center items-center h-[70vh] bg-black text-yellow-400">
+        <AlertCircle className="w-10 h-10 text-red-500 mb-3" />
+        <p>Invalid or expired order.</p>
       </div>
     );
-
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

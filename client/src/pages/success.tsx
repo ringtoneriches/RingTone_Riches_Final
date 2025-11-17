@@ -10,16 +10,21 @@ export default function WalletSuccess() {
 
   useEffect(() => {
     const confirmPayment = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const sessionId = params.get("session_id");
+      const searchParams = new URLSearchParams(window.location.search);
 
-      if (!sessionId) {
-        toast({ title: "Error", description: "Missing session ID", variant: "destructive" });
-        return;
-      }
+        const paymentJobRef = searchParams.get("paymentjobref");
+        const paymentRef = searchParams.get("paymentref");
+
+        if (!paymentJobRef || !paymentRef) {
+            return <p>Missing payment confirmation information.</p>;
+        }
+
 
       try {
-        const res = await apiRequest("/api/wallet/confirm-topup", "POST", { sessionId });
+        const res = await apiRequest("/api/wallet/confirm-topup", "POST", {  
+          paymentJobRef,
+          paymentRef, 
+        });
         if (res.ok) {
           toast({
             title: "Payment Confirmed",

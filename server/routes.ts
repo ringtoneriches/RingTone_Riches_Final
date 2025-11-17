@@ -524,108 +524,103 @@ app.post("/api/create-payment-intent", isAuthenticated, async (req: any, res) =>
 // Update the payment success route (IDEMPOTENT)
 app.post("/api/payment-success/competition", isAuthenticated, async (req: any, res) => {
   try {
-    const { sessionId } = req.body;
-    if (!sessionId) {
-      return res.status(400).json({ message: "Missing sessionId" });
+    const { paymentJobRef, paymentRef, orderId } = req.body;
+    const userId = req.user.id;
+
+    if (!paymentJobRef || !paymentRef || !orderId) {
+      return res.status(400).json({ message: "Missing paymentJobRef, paymentRef or orderId" });
     }
 
-    console.log(`🔍 Verifying payment session: ${sessionId}`);
+    console.log("🔍 Confirming Cashflows payment:", { paymentJobRef, paymentRef, orderId });
 
-    // Verify payment with Cashflows
-    const payment = await cashflows.getPaymentStatus(sessionId);
-    const paymentStatus = payment?.status || payment?.checkout?.status || payment?.data?.status;
-    
-    console.log(`📊 Payment status: ${paymentStatus}`, payment.metadata);
+    // Fetch specific payment
+    const payment = await cashflows.getPaymentStatus(paymentJobRef, paymentRef);
 
-    if (paymentStatus !== "COMPLETED" && paymentStatus !== "SUCCESS") {
+    const paymentStatus =
+      payment?.status ||
+      payment?.data?.status ||
+      payment?.data?.paymentStatus ||
+      payment?.paymentStatus;
+
+    console.log("📊 Payment Status:", paymentStatus);
+
+    const successStatuses = ["SUCCESS", "COMPLETED", "PAID", "Paid"];
+    if (!successStatuses.includes(paymentStatus)) {
       return res.status(400).json({ message: `Payment not completed. Status: ${paymentStatus}` });
     }
 
-    const { userId, competitionId, orderId, quantity } = payment.metadata || {};
-    const amount = (payment.amount?.value || 0) / 100;
-    const ticketQuantity = parseInt(quantity) || 1;
-
-    if (!userId || !orderId) {
-      console.error("❌ Invalid payment metadata:", payment.metadata);
-      return res.status(400).json({ message: "Invalid payment metadata" });
+    // Retrieve order
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId) {
+      return res.status(404).json({ message: "Order not found or belongs to wrong user" });
     }
 
-    // ✅ IDEMPOTENCY CHECK: Verify order exists and check if already completed
-    const existingOrder = await storage.getOrder(orderId);
-    if (!existingOrder) {
-      console.error(`❌ Order ${orderId} not found`);
-      return res.status(404).json({ message: "Order not found" });
-    }
+    // Get competition type
+    const competition = await storage.getCompetition(order.competitionId);
+    const competitionType = competition?.type || "competition";
 
-    // Check if already completed by looking for existing tickets
-    const existingTickets = await db
-      .select()
-      .from(tickets)
-      .where(eq(tickets.orderId, orderId))
-      .limit(1);
-
-    if (existingTickets.length > 0 || existingOrder.status === "completed") {
-      console.log(`✓ Order ${orderId} already processed - returning success without duplicating`);
-      return res.json({ 
-        success: true, 
-        competitionId, 
+    // Idempotency: avoid duplicates
+    if (order.status === "completed") {
+      return res.json({
+        success: true,
         orderId,
-        ticketsCreated: ticketQuantity,
+        competitionId: order.competitionId,
+        competitionType,
         alreadyProcessed: true
       });
     }
 
-    console.log(`🎫 Creating ${ticketQuantity} tickets for order ${orderId}`);
+    const ticketCount = order.quantity;
+    const competitionId = order.competitionId;
 
-    // ✅ ATOMIC OPERATION: All side-effects together, status update LAST
-    try {
-      // Record transaction
-      await storage.createTransaction({
+    // Create tickets
+    const ticketsCreated = [];
+    for (let i = 0; i < ticketCount; i++) {
+      const ticket = await storage.createTicket({
         userId,
-        type: "purchase",
-        amount: `-${amount}`,
-        description: `Cashflows ticket purchase for ${competitionId} - ${ticketQuantity} tickets`,
+        competitionId,
         orderId,
+        ticketNumber: nanoid(8).toUpperCase(),
       });
 
-      // Create tickets
-      const ticketPromises = [];
-      for (let i = 0; i < ticketQuantity; i++) {
-        ticketPromises.push(
-          storage.createTicket({
-            userId,
-            competitionId,
-            orderId,
-            ticketNumber: nanoid(8).toUpperCase(),
-          })
-        );
-      }
-
-      await Promise.all(ticketPromises);
-
-      // Update competition sold count
-      await storage.updateCompetitionSoldTickets(competitionId, ticketQuantity);
-
-      // ✅ Mark order complete ONLY after all side-effects succeed
-      await storage.updateOrderStatus(orderId, "completed");
-
-      console.log(`✓ Successfully processed payment for order ${orderId}`);
-    } catch (sideEffectError) {
-      console.error(`❌ Error processing order ${orderId}:`, sideEffectError);
-      throw sideEffectError; // Re-throw to be caught by outer catch
+      ticketsCreated.push(ticket);
     }
 
-    res.json({ 
-      success: true, 
-      competitionId, 
+    // Update competition sold number
+    await storage.updateCompetitionSoldTickets(competitionId, ticketCount);
+
+    // Mark order complete
+    await storage.updateOrderStatus(orderId, "completed");
+
+    // Log transaction (cash or points)
+    const amount =
+      order.pointsAmount > 0 ? `-${order.pointsAmount}` : `-${order.totalAmount}`;
+
+    await storage.createTransaction({
+      userId,
+      type: "purchase",
+      amount,
+      description: `Purchased ${ticketCount} ticket(s)`,
       orderId,
-      ticketsCreated: ticketQuantity 
     });
+
+    console.log("✅ Competition payment processed successfully!");
+
+    return res.json({
+      success: true,
+      ticketsCreated,
+      competitionId,
+      orderId,
+      competitionType
+    });
+
   } catch (error) {
-    console.error("❌ Error confirming ticket payment:", error);
-    res.status(500).json({ message: "Failed to confirm payment" });
+    console.error("❌ Error confirming competition payment:", error);
+    return res.status(500).json({ message: "Failed to confirm competition payment" });
   }
 });
+
+
 
 // Add webhook handler for Cashflows notifications
 app.post("/api/cashflows/webhook", async (req, res) => {
@@ -1153,7 +1148,6 @@ app.post("/api/play-spin-wheelll", isAuthenticated, async (req: any, res) => {
     // Check spins remaining
     const spinsUsed = await storage.getSpinsUsed(orderId);
     const spinsRemaining = order.quantity - spinsUsed;
-
     if (spinsRemaining <= 0) {
       return res.status(400).json({
         success: false,
@@ -1171,7 +1165,6 @@ app.post("/api/play-spin-wheelll", isAuthenticated, async (req: any, res) => {
     const [config] = await db.select().from(gameSpinConfig).where(eq(gameSpinConfig.id, "active"));
     const wheelConfig = config || DEFAULT_SPIN_WHEEL_CONFIG;
     const segments = wheelConfig.segments as any[];
-
     // Filter out segments that reached maxWins limit AND have zero probability
     const eligibleSegments = [];
     for (const segment of segments) {
@@ -1190,7 +1183,6 @@ app.post("/api/play-spin-wheelll", isAuthenticated, async (req: any, res) => {
       
       eligibleSegments.push(segment);
     }
-
     if (eligibleSegments.length === 0) {
       return res.status(400).json({
         success: false,
@@ -2390,179 +2382,6 @@ app.get("/api/scratch-order/:orderId", isAuthenticated, async (req: any, res) =>
   }
 });
 
-// DUPLICATE ENDPOINT REMOVED - Using Cashflows-specific endpoint above (line ~397)
-
-  // Game routes
-// app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
-//   try {
-//     const userId = req.user.id;
-//     const { winnerPrize } = req.body;
-//     const SPIN_COST = 2; // £2 per spin
-
-//     // Fetch user and ensure balance is enough
-//     const user = await storage.getUser(userId);
-//     const currentBalance = parseFloat(user?.balance || "0");
-
-//     if (currentBalance < SPIN_COST) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Insufficient balance. Please top up your wallet.",
-//       });
-//     }
-
-//     // Deduct the spin cost
-//     const newBalance = currentBalance - SPIN_COST;
-//     await storage.updateUserBalance(userId, newBalance.toFixed(2));
-
-//     await storage.createTransaction({
-//       userId,
-//       type: "withdrawal",
-//       amount: SPIN_COST.toFixed(2),
-//       description: "Spin Wheel - Spin cost",
-//     });
-
-//     // ---- Handle prize logic ----
-//     if (typeof winnerPrize.amount === "number" && winnerPrize.amount > 0) {
-//       // 💰 Cash prize
-//       const prizeAmount = winnerPrize.amount;
-//       const finalBalance = newBalance + prizeAmount;
-
-//       await storage.updateUserBalance(userId, finalBalance.toFixed(2));
-
-//       await storage.createTransaction({
-//         userId,
-//         type: "prize",
-//         amount: prizeAmount.toFixed(2),
-//         description: `Spin wheel prize: ${winnerPrize.brand || "Prize"} - £${prizeAmount}`,
-//       });
-
-//       await storage.createWinner({
-//         userId,
-//         competitionId: null,
-//         prizeDescription: winnerPrize.brand || "Spin Wheel Prize",
-//         prizeValue: `£${prizeAmount}`,
-//         imageUrl: winnerPrize.image || null,
-//       });
-//     } else if (
-//       typeof winnerPrize.amount === "string" &&
-//       winnerPrize.amount.includes("Ringtones")
-//     ) {
-//       // 🎵 Ringtone points prize
-//       const match = winnerPrize.amount.match(/(\d+)\s*Ringtones/);
-//       if (match) {
-//         const points = parseInt(match[1]);
-//         const newPoints = (user?.ringtonePoints || 0) + points;
-
-//         await storage.updateUserRingtonePoints(userId, newPoints);
-
-//         await storage.createTransaction({
-//           userId,
-//           type: "prize",
-//           amount: points.toString(),
-//           description: `Spin wheel prize: ${winnerPrize.brand || "Prize"} - ${points} Ringtones`,
-//         });
-
-//         await storage.createWinner({
-//           userId,
-//           competitionId: null,
-//           prizeDescription: winnerPrize.brand || "Spin Wheel Prize",
-//           prizeValue: `${points} Ringtones`,
-//           imageUrl: winnerPrize.image || null,
-//         });
-//       }
-//     }
-
-//     res.json({
-//       success: true,
-//       prize: winnerPrize,
-//       balance: newBalance.toFixed(2),
-//     });
-//   } catch (error) {
-//     console.error("Error playing spin wheel:", error);
-//     res.status(500).json({ message: "Failed to play spin wheel" });
-//   }
-// });
-
-// app.post("/api/play-scratch-card", isAuthenticated, async (req: any, res) => {
-//   try {
-//     const userId = req.user.id;
-//     const { winnerPrize } = req.body;
-//     const SCRATCH_COST = 2; // £2 per scratch
-
-//     const user = await storage.getUser(userId);
-//     const currentBalance = parseFloat(user?.balance || "0");
-
-//     if (currentBalance < SCRATCH_COST) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Insufficient balance. Please top up your wallet.",
-//       });
-//     }
-
-//     // 💳 Deduct scratch cost
-//     const newBalance = currentBalance - SCRATCH_COST;
-//     await storage.updateUserBalance(userId, newBalance.toFixed(2));
-//     await storage.createTransaction({
-//       userId,
-//       type: "withdrawal",
-//       amount: SCRATCH_COST.toFixed(2),
-//       description: "Scratch Card - Play cost",
-//     });
-
-//     // 🎁 Handle prize logic
-//     if (winnerPrize.type === "cash" && winnerPrize.value) {
-//       const amount = parseFloat(winnerPrize.value);
-//       if (amount > 0) {
-//         const finalBalance = newBalance + amount;
-//         await storage.updateUserBalance(userId, finalBalance.toFixed(2));
-
-//         await storage.createTransaction({
-//           userId,
-//           type: "prize",
-//           amount: amount.toFixed(2),
-//           description: `Scratch card prize: £${amount}`,
-//         });
-
-//         await storage.createWinner({
-//           userId,
-//           competitionId : null,
-//           prizeDescription: "Scratch Card Prize",
-//           prizeValue: `£${amount}`,
-//           imageUrl: winnerPrize.image || null,
-//         });
-//       }
-//     } else if (winnerPrize.type === "points" && winnerPrize.value) {
-//       const points = parseInt(winnerPrize.value);
-//       const newPoints = (user?.ringtonePoints || 0) + points;
-
-//       await storage.updateUserRingtonePoints(userId, newPoints);
-//       await storage.createTransaction({
-//         userId,
-//         type: "prize",
-//         amount: points.toString(),
-//         description: `Scratch card prize: ${points} Ringtones`,
-//       });
-
-//       await storage.createWinner({
-//         userId,
-//         competitionId : null, 
-//         prizeDescription: "Scratch Card Prize",
-//         prizeValue: `${points} Ringtones`,
-//         imageUrl: winnerPrize.image || null,
-//       });
-//     }
-
-//     res.json({
-//       success: true,
-//       prize: winnerPrize,
-//       balance: newBalance.toFixed(2),
-//     });
-//   } catch (error) {
-//     console.error("Error playing scratch card:", error);
-//     res.status(500).json({ message: "Failed to play scratch card" });
-//   }
-// });
-
   // Convert ringtone points to wallet balance
 app.post("/api/convert-ringtone-points", isAuthenticated, async (req: any, res) => {
   try {
@@ -2811,20 +2630,32 @@ app.post("/api/wallet/topup-checkout", isAuthenticated, async (req: any, res) =>
 
 app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => {
   try {
-    const { sessionId } = req.body;
-    if (!sessionId) return res.status(400).json({ message: "Missing sessionId" });
+    const { paymentJobRef , paymentRef } = req.body;
+    if (!paymentJobRef || !paymentRef) return res.status(400).json({ message: "Missing paymentJobRef or paymentRef" });
 
-    console.log(`🔍 Verifying wallet top-up session: ${sessionId}`);
+    console.log("🔍 Confirming Cashflows top-up:", { paymentJobRef, paymentRef });
 
-    const payment = await cashflows.getPaymentStatus(sessionId);
+    const payment = await cashflows.getPaymentStatus(paymentJobRef, paymentRef);
     const status =
       payment?.status || payment?.checkout?.status || payment?.data?.status;
     
     console.log(`📊 Payment status: ${status}`, payment.metadata);
+    
+   const successStatuses = ["SUCCESS", "COMPLETED", "PAID", "Paid"];
+    if (successStatuses.includes(status)) {
+      // Extract user ID (metadata may be nested)
+      const userId =
+        payment?.metadata?.userId ||
+        payment?.data?.metadata?.userId ||
+        req.user.id;
 
-    if (status === "SUCCESS" || status === "COMPLETED") {
-      const userId = payment?.metadata?.userId || req.user.id;
-      const amount = parseFloat(payment?.amountToCollect || "0");
+      // Extract payment amount from multiple potential locations
+      const amount =
+        parseFloat(payment?.amount) ||
+        parseFloat(payment?.amountToCollect) ||
+        parseFloat(payment?.data?.amountToCollect) ||
+        0;
+
 
       if (!userId) {
         console.error("❌ No userId found in payment metadata or session");
@@ -2840,14 +2671,15 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
             eq(transactions.userId, userId),
             eq(transactions.type, "deposit"),
             eq(transactions.amount, amount.toString()),
-            like(transactions.description, `%${sessionId.substring(0, 8)}%`)
+            like(transactions.description, `%${paymentRef}%`)
           )
         )
         .limit(1);
 
       if (existingTransactions.length > 0) {
-        console.log(`✓ Session ${sessionId} already processed - returning success without duplicating`);
+                console.log("✓ Already processed");
         return res.json({ success: true, alreadyProcessed: true });
+
       }
 
       const user = await storage.getUser(userId);
@@ -2860,7 +2692,7 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
         userId,
         type: "deposit",
         amount: amount.toString(),
-        description: `Cashflows top-up £${amount} (${sessionId.substring(0, 8)})`,
+        description: `Cashflows top-up £${amount} (Ref ${paymentRef})`,
       });
 
       console.log(`✓ Successfully processed wallet top-up for user ${userId}: £${amount}`);

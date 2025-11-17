@@ -15,19 +15,15 @@ export class CashflowsService {
 
   async createPaymentSession(amount: number, userId?: string) {
     const amountString = amount.toFixed(2); // amount in GBP (e.g. 10.00)
-    
-    // Get client URL from environment
-    const domains = process.env.REPLIT_DOMAINS?.split(',') || [];
-    const clientUrl = domains.length > 0 ? `https://${domains[0]}` : 'http://localhost:5000';
 
     // ✅ Minimal payload for Hosted Checkout (configurationId goes in HEADERS ONLY)
     const payload = {
       amountToCollect: amountString,
       currency: "GBP",
       parameters: {
-        returnUrlSuccess: `${clientUrl}/wallet/success`,
-        returnUrlFailed: `${clientUrl}/wallet/failed`,
-        returnUrlCancelled: `${clientUrl}/wallet/cancelled`,
+        returnUrlSuccess: `${process.env.CLIENT_URL}/wallet/success`,
+        returnUrlFailed: `${process.env.CLIENT_URL}/wallet/failed`,
+        returnUrlCancelled: `${process.env.CLIENT_URL}/wallet/cancelled`,
       },
       metadata: {
         userId, 
@@ -82,19 +78,19 @@ export class CashflowsService {
 async createCompetitionPaymentSession(amount: number, metadata: any) {
   const amountString = amount.toFixed(2);
   
-  // Get client URL from environment
-  const domains = process.env.REPLIT_DOMAINS?.split(',') || [];
-  const clientUrl = domains.length > 0 ? `https://${domains[0]}` : 'http://localhost:5000';
 
   const payload = {
     amountToCollect: amountString,
     currency: "GBP",
+   
     parameters: {
-      returnUrlSuccess: `${clientUrl}/success/competition`,
-      returnUrlFailed: `${clientUrl}/failed`,
-      returnUrlCancelled: `${clientUrl}/cancelled`,
+      returnUrlSuccess: `${process.env.CLIENT_URL}/success/competition?orderId=${metadata.orderId}`,
+      returnUrlFailed: `${process.env.CLIENT_URL}/failed?orderId=${metadata.orderId}`,
+      returnUrlCancelled: `${process.env.CLIENT_URL}/cancelled?orderId=${metadata.orderId}`,
     },
-    metadata,
+    metadata: {
+      ...metadata,
+    },
   };
 
   const jsonBody = JSON.stringify(payload);
@@ -137,33 +133,38 @@ async createCompetitionPaymentSession(amount: number, metadata: any) {
   }
 }
 
-  async getPaymentStatus(sessionId: string) {
-    const url = `${this.config.baseUrl}/payment-jobs/${sessionId}`;
+  async getPaymentStatus(paymentJobRef: string, paymentRef?: string) {
+  let url = `${this.config.baseUrl}/payment-jobs/${paymentJobRef}`;
 
-    // For GET, Cashflows requires only the API key hashed
-    const hash = crypto
-      .createHash("sha512")
-      .update(this.config.apiKey, "utf8")
-      .digest("hex")
-      .toUpperCase();
-
-    const headers = {
-      ConfigurationId: this.config.configurationId,
-      Hash: hash,
-      "Content-Type": "application/json",
-    };
-
-    try {
-      const res = await axios.get(url, { headers });
-      return res.data;
-    } catch (err: any) {
-      console.error(
-        "❌ Failed to fetch payment status:",
-        err.response?.data || err.message
-      );
-      throw err;
-    }
+  // If paymentRef exists, fetch the specific payment inside the job
+  if (paymentRef) {
+    url = `${this.config.baseUrl}/payment-jobs/${paymentJobRef}/payments/${paymentRef}`;
   }
+
+  const hash = crypto
+    .createHash("sha512")
+    .update(this.config.apiKey, "utf8")
+    .digest("hex")
+    .toUpperCase();
+
+  const headers = {
+    ConfigurationId: this.config.configurationId,
+    Hash: hash,
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const res = await axios.get(url, { headers });
+    return res.data;
+  } catch (err: any) {
+    console.error(
+      "❌ Failed to fetch payment status:",
+      err.response?.data || err.message
+    );
+    throw err;
+  }
+}
+
 }
 
 // ✅ Use the Hosted endpoint
@@ -174,5 +175,5 @@ export const cashflows = new CashflowsService({
   configurationId: process.env.CASHFLOWS_CONFIGURATION_ID!,
   baseUrl:
     process.env.CASHFLOWS_BASE_URL ||
-    "https://gateway-int.cashflows.com/api/gateway", // Default to integration for testing
+    "https://gateway.cashflows.com/api/gateway", // Default to integration for testing
 });
