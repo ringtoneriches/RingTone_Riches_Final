@@ -15,6 +15,8 @@ import Competition from "@/pages/competition";
 import PlayGame from "@/pages/play-game";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
+import ForgotPassword from "@/pages/forgot-password";
+import ResetPassword from "@/pages/reset-password";
 import spinWheel from "./pages/spinWheel";
 import WalletSuccess from "./pages/success";
 import CheckoutSuccess from "./pages/competion-success";
@@ -45,6 +47,7 @@ import AdminSettings from "./pages/admin/settings";
 import AdminWithdrawals from "./pages/admin/withdrawals";
 import AdminEntries from "./pages/admin/entries";
 import AdminPastWinners from "./pages/admin/past-winners";
+import AdminMarketing from "./pages/admin/marketing";
 import ScrollToTop from "./lib/ScrollToTop ";
 
 
@@ -60,6 +63,8 @@ function Router() {
       {/* Public routes - always available */}
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/termsAndConditions" component={TermsAndConditions} />
       <Route path="/play-responsible" component={PlayResponsibly} />
       <Route path="/privacy-policy" component={PrivacyPolicy} />
@@ -102,6 +107,7 @@ function Router() {
       <Route path="/admin/orders" component={AdminOrders} />
       <Route path="/admin/withdrawals" component={AdminWithdrawals} />
       <Route path="/admin/past-winners" component={AdminPastWinners} />
+      <Route path="/admin/marketing" component={AdminMarketing} />
       <Route path="/admin/settings" component={AdminSettings} />
       
       <Route component={NotFound} />
@@ -117,7 +123,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <ScrollToTop />
+           <ScrollToTop />
         <Router />
       </TooltipProvider>
     </QueryClientProvider>

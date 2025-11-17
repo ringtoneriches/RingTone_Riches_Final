@@ -55,7 +55,7 @@ export default function Landing() {
           <div className="text-center mb-8">
             <h2 className="text-2xl md:text-4xl font-black mb-2">
               <span className="bg-gradient-to-r from-primary via-yellow-400 to-primary bg-clip-text text-transparent">
-                Why Ringtone Riches?
+                Why RingTone Riches?
               </span>
             </h2>
             <p className="text-muted-foreground text-sm md:text-base">
@@ -267,7 +267,7 @@ export default function Landing() {
             </span>
           </h2>
           <p className="text-muted-foreground text-sm md:text-base mb-6 md:mb-8 max-w-xl mx-auto">
-            Join our VIP list for early access to new competitions, special discounts, and bonus entries!
+             Enter your email to receive our latest news, updates, and offers by email and SMS!
           </p>
           
           <div className="max-w-md mx-auto">

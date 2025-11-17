@@ -1,4 +1,7 @@
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import UnifiedBilling from "@/components/unified-billing";
@@ -6,6 +9,25 @@ import { Sparkles, Award, Star, Gift } from "lucide-react";
 
 const ScratchBilling = () => {
   const { orderId } = useParams();
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+
+  // Check if scratch cards are visible
+  const { data: scratchConfig } = useQuery<{ isVisible: boolean }>({
+    queryKey: ["/api/admin/game-scratch-config"],
+  });
+
+  // Redirect if scratch cards are hidden
+  useEffect(() => {
+    if (scratchConfig && scratchConfig.isVisible === false) {
+      toast({
+        title: "Scratch Cards Unavailable",
+        description: "Scratch cards are currently not available.",
+        variant: "destructive",
+      });
+      navigate("/");
+    }
+  }, [scratchConfig?.isVisible]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-zinc-950 via-black to-zinc-900 relative overflow-hidden">
@@ -38,7 +60,7 @@ const ScratchBilling = () => {
             </div>
             
             <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent">
-              Scratch & Win
+              The LandMark Loot
             </h1>
             
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">

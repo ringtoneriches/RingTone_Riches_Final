@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { storage } from "./storage";
 import {
   setupCustomAuth,
@@ -18,6 +19,9 @@ import {
   registerUserSchema,
   loginUserSchema,
   insertWithdrawalRequestSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  passwordResetTokens,
   competitions,
   tickets,
   orders,
@@ -36,7 +40,7 @@ import {stripe} from "./stripe";
 import { cashflows } from "./cashflows";
 import { and, asc, desc, eq, inArray, sql, like, gte, lte, or } from "drizzle-orm";
 import { z } from "zod";
-import { sendOrderConfirmationEmail, sendWelcomeEmail } from "./email";
+import { sendOrderConfirmationEmail, sendWelcomeEmail, sendPromotionalEmail, sendPasswordResetEmail } from "./email";
 import { wsManager } from "./websocket";
 
 // Default spin wheel configuration - 26 segments with 6 evenly-distributed black segments
@@ -118,6 +122,10 @@ const spinConfigSchema = z.object({
   isVisible: z.boolean().optional(),
 });
 
+const scratchConfigSchema = z.object({
+  isVisible: z.boolean().optional(),
+});
+
 const uploadDir = path.join(process.cwd(), "attached_assets", "competitions");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -145,18 +153,6 @@ const upload = multer({
   },
   limits: { fileSize: 5 * 1024 * 1024 },
 });
-
-const fixDates = (data: any) => {
-  const dateFields = ["startDate", "endDate", "expiryDate", "publishedAt"]; // <-- add your real date columns
-
-  for (const field of dateFields) {
-    if (data[field]) {
-      data[field] = new Date(data[field]); // convert to Date object
-    }
-  }
-
-  return data;
-};
 // Initialize Stripe only if keys are available
 // let stripe: Stripe | null = null;
 // if (process.env.STRIPE_SECRET_KEY) {
@@ -380,6 +376,125 @@ app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     }
 });
 
+// Password reset - Request reset link
+app.post("/api/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = forgotPasswordSchema.parse(req.body);
+
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.json({ 
+        message: "If an account exists with this email, a password reset link has been sent." 
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 3600000);
+
+    await db.insert(passwordResetTokens).values({
+      email: user.email,
+      token: resetToken,
+      expiresAt,
+      used: false,
+    });
+
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+      : `${req.protocol}://${req.get('host')}`;
+    const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
+    
+    await sendPasswordResetEmail(
+      user.email, 
+      resetUrl, 
+      user.firstName || undefined
+    );
+
+    console.log(`Password reset requested for: ${user.email}`);
+    
+    res.json({ 
+      message: "If an account exists with this email, a password reset link has been sent." 
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({ message: "Failed to process password reset request" });
+  }
+});
+
+// Password reset - Verify token validity
+app.get("/api/auth/verify-reset-token/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const [resetToken] = await db
+      .select()
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.token, token))
+      .limit(1);
+
+    if (!resetToken) {
+      return res.status(404).json({ message: "Invalid or expired reset token" });
+    }
+
+    if (resetToken.used) {
+      return res.status(400).json({ message: "This reset link has already been used" });
+    }
+
+    if (new Date() > new Date(resetToken.expiresAt)) {
+      return res.status(400).json({ message: "This reset link has expired" });
+    }
+
+    res.json({ valid: true, email: resetToken.email });
+  } catch (error) {
+    console.error("Verify reset token error:", error);
+    res.status(500).json({ message: "Failed to verify reset token" });
+  }
+});
+
+// Password reset - Reset password with token
+app.post("/api/auth/reset-password", async (req, res) => {
+  try {
+    const { token, newPassword } = resetPasswordSchema.parse(req.body);
+
+    const [resetToken] = await db
+      .select()
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.token, token))
+      .limit(1);
+
+    if (!resetToken) {
+      return res.status(404).json({ message: "Invalid or expired reset token" });
+    }
+
+    if (resetToken.used) {
+      return res.status(400).json({ message: "This reset link has already been used" });
+    }
+
+    if (new Date() > new Date(resetToken.expiresAt)) {
+      return res.status(400).json({ message: "This reset link has expired" });
+    }
+
+    const user = await storage.getUserByEmail(resetToken.email);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const hashedPassword = await hashPassword(newPassword);
+    await storage.updateUser(user.id, { password: hashedPassword });
+
+    await db
+      .update(passwordResetTokens)
+      .set({ used: true })
+      .where(eq(passwordResetTokens.token, token));
+
+    console.log(`Password reset successful for: ${user.email}`);
+
+    res.json({ message: "Password has been reset successfully" });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(500).json({ message: "Failed to reset password" });
+  }
+});
+
 app.put("/api/auth/user", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -459,7 +574,23 @@ app.get("/api/competitions", async (req, res) => {
       .where(eq(competitions.isActive, true))
       .orderBy(asc(competitions.displayOrder), desc(competitions.createdAt));
     
-    res.json(competitionsList);
+    // Check visibility settings for game types
+    const { gameSpinConfig, gameScratchConfig } = await import("@shared/schema");
+    const [spinConfig] = await db.select().from(gameSpinConfig).where(eq(gameSpinConfig.id, "active"));
+    const [scratchConfig] = await db.select().from(gameScratchConfig).where(eq(gameScratchConfig.id, "active"));
+    
+    // Filter out hidden competitions based on game type visibility
+    const visibleCompetitions = competitionsList.filter((comp) => {
+      if (comp.type === "spin" && spinConfig && spinConfig.isVisible === false) {
+        return false;
+      }
+      if (comp.type === "scratch" && scratchConfig && scratchConfig.isVisible === false) {
+        return false;
+      }
+      return true;
+    });
+    
+    res.json(visibleCompetitions);
   } catch (error) {
     console.error("Error fetching competitions:", error);
     res.status(500).json({ message: "Failed to fetch competitions" });
@@ -618,7 +749,7 @@ app.post("/api/payment-success/competition", isAuthenticated, async (req: any, r
     console.error("❌ Error confirming competition payment:", error);
     return res.status(500).json({ message: "Failed to confirm competition payment" });
   }
-});
+}); 
 
 
 
@@ -1148,6 +1279,7 @@ app.post("/api/play-spin-wheelll", isAuthenticated, async (req: any, res) => {
     // Check spins remaining
     const spinsUsed = await storage.getSpinsUsed(orderId);
     const spinsRemaining = order.quantity - spinsUsed;
+
     if (spinsRemaining <= 0) {
       return res.status(400).json({
         success: false,
@@ -1165,6 +1297,7 @@ app.post("/api/play-spin-wheelll", isAuthenticated, async (req: any, res) => {
     const [config] = await db.select().from(gameSpinConfig).where(eq(gameSpinConfig.id, "active"));
     const wheelConfig = config || DEFAULT_SPIN_WHEEL_CONFIG;
     const segments = wheelConfig.segments as any[];
+
     // Filter out segments that reached maxWins limit AND have zero probability
     const eligibleSegments = [];
     for (const segment of segments) {
@@ -1183,6 +1316,7 @@ app.post("/api/play-spin-wheelll", isAuthenticated, async (req: any, res) => {
       
       eligibleSegments.push(segment);
     }
+
     if (eligibleSegments.length === 0) {
       return res.status(400).json({
         success: false,
@@ -2347,6 +2481,412 @@ app.post("/api/reveal-all-scratch-cards", isAuthenticated, async (req: any, res)
   }
 });
 
+// 🎯 NEW ARCHITECTURE: Pre-load scratch session BEFORE scratching starts
+// Step 1: Start a scratch session - pre-determine result and tile layout
+app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID is required",
+      });
+    }
+
+    // Verify valid completed order
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "No valid scratch card purchase found",
+      });
+    }
+
+    // Check cards remaining
+    const used = await storage.getScratchCardsUsed(orderId);
+    const remaining = order.quantity - used;
+
+    if (remaining <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No scratch cards remaining in this purchase",
+      });
+    }
+
+    // Get user
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 🎲 Pre-determine the result using atomic transaction
+    let selectedPrize: any;
+    let tileLayout: string[] = [];
+    
+    try {
+      await db.transaction(async (tx) => {
+        // Lock and fetch eligible prizes
+        const allPrizes = await tx
+          .select()
+          .from(scratchCardImages)
+          .where(eq(scratchCardImages.isActive, true))
+          .for('update');
+
+        if (!allPrizes || allPrizes.length === 0) {
+          throw new Error("No prizes configured");
+        }
+
+        // Filter prizes that haven't reached maxWins
+        const eligiblePrizes = allPrizes.filter(prize => {
+          if (!prize.weight || prize.weight <= 0) return false;
+          if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins) return false;
+          return true;
+        });
+
+        if (eligiblePrizes.length === 0) {
+          throw new Error("No prizes available");
+        }
+
+        // Weighted random selection
+        const totalWeight = eligiblePrizes.reduce((sum, prize) => sum + prize.weight, 0);
+        if (totalWeight <= 0) {
+          throw new Error("Invalid prize weights");
+        }
+
+        let random = Math.random() * totalWeight;
+        selectedPrize = eligiblePrizes[0];
+
+        for (const prize of eligiblePrizes) {
+          random -= prize.weight;
+          if (random <= 0) {
+            selectedPrize = prize;
+            break;
+          }
+        }
+      });
+
+      // 🖼️ Generate 2x3 tile layout (6 tiles) based on win/loss
+      const isWinner = selectedPrize.rewardType !== 'try_again' && selectedPrize.rewardType !== 'lose';
+      
+      // Define winning patterns for 2x3 grid:
+      // [0] [1] [2]
+      // [3] [4] [5]
+      const winningPatterns = [
+        [0, 1, 2], // Top row
+        [3, 4, 5], // Bottom row
+        [0, 2, 4], // Diagonal
+        [1, 3, 5], // Diagonal
+      ];
+      
+      if (isWinner && selectedPrize.imageName) {
+        // Winner: Pick random winning pattern and show winning image in those 3 positions
+        const winningImage = selectedPrize.imageName;
+        const winPositions = winningPatterns[Math.floor(Math.random() * winningPatterns.length)];
+        
+        // Get all other images for non-winning positions
+        const otherPrizes = await db
+          .select()
+          .from(scratchCardImages)
+          .where(eq(scratchCardImages.isActive, true));
+        
+        const otherImages = otherPrizes
+          .filter(p => p.imageName !== winningImage && p.imageName)
+          .map(p => p.imageName as string);
+        
+        // Build 2x3 grid (6 tiles)
+        tileLayout = Array(6).fill('');
+        
+        // Place winning images
+        winPositions.forEach(pos => {
+          tileLayout[pos] = winningImage;
+        });
+        
+        // Fill remaining positions with random other images
+        const shuffledOthers = [...otherImages].sort(() => Math.random() - 0.5);
+        let otherIndex = 0;
+        
+        for (let i = 0; i < 6; i++) {
+          if (!winPositions.includes(i)) {
+            tileLayout[i] = shuffledOthers[otherIndex % shuffledOthers.length];
+            otherIndex++;
+          }
+        }
+      } else {
+        // Loser: Random mix ensuring NO pattern matches
+        const allPrizes = await db
+          .select()
+          .from(scratchCardImages)
+          .where(eq(scratchCardImages.isActive, true));
+        
+        const allImages = allPrizes
+          .filter(p => p.imageName)
+          .map(p => p.imageName as string);
+        
+        if (allImages.length < 3) {
+          throw new Error("Not enough images configured");
+        }
+        
+        // Generate random 6-tile layout and ensure NO winning patterns match
+        const shuffled = [...allImages].sort(() => Math.random() - 0.5);
+        tileLayout = Array(6).fill('').map((_, i) => {
+          return shuffled[i % shuffled.length];
+        });
+        
+        // Keep checking and fixing until NO patterns match
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        while (attempts < maxAttempts) {
+          // Check if ANY winning pattern matches
+          const matchingPattern = winningPatterns.find(pattern => {
+            const images = pattern.map(pos => tileLayout[pos]);
+            return images[0] === images[1] && images[1] === images[2];
+          });
+          
+          if (!matchingPattern) {
+            // No matches found - we're good!
+            break;
+          }
+          
+          // Fix the match by replacing one tile in the pattern with a different image
+          const positionToFix = matchingPattern[0]; // Pick first position in the pattern
+          const currentImage = tileLayout[positionToFix];
+          const differentImage = shuffled.find(img => img !== currentImage);
+          
+          if (differentImage) {
+            tileLayout[positionToFix] = differentImage;
+          } else {
+            // Fallback: shuffle entire layout
+            tileLayout = Array(6).fill('').map((_, i) => {
+              return shuffled[i % shuffled.length];
+            });
+          }
+          
+          attempts++;
+        }
+        
+        // Final safety check
+        if (attempts >= maxAttempts) {
+          console.warn("Failed to generate non-matching layout after max attempts, using fallback");
+          // Ensure at least the first pattern [0,1,2] doesn't match by forcing different values
+          if (shuffled.length >= 3) {
+            tileLayout[0] = shuffled[0];
+            tileLayout[1] = shuffled[1 % shuffled.length];
+            tileLayout[2] = shuffled[2 % shuffled.length];
+            // Make sure they're actually different
+            if (tileLayout[0] === tileLayout[1]) tileLayout[1] = shuffled[(1 + 1) % shuffled.length];
+            if (tileLayout[1] === tileLayout[2]) tileLayout[2] = shuffled[(2 + 1) % shuffled.length];
+            if (tileLayout[0] === tileLayout[2]) tileLayout[2] = shuffled[(2 + 2) % shuffled.length];
+          }
+        }
+      }
+
+      // Generate unique session ID
+      const sessionId = nanoid();
+
+      // Prepare prize response
+      let prizeInfo: any = {
+        type: 'none',
+        value: '0',
+        label: selectedPrize.label || 'Try Again',
+      };
+
+      if (isWinner) {
+        if (selectedPrize.rewardType === 'cash') {
+          prizeInfo = {
+            type: 'cash',
+            value: parseFloat(String(selectedPrize.rewardValue)).toFixed(2),
+            label: selectedPrize.label,
+          };
+        } else if (selectedPrize.rewardType === 'points') {
+          prizeInfo = {
+            type: 'points',
+            value: String(selectedPrize.rewardValue),
+            label: selectedPrize.label,
+          };
+        } else if (selectedPrize.rewardType === 'physical') {
+          prizeInfo = {
+            type: 'physical',
+            value: selectedPrize.label,
+            label: selectedPrize.label,
+          };
+        }
+      }
+
+      // Return session data to frontend (NO database changes yet)
+      res.json({
+        success: true,
+        sessionId,
+        isWinner,
+        prize: prizeInfo,
+        tileLayout, // 9-element array of image names
+        prizeId: selectedPrize.id,
+        orderId,
+      });
+
+    } catch (error) {
+      console.error("Error creating scratch session:", error);
+      throw error;
+    }
+
+  } catch (error) {
+    console.error("Error starting scratch session:", error);
+    res.status(500).json({ message: "Failed to start scratch session" });
+  }
+});
+
+// Step 2: Complete scratch session - record usage and award prize
+app.post("/api/scratch-session/:sessionId/complete", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { sessionId } = req.params;
+    const { orderId, prizeId, isWinner } = req.body;
+
+    if (!orderId || !prizeId) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID and Prize ID are required",
+      });
+    }
+
+    // Verify order
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order",
+      });
+    }
+
+    // Get user
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Get prize details
+    const prize = await db
+      .select()
+      .from(scratchCardImages)
+      .where(eq(scratchCardImages.id, prizeId))
+      .limit(1);
+
+    if (!prize || prize.length === 0) {
+      return res.status(404).json({ message: "Prize not found" });
+    }
+
+    const selectedPrize = prize[0];
+    let prizeResponse = { type: "none", value: "0" };
+
+    // 🔒 Atomic transaction to record usage and award prize
+    await db.transaction(async (tx) => {
+      // Record scratch card usage
+      await tx.insert(scratchCardUsage).values({
+        orderId,
+        userId,
+        usedAt: new Date()
+      });
+
+      // Award prize if winner
+      if (isWinner && selectedPrize.rewardType !== 'try_again' && selectedPrize.rewardType !== 'lose') {
+        // Update prize win count
+        await tx
+          .update(scratchCardImages)
+          .set({ quantityWon: selectedPrize.quantityWon + 1 })
+          .where(eq(scratchCardImages.id, selectedPrize.id));
+
+        // Record the win
+        await tx.insert(scratchCardWins).values({
+          userId,
+          prizeId: selectedPrize.id,
+          orderId,
+          wonAt: new Date()
+        });
+
+        // Award cash prize
+        if (selectedPrize.rewardType === 'cash' && selectedPrize.rewardValue) {
+          const amount = parseFloat(String(selectedPrize.rewardValue));
+          const finalBalance = parseFloat(user.balance || "0") + amount;
+
+          await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+          await storage.createTransaction({
+            userId,
+            type: "prize",
+            amount: amount.toFixed(2),
+            description: `Scratch Card Prize - £${amount}`,
+          });
+
+          await storage.createWinner({
+            userId,
+            competitionId: null,
+            prizeDescription: "Scratch Card Prize",
+            prizeValue: `£${amount}`,
+            imageUrl: null,
+            isShowcase: false,
+          });
+
+          prizeResponse = { type: "cash", value: amount.toFixed(2) };
+        } 
+        // Award points prize
+        else if (selectedPrize.rewardType === 'points' && selectedPrize.rewardValue) {
+          const points = parseInt(String(selectedPrize.rewardValue));
+          const newPoints = (user.ringtonePoints || 0) + points;
+
+          await storage.updateUserRingtonePoints(userId, newPoints);
+          await storage.createTransaction({
+            userId,
+            type: "prize",
+            amount: points.toString(),
+            description: `Scratch Card Prize - ${points} Ringtones`,
+          });
+
+          await storage.createWinner({
+            userId,
+            competitionId: null,
+            prizeDescription: "Scratch Card Prize",
+            prizeValue: `${points} Ringtones`,
+            imageUrl: null,
+            isShowcase: false,
+          });
+
+          prizeResponse = { type: "points", value: points.toString() };
+        }
+        // Physical prize
+        else if (selectedPrize.rewardType === 'physical') {
+          await storage.createWinner({
+            userId,
+            competitionId: null,
+            prizeDescription: `Scratch Card Prize - ${selectedPrize.label}`,
+            prizeValue: selectedPrize.label,
+            imageUrl: null,
+            isShowcase: false,
+          });
+
+          prizeResponse = { type: "physical", value: selectedPrize.label };
+        }
+      }
+    });
+
+    // Get updated remaining count
+    const used = await storage.getScratchCardsUsed(orderId);
+    const remaining = order.quantity - used;
+
+    res.json({
+      success: true,
+      prize: prizeResponse,
+      prizeLabel: selectedPrize.label,
+      remainingCards: remaining,
+      orderId: order.id,
+    });
+
+  } catch (error) {
+    console.error("Error completing scratch session:", error);
+    res.status(500).json({ message: "Failed to complete scratch session" });
+  }
+});
+
 app.get("/api/scratch-order/:orderId", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -2381,6 +2921,179 @@ app.get("/api/scratch-order/:orderId", isAuthenticated, async (req: any, res) =>
     res.status(500).json({ message: "Failed to fetch scratch order" });
   }
 });
+
+// DUPLICATE ENDPOINT REMOVED - Using Cashflows-specific endpoint above (line ~397)
+
+  // Game routes
+// app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
+//   try {
+//     const userId = req.user.id;
+//     const { winnerPrize } = req.body;
+//     const SPIN_COST = 2; // £2 per spin
+
+//     // Fetch user and ensure balance is enough
+//     const user = await storage.getUser(userId);
+//     const currentBalance = parseFloat(user?.balance || "0");
+
+//     if (currentBalance < SPIN_COST) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Insufficient balance. Please top up your wallet.",
+//       });
+//     }
+
+//     // Deduct the spin cost
+//     const newBalance = currentBalance - SPIN_COST;
+//     await storage.updateUserBalance(userId, newBalance.toFixed(2));
+
+//     await storage.createTransaction({
+//       userId,
+//       type: "withdrawal",
+//       amount: SPIN_COST.toFixed(2),
+//       description: "Spin Wheel - Spin cost",
+//     });
+
+//     // ---- Handle prize logic ----
+//     if (typeof winnerPrize.amount === "number" && winnerPrize.amount > 0) {
+//       // 💰 Cash prize
+//       const prizeAmount = winnerPrize.amount;
+//       const finalBalance = newBalance + prizeAmount;
+
+//       await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+
+//       await storage.createTransaction({
+//         userId,
+//         type: "prize",
+//         amount: prizeAmount.toFixed(2),
+//         description: `Spin wheel prize: ${winnerPrize.brand || "Prize"} - £${prizeAmount}`,
+//       });
+
+//       await storage.createWinner({
+//         userId,
+//         competitionId: null,
+//         prizeDescription: winnerPrize.brand || "Spin Wheel Prize",
+//         prizeValue: `£${prizeAmount}`,
+//         imageUrl: winnerPrize.image || null,
+//       });
+//     } else if (
+//       typeof winnerPrize.amount === "string" &&
+//       winnerPrize.amount.includes("Ringtones")
+//     ) {
+//       // 🎵 Ringtone points prize
+//       const match = winnerPrize.amount.match(/(\d+)\s*Ringtones/);
+//       if (match) {
+//         const points = parseInt(match[1]);
+//         const newPoints = (user?.ringtonePoints || 0) + points;
+
+//         await storage.updateUserRingtonePoints(userId, newPoints);
+
+//         await storage.createTransaction({
+//           userId,
+//           type: "prize",
+//           amount: points.toString(),
+//           description: `Spin wheel prize: ${winnerPrize.brand || "Prize"} - ${points} Ringtones`,
+//         });
+
+//         await storage.createWinner({
+//           userId,
+//           competitionId: null,
+//           prizeDescription: winnerPrize.brand || "Spin Wheel Prize",
+//           prizeValue: `${points} Ringtones`,
+//           imageUrl: winnerPrize.image || null,
+//         });
+//       }
+//     }
+
+//     res.json({
+//       success: true,
+//       prize: winnerPrize,
+//       balance: newBalance.toFixed(2),
+//     });
+//   } catch (error) {
+//     console.error("Error playing spin wheel:", error);
+//     res.status(500).json({ message: "Failed to play spin wheel" });
+//   }
+// });
+
+// app.post("/api/play-scratch-card", isAuthenticated, async (req: any, res) => {
+//   try {
+//     const userId = req.user.id;
+//     const { winnerPrize } = req.body;
+//     const SCRATCH_COST = 2; // £2 per scratch
+
+//     const user = await storage.getUser(userId);
+//     const currentBalance = parseFloat(user?.balance || "0");
+
+//     if (currentBalance < SCRATCH_COST) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Insufficient balance. Please top up your wallet.",
+//       });
+//     }
+
+//     // 💳 Deduct scratch cost
+//     const newBalance = currentBalance - SCRATCH_COST;
+//     await storage.updateUserBalance(userId, newBalance.toFixed(2));
+//     await storage.createTransaction({
+//       userId,
+//       type: "withdrawal",
+//       amount: SCRATCH_COST.toFixed(2),
+//       description: "Scratch Card - Play cost",
+//     });
+
+//     // 🎁 Handle prize logic
+//     if (winnerPrize.type === "cash" && winnerPrize.value) {
+//       const amount = parseFloat(winnerPrize.value);
+//       if (amount > 0) {
+//         const finalBalance = newBalance + amount;
+//         await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+
+//         await storage.createTransaction({
+//           userId,
+//           type: "prize",
+//           amount: amount.toFixed(2),
+//           description: `Scratch card prize: £${amount}`,
+//         });
+
+//         await storage.createWinner({
+//           userId,
+//           competitionId : null,
+//           prizeDescription: "Scratch Card Prize",
+//           prizeValue: `£${amount}`,
+//           imageUrl: winnerPrize.image || null,
+//         });
+//       }
+//     } else if (winnerPrize.type === "points" && winnerPrize.value) {
+//       const points = parseInt(winnerPrize.value);
+//       const newPoints = (user?.ringtonePoints || 0) + points;
+
+//       await storage.updateUserRingtonePoints(userId, newPoints);
+//       await storage.createTransaction({
+//         userId,
+//         type: "prize",
+//         amount: points.toString(),
+//         description: `Scratch card prize: ${points} Ringtones`,
+//       });
+
+//       await storage.createWinner({
+//         userId,
+//         competitionId : null, 
+//         prizeDescription: "Scratch Card Prize",
+//         prizeValue: `${points} Ringtones`,
+//         imageUrl: winnerPrize.image || null,
+//       });
+//     }
+
+//     res.json({
+//       success: true,
+//       prize: winnerPrize,
+//       balance: newBalance.toFixed(2),
+//     });
+//   } catch (error) {
+//     console.error("Error playing scratch card:", error);
+//     res.status(500).json({ message: "Failed to play scratch card" });
+//   }
+// });
 
   // Convert ringtone points to wallet balance
 app.post("/api/convert-ringtone-points", isAuthenticated, async (req: any, res) => {
@@ -2541,6 +3254,87 @@ app.get("/api/user/referral-stats", isAuthenticated, async (req: any, res) => {
   }
 });
 
+// Newsletter subscription endpoint
+app.post("/api/user/newsletter/subscribe", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    // Get the user's registered email
+    const user = await storage.getUser(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Validate email matches user's registered email
+    if (user.email.toLowerCase() !== email.toLowerCase()) {
+      return res.status(400).json({ 
+        message: "Email doesn't match your registered email. Please use the email you signed up with." 
+      });
+    }
+
+    // Check if already subscribed
+    if (user.receiveNewsletter) {
+      return res.status(409).json({ 
+        message: "You have already subscribed to our newsletter!" 
+      });
+    }
+
+    // Subscribe user to newsletter
+    await db
+      .update(users)
+      .set({ receiveNewsletter: true })
+      .where(eq(users.id, userId));
+
+    res.json({ 
+      success: true, 
+      message: "Successfully subscribed to newsletter! You'll receive exclusive offers and updates." 
+    });
+  } catch (error) {
+    console.error("Error subscribing to newsletter:", error);
+    res.status(500).json({ message: "Failed to subscribe to newsletter" });
+  }
+});
+
+// Newsletter unsubscribe endpoint
+app.post("/api/user/newsletter/unsubscribe", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get the user
+    const user = await storage.getUser(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if already unsubscribed
+    if (!user.receiveNewsletter) {
+      return res.status(409).json({ 
+        message: "You are not subscribed to our newsletter" 
+      });
+    }
+
+    // Unsubscribe user from newsletter
+    await db
+      .update(users)
+      .set({ receiveNewsletter: false })
+      .where(eq(users.id, userId));
+
+    res.json({ 
+      success: true, 
+      message: "Successfully unsubscribed from newsletter" 
+    });
+  } catch (error) {
+    console.error("Error unsubscribing from newsletter:", error);
+    res.status(500).json({ message: "Failed to unsubscribe from newsletter" });
+  }
+});
 
 app.post("/api/wallet/topup", isAuthenticated, async (req: any, res) => {
   try {
@@ -2628,7 +3422,7 @@ app.post("/api/wallet/topup-checkout", isAuthenticated, async (req: any, res) =>
   }
 });
 
-app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => {
+ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => {
   try {
     const { paymentJobRef , paymentRef } = req.body;
     if (!paymentJobRef || !paymentRef) return res.status(400).json({ message: "Missing paymentJobRef or paymentRef" });
@@ -3216,7 +4010,7 @@ app.post("/api/admin/competitions", isAuthenticated, isAdmin, async (req: any, r
 app.put("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: any, res) => {
   try {
     const { id } = req.params;
-     const updateData = fixDates(req.body);
+    const updateData = req.body;
     
     const [updatedCompetition] = await db
       .update(competitions)
@@ -3461,6 +4255,72 @@ app.put("/api/admin/game-spin-config", isAuthenticated, isAdmin, async (req: any
   } catch (error) {
     console.error("Error updating spin config:", error);
     res.status(500).json({ message: "Failed to update spin configuration" });
+  }
+});
+
+// Game Scratch Card Configuration Routes
+app.get("/api/admin/game-scratch-config", isAuthenticated, async (req: any, res) => {
+  try {
+    const { gameScratchConfig } = await import("@shared/schema");
+    const [config] = await db.select().from(gameScratchConfig).where(eq(gameScratchConfig.id, "active"));
+    
+    if (!config) {
+      return res.json({ isVisible: true });
+    }
+    
+    res.json(config);
+  } catch (error) {
+    console.error("Error fetching scratch config:", error);
+    res.status(500).json({ message: "Failed to fetch scratch configuration" });
+  }
+});
+
+app.put("/api/admin/game-scratch-config", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { gameScratchConfig } = await import("@shared/schema");
+    
+    const validationResult = scratchConfigSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({ 
+        message: "Invalid scratch configuration", 
+        errors: validationResult.error.issues 
+      });
+    }
+    
+    const { isVisible } = validationResult.data;
+    
+    const [existing] = await db.select().from(gameScratchConfig).where(eq(gameScratchConfig.id, "active"));
+    
+    if (existing) {
+      const [updated] = await db
+        .update(gameScratchConfig)
+        .set({
+          isVisible: isVisible ?? existing.isVisible,
+          updatedAt: new Date(),
+        })
+        .where(eq(gameScratchConfig.id, "active"))
+        .returning();
+      
+      res.json(updated);
+    } else {
+      const [created] = await db
+        .insert(gameScratchConfig)
+        .values({
+          id: "active",
+          mode: "tight",
+          landmarkImages: [],
+          cashPrizes: [],
+          ringtunePrizes: [],
+          isVisible: isVisible ?? true,
+          isActive: true,
+        })
+        .returning();
+      
+      res.json(created);
+    }
+  } catch (error) {
+    console.error("Error updating scratch config:", error);
+    res.status(500).json({ message: "Failed to update scratch configuration" });
   }
 });
 
@@ -3930,6 +4790,158 @@ app.delete("/api/admin/scratch-images/:id", isAuthenticated, isAdmin, async (req
   } catch (error) {
     console.error("Error deleting scratch card image:", error);
     res.status(500).json({ message: "Failed to delete scratch card image" });
+  }
+});
+
+// Marketing routes
+app.get("/api/admin/marketing/subscribers", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const subscribers = await storage.getNewsletterSubscribers();
+    res.json(subscribers);
+  } catch (error) {
+    console.error("Error fetching newsletter subscribers:", error);
+    res.status(500).json({ message: "Failed to fetch newsletter subscribers" });
+  }
+});
+
+app.get("/api/admin/marketing/campaigns", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const campaigns = await storage.getPromotionalCampaigns();
+    res.json(campaigns);
+  } catch (error) {
+    console.error("Error fetching campaigns:", error);
+    res.status(500).json({ message: "Failed to fetch campaigns" });
+  }
+});
+
+app.get("/api/admin/marketing/campaigns/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const campaign = await storage.getPromotionalCampaignById(id);
+    if (!campaign) {
+      return res.status(404).json({ message: "Campaign not found" });
+    }
+    res.json(campaign);
+  } catch (error) {
+    console.error("Error fetching campaign:", error);
+    res.status(500).json({ message: "Failed to fetch campaign" });
+  }
+});
+
+app.post("/api/admin/marketing/campaigns", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const campaignData = {
+      ...req.body,
+      createdBy: req.user.id,
+      status: "draft",
+      // Convert expiryDate string to Date object if provided
+      expiryDate: req.body.expiryDate ? new Date(req.body.expiryDate) : null,
+    };
+    const campaign = await storage.createPromotionalCampaign(campaignData);
+    res.json(campaign);
+  } catch (error) {
+    console.error("Error creating campaign:", error);
+    res.status(500).json({ message: "Failed to create campaign" });
+  }
+});
+
+app.post("/api/admin/marketing/campaigns/:id/send", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const campaign = await storage.getPromotionalCampaignById(id);
+    
+    if (!campaign) {
+      return res.status(404).json({ message: "Campaign not found" });
+    }
+
+    if (campaign.status === "sent") {
+      return res.status(400).json({ message: "Campaign has already been sent" });
+    }
+
+    // Get all newsletter subscribers
+    const subscribers = await storage.getNewsletterSubscribers();
+    
+    if (subscribers.length === 0) {
+      return res.status(400).json({ message: "No subscribers found" });
+    }
+
+    // Send emails to all subscribers
+    let sentCount = 0;
+    let failedCount = 0;
+
+    for (const subscriber of subscribers) {
+      try {
+        await sendPromotionalEmail(subscriber.email, campaign);
+        
+        // Record email send
+        await storage.createCampaignEmail({
+          campaignId: campaign.id,
+          userId: subscriber.id,
+          email: subscriber.email,
+          deliveryStatus: "sent",
+        });
+        
+        sentCount++;
+      } catch (emailError) {
+        console.error(`Failed to send email to ${subscriber.email}:`, emailError);
+        failedCount++;
+        
+        // Record failed email
+        await storage.createCampaignEmail({
+          campaignId: campaign.id,
+          userId: subscriber.id,
+          email: subscriber.email,
+          deliveryStatus: "failed",
+        });
+      }
+    }
+
+    // Update campaign status
+    await storage.updatePromotionalCampaign(id, {
+      status: "sent",
+      sentAt: new Date(),
+      recipientCount: sentCount,
+    });
+
+    res.json({
+      message: "Campaign sent successfully",
+      sentCount,
+      failedCount,
+      totalSubscribers: subscribers.length,
+    });
+  } catch (error) {
+    console.error("Error sending campaign:", error);
+    res.status(500).json({ message: "Failed to send campaign" });
+  }
+});
+
+app.delete("/api/admin/marketing/campaigns/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    await storage.deletePromotionalCampaign(id);
+    res.json({ message: "Campaign deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting campaign:", error);
+    res.status(500).json({ message: "Failed to delete campaign" });
+  }
+});
+
+app.get("/api/admin/marketing/stats", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const subscribers = await storage.getNewsletterSubscribers();
+    const campaigns = await storage.getPromotionalCampaigns();
+    
+    const stats = {
+      totalSubscribers: subscribers.length,
+      totalCampaigns: campaigns.length,
+      sentCampaigns: campaigns.filter(c => c.status === "sent").length,
+      draftCampaigns: campaigns.filter(c => c.status === "draft").length,
+    };
+    
+    res.json(stats);
+  } catch (error) {
+    console.error("Error fetching marketing stats:", error);
+    res.status(500).json({ message: "Failed to fetch marketing stats" });
   }
 });
 

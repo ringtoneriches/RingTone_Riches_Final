@@ -3,9 +3,23 @@ import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import UnifiedBilling from "@/components/unified-billing";
 import { Sparkles, Target, Zap } from "lucide-react";
+import { Competition } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
 
 const SpinBilling = () => {
-  const { orderId } = useParams();
+  const { orderId , id } = useParams();
+
+   const { data: competition, isLoading } = useQuery<Competition>({
+    queryKey: ["/api/competitions", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/competitions/${id}`);
+      if (!res.ok) throw new Error("Failed to load competition");
+      return res.json();
+    },
+    enabled: !!id,
+  });
+
+  console.log(competition)
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-zinc-950 via-black to-zinc-900 relative overflow-hidden">
@@ -35,7 +49,7 @@ const SpinBilling = () => {
             </div>
             
             <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent">
-              Spin the Wheel
+              {/* {competition?.title} */} The Luxury Car Spin
             </h1>
             
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">

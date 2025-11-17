@@ -36,6 +36,8 @@ import prize20 from "../../../../attached_assets/Car/wv.png";
 import pointer from "../../../../attached_assets/pointer.png";
 import ring from "../../../../attached_assets/ring.png";
 
+import congrats from "../../../../attached_assets/sounds/congrats.mp3"
+
 // Icon mapping for admin configuration - uses car PNG images
 const ICON_MAP: Record<string, any> = {
   AstonMartin: prize1,
@@ -136,10 +138,23 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
   const [winner, setWinner] = useState<string | null>(null);
   const [loadedImages, setLoadedImages] = useState<HTMLImageElement[]>([]);
   const [allImagesLoaded, setAllImagesLoaded] = useState(false);
-  
+  const congratsAudioRef = useRef<HTMLAudioElement | null>(null);
   // 🛡️ CRITICAL SAFEGUARD: Prevent rapid-fire spins
   const lastSpinTimeRef = useRef<number>(0);
   const manualSpinRef = useRef<boolean>(false);
+
+  useEffect(() => {
+  congratsAudioRef.current = new Audio(congrats);
+  congratsAudioRef.current.load();
+}, []);
+
+const stopCongratsSound = () => {
+  if (congratsAudioRef.current) {
+    congratsAudioRef.current.pause();
+    congratsAudioRef.current.currentTime = 0;
+  }
+};
+
 
   // Fetch wheel configuration from admin - refetch on every spin for real-time updates
   const { data: wheelConfig, refetch: refetchConfig } = useQuery<WheelConfig>({
@@ -800,7 +815,19 @@ ctx.stroke();
             winnerResult.index,
             winnerResult.label,
             result.prize, // Use prize data from server
+            
           );
+          // Play congratulation sound
+          
+          const isWin =
+  winnerResult.prize.amount !== 0 &&
+  winnerResult.prize.amount !== "-" &&
+  !winnerResult.prize.amount?.toString().toLowerCase().includes("lose");
+
+if (isWin && congratsAudioRef.current) {
+  congratsAudioRef.current.currentTime = 0;
+  congratsAudioRef.current.play().catch(() => {});
+}
 
           // ✅ Update spin history
           setSpinHistory((prev) => {
@@ -825,6 +852,11 @@ ctx.stroke();
     } catch (error) {
       console.error("Error during spin:", error);
       setIsSpinning(false);
+      // Stop sound when popup closes
+if (congratsAudioRef.current) {
+  congratsAudioRef.current.pause();
+  congratsAudioRef.current.currentTime = 0;
+}
       // Show error to user
       alert("Failed to spin. Please try again.");
     }

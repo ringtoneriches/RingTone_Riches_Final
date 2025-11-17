@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import money from "../../../../attached_assets/money.png";
+// import congrats from "../../../../attached_assets/sounds/congrats.mp3"
+
 
 interface PrizeModalProps {
   isOpen: boolean;
@@ -18,6 +20,17 @@ interface PrizeModalProps {
 }
 
 export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: PrizeModalProps) {
+  //  const congratsAudioRef = useRef<HTMLAudioElement | null>(null);
+//    useEffect(() => {
+//   if (isOpen && isWinner) {
+//     if (!congratsAudioRef.current) {
+//       congratsAudioRef.current = new Audio(congrats);
+//     }
+
+//     congratsAudioRef.current.currentTime = 0;
+//     congratsAudioRef.current.play().catch(() => {});
+//   }
+// }, [isOpen, isWinner]);
   useEffect(() => {
     if (isOpen && isWinner) {
       const duration = 3000;
@@ -110,6 +123,17 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
 };
 
 
+
+
+// const stopCongratsSound = () => {
+//   if (congratsAudioRef.current) {
+//     congratsAudioRef.current.pause();
+//     congratsAudioRef.current.currentTime = 0;
+//   }
+// };
+
+ 
+
   return (
     <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-md">
@@ -133,7 +157,9 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
           
           {/* Close button */}
           <button
-            onClick={onClose}
+            onClick={
+              onClose
+            }
             className="absolute top-4 right-4 z-10 p-2 rounded-full bg-gray-800/80 hover:bg-gray-700/80 transition-colors"
             data-testid="button-close-modal"
           >
@@ -192,7 +218,7 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
             {!isWinner && (
               <div className="bg-gradient-to-br from-gray-800/40 to-gray-900/40 rounded-xl p-6 border border-gray-700/30 backdrop-blur-sm">
                 <p className="text-center text-gray-400 text-sm sm:text-base">
-                  Better luck next time! Keep playing for more chances to win amazing prizes.
+                  You didn't win this time but the next luxury car spin could be your moment.
                 </p>
               </div>
             )}
@@ -201,7 +227,9 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
           {/* Action button */}
           <div className="px-8 pb-8">
             <Button
-              onClick={onClose}
+              onClick={
+              onClose// your popup closing logic
+            }
               className={`w-full h-12 sm:h-14 text-base sm:text-lg font-bold rounded-xl ${
                 isWinner 
                   ? 'bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] hover:from-[#F59E0B] hover:via-[#FACC15] hover:to-[#F59E0B] text-gray-900' 

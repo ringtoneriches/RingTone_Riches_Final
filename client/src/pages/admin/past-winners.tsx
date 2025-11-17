@@ -452,7 +452,7 @@ export default function AdminPastWinners() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {item.competitions?.title || (
+                      {item.competitions?.title ||(
                         <span className="text-muted-foreground">No competition</span>
                       )}
                     </TableCell>

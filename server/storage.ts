@@ -12,6 +12,8 @@ import {
   platformSettings,
   scratchCardImages,
   withdrawalRequests,
+  promotionalCampaigns,
+  campaignEmails,
   type User,
   type UpsertUser,
   type Competition,
@@ -34,6 +36,10 @@ import {
   type InsertScratchCardImage,
   type WithdrawalRequest,
   type InsertWithdrawalRequest,
+  type PromotionalCampaign,
+  type InsertPromotionalCampaign,
+  type CampaignEmail,
+  type InsertCampaignEmail,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sum, sql } from "drizzle-orm";
@@ -133,6 +139,15 @@ export interface IStorage {
     adminNotes?: string,
     processedBy?: string
   ): Promise<WithdrawalRequest>;
+
+  // Marketing operations
+  getNewsletterSubscribers(): Promise<User[]>;
+  getPromotionalCampaigns(): Promise<PromotionalCampaign[]>;
+  getPromotionalCampaignById(id: string): Promise<PromotionalCampaign | undefined>;
+  createPromotionalCampaign(campaign: InsertPromotionalCampaign): Promise<PromotionalCampaign>;
+  updatePromotionalCampaign(id: string, data: Partial<PromotionalCampaign>): Promise<PromotionalCampaign>;
+  deletePromotionalCampaign(id: string): Promise<void>;
+  createCampaignEmail(email: InsertCampaignEmail): Promise<CampaignEmail>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -699,6 +714,61 @@ async recordSpinUsage(orderId: string, userId: string): Promise<void> {
       .where(eq(withdrawalRequests.id, id))
       .returning();
     return updated;
+  }
+
+  // Marketing operations
+  async getNewsletterSubscribers(): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(eq(users.receiveNewsletter, true))
+      .orderBy(desc(users.createdAt));
+  }
+
+  async getPromotionalCampaigns(): Promise<PromotionalCampaign[]> {
+    return await db
+      .select()
+      .from(promotionalCampaigns)
+      .orderBy(desc(promotionalCampaigns.createdAt));
+  }
+
+  async getPromotionalCampaignById(id: string): Promise<PromotionalCampaign | undefined> {
+    const [campaign] = await db
+      .select()
+      .from(promotionalCampaigns)
+      .where(eq(promotionalCampaigns.id, id));
+    return campaign;
+  }
+
+  async createPromotionalCampaign(campaign: InsertPromotionalCampaign): Promise<PromotionalCampaign> {
+    const [created] = await db
+      .insert(promotionalCampaigns)
+      .values(campaign)
+      .returning();
+    return created;
+  }
+
+  async updatePromotionalCampaign(id: string, data: Partial<PromotionalCampaign>): Promise<PromotionalCampaign> {
+    const [updated] = await db
+      .update(promotionalCampaigns)
+      .set(data)
+      .where(eq(promotionalCampaigns.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePromotionalCampaign(id: string): Promise<void> {
+    await db
+      .delete(promotionalCampaigns)
+      .where(eq(promotionalCampaigns.id, id));
+  }
+
+  async createCampaignEmail(email: InsertCampaignEmail): Promise<CampaignEmail> {
+    const [created] = await db
+      .insert(campaignEmails)
+      .values(email)
+      .returning();
+    return created;
   }
 }
 

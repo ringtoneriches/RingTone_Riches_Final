@@ -1,8 +1,8 @@
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, Trophy, Upload } from "lucide-react";
+import { Plus, Edit, Trash2, Trophy, Upload, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Competition } from "@shared/schema";
 import WinnerDrawDialog from "@/components/admin/winner-draw-dialog";
@@ -60,9 +61,11 @@ function CompetitionForm({
     imageUrl: data?.imageUrl || "",
     type: fixedType || data?.type || "instant",
     ticketPrice: data?.ticketPrice || "0.99",
-    maxTickets: data?.maxTickets?.toString() || "",
+    maxTickets: data?.maxTickets?.toString() || "1000",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
-    endDate: data?.endDate ? new Date(data.endDate).toISOString().slice(0, 16) : "",
+    endDate: data?.endDate
+      ? new Date(data.endDate).toISOString().slice(0, 16)
+      : "",
     prizeData: data?.prizeData as any,
   });
   const [uploading, setUploading] = useState(false);
@@ -272,10 +275,10 @@ function CompetitionForm({
             onChange={(e) => setForm({ ...form, endDate: e.target.value })}
             placeholder="Select end date and time"
             data-testid="input-endDate"
-            className="text-white"
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Leave empty to use the default countdown timer. Set to display a custom countdown on the competition page.
+            Leave empty to use the default countdown timer. Set to display a
+            custom countdown on the competition page.
           </p>
         </div>
       </TabsContent>
@@ -328,6 +331,99 @@ function CompetitionForm({
   );
 }
 
+// Scratch Card Settings Dialog
+function ScratchSettingsDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const [isVisible, setIsVisible] = useState<boolean>(true);
+
+  const { data: config } = useQuery<{ isVisible: boolean }>({
+    queryKey: ["/api/admin/game-scratch-config"],
+  });
+
+  // Set initial state from config when it loads
+  useEffect(() => {
+    if (config) {
+      setIsVisible(config.isVisible ?? true);
+    }
+  }, [config]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/admin/game-scratch-config", "PUT", {
+        isVisible,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/game-scratch-config"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/competitions"] });
+      onOpenChange(false);
+      toast({ title: "Settings saved successfully" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to save settings",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Scratch Card Settings</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Visibility Toggle */}
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">
+                Show Scratch Card on Frontend
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Hide the scratch card on the frontend while you adjust settings
+              </p>
+            </div>
+            <Switch
+              checked={isVisible}
+              onCheckedChange={setIsVisible}
+              data-testid="switch-scratch-visible"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={saveMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            data-testid="button-save-scratch-settings"
+          >
+            {saveMutation.isPending ? "Saving..." : "Save Settings"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function AdminScratchCard() {
   const { toast } = useToast();
   const [editingCompetition, setEditingCompetition] =
@@ -336,6 +432,7 @@ export default function AdminScratchCard() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [drawWinnerCompetition, setDrawWinnerCompetition] =
     useState<Competition | null>(null);
+  const [scratchSettingsOpen, setScratchSettingsOpen] = useState(false);
 
   const { data: allCompetitions, isLoading } = useQuery<Competition[]>({
     queryKey: ["/api/admin/competitions"],
@@ -352,12 +449,12 @@ export default function AdminScratchCard() {
         maxTickets: parseInt(formData.maxTickets),
         ringtonePoints: parseInt(formData.ringtonePoints),
       };
-      
+
       // Convert datetime-local to ISO timestamp if provided
       if (formData.endDate) {
         payload.endDate = new Date(formData.endDate).toISOString();
       }
-      
+
       const res = await apiRequest("/api/admin/competitions", "POST", payload);
       return res.json();
     },
@@ -390,13 +487,17 @@ export default function AdminScratchCard() {
         maxTickets: parseInt(data.maxTickets),
         ringtonePoints: parseInt(data.ringtonePoints),
       };
-      
+
       // Convert datetime-local to ISO timestamp if provided
       if (data.endDate) {
         payload.endDate = new Date(data.endDate).toISOString();
       }
-      
-      const res = await apiRequest(`/api/admin/competitions/${id}`, "PUT", payload);
+
+      const res = await apiRequest(
+        `/api/admin/competitions/${id}`,
+        "PUT",
+        payload,
+      );
       return res.json();
     },
     onSuccess: () => {
@@ -435,10 +536,20 @@ export default function AdminScratchCard() {
   });
 
   const updateDisplayOrderMutation = useMutation({
-    mutationFn: async ({ id, displayOrder }: { id: string; displayOrder: number }) => {
-      const res = await apiRequest(`/api/admin/competitions/${id}/display-order`, "PATCH", {
-        displayOrder,
-      });
+    mutationFn: async ({
+      id,
+      displayOrder,
+    }: {
+      id: string;
+      displayOrder: number;
+    }) => {
+      const res = await apiRequest(
+        `/api/admin/competitions/${id}/display-order`,
+        "PATCH",
+        {
+          displayOrder,
+        },
+      );
       return res.json();
     },
     onSuccess: () => {
@@ -479,13 +590,15 @@ export default function AdminScratchCard() {
               Manage your scratch card competitions
             </p>
           </div>
-          {/* <Button
-            onClick={() => setCreateDialogOpen(true)}
-            data-testid="button-create-scratch"
+          <Button
+            onClick={() => setScratchSettingsOpen(true)}
+            variant="outline"
+            className="gap-2"
+            data-testid="button-scratch-settings"
           >
-            <Plus className="w-4 h-4 mr-2" />
-            Create Scratch Card
-          </Button> */}
+            <Settings className="w-4 h-4" />
+            Scratch Settings
+          </Button>
         </div>
 
         <div className="grid gap-4">
@@ -551,14 +664,18 @@ export default function AdminScratchCard() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
-                      <span className="text-muted-foreground">Display Order: </span>
+                      <span className="text-muted-foreground">
+                        Display Order:{" "}
+                      </span>
                       <Input
                         type="number"
                         min="0"
                         defaultValue={competition.displayOrder ?? 999}
                         onBlur={(e) => {
                           const parsedValue = parseInt(e.target.value);
-                          const newOrder = isNaN(parsedValue) ? 999 : parsedValue;
+                          const newOrder = isNaN(parsedValue)
+                            ? 999
+                            : parsedValue;
                           const currentOrder = competition.displayOrder ?? 999;
                           if (newOrder !== currentOrder) {
                             updateDisplayOrderMutation.mutate({
@@ -568,10 +685,15 @@ export default function AdminScratchCard() {
                           }
                         }}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const parsedValue = parseInt((e.target as HTMLInputElement).value);
-                            const newOrder = isNaN(parsedValue) ? 999 : parsedValue;
-                            const currentOrder = competition.displayOrder ?? 999;
+                          if (e.key === "Enter") {
+                            const parsedValue = parseInt(
+                              (e.target as HTMLInputElement).value,
+                            );
+                            const newOrder = isNaN(parsedValue)
+                              ? 999
+                              : parsedValue;
+                            const currentOrder =
+                              competition.displayOrder ?? 999;
                             if (newOrder !== currentOrder) {
                               updateDisplayOrderMutation.mutate({
                                 id: competition.id,
@@ -704,6 +826,11 @@ export default function AdminScratchCard() {
             onOpenChange={(open) => !open && setDrawWinnerCompetition(null)}
           />
         )}
+
+        <ScratchSettingsDialog
+          open={scratchSettingsOpen}
+          onOpenChange={setScratchSettingsOpen}
+        />
       </div>
     </AdminLayout>
   );

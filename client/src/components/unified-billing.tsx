@@ -51,8 +51,8 @@ export default function UnifiedBilling({ orderId, orderType }: UnifiedBillingPro
 
   const getTitle = () => {
     switch(orderType) {
-      case 'spin': return 'Spin Wheel Purchase';
-      case 'scratch': return 'Scratch Card Purchase';
+      case 'spin': return 'The Luxury Car Spin Purchase';
+      case 'scratch': return 'The Landmark Loot Purchase';
       default: return 'Competition Tickets';
     }
   };

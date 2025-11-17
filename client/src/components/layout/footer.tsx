@@ -130,13 +130,13 @@ export default function Footer() {
               >
                 Competitions
               </a>
-              <a
+              {/* <a
                 href="/play-responsible"
                 className="block text-muted-foreground hover:text-primary transition-colors"
                 data-testid="link-how-to-play"
               >
                 How to Play
-              </a>
+              </a> */}
               <a
                 href="/be-aware"
                 className="block text-muted-foreground hover:text-primary transition-colors"

@@ -245,7 +245,7 @@ export default function Register() {
                   data-testid="checkbox-newsletter"
                 />
                 <Label htmlFor="newsletter" className="text-white text-sm">
-                  I would like to receive the RingTone Riches newsletter.
+                  If you would like to recive our marketing via Email and SMS please tick here.
                 </Label>
               </div>
 

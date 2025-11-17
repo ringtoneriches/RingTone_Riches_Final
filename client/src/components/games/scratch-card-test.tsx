@@ -40,7 +40,7 @@ interface ScratchCardProps {
 
 const CSS_WIDTH = 500;
 const CSS_HEIGHT = 350;
-const AUTO_CLEAR_THRESHOLD = 0.7;
+const AUTO_CLEAR_THRESHOLD = 0.85; // ✅ Changed from 0.7 to 0.85
 const SAMPLE_GAP = 4;
 
 const landmarkImages = [
@@ -109,30 +109,34 @@ export default function ScratchCardTest({ onScratchComplete, mode = "tight", scr
   const drawingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const scratchSoundRef = useRef<HTMLAudioElement | null>(null);
-const hasCompletedRef = useRef(false);
-  const imagesLockedRef = useRef(false); // 🔒 Lock images when scratching starts
+  const hasCompletedRef = useRef(false);
+  const isScratching = useRef(false); // 🎵 Track if actively scratching (for sound control)
+  
+  // 🎯 NEW: Session-based state management
+  const [sessionState, setSessionState] = useState<'loading' | 'ready' | 'scratching' | 'completed'>('loading');
+  const [currentSession, setCurrentSession] = useState<{
+    sessionId: string;
+    isWinner: boolean;
+    prize: { type: string; value: string; label: string };
+    tileLayout: string[];
+    prizeId: string;
+  } | null>(null);
+  const [nextSession, setNextSession] = useState<any>(null); // Pre-fetched next session
+  
   const [revealed, setRevealed] = useState(false);
   const [percentScratched, setPercentScratched] = useState(0);
-  const [sessionKey, setSessionKey] = useState(0); // 👈 for reset
-  const [selectedPrize, setSelectedPrize] = useState<{ type: string; value: string }>({ type: "none", value: "0" });
+  const [sessionKey, setSessionKey] = useState(0);
   const [images, setImages] = useState<any[]>([]);
-  const [isWinner, setIsWinner] = useState(false);
- const [scratchHistory, setScratchHistory] = useState<
-  { status: string; prize: { type: string; value: string } }[]
->([]);
+  const [selectedPrize, setSelectedPrize] = useState<{ type: string; value: string }>({ type: "none", value: "0" });
+  const [scratchHistory, setScratchHistory] = useState<
+    { status: string; prize: { type: string; value: string } }[]
+  >([]);
   
   // Confirmation dialog state
   const [showRevealAllDialog, setShowRevealAllDialog] = useState(false);
   
   // Check if all scratch cards are used
   const allScratchesUsed = scratchHistory.length > 0 && scratchHistory.every(s => s.status === "Scratched");
-
-  const cashPrizes = mode === "tight" ? ["0.10", "0.25"] : ["0.25", "0.50", "1.00"];
-  const ringtunePrizes = ["50", "100", "250", "500", "1000"];
-  const allPrizes = [
-    ...cashPrizes.map((c) => ({ type: "cash", value: c })),
-    ...ringtunePrizes.map((p) => ({ type: "points", value: p })),
-  ];
 
     // ✅ SIMPLIFIED INITIALIZATION - Only run once when scratchTicketCount or orderId changes
   useEffect(() => {
@@ -178,6 +182,101 @@ const hasCompletedRef = useRef(false);
     }
   };
 
+  // 🎯 NEW: Fetch scratch session from backend (pre-load result and tile layout)
+  const fetchScratchSession = async (): Promise<void> => {
+    if (!orderId) return;
+    
+    try {
+      setSessionState('loading');
+      
+      const response = await fetch('/api/scratch-session/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to start scratch session');
+      }
+
+      const sessionData = await response.json();
+      
+      if (sessionData.success) {
+        setCurrentSession({
+          sessionId: sessionData.sessionId,
+          isWinner: sessionData.isWinner,
+          prize: sessionData.prize,
+          tileLayout: sessionData.tileLayout,
+          prizeId: sessionData.prizeId,
+        });
+        setSessionState('ready');
+      }
+    } catch (error) {
+      console.error('Error fetching scratch session:', error);
+      setSessionState('ready'); // Fallback to ready state
+    }
+  };
+
+  // 🎯 NEW: Complete scratch session (record usage and award prize)
+  const completeScratchSession = async (): Promise<void> => {
+    if (!currentSession || !orderId) return;
+    
+    try {
+      const response = await fetch(`/api/scratch-session/${currentSession.sessionId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          prizeId: currentSession.prizeId,
+          isWinner: currentSession.isWinner,
+        }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to complete scratch session');
+      }
+
+      const result = await response.json();
+      
+      // Update scratch history
+      setScratchHistory((prev) => {
+        const firstUnscratched = prev.findIndex((s) => s.status === "Not Scratched");
+        if (firstUnscratched === -1) return prev;
+
+        const updated = [...prev];
+        updated[firstUnscratched] = {
+          status: "Scratched",
+          prize: currentSession.prize,
+        };
+        return updated;
+      });
+
+      // Callback with prize info
+      if (onScratchComplete) {
+        onScratchComplete(currentSession.prize);
+      }
+
+      setSessionState('completed');
+    } catch (error) {
+      console.error('Error completing scratch session:', error);
+    }
+  };
+
+  // 🎯 NEW: Fetch session on mount or when we need a new one
+  useEffect(() => {
+    // Only fetch if we have remaining cards and no current session
+    if (orderId && scratchHistory.length > 0 && !currentSession) {
+      const hasRemaining = scratchHistory.some(s => s.status === "Not Scratched");
+      if (hasRemaining && sessionState === 'loading') {
+        fetchScratchSession();
+      }
+    }
+  }, [orderId, scratchHistory, currentSession, sessionState]);
+
   // ✅ Save to localStorage whenever scratchHistory changes (order-specific)
   useEffect(() => {
     if (scratchHistory.length > 0 && orderId) {
@@ -195,15 +294,31 @@ const hasCompletedRef = useRef(false);
   //   };
   // }, [scratchTicketCount]);
 
-  // Setup new scratch card session (visual only - result comes from server)
+  // 🎯 NEW: Setup scratch card with pre-loaded tile layout from backend
   useEffect(() => {
-    // Generate random images for display - will be locked once scratching starts
-    const randomImages = getRandomImages(6);
-    setImages(randomImages);
-    setIsWinner(false);
-    imagesLockedRef.current = false; // 🔓 Reset lock for new session
+    if (!currentSession ||  sessionState !== 'ready') {
+      return;
+    }
+    
+    // 🔒 Defensive check: Ensure exactly 6 tiles
+    if (currentSession.tileLayout.length !== 6) {
+      console.error(`Invalid tile layout: expected 6 tiles, got ${currentSession.tileLayout.length}`);
+      return;
+    }
+    
+    // Map tile layout from backend to actual image objects
+    const tileImages = currentSession.tileLayout.map(imageName => {
+      const found = landmarkImages.find(img => img.name === imageName);
+      return found || landmarkImages[0]; // Fallback to first image
+    });
+    
+    // Set images to pre-determined layout (exactly 6)
+    setImages(tileImages);
+    
+   // Reset state for new session
+    isScratching.current = false;
     initCanvas();
-  }, [sessionKey]);
+  }, [currentSession, sessionState]);
 
   useEffect(() => {
     scratchSoundRef.current = new Audio(scratchSoundFile);
@@ -212,7 +327,7 @@ const hasCompletedRef = useRef(false);
 
     const handleMouseUpGlobal = () => {
       drawingRef.current = false;
-      stopScratchSound();
+      stopScratchSound(); // 🎵 Always stop sound on global pointer release
       checkPercentScratched(true);
     };
 
@@ -221,6 +336,11 @@ const hasCompletedRef = useRef(false);
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      stopScratchSound(); // 🎵 Stop sound on unmount
+      if (scratchSoundRef.current) {
+        scratchSoundRef.current.pause();
+        scratchSoundRef.current = null;
+      }
       window.removeEventListener("mouseup", handleMouseUpGlobal);
       window.removeEventListener("touchend", handleMouseUpGlobal);
     };
@@ -287,11 +407,6 @@ const hasCompletedRef = useRef(false);
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     
-    // 🔒 Lock images on first scratch (prevents changes DURING scratching)
-    if (!imagesLockedRef.current) {
-      imagesLockedRef.current = true;
-    }
-    
     // Make brush size responsive based on canvas size
     const brush = Math.max(15, canvas.clientWidth * 0.09);
     
@@ -305,7 +420,7 @@ const hasCompletedRef = useRef(false);
 
 
 
- function checkPercentScratched(force = false) {
+function checkPercentScratched(force = false) {
   rafRef.current = null;
   const canvas = canvasRef.current;
   if (!canvas) return;
@@ -326,104 +441,69 @@ const hasCompletedRef = useRef(false);
   }
 
   const percent = cleared / total;
-  setPercentScratched(Math.round(percent * 100));
+  
+  // ✅ Update percentage display normally until 85%
+  if (percent < AUTO_CLEAR_THRESHOLD) {
+    setPercentScratched(Math.round(percent * 100));
+  }
 
+  // 🎯 NEW: SIMPLIFIED FLOW at 85% - Just show popup with pre-loaded prize
   if (percent >= AUTO_CLEAR_THRESHOLD && !revealed && !hasCompletedRef.current) {
-    hasCompletedRef.current = true;
-    stopScratchSound();
-    setRevealed(true);
+    // 🔒 Guard: Don't proceed if no session loaded
+    if (!currentSession) {
+      console.warn("Session not loaded yet, waiting...");
+      return;
+    }
     
-    // 🎯 SERVER-SIDE: Call API to get the real result
-    setTimeout(async () => {
+    hasCompletedRef.current = true;
+    stopScratchSound(); // Stop sound immediately
+    setRevealed(true);
+    setSessionState('scratching'); // Update state to indicate scratching completed
+    
+    // Images are ALREADY in final position (pre-loaded), just show popup
+    (async () => {
       try {
-        // Call server to determine prize (probability-based)
-        const response = await fetch("/api/play-scratch-carddd", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ orderId }),
-        });
 
-        if (!response.ok) {
-          throw new Error("Failed to get scratch result from server");
-        }
-
-        const result = await response.json();
-        const prizeWon = result.prize || { type: "none", value: "Lose" };
+        const prizeWon = currentSession.prize;
         
-        // ✅ SERVER CONTROLS DISPLAY: Update images based on server result BEFORE clearing overlay
-        // This prevents visual changes - overlay is still on when we update images
-        // When overlay clears, user sees the pattern matching the server's decision
-        if (prizeWon.type !== "none" && prizeWon.value !== "Lose") {
-          // Winner: Show matching pattern (3 same images)
-          const chosen = landmarkImages[Math.floor(Math.random() * landmarkImages.length)];
-          const winIndices = [0, 1, 4];
-          const winningImages = getRandomImages(6);
-          winIndices.forEach((i) => (winningImages[i] = chosen));
-          setImages(winningImages);
-          setIsWinner(true);
-        } else {
-          // Loser: Ensure no 3 matching images
-          const randomImages = getRandomImages(6);
-          // Make sure positions 0, 1, 4 don't have matching images
-          const usedNames = new Set();
-          const finalImages = randomImages.map((img, idx) => {
-            if ([0, 1, 4].includes(idx)) {
-              // Ensure these positions are all different
-              let candidate = img;
-              while (usedNames.has(candidate.name)) {
-                const alternatives = landmarkImages.filter(l => !usedNames.has(l.name));
-                if (alternatives.length === 0) break;
-                candidate = alternatives[Math.floor(Math.random() * alternatives.length)];
-              }
-              usedNames.add(candidate.name);
-              return candidate;
-            }
-            return img;
-          });
-          setImages(finalImages);
-          setIsWinner(false);
-        }
+        // 🎯 Images are ALREADY in correct positions (pre-loaded from backend)
+        // NO image changes needed!
         
-        setSelectedPrize(prizeWon);
-        onScratchComplete?.(prizeWon);
-
-        // ✅ Update scratch history
-        setScratchHistory((prev) => {
-          const updated = [...prev];
-          const firstUnplayedIndex = updated.findIndex((s) => s.status === "Not Scratched");
-          
-          if (firstUnplayedIndex !== -1) {
-            updated[firstUnplayedIndex] = {
-              status: "Scratched",
-              prize: prizeWon,
-            };
-          }
-          
-          return updated;
-        });
-
-        // Small delay to ensure images update, then clear overlay
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Update percentage to 100%
+        setPercentScratched(100);
+        
+        // ⏱️ Brief delay for visual smoothness
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        // ✅ Clear overlay to reveal final pattern
         clearOverlayInstant();
+        
+        // 🎉 Show popup IMMEDIATELY
+        setSelectedPrize(prizeWon);
+        
+        // 🔒 Call completion endpoint to record usage and award prize
+        await completeScratchSession();
 
-        // Auto-reset after short delay (only on success)
-        setTimeout(() => {
+        // Prepare for next scratch (fetch next session in background)
+        setTimeout(async () => {
           hasCompletedRef.current = false;
-          setSessionKey((k) => k + 1);
+          setCurrentSession(null); // Clear current session
+          setSessionState('loading'); // Trigger fetch of next session
+          setRevealed(false);
         }, 1000);
       } catch (error) {
-        console.error("Error getting scratch result:", error);
-        alert("Failed to reveal scratch card. Please try again.");
-        // Clear overlay first
+        console.error("Error completing scratch:", error);
+        alert("Failed to complete scratch card. Please try again.");
+        // Clear overlay
         clearOverlayInstant();
         // Reset on error to allow retry
         hasCompletedRef.current = false;
         setRevealed(false);
-        // Reinitialize canvas so user can try again
+        setSessionState('ready');
+        // Reinitialize canvas
         initCanvas();
       }
-    }, 400);
+    })();
   }
 }
 
@@ -436,14 +516,24 @@ const hasCompletedRef = useRef(false);
   }
 
   function startScratchSound() {
-    if (revealed) return;
+    if (revealed || hasCompletedRef.current) return;
+    if (isScratching.current) return; // 🎵 Already playing, don't restart
+    
     const sound = scratchSoundRef.current;
-    if (sound && sound.paused) sound.play().catch(() => {});
+    if (sound && sound.paused) {
+      isScratching.current = true;
+      sound.currentTime = 0; // Reset to start
+      sound.play().catch(() => {});
+    }
   }
 
   function stopScratchSound() {
     const sound = scratchSoundRef.current;
-    if (sound && !sound.paused) sound.pause();
+    if (sound && !sound.paused) {
+      sound.pause();
+      sound.currentTime = 0; // ⏮️ Reset for next scratch
+    }
+    isScratching.current = false; // 🎵 Mark as not scratching
   }
 
   // Reveal All function - batch reveals all remaining scratch cards
@@ -516,6 +606,7 @@ const hasCompletedRef = useRef(false);
 
       // Reset state
       hasCompletedRef.current = false;
+      isScratching.current = false; // Reset scratching state
       setRevealed(false);
       setSessionKey((k) => k + 1);
 
@@ -528,6 +619,7 @@ const hasCompletedRef = useRef(false);
       
       // Reset on error to allow retry
       hasCompletedRef.current = false;
+      isScratching.current = false; // Reset scratching state
       setRevealed(false);
       initCanvas();
     }
@@ -545,6 +637,16 @@ const hasCompletedRef = useRef(false);
 
   return (
   <div className="relative flex flex-col items-center justify-center p-4 min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      {/* 🎯 NEW: Loading overlay while fetching session */}
+      {sessionState === 'loading' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-[#FACC15] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-white text-lg">Loading scratch card...</p>
+          </div>
+        </div>
+      )}
+      
       <video
     autoPlay
     loop
@@ -621,10 +723,10 @@ const hasCompletedRef = useRef(false);
           {/* Card container with premium gold border */}
           <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-[#FACC15]/60 shadow-[#FACC15]/30 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 w-full sm:w-[550px] md:w-[600px] mx-auto">
             <div className="relative min-h-[350px] sm:min-h-[420px] md:min-h-[450px]">
-            {/* UNDERLAY - Enhanced with premium background */}
+            {/* UNDERLAY - Enhanced with premium background (2x3 grid = 6 tiles) */}
             <div className="absolute inset-0 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center p-3 sm:p-5">
-              <div className="grid grid-cols-3 gap-2 sm:gap-3 md:gap-4 w-full h-full max-w-lg mx-auto p-2">
-                {images.map((img, i) => (
+              <div className="grid grid-cols-3 grid-rows-2 gap-2 sm:gap-3 md:gap-4 w-full h-full max-w-lg mx-auto p-2">
+                {images.slice(0, 6).map((img, i) => (
                   <div
                     key={i}
                     className="bg-white rounded-lg sm:rounded-xl shadow-2xl flex items-center justify-center p-2 sm:p-3 border-2 border-gray-200 aspect-square overflow-hidden hover:scale-105 transition-transform duration-200"
@@ -660,7 +762,6 @@ const hasCompletedRef = useRef(false);
               scratchAt(e.clientX - rect.left, e.clientY - rect.top);
             }}
             onTouchStart={(e) => {
-              e.preventDefault();
               if (allScratchesUsed) {
                 alert("You have used all your scratches. Please buy more to play.");
                 return;
@@ -677,9 +778,18 @@ const hasCompletedRef = useRef(false);
               const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
               scratchAt(t.clientX - rect.left, t.clientY - rect.top);
             }}
-            onMouseUp={() => drawingRef.current = false}
-              onMouseLeave={() => drawingRef.current = false}
-              onTouchEnd={() => drawingRef.current = false}
+            onMouseUp={() => {
+              drawingRef.current = false;
+              stopScratchSound(); // 🎵 Stop sound when pointer released
+            }}
+            onMouseLeave={() => {
+              drawingRef.current = false;
+              stopScratchSound(); // 🎵 Stop sound when pointer leaves canvas
+            }}
+            onTouchEnd={() => {
+              drawingRef.current = false;
+              stopScratchSound(); // 🎵 Stop sound when touch ends
+            }}
             />
             </div>
           </div>

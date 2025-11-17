@@ -14,6 +14,7 @@ import {
   ArrowDownCircle,
   Ticket,
   Award,
+  Mail,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ const sidebarItems = [
   { name: "Users", path: "/admin/users", icon: Users },
   { name: "Orders", path: "/admin/orders", icon: ShoppingCart },
   { name: "Withdrawals", path: "/admin/withdrawals", icon: ArrowDownCircle },
+  { name: "Marketing", path: "/admin/marketing", icon: Mail },
   { name: "Settings", path: "/admin/settings", icon: Settings },
 ];
 

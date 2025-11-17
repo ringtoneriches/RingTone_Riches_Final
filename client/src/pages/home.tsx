@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect, act } from "react";
+import { useState, useMemo } from "react";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import CompetitionCard from "@/components/competition-card";
@@ -7,41 +7,112 @@ import StatsBanner from "@/components/stats-banner";
 import { Competition, User } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import FeaturedCompetitions from "./featuredCompetitions";
-import { Sparkles, Trophy, Zap, Gift } from "lucide-react";
+import { Sparkles, Trophy, Zap, Gift, Mail, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const { isAuthenticated, user } = useAuth() as { isAuthenticated: boolean; user: User | null };
+  const { toast } = useToast();
 
   const { data: competitions = [], isLoading } = useQuery<Competition[]>({
     queryKey: ["/api/competitions"],
   });
 
-  const [filteredCompetitions, setFilteredCompetitions] = useState<Competition[]>([]);
   const [activeFilter, setActiveFilter] = useState("all");
+  const [newsletterEmail, setNewsletterEmail] = useState("");
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setFilteredCompetitions(
-        competitions.filter((c) => c.type !== "instant")
-      );
+  // Use useMemo to avoid infinite re-render loops
+  const filteredCompetitions = useMemo(() => {
+    if (activeFilter === "all") {
+      if (!isAuthenticated) {
+        return competitions.filter((c) => c.type !== "instant");
+      } else {
+        return competitions;
+      }
     } else {
-      setFilteredCompetitions(competitions);
+      return competitions.filter((c) => c.type === activeFilter);
     }
-  }, [competitions, isAuthenticated]);
+  }, [competitions, isAuthenticated, activeFilter]);
 
   const handleFilterChange = (filterType: string) => {
     setActiveFilter(filterType);
+    // filteredCompetitions will automatically update via useMemo
+  };
 
-    if (filterType === "all") {
-      if (!isAuthenticated) {
-        setFilteredCompetitions(competitions.filter((c) => c.type !== "instant"));
-      } else {
-        setFilteredCompetitions(competitions);
-      }
-    } else {
-      const filtered = competitions.filter((c) => c.type === filterType);
-      setFilteredCompetitions(filtered);
+  const newsletterSubscribeMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await apiRequest("/api/user/newsletter/subscribe", "POST", { email });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success! 🎉",
+        description: data.message,
+        variant: "default",
+      });
+      setNewsletterEmail("");
+      // Invalidate auth user cache to refresh subscription status
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      // Invalidate marketing subscribers list so admin panel updates
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/marketing/subscribers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/marketing/stats"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Subscription Failed",
+        description: error.message || "Failed to subscribe to newsletter",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const newsletterUnsubscribeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/user/newsletter/unsubscribe", "POST", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Unsubscribed",
+        description: data.message,
+        variant: "default",
+      });
+      // Invalidate auth user cache to refresh subscription status
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      // Invalidate marketing subscribers list so admin panel updates
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/marketing/subscribers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/marketing/stats"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unsubscribe Failed",
+        description: error.message || "Failed to unsubscribe from newsletter",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleNewsletterSubscribe = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!newsletterEmail || !newsletterEmail.includes("@")) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      });
+      return;
     }
+    
+    newsletterSubscribeMutation.mutate(newsletterEmail);
+  };
+
+  const handleNewsletterUnsubscribe = () => {
+    newsletterUnsubscribeMutation.mutate();
   };
 
   return (
@@ -132,14 +203,7 @@ export default function Home() {
                   </span>
                 </h2>
                 <p className="text-muted-foreground text-sm md:text-lg font-semibold">
-                  {
-    activeFilter === "all"
-      ? `${filteredCompetitions.length} amazing prizes waiting for you!`
-      : 
-      `Huge cash prizes waiting for you!`
-      
-  }
-                 
+                  {filteredCompetitions.length} amazing prizes waiting for you!
                 </p>
               </div>
 
@@ -162,6 +226,101 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      {/* Newsletter Subscription Section - Only show when logged in */}
+      {isAuthenticated && (
+        <section className="py-12 md:py-16 bg-gradient-to-r from-slate-900 via-primary/10 to-slate-900 relative overflow-hidden">
+          {/* Decorative background elements */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-10 left-10 w-64 h-64 bg-primary rounded-full blur-3xl"></div>
+            <div className="absolute bottom-10 right-10 w-64 h-64 bg-yellow-400 rounded-full blur-3xl"></div>
+          </div>
+
+          <div className="container mx-auto px-4 relative z-10">
+            <div className="max-w-2xl mx-auto bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-8 md:p-12 border-2 border-primary/30 shadow-2xl">
+              <div className="text-center mb-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-4">
+                  <Mail className="w-8 h-8 text-slate-900" />
+                </div>
+                <h3 className="text-2xl md:text-3xl font-black mb-3">
+                  <span className="bg-gradient-to-r from-primary via-yellow-400 to-primary bg-clip-text text-transparent">
+                    {user?.receiveNewsletter ? "Newsletter Subscribed!" : "Get Exclusive Offers!"}
+                  </span>
+                </h3>
+                <p className="text-slate-300 text-sm md:text-base leading-relaxed">
+                  {user?.receiveNewsletter 
+                    ? "You're now receiving our latest news, updates, and offers by email and SMS!"
+                    : "Enter your email to receive our latest news, updates, and offers by email and SMS!"}
+                </p>
+              </div>
+
+              {user?.receiveNewsletter ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center gap-2 text-green-400 mb-4">
+                    <CheckCircle2 className="w-6 h-6" />
+                    <span className="font-semibold">You're subscribed with {user.email}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleNewsletterUnsubscribe}
+                    variant="outline"
+                    className="w-full h-12 md:h-14 border-red-500 text-red-400 hover:bg-red-500/10 hover:text-red-300 font-semibold text-base md:text-lg rounded-xl transition-all"
+                    disabled={newsletterUnsubscribeMutation.isPending}
+                    data-testid="button-newsletter-unsubscribe"
+                  >
+                    {newsletterUnsubscribeMutation.isPending ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 border-3 border-red-400 border-t-transparent rounded-full animate-spin"></div>
+                        Unsubscribing...
+                      </div>
+                    ) : (
+                      "Unsubscribe from Newsletter"
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <form onSubmit={handleNewsletterSubscribe} className="space-y-4">
+                  <div className="relative">
+                    <Input
+                      type="email"
+                      value={newsletterEmail}
+                      onChange={(e) => setNewsletterEmail(e.target.value)}
+                      placeholder={user?.email || "Enter your email"}
+                      className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 h-12 md:h-14 text-base md:text-lg pl-12 pr-4 rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/50"
+                      data-testid="input-newsletter-email"
+                      disabled={newsletterSubscribeMutation.isPending}
+                    />
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full h-12 md:h-14 bg-gradient-to-r from-primary to-yellow-400 hover:from-yellow-400 hover:to-primary text-slate-900 font-black text-base md:text-lg rounded-xl shadow-lg shadow-primary/30 transition-all hover:shadow-xl hover:shadow-primary/50 hover:scale-[1.02]"
+                    disabled={newsletterSubscribeMutation.isPending}
+                    data-testid="button-newsletter-subscribe"
+                  >
+                    {newsletterSubscribeMutation.isPending ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 border-3 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
+                        Subscribing...
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-5 h-5" />
+                        Subscribe Now
+                      </div>
+                    )}
+                  </Button>
+
+                  <p className="text-xs text-slate-400 text-center mt-4">
+                    📧 Use the email address you registered with
+                  </p>
+                </form>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       <Footer />
     </div>

@@ -370,3 +370,289 @@ export async function sendWelcomeEmail(
     return { success: false, error };
   }
 }
+
+// Promotional campaign email interface
+export interface PromotionalCampaign {
+  id: string;
+  title: string;
+  subject: string;
+  message: string;
+  offerType: 'discount' | 'bonus' | 'announcement' | 'custom';
+  discountCode?: string | null;
+  discountPercentage?: number | null;
+  bonusAmount?: string | null;
+  bonusPoints?: number | null;
+  expiryDate?: Date | null;
+}
+
+// Send promotional campaign email
+export async function sendPromotionalEmail(
+  to: string,
+  campaign: PromotionalCampaign
+) {
+  // Build offer details section based on campaign type
+  let offerSection = '';
+  
+  if (campaign.offerType === 'discount' && campaign.discountCode) {
+    offerSection = `
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fffbea; border-radius: 8px; border: 2px solid ${BRAND_COLOR}; margin-bottom: 25px;">
+        <tr>
+          <td class="mobile-padding" style="padding: 25px; text-align: center;">
+            <h2 class="mobile-h2" style="margin: 0 0 15px; color: #1a1a1a; font-size: 20px; font-weight: bold;">🎁 Special Discount Code</h2>
+            <div style="background-color: #ffffff; border: 2px dashed ${BRAND_COLOR}; border-radius: 6px; padding: 15px; display: inline-block; margin: 10px 0;">
+              <p style="margin: 0; font-size: 14px; color: #666666; text-transform: uppercase; letter-spacing: 1px;">Use Code:</p>
+              <p style="margin: 5px 0 0; font-size: 28px; color: #1a1a1a; font-weight: bold; font-family: monospace;">${campaign.discountCode}</p>
+            </div>
+            ${campaign.discountPercentage ? `<p style="margin: 15px 0 0; font-size: 18px; color: #1a1a1a; font-weight: bold;">Save ${campaign.discountPercentage}% on your next purchase!</p>` : ''}
+            ${campaign.expiryDate ? `<p style="margin: 10px 0 0; font-size: 14px; color: #666666;">Expires: ${new Date(campaign.expiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
+          </td>
+        </tr>
+      </table>
+    `;
+  } else if (campaign.offerType === 'bonus' && (campaign.bonusAmount || campaign.bonusPoints)) {
+    offerSection = `
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fffbea; border-radius: 8px; border: 2px solid ${BRAND_COLOR}; margin-bottom: 25px;">
+        <tr>
+          <td class="mobile-padding" style="padding: 25px; text-align: center;">
+            <h2 class="mobile-h2" style="margin: 0 0 15px; color: #1a1a1a; font-size: 20px; font-weight: bold;">🎉 Bonus Reward!</h2>
+            ${campaign.bonusAmount ? `<p style="margin: 10px 0; font-size: 32px; color: #1a1a1a; font-weight: bold;">£${campaign.bonusAmount} Bonus Cash</p>` : ''}
+            ${campaign.bonusPoints ? `<p style="margin: 10px 0; font-size: 32px; color: #1a1a1a; font-weight: bold;">${campaign.bonusPoints} Bonus Points</p>` : ''}
+            ${campaign.expiryDate ? `<p style="margin: 15px 0 0; font-size: 14px; color: #666666;">Available until: ${new Date(campaign.expiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
+          </td>
+        </tr>
+      </table>
+    `;
+  }
+
+  const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${campaign.subject}</title>
+  <style type="text/css">
+    @media only screen and (max-width: 480px) {
+      .email-container { width: 100% !important; }
+      .mobile-padding { padding: 20px 15px !important; }
+      .mobile-h1 { font-size: 24px !important; }
+      .mobile-h2 { font-size: 20px !important; }
+      .mobile-text-lg { font-size: 18px !important; line-height: 1.5 !important; }
+      .mobile-text-md { font-size: 16px !important; line-height: 1.6 !important; }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f5f5f5;">
+    <tr>
+      <td align="center" style="padding: 20px 10px;">
+        <table class="email-container" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          
+          <!-- Logo Header -->
+          <tr>
+            <td style="background-color: #1a1a1a; padding: 20px; text-align: center;">
+              <img src="${LOGO_URL}" alt="${BRAND_NAME}" width="200" style="display: block; margin: 0 auto; max-width: 90%; height: auto;" />
+            </td>
+          </tr>
+          
+          <!-- Yellow Banner -->
+          <tr>
+            <td style="background: linear-gradient(135deg, ${BRAND_COLOR} 0%, #F59E0B 100%); padding: 25px; text-align: center;">
+              <h1 class="mobile-h1" style="margin: 0; color: #1a1a1a; font-size: 28px; font-weight: bold;">${campaign.title}</h1>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td class="mobile-padding" style="padding: 40px 30px; background-color: #ffffff;">
+              
+              <p class="mobile-text-md" style="margin: 0 0 25px; font-size: 16px; color: #333333; line-height: 1.6; white-space: pre-line;">
+                ${campaign.message}
+              </p>
+              
+              ${offerSection}
+              
+              <table cellpadding="0" cellspacing="0" border="0" style="margin: 25px auto 0;">
+                <tr>
+                  <td align="center" style="background: linear-gradient(135deg, ${BRAND_COLOR} 0%, #F59E0B 100%); border-radius: 8px; padding: 15px 35px;">
+                    <a href="https://ringtoneriches.co.uk" style="color: #1a1a1a; text-decoration: none; font-size: 16px; font-weight: bold; display: inline-block;">
+                      Visit Ringtone Riches
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #1a1a1a; padding: 25px 30px; text-align: center; border-top: 3px solid ${BRAND_COLOR};">
+              <p style="margin: 0 0 10px; font-size: 14px; color: #cccccc;">
+                Need help? Contact us at <a href="mailto:${FROM_EMAIL}" style="color: ${BRAND_COLOR}; text-decoration: none; font-weight: bold;">${FROM_EMAIL}</a>
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #999999;">
+                &copy; ${new Date().getFullYear()} ${BRAND_NAME}. All rights reserved.
+              </p>
+              <p style="margin: 10px 0 0; font-size: 11px; color: #777777;">
+                You're receiving this email because you subscribed to our newsletter.
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: `${BRAND_NAME} <${FROM_EMAIL}>`,
+      to: [to],
+      subject: campaign.subject,
+      html: emailHtml,
+    });
+
+    if (error) {
+      console.error('Error sending promotional email:', error);
+      return { success: false, error };
+    }
+
+    console.log('Promotional email sent successfully:', data);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Failed to send promotional email:', error);
+    return { success: false, error };
+  }
+}
+
+export async function sendPasswordResetEmail(
+  to: string,
+  resetUrl: string,
+  userName?: string
+) {
+  const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Your Password - ${BRAND_NAME}</title>
+  <style type="text/css">
+    @media only screen and (max-width: 480px) {
+      .email-container { width: 100% !important; }
+      .mobile-padding { padding: 20px 15px !important; }
+      .mobile-h1 { font-size: 24px !important; }
+      .mobile-text-lg { font-size: 18px !important; line-height: 1.5 !important; }
+      .mobile-text-md { font-size: 16px !important; line-height: 1.6 !important; }
+      .mobile-button { padding: 15px 30px !important; font-size: 16px !important; }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f5f5f5;">
+    <tr>
+      <td align="center" style="padding: 20px 10px;">
+        <table class="email-container" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          
+          <!-- Logo Header -->
+          <tr>
+            <td style="background-color: #1a1a1a; padding: 20px; text-align: center;">
+              <img src="${LOGO_URL}" alt="${BRAND_NAME}" width="200" style="display: block; margin: 0 auto; max-width: 90%; height: auto;" />
+            </td>
+          </tr>
+          
+          <!-- Yellow Banner -->
+          <tr>
+            <td style="background: linear-gradient(135deg, ${BRAND_COLOR} 0%, #F59E0B 100%); padding: 25px; text-align: center;">
+              <h1 class="mobile-h1" style="margin: 0; color: #1a1a1a; font-size: 28px; font-weight: bold;">🔐 Password Reset Request</h1>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td class="mobile-padding" style="padding: 40px 30px;">
+              <p class="mobile-text-lg" style="margin: 0 0 20px; font-size: 16px; color: #333333; line-height: 1.6;">
+                ${userName ? `Hi ${userName},` : 'Hello,'}
+              </p>
+              
+              <p class="mobile-text-md" style="margin: 0 0 20px; font-size: 15px; color: #555555; line-height: 1.6;">
+                We received a request to reset your password for your ${BRAND_NAME} account. Click the button below to create a new password:
+              </p>
+              
+              <!-- Reset Button -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 30px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="${resetUrl}" class="mobile-button" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, ${BRAND_COLOR} 0%, #F59E0B 100%); color: #1a1a1a; text-decoration: none; font-weight: bold; font-size: 18px; border-radius: 8px; box-shadow: 0 4px 6px rgba(250,204,21,0.3);">
+                      Reset Password
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              
+              <p class="mobile-text-md" style="margin: 20px 0 0; font-size: 15px; color: #555555; line-height: 1.6;">
+                Or copy and paste this link into your browser:
+              </p>
+              
+              <p style="margin: 10px 0 30px; padding: 15px; background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; word-break: break-all; font-size: 13px; color: #666666;">
+                ${resetUrl}
+              </p>
+              
+              <div style="margin: 30px 0; padding: 20px; background-color: #fff9e6; border-left: 4px solid ${BRAND_COLOR}; border-radius: 6px;">
+                <p style="margin: 0; font-size: 14px; color: #666666; line-height: 1.6;">
+                  <strong style="color: #1a1a1a;">⚠️ Important:</strong> This link will expire in 1 hour. If you didn't request a password reset, please ignore this email.
+                </p>
+              </div>
+              
+              <p class="mobile-text-md" style="margin: 30px 0 0; font-size: 15px; color: #555555; line-height: 1.6;">
+                For security reasons, if you didn't request this password reset, please contact our support team immediately.
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #1a1a1a; padding: 30px; text-align: center;">
+              <p style="margin: 0 0 10px; font-size: 14px; color: #cccccc;">
+                Thank you for choosing <strong>${BRAND_NAME}</strong>
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #999999;">
+                © ${new Date().getFullYear()} ${BRAND_NAME}. All rights reserved.
+              </p>
+              <p style="margin: 10px 0 0; font-size: 11px; color: #777777;">
+                This is an automated email. Please do not reply to this message.
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: `${BRAND_NAME} <${FROM_EMAIL}>`,
+      to: [to],
+      subject: 'Reset Your Password',
+      html: emailHtml,
+    });
+
+    if (error) {
+      console.error('Error sending password reset email:', error);
+      return { success: false, error };
+    }
+
+    console.log('Password reset email sent successfully:', data);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Failed to send password reset email:', error);
+    return { success: false, error };
+  }
+}

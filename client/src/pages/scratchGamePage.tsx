@@ -16,10 +16,28 @@ export default function ScratchGamePage() {
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
 
   const [gameResult, setGameResult] = useState<any>(null);
   const [isResultModalOpen, setIsResultModalOpen] = useState(false);
   const [remainingScratches, setRemainingScratches] = useState<number>(0);
+
+  // Check if scratch cards are visible
+  const { data: scratchConfig } = useQuery<{ isVisible: boolean }>({
+    queryKey: ["/api/admin/game-scratch-config"],
+  });
+
+  // Redirect if scratch cards are hidden
+  useEffect(() => {
+    if (scratchConfig && scratchConfig.isVisible === false) {
+      toast({
+        title: "Scratch Cards Unavailable",
+        description: "Scratch cards are currently not available.",
+        variant: "destructive",
+      });
+      navigate("/");
+    }
+  }, [scratchConfig?.isVisible]);
 
   // Fetch competition data
   const { data: competition } = useQuery({
@@ -66,8 +84,6 @@ export default function ScratchGamePage() {
       });
     }
   };
-
-  const [, navigate] = useLocation();
 
   const handleCloseResultModal = () => {
     setIsResultModalOpen(false);

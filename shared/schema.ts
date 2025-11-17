@@ -198,6 +198,7 @@ export const gameScratchConfig = pgTable("game_scratch_config", {
   ringtunePrizes: jsonb("ringtune_prizes").notNull(), // Array of ringtune point amounts
   winProbability: decimal("win_probability", { precision: 3, scale: 2 }).default("0.20"), // 0.20 = 20%
   isActive: boolean("is_active").default(true),
+  isVisible: boolean("is_visible").default(true), // Controls whether scratch card is visible on frontend
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -228,6 +229,35 @@ export const platformSettings = pgTable("platform_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Promotional campaigns for marketing
+export const promotionalCampaigns = pgTable("promotional_campaigns", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  offerType: varchar("offer_type", { enum: ["discount", "bonus", "announcement", "custom"] }).notNull(),
+  discountCode: varchar("discount_code"),
+  discountPercentage: integer("discount_percentage"),
+  bonusAmount: decimal("bonus_amount", { precision: 10, scale: 2 }),
+  bonusPoints: integer("bonus_points"),
+  expiryDate: timestamp("expiry_date"),
+  status: varchar("status", { enum: ["draft", "sent", "scheduled"] }).default("draft"),
+  recipientCount: integer("recipient_count").default(0),
+  sentAt: timestamp("sent_at"),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Track individual email sends for campaigns
+export const campaignEmails = pgTable("campaign_emails", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: uuid("campaign_id").notNull().references(() => promotionalCampaigns.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  email: varchar("email").notNull(),
+  sentAt: timestamp("sent_at").defaultNow(),
+  deliveryStatus: varchar("delivery_status", { enum: ["sent", "delivered", "failed", "bounced"] }).default("sent"),
+});
+
 // Insert schemas
 export const insertCompetitionSchema = createInsertSchema(competitions);
 export const insertTicketSchema = createInsertSchema(tickets);
@@ -240,6 +270,8 @@ export const insertPlatformSettingsSchema = createInsertSchema(platformSettings)
 export const insertSpinWinSchema = createInsertSchema(spinWins).omit({ id: true, wonAt: true });
 export const insertScratchCardWinSchema = createInsertSchema(scratchCardWins).omit({ id: true, wonAt: true });
 export const insertWithdrawalRequestSchema = createInsertSchema(withdrawalRequests).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPromotionalCampaignSchema = createInsertSchema(promotionalCampaigns).omit({ id: true, createdAt: true, sentAt: true });
+export const insertCampaignEmailSchema = createInsertSchema(campaignEmails).omit({ id: true, sentAt: true });
 
 // Types
 export type UpsertUser = typeof users.$inferInsert;
@@ -270,6 +302,10 @@ export type PlatformSettings = typeof platformSettings.$inferSelect;
 export type InsertPlatformSettings = z.infer<typeof insertPlatformSettingsSchema>;
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect;
 export type InsertWithdrawalRequest = z.infer<typeof insertWithdrawalRequestSchema>;
+export type PromotionalCampaign = typeof promotionalCampaigns.$inferSelect;
+export type InsertPromotionalCampaign = z.infer<typeof insertPromotionalCampaignSchema>;
+export type CampaignEmail = typeof campaignEmails.$inferSelect;
+export type InsertCampaignEmail = z.infer<typeof insertCampaignEmailSchema>;
 
 // Registration and login schemas
 export const registerUserSchema = createInsertSchema(users).pick({
@@ -286,6 +322,33 @@ export const loginUserSchema = z.object({
   password: z.string().min(1),
   rememberMe: z.boolean().optional(),
 });
+
+// Password reset tokens
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull(),
+  token: varchar("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Password reset schemas
+export const forgotPasswordSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  newPassword: z.string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number"),
+});
+
+export type ForgotPassword = z.infer<typeof forgotPasswordSchema>;
+export type ResetPassword = z.infer<typeof resetPasswordSchema>;
 
 // Admin credential change schemas
 export const changeAdminUsernameSchema = z.object({
