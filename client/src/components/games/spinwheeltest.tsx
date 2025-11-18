@@ -75,6 +75,7 @@ interface SpinWheelProps {
   ticketCount?: number;
   orderId?: string;
   competitionId?: string;
+  congratsAudioRef: React.RefObject<HTMLAudioElement>;
 }
 
 interface WheelSegment {
@@ -131,6 +132,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
   ticketCount,
   orderId,
   competitionId,
+  congratsAudioRef
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const centerVideoRef = useRef<HTMLVideoElement>(null);
@@ -138,22 +140,10 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
   const [winner, setWinner] = useState<string | null>(null);
   const [loadedImages, setLoadedImages] = useState<HTMLImageElement[]>([]);
   const [allImagesLoaded, setAllImagesLoaded] = useState(false);
-  const congratsAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // 🛡️ CRITICAL SAFEGUARD: Prevent rapid-fire spins
   const lastSpinTimeRef = useRef<number>(0);
   const manualSpinRef = useRef<boolean>(false);
-
-  useEffect(() => {
-  congratsAudioRef.current = new Audio(congrats);
-  congratsAudioRef.current.load();
-}, []);
-
-const stopCongratsSound = () => {
-  if (congratsAudioRef.current) {
-    congratsAudioRef.current.pause();
-    congratsAudioRef.current.currentTime = 0;
-  }
-};
 
 
   // Fetch wheel configuration from admin - refetch on every spin for real-time updates

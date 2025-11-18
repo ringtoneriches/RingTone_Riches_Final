@@ -60,7 +60,7 @@ const ScratchBilling = () => {
             </div>
             
             <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent">
-              The LandMark Loot
+              The Landmark Loot
             </h1>
             
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">

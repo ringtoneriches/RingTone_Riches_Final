@@ -19,6 +19,7 @@ type RegisterForm = {
   birthMonth: string;
   birthYear: string;
   receiveNewsletter: boolean;
+  phoneNumber: string;
 };
 
 type RegisterResponse = {
@@ -39,6 +40,7 @@ export default function Register() {
     birthMonth: "",
     birthYear: "",
     receiveNewsletter: false,
+    phoneNumber: "",
   });
   const [showBonusPopup, setShowBonusPopup] = useState(false);
   const [bonusData, setBonusData] = useState<{
@@ -207,6 +209,21 @@ export default function Register() {
                   </Select>
                 </div>
               </div>
+
+              {/* Phone Number */}
+            <div>
+              <Label htmlFor="phoneNumber" className="text-white">Phone Number</Label>
+              <Input
+                id="phoneNumber"
+                type="tel"
+                value={formData.phoneNumber}
+                onChange={(e) => setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                className="bg-white text-black border-gray-300 mt-2"
+                data-testid="input-phone-number"
+                placeholder="+44 1234 567890"
+                required
+              />
+            </div>
 
               {/* Email */}
               <div>

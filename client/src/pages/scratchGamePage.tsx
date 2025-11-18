@@ -6,10 +6,12 @@ import ScratchCardTest from "@/components/games/scratch-card-test";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import { PrizeModal } from "@/components/games/prize-modal";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import CountdownTimer from "@/pages/countdownTimer";
+import congrats from "../../../attached_assets/sounds/congrats.mp3"
+
 
 export default function ScratchGamePage() {
   const { competitionId, orderId } = useParams();
@@ -17,6 +19,12 @@ export default function ScratchGamePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
+  const winnerCongratsRef = useRef<HTMLAudioElement | null>(null)
+
+  useEffect(()=>{
+    winnerCongratsRef.current = new Audio(congrats);
+    winnerCongratsRef.current.load()
+  },[])
 
   const [gameResult, setGameResult] = useState<any>(null);
   const [isResultModalOpen, setIsResultModalOpen] = useState(false);
@@ -167,6 +175,7 @@ export default function ScratchGamePage() {
           scratchTicketCount={remainingScratches}
           orderId={orderId}
           mode="loose" // or "tight" based on your preference
+          congratsAudioRef={winnerCongratsRef}
         />
 
       
@@ -179,6 +188,7 @@ export default function ScratchGamePage() {
         isWinner={gameResult?.prize?.type !== "none" && gameResult?.prize?.value !== "Lose"}
         prize={gameResult?.prize}
         gameType="scratch"
+        congratsAudioRef={winnerCongratsRef}
       />
 
       <Footer />

@@ -59,7 +59,7 @@ export default function UnifiedBilling({ orderId, orderType }: UnifiedBillingPro
 
   const getItemName = () => {
     switch(orderType) {
-      case 'spin': return 'Spin Cards';
+      case 'spin': return 'Spins';
       case 'scratch': return 'Scratch Cards';
       default: return 'Tickets';
     }

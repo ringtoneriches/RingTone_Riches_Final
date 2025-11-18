@@ -37,6 +37,7 @@ interface User {
   ringtonePoints: number;
   isAdmin: boolean;
   createdAt: string;
+  phoneNumber:string;
   addressStreet: string | null;
   addressCity: string | null;
   addressPostcode: string | null;
@@ -63,6 +64,7 @@ export default function AdminUsers() {
     lastName: "",
     balance: "",
     ringtonePoints: "",
+    phoneNumber:"",
     isAdmin: false,
   });
 
@@ -219,6 +221,7 @@ export default function AdminUsers() {
       lastName: user.lastName || "",
       balance: user.balance,
       ringtonePoints: user.ringtonePoints.toString(),
+      phoneNumber:user.phoneNumber || "",
       isAdmin: user.isAdmin,
     });
   };
@@ -257,6 +260,7 @@ export default function AdminUsers() {
         email: editForm.email,
         firstName: editForm.firstName,
         lastName: editForm.lastName,
+        phoneNumber: editForm.phoneNumber,
         balance: parseFloat(editForm.balance).toFixed(2),
         ringtonePoints: parseInt(editForm.ringtonePoints),
         isAdmin: editForm.isAdmin,
@@ -380,6 +384,9 @@ export default function AdminUsers() {
                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
                     Name
                   </th>
+                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                    Phone
+                  </th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
                     Balance
                   </th>
@@ -403,6 +410,9 @@ export default function AdminUsers() {
                     <td className="py-3 px-4 text-sm text-foreground">{user.email}</td>
                     <td className="py-3 px-4 text-sm text-foreground">
                       {user.firstName} {user.lastName || ""}
+                    </td>
+                     <td className="py-3 px-4 text-sm text-foreground">
+                      {user.phoneNumber} 
                     </td>
                     <td className="py-3 px-4 text-sm text-primary font-medium">
                       £{parseFloat(user.balance).toFixed(2)}
@@ -472,6 +482,15 @@ export default function AdminUsers() {
                   data-testid="input-edit-email"
                 />
               </div>
+              <div>
+                  <Label>Phone Number</Label>
+                  <Input
+                    value={editForm.phoneNumber}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, phoneNumber: e.target.value })
+                    }
+                  />
+                </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label>First Name</Label>

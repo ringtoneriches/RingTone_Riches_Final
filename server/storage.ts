@@ -51,7 +51,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: UpsertUser): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
-  updateUserBalance(userId: string, amount: string): Promise<User>;
+  updateUserBalance(userId: string, amount: number): Promise<User>;
   updateStripeCustomerId(userId: string, customerId: string): Promise<User>;
   updateUser(userId: string, data: Partial<UpsertUser>): Promise<User>;
 
@@ -232,14 +232,18 @@ async initializeAdminUser(): Promise<void> {
     return user;
   }
 
-  async updateUserBalance(userId: string, amount: string): Promise<User> {
-    const [user] = await db
-      .update(users)
-      .set({ balance: amount, updatedAt: new Date() })
-      .where(eq(users.id, userId))
-      .returning();
-    return user;
-  }
+async updateUserBalance(userId: string, amount: number): Promise<User> {
+  const [user] = await db
+    .update(users)
+    .set({
+      balance: sql`${users.balance} + ${amount}`,
+      updatedAt: new Date()
+    })
+    .where(eq(users.id, userId))
+    .returning();
+
+  return user;
+}
 
   async updateStripeCustomerId(userId: string, customerId: string): Promise<User> {
     const [user] = await db
@@ -300,11 +304,12 @@ async initializeAdminUser(): Promise<void> {
 // In storage.ts
 async updateUserRingtonePoints(userId: string, points: number): Promise<void> {
   await db.update(users)
-    .set({ ringtonePoints: points })
+    .set({
+      ringtonePoints: sql`${users.ringtonePoints} + ${points}`
+    })
     .where(eq(users.id, userId))
     .execute();
 }
-
 async getUserRingtonePoints(userId: string): Promise<number> {
   const user = await db.select({ ringtonePoints: users.ringtonePoints })
     .from(users)

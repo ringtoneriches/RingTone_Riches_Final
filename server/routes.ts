@@ -42,6 +42,7 @@ import { and, asc, desc, eq, inArray, sql, like, gte, lte, or } from "drizzle-or
 import { z } from "zod";
 import { sendOrderConfirmationEmail, sendWelcomeEmail, sendPromotionalEmail, sendPasswordResetEmail } from "./email";
 import { wsManager } from "./websocket";
+import { upload } from "./cloudinary";
 
 // Default spin wheel configuration - 26 segments with 6 evenly-distributed black segments
 // Color palette: Black #000000, Red #FE0000, White #FFFFFF, Blue #1E54FF, Yellow #FEED00, Green #00A223
@@ -126,33 +127,33 @@ const scratchConfigSchema = z.object({
   isVisible: z.boolean().optional(),
 });
 
-const uploadDir = path.join(process.cwd(), "attached_assets", "competitions");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+// const uploadDir = path.join(process.cwd(), "attached_assets", "competitions");
+// if (!fs.existsSync(uploadDir)) {
+//   fs.mkdirSync(uploadDir, { recursive: true });
+// }
 
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-      const uniqueName = `${Date.now()}-${nanoid(8)}${path.extname(file.originalname)}`;
-      cb(null, uniqueName);
-    },
-  }),
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (extname && mimetype) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only image files are allowed"));
-    }
-  },
-  limits: { fileSize: 5 * 1024 * 1024 },
-});
+// const upload = multer({
+  // storage: multer.diskStorage({
+  //   destination: (req, file, cb) => {
+  //     cb(null, uploadDir);
+  //   },
+  //   filename: (req, file, cb) => {
+  //     const uniqueName = `${Date.now()}-${nanoid(8)}${path.extname(file.originalname)}`;
+  //     cb(null, uniqueName);
+  //   },
+  // }),
+  // fileFilter: (req, file, cb) => {
+  //   const allowedTypes = /jpeg|jpg|png|gif|webp/;
+  //   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  //   const mimetype = allowedTypes.test(file.mimetype);
+  //   if (extname && mimetype) {
+  //     cb(null, true);
+  //   } else {
+  //     cb(new Error("Only image files are allowed"));
+  //   }
+  // },
+  // limits: { fileSize: 5 * 1024 * 1024 },
+// });
 // Initialize Stripe only if keys are available
 // let stripe: Stripe | null = null;
 // if (process.env.STRIPE_SECRET_KEY) {
@@ -184,7 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
-      const imagePath = `/attached_assets/competitions/${req.file.filename}`;
+      const imagePath = req.file.path;
       return res.status(200).json({ imagePath });
     } catch (error: any) {
       console.error("File upload error:", error);
@@ -211,6 +212,7 @@ app.post("/api/auth/register", async (req, res) => {
       firstName,
       lastName,
       dateOfBirth,
+      phoneNumber,
       receiveNewsletter,
       birthMonth,
       birthYear,
@@ -240,7 +242,10 @@ app.post("/api/auth/register", async (req, res) => {
       firstName,
       lastName,
       dateOfBirth: dobString,
+      phoneNumber,
       receiveNewsletter: receiveNewsletter || false,
+      balance: "0.00",              
+      ringtonePoints: 0,  
     });
 
     // Check if signup bonus is enabled and credit new user
@@ -2802,6 +2807,8 @@ app.post("/api/scratch-session/:sessionId/complete", isAuthenticated, async (req
           userId,
           prizeId: selectedPrize.id,
           orderId,
+          rewardType: selectedPrize.rewardType,
+          rewardValue: String(selectedPrize.rewardValue ?? ""),
           wonAt: new Date()
         });
 
@@ -4011,13 +4018,25 @@ app.put("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: any
   try {
     const { id } = req.params;
     const updateData = req.body;
+
+    const formattedUpdateData = {
+  ...updateData,
+  updatedAt: new Date(),
+};
+
+// Convert timestamp fields if provided
+const dateFields = ["startDate", "endDate", "drawDate"];
+
+dateFields.forEach(field => {
+  if (formattedUpdateData[field]) {
+    formattedUpdateData[field] = new Date(formattedUpdateData[field]);
+  }
+});
+
     
     const [updatedCompetition] = await db
       .update(competitions)
-      .set({
-        ...updateData,
-        updatedAt: new Date(),
-      })
+      .set(formattedUpdateData)
       .where(eq(competitions.id, id))
       .returning();
     
@@ -4426,6 +4445,7 @@ app.get("/api/admin/users", isAuthenticated, isAdmin, async (req: any, res) => {
       firstName: user.firstName,
       lastName: user.lastName,
       balance: user.balance,
+      phoneNumber:user.phoneNumber,
       ringtonePoints: user.ringtonePoints,
       isAdmin: user.isAdmin,
       createdAt: user.createdAt,
@@ -4464,6 +4484,7 @@ app.put("/api/admin/users/:id", isAuthenticated, isAdmin, async (req: any, res) 
       email: updatedUser.email,
       firstName: updatedUser.firstName,
       lastName: updatedUser.lastName,
+      phoneNumber:updatedUser.phoneNumber,
       balance: updatedUser.balance,
       ringtonePoints: updatedUser.ringtonePoints,
       isAdmin: updatedUser.isAdmin,

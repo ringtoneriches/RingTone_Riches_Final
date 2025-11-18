@@ -8,11 +8,13 @@ import { Competition, User } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import FeaturedCompetitions from "./featuredCompetitions";
 import { Sparkles, Trophy, Zap, Shield, Lock, Star, Gift, CreditCard, CheckCircle } from "lucide-react";
+import { useLocation } from "wouter";
 
 export default function Landing() {
   const { data: competitions = [], isLoading } = useQuery<Competition[]>({
     queryKey: ["/api/competitions"],
   });
+  const [, setLocation] = useLocation()
 
   const [activeFilter, setActiveFilter] = useState("all");
   const { isAuthenticated, user } = useAuth() as { isAuthenticated: boolean; user: User | null };
@@ -28,6 +30,12 @@ export default function Landing() {
     setActiveFilter(filterType);
   };
 
+  //   const redirectToRegister = ()=> {
+  //     setLocation("/register")
+  // }
+  function redirectToRegister() {
+   setLocation("/register")
+  }
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
@@ -279,6 +287,7 @@ export default function Landing() {
                 data-testid="input-newsletter-email"
               />
               <button
+              onClick={redirectToRegister}
                 className="bg-gradient-to-r from-primary to-yellow-400 hover:from-yellow-400 hover:to-primary text-slate-900 px-6 md:px-8 py-3 md:py-4 rounded-lg font-black uppercase tracking-wide hover:shadow-2xl hover:shadow-primary/50 transition-all text-sm md:text-base hover:scale-105 transform"
                 data-testid="button-subscribe"
               >

@@ -1650,7 +1650,7 @@ export default function Wallet() {
                       <li className="flex items-start gap-2">
                         <span className="text-yellow-500">•</span>
                         <span>
-                          Your friend gets 100 Ringtune Points as a welcome
+                          Your friend gets 100 Ringtone Points as a welcome
                           bonus
                         </span>
                       </li>
@@ -2090,8 +2090,15 @@ export default function Wallet() {
                 Processing Time
               </p>
               <p>
-                Withdrawal requests are processed manually within 2-3 business
-                days. You'll receive your funds via bank transfer.
+                Withdrawal requests are processed manually within 24 hours. You’ll receive your funds via bank transfer.
+              </p>
+            </div>
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-gray-300">
+              <p className="font-semibold text-yellow-400 mb-1">
+                Important
+              </p>
+              <p>
+               Joining bonus credit or promotional site credit cannot be withdrawn. These credits are for gameplay only — only winnings generated through gameplay are eligible for withdrawal.
               </p>
             </div>
           </div>

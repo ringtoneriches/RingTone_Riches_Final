@@ -23,6 +23,7 @@ interface User {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  phoneNumber: string;
   createdAt: string;
 }
 
@@ -270,8 +271,9 @@ export default function AdminMarketing() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-zinc-800">
-                    <TableHead className="text-gray-400">Email</TableHead>
                     <TableHead className="text-gray-400">Name</TableHead>
+                    <TableHead className="text-gray-400">Email</TableHead>
+                    <TableHead className="text-gray-400">Phone</TableHead>
                     <TableHead className="text-gray-400">Subscribed Date</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -285,12 +287,14 @@ export default function AdminMarketing() {
                   ) : (
                     subscribers.map((subscriber) => (
                       <TableRow key={subscriber.id} className="border-zinc-800" data-testid={`row-subscriber-${subscriber.id}`}>
-                        <TableCell className="text-white">{subscriber.email}</TableCell>
+                        
                         <TableCell className="text-gray-300">
                           {subscriber.firstName && subscriber.lastName
                             ? `${subscriber.firstName} ${subscriber.lastName}`
                             : subscriber.firstName || subscriber.lastName || "-"}
                         </TableCell>
+                        <TableCell className="text-white">{subscriber.email}</TableCell>
+                        <TableCell className="text-white">{subscriber.phoneNumber}</TableCell>
                         <TableCell className="text-gray-400">
                           {format(new Date(subscriber.createdAt), "MMM dd, yyyy")}
                         </TableCell>

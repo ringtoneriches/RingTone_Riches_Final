@@ -43,6 +43,7 @@ export const users = pgTable("users", {
   isAdmin: boolean("is_admin").default(false),
   isActive: boolean("is_active").default(true),
   referralCode: varchar("referral_code").unique(),
+  phoneNumber: varchar("phone_number"),
   referredBy: varchar("referred_by"),
   addressStreet: text("address_street"),
   addressCity: text("address_city"),
@@ -313,6 +314,7 @@ export const registerUserSchema = createInsertSchema(users).pick({
   lastName: true,
   email: true,
   password: true,
+  phoneNumber:true,
   dateOfBirth: true,
   receiveNewsletter: true,
 });

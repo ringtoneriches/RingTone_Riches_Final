@@ -4,16 +4,23 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { PrizeModal } from "@/components/games/prize-modal";
 import SpinWheel from "@/components/games/spinwheeltest";
 import { useLocation } from "wouter";
 import CountdownTimer from "@/pages/countdownTimer";
+import congrats from "../../../attached_assets/sounds/congrats.mp3"
 
 
 export default function SpinGamePage() {
  const { competitionId, orderId } = useParams();
+ const congratsAudioRef = useRef<HTMLAudioElement | null>(null);
+ 
+  useEffect(() => {
+    congratsAudioRef.current = new Audio(congrats);
+    congratsAudioRef.current.load();
+  }, []);
 
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
@@ -144,13 +151,15 @@ export default function SpinGamePage() {
       </div>
       <main className="container mx-auto   text-center">
         <SpinWheel 
-  onSpinComplete={handleSpinComplete}
-  ticketCount={remainingSpins}  
-  orderId={orderId}
-  competitionId={competitionId}
-  isSpinning={isSpinning}
-  setIsSpinning={setIsSpinning}      
-/>
+          onSpinComplete={handleSpinComplete}
+          ticketCount={remainingSpins}  
+          orderId={orderId}
+          competitionId={competitionId}
+          isSpinning={isSpinning}
+          setIsSpinning={setIsSpinning}    
+         congratsAudioRef={congratsAudioRef} 
+
+        />
 
       </main>
 
@@ -161,6 +170,7 @@ export default function SpinGamePage() {
         isWinner={gameResult?.prize?.type !== "none"}
         prize={gameResult?.prize}
         gameType="spin"
+        congratsAudioRef={congratsAudioRef}
       />
 
       <Footer />

@@ -17,9 +17,10 @@ interface PrizeModalProps {
     description?: string;
   };
   gameType: 'scratch' | 'spin';
+  congratsAudioRef: React.RefObject<HTMLAudioElement>;
 }
 
-export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: PrizeModalProps) {
+export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType ,congratsAudioRef }: PrizeModalProps) {
   //  const congratsAudioRef = useRef<HTMLAudioElement | null>(null);
 //    useEffect(() => {
 //   if (isOpen && isWinner) {
@@ -125,13 +126,18 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
 
 
 
-// const stopCongratsSound = () => {
-//   if (congratsAudioRef.current) {
-//     congratsAudioRef.current.pause();
-//     congratsAudioRef.current.currentTime = 0;
-//   }
-// };
+const stopCongratsSound = () => {
+  if (congratsAudioRef.current) {
+    congratsAudioRef.current.pause();
+    congratsAudioRef.current.currentTime = 0;
+  }
+};
 
+
+const handleClose = () => {
+  stopCongratsSound();
+  onClose();
+};
  
 
   return (
@@ -157,9 +163,7 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
           
           {/* Close button */}
           <button
-            onClick={
-              onClose
-            }
+            onClick={handleClose}
             className="absolute top-4 right-4 z-10 p-2 rounded-full bg-gray-800/80 hover:bg-gray-700/80 transition-colors"
             data-testid="button-close-modal"
           >
@@ -218,7 +222,11 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
             {!isWinner && (
               <div className="bg-gradient-to-br from-gray-800/40 to-gray-900/40 rounded-xl p-6 border border-gray-700/30 backdrop-blur-sm">
                 <p className="text-center text-gray-400 text-sm sm:text-base">
-                  You didn't win this time but the next luxury car spin could be your moment.
+                  {gameType === "scratch" ?
+                     `Better luck next time! Keep playing for more chances to win amazing prizes.` :
+                     `You didn't win this time but the next luxury car spin could be your moment.`
+                  }
+                  
                 </p>
               </div>
             )}
@@ -227,9 +235,7 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType }: Prize
           {/* Action button */}
           <div className="px-8 pb-8">
             <Button
-              onClick={
-              onClose// your popup closing logic
-            }
+              onClick={handleClose}
               className={`w-full h-12 sm:h-14 text-base sm:text-lg font-bold rounded-xl ${
                 isWinner 
                   ? 'bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] hover:from-[#F59E0B] hover:via-[#FACC15] hover:to-[#F59E0B] text-gray-900' 

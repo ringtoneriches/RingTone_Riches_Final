@@ -418,6 +418,21 @@ export default function TermsAndConditions() {
               </p>
             </div>
           </section>
+          <section>
+            <h2 className="text-2xl text-white font-semibold mb-3">
+              Bonus Credit:
+            </h2>
+            <div className="space-y-4">
+              <p>
+                 Any joining bonus, free credit, or promotional
+                credit added to an account is non-withdrawable. Bonus credit
+                must be used for gameplay only. Only real-money winnings earned
+                from gameplay using deposited funds or bonus credit are eligible
+                for withdrawal. Any withdrawal requests made for
+                non-withdrawable bonus credit will be rejected.
+              </p>
+            </div>
+          </section>
         </div>
       </main>
 

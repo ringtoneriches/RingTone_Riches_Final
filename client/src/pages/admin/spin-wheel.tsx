@@ -110,7 +110,7 @@ function CompetitionForm({
 
   return (
     <Tabs defaultValue="basic" className="w-full">
-      <TabsList className="grid w-full grid-cols-2 h-auto">
+      <TabsList className="grid w-full grid-cols-1 h-auto">
         <TabsTrigger
           value="basic"
           data-testid="tab-basic"
@@ -118,13 +118,13 @@ function CompetitionForm({
         >
           Basic Info
         </TabsTrigger>
-        <TabsTrigger
+        {/* <TabsTrigger
           value="prizes"
           data-testid="tab-prizes"
           className="text-xs sm:text-sm py-2 sm:py-2.5"
         >
           Prize Configuration
-        </TabsTrigger>
+        </TabsTrigger> */}
       </TabsList>
 
       <TabsContent

@@ -36,6 +36,7 @@ interface ScratchCardProps {
   mode?: "tight" | "loose";
   scratchTicketCount?: number;
   orderId?: string;
+  congratsAudioRef:React.RefObject<HTMLAudioElement>
 }
 
 const CSS_WIDTH = 500;
@@ -104,7 +105,7 @@ const saveScratchHistory = (history: { status: string; prize: { type: string; va
   }
 };
 
-export default function ScratchCardTest({ onScratchComplete, mode = "tight", scratchTicketCount, orderId }: ScratchCardProps) {
+export default function ScratchCardTest({ onScratchComplete, mode = "tight", scratchTicketCount, orderId ,congratsAudioRef }: ScratchCardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -258,6 +259,17 @@ export default function ScratchCardTest({ onScratchComplete, mode = "tight", scr
       // Callback with prize info
       if (onScratchComplete) {
         onScratchComplete(currentSession.prize);
+      }
+
+      const isWin = 
+      currentSession.prize?.type !== "none" &&
+      currentSession.prize?.value !== "-" &&
+      currentSession.isWinner === true;
+
+
+      if (isWin && congratsAudioRef.current) {
+        congratsAudioRef.current.currentTime = 0;
+        congratsAudioRef.current.play().catch(() => {});
       }
 
       setSessionState('completed');
@@ -680,7 +692,7 @@ function checkPercentScratched(force = false) {
               <div className="absolute -inset-1 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-full blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
               <div className="relative bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 px-6 py-3 rounded-full text-sm sm:text-base font-black shadow-2xl flex items-center gap-2">
                 <span className="text-lg sm:text-xl">🎟️</span>
-                <span>Available Scratche{scratchTicketCount !== 1 ? "s" : ""}: {scratchTicketCount}</span>
+                <span>Available Scratch Cards: {scratchTicketCount}</span>
               </div>
             </div>
           )}

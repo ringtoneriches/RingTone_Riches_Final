@@ -137,6 +137,9 @@ export async function sendOrderConfirmationEmail(
                       <li class="mobile-label" style="font-size: 15px; margin: 5px 0;">7:30am</li>
                       <li class="mobile-label" style="font-size: 15px; margin: 5px 0;">7:45am</li>
                     </ul>
+                     <p class="mobile-text-md" style="margin: 0 0 15px; color: #1a1a1a; font-size: 16px; line-height: 1.5; font-weight: 600;">
+                      Answer: 7:30am
+                    </p>
                     ${orderData.skillAnswer ? `
                     <p class="mobile-label" style="margin: 0 0 10px; color: #666666; font-size: 15px; font-weight: 600;">Your Answer:</p>
                     <p class="mobile-text-md" style="margin: 0; color: #1a1a1a; font-size: 16px; font-weight: bold; background-color: #ffffff; padding: 12px; border-radius: 6px; border: 1px solid ${BRAND_COLOR};">
