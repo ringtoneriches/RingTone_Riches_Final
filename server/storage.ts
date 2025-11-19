@@ -241,9 +241,10 @@ async updateUserBalance(userId: string, amount: number): Promise<User> {
     })
     .where(eq(users.id, userId))
     .returning();
-
+    
   return user;
 }
+
 
   async updateStripeCustomerId(userId: string, customerId: string): Promise<User> {
     const [user] = await db
@@ -304,9 +305,7 @@ async updateUserBalance(userId: string, amount: number): Promise<User> {
 // In storage.ts
 async updateUserRingtonePoints(userId: string, points: number): Promise<void> {
   await db.update(users)
-    .set({
-      ringtonePoints: sql`${users.ringtonePoints} + ${points}`
-    })
+     .set({ ringtonePoints: points })
     .where(eq(users.id, userId))
     .execute();
 }

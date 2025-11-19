@@ -30,6 +30,7 @@ import TajMahal from "../../../../attached_assets/Taj Ma.png";
 import TimesSquare from "../../../../attached_assets/Times S.png";
 import TowerBridge from "../../../../attached_assets/Tower Bridge.png";
 import TowerOfPisa from "../../../../attached_assets/Tower of Pisa.png";
+import { useLocation } from "wouter";
 
 interface ScratchCardProps {
   onScratchComplete?: (prize: { type: string; value: string }) => void;
@@ -66,6 +67,20 @@ const landmarkImages = [
   { name: "Tower Bridge", src: TowerBridge },
   { name: "Tower of Pisa", src: TowerOfPisa },
 ];
+
+function normalizeName(str: string) {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function getImageByBackendName(name: string) {
+  const normalized = normalizeName(name);
+
+  const found = landmarkImages.find(
+    (img) => normalizeName(img.name) === normalized
+  );
+
+  return found || null;
+}
 
 function getRandomImages(n: number) {
   const shuffled = [...landmarkImages].sort(() => 0.5 - Math.random());
@@ -112,7 +127,7 @@ export default function ScratchCardTest({ onScratchComplete, mode = "tight", scr
   const scratchSoundRef = useRef<HTMLAudioElement | null>(null);
   const hasCompletedRef = useRef(false);
   const isScratching = useRef(false); // 🎵 Track if actively scratching (for sound control)
-  
+  const [,setLocation] = useLocation();
   // 🎯 NEW: Session-based state management
   const [sessionState, setSessionState] = useState<'loading' | 'ready' | 'scratching' | 'completed'>('loading');
   const [currentSession, setCurrentSession] = useState<{
@@ -135,6 +150,15 @@ export default function ScratchCardTest({ onScratchComplete, mode = "tight", scr
   
   // Confirmation dialog state
   const [showRevealAllDialog, setShowRevealAllDialog] = useState(false);
+  const [showRevealAllResultDialog, setShowRevealAllResultDialog] = useState(false);
+const [revealAllSummary, setRevealAllSummary] = useState<{ wins: number; losses: number }>({
+  wins: 0,
+  losses: 0
+});
+
+const [showOutOfScratchesDialog, setShowOutOfScratchesDialog] = useState(false);
+const outOfScratchClickCount = useRef(0);
+
   
   // Check if all scratch cards are used
   const allScratchesUsed = scratchHistory.length > 0 && scratchHistory.every(s => s.status === "Scratched");
@@ -296,6 +320,9 @@ export default function ScratchCardTest({ onScratchComplete, mode = "tight", scr
     }
   }, [scratchHistory, orderId]);
 
+
+   
+
   // ✅ Clear localStorage only when explicitly needed (like when leaving competition)
   // useEffect(() => {
   //   return () => {
@@ -319,10 +346,15 @@ export default function ScratchCardTest({ onScratchComplete, mode = "tight", scr
     }
     
     // Map tile layout from backend to actual image objects
-    const tileImages = currentSession.tileLayout.map(imageName => {
-      const found = landmarkImages.find(img => img.name === imageName);
-      return found || landmarkImages[0]; // Fallback to first image
-    });
+      const tileImages = currentSession.tileLayout.map((name: string) => {
+        const img = getImageByBackendName(name);
+        if (!img) {
+          console.warn("Unknown backend image name:", name);
+          return landmarkImages[Math.floor(Math.random() * landmarkImages.length)];
+        }
+        return img;
+      });
+
     
     // Set images to pre-determined layout (exactly 6)
     setImages(tileImages);
@@ -622,8 +654,18 @@ function checkPercentScratched(force = false) {
       setRevealed(false);
       setSessionKey((k) => k + 1);
 
-      // Show summary message
-      alert(`All scratch cards revealed! Check the progress table for your results.`);
+//      const wins = results.scratches.filter((s: any) =>
+//   s.prize?.type !== "none" &&
+//   s.prize?.type !== "try_again" &&
+//   s.prize?.value !== "Lose" &&
+//   s.prize?.value !== "Try Again"
+// ).length;
+
+// const losses = results.scratches.length - wins;
+
+// // Save for modal
+// setRevealAllSummary({ wins, losses });
+setShowRevealAllResultDialog(true);
 
     } catch (error) {
       console.error("Error revealing all scratch cards:", error);
@@ -744,7 +786,7 @@ function checkPercentScratched(force = false) {
                     className="bg-white rounded-lg sm:rounded-xl shadow-2xl flex items-center justify-center p-2 sm:p-3 border-2 border-gray-200 aspect-square overflow-hidden hover:scale-105 transition-transform duration-200"
                   >
                     <img
-                      src={img.src}
+                      src={`${img.src}?v=${currentSession?.sessionId}`}
                       alt={img.name}
                       className="w-full h-full object-contain select-none"
                     />
@@ -759,8 +801,8 @@ function checkPercentScratched(force = false) {
               ref={canvasRef}
               className="absolute inset-0 cursor-pointer touch-none w-full h-full"
             onMouseDown={(e) => {
-              if (allScratchesUsed) {
-                alert("You have used all your scratches. Please buy more to play.");
+             if (allScratchesUsed) {
+                setShowOutOfScratchesDialog(true);
                 return;
               }
               drawingRef.current = true;
@@ -774,10 +816,10 @@ function checkPercentScratched(force = false) {
               scratchAt(e.clientX - rect.left, e.clientY - rect.top);
             }}
             onTouchStart={(e) => {
-              if (allScratchesUsed) {
-                alert("You have used all your scratches. Please buy more to play.");
-                return;
-              }
+             if (allScratchesUsed) {
+              setShowOutOfScratchesDialog(true);
+              return;
+            }
               drawingRef.current = true;
               startScratchSound();
               const t = e.touches[0];
@@ -963,6 +1005,66 @@ function checkPercentScratched(force = false) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reveal-All Result Dialog */}
+<AlertDialog open={showRevealAllResultDialog} onOpenChange={setShowRevealAllResultDialog}>
+  <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15] text-white">
+    <AlertDialogHeader>
+      <AlertDialogTitle className="text-[#FACC15] text-2xl font-black text-center">
+        ✨ Reveal-All Complete!
+      </AlertDialogTitle>
+      <AlertDialogDescription className="text-gray-300 text-center text-lg">
+        Check the progress table below for full prize details.
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+
+    <AlertDialogFooter>
+      <AlertDialogAction
+        className="bg-[#FACC15] text-gray-900 hover:bg-[#F59E0B] font-bold px-6 py-3 rounded-lg"
+        onClick={() => setShowRevealAllResultDialog(false)}
+      >
+        OK
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+
+                  {/* OUT OF SCRATCHES DIALOG */}
+<AlertDialog open={showOutOfScratchesDialog} onOpenChange={setShowOutOfScratchesDialog}>
+  <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15] text-white">
+    <AlertDialogHeader>
+      <AlertDialogTitle className="text-[#FACC15] text-xl font-bold text-center">
+        No Scratch Cards Left
+      </AlertDialogTitle>
+      <AlertDialogDescription className="text-gray-300 text-center text-base">
+        You have used all your scratch cards.  
+        Buy more to continue playing!
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+
+    <AlertDialogFooter className="flex justify-center">
+      <AlertDialogAction
+        className="bg-[#FACC15] text-gray-900 font-bold px-6 py-3 rounded-lg hover:bg-[#F59E0B]"
+        onClick={() => {
+         setTimeout(() => {
+        // Clear order-specific localStorage
+        if (orderId) {
+          localStorage.removeItem(`scratchCardHistory_${orderId}`);
+        }
+        setLocation("/"); // Navigate to home
+      }, 2000);
+        }}
+      >
+        Buy More
+      </AlertDialogAction>
+
+      <AlertDialogCancel className="bg-gray-800 text-white hover:bg-gray-700 px-6 py-3 rounded-lg">
+        Close
+      </AlertDialogCancel>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+
     </div>
   );
 }

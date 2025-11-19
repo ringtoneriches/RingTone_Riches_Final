@@ -37,6 +37,7 @@ import pointer from "../../../../attached_assets/pointer.png";
 import ring from "../../../../attached_assets/ring.png";
 
 import congrats from "../../../../attached_assets/sounds/congrats.mp3"
+import { useLocation } from "wouter";
 
 // Icon mapping for admin configuration - uses car PNG images
 const ICON_MAP: Record<string, any> = {
@@ -158,6 +159,9 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
   
   // Confirmation dialog state
   const [showRevealAllDialog, setShowRevealAllDialog] = useState(false);
+  const [showRevealAllResultDialog, setShowRevealAllResultDialog] = useState(false);
+  const [showOutOfSpinDialog, setShowOutOfSpinDialog] = useState(false);
+    const [,setLocation] = useLocation();
   
   // Check if all spins are used
   const allSpinsUsed = spinHistory.length > 0 && spinHistory.every(s => s.status === "SPUN");
@@ -636,7 +640,7 @@ ctx.stroke();
       setIsSpinning(false);
 
       // Show summary modal or notification
-      alert(`All spins revealed! Check the progress table for your results.`);
+     setShowRevealAllResultDialog(true);
 
     } catch (error) {
       console.error("Error revealing all spins:", error);
@@ -648,7 +652,8 @@ ctx.stroke();
   const spinWheel = async () => {
     // Check if all spins are used
     if (allSpinsUsed) {
-      alert("You have used all your spins. Please buy more to play.");
+    setShowOutOfSpinDialog(true);
+
       return;
     }
     
@@ -982,11 +987,11 @@ if (congratsAudioRef.current) {
                      shadow-xl transition-all
                      z-30 cursor-pointer
                      ${isSpinning ? 'bg-yellow-300 opacity-50 cursor-not-allowed' : 
-                       allSpinsUsed ? 'bg-gray-400 opacity-50 cursor-not-allowed' : 
+                       
                        'bg-yellow-400 hover:bg-yellow-500'}`}
           data-testid="button-spin"
         >
-          {isSpinning ? "SPINNING..." : allSpinsUsed ? "ALL USED" : "SPIN"}
+          {isSpinning ? "SPINNING..." : "SPIN"}
         </button>
       </div>
 
@@ -1145,6 +1150,67 @@ if (congratsAudioRef.current) {
             >
               Yes, Reveal All
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+
+            {/* Reveal-All Result Dialog */}
+      <AlertDialog open={showRevealAllResultDialog} onOpenChange={setShowRevealAllResultDialog}>
+        <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15] text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#FACC15] text-2xl font-black text-center">
+              ✨ Reveal-All Complete!
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300 text-center text-lg">
+              Check the progress table below for full prize details.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+      
+          <AlertDialogFooter>
+            <AlertDialogAction
+              className="bg-[#FACC15] text-gray-900 hover:bg-[#F59E0B] font-bold px-6 py-3 rounded-lg"
+              onClick={() => setShowRevealAllResultDialog(false)}
+            >
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+
+                        {/* OUT OF SCRATCHES DIALOG */}
+      <AlertDialog open={showOutOfSpinDialog} onOpenChange={setShowOutOfSpinDialog}>
+        <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15] text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#FACC15] text-xl font-bold text-center">
+              No Scratch Cards Left
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300 text-center text-base">
+              You have used all your scratch cards.  
+              Buy more to continue playing!
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+      
+          <AlertDialogFooter className="flex justify-center">
+            <AlertDialogAction
+              className="bg-[#FACC15] text-gray-900 font-bold px-6 py-3 rounded-lg hover:bg-[#F59E0B]"
+              onClick={() => {
+               setTimeout(() => {
+              // Clear order-specific localStorage
+              if (orderId) {
+               localStorage.removeItem(`spinWheelHistory_${orderId}`);
+              }
+              setLocation("/"); // Navigate to home
+            }, 2000);
+              }}
+            >
+              Buy More
+            </AlertDialogAction>
+      
+            <AlertDialogCancel className="bg-gray-800 text-white hover:bg-gray-700 px-6 py-3 rounded-lg">
+              Close
+            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

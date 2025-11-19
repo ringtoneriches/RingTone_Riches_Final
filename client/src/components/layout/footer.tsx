@@ -15,14 +15,31 @@ export default function Footer() {
                 className="w-32 h-16 sm:w-36 sm:h-18 md:w-40 md:h-24 object-contain"
               />
             </div>
-            <div className="flex space-x-4">
+            <div className="flex space-x-3">
               <a
                 href="https://www.facebook.com/profile.php?id=61579695463356"
                 className="hover:opacity-80 transition"
                 data-testid="link-facebook"
               >
-                <img src={facebook} className="w-14" alt="" />
+                <img src={facebook} className="w-14 " alt="" />
               </a>
+
+             <a
+              href="https://www.instagram.com/ringtoneriches?igsh=MTVyMnJvZ2w4dGZ2Zw%3D%3D&utm_source=qr"
+              className="hover:opacity-80 transition"
+              data-testid="link-facebook"
+            >
+              <i
+                className="fab fa-instagram text-3xl -ml-3"
+                style={{
+                  background: "linear-gradient(to bottom, #9F399B, #F39C3D)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  display: "inline-block",
+                }}
+              ></i>
+            </a>
+
 
               <a
                 href="https://www.tiktok.com/@ringtone.riches?_t=ZN-90jrPt73hTi&_r=1"

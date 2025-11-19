@@ -366,17 +366,40 @@ export default function TermsAndConditions() {
             </h2>
             <div className="space-y-4">
               <p>
-                All instant-win features are linked to valid competition entries
-                and are not standalone games of chance. If a wheel or scratch
-                mechanism malfunctions, the result is determined at the
-                Promoter’s discretion to maintain fairness. Each spin or scratch
-                guarantees one prize – either a cash prize or site credit
-                (“Ringtone Points”).
+                The Cash Wheel and Scratch Card Game form part of the overall
+                prize competition and do not operate as standalone games of
+                chance. Each spin or scratch is treated as a valid competition
+                entry and is subject to all Terms & Conditions contained herein.
+              </p>
+              <p>
+                Both the Cash Wheel and Scratch Card Game may award instant cash
+                prizes, site credit in the form of “Ringtone Points”, or a lose
+                result. Each spin or scratch generates one definitive outcome
+                only. No alternative outcomes or compensatory prizes will be
+                offered unless deemed necessary by the Promoter to maintain
+                fairness and compliance.
+              </p>
+              <p>
+                In the event of any technical issue, interruption, display
+                error, system malfunction, or other irregularity, the Promoter
+                reserves the absolute right to review, void, amend, or re-issue
+                any result at its sole discretion.
               </p>
               <p>
                 Ringtone Points are equivalent to £0.01 each and may be used
-                only for eligible competitions; they cannot be exchanged for
-                cash.
+                solely for eligible competitions; they cannot be exchanged for,
+                redeemed for, or withdrawn as cash under any circumstances.
+              </p>
+              <p>
+                Any bonus, promotional, goodwill or joining-credit Ringtone
+                Points carry no monetary value and are strictly
+                non-withdrawable. Only winnings generated from gameplay using
+                deposited funds may form part of a withdrawable balance.
+              </p>
+              <p>
+                The Promoter’s decision in all matters relating to instant-win
+                features, prize allocations, technical determinations, and the
+                interpretation of these Terms is final and binding.
               </p>
             </div>
           </section>
@@ -424,12 +447,12 @@ export default function TermsAndConditions() {
             </h2>
             <div className="space-y-4">
               <p>
-                 Any joining bonus, free credit, or promotional
-                credit added to an account is non-withdrawable. Bonus credit
-                must be used for gameplay only. Only real-money winnings earned
-                from gameplay using deposited funds or bonus credit are eligible
-                for withdrawal. Any withdrawal requests made for
-                non-withdrawable bonus credit will be rejected.
+                Any joining bonus, free credit, or promotional credit added to
+                an account is non-withdrawable. Bonus credit must be used for
+                gameplay only. Only real-money winnings earned from gameplay
+                using deposited funds or bonus credit are eligible for
+                withdrawal. Any withdrawal requests made for non-withdrawable
+                bonus credit will be rejected.
               </p>
             </div>
           </section>
