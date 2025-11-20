@@ -33,6 +33,9 @@ import {
   scratchCardWins,
   scratchCardUsage,
   withdrawalRequests,
+  spinUsage,
+  spinWins,
+  campaignEmails,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -2534,46 +2537,54 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
     let tileLayout: string[] = [];
     
     try {
-      await db.transaction(async (tx) => {
-        // Lock and fetch eligible prizes
-        const allPrizes = await tx
-          .select()
-          .from(scratchCardImages)
-          .where(eq(scratchCardImages.isActive, true))
-          
+    await db.transaction(async (tx) => {
+  const allPrizes = await tx
+    .select()
+    .from(scratchCardImages)
+    .where(eq(scratchCardImages.isActive, true));
 
-        if (!allPrizes || allPrizes.length === 0) {
-          throw new Error("No prizes configured");
-        }
+  if (!allPrizes || allPrizes.length === 0) {
+    throw new Error("No prizes configured");
+  }
 
-        // Filter prizes that haven't reached maxWins
-        const eligiblePrizes = allPrizes.filter(prize => {
-          if (!prize.weight || prize.weight <= 0) return false;
-          if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins) return false;
-          return true;
-        });
+  const eligiblePrizes = allPrizes.filter(prize => {
+    const safeWeight = Number(prize.weight) || 0;
+    if (safeWeight <= 0) return false;
 
-        if (eligiblePrizes.length === 0) {
-          throw new Error("No prizes available");
-        }
+    const maxWins = prize.maxWins === null ? null : Number(prize.maxWins);
+    if (maxWins !== null && maxWins > 0 && prize.quantityWon >= maxWins) {
+      return false;
+    }
+    return true;
+  });
 
-        // Weighted random selection
-        const totalWeight = eligiblePrizes.reduce((sum, prize) => sum + prize.weight, 0);
-        if (totalWeight <= 0) {
-          throw new Error("Invalid prize weights");
-        }
+  // Use eligible prizes OR fallback to all prizes
+  const prizePool = eligiblePrizes.length > 0 ? eligiblePrizes : allPrizes;
 
-        let random = Math.random() * totalWeight;
-        selectedPrize = eligiblePrizes[0];
+  // SAFE total weight
+  const totalWeight = prizePool.reduce(
+    (sum, prize) => sum + (Number(prize.weight) || 0),
+    0
+  );
 
-        for (const prize of eligiblePrizes) {
-          random -= prize.weight;
-          if (random <= 0) {
-            selectedPrize = prize;
-            break;
-          }
-        }
-      });
+  if (totalWeight <= 0 || Number.isNaN(totalWeight)) {
+    throw new Error("Invalid prize weights");
+  }
+
+  let random = Math.random() * totalWeight;
+
+  selectedPrize = prizePool[0];
+
+  for (const prize of prizePool) {
+    const w = Number(prize.weight) || 0;
+    random -= w;
+    if (random <= 0) {
+      selectedPrize = prize;
+      break;
+    }
+  }
+});
+
 
       // 🖼️ Generate 2x3 tile layout (6 tiles) based on win/loss
       const isWinner = selectedPrize.rewardType !== 'try_again' && selectedPrize.rewardType !== 'lose';
@@ -4174,35 +4185,68 @@ app.put("/api/admin/game-scratch-config", isAuthenticated, isAdmin, async (req: 
 });
 
 //  Delete user
-app.delete("/api/admin/users/:id", isAuthenticated , isAdmin , async (req: any , res) =>{
+app.delete("/api/admin/users/:id", isAuthenticated, isAdmin, async (req: any, res) => {
   try {
-      const { id } = req.params;
-      const userId = req.user.id;
-      if(id === userId){
-        return res.status(400).json({ message : "admin cannot delete own account"})
-      }
+    const { id } = req.params;
+    const adminId = req.user.id;
 
-      const user = await storage.getUser(id);
-      if(!user){
-        return res.status(404).json({ message : "user not found"})
-      }
+    if (id === adminId) {
+      return res.status(400).json({ message: "Admin cannot delete own account" });
+    }
 
-      const userOrders = await db.select().from(orders).where(eq(orders.userId , id)).limit(1);
-      const userTickets =  await db.select().from(tickets).where(eq(tickets.userId , id)).limit(1);
-      
-      if(userOrders.length > 0 || userTickets.length > 0){
-        return res.status(400).json({ message : "cannot delete user with existing orders or tickets"})
-      }
+    const user = await storage.getUser(id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
-      await db.delete(transactions).where(eq(transactions.userId, id));
+    await db.transaction(async (tx) => {
+      // 1️⃣ Delete scratch-card usage FIRST (important!!)
+      await tx.delete(scratchCardUsage).where(eq(scratchCardUsage.userId, id));
 
-      await db.delete(users).where(eq(users.id , id))
-      res.status(200).json({ message : "user deleted successfully"})
+      // 2️⃣ Delete scratch-card wins
+      await tx.delete(scratchCardWins).where(eq(scratchCardWins.userId, id));
+
+      // 3️⃣ Delete spin usage
+      await tx.delete(spinUsage).where(eq(spinUsage.userId, id));
+
+      // 4️⃣ Delete spin wins
+      await tx.delete(spinWins).where(eq(spinWins.userId, id));
+
+      // 5️⃣ Delete withdrawals
+      await tx.delete(withdrawalRequests).where(eq(withdrawalRequests.userId, id));
+
+      // 6️⃣ Delete winners
+      await tx.delete(winners).where(eq(winners.userId, id));
+
+      // 7️⃣ Delete transactions
+      await tx.delete(transactions).where(eq(transactions.userId, id));
+
+      // 8️⃣ Delete tickets
+      await tx.delete(tickets).where(eq(tickets.userId, id));
+
+      // 9️⃣ Delete orders AFTER usage/wins cleared
+      await tx.delete(orders).where(eq(orders.userId, id));
+
+      // 🔟 Remove referrals to this user
+      await tx.update(users)
+        .set({ referredBy: null })
+        .where(eq(users.referredBy, id));
+
+      // 1️⃣1️⃣ Delete marketing campaign emails
+      await tx.delete(campaignEmails).where(eq(campaignEmails.userId, id));
+
+      // 1️⃣2️⃣ Finally delete the user
+      await tx.delete(users).where(eq(users.id, id));
+    });
+
+    res.status(200).json({ message: "User and all related data deleted successfully" });
+
   } catch (error) {
-      console.error("Error deleting user:" , error);
-      res.status(500).json({ message : "failed to delete user"})
+    console.error("Error deleting user:", error);
+    res.status(500).json({ message: "Failed to delete user" });
   }
 });
+
 
 // Deactivate user
 app.delete("/api/admin/users/deactivate/:id" ,isAuthenticated, isAdmin, async (req:any , res)=>{
