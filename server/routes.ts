@@ -33,15 +33,15 @@ import {
   scratchCardWins,
   scratchCardUsage,
   withdrawalRequests,
-  spinUsage,
   spinWins,
-  campaignEmails,
+  spinUsage,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
 import {stripe} from "./stripe";
 import { cashflows } from "./cashflows";
 import { and, asc, desc, eq, inArray, sql, like, gte, lte, or } from "drizzle-orm";
+import { count } from "drizzle-orm/sql";
 import { z } from "zod";
 import { sendOrderConfirmationEmail, sendWelcomeEmail, sendPromotionalEmail, sendPasswordResetEmail } from "./email";
 import { wsManager } from "./websocket";
@@ -1248,7 +1248,7 @@ const spinCooldowns = new Map<string, number>();
 const SPIN_COOLDOWN_MS = 3000; // 3 seconds minimum between spins
 
 // SERVER-SIDE: Spin wheel play route with probability and max wins enforcement
-app.post("/api/play-spin-wheelll", isAuthenticated, async (req: any, res) => {
+app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
     const { orderId } = req.body;
@@ -1505,132 +1505,163 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Fetch active wheel configuration once
-    const [config] = await db.select().from(gameSpinConfig).where(eq(gameSpinConfig.id, "active"));
-    const wheelConfig = config || DEFAULT_SPIN_WHEEL_CONFIG;
-    const segments = wheelConfig.segments as any[];
-
-    // Process all spins
+    // 🔒 CRITICAL: Use database transaction for atomic operations
     const results = [];
     let totalCash = 0;
     let totalPoints = 0;
 
-    for (let i = 0; i < spinsToProcess; i++) {
-      // Filter eligible segments for this spin
-      const eligibleSegments = [];
-      for (const segment of segments) {
-        if (!segment.probability || segment.probability <= 0) {
-          continue;
-        }
-        
-        if (segment.maxWins !== null) {
-          const winCount = await storage.getSegmentWinCount(segment.id);
-          if (winCount >= segment.maxWins) {
+    await db.transaction(async (tx) => {
+      // Fetch active wheel configuration once
+      const [config] = await tx.select().from(gameSpinConfig).where(eq(gameSpinConfig.id, "active"));
+      const wheelConfig = config || DEFAULT_SPIN_WHEEL_CONFIG;
+      const segments = wheelConfig.segments as any[];
+
+      for (let i = 0; i < spinsToProcess; i++) {
+        // Filter eligible segments for this spin
+        const eligibleSegments = [];
+        for (const segment of segments) {
+          if (!segment.probability || segment.probability <= 0) {
             continue;
           }
+          
+          if (segment.maxWins !== null) {
+            const [winData] = await tx
+              .select({ count: sql<number>`count(*)` })
+              .from(spinWins)
+              .where(eq(spinWins.segmentId, segment.id));
+            const winCount = winData?.count || 0;
+            
+            if (winCount >= segment.maxWins) {
+              continue;
+            }
+          }
+          
+          eligibleSegments.push(segment);
         }
-        
-        eligibleSegments.push(segment);
-      }
 
-      if (eligibleSegments.length === 0) {
-        break; // No more prizes available
-      }
-
-      // Weighted random selection
-      const totalWeight = eligibleSegments.reduce((sum, seg) => sum + seg.probability, 0);
-      let random = Math.random() * totalWeight;
-      let selectedSegment = eligibleSegments[0];
-
-      for (const segment of eligibleSegments) {
-        random -= segment.probability;
-        if (random <= 0) {
-          selectedSegment = segment;
-          break;
+        if (eligibleSegments.length === 0) {
+          break; // No more prizes available
         }
+
+        // Weighted random selection
+        const totalWeight = eligibleSegments.reduce((sum, seg) => sum + seg.probability, 0);
+        let random = Math.random() * totalWeight;
+        let selectedSegment = eligibleSegments[0];
+
+        for (const segment of eligibleSegments) {
+          random -= segment.probability;
+          if (random <= 0) {
+            selectedSegment = segment;
+            break;
+          }
+        }
+
+        // Record spin usage using tx
+        await tx.insert(spinUsage).values({
+          orderId,
+          userId,
+          usedAt: new Date(),
+        });
+
+        // Record the win using tx
+        await tx.insert(spinWins).values({
+          userId,
+          segmentId: selectedSegment.id,
+          rewardType: selectedSegment.rewardType as any,
+          rewardValue: String(selectedSegment.rewardValue),
+        });
+
+        // Award prize and track totals
+        let prizeAmount: number | string = 0;
+        let prizeType = "none";
+
+        if (selectedSegment.rewardType === "cash" && selectedSegment.rewardValue) {
+          const amount = typeof selectedSegment.rewardValue === 'number' 
+            ? selectedSegment.rewardValue 
+            : parseFloat(String(selectedSegment.rewardValue));
+          
+          // 🔒 CRITICAL: Update balance using tx (not global db)
+          totalCash += amount;
+          const currentBalance = parseFloat(user.balance || "0");
+          user.balance = (currentBalance + amount).toFixed(2);
+          
+          await tx
+            .update(users)
+            .set({ balance: user.balance })
+            .where(eq(users.id, userId));
+
+          await tx.insert(transactions).values({
+            id: crypto.randomUUID(),
+            userId,
+            type: "prize",
+            amount: amount.toFixed(2),
+            description: `Spin Wheel Prize - £${amount}`,
+            createdAt: new Date(),
+          });
+
+          await tx.insert(winners).values({
+            id: crypto.randomUUID(),
+            userId,
+            competitionId: null,
+            prizeDescription: selectedSegment.label,
+            prizeValue: `£${amount}`,
+            imageUrl: null,
+            isShowcase: false,
+            createdAt: new Date(),
+          });
+
+          prizeAmount = amount;
+          prizeType = "cash";
+        } else if (selectedSegment.rewardType === "points" && selectedSegment.rewardValue) {
+          const points = typeof selectedSegment.rewardValue === 'number'
+            ? Math.floor(selectedSegment.rewardValue)
+            : parseInt(String(selectedSegment.rewardValue));
+          
+          // 🔒 CRITICAL: Update points using tx (not global db)
+          totalPoints += points;
+          const currentPoints = user.ringtonePoints || 0;
+          user.ringtonePoints = currentPoints + points;
+          
+          await tx
+            .update(users)
+            .set({ ringtonePoints: user.ringtonePoints })
+            .where(eq(users.id, userId));
+
+          await tx.insert(transactions).values({
+            id: crypto.randomUUID(),
+            userId,
+            type: "prize",
+            amount: points.toString(),
+            description: `Spin Wheel Prize - ${points} Ringtones`,
+            createdAt: new Date(),
+          });
+
+          await tx.insert(winners).values({
+            id: crypto.randomUUID(),
+            userId,
+            competitionId: null,
+            prizeDescription: selectedSegment.label,
+            prizeValue: `${points} Ringtones`,
+            imageUrl: null,
+            isShowcase: false,
+            createdAt: new Date(),
+          });
+
+          prizeAmount = `${points} Ringtones`;
+          prizeType = "points";
+        }
+
+        results.push({
+          segmentId: selectedSegment.id,
+          label: selectedSegment.label,
+          prize: {
+            brand: selectedSegment.label,
+            amount: prizeAmount,
+            type: prizeType,
+          },
+        });
       }
-
-      // Record spin usage
-      await storage.recordSpinUsage(orderId, userId);
-
-      // Record the win
-      await storage.recordSpinWin({
-        userId,
-        segmentId: selectedSegment.id,
-        rewardType: selectedSegment.rewardType,
-        rewardValue: String(selectedSegment.rewardValue),
-      });
-
-      // Award prize and track totals
-      let prizeAmount: number | string = 0;
-      let prizeType = "none";
-
-      if (selectedSegment.rewardType === "cash" && selectedSegment.rewardValue) {
-        const amount = typeof selectedSegment.rewardValue === 'number' 
-          ? selectedSegment.rewardValue 
-          : parseFloat(String(selectedSegment.rewardValue));
-        
-        const finalBalance = parseFloat(user.balance || "0") + amount;
-        await storage.updateUserBalance(userId, finalBalance.toFixed(2));
-
-        await storage.createTransaction({
-          userId,
-          type: "prize",
-          amount: amount.toFixed(2),
-          description: `Spin Wheel Prize - £${amount}`,
-        });
-
-        await storage.createWinner({
-          userId,
-          competitionId: null,
-          prizeDescription: selectedSegment.label,
-          prizeValue: `£${amount}`,
-          imageUrl: null,
-          isShowcase: false,
-        });
-
-        totalCash += amount;
-        prizeAmount = amount;
-        prizeType = "cash";
-      } else if (selectedSegment.rewardType === "points" && selectedSegment.rewardValue) {
-        const points = typeof selectedSegment.rewardValue === 'number'
-          ? Math.floor(selectedSegment.rewardValue)
-          : parseInt(String(selectedSegment.rewardValue));
-        
-        const newPoints = (user.ringtonePoints || 0) + points;
-        await storage.updateUserRingtonePoints(userId, newPoints);
-
-        await storage.createTransaction({
-          userId,
-          type: "prize",
-          amount: points.toString(),
-          description: `Spin Wheel Prize - ${points} Ringtones`,
-        });
-
-        await storage.createWinner({
-          userId,
-          competitionId: null,
-          prizeDescription: selectedSegment.label,
-          prizeValue: `${points} Ringtones`,
-          imageUrl: null,
-          isShowcase: false,
-        });
-
-        totalPoints += points;
-        prizeAmount = `${points} Ringtones`;
-        prizeType = "points";
-      }
-
-      results.push({
-        segmentId: selectedSegment.id,
-        label: selectedSegment.label,
-        prize: {
-          brand: selectedSegment.label,
-          amount: prizeAmount,
-          type: prizeType,
-        },
-      });
-    }
+    });
 
     res.json({
       success: true,
@@ -2412,61 +2443,89 @@ app.post("/api/reveal-all-scratch-cards", isAuthenticated, async (req: any, res)
         if (selectedPrize.rewardType === "cash" && selectedPrize.rewardValue) {
           const amount = parseFloat(String(selectedPrize.rewardValue));
           
-          const finalBalance = parseFloat(user.balance || "0") + amount;
-          await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+          // 🔒 CRITICAL: Update balance using tx (not global db)
+          // Track cumulative total for response
+          totalCash += amount;
+          
+          // Get current balance from user object and add this prize
+          const currentBalance = parseFloat(user.balance || "0");
+          user.balance = (currentBalance + amount).toFixed(2); // Update user object for next iteration
+          
+          await tx
+            .update(users)
+            .set({ balance: user.balance })
+            .where(eq(users.id, userId));
 
-          await storage.createTransaction({
+          await tx.insert(transactions).values({
+            id: crypto.randomUUID(),
             userId,
             type: "prize",
             amount: amount.toFixed(2),
             description: `Scratch Card Prize - £${amount}`,
+            createdAt: new Date(),
           });
 
-          await storage.createWinner({
+          await tx.insert(winners).values({
+            id: crypto.randomUUID(),
             userId,
             competitionId: null,
             prizeDescription: "Scratch Card Prize",
             prizeValue: `£${amount}`,
             imageUrl: null,
             isShowcase: false,
+            createdAt: new Date(),
           });
 
           prizeResponse = { type: "cash", value: amount.toFixed(2) };
-          totalCash += amount;
 
         } else if (selectedPrize.rewardType === "points" && selectedPrize.rewardValue) {
           const points = parseInt(String(selectedPrize.rewardValue));
 
-          const newPoints = (user.ringtonePoints || 0) + points;
-          await storage.updateUserRingtonePoints(userId, newPoints);
+          // 🔒 CRITICAL: Update points using tx (not global db)
+          // Track cumulative total for response
+          totalPoints += points;
+          
+          // Get current points from user object and add this prize
+          const currentPoints = user.ringtonePoints || 0;
+          user.ringtonePoints = currentPoints + points; // Update user object for next iteration
+          
+          await tx
+            .update(users)
+            .set({ ringtonePoints: user.ringtonePoints })
+            .where(eq(users.id, userId));
 
-          await storage.createTransaction({
+          await tx.insert(transactions).values({
+            id: crypto.randomUUID(),
             userId,
             type: "prize",
             amount: points.toString(),
             description: `Scratch Card Prize - ${points} Ringtones`,
+            createdAt: new Date(),
           });
 
-          await storage.createWinner({
+          await tx.insert(winners).values({
+            id: crypto.randomUUID(),
             userId,
             competitionId: null,
             prizeDescription: "Scratch Card Prize",
             prizeValue: `${points} Ringtones`,
             imageUrl: null,
             isShowcase: false,
+            createdAt: new Date(),
           });
 
           prizeResponse = { type: "points", value: points.toString() };
-          totalPoints += points;
 
         } else if (selectedPrize.rewardType === "physical") {
-          await storage.createWinner({
+          await tx.insert(winners).values({
+            id: crypto.randomUUID(),
             userId,
             competitionId: null,
             prizeDescription: `Scratch Card Prize - ${selectedPrize.imageName}`,
             prizeValue: selectedPrize.imageName,
             imageUrl: null,
             isShowcase: false,
+            createdAt: new Date(),
           });
 
           prizeResponse = { type: "physical", value: selectedPrize.imageName };
@@ -2537,54 +2596,46 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
     let tileLayout: string[] = [];
     
     try {
-    await db.transaction(async (tx) => {
-  const allPrizes = await tx
-    .select()
-    .from(scratchCardImages)
-    .where(eq(scratchCardImages.isActive, true));
+      await db.transaction(async (tx) => {
+        // Lock and fetch eligible prizes
+        const allPrizes = await tx
+          .select()
+          .from(scratchCardImages)
+          .where(eq(scratchCardImages.isActive, true))
+          
 
-  if (!allPrizes || allPrizes.length === 0) {
-    throw new Error("No prizes configured");
-  }
+        if (!allPrizes || allPrizes.length === 0) {
+          throw new Error("No prizes configured");
+        }
 
-  const eligiblePrizes = allPrizes.filter(prize => {
-    const safeWeight = Number(prize.weight) || 0;
-    if (safeWeight <= 0) return false;
+        // Filter prizes that haven't reached maxWins
+        const eligiblePrizes = allPrizes.filter(prize => {
+          if (!prize.weight || prize.weight <= 0) return false;
+          if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins) return false;
+          return true;
+        });
 
-    const maxWins = prize.maxWins === null ? null : Number(prize.maxWins);
-    if (maxWins !== null && maxWins > 0 && prize.quantityWon >= maxWins) {
-      return false;
-    }
-    return true;
-  });
+        if (eligiblePrizes.length === 0) {
+          throw new Error("No prizes available");
+        }
 
-  // Use eligible prizes OR fallback to all prizes
-  const prizePool = eligiblePrizes.length > 0 ? eligiblePrizes : allPrizes;
+        // Weighted random selection
+        const totalWeight = eligiblePrizes.reduce((sum, prize) => sum + prize.weight, 0);
+        if (totalWeight <= 0) {
+          throw new Error("Invalid prize weights");
+        }
 
-  // SAFE total weight
-  const totalWeight = prizePool.reduce(
-    (sum, prize) => sum + (Number(prize.weight) || 0),
-    0
-  );
+        let random = Math.random() * totalWeight;
+        selectedPrize = eligiblePrizes[0];
 
-  if (totalWeight <= 0 || Number.isNaN(totalWeight)) {
-    throw new Error("Invalid prize weights");
-  }
-
-  let random = Math.random() * totalWeight;
-
-  selectedPrize = prizePool[0];
-
-  for (const prize of prizePool) {
-    const w = Number(prize.weight) || 0;
-    random -= w;
-    if (random <= 0) {
-      selectedPrize = prize;
-      break;
-    }
-  }
-});
-
+        for (const prize of eligiblePrizes) {
+          random -= prize.weight;
+          if (random <= 0) {
+            selectedPrize = prize;
+            break;
+          }
+        }
+      });
 
       // 🖼️ Generate 2x3 tile layout (6 tiles) based on win/loss
       const isWinner = selectedPrize.rewardType !== 'try_again' && selectedPrize.rewardType !== 'lose';
@@ -2600,11 +2651,11 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
       ];
       
       if (isWinner && selectedPrize.imageName) {
-        // Winner: Pick random winning pattern and show winning image in those 3 positions
+        // ✅ WINNER: Show EXACTLY 3 matching images, 3 different non-matching images
         const winningImage = selectedPrize.imageName;
         const winPositions = winningPatterns[Math.floor(Math.random() * winningPatterns.length)];
         
-        // Get all other images for non-winning positions
+        // Get all other images (excluding winning image)
         const otherPrizes = await db
           .select()
           .from(scratchCardImages)
@@ -2614,26 +2665,47 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
           .filter(p => p.imageName !== winningImage && p.imageName)
           .map(p => p.imageName as string);
         
+        if (otherImages.length < 3) {
+          throw new Error("Not enough different images configured - need at least 4 total images");
+        }
+        
         // Build 2x3 grid (6 tiles)
         tileLayout = Array(6).fill('');
         
-        // Place winning images
+        // Place EXACTLY 3 winning images in winning positions
         winPositions.forEach(pos => {
           tileLayout[pos] = winningImage;
         });
         
-        // Fill remaining positions with random other images
+        // 🛡️ CRITICAL: Fill remaining 3 positions with 3 DIFFERENT images (no duplicates)
+        // This ensures we never accidentally create a 4th or 5th matching image
         const shuffledOthers = [...otherImages].sort(() => Math.random() - 0.5);
-        let otherIndex = 0;
+        const nonWinningPositions = [0, 1, 2, 3, 4, 5].filter(pos => !winPositions.includes(pos));
         
-        for (let i = 0; i < 6; i++) {
-          if (!winPositions.includes(i)) {
-            tileLayout[i] = shuffledOthers[otherIndex % shuffledOthers.length];
-            otherIndex++;
-          }
+        // Pick 3 different images for the 3 non-winning positions
+        nonWinningPositions.forEach((pos, index) => {
+          tileLayout[pos] = shuffledOthers[index % shuffledOthers.length];
+        });
+        
+        // 🔒 Final safety check: Ensure only ONE set of 3 matching exists
+        const matchCount: { [key: string]: number } = {};
+        tileLayout.forEach(img => {
+          matchCount[img] = (matchCount[img] || 0) + 1;
+        });
+        
+        // Verify winning image appears exactly 3 times
+        if (matchCount[winningImage] !== 3) {
+          console.error(`❌ CRITICAL: Winning image appears ${matchCount[winningImage]} times instead of 3!`);
         }
+        
+        // Verify no other image appears 3+ times
+        Object.entries(matchCount).forEach(([img, count]) => {
+          if (img !== winningImage && count >= 3) {
+            console.error(`❌ CRITICAL: Non-winning image "${img}" appears ${count} times!`);
+          }
+        });
       } else {
-        // Loser: Random mix ensuring NO pattern matches
+        // 🔴 LOSER: Create layout ensuring NO 3 matching images
         const allPrizes = await db
           .select()
           .from(scratchCardImages)
@@ -2644,61 +2716,52 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
           .map(p => p.imageName as string);
         
         if (allImages.length < 3) {
-          throw new Error("Not enough images configured");
+          throw new Error("Not enough images configured - need at least 3 different images");
         }
         
-        // Generate random 6-tile layout and ensure NO winning patterns match
+        // 🎯 Strategy: Create pairs (2 of each image) to ensure max 2 same, never 3
+        // This guarantees the game cannot be won
+        tileLayout = [];
+        
+        // Pick 3 different images randomly
         const shuffled = [...allImages].sort(() => Math.random() - 0.5);
-        tileLayout = Array(6).fill('').map((_, i) => {
-          return shuffled[i % shuffled.length];
-        });
+        const image1 = shuffled[0];
+        const image2 = shuffled[1];
+        const image3 = shuffled[2];
         
-        // Keep checking and fixing until NO patterns match
-        let attempts = 0;
-        const maxAttempts = 10;
+        // Create pairs: 2 of image1, 2 of image2, 2 of image3
+        const tiles = [image1, image1, image2, image2, image3, image3];
         
-        while (attempts < maxAttempts) {
-          // Check if ANY winning pattern matches
-          const matchingPattern = winningPatterns.find(pattern => {
+        // Shuffle the tiles randomly
+        tileLayout = tiles.sort(() => Math.random() - 0.5);
+        
+        // 🛡️ Safety check: Ensure NO winning pattern exists
+        let safetyAttempts = 0;
+        while (safetyAttempts < 20) {
+          const hasWinningPattern = winningPatterns.some(pattern => {
             const images = pattern.map(pos => tileLayout[pos]);
             return images[0] === images[1] && images[1] === images[2];
           });
           
-          if (!matchingPattern) {
-            // No matches found - we're good!
-            break;
+          if (!hasWinningPattern) {
+            break; // Success! No 3 matching
           }
           
-          // Fix the match by replacing one tile in the pattern with a different image
-          const positionToFix = matchingPattern[0]; // Pick first position in the pattern
-          const currentImage = tileLayout[positionToFix];
-          const differentImage = shuffled.find(img => img !== currentImage);
-          
-          if (differentImage) {
-            tileLayout[positionToFix] = differentImage;
-          } else {
-            // Fallback: shuffle entire layout
-            tileLayout = Array(6).fill('').map((_, i) => {
-              return shuffled[i % shuffled.length];
-            });
-          }
-          
-          attempts++;
+          // Re-shuffle and try again
+          tileLayout = tiles.sort(() => Math.random() - 0.5);
+          safetyAttempts++;
         }
         
-        // Final safety check
-        if (attempts >= maxAttempts) {
-          console.warn("Failed to generate non-matching layout after max attempts, using fallback");
-          // Ensure at least the first pattern [0,1,2] doesn't match by forcing different values
-          if (shuffled.length >= 3) {
-            tileLayout[0] = shuffled[0];
-            tileLayout[1] = shuffled[1 % shuffled.length];
-            tileLayout[2] = shuffled[2 % shuffled.length];
-            // Make sure they're actually different
-            if (tileLayout[0] === tileLayout[1]) tileLayout[1] = shuffled[(1 + 1) % shuffled.length];
-            if (tileLayout[1] === tileLayout[2]) tileLayout[2] = shuffled[(2 + 1) % shuffled.length];
-            if (tileLayout[0] === tileLayout[2]) tileLayout[2] = shuffled[(2 + 2) % shuffled.length];
-          }
+        // Final verification
+        const finalCheck = winningPatterns.some(pattern => {
+          const images = pattern.map(pos => tileLayout[pos]);
+          return images[0] === images[1] && images[1] === images[2];
+        });
+        
+        if (finalCheck) {
+          console.error("❌ CRITICAL: Failed to generate non-winning layout! Force-fixing...");
+          // Force fix: manually ensure no pattern matches
+          tileLayout = [image1, image2, image3, image1, image2, image3];
         }
       }
 
@@ -2820,7 +2883,6 @@ app.post("/api/scratch-session/:sessionId/complete", isAuthenticated, async (req
         await tx.insert(scratchCardWins).values({
           userId,
           prizeId: selectedPrize.id,
-          orderId,
           rewardType: selectedPrize.rewardType,
           rewardValue: String(selectedPrize.rewardValue ?? ""),
           wonAt: new Date()
@@ -2831,21 +2893,30 @@ app.post("/api/scratch-session/:sessionId/complete", isAuthenticated, async (req
           const amount = parseFloat(String(selectedPrize.rewardValue));
           const finalBalance = parseFloat(user.balance || "0") + amount;
 
-          await storage.updateUserBalance(userId, finalBalance.toFixed(2));
-          await storage.createTransaction({
+          // Update balance using transaction context
+          await tx
+            .update(users)
+            .set({ balance: finalBalance.toFixed(2), updatedAt: new Date() })
+            .where(eq(users.id, userId));
+
+          // Create transaction record
+          await tx.insert(transactions).values({
             userId,
             type: "prize",
             amount: amount.toFixed(2),
             description: `Scratch Card Prize - £${amount}`,
+            createdAt: new Date(),
           });
 
-          await storage.createWinner({
+          // Create winner record
+          await tx.insert(winners).values({
             userId,
             competitionId: null,
             prizeDescription: "Scratch Card Prize",
             prizeValue: `£${amount}`,
             imageUrl: null,
             isShowcase: false,
+            createdAt: new Date(),
           });
 
           prizeResponse = { type: "cash", value: amount.toFixed(2) };
@@ -2855,37 +2926,48 @@ app.post("/api/scratch-session/:sessionId/complete", isAuthenticated, async (req
           const points = parseInt(String(selectedPrize.rewardValue));
           const newPoints = (user.ringtonePoints || 0) + points;
 
-          await storage.updateUserRingtonePoints(userId, newPoints);
-          await storage.createTransaction({
+          // Update points using transaction context
+          await tx
+            .update(users)
+            .set({ ringtonePoints: newPoints })
+            .where(eq(users.id, userId));
+
+          // Create transaction record
+          await tx.insert(transactions).values({
             userId,
             type: "prize",
             amount: points.toString(),
             description: `Scratch Card Prize - ${points} Ringtones`,
+            createdAt: new Date(),
           });
 
-          await storage.createWinner({
+          // Create winner record
+          await tx.insert(winners).values({
             userId,
             competitionId: null,
             prizeDescription: "Scratch Card Prize",
             prizeValue: `${points} Ringtones`,
             imageUrl: null,
             isShowcase: false,
+            createdAt: new Date(),
           });
 
           prizeResponse = { type: "points", value: points.toString() };
         }
         // Physical prize
         else if (selectedPrize.rewardType === 'physical') {
-          await storage.createWinner({
+          // Create winner record
+          await tx.insert(winners).values({
             userId,
             competitionId: null,
-            prizeDescription: `Scratch Card Prize - ${selectedPrize.label}`,
-            prizeValue: selectedPrize.label,
+            prizeDescription: `Scratch Card Prize - ${selectedPrize.imageName}`,
+            prizeValue: selectedPrize.imageName,
             imageUrl: null,
             isShowcase: false,
+            createdAt: new Date(),
           });
 
-          prizeResponse = { type: "physical", value: selectedPrize.label };
+          prizeResponse = { type: "physical", value: selectedPrize.imageName };
         }
       }
     });
@@ -2897,7 +2979,7 @@ app.post("/api/scratch-session/:sessionId/complete", isAuthenticated, async (req
     res.json({
       success: true,
       prize: prizeResponse,
-      prizeLabel: selectedPrize.label,
+      prizeLabel: selectedPrize.imageName,
       remainingCards: remaining,
       orderId: order.id,
     });
@@ -4185,68 +4267,35 @@ app.put("/api/admin/game-scratch-config", isAuthenticated, isAdmin, async (req: 
 });
 
 //  Delete user
-app.delete("/api/admin/users/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+app.delete("/api/admin/users/:id", isAuthenticated , isAdmin , async (req: any , res) =>{
   try {
-    const { id } = req.params;
-    const adminId = req.user.id;
+      const { id } = req.params;
+      const userId = req.user.id;
+      if(id === userId){
+        return res.status(400).json({ message : "admin cannot delete own account"})
+      }
 
-    if (id === adminId) {
-      return res.status(400).json({ message: "Admin cannot delete own account" });
-    }
+      const user = await storage.getUser(id);
+      if(!user){
+        return res.status(404).json({ message : "user not found"})
+      }
 
-    const user = await storage.getUser(id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+      const userOrders = await db.select().from(orders).where(eq(orders.userId , id)).limit(1);
+      const userTickets =  await db.select().from(tickets).where(eq(tickets.userId , id)).limit(1);
+      
+      if(userOrders.length > 0 || userTickets.length > 0){
+        return res.status(400).json({ message : "cannot delete user with existing orders or tickets"})
+      }
 
-    await db.transaction(async (tx) => {
-      // 1️⃣ Delete scratch-card usage FIRST (important!!)
-      await tx.delete(scratchCardUsage).where(eq(scratchCardUsage.userId, id));
+      await db.delete(transactions).where(eq(transactions.userId, id));
 
-      // 2️⃣ Delete scratch-card wins
-      await tx.delete(scratchCardWins).where(eq(scratchCardWins.userId, id));
-
-      // 3️⃣ Delete spin usage
-      await tx.delete(spinUsage).where(eq(spinUsage.userId, id));
-
-      // 4️⃣ Delete spin wins
-      await tx.delete(spinWins).where(eq(spinWins.userId, id));
-
-      // 5️⃣ Delete withdrawals
-      await tx.delete(withdrawalRequests).where(eq(withdrawalRequests.userId, id));
-
-      // 6️⃣ Delete winners
-      await tx.delete(winners).where(eq(winners.userId, id));
-
-      // 7️⃣ Delete transactions
-      await tx.delete(transactions).where(eq(transactions.userId, id));
-
-      // 8️⃣ Delete tickets
-      await tx.delete(tickets).where(eq(tickets.userId, id));
-
-      // 9️⃣ Delete orders AFTER usage/wins cleared
-      await tx.delete(orders).where(eq(orders.userId, id));
-
-      // 🔟 Remove referrals to this user
-      await tx.update(users)
-        .set({ referredBy: null })
-        .where(eq(users.referredBy, id));
-
-      // 1️⃣1️⃣ Delete marketing campaign emails
-      await tx.delete(campaignEmails).where(eq(campaignEmails.userId, id));
-
-      // 1️⃣2️⃣ Finally delete the user
-      await tx.delete(users).where(eq(users.id, id));
-    });
-
-    res.status(200).json({ message: "User and all related data deleted successfully" });
-
+      await db.delete(users).where(eq(users.id , id))
+      res.status(200).json({ message : "user deleted successfully"})
   } catch (error) {
-    console.error("Error deleting user:", error);
-    res.status(500).json({ message: "Failed to delete user" });
+      console.error("Error deleting user:" , error);
+      res.status(500).json({ message : "failed to delete user"})
   }
 });
-
 
 // Deactivate user
 app.delete("/api/admin/users/deactivate/:id" ,isAuthenticated, isAdmin, async (req:any , res)=>{

@@ -10,7 +10,8 @@ import { useState, useEffect, useRef } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import CountdownTimer from "@/pages/countdownTimer";
-import congrats from "../../../attached_assets/sounds/congrats.mp3"
+import congrats from "../../../attached_assets/sounds/congrats.mp3";
+import { completeSession, type CompleteSessionPayload } from "@/services/scratch-session-service";
 
 
 export default function ScratchGamePage() {
@@ -29,6 +30,44 @@ export default function ScratchGamePage() {
   const [gameResult, setGameResult] = useState<any>(null);
   const [isResultModalOpen, setIsResultModalOpen] = useState(false);
   const [remainingScratches, setRemainingScratches] = useState<number>(0);
+  const [commitError, setCommitError] = useState<string | null>(null);
+
+  // ✅ Parent-controlled mutation for scratch completion
+  // Ensures query invalidation happens even if child component unmounts
+  const completeScratchMutation = useMutation({
+    mutationFn: async (params: { sessionId: string; payload: CompleteSessionPayload }) => {
+      console.log('🔒 Parent mutation: Completing scratch session:', params.sessionId);
+      return await completeSession(params.sessionId, params.payload);
+    },
+    onSuccess: (data) => {
+      console.log('✅ Parent mutation success: Balance credited, invalidating queries');
+      
+      // ✅ CRITICAL: Query invalidation happens HERE in parent (survives child unmount)
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scratch-order", orderId] });
+      
+      // Clear any errors
+      setCommitError(null);
+      
+      // Show success toast
+      if (gameResult?.prize && gameResult.prize.type !== "none") {
+        toast({
+          title: "🎉 Congratulations!",
+          description: `You won ${gameResult.prize.type === 'cash' ? '£' : ''}${gameResult.prize.value}${gameResult.prize.type === 'points' ? ' points' : ''}!`,
+        });
+      }
+    },
+    onError: (error: any) => {
+      console.error('❌ Parent mutation error:', error);
+      setCommitError(error.message || 'Failed to save scratch result');
+      
+      toast({
+        title: "Error",
+        description: "Failed to save your scratch result. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Check if scratch cards are visible
   const { data: scratchConfig } = useQuery<{ isVisible: boolean }>({
@@ -72,25 +111,31 @@ export default function ScratchGamePage() {
     }
   }, [orderData]);
 
-  // 🎯 Handle scratch completion - scratch component already calls API server-side
-  const handleScratchComplete = (prize: any) => {
-    console.log("🎯 Scratch complete:", prize);
-
-    // The scratch card component already called the server and got the result
-    // We just need to display it and refresh data
+  // 🎯 Callback 1: Handle scratch reveal - shows popup INSTANTLY when user scratches to 85%
+  const handleScratchReveal = (prize: any) => {
+    console.log("🎯 Scratch revealed (instant):", prize);
+    
+    // Store prize for later use in mutation success handler
     setGameResult({ prize });
     setIsResultModalOpen(true);
+    
+    // Don't show toast yet - wait for mutation success to ensure balance credited
+  };
 
-    // Refresh user data and order status
+  // 🎯 Callback 2: Handle session commit - child requests parent to save result via mutation
+  // Returns promise that child can await to handle loading/error states
+  const handleCommitSession = async (sessionId: string, payload: CompleteSessionPayload): Promise<void> => {
+    console.log("🔒 Commit session requested:", sessionId, payload);
+    
+    // Use parent mutation (query invalidation survives child unmount)
+    await completeScratchMutation.mutateAsync({ sessionId, payload });
+  };
+  
+  // 🎯 Callback 3: Refresh balance - used after reveal-all completes
+  const handleRefreshBalance = () => {
+    console.log("🔄 Refreshing user balance and order data");
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     queryClient.invalidateQueries({ queryKey: ["/api/scratch-order", orderId] });
-
-    if (prize && prize.type !== "none") {
-      toast({
-        title: "🎉 Congratulations!",
-        description: `You won ${prize.type === 'cash' ? '£' : ''}${prize.value}${prize.type === 'points' ? ' points' : ''}!`,
-      });
-    }
   };
 
   const handleCloseResultModal = () => {
@@ -171,7 +216,10 @@ export default function ScratchGamePage() {
 
         {/* Scratch Card Component */}
         <ScratchCardTest
-          onScratchComplete={handleScratchComplete}
+          onScratchReveal={handleScratchReveal}
+          onCommitSession={handleCommitSession}
+          onRefreshBalance={handleRefreshBalance}
+          commitError={commitError}
           scratchTicketCount={remainingScratches}
           orderId={orderId}
           mode="loose" // or "tight" based on your preference

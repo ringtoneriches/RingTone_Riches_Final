@@ -33,11 +33,14 @@ import TowerOfPisa from "../../../../attached_assets/Land Mark/Tower of Pisa.web
 import { useLocation } from "wouter";
 
 interface ScratchCardProps {
-  onScratchComplete?: (prize: { type: string; value: string }) => void;
+  onScratchReveal?: (prize: { type: string; value: string }) => void;
+  onCommitSession?: (sessionId: string, payload: { orderId: string; prizeId: string; isWinner: boolean }) => Promise<void>;
+  onRefreshBalance?: () => void;
+  commitError?: string | null;
   mode?: "tight" | "loose";
   scratchTicketCount?: number;
   orderId?: string;
-  congratsAudioRef:React.RefObject<HTMLAudioElement>
+  congratsAudioRef: React.RefObject<HTMLAudioElement>;
 }
 
 const CSS_WIDTH = 500;
@@ -120,7 +123,7 @@ const saveScratchHistory = (history: { status: string; prize: { type: string; va
   }
 };
 
-export default function ScratchCardTest({ onScratchComplete, mode = "tight", scratchTicketCount, orderId ,congratsAudioRef }: ScratchCardProps) {
+export default function ScratchCardTest({ onScratchReveal, onCommitSession, onRefreshBalance, commitError, mode = "tight", scratchTicketCount, orderId ,congratsAudioRef }: ScratchCardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -155,6 +158,9 @@ const [revealAllSummary, setRevealAllSummary] = useState<{ wins: number; losses:
   wins: 0,
   losses: 0
 });
+
+const isRevealAllMode = useRef(false);
+
 
 const [showOutOfScratchesDialog, setShowOutOfScratchesDialog] = useState(false);
 const outOfScratchClickCount = useRef(0);
@@ -244,61 +250,32 @@ const outOfScratchClickCount = useRef(0);
     }
   };
 
-  // 🎯 NEW: Complete scratch session (record usage and award prize)
-  const completeScratchSession = async (): Promise<void> => {
-    if (!currentSession || !orderId) return;
+  // 🎯 Helper: Update local UI state after successful scratch completion
+  const updateScratchUI = () => {
+    if (!currentSession) return;
     
-    try {
-      const response = await fetch(`/api/scratch-session/${currentSession.sessionId}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId,
-          prizeId: currentSession.prizeId,
-          isWinner: currentSession.isWinner,
-        }),
-        credentials: 'include',
-      });
+    // Update scratch history
+    setScratchHistory((prev) => {
+      const firstUnscratched = prev.findIndex((s) => s.status === "Not Scratched");
+      if (firstUnscratched === -1) return prev;
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to complete scratch session');
-      }
+      const updated = [...prev];
+      updated[firstUnscratched] = {
+        status: "Scratched",
+        prize: currentSession.prize,
+      };
+      return updated;
+    });
 
-      const result = await response.json();
-      
-      // Update scratch history
-      setScratchHistory((prev) => {
-        const firstUnscratched = prev.findIndex((s) => s.status === "Not Scratched");
-        if (firstUnscratched === -1) return prev;
-
-        const updated = [...prev];
-        updated[firstUnscratched] = {
-          status: "Scratched",
-          prize: currentSession.prize,
-        };
-        return updated;
-      });
-
-      // Callback with prize info
-      if (onScratchComplete) {
-        onScratchComplete(currentSession.prize);
-      }
-
-      const isWin = 
+    // Play congrats sound for wins
+    const isWin = 
       currentSession.prize?.type !== "none" &&
       currentSession.prize?.value !== "-" &&
       currentSession.isWinner === true;
 
-
-      if (isWin && congratsAudioRef.current) {
-        congratsAudioRef.current.currentTime = 0;
-        congratsAudioRef.current.play().catch(() => {});
-      }
-
-      setSessionState('completed');
-    } catch (error) {
-      console.error('Error completing scratch session:', error);
+    if (isWin && congratsAudioRef.current) {
+      congratsAudioRef.current.currentTime = 0;
+      congratsAudioRef.current.play().catch(() => {});
     }
   };
 
@@ -320,6 +297,8 @@ const outOfScratchClickCount = useRef(0);
     }
   }, [scratchHistory, orderId]);
 
+  // ✅ No auto-redirect - let users view their progress table after revealing all prizes
+
 
    
 
@@ -336,6 +315,12 @@ const outOfScratchClickCount = useRef(0);
   // 🎯 NEW: Setup scratch card with pre-loaded tile layout from backend
   useEffect(() => {
     if (!currentSession ||  sessionState !== 'ready') {
+      return;
+    }
+    
+    // 🛡️ CRITICAL: Don't reinitialize if user is ACTIVELY scratching (drawing)
+    // But DO allow initialization for new sessions even if previous one was completed
+    if (drawingRef.current) {
       return;
     }
     
@@ -359,10 +344,33 @@ const outOfScratchClickCount = useRef(0);
     // Set images to pre-determined layout (exactly 6)
     setImages(tileImages);
     
-   // Reset state for new session
+   // ✅ Reset ALL state for new session (this will run for each new session)
     isScratching.current = false;
+    hasCompletedRef.current = false;
+    setRevealed(false);
+    setPercentScratched(0);
+    setSelectedPrize({ type: "none", value: "0" }); // Clear previous prize popup
     initCanvas();
+    
+    console.log('✅ New scratch session initialized:', currentSession.sessionId);
   }, [currentSession, sessionState]);
+
+  // 🎯 Preload all landmark images on mount for instant display
+  useEffect(() => {
+    const preloadImages = async () => {
+      const imagePromises = landmarkImages.map((img) => {
+        return new Promise((resolve) => {
+          const image = new Image();
+          image.onload = () => resolve(true);
+          image.onerror = () => resolve(false);
+          image.src = img.src;
+        });
+      });
+      await Promise.all(imagePromises);
+      console.log('✅ All scratch card images preloaded');
+    };
+    preloadImages();
+  }, []);
 
   useEffect(() => {
     scratchSoundRef.current = new Audio(scratchSoundFile);
@@ -372,7 +380,10 @@ const outOfScratchClickCount = useRef(0);
     const handleMouseUpGlobal = () => {
       drawingRef.current = false;
       stopScratchSound(); // 🎵 Always stop sound on global pointer release
-      checkPercentScratched(true);
+      // 🛡️ Only check if not already revealed to prevent duplicate calls
+      if (!revealed && !hasCompletedRef.current) {
+        checkPercentScratched(true);
+      }
     };
 
     window.addEventListener("mouseup", handleMouseUpGlobal);
@@ -388,16 +399,20 @@ const outOfScratchClickCount = useRef(0);
       window.removeEventListener("mouseup", handleMouseUpGlobal);
       window.removeEventListener("touchend", handleMouseUpGlobal);
     };
-  }, []);
+  }, [revealed]);
 
     useEffect(() => {
     const handleResize = () => {
+      // 🛡️ CRITICAL: Don't reinitialize canvas during active scratching
+      if (revealed || hasCompletedRef.current || drawingRef.current) {
+        return;
+      }
       initCanvas();
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [revealed]);
 
  function initCanvas() {
     const canvas = canvasRef.current;
@@ -419,7 +434,8 @@ const outOfScratchClickCount = useRef(0);
     canvas.width = Math.round(containerWidth * ratio);
     canvas.height = Math.round(containerHeight * ratio);
     
-    const ctx = canvas.getContext("2d");
+    // 🎯 Add willReadFrequently for better performance when reading pixels
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
     
     // Scale the context to account for device pixel ratio
@@ -445,10 +461,16 @@ const outOfScratchClickCount = useRef(0);
   }
 
   function scratchAt(x: number, y: number) {
+    // 🛡️ CRITICAL: Don't allow scratching until session is ready
+    if (isRevealAllMode.current) return;
+
+    if (!currentSession || sessionState !== 'ready') {
+      return;
+    }
     if (revealed) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
     
     // Make brush size responsive based on canvas size
@@ -466,9 +488,11 @@ const outOfScratchClickCount = useRef(0);
 
 function checkPercentScratched(force = false) {
   rafRef.current = null;
+  if (isRevealAllMode.current) return;
+
   const canvas = canvasRef.current;
   if (!canvas) return;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return;
   const w = canvas.width;
   const h = canvas.height;
@@ -493,58 +517,79 @@ function checkPercentScratched(force = false) {
 
   // 🎯 NEW: SIMPLIFIED FLOW at 85% - Just show popup with pre-loaded prize
   if (percent >= AUTO_CLEAR_THRESHOLD && !revealed && !hasCompletedRef.current) {
-    // 🔒 Guard: Don't proceed if no session loaded
-    if (!currentSession) {
-      console.warn("Session not loaded yet, waiting...");
+    // 🔒 CRITICAL: Don't proceed if no session loaded
+    if (!currentSession || sessionState !== 'ready') {
+      console.warn("⏳ Session not ready yet, waiting...");
       return;
     }
     
+    // 🛡️ CRITICAL: Set hasCompletedRef IMMEDIATELY to prevent duplicate calls
     hasCompletedRef.current = true;
-    stopScratchSound(); // Stop sound immediately
+    
+    // 🎯 Set revealed state immediately to prevent re-entry during async operations
     setRevealed(true);
-    setSessionState('scratching'); // Update state to indicate scratching completed
+    stopScratchSound(); // Stop sound immediately
+    
+    console.log('🎯 Scratch completion triggered at', Math.round(percent * 100), '% with prize:', currentSession.prize);
     
     // Images are ALREADY in final position (pre-loaded), just show popup
     (async () => {
+      const prizeWon = currentSession.prize;
+      
       try {
-
-        const prizeWon = currentSession.prize;
-        
         // 🎯 Images are ALREADY in correct positions (pre-loaded from backend)
         // NO image changes needed!
         
         // Update percentage to 100%
         setPercentScratched(100);
         
-        // ⏱️ Brief delay for visual smoothness
-        await new Promise(resolve => setTimeout(resolve, 150));
-        
-        // ✅ Clear overlay to reveal final pattern
+        // ✅ Clear overlay to reveal final pattern IMMEDIATELY - no delay
         clearOverlayInstant();
         
-        // 🎉 Show popup IMMEDIATELY
+        // 🎉 Show internal popup state for component's own display
         setSelectedPrize(prizeWon);
         
-        // 🔒 Call completion endpoint to record usage and award prize
-        await completeScratchSession();
+        // 🎯 STEP 1: Notify parent to show modal INSTANTLY (don't wait for API)
+        if (onScratchReveal) {
+          onScratchReveal(prizeWon);
+        }
+        
+        // 🔒 STEP 2: Request parent to commit session via mutation (credits balance, invalidates queries)
+        // Parent mutation survives even if this component unmounts
+        if (onCommitSession && currentSession) {
+          await onCommitSession(currentSession.sessionId, {
+            orderId: orderId!,
+            prizeId: currentSession.prizeId,
+            isWinner: currentSession.isWinner,
+          });
+          
+          // ✅ Success: Update local UI state (history, sound)
+          updateScratchUI();
+        }
+        
+        // ✅ Backend confirmed success - parent already handled query invalidation
+        setSessionState('completed');
 
         // Prepare for next scratch (fetch next session in background)
         setTimeout(async () => {
-          hasCompletedRef.current = false;
           setCurrentSession(null); // Clear current session
           setSessionState('loading'); // Trigger fetch of next session
-          setRevealed(false);
+          // 🛡️ DON'T reset hasCompletedRef or revealed here - wait until new session is ready
         }, 1000);
       } catch (error) {
-        console.error("Error completing scratch:", error);
-        alert("Failed to complete scratch card. Please try again.");
-        // Clear overlay
-        clearOverlayInstant();
-        // Reset on error to allow retry
+        console.error("❌ Error completing scratch - rolling back:", error);
+        
+        // 🔄 CRITICAL: Rollback all state to allow retry
         hasCompletedRef.current = false;
         setRevealed(false);
+        setSelectedPrize({ type: "none", value: "0" }); // Clear popup
         setSessionState('ready');
-        // Reinitialize canvas
+        
+        // ❌ Error handled by parent mutation - displayed via commitError prop
+        // Parent already shows error toast, we just need to reset local state
+        alert("Failed to save your scratch result. The error has been reported. Please try again.");
+        
+        // Reinitialize canvas for retry
         initCanvas();
       }
     })();
@@ -554,7 +599,7 @@ function checkPercentScratched(force = false) {
   function clearOverlayInstant() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
@@ -583,7 +628,7 @@ function checkPercentScratched(force = false) {
   // Reveal All function - batch reveals all remaining scratch cards
   async function handleRevealAll() {
     if (revealed || hasCompletedRef.current || !canvasRef.current) return;
-    
+     isRevealAllMode.current = true;
     // Close dialog
     setShowRevealAllDialog(false);
     
@@ -591,10 +636,13 @@ function checkPercentScratched(force = false) {
     stopScratchSound();
     
     // Mark as completed to prevent double triggers
-    hasCompletedRef.current = true;
-    setRevealed(true);
+ setRevealed(true);          // overlay cleared
+hasCompletedRef.current = true; 
+isScratching.current = false;
     setPercentScratched(100);
     
+    // Block scratch card entirely
+canvasRef.current.style.pointerEvents = "none";
     // Get count of all remaining scratch cards
     const remainingCount = scratchHistory.filter(s => s.status === "Not Scratched").length;
     
@@ -608,7 +656,7 @@ function checkPercentScratched(force = false) {
     clearOverlayInstant();
     
     try {
-      // Call batch reveal API to process all remaining scratch cards
+      // 🔒 CRITICAL: Call batch reveal API with keepalive to ensure completion
       const response = await fetch("/api/reveal-all-scratch-cards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -617,6 +665,7 @@ function checkPercentScratched(force = false) {
           orderId,
           count: remainingCount
         }),
+        keepalive: true, // ✅ Ensure request completes even if user navigates away
       });
 
       if (!response.ok) {
@@ -647,6 +696,11 @@ function checkPercentScratched(force = false) {
 
         return updated;
       });
+      
+      // 🔒 CRITICAL: Invalidate queries to refresh balance and points in header
+      if (onRefreshBalance) {
+        onRefreshBalance();
+      }
 
       // Reset state
       hasCompletedRef.current = false;
@@ -654,18 +708,8 @@ function checkPercentScratched(force = false) {
       setRevealed(false);
       setSessionKey((k) => k + 1);
 
-//      const wins = results.scratches.filter((s: any) =>
-//   s.prize?.type !== "none" &&
-//   s.prize?.type !== "try_again" &&
-//   s.prize?.value !== "Lose" &&
-//   s.prize?.value !== "Try Again"
-// ).length;
-
-// const losses = results.scratches.length - wins;
-
-// // Save for modal
-// setRevealAllSummary({ wins, losses });
-setShowRevealAllResultDialog(true);
+      // Show completion dialog
+      setShowRevealAllResultDialog(true);
 
     } catch (error) {
       console.error("Error revealing all scratch cards:", error);
@@ -691,8 +735,8 @@ setShowRevealAllResultDialog(true);
 
   return (
   <div className="relative flex flex-col items-center justify-center p-4 min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* 🎯 NEW: Loading overlay while fetching session */}
-      {sessionState === 'loading' && (
+      {/* 🎯 NEW: Loading overlay while fetching session (but not when all scratches are complete) */}
+      {sessionState === 'loading' && !allScratchesUsed && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-[#FACC15] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -734,7 +778,7 @@ setShowRevealAllResultDialog(true);
               <div className="absolute -inset-1 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-full blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
               <div className="relative bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 px-6 py-3 rounded-full text-sm sm:text-base font-black shadow-2xl flex items-center gap-2">
                 <span className="text-lg sm:text-xl">🎟️</span>
-                <span>Available Scratch Cards: {scratchTicketCount}</span>
+                <span>Available Scratch Cards: {scratchHistory.filter(s => s.status === "Not Scratched").length}</span>
               </div>
             </div>
           )}
@@ -799,8 +843,9 @@ setShowRevealAllResultDialog(true);
             <canvas
               key={sessionKey}
               ref={canvasRef}
-              className="absolute inset-0 cursor-pointer touch-none w-full h-full z-[50]"
+              className="absolute inset-0 cursor-pointer touch-none w-full h-full"
             onMouseDown={(e) => {
+               if (isRevealAllMode.current) return; 
              if (allScratchesUsed) {
                 setShowOutOfScratchesDialog(true);
                 return;
@@ -811,11 +856,13 @@ setShowRevealAllResultDialog(true);
               scratchAt(e.clientX - rect.left, e.clientY - rect.top);
             }}
             onMouseMove={(e) => {
+               if (isRevealAllMode.current) return; 
               if (!drawingRef.current) return;
               const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
               scratchAt(e.clientX - rect.left, e.clientY - rect.top);
             }}
             onTouchStart={(e) => {
+              if (isRevealAllMode.current) return;
              if (allScratchesUsed) {
               setShowOutOfScratchesDialog(true);
               return;
@@ -827,20 +874,24 @@ setShowRevealAllResultDialog(true);
               scratchAt(t.clientX - rect.left, t.clientY - rect.top);
             }}
             onTouchMove={(e) => {
+              if (isRevealAllMode.current) return; 
               if (!drawingRef.current) return;
               const t = e.touches[0];
               const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
               scratchAt(t.clientX - rect.left, t.clientY - rect.top);
             }}
             onMouseUp={() => {
+              if (isRevealAllMode.current) return;
               drawingRef.current = false;
               stopScratchSound(); // 🎵 Stop sound when pointer released
             }}
             onMouseLeave={() => {
+              if (isRevealAllMode.current) return;
               drawingRef.current = false;
               stopScratchSound(); // 🎵 Stop sound when pointer leaves canvas
             }}
             onTouchEnd={() => {
+              if (isRevealAllMode.current) return;
               drawingRef.current = false;
               stopScratchSound(); // 🎵 Stop sound when touch ends
             }}

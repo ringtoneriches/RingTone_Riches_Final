@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import R_Prize from "../../../../attached_assets/R_prize.png";
 import {
   AlertDialog,
@@ -596,7 +597,7 @@ ctx.stroke();
       console.log("Refetching configuration before revealing all spins...");
       await refetchConfig();
 
-      // Call server to process all remaining spins
+      // 🔒 CRITICAL: Call server with keepalive to ensure completion
       const response = await fetch("/api/reveal-all-spins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -606,6 +607,7 @@ ctx.stroke();
           orderId,
           count: remainingCount,
         }),
+        keepalive: true, // ✅ Ensure request completes even if user navigates away
       });
 
       if (!response.ok) {
@@ -636,11 +638,15 @@ ctx.stroke();
 
         return updated;
       });
+      
+      // 🔒 CRITICAL: Invalidate queries to refresh balance and points in header
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/spin-order", orderId] });
 
       setIsSpinning(false);
 
       // Show summary modal or notification
-     setShowRevealAllResultDialog(true);
+      setShowRevealAllResultDialog(true);
 
     } catch (error) {
       console.error("Error revealing all spins:", error);
@@ -661,13 +667,15 @@ ctx.stroke();
     const now = Date.now();
     const timeSinceLastSpin = now - lastSpinTimeRef.current;
     
-    // Require at least 2 seconds between spins to prevent auto-queue bug
-    if (timeSinceLastSpin < 2000 && lastSpinTimeRef.current > 0) {
-      console.warn(`Spin blocked: Too fast (${timeSinceLastSpin}ms since last spin)`);
+    // Require at least 3 seconds between spins to prevent auto-queue bug and duplicate API calls
+    if (timeSinceLastSpin < 3000 && lastSpinTimeRef.current > 0) {
+      console.warn(`🛡️ Spin blocked: Too fast (${timeSinceLastSpin}ms since last spin). Please wait ${Math.ceil((3000 - timeSinceLastSpin) / 1000)}s`);
       return;
     }
     
+    // 🛡️ CRITICAL: Prevent duplicate spins while one is in progress
     if (isSpinning) {
+      console.warn(`🛡️ Spin blocked: Already spinning`);
       return;
     }
 
@@ -715,7 +723,7 @@ ctx.stroke();
 
       // 🎯 STEP 2: Call server to get the winning segment (server-side determination)
       console.log("Calling server for winning segment...");
-      const response = await fetch("/api/play-spin-wheelll", {
+      const response = await fetch("/api/play-spin-wheel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
