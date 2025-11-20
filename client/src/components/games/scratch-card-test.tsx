@@ -10,26 +10,26 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import scratchSoundFile from "../../../../attached_assets/assets_sounds_sound_scratch.mp3";
-import BarrierReef from "../../../../attached_assets/Barrier Reef.png";
-import AngleOfNorth from "../../../../attached_assets/Angel of North.png";
-import BigBen from "../../../../attached_assets/Big Ben.png";
-import BuckinghamPalace from "../../../../attached_assets/Buckingham palace.png";
-import Burj from "../../../../attached_assets/Burj.png";
-import colosseum from "../../../../attached_assets/colosseum.png";
-import EiffelTower from "../../../../attached_assets/Eiifel Tow.png";
-import EmpireState from "../../../../attached_assets/Empire State.png";
-import GoldenGate from "../../../../attached_assets/Golden Gate.png";
-import GrandCanyon from "../../../../attached_assets/Grand Canyon.png";
-import GreatWallOfChina from "../../../../attached_assets/Great Wall of China.png";
-import MountEverest from "../../../../attached_assets/Mount Ever.png";
-import NotreDame from "../../../../attached_assets/Notre Dame.png";
-import PayramidsOfPisa from "../../../../attached_assets/Pyramids of Pisa.png";
-import StatueOfLiberty from "../../../../attached_assets/Statue Of Liber.png";
-import StoneH from "../../../../attached_assets/Stone H.png";
-import TajMahal from "../../../../attached_assets/Taj Ma.png";
-import TimesSquare from "../../../../attached_assets/Times S.png";
-import TowerBridge from "../../../../attached_assets/Tower Bridge.png";
-import TowerOfPisa from "../../../../attached_assets/Tower of Pisa.png";
+import BarrierReef from "../../../../attached_assets/Land Mark/Barrier Reef.webp";
+import AngleOfNorth from "../../../../attached_assets/Land Mark/Angel of North.webp";
+import BigBen from "../../../../attached_assets/Land Mark/Big Ben.webp";
+import BuckinghamPalace from "../../../../attached_assets/Land Mark/Buckingham palace.webp";
+import Burj from "../../../../attached_assets/Land Mark/Burj.webp";
+import colosseum from "../../../../attached_assets/Land Mark/colosseum.webp";
+import EiffelTower from "../../../../attached_assets/Land Mark/Eiifel Tow.webp";
+import EmpireState from "../../../../attached_assets/Land Mark/Empire State.webp";
+import GoldenGate from "../../../../attached_assets/Land Mark/Golden Gate.webp";
+import GrandCanyon from "../../../../attached_assets/Land Mark/Grand Canyon.webp";
+import GreatWallOfChina from "../../../../attached_assets/Land Mark/Great Wall of China.webp";
+import MountEverest from "../../../../attached_assets/Land Mark/Mount Ever.webp";
+import NotreDame from "../../../../attached_assets/Land Mark/Notre Dame.webp";
+import PayramidsOfPisa from "../../../../attached_assets/Land Mark/Pyramids of Pisa.webp";
+import StatueOfLiberty from "../../../../attached_assets/Land Mark/Statue Of Liber.webp";
+import StoneH from "../../../../attached_assets/Land Mark/Stone H.webp";
+import TajMahal from "../../../../attached_assets/Land Mark/Taj Ma.webp";
+import TimesSquare from "../../../../attached_assets/Land Mark/Times S.webp";
+import TowerBridge from "../../../../attached_assets/Land Mark/Tower Bridge.webp";
+import TowerOfPisa from "../../../../attached_assets/Land Mark/Tower of Pisa.webp";
 import { useLocation } from "wouter";
 
 interface ScratchCardProps {
@@ -162,29 +162,6 @@ const outOfScratchClickCount = useRef(0);
   
   // Check if all scratch cards are used
   const allScratchesUsed = scratchHistory.length > 0 && scratchHistory.every(s => s.status === "Scratched");
-
-  const [imagesLoaded, setImagesLoaded] = useState(false);
-
-useEffect(() => {
-  async function preloadImages() {
-    const load = (src: string) =>
-      new Promise<void>((resolve, reject) => {
-        const img = new Image();
-        img.src = src;
-        img.onload = () => resolve();
-        img.onerror = () => resolve(); // resolve anyway so UI never locks
-      });
-
-    // Preload EVERYTHING
-    await Promise.all(landmarkImages.map(img => load(img.src)));
-
-    console.log("✅ All landmark images preloaded & cached");
-    setImagesLoaded(true);
-  }
-
-  preloadImages();
-}, []);
-
 
     // ✅ SIMPLIFIED INITIALIZATION - Only run once when scratchTicketCount or orderId changes
   useEffect(() => {
@@ -712,18 +689,6 @@ setShowRevealAllResultDialog(true);
 //   );
 // }
 
-  if (!imagesLoaded || !currentSession) {
-  return (
-    <div className="w-full h-screen flex items-center justify-center bg-black text-white">
-      <div className="text-center">
-        <div className="w-16 h-16 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
-        <p className="mt-4 text-lg">Preparing your scratch card...</p>
-      </div>
-    </div>
-  );
-}
-
-
   return (
   <div className="relative flex flex-col items-center justify-center p-4 min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* 🎯 NEW: Loading overlay while fetching session */}
@@ -834,7 +799,7 @@ setShowRevealAllResultDialog(true);
             <canvas
               key={sessionKey}
               ref={canvasRef}
-              className="absolute inset-0 cursor-pointer touch-none w-full h-full"
+              className="absolute inset-0 cursor-pointer touch-none w-full h-full z-[50]"
             onMouseDown={(e) => {
              if (allScratchesUsed) {
                 setShowOutOfScratchesDialog(true);
