@@ -160,6 +160,8 @@ const [revealAllSummary, setRevealAllSummary] = useState<{ wins: number; losses:
 });
 
 const isRevealAllMode = useRef(false);
+const [lockedImages, setLockedImages] = useState<any[] | null>(null);
+
 
 
 const [showOutOfScratchesDialog, setShowOutOfScratchesDialog] = useState(false);
@@ -313,47 +315,29 @@ const outOfScratchClickCount = useRef(0);
   // }, [scratchTicketCount]);
 
   // 🎯 NEW: Setup scratch card with pre-loaded tile layout from backend
-  useEffect(() => {
-    if (!currentSession ||  sessionState !== 'ready') {
-      return;
-    }
-    
-    // 🛡️ CRITICAL: Don't reinitialize if user is ACTIVELY scratching (drawing)
-    // But DO allow initialization for new sessions even if previous one was completed
-    if (drawingRef.current) {
-      return;
-    }
-    
-    // 🔒 Defensive check: Ensure exactly 6 tiles
-    if (currentSession.tileLayout.length !== 6) {
-      console.error(`Invalid tile layout: expected 6 tiles, got ${currentSession.tileLayout.length}`);
-      return;
-    }
-    
-    // Map tile layout from backend to actual image objects
-      const tileImages = currentSession.tileLayout.map((name: string) => {
-        const img = getImageByBackendName(name);
-        if (!img) {
-          console.warn("Unknown backend image name:", name);
-          return landmarkImages[Math.floor(Math.random() * landmarkImages.length)];
-        }
-        return img;
-      });
+useEffect(() => {
+  if (!currentSession || sessionState !== "ready") return;
 
-    
-    // Set images to pre-determined layout (exactly 6)
-    setImages(tileImages);
-    
-   // ✅ Reset ALL state for new session (this will run for each new session)
-    isScratching.current = false;
-    hasCompletedRef.current = false;
-    setRevealed(false);
-    setPercentScratched(0);
-    setSelectedPrize({ type: "none", value: "0" }); // Clear previous prize popup
-    initCanvas();
-    
-    console.log('✅ New scratch session initialized:', currentSession.sessionId);
-  }, [currentSession, sessionState]);
+  // Only lock images once per session
+  if (!lockedImages) {
+    const tileImages = currentSession.tileLayout.map((name: string) => {
+      const img = getImageByBackendName(name);
+      return img || landmarkImages[Math.floor(Math.random() * landmarkImages.length)];
+    });
+
+    setLockedImages(tileImages);
+  }
+
+  // Reset scratch states for the new session
+  isScratching.current = false;
+  hasCompletedRef.current = false;
+  setRevealed(false);
+  setPercentScratched(0);
+  setSelectedPrize({ type: "none", value: "0" });
+
+  initCanvas();
+}, [currentSession, sessionState]);
+
 
   // 🎯 Preload all landmark images on mount for instant display
   useEffect(() => {
@@ -569,6 +553,7 @@ function checkPercentScratched(force = false) {
         
         // ✅ Backend confirmed success - parent already handled query invalidation
         setSessionState('completed');
+        setLockedImages(null);  // allow next session to load new images
 
         // Prepare for next scratch (fetch next session in background)
         setTimeout(async () => {
@@ -824,7 +809,7 @@ canvasRef.current.style.pointerEvents = "none";
             {/* UNDERLAY - Enhanced with premium background (2x3 grid = 6 tiles) */}
             <div className="absolute inset-0 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center p-3 sm:p-5">
               <div className="grid grid-cols-3 grid-rows-2 gap-2 sm:gap-3 md:gap-4 w-full h-full max-w-lg mx-auto p-2">
-                {images.slice(0, 6).map((img, i) => (
+                {(lockedImages || []).slice(0, 6).map((img, i) => (
                   <div
                     key={i}
                     className="bg-white rounded-lg sm:rounded-xl shadow-2xl flex items-center justify-center p-2 sm:p-3 border-2 border-gray-200 aspect-square overflow-hidden hover:scale-105 transition-transform duration-200"
