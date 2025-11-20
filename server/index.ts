@@ -8,7 +8,10 @@ import { wsManager } from "./websocket";
 import { autoSeedProduction } from "./auto-seed";
 import { autoCreateAdmin } from "./auto-admin";
 
-dotenv.config();
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config();
+}
+
 
 const app = express();
 app.disable("etag"); 
