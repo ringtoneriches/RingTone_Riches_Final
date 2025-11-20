@@ -163,6 +163,29 @@ const outOfScratchClickCount = useRef(0);
   // Check if all scratch cards are used
   const allScratchesUsed = scratchHistory.length > 0 && scratchHistory.every(s => s.status === "Scratched");
 
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+
+useEffect(() => {
+  async function preloadImages() {
+    const load = (src: string) =>
+      new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.src = src;
+        img.onload = () => resolve();
+        img.onerror = () => resolve(); // resolve anyway so UI never locks
+      });
+
+    // Preload EVERYTHING
+    await Promise.all(landmarkImages.map(img => load(img.src)));
+
+    console.log("✅ All landmark images preloaded & cached");
+    setImagesLoaded(true);
+  }
+
+  preloadImages();
+}, []);
+
+
     // ✅ SIMPLIFIED INITIALIZATION - Only run once when scratchTicketCount or orderId changes
   useEffect(() => {
     if (!scratchTicketCount || !orderId) return;
@@ -689,6 +712,18 @@ setShowRevealAllResultDialog(true);
 //   );
 // }
 
+  if (!imagesLoaded || !currentSession) {
+  return (
+    <div className="w-full h-screen flex items-center justify-center bg-black text-white">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <p className="mt-4 text-lg">Preparing your scratch card...</p>
+      </div>
+    </div>
+  );
+}
+
+
   return (
   <div className="relative flex flex-col items-center justify-center p-4 min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* 🎯 NEW: Loading overlay while fetching session */}
@@ -786,7 +821,7 @@ setShowRevealAllResultDialog(true);
                     className="bg-white rounded-lg sm:rounded-xl shadow-2xl flex items-center justify-center p-2 sm:p-3 border-2 border-gray-200 aspect-square overflow-hidden hover:scale-105 transition-transform duration-200"
                   >
                     <img
-                      src={`${img.src}?v=${currentSession?.sessionId}`}
+                      src={img.src}
                       alt={img.name}
                       className="w-full h-full object-contain select-none"
                     />
