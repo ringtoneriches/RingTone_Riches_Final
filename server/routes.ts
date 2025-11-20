@@ -2540,7 +2540,7 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
           .select()
           .from(scratchCardImages)
           .where(eq(scratchCardImages.isActive, true))
-          .for('update');
+          
 
         if (!allPrizes || allPrizes.length === 0) {
           throw new Error("No prizes configured");

@@ -51,7 +51,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: UpsertUser): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
-  updateUserBalance(userId: string, amount: number): Promise<User>;
+  updateUserBalance(userId: string, amount: string): Promise<User>;
   updateStripeCustomerId(userId: string, customerId: string): Promise<User>;
   updateUser(userId: string, data: Partial<UpsertUser>): Promise<User>;
 
@@ -232,16 +232,12 @@ async initializeAdminUser(): Promise<void> {
     return user;
   }
 
-async updateUserBalance(userId: string, amount: number): Promise<User> {
+async updateUserBalance(userId: string, amount: string): Promise<User> {
   const [user] = await db
     .update(users)
-    .set({
-      balance: sql`${users.balance} + ${amount}`,
-      updatedAt: new Date()
-    })
+    .set({ balance: amount, updatedAt: new Date() })
     .where(eq(users.id, userId))
     .returning();
-    
   return user;
 }
 
