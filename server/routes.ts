@@ -2602,7 +2602,7 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
           .select()
           .from(scratchCardImages)
           .where(eq(scratchCardImages.isActive, true))
-          
+          .for("update"); 
 
         if (!allPrizes || allPrizes.length === 0) {
           throw new Error("No prizes configured");
@@ -3940,37 +3940,66 @@ app.post("/api/admin/competitions", isAuthenticated, isAdmin, async (req: any, r
 app.put("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: any, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
 
-    const formattedUpdateData = {
-  ...updateData,
-  updatedAt: new Date(),
-};
+    const formattedUpdateData: any = { ...req.body };
 
-// Convert timestamp fields if provided
-const dateFields = ["startDate", "endDate", "drawDate"];
+    // Always override updatedAt
+    formattedUpdateData.updatedAt = new Date();
 
-dateFields.forEach(field => {
-  if (formattedUpdateData[field]) {
-    formattedUpdateData[field] = new Date(formattedUpdateData[field]);
-  }
-});
+    // MUST NOT allow updating createdAt
+    delete formattedUpdateData.createdAt;
+    delete formattedUpdateData.created_at;
 
-    
+    function sanitizeTimestamps(obj: any) {
+      for (const key in obj) {
+        const value = obj[key];
+
+         // convert empty string → null
+    if (value === "") {
+      obj[key] = null;
+      continue;
+    }
+
+    // ONLY delete undefined (not null!)
+    if (value === undefined) {
+      delete obj[key];
+      continue;
+    }
+
+        // Only these are timestamp columns in schema
+        const timestampFields = ["endDate", "end_date", "updatedAt", "updated_at"];
+
+        if (timestampFields.includes(key)) {
+          const parsed = new Date(value);
+          if (isNaN(parsed.getTime())) {
+            delete obj[key];
+          } else {
+            obj[key] = parsed;
+          }
+        }
+
+        // NEVER allow updating createdAt
+        if (key === "createdAt" || key === "created_at") {
+          delete obj[key];
+        }
+      }
+    }
+
+    sanitizeTimestamps(formattedUpdateData);
+
     const [updatedCompetition] = await db
       .update(competitions)
       .set(formattedUpdateData)
       .where(eq(competitions.id, id))
       .returning();
-    
+
     if (!updatedCompetition) {
       return res.status(404).json({ message: "Competition not found" });
     }
-    
-    // Broadcast real-time update
+
     wsManager.broadcast({ type: 'competition_updated', competitionId: id });
-    
     res.json(updatedCompetition);
+
   } catch (error) {
     console.error("Error updating competition:", error);
     res.status(500).json({ message: "Failed to update competition" });

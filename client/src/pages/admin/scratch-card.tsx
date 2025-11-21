@@ -62,7 +62,7 @@ function CompetitionForm({
     imageUrl: data?.imageUrl || "",
     type: fixedType || data?.type || "instant",
     ticketPrice: data?.ticketPrice || "0.99",
-    maxTickets: data?.maxTickets?.toString() || "1000",
+    maxTickets: data?.maxTickets?.toString() || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     endDate: data?.endDate
       ? new Date(data.endDate).toISOString().slice(0, 16)

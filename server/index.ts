@@ -8,9 +8,8 @@ import { wsManager } from "./websocket";
 import { autoSeedProduction } from "./auto-seed";
 import { autoCreateAdmin } from "./auto-admin";
 
-if (process.env.NODE_ENV !== "production") {
   dotenv.config();
-}
+
 
 
 const app = express();
