@@ -391,6 +391,21 @@ export default function Wallet() {
         new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime(),
     );
 
+    function formatAmount(transaction: Transaction) {
+  const isPoints =
+    transaction.description?.toLowerCase().includes("ringtone") ||
+    transaction.description?.toLowerCase().includes("points");
+
+  const amount = Math.abs(parseFloat(transaction.amount));
+
+  if (isPoints) {
+    return `${amount} pts`;
+  }
+
+  return `£${amount.toFixed(2)}`;
+}
+
+
   const ringtonePoints = user?.ringtonePoints || 0;
 
   // Group tickets by competition
@@ -928,10 +943,7 @@ export default function Wallet() {
                               transaction.type === "referral"
                                 ? "+"
                                 : "-"}
-                              £
-                              {Math.abs(parseFloat(transaction.amount)).toFixed(
-                                2,
-                              )}
+                             {formatAmount(transaction)}
                             </div>
                           </div>
                         ))

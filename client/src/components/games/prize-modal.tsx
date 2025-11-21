@@ -81,9 +81,12 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType ,congrat
         subtext: 'Cash Prize!'
       };
     } else if (prize.type === 'points') {
+      const cleanValue = prize.value
+    // remove trailing "s" from "Ringtones"
+    .replace(/Ringtones/gi, "Ringtone")
       return {
         icon: '⭐',
-        text: `${prize.value} Points`,
+        text: `${cleanValue} Points`,
         subtext: 'Ringtone Points!'
       };
     } else if (prize.type === 'car') {
@@ -187,7 +190,7 @@ const handleClose = () => {
             </div>
 
             {/* Title */}
-            <h2 className={`text-3xl sm:text-4xl font-black text-center mb-2 ${
+            <h2 className={`small-congrats text-3xl sm:text-4xl font-black text-center mb-2 ${
               isWinner 
                 ? 'text-transparent bg-clip-text bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15]' 
                 : 'text-gray-300'
@@ -248,6 +251,7 @@ const handleClose = () => {
           </div>
         </div>
       </div>
+    
     </div>
   );
 }

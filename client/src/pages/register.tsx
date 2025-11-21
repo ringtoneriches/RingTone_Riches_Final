@@ -289,7 +289,7 @@ export default function Register() {
                 <Link href="/login">
                   <Button
                     variant="outline"
-                    className="border-ringtone-600 text-ringtone-400 hover:bg-ringtone-600/20"
+                    className="border-ringtone-600 text-ringtone-400 hover:bg-ringtone-600/20 hover:text-ringtone-400"
                     data-testid="button-go-to-login"
                   >
                     SIGN IN

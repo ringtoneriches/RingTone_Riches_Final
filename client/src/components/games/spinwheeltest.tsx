@@ -78,6 +78,7 @@ interface SpinWheelProps {
   orderId?: string;
   competitionId?: string;
   congratsAudioRef: React.RefObject<HTMLAudioElement>;
+  onAllSpinsComplete?: () => void;   
 }
 
 interface WheelSegment {
@@ -134,7 +135,8 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
   ticketCount,
   orderId,
   competitionId,
-  congratsAudioRef
+  congratsAudioRef,
+  onAllSpinsComplete
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const centerVideoRef = useRef<HTMLVideoElement>(null);
@@ -176,7 +178,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
       if (seg.rewardType === "cash") {
         amount = Number(seg.rewardValue);
       } else if (seg.rewardType === "points") {
-        amount = `${seg.rewardValue} Ringtones`;
+        amount = `${seg.rewardValue} Ringtone`;
       } else {
         amount = 0;
       }
@@ -845,7 +847,11 @@ if (isWin && congratsAudioRef.current) {
                 prize: result.prize,
               };
             }
-
+              // 🔥 CHECK IF ALL SPINS ARE NOW SPENT
+  const allUsed = updated.every(s => s.status === "SPUN");
+  if (allUsed) {
+    onAllSpinsComplete?.();   // <-- FIRE CALLBACK
+  }
             return updated;
           });
         }

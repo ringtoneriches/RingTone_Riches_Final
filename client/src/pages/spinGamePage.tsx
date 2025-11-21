@@ -45,6 +45,20 @@ export default function SpinGamePage() {
    const { data: competition } = useQuery({
       queryKey: ["/api/competitions", competitionId],
     });
+
+      useEffect(() => {
+      return () => {
+        if (orderId) {
+          const history = JSON.parse(localStorage.getItem(`spinWheelHistory_${orderId}`) || "[]");
+    
+          const allDone = history.length > 0 && history.every(h => h.status === "SPUN");
+    
+          if (allDone) {
+            localStorage.removeItem(`spinWheelHistory_${orderId}`);
+          }
+        }
+      };
+    }, []);
   // Update remaining spins count
   useEffect(() => {
     if (orderData?.order) {
@@ -109,19 +123,19 @@ export default function SpinGamePage() {
   const handleCloseResultModal = () => {
     setIsResultModalOpen(false);
 
-    if (remainingSpins <= 0) {
-      toast({
-        title: "All Spins Used",
-        description: "You’ve used all your spins from this purchase.",
-      });
-      setTimeout(() => {
-        // Clear order-specific localStorage
-        if (orderId) {
-          localStorage.removeItem(`spinWheelHistory_${orderId}`);
-        }
-        window.location.href = "/";
-      }, 2000);
-    }
+    // if (remainingSpins <= 0) {
+    //   toast({
+    //     title: "All Spins Used",
+    //     description: "You’ve used all your spins from this purchase.",
+    //   });
+    //   setTimeout(() => {
+    //     // Clear order-specific localStorage
+    //     if (orderId) {
+    //       localStorage.removeItem(`spinWheelHistory_${orderId}`);
+    //     }
+    //     window.location.href = "/";
+    //   }, 2000);
+    // }
   };
 
   if (isLoading)
@@ -157,8 +171,13 @@ export default function SpinGamePage() {
           competitionId={competitionId}
           isSpinning={isSpinning}
           setIsSpinning={setIsSpinning}    
-         congratsAudioRef={congratsAudioRef} 
-
+          congratsAudioRef={congratsAudioRef} 
+          onAllSpinsComplete={() => {
+          toast({
+            title: "All Spins Used",
+            description: "You've used all spins from this purchase."
+          });
+        }}
         />
 
       </main>

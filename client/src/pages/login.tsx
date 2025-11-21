@@ -123,7 +123,7 @@ export default function Login() {
                 <Link href="/register">
                   <Button
                     variant="outline"
-                    className="border-ringtone-600 text-ringtone-400 hover:bg-ringtone-600/10"
+                    className="border-ringtone-600 text-ringtone-400 hover:bg-ringtone-600/10 hover:text-ringtone-400"
                   >
                     CREATE ACCOUNT
                   </Button>

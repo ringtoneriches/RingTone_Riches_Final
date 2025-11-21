@@ -123,13 +123,15 @@ const saveScratchHistory = (history: { status: string; prize: { type: string; va
   }
 };
 
-export default function ScratchCardTest({ onScratchReveal, onCommitSession, onRefreshBalance, commitError, mode = "tight", scratchTicketCount, orderId ,congratsAudioRef }: ScratchCardProps) {
+export default function ScratchCardTest({ onScratchReveal, mode = "tight", scratchTicketCount, orderId ,congratsAudioRef }: ScratchCardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const scratchSoundRef = useRef<HTMLAudioElement | null>(null);
   const hasCompletedRef = useRef(false);
   const isScratching = useRef(false); // 🎵 Track if actively scratching (for sound control)
+  const [hideImagesAfterRevealAll, setHideImagesAfterRevealAll] = useState(false);
+
   const [,setLocation] = useLocation();
   // 🎯 NEW: Session-based state management
   const [sessionState, setSessionState] = useState<'loading' | 'ready' | 'scratching' | 'completed'>('loading');
@@ -141,7 +143,7 @@ export default function ScratchCardTest({ onScratchReveal, onCommitSession, onRe
     prizeId: string;
   } | null>(null);
   const [nextSession, setNextSession] = useState<any>(null); // Pre-fetched next session
-  
+
   const [revealed, setRevealed] = useState(false);
   const [percentScratched, setPercentScratched] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
@@ -150,7 +152,7 @@ export default function ScratchCardTest({ onScratchReveal, onCommitSession, onRe
   const [scratchHistory, setScratchHistory] = useState<
     { status: string; prize: { type: string; value: string } }[]
   >([]);
-  
+
   // Confirmation dialog state
   const [showRevealAllDialog, setShowRevealAllDialog] = useState(false);
   const [showRevealAllResultDialog, setShowRevealAllResultDialog] = useState(false);
@@ -159,15 +161,10 @@ const [revealAllSummary, setRevealAllSummary] = useState<{ wins: number; losses:
   losses: 0
 });
 
-const isRevealAllMode = useRef(false);
-const [lockedImages, setLockedImages] = useState<any[] | null>(null);
-
-
-
 const [showOutOfScratchesDialog, setShowOutOfScratchesDialog] = useState(false);
 const outOfScratchClickCount = useRef(0);
 
-  
+
   // Check if all scratch cards are used
   const allScratchesUsed = scratchHistory.length > 0 && scratchHistory.every(s => s.status === "Scratched");
 
@@ -176,7 +173,7 @@ const outOfScratchClickCount = useRef(0);
     if (!scratchTicketCount || !orderId) return;
 
     const savedHistory = loadScratchHistory(orderId);
-    
+
     // If we have saved history that matches current count, use it
     if (savedHistory.length === scratchTicketCount) {
       setScratchHistory(savedHistory);
@@ -200,7 +197,7 @@ const outOfScratchClickCount = useRef(0);
   // Helper function to adjust history while preserving all data
   const adjustHistoryToCount = (history: any[], targetCount: number) => {
     if (history.length === targetCount) return history;
-    
+
     if (history.length < targetCount) {
       // Add new unscratched entries
       const newEntries = Array.from({ length: targetCount - history.length }, () => ({
@@ -218,10 +215,10 @@ const outOfScratchClickCount = useRef(0);
   // 🎯 NEW: Fetch scratch session from backend (pre-load result and tile layout)
   const fetchScratchSession = async (): Promise<void> => {
     if (!orderId) return;
-    
+
     try {
       setSessionState('loading');
-      
+
       const response = await fetch('/api/scratch-session/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -235,7 +232,7 @@ const outOfScratchClickCount = useRef(0);
       }
 
       const sessionData = await response.json();
-      
+
       if (sessionData.success) {
         setCurrentSession({
           sessionId: sessionData.sessionId,
@@ -252,32 +249,61 @@ const outOfScratchClickCount = useRef(0);
     }
   };
 
-  // 🎯 Helper: Update local UI state after successful scratch completion
-  const updateScratchUI = () => {
-    if (!currentSession) return;
-    
-    // Update scratch history
-    setScratchHistory((prev) => {
-      const firstUnscratched = prev.findIndex((s) => s.status === "Not Scratched");
-      if (firstUnscratched === -1) return prev;
+  // 🎯 NEW: Complete scratch session (record usage and award prize)
+  const completeScratchSession = async (): Promise<void> => {
+    if (!currentSession || !orderId) return;
 
-      const updated = [...prev];
-      updated[firstUnscratched] = {
-        status: "Scratched",
-        prize: currentSession.prize,
-      };
-      return updated;
-    });
+    try {
+      const response = await fetch(`/api/scratch-session/${currentSession.sessionId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          prizeId: currentSession.prizeId,
+          isWinner: currentSession.isWinner,
+        }),
+        credentials: 'include',
+      });
 
-    // Play congrats sound for wins
-    const isWin = 
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to complete scratch session');
+      }
+
+      const result = await response.json();
+
+      // Update scratch history
+      setScratchHistory((prev) => {
+        const firstUnscratched = prev.findIndex((s) => s.status === "Not Scratched");
+        if (firstUnscratched === -1) return prev;
+
+        const updated = [...prev];
+        updated[firstUnscratched] = {
+          status: "Scratched",
+          prize: currentSession.prize,
+        };
+        return updated;
+      });
+
+      // Callback with prize info
+      if (onScratchReveal) {
+        onScratchReveal(currentSession.prize);
+      }
+
+      const isWin = 
       currentSession.prize?.type !== "none" &&
       currentSession.prize?.value !== "-" &&
       currentSession.isWinner === true;
 
-    if (isWin && congratsAudioRef.current) {
-      congratsAudioRef.current.currentTime = 0;
-      congratsAudioRef.current.play().catch(() => {});
+
+      if (isWin && congratsAudioRef.current) {
+        congratsAudioRef.current.currentTime = 0;
+        congratsAudioRef.current.play().catch(() => {});
+      }
+
+      setSessionState('completed');
+    } catch (error) {
+      console.error('Error completing scratch session:', error);
     }
   };
 
@@ -299,8 +325,6 @@ const outOfScratchClickCount = useRef(0);
     }
   }, [scratchHistory, orderId]);
 
-  // ✅ No auto-redirect - let users view their progress table after revealing all prizes
-
 
    
 
@@ -315,46 +339,39 @@ const outOfScratchClickCount = useRef(0);
   // }, [scratchTicketCount]);
 
   // 🎯 NEW: Setup scratch card with pre-loaded tile layout from backend
-useEffect(() => {
-  if (!currentSession || sessionState !== "ready") return;
-
-  // Only lock images once per session
-  if (!lockedImages) {
-    const tileImages = currentSession.tileLayout.map((name: string) => {
-      const img = getImageByBackendName(name);
-      return img || landmarkImages[Math.floor(Math.random() * landmarkImages.length)];
-    });
-
-    setLockedImages(tileImages);
-  }
-
-  // Reset scratch states for the new session
-  isScratching.current = false;
-  hasCompletedRef.current = false;
-  setRevealed(false);
-  setPercentScratched(0);
-  setSelectedPrize({ type: "none", value: "0" });
-
-  initCanvas();
-}, [currentSession, sessionState]);
-
-
-  // 🎯 Preload all landmark images on mount for instant display
   useEffect(() => {
-    const preloadImages = async () => {
-      const imagePromises = landmarkImages.map((img) => {
-        return new Promise((resolve) => {
-          const image = new Image();
-          image.onload = () => resolve(true);
-          image.onerror = () => resolve(false);
-          image.src = img.src;
-        });
+    if (!currentSession ||  sessionState !== 'ready') {
+      return;
+    }
+
+    // 🔒 Defensive check: Ensure exactly 6 tiles
+    if (currentSession.tileLayout.length !== 6) {
+      console.error(`Invalid tile layout: expected 6 tiles, got ${currentSession.tileLayout.length}`);
+      return;
+    }
+
+    // Map tile layout from backend to actual image objects
+    // const tileImages = currentSession.tileLayout.map(imageName => {
+    //   const found = landmarkImages.find(img => img.name === imageName);
+    //   return found || landmarkImages[0]; // Fallback to first image
+    // });
+      const tileImages = currentSession.tileLayout.map((name: string) => {
+        const img = getImageByBackendName(name);
+        if (!img) {
+          console.warn("Unknown backend image name:", name);
+          return landmarkImages[Math.floor(Math.random() * landmarkImages.length)];
+        }
+        return img;
       });
-      await Promise.all(imagePromises);
-      console.log('✅ All scratch card images preloaded');
-    };
-    preloadImages();
-  }, []);
+
+
+    // Set images to pre-determined layout (exactly 6)
+    setImages(tileImages);
+
+   // Reset state for new session
+    isScratching.current = false;
+    initCanvas();
+  }, [currentSession, sessionState]);
 
   useEffect(() => {
     scratchSoundRef.current = new Audio(scratchSoundFile);
@@ -364,10 +381,7 @@ useEffect(() => {
     const handleMouseUpGlobal = () => {
       drawingRef.current = false;
       stopScratchSound(); // 🎵 Always stop sound on global pointer release
-      // 🛡️ Only check if not already revealed to prevent duplicate calls
-      if (!revealed && !hasCompletedRef.current) {
-        checkPercentScratched(true);
-      }
+      checkPercentScratched(true);
     };
 
     window.addEventListener("mouseup", handleMouseUpGlobal);
@@ -383,48 +397,43 @@ useEffect(() => {
       window.removeEventListener("mouseup", handleMouseUpGlobal);
       window.removeEventListener("touchend", handleMouseUpGlobal);
     };
-  }, [revealed]);
+  }, []);
 
     useEffect(() => {
     const handleResize = () => {
-      // 🛡️ CRITICAL: Don't reinitialize canvas during active scratching
-      if (revealed || hasCompletedRef.current || drawingRef.current) {
-        return;
-      }
       initCanvas();
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [revealed]);
+  }, []);
 
  function initCanvas() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     const container = canvas.parentElement;
     if (!container) return;
-    
+
     // Get container dimensions
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
-    
+
     // Set canvas CSS dimensions to match container
     canvas.style.width = `${containerWidth}px`;
     canvas.style.height = `${containerHeight}px`;
-    
+
     // Set canvas internal dimensions (accounting for device pixel ratio)
     const ratio = window.devicePixelRatio || 1;
     canvas.width = Math.round(containerWidth * ratio);
     canvas.height = Math.round(containerHeight * ratio);
-    
-    // 🎯 Add willReadFrequently for better performance when reading pixels
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    
+
     // Scale the context to account for device pixel ratio
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    
+
     ctx.globalCompositeOperation = "source-over";
     const gradient = ctx.createLinearGradient(0, 0, containerWidth, containerHeight);
 
@@ -434,7 +443,7 @@ useEffect(() => {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, containerWidth, containerHeight);
     ctx.fillStyle = "#fff";
-    
+
     // Responsive font size
     const fontSize = Math.max(16, containerWidth * 0.05);
     ctx.font = `bold ${fontSize}px Arial`;
@@ -445,21 +454,15 @@ useEffect(() => {
   }
 
   function scratchAt(x: number, y: number) {
-    // 🛡️ CRITICAL: Don't allow scratching until session is ready
-    if (isRevealAllMode.current) return;
-
-    if (!currentSession || sessionState !== 'ready') {
-      return;
-    }
     if (revealed) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    
+
     // Make brush size responsive based on canvas size
     const brush = Math.max(15, canvas.clientWidth * 0.09);
-    
+
     ctx.globalCompositeOperation = "destination-out";
     ctx.beginPath();
     ctx.arc(x, y, brush, 0, Math.PI * 2);
@@ -472,11 +475,9 @@ useEffect(() => {
 
 function checkPercentScratched(force = false) {
   rafRef.current = null;
-  if (isRevealAllMode.current) return;
-
   const canvas = canvasRef.current;
   if (!canvas) return;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const w = canvas.width;
   const h = canvas.height;
@@ -493,7 +494,7 @@ function checkPercentScratched(force = false) {
   }
 
   const percent = cleared / total;
-  
+
   // ✅ Update percentage display normally until 85%
   if (percent < AUTO_CLEAR_THRESHOLD) {
     setPercentScratched(Math.round(percent * 100));
@@ -501,80 +502,58 @@ function checkPercentScratched(force = false) {
 
   // 🎯 NEW: SIMPLIFIED FLOW at 85% - Just show popup with pre-loaded prize
   if (percent >= AUTO_CLEAR_THRESHOLD && !revealed && !hasCompletedRef.current) {
-    // 🔒 CRITICAL: Don't proceed if no session loaded
-    if (!currentSession || sessionState !== 'ready') {
-      console.warn("⏳ Session not ready yet, waiting...");
+    // 🔒 Guard: Don't proceed if no session loaded
+    if (!currentSession) {
+      console.warn("Session not loaded yet, waiting...");
       return;
     }
-    
-    // 🛡️ CRITICAL: Set hasCompletedRef IMMEDIATELY to prevent duplicate calls
+
     hasCompletedRef.current = true;
-    
-    // 🎯 Set revealed state immediately to prevent re-entry during async operations
-    setRevealed(true);
     stopScratchSound(); // Stop sound immediately
-    
-    console.log('🎯 Scratch completion triggered at', Math.round(percent * 100), '% with prize:', currentSession.prize);
-    
+    setRevealed(true);
+    setSessionState('scratching'); // Update state to indicate scratching completed
+
     // Images are ALREADY in final position (pre-loaded), just show popup
     (async () => {
-      const prizeWon = currentSession.prize;
-      
       try {
+
+        const prizeWon = currentSession.prize;
+
         // 🎯 Images are ALREADY in correct positions (pre-loaded from backend)
         // NO image changes needed!
-        
+
         // Update percentage to 100%
         setPercentScratched(100);
-        
-        // ✅ Clear overlay to reveal final pattern IMMEDIATELY - no delay
+
+        // ⏱️ Brief delay for visual smoothness
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        // ✅ Clear overlay to reveal final pattern
         clearOverlayInstant();
-        
-        // 🎉 Show internal popup state for component's own display
+
+        // 🎉 Show popup IMMEDIATELY
         setSelectedPrize(prizeWon);
-        
-        // 🎯 STEP 1: Notify parent to show modal INSTANTLY (don't wait for API)
-        if (onScratchReveal) {
-          onScratchReveal(prizeWon);
-        }
-        
-        // 🔒 STEP 2: Request parent to commit session via mutation (credits balance, invalidates queries)
-        // Parent mutation survives even if this component unmounts
-        if (onCommitSession && currentSession) {
-          await onCommitSession(currentSession.sessionId, {
-            orderId: orderId!,
-            prizeId: currentSession.prizeId,
-            isWinner: currentSession.isWinner,
-          });
-          
-          // ✅ Success: Update local UI state (history, sound)
-          updateScratchUI();
-        }
-        
-        // ✅ Backend confirmed success - parent already handled query invalidation
-        setSessionState('completed');
-        setLockedImages(null);  // allow next session to load new images
+
+        // 🔒 Call completion endpoint to record usage and award prize
+        await completeScratchSession();
 
         // Prepare for next scratch (fetch next session in background)
         setTimeout(async () => {
+          hasCompletedRef.current = false;
           setCurrentSession(null); // Clear current session
           setSessionState('loading'); // Trigger fetch of next session
-          // 🛡️ DON'T reset hasCompletedRef or revealed here - wait until new session is ready
+          setRevealed(false);
         }, 1000);
       } catch (error) {
-        console.error("❌ Error completing scratch - rolling back:", error);
-        
-        // 🔄 CRITICAL: Rollback all state to allow retry
+        console.error("Error completing scratch:", error);
+        alert("Failed to complete scratch card. Please try again.");
+        // Clear overlay
+        clearOverlayInstant();
+        // Reset on error to allow retry
         hasCompletedRef.current = false;
         setRevealed(false);
-        setSelectedPrize({ type: "none", value: "0" }); // Clear popup
         setSessionState('ready');
-        
-        // ❌ Error handled by parent mutation - displayed via commitError prop
-        // Parent already shows error toast, we just need to reset local state
-        alert("Failed to save your scratch result. The error has been reported. Please try again.");
-        
-        // Reinitialize canvas for retry
+        // Reinitialize canvas
         initCanvas();
       }
     })();
@@ -584,7 +563,7 @@ function checkPercentScratched(force = false) {
   function clearOverlayInstant() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
@@ -592,7 +571,7 @@ function checkPercentScratched(force = false) {
   function startScratchSound() {
     if (revealed || hasCompletedRef.current) return;
     if (isScratching.current) return; // 🎵 Already playing, don't restart
-    
+
     const sound = scratchSoundRef.current;
     if (sound && sound.paused) {
       isScratching.current = true;
@@ -613,35 +592,36 @@ function checkPercentScratched(force = false) {
   // Reveal All function - batch reveals all remaining scratch cards
   async function handleRevealAll() {
     if (revealed || hasCompletedRef.current || !canvasRef.current) return;
-     isRevealAllMode.current = true;
+
     // Close dialog
     setShowRevealAllDialog(false);
-    
+
     // Stop any scratch sound
     stopScratchSound();
-    
+
     // Mark as completed to prevent double triggers
- setRevealed(true);          // overlay cleared
-hasCompletedRef.current = true; 
-isScratching.current = false;
+    hasCompletedRef.current = true;
+    setRevealed(true);
     setPercentScratched(100);
-    
-    // Block scratch card entirely
-canvasRef.current.style.pointerEvents = "none";
+
     // Get count of all remaining scratch cards
     const remainingCount = scratchHistory.filter(s => s.status === "Not Scratched").length;
-    
+
     if (remainingCount === 0) {
       hasCompletedRef.current = false;
       setRevealed(false);
       return;
     }
+    setHideImagesAfterRevealAll(true);
 
     // Clear overlay immediately
     clearOverlayInstant();
-    
+    setTimeout(() => {
+    initCanvas();
+}, 50);
+
     try {
-      // 🔒 CRITICAL: Call batch reveal API with keepalive to ensure completion
+      // Call batch reveal API to process all remaining scratch cards
       const response = await fetch("/api/reveal-all-scratch-cards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -650,7 +630,6 @@ canvasRef.current.style.pointerEvents = "none";
           orderId,
           count: remainingCount
         }),
-        keepalive: true, // ✅ Ensure request completes even if user navigates away
       });
 
       if (!response.ok) {
@@ -681,11 +660,6 @@ canvasRef.current.style.pointerEvents = "none";
 
         return updated;
       });
-      
-      // 🔒 CRITICAL: Invalidate queries to refresh balance and points in header
-      if (onRefreshBalance) {
-        onRefreshBalance();
-      }
 
       // Reset state
       hasCompletedRef.current = false;
@@ -693,13 +667,25 @@ canvasRef.current.style.pointerEvents = "none";
       setRevealed(false);
       setSessionKey((k) => k + 1);
 
-      // Show completion dialog
-      setShowRevealAllResultDialog(true);
+      // Show summary message
+      // alert(`All scratch cards revealed! Check the progress table for your results.`);
+//      const wins = results.scratches.filter((s: any) =>
+//   s.prize?.type !== "none" &&
+//   s.prize?.type !== "try_again" &&
+//   s.prize?.value !== "Lose" &&
+//   s.prize?.value !== "Try Again"
+// ).length;
+
+// const losses = results.scratches.length - wins;
+
+// // Save for modal
+// setRevealAllSummary({ wins, losses });
+setShowRevealAllResultDialog(true);
 
     } catch (error) {
       console.error("Error revealing all scratch cards:", error);
       alert("Failed to reveal all scratch cards. Please try again.");
-      
+
       // Reset on error to allow retry
       hasCompletedRef.current = false;
       isScratching.current = false; // Reset scratching state
@@ -720,8 +706,8 @@ canvasRef.current.style.pointerEvents = "none";
 
   return (
   <div className="relative flex flex-col items-center justify-center p-4 min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* 🎯 NEW: Loading overlay while fetching session (but not when all scratches are complete) */}
-      {sessionState === 'loading' && !allScratchesUsed && (
+      {/* 🎯 NEW: Loading overlay while fetching session */}
+      {sessionState === 'loading' && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-[#FACC15] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -729,7 +715,7 @@ canvasRef.current.style.pointerEvents = "none";
           </div>
         </div>
       )}
-      
+
       <video
     autoPlay
     loop
@@ -751,7 +737,7 @@ canvasRef.current.style.pointerEvents = "none";
 
   {/* Premium gradient overlay */}
   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40"></div>
-  
+
   {/* Decorative glow effects - Brand Colors */}
   <div className="absolute top-20 left-10 w-96 h-96 bg-[#FACC15]/20 rounded-full blur-3xl animate-pulse"></div>
   <div className="absolute bottom-20 right-10 w-96 h-96 bg-[#F59E0B]/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
@@ -763,18 +749,18 @@ canvasRef.current.style.pointerEvents = "none";
               <div className="absolute -inset-1 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-full blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
               <div className="relative bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 px-6 py-3 rounded-full text-sm sm:text-base font-black shadow-2xl flex items-center gap-2">
                 <span className="text-lg sm:text-xl">🎟️</span>
-                <span>Available Scratch Cards: {scratchHistory.filter(s => s.status === "Not Scratched").length}</span>
+                <span>Available Scratch Cards: {scratchTicketCount}</span>
               </div>
             </div>
           )}
         </div>
-        
+
         {/* PREMIUM Eye-Catching Title */}
         <div className="text-center mb-6 sm:mb-10">
           <div className="relative inline-block mb-4">
             {/* Glow behind text */}
             <div className="absolute inset-0 bg-gradient-to-r from-[#FACC15]/30 via-[#F59E0B]/30 to-[#FACC15]/30 blur-3xl"></div>
-            
+
             <h2 
               className="relative text-3xl sm:text-4xl md:text-6xl font-black tracking-tight leading-[1.1]"
               style={{ 
@@ -788,11 +774,11 @@ canvasRef.current.style.pointerEvents = "none";
             >
               Scratch & Match
             </h2>
-            
+
             {/* Premium underline */}
             <div className="h-1 mt-3 bg-gradient-to-r from-transparent via-[#FACC15] to-transparent rounded-full"></div>
           </div>
-          
+
           <p className="text-white/90 text-base sm:text-lg md:text-xl font-semibold">
             Match 3 same images to win amazing prizes! 🎁
           </p>
@@ -802,14 +788,16 @@ canvasRef.current.style.pointerEvents = "none";
         <div className="relative mx-auto mb-8 sm:mb-12 group">
           {/* Premium outer glow effect - Brand Colors */}
           <div className="absolute -inset-4 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-3xl blur-2xl opacity-40 group-hover:opacity-60 transition-all duration-700"></div>
-          
+
           {/* Card container with premium gold border */}
           <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-[#FACC15]/60 shadow-[#FACC15]/30 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 w-full sm:w-[550px] md:w-[600px] mx-auto">
             <div className="relative min-h-[350px] sm:min-h-[420px] md:min-h-[450px]">
             {/* UNDERLAY - Enhanced with premium background (2x3 grid = 6 tiles) */}
             <div className="absolute inset-0 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center p-3 sm:p-5">
-              <div className="grid grid-cols-3 grid-rows-2 gap-2 sm:gap-3 md:gap-4 w-full h-full max-w-lg mx-auto p-2">
-                {(lockedImages || []).slice(0, 6).map((img, i) => (
+              {!hideImagesAfterRevealAll &&
+                ( 
+                <div className="grid grid-cols-3 grid-rows-2 gap-2 sm:gap-3 md:gap-4 w-full h-full max-w-lg mx-auto p-2">
+                {images.slice(0, 6).map((img, i) => (
                   <div
                     key={i}
                     className="bg-white rounded-lg sm:rounded-xl shadow-2xl flex items-center justify-center p-2 sm:p-3 border-2 border-gray-200 aspect-square overflow-hidden hover:scale-105 transition-transform duration-200"
@@ -822,6 +810,8 @@ canvasRef.current.style.pointerEvents = "none";
                   </div>
                 ))}
               </div>
+              )
+              }
             </div>
 
             {/* SCRATCH LAYER */}
@@ -830,7 +820,7 @@ canvasRef.current.style.pointerEvents = "none";
               ref={canvasRef}
               className="absolute inset-0 cursor-pointer touch-none w-full h-full"
             onMouseDown={(e) => {
-               if (isRevealAllMode.current) return; 
+              
              if (allScratchesUsed) {
                 setShowOutOfScratchesDialog(true);
                 return;
@@ -841,13 +831,12 @@ canvasRef.current.style.pointerEvents = "none";
               scratchAt(e.clientX - rect.left, e.clientY - rect.top);
             }}
             onMouseMove={(e) => {
-               if (isRevealAllMode.current) return; 
               if (!drawingRef.current) return;
               const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
               scratchAt(e.clientX - rect.left, e.clientY - rect.top);
             }}
             onTouchStart={(e) => {
-              if (isRevealAllMode.current) return;
+              
              if (allScratchesUsed) {
               setShowOutOfScratchesDialog(true);
               return;
@@ -859,24 +848,20 @@ canvasRef.current.style.pointerEvents = "none";
               scratchAt(t.clientX - rect.left, t.clientY - rect.top);
             }}
             onTouchMove={(e) => {
-              if (isRevealAllMode.current) return; 
               if (!drawingRef.current) return;
               const t = e.touches[0];
               const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
               scratchAt(t.clientX - rect.left, t.clientY - rect.top);
             }}
             onMouseUp={() => {
-              if (isRevealAllMode.current) return;
               drawingRef.current = false;
               stopScratchSound(); // 🎵 Stop sound when pointer released
             }}
             onMouseLeave={() => {
-              if (isRevealAllMode.current) return;
               drawingRef.current = false;
               stopScratchSound(); // 🎵 Stop sound when pointer leaves canvas
             }}
             onTouchEnd={() => {
-              if (isRevealAllMode.current) return;
               drawingRef.current = false;
               stopScratchSound(); // 🎵 Stop sound when touch ends
             }}
@@ -912,7 +897,7 @@ canvasRef.current.style.pointerEvents = "none";
         <div className="w-full max-w-3xl mx-auto relative px-2 sm:px-4">
           {/* Premium glow effect around table */}
           <div className="absolute -inset-2 bg-gradient-to-r from-[#FACC15]/20 via-[#F59E0B]/20 to-[#FACC15]/20 rounded-2xl blur-xl"></div>
-          
+
           <div className="relative bg-gradient-to-br from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-xl rounded-xl sm:rounded-2xl border-2 border-[#FACC15]/40 shadow-2xl overflow-hidden">
             {/* Header with premium styling */}
             <div className="bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] px-3 sm:px-6 py-3 sm:py-4">
@@ -973,7 +958,7 @@ canvasRef.current.style.pointerEvents = "none";
                                            item.prize.type === "try_again" || 
                                            item.prize.value === "Lose" ||
                                            item.prize.value === "Try Again";
-                              
+
                               if (isLoss) {
                                 return (
                                   <span className="text-red-400 text-xs sm:text-sm whitespace-nowrap">
@@ -981,7 +966,7 @@ canvasRef.current.style.pointerEvents = "none";
                                   </span>
                                 );
                               }
-                              
+
                               if (item.prize.type === "cash") {
                                 return (
                                   <span className="text-green-400 text-xs sm:text-sm whitespace-nowrap">
@@ -989,7 +974,7 @@ canvasRef.current.style.pointerEvents = "none";
                                   </span>
                                 );
                               }
-                              
+
                               if (item.prize.type === "points") {
                                 return (
                                   <span className="text-green-400 text-xs sm:text-sm whitespace-nowrap">
@@ -997,7 +982,7 @@ canvasRef.current.style.pointerEvents = "none";
                                   </span>
                                 );
                               }
-                              
+
                               // Physical prize or other
                               return (
                                 <span className="text-green-400 text-xs sm:text-sm whitespace-nowrap">
@@ -1016,7 +1001,7 @@ canvasRef.current.style.pointerEvents = "none";
           </div>
         </div>
       </div>
-      
+
       {/* Reveal All Confirmation Dialog */}
       <AlertDialog open={showRevealAllDialog} onOpenChange={setShowRevealAllDialog}>
         <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15]">
