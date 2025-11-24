@@ -2608,10 +2608,12 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
           throw new Error("No prizes configured");
         }
 
-      // Filter only active prizes with valid weights (global, unlimited wins)
-       const eligiblePrizes = allPrizes.filter(prize => {
-  return prize.weight && prize.weight > 0;
-});
+        // Filter prizes that haven't reached maxWins
+        const eligiblePrizes = allPrizes.filter(prize => {
+          if (!prize.weight || prize.weight <= 0) return false;
+          if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins) return false;
+          return true;
+        });
 
         if (eligiblePrizes.length === 0) {
           throw new Error("No prizes available");

@@ -542,15 +542,15 @@ function checkPercentScratched(force = false) {
 
         // ⏱️ Brief delay for visual smoothness
         await new Promise(resolve => setTimeout(resolve, 150));
-
+          // 🔒 Call completion endpoint to record usage and award prize
+        await completeScratchSession();
         // ✅ Clear overlay to reveal final pattern
         clearOverlayInstant();
 
         // 🎉 Show popup IMMEDIATELY
         setSelectedPrize(prizeWon);
 
-        // 🔒 Call completion endpoint to record usage and award prize
-        await completeScratchSession();
+      
 
         // Prepare for next scratch (fetch next session in background)
         setTimeout(async () => {
@@ -628,6 +628,12 @@ function checkPercentScratched(force = false) {
       return;
     }
     setHideImagesAfterRevealAll(true);
+
+    // 🔥 Force browser to reflow by faking resize event
+setTimeout(() => {
+  window.dispatchEvent(new Event("resize"));
+}, 50);
+
 
     // Clear overlay immediately
     clearOverlayInstant();
