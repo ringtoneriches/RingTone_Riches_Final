@@ -30,6 +30,7 @@ import TajMahal from "../../../../attached_assets/Land Mark/Taj Ma.webp";
 import TimesSquare from "../../../../attached_assets/Land Mark/Times S.webp";
 import TowerBridge from "../../../../attached_assets/Land Mark/Tower Bridge.webp";
 import TowerOfPisa from "../../../../attached_assets/Land Mark/Tower of Pisa.webp";
+import TryAgain from "../../../../attached_assets/Land Mark/tryAgain.jpg";
 import { useLocation } from "wouter";
 
 interface ScratchCardProps {
@@ -69,6 +70,7 @@ const landmarkImages = [
   { name: "Times Square", src: TimesSquare },
   { name: "Tower Bridge", src: TowerBridge },
   { name: "Tower of Pisa", src: TowerOfPisa },
+  // { name: "Try Again", src: TryAgain },
 ];
 
 function normalizeName(str: string) {
@@ -123,7 +125,7 @@ const saveScratchHistory = (history: { status: string; prize: { type: string; va
   }
 };
 
-export default function ScratchCardTest({ onScratchReveal, mode = "tight", scratchTicketCount, orderId ,congratsAudioRef }: ScratchCardProps) {
+export default function ScratchCardTest({ onScratchReveal, onRefreshBalance, mode = "tight", scratchTicketCount, orderId ,congratsAudioRef }: ScratchCardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -167,6 +169,19 @@ const outOfScratchClickCount = useRef(0);
 
   // Check if all scratch cards are used
   const allScratchesUsed = scratchHistory.length > 0 && scratchHistory.every(s => s.status === "Scratched");
+
+  // Fix canvas not rendering after Reveal All
+useEffect(() => {
+  if (hideImagesAfterRevealAll) {
+    // Wait for DOM to update
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        initCanvas();
+      });
+    });
+  }
+}, [hideImagesAfterRevealAll]);
+
 
     // ✅ SIMPLIFIED INITIALIZATION - Only run once when scratchTicketCount or orderId changes
   useEffect(() => {
@@ -616,9 +631,7 @@ function checkPercentScratched(force = false) {
 
     // Clear overlay immediately
     clearOverlayInstant();
-    setTimeout(() => {
-    initCanvas();
-}, 50);
+   
 
     try {
       // Call batch reveal API to process all remaining scratch cards
@@ -660,6 +673,11 @@ function checkPercentScratched(force = false) {
 
         return updated;
       });
+
+      // 🔒 CRITICAL: Invalidate queries to refresh balance and points in header
+      if (onRefreshBalance) {
+        onRefreshBalance();
+      }
 
       // Reset state
       hasCompletedRef.current = false;
@@ -707,14 +725,14 @@ setShowRevealAllResultDialog(true);
   return (
   <div className="relative flex flex-col items-center justify-center p-4 min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* 🎯 NEW: Loading overlay while fetching session */}
-      {sessionState === 'loading' && (
+      {/* {sessionState === 'loading' && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-[#FACC15] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-white text-lg">Loading scratch card...</p>
           </div>
         </div>
-      )}
+      )} */}
 
       <video
     autoPlay
@@ -749,7 +767,7 @@ setShowRevealAllResultDialog(true);
               <div className="absolute -inset-1 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-full blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
               <div className="relative bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 px-6 py-3 rounded-full text-sm sm:text-base font-black shadow-2xl flex items-center gap-2">
                 <span className="text-lg sm:text-xl">🎟️</span>
-                <span>Available Scratch Cards: {scratchTicketCount}</span>
+                <span>Available Scratch Cards: {scratchHistory.filter(s => s.status === "Not Scratched").length}</span>
               </div>
             </div>
           )}

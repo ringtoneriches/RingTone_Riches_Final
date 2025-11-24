@@ -1198,10 +1198,10 @@ if (congratsAudioRef.current) {
         <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15] text-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-[#FACC15] text-xl font-bold text-center">
-              No Scratch Cards Left
+              No More Spins Left
             </AlertDialogTitle>
             <AlertDialogDescription className="text-gray-300 text-center text-base">
-              You have used all your scratch cards.  
+              You have used all your spins.  
               Buy more to continue playing!
             </AlertDialogDescription>
           </AlertDialogHeader>
