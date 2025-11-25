@@ -53,7 +53,10 @@ export default function ScratchGamePage() {
       if (gameResult?.prize && gameResult.prize.type !== "none") {
         toast({
           title: "🎉 Congratulations!",
-          description: `You won ${gameResult.prize.type === 'cash' ? '£' : ''}${gameResult.prize.value}${gameResult.prize.type === 'points' ? ' points' : ''}!`,
+          description: `You won ${gameResult.prize.type === "cash" ? "£" : ""}${gameResult.prize.type === "points" 
+  ? gameResult.prize.value?.replace(/s$/i, "") 
+  : gameResult.prize.value}${gameResult.prize.type === "points" ? " points" : ""}!`,
+
         });
       }
     },
@@ -152,7 +155,7 @@ export default function ScratchGamePage() {
         if (orderId) {
           localStorage.removeItem(`scratchCardHistory_${orderId}`);
         }
-        navigate("/"); // Navigate to home
+       navigate(`/scratch/${competitionId}/${orderId}`);
       }, 2000);
     }
   };
@@ -222,6 +225,7 @@ export default function ScratchGamePage() {
           commitError={commitError}
           scratchTicketCount={remainingScratches}
           orderId={orderId}
+          competitionId={competitionId}  
           mode="loose" // or "tight" based on your preference
           congratsAudioRef={winnerCongratsRef}
         />

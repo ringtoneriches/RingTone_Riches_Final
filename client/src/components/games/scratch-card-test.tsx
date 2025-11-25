@@ -31,7 +31,7 @@ import TimesSquare from "../../../../attached_assets/Land Mark/Times S.webp";
 import TowerBridge from "../../../../attached_assets/Land Mark/Tower Bridge.webp";
 import TowerOfPisa from "../../../../attached_assets/Land Mark/Tower of Pisa.webp";
 import TryAgain from "../../../../attached_assets/Land Mark/tryAgain.jpg";
-import { useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
 
 interface ScratchCardProps {
   onScratchReveal?: (prize: { type: string; value: string }) => void;
@@ -42,6 +42,7 @@ interface ScratchCardProps {
   scratchTicketCount?: number;
   orderId?: string;
   congratsAudioRef: React.RefObject<HTMLAudioElement>;
+  competitionId?: string;
 }
 
 const CSS_WIDTH = 500;
@@ -125,8 +126,9 @@ const saveScratchHistory = (history: { status: string; prize: { type: string; va
   }
 };
 
-export default function ScratchCardTest({ onScratchReveal, onRefreshBalance, mode = "tight", scratchTicketCount, orderId ,congratsAudioRef }: ScratchCardProps) {
+export default function ScratchCardTest({ onScratchReveal, onRefreshBalance,  competitionId , mode = "tight", scratchTicketCount, orderId ,congratsAudioRef }: ScratchCardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const {id} = useParams()
   const drawingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const scratchSoundRef = useRef<HTMLAudioElement | null>(null);
@@ -1028,7 +1030,7 @@ setShowRevealAllResultDialog(true);
 
       {/* Reveal All Confirmation Dialog */}
       <AlertDialog open={showRevealAllDialog} onOpenChange={setShowRevealAllDialog}>
-        <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15]">
+        <AlertDialogContent className="bg-gray-900 w-[90vw] max-w-sm sm:max-w-md mx-auto   border-2 border-[#FACC15]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-[#FACC15] text-xl font-bold">
               Reveal All Scratch Cards?
@@ -1053,7 +1055,7 @@ setShowRevealAllResultDialog(true);
 
       {/* Reveal-All Result Dialog */}
 <AlertDialog open={showRevealAllResultDialog} onOpenChange={setShowRevealAllResultDialog}>
-  <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15] text-white">
+  <AlertDialogContent className="bg-gray-900 w-[90vw] max-w-sm sm:max-w-md mx-auto  border-2 border-[#FACC15] text-white">
     <AlertDialogHeader>
       <AlertDialogTitle className="text-[#FACC15] text-2xl font-black text-center">
         ✨ Reveal-All Complete!
@@ -1076,7 +1078,7 @@ setShowRevealAllResultDialog(true);
 
                   {/* OUT OF SCRATCHES DIALOG */}
 <AlertDialog open={showOutOfScratchesDialog} onOpenChange={setShowOutOfScratchesDialog}>
-  <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15] text-white">
+  <AlertDialogContent className="bg-gray-900 w-[90vw] max-w-sm sm:max-w-md mx-auto border-2 border-[#FACC15] text-white">
     <AlertDialogHeader>
       <AlertDialogTitle className="text-[#FACC15] text-xl font-bold text-center">
         No Scratch Cards Left
@@ -1087,7 +1089,7 @@ setShowRevealAllResultDialog(true);
       </AlertDialogDescription>
     </AlertDialogHeader>
 
-    <AlertDialogFooter className="flex justify-center">
+    <AlertDialogFooter className="flex justify-center gap-2">
       <AlertDialogAction
         className="bg-[#FACC15] text-gray-900 font-bold px-6 py-3 rounded-lg hover:bg-[#F59E0B]"
         onClick={() => {
@@ -1096,14 +1098,14 @@ setShowRevealAllResultDialog(true);
         if (orderId) {
           localStorage.removeItem(`scratchCardHistory_${orderId}`);
         }
-        setLocation("/"); // Navigate to home
+        setLocation(`/competition/${competitionId}`);
       }, 2000);
         }}
       >
         Buy More
       </AlertDialogAction>
 
-      <AlertDialogCancel className="bg-gray-800 text-white hover:bg-gray-700 px-6 py-3 rounded-lg">
+      <AlertDialogCancel className="bg-gray-800  text-white hover:bg-gray-700 px-6 py-3 rounded-lg">
         Close
       </AlertDialogCancel>
     </AlertDialogFooter>

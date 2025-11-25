@@ -3919,22 +3919,25 @@ app.get("/api/admin/competitions", isAuthenticated, isAdmin, async (req: any, re
 // Create competition
 app.post("/api/admin/competitions", isAuthenticated, isAdmin, async (req: any, res) => {
   try {
-    const competitionData = req.body;
-    
+    const data = req.body;
+
     const competition = await storage.createCompetition({
-      ...competitionData,
+      ...data,
+      startDate: new Date(data.startDate),
+      endDate: new Date(data.endDate),
       isActive: true,
     });
-    
+
     // Broadcast real-time update
-    wsManager.broadcast({ type: 'competition_created' });
-    
+    wsManager.broadcast({ type: "competition_created" });
+
     res.status(201).json(competition);
   } catch (error) {
     console.error("Error creating competition:", error);
     res.status(500).json({ message: "Failed to create competition" });
   }
 });
+
 
 // Update competition
 app.put("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: any, res) => {

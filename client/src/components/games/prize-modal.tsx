@@ -87,7 +87,6 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType ,congrat
       return {
         icon: '⭐',
         text: `${cleanValue} Points`,
-        subtext: 'Ringtone Points!'
       };
     } else if (prize.type === 'car') {
       return {

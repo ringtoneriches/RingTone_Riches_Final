@@ -114,7 +114,10 @@ export default function SpinGamePage() {
     if (normalizedPrize.type !== "none") {
       toast({
         title: "🎉 Congratulations!",
-        description: `You won ${normalizedPrize.type === "cash" ? "£" : ""}${normalizedPrize.value}${normalizedPrize.type === "points" ? " points" : ""}!`,
+       description: `You won ${normalizedPrize.type === "cash" ? "£" : ""}${normalizedPrize.type === "points" 
+  ? normalizedPrize.value?.replace(/s$/i, "") 
+  : normalizedPrize.value}${normalizedPrize.type === "points" ? " points" : ""}!`,
+
       });
     }
   };

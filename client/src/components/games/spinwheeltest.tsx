@@ -1145,7 +1145,7 @@ if (congratsAudioRef.current) {
 
       {/* Reveal All Confirmation Dialog */}
       <AlertDialog open={showRevealAllDialog} onOpenChange={setShowRevealAllDialog}>
-        <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15]">
+        <AlertDialogContent className="bg-gray-900 w-[90vw] max-w-sm sm:max-w-md mx-auto  border-2 border-[#FACC15]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-[#FACC15] text-xl font-bold">
               Reveal All Spins?
@@ -1171,7 +1171,7 @@ if (congratsAudioRef.current) {
 
             {/* Reveal-All Result Dialog */}
       <AlertDialog open={showRevealAllResultDialog} onOpenChange={setShowRevealAllResultDialog}>
-        <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15] text-white">
+        <AlertDialogContent className="bg-gray-900 w-[90vw] max-w-sm sm:max-w-md mx-auto  border-2 border-[#FACC15] text-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-[#FACC15] text-2xl font-black text-center">
               ✨ Reveal-All Complete!
@@ -1195,7 +1195,7 @@ if (congratsAudioRef.current) {
 
                         {/* OUT OF SCRATCHES DIALOG */}
       <AlertDialog open={showOutOfSpinDialog} onOpenChange={setShowOutOfSpinDialog}>
-        <AlertDialogContent className="bg-gray-900 border-2 border-[#FACC15] text-white">
+        <AlertDialogContent className="bg-gray-900 w-[90vw] max-w-sm sm:max-w-md mx-auto  border-2 border-[#FACC15] text-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-[#FACC15] text-xl font-bold text-center">
               No More Spins Left
@@ -1206,7 +1206,7 @@ if (congratsAudioRef.current) {
             </AlertDialogDescription>
           </AlertDialogHeader>
       
-          <AlertDialogFooter className="flex justify-center">
+          <AlertDialogFooter className="flex justify-center gap-2">
             <AlertDialogAction
               className="bg-[#FACC15] text-gray-900 font-bold px-6 py-3 rounded-lg hover:bg-[#F59E0B]"
               onClick={() => {
@@ -1215,7 +1215,7 @@ if (congratsAudioRef.current) {
               if (orderId) {
                localStorage.removeItem(`spinWheelHistory_${orderId}`);
               }
-              setLocation("/"); // Navigate to home
+              setLocation(`/competition/${competitionId}`);
             }, 2000);
               }}
             >
