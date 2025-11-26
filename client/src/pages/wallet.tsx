@@ -67,6 +67,8 @@ const getTransactionIcon = (type: string) => {
       return <Gift className="h-4 w-4 text-yellow-500" />;
     case "referral":
       return <Users className="h-4 w-4 text-purple-500" />;
+    case "referral_bonus":
+      return <Gift className="h-4 w-4 text-yellow-500" />; 
     default:
       return <DollarSign className="h-4 w-4 text-gray-500" />;
   }
@@ -79,6 +81,7 @@ const getTransactionTypeBadge = (type: string) => {
     purchase: "bg-blue-500/10 text-blue-500 border-blue-500/20",
     prize: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
     referral: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+    referral_bonus: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
   };
 
   return (
@@ -298,11 +301,18 @@ function ChangePasswordModal() {
 
 export default function Wallet() {
   const { toast } = useToast();
-  const { isAuthenticated, isLoading, user } = useAuth() as {
-    isAuthenticated: boolean;
-    isLoading: boolean;
-    user: User | null;
-  };
+  const { data: user, isLoading, isError } = useQuery({
+  queryKey: ["/api/auth/user"],
+  queryFn: async () => {
+    const res = await apiRequest("/api/auth/user", "GET");
+    return res.json();
+  },
+  refetchInterval: 4000,        // 🔥 auto refresh every 4 seconds
+  refetchOnWindowFocus: true,   // 🔥 refresh when page is focused
+  staleTime: 0,
+});
+
+const isAuthenticated = !!user;
   const queryClient = useQueryClient();
   const [topUpAmount, setTopUpAmount] = useState<string>("10");
   const [filterType, setFilterType] = useState<string>("all");
@@ -887,6 +897,7 @@ export default function Wallet() {
                             <SelectItem value="purchase">Purchases</SelectItem>
                             <SelectItem value="prize">Prizes</SelectItem>
                             <SelectItem value="referral">Referrals</SelectItem>
+                            <SelectItem value="referral_bonus">Referrals Bonus</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -931,18 +942,22 @@ export default function Wallet() {
                             </div>
                             <div
                               className={`font-bold text-lg whitespace-nowrap ${
-                                transaction.type === "deposit" ||
-                                transaction.type === "prize" ||
-                                transaction.type === "referral"
-                                  ? "text-green-400"
-                                  : "text-red-400"
+                                (transaction.type === "deposit" ||
+                                  transaction.type === "prize" ||
+                                  transaction.type === "referral" ||
+                                  transaction.type === "referral_bonus")
+                                    ? "text-green-400"
+                                    : "text-red-400"
+
                               }`}
                             >
                               {transaction.type === "deposit" ||
-                              transaction.type === "prize" ||
-                              transaction.type === "referral"
-                                ? "+"
-                                : "-"}
+transaction.type === "prize" ||
+transaction.type === "referral" ||
+transaction.type === "referral_bonus"
+  ? "+"
+  : "-"
+}
                              {formatAmount(transaction)}
                             </div>
                           </div>
@@ -1402,7 +1417,7 @@ export default function Wallet() {
                               <span className="flex items-center gap-1">
                                 <span className="text-gray-400">Type:</span>
                                 <span className="capitalize bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded border border-yellow-500/30">
-                                  {entry.competition.type}
+                                  {entry.competition.type === "instant" && "Competition"}
                                 </span>
                               </span>
                               <span className="flex items-center gap-1">

@@ -20,6 +20,7 @@ type RegisterForm = {
   birthYear: string;
   receiveNewsletter: boolean;
   phoneNumber: string;
+  referralCode?: string;
 };
 
 type RegisterResponse = {
@@ -32,6 +33,7 @@ type RegisterResponse = {
 
 export default function Register() {
     const [, setLocation] = useLocation();
+   const referralCode = new URLSearchParams(window.location.search).get("ref");
   const [formData, setFormData] = useState<RegisterForm>({
     firstName: "",
     lastName: "",
@@ -41,6 +43,7 @@ export default function Register() {
     birthYear: "",
     receiveNewsletter: false,
     phoneNumber: "",
+    referralCode:""
   });
   const [showBonusPopup, setShowBonusPopup] = useState(false);
   const [bonusData, setBonusData] = useState<{
@@ -128,7 +131,10 @@ export default function Register() {
       return;
     }
 
-    registerMutation.mutate(formData);
+    registerMutation.mutate({
+       ...formData,
+  referralCode: referralCode || "",
+    });
   };
 
   const months = [

@@ -109,7 +109,7 @@ export const orders = pgTable("orders", {
 export const transactions = pgTable("transactions", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  type: varchar("type", { enum: ["deposit", "withdrawal", "purchase", "prize", "referral"] }).notNull(),
+  type: varchar("type", { enum: ["deposit", "withdrawal", "purchase", "prize", "referral" , "referral_bonus"] }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   description: text("description"),
   orderId: uuid("order_id").references(() => orders.id),

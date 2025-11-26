@@ -203,7 +203,12 @@ export default function Home() {
                   </span>
                 </h2>
                 <p className="text-muted-foreground text-sm md:text-lg font-semibold">
-                  {filteredCompetitions.length} amazing prizes waiting for you!
+                  { activeFilter === "spin" || activeFilter === "scratch" ?
+                     ` huge cash prizes waiting for you!` :
+                     `${filteredCompetitions.length} amazing prizes waiting for you!` 
+                  }
+                 
+
                 </p>
               </div>
 

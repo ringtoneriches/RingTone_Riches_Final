@@ -115,6 +115,7 @@ export interface IStorage {
   getUserReferralCode(userId: string): Promise<string>;
   getUserReferrals(userId: string): Promise<User[]>;
   getUserByReferralCode(code: string): Promise<User | undefined>;
+saveUserReferral(data: { userId: string; referrerId: string }): Promise<void>;
 
   // Platform settings operations
   getPlatformSettings(): Promise<PlatformSettings | undefined>;
@@ -547,6 +548,17 @@ async recordSpinUsage(orderId: string, userId: string): Promise<void> {
     
     return user.referralCode;
   }
+
+
+  async saveUserReferral(data: { userId: string; referrerId: string }): Promise<void> {
+  await db
+    .update(users)
+    .set({
+      referredBy: data.referrerId,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, data.userId));
+}
 
   async getUserReferrals(userId: string): Promise<User[]> {
     return await db

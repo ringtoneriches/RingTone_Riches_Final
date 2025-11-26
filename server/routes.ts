@@ -201,12 +201,10 @@ app.post("/api/auth/register", async (req, res) => {
   try {
     const result = registerUserSchema.safeParse(req.body);
     if (!result.success) {
-      return res
-        .status(400)
-        .json({
-          message: "Invalid registration data",
-          errors: result.error.issues,
-        });
+      return res.status(400).json({
+        message: "Invalid registration data",
+        errors: result.error.issues,
+      });
     }
 
     const {
@@ -219,26 +217,25 @@ app.post("/api/auth/register", async (req, res) => {
       receiveNewsletter,
       birthMonth,
       birthYear,
+      referralCode, // ⭐ IMPORTANT
     } = req.body;
 
-    // Check if user already exists
+    // Check if user exists
     const existingUser = await storage.getUserByEmail(email);
     if (existingUser) {
-      return res
-        .status(400)
-        .json({ message: "User already exists with this email" });
+      return res.status(400).json({ message: "User already exists with this email" });
     }
 
     // Hash password
     const hashedPassword = await hashPassword(password || "");
 
-    // Create date of birth string if provided
+    // Create DOB
     const dobString =
       birthMonth && birthYear
         ? `${birthYear}-${String(birthMonth).padStart(2, "0")}-01`
         : undefined;
 
-    // Create user
+    // Create new user
     const user = await storage.createUser({
       email,
       password: hashedPassword,
@@ -247,26 +244,22 @@ app.post("/api/auth/register", async (req, res) => {
       dateOfBirth: dobString,
       phoneNumber,
       receiveNewsletter: receiveNewsletter || false,
- 
     });
 
-    // Check if signup bonus is enabled and credit new user
     let bonusCashCredited = 0;
     let bonusPointsCredited = 0;
-    
+
+    // Apply normal signup bonus
     try {
       const settings = await storage.getPlatformSettings();
       if (settings?.signupBonusEnabled) {
         const bonusCash = parseFloat(settings.signupBonusCash || "0");
         const bonusPoints = settings.signupBonusPoints || 0;
 
-        // Credit wallet balance if bonus cash is set
         if (bonusCash > 0) {
-          await storage.updateUserBalance(user.id, bonusCash);
-          console.log(`Credited ${bonusCash} cash to user ${user.id}`);
+          await storage.updateUserBalance(user.id, bonusCash.toFixed(2));
           bonusCashCredited = bonusCash;
-          
-          // Record transaction for signup bonus cash
+
           await storage.createTransaction({
             userId: user.id,
             amount: bonusCash.toFixed(2),
@@ -277,13 +270,10 @@ app.post("/api/auth/register", async (req, res) => {
           });
         }
 
-        // Credit ringtone points if bonus points are set
         if (bonusPoints > 0) {
           await storage.updateUserRingtonePoints(user.id, bonusPoints);
-          console.log(`Credited ${bonusPoints} points to user ${user.id}`);
           bonusPointsCredited = bonusPoints;
-          
-          // Record transaction for signup bonus points
+
           await storage.createTransaction({
             userId: user.id,
             amount: "0.00",
@@ -295,32 +285,65 @@ app.post("/api/auth/register", async (req, res) => {
         }
       }
     } catch (bonusError) {
-      // Log error but don't fail registration if bonus credit fails
-      console.error('Failed to credit signup bonus:', bonusError);
+      console.error("Signup bonus error:", bonusError);
     }
 
-    // Send welcome email (non-blocking)
-    sendWelcomeEmail(email, {
-      userName: `${firstName} ${lastName}`.trim() || 'there',
-      email: email
-    }).catch(err => {
-      console.error('Failed to send welcome email:', err);
-    });
+    // ⭐⭐ REFERRAL SYSTEM — REWARDED ON SIGNUP ⭐⭐
+    try {
+      if (referralCode) {
+        const referrer = await storage.getUserByReferralCode(referralCode);
 
-    res
-      .status(201)
-      .json({ 
-        message: "User registered successfully", 
-        userId: user.id,
-        bonusCash: bonusCashCredited,
-        bonusPoints: bonusPointsCredited,
-        userName: `${firstName} ${lastName}`.trim() || firstName
-      });
+        if (referrer && referrer.id !== user.id) {
+          // Save referredBy
+          await storage.saveUserReferral({
+            userId: user.id,
+            referrerId: referrer.id,
+          });
+
+          console.log(`🎉 Referral: ${referrer.email} referred ${user.email}`);
+
+          // ⭐ GIVE NEW USER 100 POINTS
+          const welcomeReferralPoints = 100;
+          const existingPoints = await storage.getUserRingtonePoints(user.id);
+
+          await storage.updateUserRingtonePoints(
+            user.id,
+            existingPoints + welcomeReferralPoints
+          );
+
+          await storage.createTransaction({
+            userId: user.id,
+            amount: welcomeReferralPoints.toString(),
+            type: "referral_bonus",
+            status: "completed",
+            description: `Welcome referral bonus +${welcomeReferralPoints} points`,
+            paymentMethod: "bonus",
+          });
+        }
+      }
+    } catch (referralError) {
+      console.error("Referral processing error:", referralError);
+    }
+
+    // Send welcome email
+    sendWelcomeEmail(email, {
+      userName: `${firstName} ${lastName}`.trim() || "there",
+      email,
+    }).catch((err) => console.error("Failed to send welcome email:", err));
+
+    res.status(201).json({
+      message: "User registered successfully",
+      userId: user.id,
+      bonusCash: bonusCashCredited,
+      bonusPoints: bonusPointsCredited,
+      userName: `${firstName} ${lastName}`.trim() || firstName,
+    });
   } catch (error) {
     console.error("Registration error:", error);
     res.status(500).json({ message: "Failed to register user" });
   }
 });
+
 
   // Login route
 app.post("/api/auth/login", async (req, res) => {
@@ -865,17 +888,39 @@ app.post("/api/cashflows/webhook", async (req, res) => {
 app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
-    const { competitionId, quantity = 1 } = req.body;
+    const {
+      orderId,
+      competitionId,
+      quantity = 1,
+      useWalletBalance = false,
+      useRingtonePoints = false,
+    } = req.body;
 
+    // -------------------------
+    // 1️⃣ VALIDATE ORDER
+    // -------------------------
+    const order = await storage.getOrder(orderId);
+
+    if (!order || order.userId !== userId) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (order.status !== "pending") {
+      return res.status(400).json({ message: "Order already processed" });
+    }
+
+    // Load the competition
     const competition = await storage.getCompetition(competitionId);
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
 
-    const totalAmount = parseFloat(competition.ticketPrice) * quantity;
     const compType = competition.type;
+    const totalAmount = parseFloat(order.totalAmount);
 
-    // ✅ Skip sold-out checks for SPIN and SCRATCH
+    // -------------------------
+    // 2️⃣ SOLD-OUT LOGIC (INSTANT ONLY)
+    // -------------------------
     if (compType === "instant") {
       const soldTickets = Number(competition.soldTickets || 0);
       const maxTickets = Number(competition.maxTickets || 0);
@@ -885,103 +930,207 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
       }
 
       const remainingTickets = maxTickets - soldTickets;
-      if (maxTickets > 0 && quantity > remainingTickets) {
+      if (quantity > remainingTickets) {
         return res.status(400).json({
-          message: `Only ${remainingTickets} ticket${
-            remainingTickets > 1 ? "s" : ""
-          } remaining`,
+          message: `Only ${remainingTickets} tickets remaining`,
         });
       }
-    } else {
-      // 🌀 For spin or scratch, make sure soldTickets/maxTickets don’t cause errors
-      competition.soldTickets = 0;
-      competition.maxTickets = null;
     }
 
-    // --- continue purchase logic below ---
+    // -------------------------
+    // 3️⃣ USER BALANCE + POINTS
+    // -------------------------
     const user = await storage.getUser(userId);
-    const userBalance = parseFloat(user?.balance || "0");
+    const walletBalance = parseFloat(user?.balance || "0");
+    const ringtonePoints = user?.ringtonePoints || 0;
+    const pointsValue = ringtonePoints * 0.01;
 
-    const order = await storage.createOrder({
-      userId,
-      competitionId,
-      quantity,
-      totalAmount: totalAmount.toString(),
-      paymentMethod: userBalance >= totalAmount ? "wallet" : "cashflows",
-      status: "pending",
-    });
+    let remainingAmount = totalAmount;
+    let walletUsed = 0;
+    let pointsUsed = 0;
 
-    if (userBalance >= totalAmount) {
-      const newBalance = (userBalance - totalAmount).toString();
+    const paymentBreakdown = [];
 
-      await storage.updateUserBalance(userId, newBalance);
-      await storage.createTransaction({
-        userId,
-        type: "purchase",
-        amount: `-${totalAmount}`,
-        description: `Ticket purchase for ${competition.title}`,
-        orderId: order.id,
-      });
+    // -------------------------
+    // 4️⃣ APPLY WALLET
+    // -------------------------
+    if (useWalletBalance) {
+      walletUsed = Math.min(walletBalance, remainingAmount);
+      if (walletUsed > 0) {
+        const newBalance = (walletBalance - walletUsed).toFixed(2);
+        await storage.updateUserBalance(userId, newBalance);
 
-      const tickets = [];
-      for (let i = 0; i < quantity; i++) {
-        const ticketNumber = nanoid(8).toUpperCase();
-        const ticket = await storage.createTicket({
+        await storage.createTransaction({
           userId,
-          competitionId,
-          orderId: order.id,
-          ticketNumber,
-          isWinner: false,
+          type: "purchase",
+          amount: `-${walletUsed}`,
+          description: `Wallet payment for ${competition.title}`,
+          orderId,
         });
-        tickets.push(ticket);
+
+        remainingAmount -= walletUsed;
+        paymentBreakdown.push({
+          method: "wallet",
+          amount: walletUsed,
+        });
+      }
+    }
+
+    // -------------------------
+    // 5️⃣ APPLY POINTS
+    // -------------------------
+    if (useRingtonePoints && remainingAmount > 0) {
+      const pointsToMoney = Math.min(pointsValue, remainingAmount);
+      pointsUsed = Math.floor(pointsToMoney * 100); // convert to points (1p)
+
+      if (pointsUsed > 0) {
+        const newPoints = ringtonePoints - pointsUsed;
+
+        await storage.updateUserRingtonePoints(userId, newPoints);
+
+        await storage.createTransaction({
+          userId,
+          type: "purchase",
+          amount: `-${pointsUsed}`,
+          description: `Ringtone Points payment for ${competition.title}`,
+          orderId,
+        });
+
+        remainingAmount -= pointsToMoney;
+        paymentBreakdown.push({
+          method: "points",
+          amount: pointsToMoney,
+          pointsUsed,
+        });
+      }
+    }
+
+    // -------------------------
+    // 6️⃣ CASHFLOWS NEEDED?
+    // -------------------------
+    if (remainingAmount > 0) {
+      const session = await cashflows.createCompetitionPaymentSession(
+        remainingAmount,
+        {
+          orderId,
+          competitionId,
+          userId,
+          quantity: quantity.toString(),
+          paymentBreakdown: JSON.stringify(paymentBreakdown),
+        }
+      );
+
+      // In case Cashflows fails: refund wallet + points
+      if (!session || !session.hostedPageUrl) {
+        if (walletUsed > 0)
+          await storage.updateUserBalance(
+            userId,
+            (walletBalance + walletUsed).toFixed(2)
+          );
+        if (pointsUsed > 0)
+          await storage.updateUserRingtonePoints(userId, ringtonePoints + pointsUsed);
+
+        return res.status(500).json({ message: "Failed to create payment session" });
       }
 
-      if (compType === "instant") {
-        await storage.updateCompetitionSoldTickets(competitionId, quantity);
-      }
-
-      await storage.updateOrderStatus(order.id, "completed");
-
-      // Send order confirmation email (non-blocking)
-      if (user?.email) {
-        // Use already-created tickets array to avoid extra database query
-        const ticketNumbers = tickets.map(t => t.ticketNumber);
-        
-        sendOrderConfirmationEmail(user.email, {
-          orderId: order.id,
-          userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
-          orderType: 'competition',
-          itemName: competition.title,
-          quantity,
-          totalAmount: totalAmount.toFixed(2),
-          orderDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          paymentMethod: 'Wallet Balance',
-          skillQuestion: competition.skillQuestion || undefined,
-          skillAnswer: order.skillAnswer || undefined,
-          ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
-        }).catch(err => console.error('Failed to send order confirmation email:', err));
-      }
+      // Save partial payment info
+      await storage.updateOrderPaymentInfo(orderId, {
+        paymentMethod: "mixed",
+        walletAmount: walletUsed.toString(),
+        pointsAmount: pointsUsed.toString(),
+        cashflowsAmount: remainingAmount.toString(),
+        paymentBreakdown: JSON.stringify(paymentBreakdown),
+      });
 
       return res.json({
         success: true,
-        message: "Tickets purchased via wallet",
-        orderId: order.id,
-        tickets,
-        paymentMethod: "wallet",
+        redirectUrl: session.hostedPageUrl,
+        sessionId: session.paymentJobReference,
       });
     }
 
+    // -------------------------
+    // 7️⃣ FULLY PAID — COMPLETE ORDER
+    // -------------------------
+    await storage.updateOrderStatus(orderId, "completed");
+
+    // Create tickets
+    const tickets = [];
+    for (let i = 0; i < quantity; i++) {
+      const ticketNumber = nanoid(8).toUpperCase();
+      const ticket = await storage.createTicket({
+        userId,
+        competitionId,
+        orderId,
+        ticketNumber,
+        isWinner: false,
+      });
+      tickets.push(ticket);
+    }
+
+    if (compType === "instant") {
+      await storage.updateCompetitionSoldTickets(competitionId, quantity);
+    }
+
+    // -------------------------
+    // 8️⃣ APPLY REFERRAL BONUS (FIRST PURCHASE ONLY)
+    // -------------------------
+    try {
+      const buyer = user;
+      const referrerId = buyer?.referredBy;
+
+      if (referrerId) {
+        const userOrders = await storage.getUserOrders(userId);
+        const completedOrders = userOrders.filter(
+          (o) => o.orders.status === "completed"
+        );
+
+        if (completedOrders.length === 1) {
+          const bonus = 2;
+          const referrer = await storage.getUser(referrerId);
+
+          if (referrer) {
+            const newBalance =
+              parseFloat(referrer.balance || "0") + bonus;
+
+            await storage.updateUserBalance(referrer.id, newBalance.toFixed(2));
+
+            await storage.createTransaction({
+              userId: referrer.id,
+              type: "referral",
+              amount: bonus.toFixed(2),
+              description: `Referral reward: ${buyer.email} made their first competition entry`,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Referral error:", err);
+    }
+
+    // -------------------------
+    // 9️⃣ RESPONSE
+    // -------------------------
     return res.json({
       success: true,
-      message: "Proceed to Cashflows payment",
-      orderId: order.id,
-      paymentMethod: "cashflows",
+      message: "Competition entry purchased successfully",
+      orderId,
+      competitionId,
+      tickets,
+      paymentMethod:
+        walletUsed > 0 && pointsUsed > 0
+          ? "wallet_points"
+          : walletUsed > 0
+          ? "wallet"
+          : "points",
     });
   } catch (error) {
     console.error("Error purchasing ticket:", error);
     res.status(500).json({ message: "Failed to complete purchase" });
   }
 });
+
+
 
 
 // NEW: Create spin wheel order (shows billing page)
@@ -3154,23 +3303,31 @@ app.get("/api/user/referrals", isAuthenticated, async (req: any, res) => {
 app.get("/api/user/referral-stats", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
+
+    // Get list of referred users
     const referrals = await storage.getUserReferrals(userId);
+
+    // Get ONLY CASH referral earnings (exclude points)
     const referralTransactions = await db
       .select()
       .from(transactions)
-      .where(and(
-        eq(transactions.userId, userId),
-        eq(transactions.type, "referral")
-      ));
-    
-    const totalEarned = referralTransactions.reduce((sum, tx) => 
-      sum + parseFloat(tx.amount || "0"), 0
-    );
-    
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.type, "referral") // true cash referral ONLY
+        )
+      );
+
+    // Sum only positive money amounts (ignore "0", ignore points)
+    const totalEarned = referralTransactions.reduce((sum, tx) => {
+      const amount = parseFloat(tx.amount || "0");
+      return amount > 0 ? sum + amount : sum;
+    }, 0);
+
     res.json({
       totalReferrals: referrals.length,
       totalEarned: totalEarned.toFixed(2),
-      referrals: referrals.map(r => ({
+      referrals: referrals.map((r) => ({
         id: r.id,
         firstName: r.firstName,
         lastName: r.lastName,
@@ -3183,6 +3340,7 @@ app.get("/api/user/referral-stats", isAuthenticated, async (req: any, res) => {
     res.status(500).json({ message: "Failed to fetch referral stats" });
   }
 });
+
 
 // Newsletter subscription endpoint
 app.post("/api/user/newsletter/subscribe", isAuthenticated, async (req: any, res) => {
@@ -4298,36 +4456,79 @@ app.put("/api/admin/game-scratch-config", isAuthenticated, isAdmin, async (req: 
   }
 });
 
-//  Delete user
-app.delete("/api/admin/users/:id", isAuthenticated , isAdmin , async (req: any , res) =>{
+
+
+app.delete("/api/admin/users/:id", isAuthenticated, isAdmin, async (req: any, res) => {
   try {
-      const { id } = req.params;
-      const userId = req.user.id;
-      if(id === userId){
-        return res.status(400).json({ message : "admin cannot delete own account"})
-      }
+    const { id } = req.params;
+    const adminId = req.user.id;
 
-      const user = await storage.getUser(id);
-      if(!user){
-        return res.status(404).json({ message : "user not found"})
-      }
+    // Prevent self-deleting admin
+    if (id === adminId) {
+      return res.status(400).json({ message: "Admin cannot delete their own account" });
+    }
 
-      const userOrders = await db.select().from(orders).where(eq(orders.userId , id)).limit(1);
-      const userTickets =  await db.select().from(tickets).where(eq(tickets.userId , id)).limit(1);
-      
-      if(userOrders.length > 0 || userTickets.length > 0){
-        return res.status(400).json({ message : "cannot delete user with existing orders or tickets"})
-      }
+    // Check if user exists
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, id),
+    });
 
-      await db.delete(transactions).where(eq(transactions.userId, id));
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
-      await db.delete(users).where(eq(users.id , id))
-      res.status(200).json({ message : "user deleted successfully"})
+    // 1️⃣ Get ALL order IDs for this user
+    const ordersList = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(eq(orders.userId, id));
+
+    const orderIds = ordersList.map(o => o.id);
+
+    // 2️⃣ Delete transactions linked to these orders
+    if (orderIds.length > 0) {
+      await db
+        .delete(transactions)
+        .where(inArray(transactions.orderId, orderIds));
+    }
+
+    // 3️⃣ Delete user's own transactions
+    await db
+      .delete(transactions)
+      .where(eq(transactions.userId, id));
+
+    // 4️⃣ Delete tickets belonging to the user
+    await db
+      .delete(tickets)
+      .where(eq(tickets.userId, id));
+
+    // 5️⃣ Delete orders
+    if (orderIds.length > 0) {
+      await db
+        .delete(orders)
+        .where(inArray(orders.id, orderIds));
+    }
+
+    // 6️⃣ Remove this user from being someone’s referrer
+    await db
+      .update(users)
+      .set({ referredBy: null })
+      .where(eq(users.referredBy, id));
+
+    // 7️⃣ Finally delete user
+    await db
+      .delete(users)
+      .where(eq(users.id, id));
+
+    res.json({ message: "User deleted successfully" });
+
   } catch (error) {
-      console.error("Error deleting user:" , error);
-      res.status(500).json({ message : "failed to delete user"})
+    console.error("Error deleting user:", error);
+    res.status(500).json({ message: "Failed to delete user" });
   }
 });
+
+
 
 // Deactivate user
 app.delete("/api/admin/users/deactivate/:id" ,isAuthenticated, isAdmin, async (req:any , res)=>{
