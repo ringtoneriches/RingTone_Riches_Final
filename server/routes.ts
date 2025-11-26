@@ -35,6 +35,9 @@ import {
   withdrawalRequests,
   spinWins,
   spinUsage,
+  campaignEmails,
+  promotionalCampaigns,
+  platformSettings,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -4527,6 +4530,62 @@ app.delete("/api/admin/users/:id", isAuthenticated, isAdmin, async (req: any, re
     res.status(500).json({ message: "Failed to delete user" });
   }
 });
+
+app.delete(
+  "/api/admin/full-reset",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      
+      // GAME DATA
+      await db.delete(spinUsage);
+      await db.delete(spinWins);
+      await db.delete(scratchCardUsage);
+      await db.delete(scratchCardWins);
+
+      // CAMPAIGN EMAILS & CAMPAIGNS
+      await db.delete(campaignEmails);
+      await db.delete(promotionalCampaigns);
+
+      // ENTRY DATA
+      await db.delete(tickets);
+
+      // ORDER AND WALLET DATA
+      await db.delete(transactions);
+      await db.delete(orders);
+
+      // WITHDRAWALS
+      await db.delete(withdrawalRequests);
+
+      // WINNERS
+      await db.delete(winners);
+
+      // SCRATCH CARD CONFIG LIST
+      await db.delete(scratchCardImages);
+
+
+      // RESET PLATFORM SETTINGS
+      await db.update(platformSettings).set({
+        signupBonusEnabled: false,
+        signupBonusCash: "0.00",
+        signupBonusPoints: 0,
+        commissionRate: "0.00",
+        minimumTopUp: "10.00"
+      });
+
+      res.json({
+        message: "Platform successfully reset. All data wiped except admin accounts."
+      });
+
+    } catch (error) {
+      console.error("FULL RESET ERROR:", error);
+      res.status(500).json({
+        message: "Failed to reset platform"
+      });
+    }
+  }
+);
 
 
 

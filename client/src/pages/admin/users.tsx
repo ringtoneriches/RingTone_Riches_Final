@@ -57,6 +57,7 @@ export default function AdminUsers() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [passwordResetConfirm, setPasswordResetConfirm] = useState(false);
+  const [resetAll , setResetAll] = useState(null);
   const [newPassword, setNewPassword] = useState("");
   const [editForm, setEditForm] = useState({
     email: "",
@@ -193,6 +194,34 @@ export default function AdminUsers() {
     },
   });
 
+   const resetAllMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest(`/api/admin/full-reset`, "DELETE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: "All data reset successfully",
+        description: "The data has been successfully deleted.",
+      });
+      console.log("all data removed")
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete data",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleResetAll = () => {
+
+   resetAllMutation.mutate()
+  }
+
   const handleDeleteUser = (user: User) => {
     // Prevent deleting yourself
     if (user.id === currentUser?.id) {
@@ -291,6 +320,9 @@ export default function AdminUsers() {
         </div>
 
         {/* Date Filters */}
+        <div className="flex  justify-between">
+
+        
         <div className="flex flex-wrap gap-2 items-center">
           <Calendar className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm font-medium text-foreground mr-2">Date Range:</span>
@@ -335,7 +367,14 @@ export default function AdminUsers() {
             Custom Range
           </Button>
         </div>
-
+        <div>
+          <button 
+          onClick={handleResetAll}
+          className="bg-yellow-400 text-black px-3 py-1 rounded-sm">
+            Reset All
+            </button>
+        </div>
+</div>
         {/* Custom Date Range Inputs */}
         {dateFilter === "custom" && (
           <div className="flex gap-4 items-center">
