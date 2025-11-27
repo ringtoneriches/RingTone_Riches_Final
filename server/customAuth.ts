@@ -19,10 +19,10 @@ export function getSession() {
     resave: false,
     saveUninitialized: false,
     cookie: {
-      // httpOnly: true,
-      secure: false,
+      httpOnly: true,
+      secure: true,
       maxAge: sessionTtl,
-        sameSite: "lax",
+      sameSite: "none",
     },
   });
 }

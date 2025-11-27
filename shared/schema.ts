@@ -227,6 +227,7 @@ export const platformSettings = pgTable("platform_settings", {
   signupBonusPoints: integer("signup_bonus_points").default(0),
   commissionRate: decimal("commission_rate", { precision: 5, scale: 2 }).default("0.00"),
   minimumTopUp: decimal("minimum_top_up", { precision: 10, scale: 2 }).default("10.00"),
+  maintenanceMode: boolean("maintenance_mode").default(false),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

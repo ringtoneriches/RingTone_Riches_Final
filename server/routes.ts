@@ -5181,6 +5181,41 @@ app.get("/api/admin/marketing/stats", isAuthenticated, isAdmin, async (req: any,
   }
 });
 
+app.get("/api/maintenance", async (req, res) => {
+  try {
+    const [settings] = await db.select().from(platformSettings).limit(1);
+
+    res.json({
+      maintenanceMode: settings?.maintenanceMode || false
+    });
+
+  } catch (err) {
+    console.error("Error fetching maintenance:", err);
+    res.json({ maintenanceMode: false });
+  }
+});
+
+
+app.post("/api/admin/maintenance/on", isAuthenticated, isAdmin, async (req, res) => {
+  const [updated] = await db
+    .update(platformSettings)
+    .set({ maintenanceMode: true, updatedAt: new Date() })
+    .returning();
+
+  res.json({ message: "Maintenance mode enabled", settings: updated });
+});
+
+app.post("/api/admin/maintenance/off", isAuthenticated, isAdmin, async (req, res) => {
+  const [updated] = await db
+    .update(platformSettings)
+    .set({ maintenanceMode: false, updatedAt: new Date() })
+    .returning();
+
+  res.json({ message: "Maintenance mode disabled", settings: updated });
+});
+
+
+
 const httpServer = createServer(app);
 return httpServer;
 }

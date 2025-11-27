@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { User } from "@shared/schema";
@@ -50,6 +50,41 @@ export default function AdminLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { toast } = useToast();
 
+  const { data: maintenanceData, refetch: refetchMaintenance } = useQuery({
+    queryKey: ["/api/maintenance"],
+    queryFn: () => fetch("/api/maintenance").then((res) => res.json()),
+  });
+
+  const enableMaintenance = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/admin/maintenance/on", "POST");
+      const data = await res.json();
+      return data;
+    },
+    onSuccess: async () => {
+      toast({
+        title: "Maintenance Enabled",
+        description: "The site is now in maintenance mode.",
+      });
+      await refetchMaintenance();
+    },
+  });
+
+  const disableMaintenance = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/admin/maintenance/off", "POST");
+      const data = await res.json();   // <-- only once
+
+    return data;
+    },
+    onSuccess: async () => {
+      toast({
+        title: "Maintenance Disabled",
+        description: "The site is live again.",
+      });
+      await refetchMaintenance();
+    },
+  });
   const logoutMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("/api/auth/logout", "POST");
@@ -164,12 +199,41 @@ export default function AdminLayout({
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div className="flex items-center gap-4">
+
+            <div className="flex items-center justify-between flex-1 gap-4">
               <Link href="/">
                 <Button variant="outline" size="sm">
                   View Site
                 </Button>
               </Link>
+
+              {/* 🔥 Compact Maintenance Toggle */}
+              <div className="flex items-center gap-3 bg-muted px-4 py-2 rounded-xl border border-border shadow-sm">
+                {maintenanceData?.maintenanceMode ? (
+                  <span className="text-red-500 font-bold text-sm">
+                    Maintenance
+                  </span>
+                ) : (
+                  <span className="text-green-500 font-bold text-sm">Live</span>
+                )}
+
+                {maintenanceData?.maintenanceMode ? (
+                  <button
+                    onClick={() => disableMaintenance.mutate()}
+                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
+                  >
+                    Disable
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => enableMaintenance.mutate()}
+                    disabled={enableMaintenance.isPending}
+                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all"
+                  >
+                    {enableMaintenance.isPending ? "Enabling..." : "Enable"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </header>

@@ -1,6 +1,6 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
@@ -49,7 +49,7 @@ import AdminEntries from "./pages/admin/entries";
 import AdminPastWinners from "./pages/admin/past-winners";
 import AdminMarketing from "./pages/admin/marketing";
 import ScrollToTop from "./lib/ScrollToTop ";
-
+import MaintenancePage from "./pages/MaintenancePage";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -69,17 +69,20 @@ function Router() {
       <Route path="/play-responsible" component={PlayResponsibly} />
       <Route path="/privacy-policy" component={PrivacyPolicy} />
       <Route path="/be-aware" component={BeAware} />
-      
+
       {/* Main routes - always registered */}
       <Route path="/" component={HomePage} />
       <Route path="/competition/:id" component={Competition} />
       <Route path="/play/:id" component={PlayGame} />
       <Route path="/winners" component={PastWinners} />
-      
+
       {/* Game routes - always registered */}
-      <Route path="/scratch/:competitionId/:orderId" component={ScratchGamePage} />
+      <Route
+        path="/scratch/:competitionId/:orderId"
+        component={ScratchGamePage}
+      />
       <Route path="/spin/:competitionId/:orderId" component={SpinGamePage} />
-      
+
       {/* Authenticated routes - always registered, auth checked in component */}
       <Route path="/instant" component={instant} />
       <Route path="/wallet" component={Wallet} />
@@ -95,7 +98,7 @@ function Router() {
       <Route path="/scratch" component={scratchcard} />
       <Route path="/spin-billing/:orderId" component={SpinBilling} />
       <Route path="/scratch-billing/:orderId" component={ScratchBilling} />
-      
+
       {/* Admin routes - always registered, auth checked in component */}
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin" component={AdminDashboard} />
@@ -109,24 +112,44 @@ function Router() {
       <Route path="/admin/past-winners" component={AdminPastWinners} />
       <Route path="/admin/marketing" component={AdminMarketing} />
       <Route path="/admin/settings" component={AdminSettings} />
-      
+
       <Route component={NotFound} />
     </Switch>
   );
 }
 
 function App() {
-  // Enable real-time updates via WebSocket (temporarily disabled)
-  // useWebSocket();
-
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-           <ScrollToTop />
-        <Router />
-      </TooltipProvider>
+      <AppWithMaintenance />
     </QueryClientProvider>
+  );
+}
+
+function AppWithMaintenance() {
+  const [location] = useLocation();
+
+  // Fetch maintenance status
+  const { data: maintenanceData, isLoading } = useQuery({
+    queryKey: ["/api/maintenance"],
+    queryFn: () => fetch("/api/maintenance").then((res) => res.json()),
+     refetchInterval: 10000,
+  });
+
+  const isAdminRoute = location.startsWith("/admin");
+
+  if (isLoading) return null;
+
+  if (maintenanceData?.maintenanceMode && !isAdminRoute) {
+    return <MaintenancePage />;
+  }
+
+  return (
+    <TooltipProvider>
+      <Toaster />
+      <ScrollToTop />
+      <Router />
+    </TooltipProvider>
   );
 }
 
