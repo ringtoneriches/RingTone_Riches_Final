@@ -128,19 +128,20 @@ function App() {
 
 function AppWithMaintenance() {
   const [location] = useLocation();
+  const { user } = useAuth(); // don't block on authLoading
 
-  // Fetch maintenance status
-  const { data: maintenanceData, isLoading } = useQuery({
+  const { data: maintenanceData, isLoading: maintenanceLoading } = useQuery({
     queryKey: ["/api/maintenance"],
     queryFn: () => fetch("/api/maintenance").then((res) => res.json()),
-     refetchInterval: 10000,
   });
 
+  if (maintenanceLoading) return null;
+
+  const isAdminUser = user?.isAdmin === true;
   const isAdminRoute = location.startsWith("/admin");
 
-  if (isLoading) return null;
-
-  if (maintenanceData?.maintenanceMode && !isAdminRoute) {
+  // If maintenance ON → only admin can bypass
+  if (maintenanceData?.maintenanceMode && !isAdminUser && !isAdminRoute) {
     return <MaintenancePage />;
   }
 
@@ -152,5 +153,6 @@ function AppWithMaintenance() {
     </TooltipProvider>
   );
 }
+
 
 export default App;
