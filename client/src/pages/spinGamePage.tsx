@@ -11,6 +11,7 @@ import SpinWheel from "@/components/games/spinwheeltest";
 import { useLocation } from "wouter";
 import CountdownTimer from "@/pages/countdownTimer";
 import congrats from "../../../attached_assets/sounds/congrats.mp3"
+import SpinWheel2 from "@/components/games/spinwheeltest2";
 
 
 export default function SpinGamePage() {
@@ -45,6 +46,8 @@ export default function SpinGamePage() {
    const { data: competition } = useQuery({
       queryKey: ["/api/competitions", competitionId],
     });
+
+      const wheelType = competition?.wheelType || "wheel1";
 
       useEffect(() => {
       return () => {
@@ -122,6 +125,46 @@ export default function SpinGamePage() {
     }
   };
 
+   const getWheelComponent = () => {
+    if (wheelType === "wheel2") {
+      return (
+        <SpinWheel2 // You need to create this component
+          onSpinComplete={handleSpinComplete}
+          ticketCount={remainingSpins}  
+          orderId={orderId}
+          competitionId={competitionId}
+          isSpinning={isSpinning}
+          setIsSpinning={setIsSpinning}    
+          congratsAudioRef={congratsAudioRef} 
+          onAllSpinsComplete={() => {
+            toast({
+              title: "All Spins Used",
+              description: "You've used all spins from this purchase."
+            });
+          }}
+        />
+      );
+    } else {
+      return (
+        <SpinWheel // Original wheel
+          onSpinComplete={handleSpinComplete}
+          ticketCount={remainingSpins}  
+          orderId={orderId}
+          competitionId={competitionId}
+          isSpinning={isSpinning}
+          setIsSpinning={setIsSpinning}    
+          congratsAudioRef={congratsAudioRef} 
+          onAllSpinsComplete={() => {
+            toast({
+              title: "All Spins Used",
+              description: "You've used all spins from this purchase."
+            });
+          }}
+        />
+      );
+    }
+  };
+
 
   const handleCloseResultModal = () => {
     setIsResultModalOpen(false);
@@ -167,21 +210,7 @@ export default function SpinGamePage() {
         )} */}
       </div>
       <main className="container mx-auto   text-center">
-        <SpinWheel 
-          onSpinComplete={handleSpinComplete}
-          ticketCount={remainingSpins}  
-          orderId={orderId}
-          competitionId={competitionId}
-          isSpinning={isSpinning}
-          setIsSpinning={setIsSpinning}    
-          congratsAudioRef={congratsAudioRef} 
-          onAllSpinsComplete={() => {
-          toast({
-            title: "All Spins Used",
-            description: "You've used all spins from this purchase."
-          });
-        }}
-        />
+          {getWheelComponent()}
 
       </main>
 

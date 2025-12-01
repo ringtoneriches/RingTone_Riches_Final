@@ -80,15 +80,17 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType ,congrat
         text: `£${prize.value}`,
         subtext: 'Cash Prize!'
       };
-    } else if (prize.type === 'points') {
-      const cleanValue = prize.value
-    // remove trailing "s" from "Ringtones"
-    .replace(/Ringtones/gi, "Ringtone")
-      return {
-        icon: '⭐',
-        text: `${cleanValue} Points`,
-      };
-    } else if (prize.type === 'car') {
+    }else if (prize.type === 'points') {
+  const cleanValue = prize.value.replace(/Ringtones/gi, "Ringtone");
+
+  // If scratch → always show Ringtone tag too
+  const extraRingtoneText = gameType === "scratch" ? " Ringtone" : "";
+
+  return {
+    icon: '⭐',
+    text: `${cleanValue} ${extraRingtoneText} Points`,
+  };
+}else if (prize.type === 'car') {
       return {
         icon: '🏆',
         text: prize.brand || prize.value,

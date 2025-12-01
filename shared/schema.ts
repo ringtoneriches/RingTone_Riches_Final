@@ -69,6 +69,7 @@ export const competitions = pgTable("competitions", {
   ringtonePoints: integer("ringtone_points").default(0),
   displayOrder: integer("display_order").default(999), // Lower numbers appear first
   endDate: timestamp("end_date"), // Optional countdown timer end date
+  wheelType: varchar("wheel_type", { enum: ["wheel1", "wheel2"] }).default("wheel1"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -190,6 +191,18 @@ export const gameSpinConfig = pgTable("game_spin_config", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+
+export const spinWheel2Configs = pgTable("spin_wheel_2_configs", {
+  id: varchar("id").primaryKey().default("active"),
+  segments: jsonb("segments").notNull(),             // Array of segment configurations
+  maxSpinsPerUser: integer("max_spins_per_user"),    // Max spins per user
+  mysteryPrize: jsonb("mystery_prize"),              // {rewardType, rewardValue, probability, maxWins, segmentId}
+  isVisible: boolean("is_visible").default(true),    // Controls frontend visibility
+  isActive: boolean("is_active").default(true),      // Whether wheel is active
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Game scratch card configuration - single active config
 export const gameScratchConfig = pgTable("game_scratch_config", {
   id: varchar("id").primaryKey().default("active"),
@@ -266,6 +279,7 @@ export const insertTicketSchema = createInsertSchema(tickets);
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTransactionSchema = createInsertSchema(transactions).omit({ id: true, createdAt: true });
 export const insertGameSpinConfigSchema = createInsertSchema(gameSpinConfig);
+export const insertSpinWheel2ConfigSchema = createInsertSchema(spinWheel2Configs);
 export const insertGameScratchConfigSchema = createInsertSchema(gameScratchConfig);
 export const insertScratchCardImageSchema = createInsertSchema(scratchCardImages).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPlatformSettingsSchema = createInsertSchema(platformSettings);
@@ -296,6 +310,8 @@ export type InsertScratchCardWin = z.infer<typeof insertScratchCardWinSchema>;
 export type ScratchCardUsage = typeof scratchCardUsage.$inferInsert;
 export type GameSpinConfig = typeof gameSpinConfig.$inferSelect;
 export type InsertGameSpinConfig = z.infer<typeof insertGameSpinConfigSchema>;
+export type SpinWheel2Config = typeof spinWheel2Configs.$inferSelect;
+export type InsertSpinWheel2Config = z.infer<typeof insertSpinWheel2ConfigSchema>;
 export type GameScratchConfig = typeof gameScratchConfig.$inferSelect;
 export type InsertGameScratchConfig = z.infer<typeof insertGameScratchConfigSchema>;
 export type ScratchCardImage = typeof scratchCardImages.$inferSelect;

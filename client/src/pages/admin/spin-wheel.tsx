@@ -39,6 +39,7 @@ interface CompetitionFormData {
   ringtonePoints: string;
   endDate?: string;
   prizeData?: SpinPrizeData | ScratchPrizeData | InstantPrizeData;
+  wheelType?: string;
 }
 
 function CompetitionForm({
@@ -229,7 +230,21 @@ function CompetitionForm({
             </div>
           </div>
         )}
-
+        <div>
+  <Label>Wheel Type</Label>
+  <select
+    className="w-full p-2 border border-border rounded-md bg-background text-foreground"
+    value={form.wheelType || "wheel1"}
+    onChange={(e) => setForm({ ...form, wheelType: e.target.value })}
+    data-testid="select-wheel-type"
+  >
+    <option value="wheel1">Car Wheel (Default)</option>
+    <option value="wheel2">Christmas wheel</option>
+  </select>
+  <p className="text-xs text-muted-foreground mt-1">
+    Choose which wheel design to use for this competition
+  </p>
+</div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <div>
             <Label>Ticket Price (£)</Label>
@@ -341,6 +356,7 @@ export default function AdminSpinWheel() {
   const [drawWinnerCompetition, setDrawWinnerCompetition] =
     useState<Competition | null>(null);
   const [wheelSettingsOpen, setWheelSettingsOpen] = useState(false);
+  const [wheel2SettingsOpen, setWheel2SettingsOpen] = useState(false);
 
   const { data: allCompetitions, isLoading } = useQuery<Competition[]>({
     queryKey: ["/api/admin/competitions"],
@@ -355,6 +371,7 @@ export default function AdminSpinWheel() {
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
         maxTickets: parseInt(formData.maxTickets),
         ringtonePoints: parseInt(formData.ringtonePoints),
+        wheelType: formData.wheelType || "wheel1",
       };
       
       // Convert datetime-local to ISO timestamp if provided
@@ -393,6 +410,7 @@ export default function AdminSpinWheel() {
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
         maxTickets: parseInt(data.maxTickets),
         ringtonePoints: parseInt(data.ringtonePoints),
+        wheelType: data.wheelType || "wheel1",
       };
       
       // Convert datetime-local to ISO timestamp if provided
@@ -493,14 +511,23 @@ export default function AdminSpinWheel() {
               <Settings className="w-4 h-4" />
               Wheel Settings
             </Button>
-            {/* <Button 
+            <Button
+            onClick={() => setWheel2SettingsOpen(true)} // ← NEW BUTTON
+            variant="outline"
+            className="gap-2 "
+            data-testid="button-wheel-2-settings"
+          >
+            <Settings className="w-4 h-4" />
+            Wheel 2 Settings
+          </Button>
+            <Button 
               onClick={() => setCreateDialogOpen(true)} 
               size="icon"
               className="bg-yellow-500 hover:bg-yellow-600 text-black"
               data-testid="button-create-spin"
             >
               <Plus className="w-4 h-4" />
-            </Button> */}
+            </Button>
           </div>
         </div>
 
@@ -622,7 +649,7 @@ export default function AdminSpinWheel() {
                   >
                     <Edit className="w-4 h-4" />
                   </Button>
-                  {/* <Button
+                  <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setDeleteConfirm(competition.id)}
@@ -630,7 +657,7 @@ export default function AdminSpinWheel() {
                     data-testid={`button-delete-${competition.id}`}
                   >
                     <Trash2 className="w-4 h-4" />
-                  </Button> */}
+                  </Button>
                 </div>
               </div>
             </div>
@@ -725,6 +752,10 @@ export default function AdminSpinWheel() {
           open={wheelSettingsOpen}
           onOpenChange={setWheelSettingsOpen}
         />
+        <WheelSettingsDialog2
+        open={wheel2SettingsOpen}
+        onOpenChange={setWheel2SettingsOpen}
+      />
       </div>
     </AdminLayout>
   );
@@ -935,6 +966,454 @@ function WheelSettingsDialog({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Configure Spin Wheel</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Wheel Visibility Toggle */}
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">Show Wheel on Frontend</Label>
+              <p className="text-xs text-muted-foreground">
+                Hide the wheel on the frontend while you adjust prizes
+              </p>
+            </div>
+            <Switch
+              checked={isVisible}
+              onCheckedChange={setIsVisible}
+              data-testid="switch-wheel-visible"
+            />
+          </div>
+
+          {/* Max Spins Per User */}
+          <div>
+            <Label>Max Spins Per User (optional)</Label>
+            <Input
+              type="number"
+              value={maxSpinsPerUser}
+              onChange={(e) => setMaxSpinsPerUser(e.target.value)}
+              placeholder="Leave empty for unlimited"
+              data-testid="input-max-spins"
+            />
+          </div>
+
+          {/* Mystery Prize Configuration */}
+          <div className="space-y-3 rounded-lg border p-4 bg-card">
+            <div>
+              <Label className="text-sm font-semibold">Mystery Prize (R Prize - Segment 26)</Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Configure the special mystery prize reward (Ringtone logo icon on black segment)
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Reward Type</Label>
+                <select
+                  value={mysteryPrize.rewardType}
+                  onChange={(e) =>
+                    updateMysteryPrize({ rewardType: e.target.value as any })
+                  }
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                  data-testid="select-mystery-reward-type"
+                >
+                  <option value="cash">Cash (£)</option>
+                  <option value="points">Points</option>
+                  <option value="lose">No Win</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Reward Value</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={mysteryPrize.rewardValue}
+                  onChange={(e) =>
+                    updateMysteryPrize({ rewardValue: parseFloat(e.target.value) || 0 })
+                  }
+                  disabled={mysteryPrize.rewardType === "lose"}
+                  data-testid="input-mystery-reward-value"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Probability (%) - 0 = disabled</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={mysteryPrize.probability}
+                  onChange={(e) =>
+                    updateMysteryPrize({ probability: parseFloat(e.target.value) || 0 })
+                  }
+                  placeholder="e.g. 0.5, 1, 2.5"
+                  data-testid="input-mystery-probability"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Max Wins (0 = disabled)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={mysteryPrize.maxWins ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    updateMysteryPrize({
+                      maxWins: val === "" ? null : parseInt(val, 10),
+                    });
+                  }}
+                  placeholder="Unlimited"
+                  data-testid="input-mystery-max-wins"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-lg font-semibold">Wheel Segments</Label>
+              <div
+                className={`px-3 py-1 rounded-md ${isProbabilityValid ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500"}`}
+              >
+                Total: {totalProbability.toFixed(2)}%{" "}
+                {isProbabilityValid ? "✓" : "(must be 100%)"}
+              </div>
+            </div>
+
+            <div className="grid gap-3 max-h-[50vh] overflow-y-auto pr-2">
+              {segments.map((segment, index) => (
+                <div
+                  key={segment.id}
+                  className="border border-border rounded-lg p-4 space-y-3 bg-card"
+                >
+                  {/* Segment header with position and reorder buttons */}
+                  <div className="flex items-center justify-between mb-2 pb-2 border-b">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm">Position {index + 1}</span>
+                      {segment.iconKey === "R_Prize" && (
+                        <span className="text-xs bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded">
+                          Mystery Prize
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => moveSegmentUp(index)}
+                        disabled={index === 0}
+                        className="h-7 w-7 p-0"
+                        data-testid={`button-move-up-${index}`}
+                      >
+                        ↑
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => moveSegmentDown(index)}
+                        disabled={index === segments.length - 1}
+                        className="h-7 w-7 p-0"
+                        data-testid={`button-move-down-${index}`}
+                      >
+                        ↓
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Label</Label>
+                      <Input
+                        value={segment.label}
+                        onChange={(e) =>
+                          updateSegment(index, { label: e.target.value })
+                        }
+                        data-testid={`input-label-${index}`}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Color (hex)</Label>
+                      <Input
+                        value={segment.color}
+                        onChange={(e) =>
+                          updateSegment(index, { color: e.target.value })
+                        }
+                        data-testid={`input-color-${index}`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-3">
+                    <div>
+                      <Label className="text-xs">Reward Type</Label>
+                      <select
+                        value={segment.rewardType}
+                        onChange={(e) =>
+                          updateSegment(index, {
+                            rewardType: e.target.value as any,
+                          })
+                        }
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                        data-testid={`select-reward-type-${index}`}
+                      >
+                        <option value="cash">Cash (£)</option>
+                        <option value="points">Points</option>
+                        <option value="lose">No Win</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Reward Value</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={segment.rewardValue}
+                        onChange={(e) =>
+                          updateSegment(index, {
+                            rewardValue: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        disabled={segment.rewardType === "lose"}
+                        data-testid={`input-reward-value-${index}`}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Probability (%) - 0 = disabled</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={segment.probability}
+                        onChange={(e) =>
+                          updateSegment(index, {
+                            probability: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        placeholder="e.g. 0.5, 1, 2.5"
+                        data-testid={`input-probability-${index}`}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Max Wins (0 = disabled)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={segment.maxWins ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateSegment(index, {
+                            maxWins: val === "" ? null : parseInt(val, 10),
+                          });
+                        }}
+                        placeholder="Unlimited"
+                        data-testid={`input-max-wins-${index}`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={saveMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={!isProbabilityValid || saveMutation.isPending}
+            data-testid="button-save-wheel-settings"
+          >
+            {saveMutation.isPending ? "Saving..." : "Save Settings"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function WheelSettingsDialog2({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const [segments, setSegments] = useState<WheelSegment[]>([]);
+  const [maxSpinsPerUser, setMaxSpinsPerUser] = useState<string>("");
+  const [isVisible, setIsVisible] = useState<boolean>(true);
+  const [mysteryPrize, setMysteryPrize] = useState<MysteryPrize>({
+    rewardType: "cash",
+    rewardValue: 100,
+    probability: 1,
+    maxWins: 1,
+    segmentId: "26",
+  });
+
+  const { data: config, isLoading } = useQuery<WheelConfig>({
+    queryKey: ["/api/admin/game-spin-2-config"],
+    enabled: open,
+  });
+
+  // Update local state when config loads or dialog opens
+  useEffect(() => {
+    if (config && open) {
+      setSegments(config.segments);
+      setMaxSpinsPerUser(config.maxSpinsPerUser?.toString() || "");
+      setIsVisible(config.isVisible ?? true);
+      setMysteryPrize(config.mysteryPrize || {
+        rewardType: "cash",
+        rewardValue: 100,
+        probability: 1,
+        maxWins: 1,
+        segmentId: "26",
+      });
+    }
+  }, [config, open]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      // Find the R_Prize segment to track its current position after reordering
+      const rPrizeIndex = segments.findIndex(seg => seg.iconKey === "R_Prize");
+      
+      // Defensive guard: ensure R_Prize segment exists
+      if (rPrizeIndex === -1) {
+        throw new Error("R_Prize segment not found. Each wheel must have exactly one R_Prize segment.");
+      }
+      
+      const rPrizeSegmentId = (rPrizeIndex + 1).toString(); // Convert to 1-based ID
+      
+      // Update mystery prize with current R_Prize segment position
+      const updatedMysteryPrize = {
+        ...mysteryPrize,
+        segmentId: rPrizeSegmentId,
+      };
+
+      // Sync mystery prize data with R_Prize segment
+      const updatedSegments = segments.map((seg) => {
+        if (seg.iconKey === "R_Prize") {
+          return {
+            ...seg,
+            rewardType: mysteryPrize.rewardType,
+            rewardValue: mysteryPrize.rewardValue,
+            probability: mysteryPrize.probability,
+            maxWins: mysteryPrize.maxWins,
+          };
+        }
+        return seg;
+      });
+
+      const res = await apiRequest("/api/admin/game-spin-2-config", "PUT", {
+        segments: updatedSegments,
+        maxSpinsPerUser: maxSpinsPerUser ? parseInt(maxSpinsPerUser) : null,
+        mysteryPrize: updatedMysteryPrize,
+        isVisible,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/game-spin-2-config"],
+      });
+      toast({ title: "Wheel settings saved successfully" });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to save wheel settings",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const totalProbability = segments.reduce(
+    (sum, seg) => sum + seg.probability,
+    0,
+  );
+  const isProbabilityValid = Math.abs(totalProbability - 100) < 0.01;
+
+  const updateSegment = (index: number, updates: Partial<WheelSegment>) => {
+    const newSegments = [...segments];
+    newSegments[index] = { ...newSegments[index], ...updates };
+    setSegments(newSegments);
+  };
+
+  // Update mystery prize and sync with R_Prize segment (wherever it is)
+  const updateMysteryPrize = (updates: Partial<MysteryPrize>) => {
+    const updated = { ...mysteryPrize, ...updates };
+    setMysteryPrize(updated);
+
+    // Sync with R_Prize segment (find it by iconKey, not by position)
+    setSegments(prev => prev.map((seg) => {
+      if (seg.iconKey === "R_Prize") {
+        return {
+          ...seg,
+          rewardType: updated.rewardType,
+          rewardValue: updated.rewardValue,
+          probability: updated.probability,
+          maxWins: updated.maxWins,
+        };
+      }
+      return seg;
+    }));
+  };
+
+  // Move segment up in the order
+  const moveSegmentUp = (index: number) => {
+    if (index === 0) return; // Can't move first segment up
+    
+    const newSegments = [...segments];
+    // Swap with previous segment
+    [newSegments[index - 1], newSegments[index]] = [newSegments[index], newSegments[index - 1]];
+    
+    // Update IDs to maintain sequential order
+    newSegments.forEach((seg, idx) => {
+      seg.id = (idx + 1).toString();
+    });
+    
+    setSegments(newSegments);
+  };
+
+  // Move segment down in the order
+  const moveSegmentDown = (index: number) => {
+    if (index === segments.length - 1) return; // Can't move last segment down
+    
+    const newSegments = [...segments];
+    // Swap with next segment
+    [newSegments[index], newSegments[index + 1]] = [newSegments[index + 1], newSegments[index]];
+    
+    // Update IDs to maintain sequential order
+    newSegments.forEach((seg, idx) => {
+      seg.id = (idx + 1).toString();
+    });
+    
+    setSegments(newSegments);
+  };
+
+  if (isLoading) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Configure Christmas Wheel</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">

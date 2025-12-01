@@ -38,6 +38,7 @@ import {
   campaignEmails,
   promotionalCampaigns,
   platformSettings,
+  spinWheel2Configs,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -101,6 +102,63 @@ const totalProb = DEFAULT_SPIN_WHEEL_CONFIG.segments.reduce((sum, s) => sum + s.
 if (totalProb !== 100) {
   throw new Error(`DEFAULT_SPIN_WHEEL_CONFIG probabilities total ${totalProb}, must be 100`);
 }
+
+const DEFAULT_SPIN_WHEEL_2_CONFIG = {
+  id: "active",
+  segments: [
+    // Segment 1-5
+    { id: "1", label: "Nice Try", color: "#000000", iconKey: "NoWin", rewardType: "lose", rewardValue: 0, probability: 3, maxWins: null },
+    { id: "2", label: "Santa", color: "#FE0000", iconKey: "Santa", rewardType: "cash", rewardValue: 5000, probability: 1, maxWins: null }, // Rare big prize
+    { id: "3", label: "Sleigh", color: "#FFFFFF", iconKey: "Sleigh", rewardType: "cash", rewardValue: 1000, probability: 2, maxWins: null },
+    { id: "4", label: "Santa's Sack", color: "#1E54FF", iconKey: "SantasSack", rewardType: "cash", rewardValue: 750, probability: 2, maxWins: null },
+    { id: "5", label: "Nice Try", color: "#000000", iconKey: "NoWin", rewardType: "lose", rewardValue: 0, probability: 8, maxWins: null },
+    
+    // Segment 6-10
+    { id: "6", label: "Rudolph", color: "#00A223", iconKey: "Rudolph", rewardType: "cash", rewardValue: 500, probability: 3, maxWins: null },
+    { id: "7", label: "Elf", color: "#FEED00", iconKey: "Elf", rewardType: "cash", rewardValue: 250, probability: 4, maxWins: null },
+    { id: "8", label: "Gold Star", color: "#FE0000", iconKey: "GoldStar", rewardType: "cash", rewardValue: 150, probability: 4, maxWins: null },
+    { id: "9", label: "Christmas Tree", color: "#FFFFFF", iconKey: "ChristmasTree", rewardType: "cash", rewardValue: 100, probability: 4, maxWins: null },
+    { id: "10", label: "Nice Try", color: "#000000", iconKey: "NoWin", rewardType: "lose", rewardValue: 0, probability: 8, maxWins: null },
+    
+    // Segment 11-15
+    { id: "11", label: "Present", color: "#FEED00", iconKey: "Present", rewardType: "cash", rewardValue: 75, probability: 4, maxWins: null },
+    { id: "12", label: "Snowman", color: "#00A223", iconKey: "Snowman", rewardType: "cash", rewardValue: 50, probability: 4, maxWins: null },
+    { id: "13", label: "Bauble", color: "#1E54FF", iconKey: "Bauble", rewardType: "cash", rewardValue: 25, probability: 4, maxWins: null },
+    { id: "14", label: "Snowflake", color: "#FE0000", iconKey: "Snowflake", rewardType: "points", rewardValue: 1000, probability: 3, maxWins: null },
+    { id: "15", label: "Nice Try", color: "#000000", iconKey: "NoWin", rewardType: "lose", rewardValue: 0, probability: 8, maxWins: null },
+    
+    // Segment 16-20
+    { id: "16", label: "Wreath", color: "#1E54FF", iconKey: "Holly", rewardType: "points", rewardValue: 750, probability: 3, maxWins: null }, // Using Holly icon for Wreath
+    { id: "17", label: "Candy Cane", color: "#FEED00", iconKey: "CandyCane", rewardType: "points", rewardValue: 500, probability: 3, maxWins: null },
+    { id: "18", label: "Stocking", color: "#00A223", iconKey: "Mitten", rewardType: "points", rewardValue: 400, probability: 3, maxWins: null }, // Using Mitten icon for Stocking
+    { id: "19", label: "Mitten", color: "#FFFFFF", iconKey: "Mitten", rewardType: "points", rewardValue: 300, probability: 3, maxWins: null },
+    { id: "20", label: "Nice Try", color: "#000000", iconKey: "NoWin", rewardType: "lose", rewardValue: 0, probability: 8, maxWins: null },
+    
+    // Segment 21-25
+    { id: "21", label: "Candle", color: "#FFFFFF", iconKey: "Candle", rewardType: "points", rewardValue: 250, probability: 3, maxWins: null },
+    { id: "22", label: "Holly", color: "#1E54FF", iconKey: "Holly", rewardType: "points", rewardValue: 200, probability: 3, maxWins: null },
+    { id: "23", label: "Gingerbread Man", color: "#FEED00", iconKey: "GingerbreadMan", rewardType: "points", rewardValue: 150, probability: 3, maxWins: null },
+    { id: "24", label: "Snow Globe", color: "#00A223", iconKey: "SnowGlobe", rewardType: "points", rewardValue: 100, probability: 3, maxWins: null },
+    { id: "25", label: "Bell", color: "#FE0000", iconKey: "Bell", rewardType: "points", rewardValue: 50, probability: 3, maxWins: null },
+    
+    // Segment 26 - Mystery Prize
+    { id: "26", label: "R Prize", color: "#000000", iconKey: "R_Prize", rewardType: "cash", rewardValue: 10000, probability: 1, maxWins: 1 } // Big mystery prize
+  ],
+  maxSpinsPerUser: null,
+  mysteryPrize: {
+    rewardType: "cash",
+    rewardValue: 10000, // £10,000 mega prize
+    probability: 1,
+    maxWins: 1,
+    segmentId: "26"
+  },
+  isActive: true,
+  isVisible: true,
+};
+
+// Verify total probability = 100
+const totalProb2 = DEFAULT_SPIN_WHEEL_2_CONFIG.segments.reduce((sum, s) => sum + s.probability, 0);
+console.log(`Christmas Wheel Total Probability: ${totalProb2}%`); // Should be 100%
 
 // Validation schema for spin wheel segment
 const spinSegmentSchema = z.object({
@@ -1403,12 +1461,12 @@ const SPIN_COOLDOWN_MS = 3000; // 3 seconds minimum between spins
 app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
-    const { orderId } = req.body;
+    const { orderId, competitionId } = req.body; // ← ADD competitionId
 
-    if (!orderId) {
+    if (!orderId || !competitionId) { // ← UPDATE validation
       return res.status(400).json({
         success: false,
-        message: "Order ID is required",
+        message: "Order ID and Competition ID are required",
       });
     }
 
@@ -1456,9 +1514,29 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Fetch active wheel configuration
-    const [config] = await db.select().from(gameSpinConfig).where(eq(gameSpinConfig.id, "active"));
-    const wheelConfig = config || DEFAULT_SPIN_WHEEL_CONFIG;
+    // 🔥 NEW: Get competition to know which wheel type
+    const competition = await storage.getCompetition(competitionId);
+    if (!competition) {
+      return res.status(404).json({ message: "Competition not found" });
+    }
+    
+    // Get wheel type (default to "wheel1" for backward compatibility)
+    const wheelType = competition.wheelType || "wheel1";
+
+    // 🔥 NEW: Fetch correct wheel configuration based on wheel type
+    let wheelConfig;
+    if (wheelType === "wheel2") {
+      // Use Wheel 2 configuration
+      const [config] = await db.select().from(spinWheel2Configs).where(eq(spinWheel2Configs.id, "active"));
+      wheelConfig = config || DEFAULT_SPIN_WHEEL_2_CONFIG; // You need to create this default
+      console.log(`🎡 Using Wheel 2 configuration for competition ${competitionId}`);
+    } else {
+      // Use original Wheel 1 configuration (default)
+      const [config] = await db.select().from(gameSpinConfig).where(eq(gameSpinConfig.id, "active"));
+      wheelConfig = config || DEFAULT_SPIN_WHEEL_CONFIG;
+      console.log(`🎡 Using Wheel 1 configuration for competition ${competitionId}`);
+    }
+    
     const segments = wheelConfig.segments as any[];
 
     // Filter out segments that reached maxWins limit AND have zero probability
@@ -1511,12 +1589,13 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
     // Record spin usage
     await storage.recordSpinUsage(orderId, userId);
 
-    // Record the win
+    // Record the win (with wheel type for tracking)
     await storage.recordSpinWin({
       userId,
       segmentId: selectedSegment.id,
       rewardType: selectedSegment.rewardType,
       rewardValue: String(selectedSegment.rewardValue),
+      // Optionally add wheelType to spinWins table if needed
     });
 
     // Validate and award prize based on type
@@ -1539,7 +1618,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         userId,
         type: "prize",
         amount: amount.toFixed(2),
-        description: `Spin Wheel Prize - £${amount}`,
+        description: `Spin Wheel ${wheelType} Prize - £${amount}`,
       });
 
       await storage.createWinner({
@@ -1569,7 +1648,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         userId,
         type: "prize",
         amount: points.toString(),
-        description: `Spin Wheel Prize - ${points} Ringtones`,
+        description: `Spin Wheel ${wheelType} Prize - ${points} Ringtones`,
       });
 
       await storage.createWinner({
@@ -1605,12 +1684,14 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       },
       spinsRemaining: spinsRemaining - 1,
       orderId: order.id,
+      wheelType: wheelType, // ← Send back which wheel was used
     });
   } catch (error) {
     console.error("Error playing spin wheel:", error);
     res.status(500).json({ message: "Failed to play spin wheel" });
   }
 });
+
 
 // Reveal All Spins - Batch process remaining spins
 app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
@@ -4206,18 +4287,51 @@ app.delete("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: 
   try {
     const { id } = req.params;
 
-    // ✅ 1. Delete all transactions related to orders for this competition
+    // 🔥 NEW: First, get all order IDs for this competition
+    const competitionOrders = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(eq(orders.competitionId, id));
+    
+    const orderIds = competitionOrders.map(order => order.id);
+
+    if (orderIds.length > 0) {
+      // ✅ 1. Delete spin usage (NEW - this was missing!)
+      await db
+        .delete(spinUsage)
+        .where(inArray(spinUsage.orderId, orderIds));
+
+      // ✅ 2. Delete spin wins related to these orders
+      await db
+        .delete(spinWins)
+        .where(inArray(spinWins.userId, db.select({ userId: orders.userId }).from(orders).where(eq(orders.competitionId, id))));
+
+      // ✅ 3. Delete scratch card usage
+      await db
+        .delete(scratchCardUsage)
+        .where(inArray(scratchCardUsage.orderId, orderIds));
+
+      // ✅ 4. Delete scratch card wins
+      await db
+        .delete(scratchCardWins)
+        .where(inArray(scratchCardWins.userId, db.select({ userId: orders.userId }).from(orders).where(eq(orders.competitionId, id))));
+    }
+
+    // ✅ 5. Delete all transactions related to orders for this competition
     await db
       .delete(transactions)
-      .where(inArray(transactions.orderId, db.select({ id: orders.id }).from(orders).where(eq(orders.competitionId, id))));
+      .where(inArray(transactions.orderId, orderIds));
 
-    // ✅ 2. Delete all tickets related to this competition
+    // ✅ 6. Delete all tickets related to this competition
     await db.delete(tickets).where(eq(tickets.competitionId, id));
 
-    // ✅ 3. Delete all orders related to this competition
+    // ✅ 7. Delete all winners related to this competition
+    await db.delete(winners).where(eq(winners.competitionId, id));
+
+    // ✅ 8. Delete all orders related to this competition
     await db.delete(orders).where(eq(orders.competitionId, id));
 
-    // ✅ 4. Finally, delete the competition itself
+    // ✅ 9. Finally, delete the competition itself
     const [deletedCompetition] = await db
       .delete(competitions)
       .where(eq(competitions.id, id))
@@ -4375,6 +4489,88 @@ app.put("/api/admin/game-spin-config", isAuthenticated, isAdmin, async (req: any
       // Insert new config
       const [created] = await db
         .insert(gameSpinConfig)
+        .values({
+          id: "active",
+          segments,
+          maxSpinsPerUser: maxSpinsPerUser ?? null,
+          mysteryPrize: mysteryPrize ?? null,
+          isVisible: isVisible ?? true,
+          isActive: true,
+        })
+        .returning();
+      
+      res.json(created);
+    }
+  } catch (error) {
+    console.error("Error updating spin config:", error);
+    res.status(500).json({ message: "Failed to update spin configuration" });
+  }
+});
+
+// Admin Game Spin 2 routes spinWheel2Configs
+app.get("/api/admin/game-spin-2-config", isAuthenticated, async (req: any, res) => {
+  try {
+    const { spinWheel2Configs } = await import("@shared/schema");
+    const [config] = await db.select().from(spinWheel2Configs).where(eq(spinWheel2Configs.id, "active"));
+    
+    if (!config) {
+      // Return default configuration if none exists in database
+      return res.json(DEFAULT_SPIN_WHEEL_2_CONFIG);
+    }
+    
+    res.json(config);
+  } catch (error) {
+    console.error("Error fetching spin config:", error);
+    res.status(500).json({ message: "Failed to fetch spin configuration" });
+  }
+});
+
+app.put("/api/admin/game-spin-2-config", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { spinWheel2Configs } = await import("@shared/schema");
+    
+    // Validate incoming data
+    const validationResult = spinConfigSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({ 
+        message: "Invalid spin configuration", 
+        errors: validationResult.error.issues 
+      });
+    }
+    
+    const { segments, maxSpinsPerUser, mysteryPrize, isVisible } = validationResult.data;
+    
+    // Validate total probability equals 100 (with 0.01% tolerance for decimal precision)
+    const totalProbability = segments.reduce((sum, seg) => sum + seg.probability, 0);
+    if (Math.abs(totalProbability - 100) >= 0.01) {
+      return res.status(400).json({ 
+        message: "Total probability must equal 100% (within 0.01% tolerance)", 
+        currentTotal: totalProbability.toFixed(2)
+      });
+    }
+    
+    // Check if config exists
+    const [existing] = await db.select().from(spinWheel2Configs).where(eq(spinWheel2Configs.id, "active"));
+    
+    if (existing) {
+      // Update existing config
+      const [updated] = await db
+        .update(spinWheel2Configs)
+        .set({
+          segments,
+          maxSpinsPerUser: maxSpinsPerUser ?? null,
+          mysteryPrize: mysteryPrize ?? existing.mysteryPrize,
+          isVisible: isVisible ?? existing.isVisible,
+          updatedAt: new Date(),
+        })
+        .where(eq(spinWheel2Configs.id, "active"))
+        .returning();
+      
+      res.json(updated);
+    } else {
+      // Insert new config
+      const [created] = await db
+        .insert(spinWheel2Configs)
         .values({
           id: "active",
           segments,
