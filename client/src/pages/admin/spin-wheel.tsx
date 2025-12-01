@@ -520,14 +520,14 @@ export default function AdminSpinWheel() {
             <Settings className="w-4 h-4" />
             Wheel 2 Settings
           </Button>
-            <Button 
+            {/* <Button 
               onClick={() => setCreateDialogOpen(true)} 
               size="icon"
               className="bg-yellow-500 hover:bg-yellow-600 text-black"
               data-testid="button-create-spin"
             >
               <Plus className="w-4 h-4" />
-            </Button>
+            </Button> */}
           </div>
         </div>
 
