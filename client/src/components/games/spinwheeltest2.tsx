@@ -36,7 +36,7 @@ import prize20 from "../../../../attached_assets/Christmas/Snowman.png";
 
 import pointer from "../../../../attached_assets/pointer.png";
 import ring from "../../../../attached_assets/wheel2ring.png";
-
+import centerVideo from "../../../../attached_assets/spinweel2video.mp4"
 import congrats from "../../../../attached_assets/sounds/congrats.mp3"
 import { useLocation } from "wouter";
 
@@ -983,10 +983,10 @@ if (congratsAudioRef.current) {
           playsInline
           disablePictureInPicture
           disableRemotePlayback
-          className="absolute w-32 h-32 md:w-52 md:h-52 rounded-full object-cover pointer-events-none border-2 border-yellow-400 z-10"
+          className="absolute w-32 h-32 md:w-52 md:h-52 rounded-full object-cover pointer-events-none border-8 border-yellow-400 z-10"
         >
           <source
-            src="https://res.cloudinary.com/dziy5sjas/video/upload/v1761140835/Middlevideo_s9eiiy.mp4"
+            src={centerVideo}
             type="video/mp4"
           />
         </video>
@@ -996,7 +996,7 @@ if (congratsAudioRef.current) {
           onClick={spinWheel}
           disabled={isSpinning}
           aria-disabled={allSpinsUsed}
-          className={`absolute bottom-[40.5%] sm:bottom-[44%] md:bottom-[42%]
+          className={`absolute bottom-[45.5%]
                      px-2 py-1 
                      rounded-[4px] 
                      text-black font-bold 
