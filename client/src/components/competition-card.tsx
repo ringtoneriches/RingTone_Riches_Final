@@ -19,11 +19,15 @@ export default function CompetitionCard({ competition, authenticated = false }: 
     : 0;
 
    const shortDescription =
-     competition.type === "spin"
+     competition.type === "spin" && competition.wheelType === "wheel1"
        ? "Rev it. Spin it. Win it! 🏎️ Unlock massive cash & ringtone rewards – WIN UP TO £15,000 INSTANTLY! 💷"
+        : competition.type === "spin" && competition.wheelType === "wheel2"
+    ? " Spin for magical Christmas prizes & cash – Santa’s sack holds £1,000+ CASH + festive ringtone treats! Only £1.50 per spin!"
        : competition.type === "scratch"
        ? "Scratch your way to legendary wins around the world! 🌍💰-WIN UP TO £5,000 INSTANTLY! 💷"
        : "";
+
+   
 
   const isHot = progressPercentage > 60;
   const isAlmostSoldOut = progressPercentage > 85;

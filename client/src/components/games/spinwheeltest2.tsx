@@ -43,30 +43,30 @@ import { useLocation } from "wouter";
 // Icon mapping for admin configuration - uses car PNG images
 const CHRISTMAS_ICON_MAP: Record<string, any> = {
   // Cash Prizes (10)
-  Santa: prize15,              // £5,000
-  Sleigh: prize17,             // £1,000
-  SantasSack: prize16,         // £750
-  Rudolph: prize14,            // £500
-  Elf: prize6,                 // £250
-  GoldStar: prize8,            // £150
-  ChristmasTree: prize5,       // £100
-  Present: prize12,            // £75
-  Snowman: prize20,            // £50
-  Bauble: prize1,              // £25
+  Santa: prize15,              
+  Sleigh: prize17,             
+  SantasSack: prize16,         
+  Rudolph: prize14,            
+  Elf: prize6,                
+  GoldStar: prize8,            
+  ChristmasTree: prize5,      
+  Present: prize12,            
+  Snowman: prize20,            
+  Bauble: prize1,              
   
   // Ringtone Points (10)
-  Snowflake: prize19,          // 1,000 Ringtones
-  Holly: prize9,               // 750 Ringtones (Wreath)
-  CandyCane: prize4,           // 500 Ringtones
-  Mitten: prize10,             // 400 Ringtones (Stocking)
-  Candle: prize3,              // 250 Ringtones
-  GingerbreadMan: prize7,      // 150 Ringtones
-  SnowGlobe: prize18,          // 100 Ringtones
-  Bell: prize2,                // 50 Ringtones
+  Snowflake: prize19,          
+  Holly: prize9,               
+  CandyCane: prize4,          
+  Mitten: prize10,            
+  Candle: prize3,              
+  GingerbreadMan: prize7,      
+  SnowGlobe: prize18,          
+  Bell: prize2,                
   
   // Special
-  R_Prize: prize13,            // Mystery Prize (£10,000)
-  NoWin: prize11,              // Lose segment
+  R_Prize: prize13,            
+  // NoWin: prize11,              
 };
 
 interface SpinWheelProps {
@@ -442,7 +442,7 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
       ctx.save();
 
       const midAngle = startAngle + segmentAngle / 2;
-      let distanceFromCenter = radius * (isMobile ? 0.85 : 0.8);
+      let distanceFromCenter = radius * (isMobile ? 0.85 : 0.85);
 
       const imageX = centerX + distanceFromCenter * Math.cos(midAngle);
       const imageY = centerY + distanceFromCenter * Math.sin(midAngle);
@@ -456,8 +456,8 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
         drawRedX(ctx, isMobile);
       } else if (loadedImages[index]) {
         // SPECIAL CASE: Larger size for R Prize (mystery prize)
-        let imgWidth = isMobile ? 28 : 42;
-        let imgHeight = isMobile ? 28 : 42;
+        let imgWidth = isMobile ? 28 : 55;
+        let imgHeight = isMobile ? 28 : 55;
 
         if (segment.label === "R Prize") {
           imgWidth = isMobile ? 35 : 55;
@@ -996,11 +996,11 @@ if (congratsAudioRef.current) {
           onClick={spinWheel}
           disabled={isSpinning}
           aria-disabled={allSpinsUsed}
-          className={`absolute bottom-[45.5%]
-                     px-2 py-1 
+          className={`absolute bottom-[47%]
+                      px-2 py-1 sm:px-4 sm:py-2
                      rounded-[4px] 
                      text-black font-bold 
-                     text-[8px] md:text-[12px] 
+                     text-[8px] md:text-[16px] 
                      shadow-xl transition-all
                      z-30 cursor-pointer
                      ${isSpinning ? 'bg-yellow-300 opacity-50 cursor-not-allowed' : 
@@ -1008,7 +1008,7 @@ if (congratsAudioRef.current) {
                        'bg-yellow-400 hover:bg-yellow-500'}`}
           data-testid="button-spin"
         >
-          {isSpinning ? "SPINNING..." : "SPIN"}
+          {isSpinning ? "SPINNING" : "SPIN"}
         </button>
       </div>
 

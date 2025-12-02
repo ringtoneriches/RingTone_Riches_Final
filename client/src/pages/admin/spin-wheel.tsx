@@ -520,14 +520,14 @@ export default function AdminSpinWheel() {
             <Settings className="w-4 h-4" />
             Wheel 2 Settings
           </Button>
-            {/* <Button 
+            <Button 
               onClick={() => setCreateDialogOpen(true)} 
               size="icon"
               className="bg-yellow-500 hover:bg-yellow-600 text-black"
               data-testid="button-create-spin"
             >
               <Plus className="w-4 h-4" />
-            </Button> */}
+            </Button>
           </div>
         </div>
 
@@ -1397,6 +1397,29 @@ function WheelSettingsDialog2({
     setSegments(newSegments);
   };
 
+  const deleteSegment = (index: number) => {
+  const seg = segments[index];
+
+  // Prevent deleting the required mystery prize segment
+  if (seg.iconKey === "R_Prize") {
+    toast({ 
+      title: "Cannot delete Mystery Prize segment",
+      variant: "destructive"
+    });
+    return;
+  }
+
+  const newSegments = segments.filter((_, i) => i !== index);
+
+  // Reassign IDs 1..N
+  newSegments.forEach((s, idx) => {
+    s.id = (idx + 1).toString();
+  });
+
+  setSegments(newSegments);
+};
+
+
   if (isLoading) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1542,30 +1565,40 @@ function WheelSettingsDialog2({
                         </span>
                       )}
                     </div>
-                    <div className="flex gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => moveSegmentUp(index)}
-                        disabled={index === 0}
-                        className="h-7 w-7 p-0"
-                        data-testid={`button-move-up-${index}`}
-                      >
-                        ↑
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => moveSegmentDown(index)}
-                        disabled={index === segments.length - 1}
-                        className="h-7 w-7 p-0"
-                        data-testid={`button-move-down-${index}`}
-                      >
-                        ↓
-                      </Button>
-                    </div>
+                   <div className="flex gap-1">
+  <Button
+    type="button"
+    variant="ghost"
+    size="sm"
+    onClick={() => moveSegmentUp(index)}
+    disabled={index === 0}
+    className="h-7 w-7 p-0"
+  >
+    ↑
+  </Button>
+
+  <Button
+    type="button"
+    variant="ghost"
+    size="sm"
+    onClick={() => moveSegmentDown(index)}
+    disabled={index === segments.length - 1}
+    className="h-7 w-7 p-0"
+  >
+    ↓
+  </Button>
+
+  <Button
+    type="button"
+    variant="destructive"
+    size="sm"
+    onClick={() => deleteSegment(index)}
+    className="h-7 px-2 text-xs"
+  >
+    Delete
+  </Button>
+</div>
+
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">

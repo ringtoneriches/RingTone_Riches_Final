@@ -74,15 +74,21 @@ export class CashflowsService {
       throw err;
     }
   }
+  
 
 async createCompetitionPaymentSession(amount: number, metadata: any) {
   const amountString = amount.toFixed(2);
-  
-
+  const displayOrderNumber = `${metadata.orderId.replace(/-/g, '').substring(0, 12)}/${Date.now().toString().slice(-7)}`;
+  const shortOrderId = metadata.orderId
+    .replace(/-/g, '')          
+    .substring(0, 12);  
   const payload = {
     amountToCollect: amountString,
     currency: "GBP",
-   
+     order: {
+      orderNumber: displayOrderNumber,
+    },
+    
     parameters: {
       returnUrlSuccess: `${process.env.CLIENT_URL}/success/competition?orderId=${metadata.orderId}`,
       returnUrlFailed: `${process.env.CLIENT_URL}/failed?orderId=${metadata.orderId}`,
@@ -109,15 +115,18 @@ async createCompetitionPaymentSession(amount: number, metadata: any) {
   try {
     const res = await axios.post(`${this.config.baseUrl}/payment-jobs`, payload, { headers });
 
-      const hostedPageUrl =
+    const hostedPageUrl =
       res.data?.links?.action?.url ||
-      res.data?.actions?.[0]?.url || // fallback for other response shapes
+      res.data?.actions?.[0]?.url ||
       null;
 
     console.log("🔗 Hosted page redirect URL:", hostedPageUrl);
-    console.log("🔁 Full Cashflows Response:", res.data);
-
-    console.log("➡️ Cashflows Hosted URL:", hostedPageUrl || "❌ Missing in response");
+    console.log("🔁 Full Cashflows Response:", JSON.stringify(res.data, null, 2));
+    
+    // ✅ Check what reference Cashflows is using
+    console.log("📝 Cashflows Reference:", res.data?.data?.reference);
+    console.log("📝 Our Order ID:", metadata.orderId);
+    
     return {
       success: true,
       hostedPageUrl,

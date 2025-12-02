@@ -125,7 +125,7 @@ const DEFAULT_SPIN_WHEEL_2_CONFIG = {
     { id: "12", label: "Snowman", color: "#00A223", iconKey: "Snowman", rewardType: "cash", rewardValue: 50, probability: 4, maxWins: null },
     { id: "13", label: "Bauble", color: "#1E54FF", iconKey: "Bauble", rewardType: "cash", rewardValue: 25, probability: 4, maxWins: null },
     { id: "14", label: "Snowflake", color: "#FE0000", iconKey: "Snowflake", rewardType: "points", rewardValue: 1000, probability: 3, maxWins: null },
-    { id: "15", label: "Nice Try", color: "#000000", iconKey: "NoWin", rewardType: "lose", rewardValue: 0, probability: 8, maxWins: null },
+    // { id: "15", label: "Nice Try", color: "#000000", iconKey: "NoWin", rewardType: "lose", rewardValue: 0, probability: 8, maxWins: null },
     
     // Segment 16-20
     { id: "16", label: "Wreath", color: "#1E54FF", iconKey: "Holly", rewardType: "points", rewardValue: 750, probability: 3, maxWins: null }, // Using Holly icon for Wreath
@@ -182,6 +182,13 @@ const mysteryPrizeSchema = z.object({
 
 const spinConfigSchema = z.object({
   segments: z.array(spinSegmentSchema).length(26, "Must have exactly 26 segments"),
+  maxSpinsPerUser: z.number().nullable().optional(),
+  mysteryPrize: mysteryPrizeSchema.optional(),
+  isVisible: z.boolean().optional(),
+});
+
+const spinConfigSchema2 = z.object({
+  segments: z.array(spinSegmentSchema).length(25, "Must have exactly 25 segments"),
   maxSpinsPerUser: z.number().nullable().optional(),
   mysteryPrize: mysteryPrizeSchema.optional(),
   isVisible: z.boolean().optional(),
@@ -713,6 +720,8 @@ app.post("/api/create-payment-intent", isAuthenticated, async (req: any, res) =>
     if (!orderId || typeof orderId !== "string") {
       return res.status(400).json({ message: "Invalid or missing order ID" });
     }
+
+       console.log("📋 Creating payment for orderId:", orderId); 
 
     const order = await storage.getOrder(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
@@ -1697,19 +1706,16 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
 app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
-    const { orderId, count } = req.body;
+    const { orderId, count, competitionId } = req.body;
 
-    if (!orderId || !count || count <= 0) {
+    if (!orderId || !count || count <= 0 || !competitionId) {
       return res.status(400).json({
         success: false,
-        message: "Valid orderId and count are required",
+        message: "Valid orderId, count and competitionId are required",
       });
     }
 
-    // Process all remaining spins (no cap)
-    const batchSize = count;
-
-    // Verify valid completed order
+    // Verify order
     const order = await storage.getOrder(orderId);
     if (!order || order.userId !== userId || order.status !== "completed") {
       return res.status(400).json({
@@ -1721,7 +1727,6 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
     // Check spins remaining
     const spinsUsed = await storage.getSpinsUsed(orderId);
     const spinsRemaining = order.quantity - spinsUsed;
-
     if (spinsRemaining <= 0) {
       return res.status(400).json({
         success: false,
@@ -1729,97 +1734,109 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // Actual spins to process
-    const spinsToProcess = Math.min(batchSize, spinsRemaining);
+    const spinsToProcess = Math.min(count, spinsRemaining);
 
-    // Get user
+    // Fetch user
     const user = await storage.getUser(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Fetch competition with wheelType
+    const competition = await storage.getCompetition(competitionId);
+    if (!competition) {
+      return res.status(404).json({ message: "Competition not found" });
     }
 
-    // 🔒 CRITICAL: Use database transaction for atomic operations
+    const wheelType = competition.wheelType || "wheel1";
+
     const results = [];
     let totalCash = 0;
     let totalPoints = 0;
 
     await db.transaction(async (tx) => {
-      // Fetch active wheel configuration once
-      const [config] = await tx.select().from(gameSpinConfig).where(eq(gameSpinConfig.id, "active"));
-      const wheelConfig = config || DEFAULT_SPIN_WHEEL_CONFIG;
+
+      // ✅ LOAD WHEEL CONFIG BASED ON TYPE
+      let wheelConfig;
+
+      if (wheelType === "wheel2") {
+        const [cfg] = await tx
+          .select()
+          .from(spinWheel2Configs)
+          .where(eq(spinWheel2Configs.id, "active"));
+        wheelConfig = cfg || DEFAULT_SPIN_WHEEL_2_CONFIG;
+      } else {
+        const [cfg] = await tx
+          .select()
+          .from(gameSpinConfig)
+          .where(eq(gameSpinConfig.id, "active"));
+        wheelConfig = cfg || DEFAULT_SPIN_WHEEL_CONFIG;
+      }
+
       const segments = wheelConfig.segments as any[];
 
+      // --------------------------------------
+      // 🚀 PROCESS SPINS
+      // --------------------------------------
       for (let i = 0; i < spinsToProcess; i++) {
-        // Filter eligible segments for this spin
+
+        // Filter eligible segments
         const eligibleSegments = [];
         for (const segment of segments) {
-          if (!segment.probability || segment.probability <= 0) {
-            continue;
-          }
-          
+          if (!segment.probability || segment.probability <= 0) continue;
+
           if (segment.maxWins !== null) {
             const [winData] = await tx
               .select({ count: sql<number>`count(*)` })
               .from(spinWins)
               .where(eq(spinWins.segmentId, segment.id));
             const winCount = winData?.count || 0;
-            
-            if (winCount >= segment.maxWins) {
-              continue;
-            }
+
+            if (winCount >= segment.maxWins) continue;
           }
-          
+
           eligibleSegments.push(segment);
         }
 
-        if (eligibleSegments.length === 0) {
-          break; // No more prizes available
-        }
+        if (eligibleSegments.length === 0) break;
 
-        // Weighted random selection
+        // Weighted random
         const totalWeight = eligibleSegments.reduce((sum, seg) => sum + seg.probability, 0);
         let random = Math.random() * totalWeight;
         let selectedSegment = eligibleSegments[0];
 
-        for (const segment of eligibleSegments) {
-          random -= segment.probability;
+        for (const seg of eligibleSegments) {
+          random -= seg.probability;
           if (random <= 0) {
-            selectedSegment = segment;
+            selectedSegment = seg;
             break;
           }
         }
 
-        // Record spin usage using tx
+        // Record spin usage
         await tx.insert(spinUsage).values({
           orderId,
           userId,
           usedAt: new Date(),
         });
 
-        // Record the win using tx
+        // Record win
         await tx.insert(spinWins).values({
           userId,
           segmentId: selectedSegment.id,
-          rewardType: selectedSegment.rewardType as any,
+          rewardType: selectedSegment.rewardType,
           rewardValue: String(selectedSegment.rewardValue),
         });
 
-        // Award prize and track totals
-        let prizeAmount: number | string = 0;
+        // Award prize
+        let prizeAmt = 0;
         let prizeType = "none";
 
-        if (selectedSegment.rewardType === "cash" && selectedSegment.rewardValue) {
-          const amount = typeof selectedSegment.rewardValue === 'number' 
-            ? selectedSegment.rewardValue 
-            : parseFloat(String(selectedSegment.rewardValue));
-          
-          // 🔒 CRITICAL: Update balance using tx (not global db)
+        if (selectedSegment.rewardType === "cash") {
+          const amount = Number(selectedSegment.rewardValue);
           totalCash += amount;
-          const currentBalance = parseFloat(user.balance || "0");
-          user.balance = (currentBalance + amount).toFixed(2);
-          
-          await tx
-            .update(users)
+
+          user.balance = (Number(user.balance || 0) + amount).toFixed(2);
+
+          await tx.update(users)
             .set({ balance: user.balance })
             .where(eq(users.id, userId));
 
@@ -1843,20 +1860,17 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             createdAt: new Date(),
           });
 
-          prizeAmount = amount;
+          prizeAmt = amount;
           prizeType = "cash";
-        } else if (selectedSegment.rewardType === "points" && selectedSegment.rewardValue) {
-          const points = typeof selectedSegment.rewardValue === 'number'
-            ? Math.floor(selectedSegment.rewardValue)
-            : parseInt(String(selectedSegment.rewardValue));
-          
-          // 🔒 CRITICAL: Update points using tx (not global db)
+        }
+
+        if (selectedSegment.rewardType === "points") {
+          const points = Number(selectedSegment.rewardValue);
           totalPoints += points;
-          const currentPoints = user.ringtonePoints || 0;
-          user.ringtonePoints = currentPoints + points;
-          
-          await tx
-            .update(users)
+
+          user.ringtonePoints = (user.ringtonePoints || 0) + points;
+
+          await tx.update(users)
             .set({ ringtonePoints: user.ringtonePoints })
             .where(eq(users.id, userId));
 
@@ -1880,7 +1894,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             createdAt: new Date(),
           });
 
-          prizeAmount = `${points} Ringtones`;
+          prizeAmt = points;
           prizeType = "points";
         }
 
@@ -1888,14 +1902,16 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
           segmentId: selectedSegment.id,
           label: selectedSegment.label,
           prize: {
-            brand: selectedSegment.label,
-            amount: prizeAmount,
+            amount: prizeAmt,
             type: prizeType,
           },
         });
       }
     });
 
+    // --------------------------------------
+    // DONE
+    // --------------------------------------
     res.json({
       success: true,
       spins: results,
@@ -1906,11 +1922,13 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
       },
       spinsRemaining: spinsRemaining - results.length,
     });
+
   } catch (error) {
     console.error("Error revealing all spins:", error);
     res.status(500).json({ message: "Failed to reveal all spins" });
   }
 });
+
 
 // Get spin order details for billing page
 app.get("/api/spin-order/:orderId", isAuthenticated, async (req: any, res) => {
@@ -4530,7 +4548,7 @@ app.put("/api/admin/game-spin-2-config", isAuthenticated, isAdmin, async (req: a
     const { spinWheel2Configs } = await import("@shared/schema");
     
     // Validate incoming data
-    const validationResult = spinConfigSchema.safeParse(req.body);
+    const validationResult = spinConfigSchema2.safeParse(req.body);
     if (!validationResult.success) {
       return res.status(400).json({ 
         message: "Invalid spin configuration", 
