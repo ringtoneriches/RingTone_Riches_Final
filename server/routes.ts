@@ -128,9 +128,9 @@ const DEFAULT_SPIN_WHEEL_2_CONFIG = {
     // { id: "15", label: "Nice Try", color: "#000000", iconKey: "NoWin", rewardType: "lose", rewardValue: 0, probability: 8, maxWins: null },
     
     // Segment 16-20
-    { id: "16", label: "Wreath", color: "#1E54FF", iconKey: "Holly", rewardType: "points", rewardValue: 750, probability: 3, maxWins: null }, // Using Holly icon for Wreath
+    { id: "16", label: "Wreath", color: "#1E54FF", iconKey: "Wreath", rewardType: "points", rewardValue: 750, probability: 3, maxWins: null }, // Using Holly icon for Wreath
     { id: "17", label: "Candy Cane", color: "#FEED00", iconKey: "CandyCane", rewardType: "points", rewardValue: 500, probability: 3, maxWins: null },
-    { id: "18", label: "Stocking", color: "#00A223", iconKey: "Mitten", rewardType: "points", rewardValue: 400, probability: 3, maxWins: null }, // Using Mitten icon for Stocking
+    { id: "18", label: "Stocking", color: "#00A223", iconKey: "Stocking", rewardType: "points", rewardValue: 400, probability: 3, maxWins: null }, // Using Mitten icon for Stocking
     { id: "19", label: "Mitten", color: "#FFFFFF", iconKey: "Mitten", rewardType: "points", rewardValue: 300, probability: 3, maxWins: null },
     { id: "20", label: "Nice Try", color: "#000000", iconKey: "NoWin", rewardType: "lose", rewardValue: 0, probability: 8, maxWins: null },
     
