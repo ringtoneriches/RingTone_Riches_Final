@@ -33,6 +33,8 @@ import prize17 from "../../../../attached_assets/Christmas/Sleigh.png";
 import prize18 from "../../../../attached_assets/Christmas/Snow globe.png";
 import prize19 from "../../../../attached_assets/Christmas/Snowflake.png";
 import prize20 from "../../../../attached_assets/Christmas/Snowman.png";
+import prize21 from "../../../../attached_assets/Christmas/Stocking.png";
+import prize22 from "../../../../attached_assets/Christmas/Wreath.png";
 
 import pointer from "../../../../attached_assets/pointer.png";
 import ring from "../../../../attached_assets/wheel2ring.png";
@@ -53,7 +55,8 @@ const CHRISTMAS_ICON_MAP: Record<string, any> = {
   Present: prize12,            
   Snowman: prize20,            
   Bauble: prize1,              
-  
+  Stocking: prize21,
+  Wreath: prize22,
   // Ringtone Points (10)
   Snowflake: prize19,          
   Holly: prize9,               
@@ -920,9 +923,9 @@ if (congratsAudioRef.current) {
   }
 
   return (
-    <div className="flex flex-col items-center bg-white justify-center min-h-screen relative overflow-hidden z-10">
+    <div className="flex flex-col items-center justify-center min-h-screen relative overflow-hidden z-10">
       {/* Background video */}
-      {/* <video
+      <video
         ref={backgroundVideoRef}
         autoPlay
         loop
@@ -934,10 +937,10 @@ if (congratsAudioRef.current) {
         className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
       >
         <source
-          src="/attached_assets/wheelbgvideo_1762893751007.mp4"
+          src="/attached_assets/wheel2bgvideo.mp4"
           type="video/mp4"
         />
-      </video> */}
+      </video>
 
       <div className="relative w-full max-w-2xl aspect-square flex items-center justify-center z-10">
          <img
