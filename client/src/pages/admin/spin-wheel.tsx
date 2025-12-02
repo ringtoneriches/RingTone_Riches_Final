@@ -515,19 +515,20 @@ export default function AdminSpinWheel() {
             onClick={() => setWheel2SettingsOpen(true)} // ← NEW BUTTON
             variant="outline"
             className="gap-2 "
-            data-testid="button-wheel-2-settings"
+            data-testid="button-wheel-2-settings" //
           >
             <Settings className="w-4 h-4" />
             Wheel 2 Settings
           </Button>
-            <Button 
+          
+            {/* <Button 
               onClick={() => setCreateDialogOpen(true)} 
               size="icon"
               className="bg-yellow-500 hover:bg-yellow-600 text-black"
               data-testid="button-create-spin"
             >
               <Plus className="w-4 h-4" />
-            </Button>
+            </Button> */}
           </div>
         </div>
 
