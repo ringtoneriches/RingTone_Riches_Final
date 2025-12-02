@@ -920,9 +920,9 @@ if (congratsAudioRef.current) {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen relative overflow-hidden z-10">
+    <div className="flex flex-col items-center bg-white justify-center min-h-screen relative overflow-hidden z-10">
       {/* Background video */}
-      <video
+      {/* <video
         ref={backgroundVideoRef}
         autoPlay
         loop
@@ -937,7 +937,7 @@ if (congratsAudioRef.current) {
           src="/attached_assets/wheelbgvideo_1762893751007.mp4"
           type="video/mp4"
         />
-      </video>
+      </video> */}
 
       <div className="relative w-full max-w-2xl aspect-square flex items-center justify-center z-10">
          <img
