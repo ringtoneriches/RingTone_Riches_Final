@@ -1775,6 +1775,8 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
       });
     }
 
+    const batchSize = count;
+
     // Verify order
     const order = await storage.getOrder(orderId);
     if (!order || order.userId !== userId || order.status !== "completed") {
@@ -1794,7 +1796,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    const spinsToProcess = Math.min(count, spinsRemaining);
+    const spinsToProcess = Math.min(batchSize, spinsRemaining);
 
     // Fetch user
     const user = await storage.getUser(userId);
@@ -1882,19 +1884,26 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
         await tx.insert(spinWins).values({
           userId,
           segmentId: selectedSegment.id,
-          rewardType: selectedSegment.rewardType,
+          rewardType: selectedSegment.rewardType as any,
           rewardValue: String(selectedSegment.rewardValue),
         });
 
         // Award prize
-        let prizeAmt = 0;
+        let prizeAmount: number | string = 0;
         let prizeType = "none";
 
-        if (selectedSegment.rewardType === "cash") {
-          const amount = Number(selectedSegment.rewardValue);
+        if (selectedSegment.rewardType === "cash" && selectedSegment.rewardValue) {
+          const amount = typeof selectedSegment.rewardValue === 'number' 
+            ? selectedSegment.rewardValue 
+            : parseFloat(String(selectedSegment.rewardValue));
+
           totalCash += amount;
 
-          user.balance = (Number(user.balance || 0) + amount).toFixed(2);
+           const currentBalance = parseFloat(user.balance || "0");
+          user.balance = (currentBalance + amount).toFixed(2);
+          
+          await tx
+            .update(users)
 
           await tx.update(users)
             .set({ balance: user.balance })
@@ -1920,15 +1929,21 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             createdAt: new Date(),
           });
 
-          prizeAmt = amount;
+          prizeAmount = amount;
           prizeType = "cash";
         }
 
-        if (selectedSegment.rewardType === "points") {
-          const points = Number(selectedSegment.rewardValue);
+        else if (selectedSegment.rewardType === "points" && selectedSegment.rewardValue) {
+          const points = typeof selectedSegment.rewardValue === 'number'
+            ? Math.floor(selectedSegment.rewardValue)
+            : parseInt(String(selectedSegment.rewardValue));
           totalPoints += points;
 
-          user.ringtonePoints = (user.ringtonePoints || 0) + points;
+           const currentPoints = user.ringtonePoints || 0;
+          user.ringtonePoints = currentPoints + points;
+          
+          await tx
+            .update(users)
 
           await tx.update(users)
             .set({ ringtonePoints: user.ringtonePoints })
@@ -1954,7 +1969,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             createdAt: new Date(),
           });
 
-          prizeAmt = points;
+          prizeAmount = `${points} Ringtones`;
           prizeType = "points";
         }
 
@@ -1962,7 +1977,8 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
           segmentId: selectedSegment.id,
           label: selectedSegment.label,
           prize: {
-            amount: prizeAmt,
+            brand: selectedSegment.label,
+            amount: prizeAmount,
             type: prizeType,
           },
         });
