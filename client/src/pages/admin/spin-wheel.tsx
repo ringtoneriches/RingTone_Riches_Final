@@ -65,6 +65,7 @@ function CompetitionForm({
     ticketPrice: data?.ticketPrice || "0.99",
     maxTickets: data?.maxTickets?.toString() || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
+    wheelType: data?.wheelType || "wheel1",
     endDate: data?.endDate ? new Date(data.endDate).toISOString().slice(0, 16) : "",
     prizeData: data?.prizeData as any,
   });
@@ -1245,6 +1246,7 @@ function WheelSettingsDialog2({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  console.log("WheelSettingsDialog (Wheel 2) rendering");
   const { toast } = useToast();
   const [segments, setSegments] = useState<WheelSegment[]>([]);
   const [maxSpinsPerUser, setMaxSpinsPerUser] = useState<string>("");
@@ -1262,6 +1264,15 @@ function WheelSettingsDialog2({
     enabled: open,
   });
 
+   useEffect(() => {
+    if (config && open) {
+      console.log("Wheel 2 Config Loaded:", {
+        isVisible: config.isVisible,
+        source: '/api/admin/game-spin-2-config'
+      });
+      setIsVisible(config.isVisible ?? true);
+    }
+  }, [config, open]);
   // Update local state when config loads or dialog opens
   useEffect(() => {
     if (config && open) {

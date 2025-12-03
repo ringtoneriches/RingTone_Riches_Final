@@ -47,7 +47,7 @@ import { cashflows } from "./cashflows";
 import { and, asc, desc, eq, inArray, sql, like, gte, lte, or } from "drizzle-orm";
 import { count } from "drizzle-orm/sql";
 import { z } from "zod";
-import { sendOrderConfirmationEmail, sendWelcomeEmail, sendPromotionalEmail, sendPasswordResetEmail } from "./email";
+import { sendOrderConfirmationEmail, sendWelcomeEmail, sendPromotionalEmail, sendPasswordResetEmail, sendTopupConfirmationEmail } from "./email";
 import { wsManager } from "./websocket";
 import { upload } from "./cloudinary";
 
@@ -827,6 +827,39 @@ app.post("/api/payment-success/competition", isAuthenticated, async (req: any, r
     // Mark order complete
     await storage.updateOrderStatus(orderId, "completed");
 
+    // -------------------------
+// SEND ORDER CONFIRMATION EMAIL
+// -------------------------
+try {
+  const user = await storage.getUser(order.userId);
+  const tickets = await storage.getTicketsByOrderId(order.id);
+  const ticketNumbers = tickets.map(t => t.ticketNumber);
+
+  if (user?.email && tickets.length > 0) {
+    const orderType = competition.type === 'spin' ? 'spin' :
+                      competition.type === 'scratch' ? 'scratch' : 'competition';
+
+    await sendOrderConfirmationEmail(user.email, {
+      orderId: order.id,
+      userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
+      orderType,
+      itemName: competition.title,
+      quantity: tickets.length,
+      totalAmount: order.totalAmount,
+      orderDate: new Date().toLocaleDateString('en-GB', { 
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+      }),
+      paymentMethod: 'Card Payment (Cashflows)',
+      skillQuestion: competition.skillQuestion || undefined,
+      skillAnswer: order.skillAnswer || undefined,
+      ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
+    });
+  }
+} catch (err) {
+  console.error('Failed to send order confirmation email for Cashflows payment:', err);
+}
+
+
     // Log transaction (cash or points)
     const amount =
       order.pointsAmount > 0 ? `-${order.pointsAmount}` : `-${order.totalAmount}`;
@@ -1141,6 +1174,33 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     if (compType === "instant") {
       await storage.updateCompetitionSoldTickets(competitionId, quantity);
     }
+
+    try {
+  if (user?.email) {
+    const ticketNumbers = tickets.map(t => t.ticketNumber);
+
+    await sendOrderConfirmationEmail(user.email, {
+      orderId: order.id,
+      userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
+      orderType: 'competition', // instant competitions are normal 'competition'
+      itemName: competition.title,
+      quantity: quantity,
+      totalAmount: order.totalAmount,
+      orderDate: new Date().toLocaleDateString('en-GB', { 
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+      }),
+      paymentMethod:
+        walletUsed > 0 && pointsUsed > 0
+          ? 'Wallet + Ringtone Points'
+          : walletUsed > 0
+          ? 'Wallet Balance'
+          : 'Ringtone Points',
+      ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
+    });
+  }
+} catch (err) {
+  console.error('Failed to send order confirmation email for instant competition:', err);
+}
 
     // -------------------------
     // 8️⃣ APPLY REFERRAL BONUS (FIRST PURCHASE ONLY)
@@ -3680,6 +3740,33 @@ app.post("/api/wallet/topup-checkout", isAuthenticated, async (req: any, res) =>
       });
 
       console.log(`✓ Successfully processed wallet top-up for user ${userId}: £${amount}`);
+        // ✅ SEND CONFIRMATION EMAIL
+      try {
+        // Get user email
+        const userEmail = user?.email;
+        if (userEmail) {
+          const topupData = {
+            userName: user?.name || user?.username || "Customer",
+            amount: amount.toString(),
+            newBalance: newBalance,
+            paymentRef: paymentRef,
+            paymentMethod: "Cashflows",
+            topupDate: new Date().toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          };
+          
+          await sendTopupConfirmationEmail(userEmail, topupData);
+          console.log(`✓ Confirmation email sent to ${userEmail}`);
+        }
+      } catch (emailError) {
+        console.error("Failed to send confirmation email:", emailError);
+        // Don't fail the whole request if email fails
+      }
 
       return res.json({ success: true, newBalance, amount });
     }

@@ -19,9 +19,10 @@ import {
 interface UnifiedBillingProps {
   orderId: string;
   orderType: 'competition' | 'spin' | 'scratch';
+  wheelType?: string;
 }
 
-export default function UnifiedBilling({ orderId, orderType }: UnifiedBillingProps) {
+export default function UnifiedBilling({ orderId, orderType ,wheelType }: UnifiedBillingProps) {
   const [, setLocation] = useLocation();
   const [selectedMethods, setSelectedMethods] = useState({
     walletBalance: false,
@@ -49,21 +50,39 @@ export default function UnifiedBilling({ orderId, orderType }: UnifiedBillingPro
     }
   };
 
-  const getTitle = () => {
-    switch(orderType) {
-      case 'spin': return 'The Luxury Car Spin Purchase';
-      case 'scratch': return 'The Landmark Loot Purchase';
-      default: return 'Competition Tickets';
+ const getTitle = () => {
+  if (orderType === "spin") {
+    if (wheelType === "wheel2") {
+      return "The Festive Spin Purchase";
     }
-  };
+    return "The Luxury Car Spin Purchase";
+  }
 
-  const getItemName = () => {
-    switch(orderType) {
-      case 'spin': return 'Spins';
-      case 'scratch': return 'Scratch Cards';
-      default: return 'Tickets';
+  switch (orderType) {
+    case "scratch":
+      return "The Landmark Loot Purchase";
+    default:
+      return "Competition Tickets";
+  }
+};
+
+
+ const getItemName = () => {
+  if (orderType === "spin") {
+    if (wheelType === "wheel2") {
+      return "Festive Spins";
     }
-  };
+    return "Spins";
+  }
+
+  switch (orderType) {
+    case "scratch":
+      return "Scratch Cards";
+    default:
+      return "Tickets";
+  }
+};
+
 
   const {
     data: orderData,

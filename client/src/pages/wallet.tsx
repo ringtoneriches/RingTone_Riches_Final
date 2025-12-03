@@ -1670,7 +1670,7 @@ transaction.type === "referral_bonus"
                       <li className="flex items-start gap-2">
                         <span className="text-yellow-500">•</span>
                         <span>
-                          You earn £5 bonus credit when they complete their
+                          You earn £2 bonus credit when they complete their
                           first competition entry
                         </span>
                       </li>

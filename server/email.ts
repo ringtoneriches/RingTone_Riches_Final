@@ -660,3 +660,167 @@ export async function sendPasswordResetEmail(
     return { success: false, error };
   }
 }
+
+// Add this interface at the top with other interfaces
+export interface TopupConfirmationPayload {
+  userName: string;
+  amount: string;
+  newBalance: string;
+  paymentRef: string;
+  paymentMethod: string; // e.g., "Cashflows", "Stripe", "Direct"
+  topupDate: string;
+}
+
+// Add this function after other email functions
+export async function sendTopupConfirmationEmail(
+  to: string,
+  topupData: TopupConfirmationPayload
+) {
+  const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wallet Top-up Confirmation - ${BRAND_NAME}</title>
+  <style type="text/css">
+    @media only screen and (max-width: 480px) {
+      .email-container { width: 100% !important; }
+      .mobile-padding { padding: 20px 15px !important; }
+      .mobile-h1 { font-size: 24px !important; }
+      .mobile-h2 { font-size: 20px !important; }
+      .mobile-text-lg { font-size: 18px !important; line-height: 1.5 !important; }
+      .mobile-text-md { font-size: 16px !important; line-height: 1.6 !important; }
+      .mobile-label { font-size: 15px !important; }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f5f5f5;">
+    <tr>
+      <td align="center" style="padding: 20px 10px;">
+        <table class="email-container" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          
+          <!-- Logo Header -->
+          <tr>
+            <td style="background-color: #1a1a1a; padding: 20px; text-align: center;">
+              <img src="${LOGO_URL}" alt="${BRAND_NAME}" width="200" style="display: block; margin: 0 auto; max-width: 90%; height: auto;" />
+            </td>
+          </tr>
+          
+          <!-- Yellow Banner -->
+          <tr>
+            <td style="background: linear-gradient(135deg, ${BRAND_COLOR} 0%, #F59E0B 100%); padding: 25px; text-align: center;">
+              <h1 class="mobile-h1" style="margin: 0; color: #1a1a1a; font-size: 28px; font-weight: bold;">💰 Wallet Top-up Successful!</h1>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td class="mobile-padding" style="padding: 40px 30px; background-color: #ffffff;">
+              <p class="mobile-text-lg" style="margin: 0 0 20px; font-size: 18px; color: #1a1a1a; font-weight: 600;">Hi ${topupData.userName},</p>
+              
+              <p class="mobile-text-md" style="margin: 0 0 30px; font-size: 16px; color: #333333; line-height: 1.6;">
+                Your wallet top-up has been processed successfully! Your funds are now available to use for competitions, spins, and scratch cards.
+              </p>
+              
+              <!-- Top-up Details Box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f9f9f9; border-radius: 8px; border: 2px solid ${BRAND_COLOR}; margin-bottom: 25px;">
+                <tr>
+                  <td class="mobile-padding" style="padding: 20px;">
+                    <h2 class="mobile-h2" style="margin: 0 0 20px; color: #1a1a1a; font-size: 20px; font-weight: bold;">Top-up Details</h2>
+                    
+                    <table width="100%" cellpadding="8" cellspacing="0" border="0">
+                      <tr>
+                        <td class="mobile-label" style="color: #666666; font-size: 15px; width: 40%;">Amount Added:</td>
+                        <td class="mobile-text-lg" style="color: #1a1a1a; font-size: 20px; font-weight: bold; text-align: right; color: ${BRAND_COLOR};">£${topupData.amount}</td>
+                      </tr>
+                      <tr>
+                        <td class="mobile-label" style="color: #666666; font-size: 15px;">Date:</td>
+                        <td class="mobile-label" style="color: #1a1a1a; font-size: 15px; text-align: right;">${topupData.topupDate}</td>
+                      </tr>
+                      <tr>
+                        <td class="mobile-label" style="color: #666666; font-size: 15px;">Payment Method:</td>
+                        <td class="mobile-label" style="color: #1a1a1a; font-size: 15px; text-align: right;">${topupData.paymentMethod}</td>
+                      </tr>
+                      <tr>
+                        <td class="mobile-label" style="color: #666666; font-size: 15px;">Reference:</td>
+                        <td class="mobile-label" style="color: #666666; font-size: 14px; text-align: right; font-family: monospace;">${topupData.paymentRef.substring(0, 8)}</td>
+                      </tr>
+                      <tr style="border-top: 2px solid ${BRAND_COLOR};">
+                        <td class="mobile-text-lg" style="color: #1a1a1a; font-size: 18px; font-weight: bold; padding-top: 12px;">New Balance:</td>
+                        <td class="mobile-text-lg" style="color: #1a1a1a; font-size: 24px; font-weight: bold; text-align: right; padding-top: 12px; color: #10b981;">£${topupData.newBalance}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Action CTA -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fffbea; border-radius: 8px; border: 2px solid ${BRAND_COLOR}; margin-bottom: 25px;">
+                <tr>
+                  <td class="mobile-padding" style="padding: 25px; text-align: center;">
+                    <h2 class="mobile-h2" style="margin: 0 0 15px; color: #1a1a1a; font-size: 20px; font-weight: bold;">🎉 Ready to Play?</h2>
+                    <p class="mobile-text-md" style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
+                      Your wallet is now loaded! Start playing and winning amazing prizes today.
+                    </p>
+                    
+                    <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto;">
+                      <tr>
+                        <td align="center" style="background: linear-gradient(135deg, ${BRAND_COLOR} 0%, #F59E0B 100%); border-radius: 8px; padding: 15px 35px;">
+                          <a href="https://ringtoneriches.co.uk" style="color: #1a1a1a; text-decoration: none; font-size: 16px; font-weight: bold; display: inline-block;">
+                            Start Playing Now
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <p class="mobile-text-md" style="margin: 30px 0 0; font-size: 16px; color: #333333; line-height: 1.6;">
+                If you have any questions about your top-up, please contact our support team.
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #1a1a1a; padding: 25px 30px; text-align: center; border-top: 3px solid ${BRAND_COLOR};">
+              <p style="margin: 0 0 10px; font-size: 14px; color: #cccccc;">
+                Questions? Contact us at <a href="mailto:${FROM_EMAIL}" style="color: ${BRAND_COLOR}; text-decoration: none; font-weight: bold;">${FROM_EMAIL}</a>
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #999999;">
+                &copy; ${new Date().getFullYear()} ${BRAND_NAME}. All rights reserved.
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: `${BRAND_NAME} <${FROM_EMAIL}>`,
+      to: [to],
+      subject: `Wallet Top-up Confirmation - £${topupData.amount} Added - ${BRAND_NAME}`,
+      html: emailHtml,
+    });
+
+    if (error) {
+      console.error('Error sending top-up confirmation email:', error);
+      return { success: false, error };
+    }
+
+    console.log('Top-up confirmation email sent successfully:', data);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Failed to send top-up confirmation email:', error);
+    return { success: false, error };
+  }
+}

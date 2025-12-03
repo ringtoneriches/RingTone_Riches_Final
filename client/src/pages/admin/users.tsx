@@ -368,11 +368,11 @@ export default function AdminUsers() {
           </Button>
         </div>
         <div>
-          <button 
+          {/* <button 
           onClick={handleResetAll}
           className="bg-yellow-400 text-black px-3 py-1 rounded-sm">
             Reset All
-            </button>
+            </button> */}
         </div>
 </div>
         {/* Custom Date Range Inputs */}

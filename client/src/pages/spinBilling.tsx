@@ -7,19 +7,27 @@ import { Competition } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 
 const SpinBilling = () => {
-  const { orderId , id } = useParams();
+  const { orderId , competitionId  } = useParams();
 
    const { data: competition, isLoading } = useQuery<Competition>({
-    queryKey: ["/api/competitions", id],
+    queryKey: ["/api/competitions", competitionId ],
     queryFn: async () => {
-      const res = await fetch(`/api/competitions/${id}`);
+      const res = await fetch(`/api/competitions/${competitionId }`);
       if (!res.ok) throw new Error("Failed to load competition");
       return res.json();
     },
-    enabled: !!id,
+    enabled: !!competitionId ,
   });
 
+  // const { data: competition, isLoading } = useQuery<Competition>({
+  //     queryKey: ["/api/competitions", id],
+  //     enabled: !!id,
+  //   });
+  
+    console.log("✅ Competition data:", competition);
+console.log("orderId:", orderId)
   console.log(competition)
+  console.log("Wheel Type:", competition?.wheelType);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-zinc-950 via-black to-zinc-900 relative overflow-hidden">
@@ -49,7 +57,9 @@ const SpinBilling = () => {
             </div>
             
             <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent">
-              {/* {competition?.title} */} The Luxury Car Spin
+              {/* {competition?.title} */}  {competition?.wheelType === "wheel2"
+    ? "The Festive Spin"
+    : "The Luxury Car Spin"}
             </h1>
             
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">
@@ -61,7 +71,7 @@ const SpinBilling = () => {
           <div className="relative">
             <div className="absolute -inset-1 bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 rounded-2xl blur opacity-75" />
             <div className="relative">
-              {orderId && <UnifiedBilling orderId={orderId} orderType="spin" />}
+              {orderId && <UnifiedBilling orderId={orderId} orderType="spin"   wheelType={competition?.wheelType} />}
             </div>
           </div>
         </div>

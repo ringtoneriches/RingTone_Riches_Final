@@ -924,23 +924,33 @@ if (congratsAudioRef.current) {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen relative overflow-hidden z-10">
-      {/* Background video */}
-      <video
-        ref={backgroundVideoRef}
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
-        disablePictureInPicture
-        disableRemotePlayback
-        className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
-      >
-        <source
-          src="/attached_assets/wheel2bgvideo.mp4"
-          type="video/mp4"
-        />
-      </video>
+      {/* Desktop video */}
+  <video
+    autoPlay
+    loop
+    muted
+    playsInline
+    preload="auto"
+    disablePictureInPicture
+    disableRemotePlayback
+    className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none hidden md:block"
+  >
+    <source src="/attached_assets/Snowflake.mp4" type="video/mp4" />
+  </video>
+
+  {/* Mobile video */}
+  <video
+    autoPlay
+    loop
+    muted
+    playsInline
+    preload="auto"
+    disablePictureInPicture
+    disableRemotePlayback
+    className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none block md:hidden"
+  >
+    <source src="/attached_assets/SnowflakeMobile.mp4" type="video/mp4" />
+  </video>
 
       <div className="relative w-full max-w-2xl aspect-square flex items-center justify-center z-10">
          <img

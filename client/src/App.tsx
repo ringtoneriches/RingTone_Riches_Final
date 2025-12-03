@@ -96,7 +96,7 @@ function Router() {
       <Route path="/failed" component={CheckoutFailed} />
       <Route path="/cancelled" component={CheckoutCancelled} />
       <Route path="/scratch" component={scratchcard} />
-      <Route path="/spin-billing/:orderId" component={SpinBilling} />
+      <Route path="/spin-billing/:orderId/:competitionId" component={SpinBilling} />
       <Route path="/scratch-billing/:orderId" component={ScratchBilling} />
 
       {/* Admin routes - always registered, auth checked in component */}

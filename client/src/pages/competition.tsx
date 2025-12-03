@@ -127,7 +127,7 @@ const purchaseTicketMutation = useMutation({
 
     if (competitionType === "spin") {
       // ✅ Redirect to spin billing
-      setLocation(`/spin-billing/${data.orderId}`);
+        setLocation(`/spin-billing/${data.orderId}/${competition?.id}`);
       return;
     }
 
