@@ -34,12 +34,12 @@ interface Order {
   createdAt: string;
 }
 
-type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
+type DateFilter = "all" | "1h" | "24h" | "7d" | "30d" | "custom";
 
 export default function AdminOrders() {
   const { toast } = useToast();
   const [searchInput, setSearchInput] = useState("");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("1h");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -56,6 +56,9 @@ export default function AdminOrders() {
     let dateTo = "";
 
     switch (dateFilter) {
+        case "1h":
+    dateFrom = new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString();
+    break;
       case "24h":
         dateFrom = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
         break;
@@ -205,6 +208,14 @@ export default function AdminOrders() {
             data-testid="button-filter-all"
           >
             All Time
+          </Button>
+          <Button
+            variant={dateFilter === "1h" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("1h")}
+            data-testid="button-filter-1h"
+          >
+            Last 1 Hour
           </Button>
           <Button
             variant={dateFilter === "24h" ? "default" : "outline"}
