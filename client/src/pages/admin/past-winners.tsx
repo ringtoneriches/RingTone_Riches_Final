@@ -463,7 +463,7 @@ export default function AdminPastWinners() {
                       {item.winners.prizeValue}
                     </TableCell>
                     <TableCell>
-                      {new Date(item.winners.createdAt).toLocaleDateString()}
+                      {new Date(item.winners.createdAt).toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">

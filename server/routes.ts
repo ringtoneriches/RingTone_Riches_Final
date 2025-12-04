@@ -4104,7 +4104,7 @@ app.get("/api/winners", async (req, res) => {
 // ====== WINNERS ADMIN ENDPOINTS ======
 app.get("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
   try {
-    const winners = await storage.getRecentWinners(100);
+    const winners = await storage.getRecentWinners();
     res.json(winners);
   } catch (error) {
     console.error("Error fetching winners for admin:", error);

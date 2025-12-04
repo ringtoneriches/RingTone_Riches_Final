@@ -167,10 +167,47 @@ const [revealAllSummary, setRevealAllSummary] = useState<{ wins: number; losses:
 
 const [showOutOfScratchesDialog, setShowOutOfScratchesDialog] = useState(false);
 const outOfScratchClickCount = useRef(0);
-
+const hasCommittedCurrentScratch = useRef(false);
 
   // Check if all scratch cards are used
   const allScratchesUsed = scratchHistory.length > 0 && scratchHistory.every(s => s.status === "Scratched");
+
+  // Add this useEffect at the beginning of your component
+useEffect(() => {
+  if (!orderId) return;
+  
+  const checkIncompleteScratches = () => {
+    const inProgressData = localStorage.getItem(`scratchInProgress_${orderId}`);
+    
+    if (inProgressData) {
+      const { index, timestamp } = JSON.parse(inProgressData);
+      const now = Date.now();
+      const fiveMinutesAgo = now - (5 * 60 * 1000); // 5 minutes ago
+      
+      // If scratch was started more than 5 minutes ago, mark as lost
+      if (timestamp < fiveMinutesAgo) {
+        console.log("⏰ Old incomplete scratch found, marking as lost");
+        
+        setScratchHistory(prev => {
+          const updated = [...prev];
+          if (index < updated.length) {
+            updated[index] = {
+              status: "Lost",
+              prize: { type: "none", value: "Lost" },
+            };
+          }
+          return updated;
+        });
+        
+        localStorage.removeItem(`scratchInProgress_${orderId}`);
+      } else {
+        console.log("🔄 Scratch was in progress recently, keeping as Scratching");
+      }
+    }
+  };
+  
+  checkIncompleteScratches();
+}, [orderId]);
 
   // Fix canvas not rendering after Reveal All
 useEffect(() => {
@@ -186,30 +223,53 @@ useEffect(() => {
 
 
     // ✅ SIMPLIFIED INITIALIZATION - Only run once when scratchTicketCount or orderId changes
-  useEffect(() => {
-    if (!scratchTicketCount || !orderId) return;
+// Update your initialization useEffect
+useEffect(() => {
+  if (!scratchTicketCount || !orderId) return;
 
-    const savedHistory = loadScratchHistory(orderId);
+  const savedHistory = loadScratchHistory(orderId);
+  const lostScratches = JSON.parse(localStorage.getItem(`lostScratches_${orderId}`) || '[]');
 
-    // If we have saved history that matches current count, use it
-    if (savedHistory.length === scratchTicketCount) {
-      setScratchHistory(savedHistory);
-    } 
-    // If saved history exists but count doesn't match, adjust it
-    else if (savedHistory.length > 0) {
-      const adjustedHistory = adjustHistoryToCount(savedHistory, scratchTicketCount);
-      setScratchHistory(adjustedHistory);
-    }
-    // No saved history, create fresh
-    else {
-      setScratchHistory(
-        Array.from({ length: scratchTicketCount }, () => ({
-          status: "Not Scratched",
-          prize: { type: "none", value: "-" },
-        }))
-      );
-    }
-  }, [scratchTicketCount, orderId]);
+  let finalHistory = savedHistory;
+  
+  // 🎯 Apply lost scratches
+  if (lostScratches.length > 0) {
+    console.log("📋 Found lost scratches:", lostScratches);
+    
+    finalHistory = savedHistory.map((item, index) => {
+      const wasLost = lostScratches.some((lost: any) => lost.index === index);
+      if (wasLost) {
+        return {
+          status: "Lost",
+          prize: { type: "none", value: "Lost" },
+        };
+      }
+      return item;
+    });
+    
+    // Clear lost scratches after applying
+    localStorage.removeItem(`lostScratches_${orderId}`);
+  }
+
+  // If we have saved history that matches current count, use it
+  if (finalHistory.length === scratchTicketCount) {
+    setScratchHistory(finalHistory);
+  } 
+  // If saved history exists but count doesn't match, adjust it
+  else if (finalHistory.length > 0) {
+    const adjustedHistory = adjustHistoryToCount(finalHistory, scratchTicketCount);
+    setScratchHistory(adjustedHistory);
+  }
+  // No saved history, create fresh
+  else {
+    setScratchHistory(
+      Array.from({ length: scratchTicketCount }, () => ({
+        status: "Not Scratched",
+        prize: { type: "none", value: "-" },
+      }))
+    );
+  }
+}, [scratchTicketCount, orderId]);
 
   // Helper function to adjust history while preserving all data
   const adjustHistoryToCount = (history: any[], targetCount: number) => {
@@ -266,63 +326,167 @@ useEffect(() => {
     }
   };
 
-  // 🎯 NEW: Complete scratch session (record usage and award prize)
-  const completeScratchSession = async (): Promise<void> => {
-    if (!currentSession || !orderId) return;
-
-    try {
-      const response = await fetch(`/api/scratch-session/${currentSession.sessionId}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId,
-          prizeId: currentSession.prizeId,
-          isWinner: currentSession.isWinner,
-        }),
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to complete scratch session');
+  useEffect(() => {
+  const handleVisibilityChange = () => {
+    if (document.hidden && 
+        hasCommittedCurrentScratch.current && 
+        !hasCompletedRef.current &&
+        orderId && 
+        localStorage.getItem(`scratchInProgress_${orderId}`)) {
+      
+      console.log("👁️ User switched tabs while scratching!");
+      
+      // Mark as lost
+      const inProgressData = localStorage.getItem(`scratchInProgress_${orderId}`);
+      if (inProgressData) {
+        const { index } = JSON.parse(inProgressData);
+        
+        const lostScratches = JSON.parse(localStorage.getItem(`lostScratches_${orderId}`) || '[]');
+        lostScratches.push({ index, lostAt: Date.now() });
+        localStorage.setItem(`lostScratches_${orderId}`, JSON.stringify(lostScratches));
+        
+        localStorage.removeItem(`scratchInProgress_${orderId}`);
+        
+        // Update UI
+        setScratchHistory(prev => {
+          const updated = [...prev];
+          if (index < updated.length) {
+            updated[index] = {
+              status: "Lost",
+              prize: { type: "none", value: "Lost" },
+            };
+          }
+          return updated;
+        });
       }
+    }
+  };
 
-      const result = await response.json();
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  
+  return () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
+}, [orderId, hasCommittedCurrentScratch.current, hasCompletedRef.current]);
 
-      // Update scratch history
-      setScratchHistory((prev) => {
-        const firstUnscratched = prev.findIndex((s) => s.status === "Not Scratched");
-        if (firstUnscratched === -1) return prev;
+// When all scratches are used, clean up localStorage
+useEffect(() => {
+  if (scratchHistory.length > 0 && scratchHistory.every(s => 
+    s.status === "Scratched" || s.status === "Lost")) {
+    
+    console.log("🧹 All scratches completed, cleaning up localStorage");
+    
+    if (orderId) {
+      localStorage.removeItem(`scratchInProgress_${orderId}`);
+      localStorage.removeItem(`lostScratches_${orderId}`);
+    }
+  }
+}, [scratchHistory, orderId]);
 
-        const updated = [...prev];
-        updated[firstUnscratched] = {
-          status: "Scratched",
-          prize: currentSession.prize,
-        };
-        return updated;
-      });
+const commitCurrentScratch = () => {
+  if (hasCommittedCurrentScratch.current) return;
+  
+  const firstUnscratched = scratchHistory.findIndex(s => s.status === "Not Scratched");
+  if (firstUnscratched === -1) return;
+  
+  console.log("📝 Committing scratch at index:", firstUnscratched);
+  
+  setScratchHistory(prev => {
+    const updated = [...prev];
+    updated[firstUnscratched] = {
+      status: "Scratching",
+      prize: { type: "none", value: "In progress..." },
+    };
+    return updated;
+  });
+  
+  // 🎯 Save to localStorage IMMEDIATELY
+  if (orderId) {
+    localStorage.setItem(`scratchInProgress_${orderId}`, JSON.stringify({
+      index: firstUnscratched,
+      timestamp: Date.now(),
+      isInProgress: true
+    }));
+  }
+  
+  hasCommittedCurrentScratch.current = true;
+};
 
-      // Callback with prize info
-      if (onScratchReveal) {
-        onScratchReveal(currentSession.prize);
+// Then update completeScratchSession to use the tracked index:
+const completeScratchSession = async (): Promise<void> => {
+  if (!currentSession || !orderId) return;
+
+  try {
+    console.log("🎯 Starting completeScratchSession");
+    console.log("Prize to set:", currentSession.prize);
+
+    const response = await fetch(`/api/scratch-session/${currentSession.sessionId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId,
+        prizeId: currentSession.prizeId,
+        isWinner: currentSession.isWinner,
+      }),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to complete scratch session');
+    }
+
+    const result = await response.json();
+
+    console.log("🔍 Looking for 'Scratching' items to update...");
+    
+    setScratchHistory(prev => {
+      const updated = [...prev];
+      let updatedCount = 0;
+      
+      for (let i = 0; i < updated.length; i++) {
+        if (updated[i].status === "Scratching") {
+          updated[i] = {
+            status: "Scratched",
+            prize: currentSession.prize,
+          };
+          updatedCount++;
+          console.log(`✅ Updated scratch at index ${i} with prize:`, currentSession.prize);
+        }
       }
+      
+      if (updatedCount === 0) {
+        console.warn("⚠️ No 'Scratching' items found to update!");
+      }
+      
+      return updated;
+    });
 
-      const isWin = 
+    // 🎯 CRITICAL: Clear the in-progress flag
+    localStorage.removeItem(`scratchInProgress_${orderId}`);
+    
+    // Rest of your existing code...
+    if (onScratchReveal) {
+      onScratchReveal(currentSession.prize);
+    }
+
+    const isWin = 
       currentSession.prize?.type !== "none" &&
       currentSession.prize?.value !== "-" &&
       currentSession.isWinner === true;
 
-
-      if (isWin && congratsAudioRef.current) {
-        congratsAudioRef.current.currentTime = 0;
-        congratsAudioRef.current.play().catch(() => {});
-      }
-
-      setSessionState('completed');
-    } catch (error) {
-      console.error('Error completing scratch session:', error);
+    if (isWin && congratsAudioRef.current) {
+      congratsAudioRef.current.currentTime = 0;
+      congratsAudioRef.current.play().catch(() => {});
     }
-  };
+
+    setSessionState('completed');
+    console.log("✅ completeScratchSession finished");
+    
+  } catch (error) {
+    console.error('Error completing scratch session:', error);
+  }
+};
 
   // 🎯 NEW: Fetch session on mount or when we need a new one
   useEffect(() => {
@@ -729,6 +893,50 @@ setShowRevealAllResultDialog(true);
 //     winIndices.includes(i) ? chosen : img.name === chosen.name ? getRandomImages(1)[0] : img
 //   );
 // }
+useEffect(() => {
+  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (hasCommittedCurrentScratch.current && !hasCompletedRef.current) {
+      // 🎯 Check if there's a scratch in progress
+      if (orderId && localStorage.getItem(`scratchInProgress_${orderId}`)) {
+        e.preventDefault();
+        e.returnValue = "You're scratching a card! If you leave now, you'll lose this scratch.";
+        return e.returnValue;
+      }
+    }
+  };
+
+  const handleUnload = () => {
+    // 🎯 On page unload, mark any in-progress scratch as lost
+    if (orderId && localStorage.getItem(`scratchInProgress_${orderId}`)) {
+      const inProgressData = localStorage.getItem(`scratchInProgress_${orderId}`);
+      if (inProgressData) {
+        const { index } = JSON.parse(inProgressData);
+        
+        // Save that this scratch was lost
+        const lostScratches = JSON.parse(localStorage.getItem(`lostScratches_${orderId}`) || '[]');
+        lostScratches.push({ index, lostAt: Date.now() });
+        localStorage.setItem(`lostScratches_${orderId}`, JSON.stringify(lostScratches));
+        
+        localStorage.removeItem(`scratchInProgress_${orderId}`);
+      }
+    }
+  };
+
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  window.addEventListener('unload', handleUnload);
+
+  return () => {
+    window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.removeEventListener('unload', handleUnload);
+  };
+}, [orderId, hasCommittedCurrentScratch.current, hasCompletedRef.current]);
+
+
+useEffect(() => {
+  if (currentSession) {
+    hasCommittedCurrentScratch.current = false;
+  }
+}, [currentSession]);
 
   return (
   <div className="relative flex flex-col items-center justify-center p-4 min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -845,17 +1053,22 @@ setShowRevealAllResultDialog(true);
               key={sessionKey}
               ref={canvasRef}
               className="absolute inset-0 cursor-pointer touch-none w-full h-full"
-            onMouseDown={(e) => {
-              
-             if (allScratchesUsed) {
-                setShowOutOfScratchesDialog(true);
-                return;
-              }
-              drawingRef.current = true;
-              startScratchSound();
-              const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-              scratchAt(e.clientX - rect.left, e.clientY - rect.top);
-            }}
+           onMouseDown={(e) => {
+  if (allScratchesUsed) {
+    setShowOutOfScratchesDialog(true);
+    return;
+  }
+  
+  // 🚨 COMMIT ON FIRST SCRATCH
+  if (!hasCommittedCurrentScratch.current) {
+    commitCurrentScratch();
+  }
+  
+  drawingRef.current = true;
+  startScratchSound();
+  const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
+  scratchAt(e.clientX - rect.left, e.clientY - rect.top);
+}}
             onMouseMove={(e) => {
               if (!drawingRef.current) return;
               const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
@@ -867,6 +1080,10 @@ setShowRevealAllResultDialog(true);
               setShowOutOfScratchesDialog(true);
               return;
             }
+             // 🚨 COMMIT ON FIRST SCRATCH
+  if (!hasCommittedCurrentScratch.current) {
+    commitCurrentScratch();
+  }
               drawingRef.current = true;
               startScratchSound();
               const t = e.touches[0];
@@ -962,21 +1179,34 @@ setShowRevealAllResultDialog(true);
                         </span>
                       </td>
                       <td className="px-1 sm:px-2 md:px-3 py-2 sm:py-3">
-                        <span className={`inline-flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold ${
-                          item.status === "Scratched" 
-                            ? "bg-green-500/20 text-green-400 border border-green-500/30" 
-                            : "bg-gray-700/50 text-gray-400 border border-gray-600/30"
-                        }`}>
-                          <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${
-                            item.status === "Scratched" ? "bg-green-400" : "bg-gray-400"
-                          }`}></span>
-                          <span className="hidden sm:inline">{item.status}</span>
-                          <span className="sm:hidden">{item.status === "Scratched" ? "✓" : "−"}</span>
-                        </span>
-                      </td>
-                      <td className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-right font-bold rounded-r-lg">
-                        {item.status === "Not Scratched" ? (
-                          <span className="text-gray-500 text-xs sm:text-sm">-</span>
+        <span className={`inline-flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold ${
+          item.status === "Scratched" 
+            ? "bg-green-500/20 text-green-400 border border-green-500/30" 
+            : item.status === "Scratching" // ✅ Add this case
+            ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 animate-pulse"
+            : "bg-gray-700/50 text-gray-400 border border-gray-600/30"
+        }`}>
+          <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${
+            item.status === "Scratched" ? "bg-green-400" 
+            : item.status === "Scratching" ? "bg-yellow-400 animate-pulse" // ✅ Add this
+            : "bg-gray-400"
+          }`}></span>
+          <span className="hidden sm:inline">{item.status}</span>
+          <span className="sm:hidden">
+            {item.status === "Scratched" ? "✓" 
+             : item.status === "Scratching" ? "⟳" // ✅ Add this
+             : "−"}
+          </span>
+        </span>
+      </td>
+      
+      <td className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-right font-bold rounded-r-lg">
+        {item.status === "Not Scratched" ? (
+          <span className="text-gray-500 text-xs sm:text-sm">-</span>
+        ) : item.status === "Scratching" ? ( // ✅ Add this case
+          <span className="text-yellow-400 text-xs sm:text-sm animate-pulse">
+            Scratching...
+          </span>
                         ) : (
                           <>
                             {(() => {
