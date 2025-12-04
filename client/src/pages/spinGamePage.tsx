@@ -76,7 +76,7 @@ export default function SpinGamePage() {
     winnerLabel: string,
     winnerPrize: any
   ) => {
-    console.log("🎯 Spin complete:", { winnerSegment, winnerLabel, winnerPrize });
+    // console.log("🎯 Spin complete:", { winnerSegment, winnerLabel, winnerPrize });
 
     // Normalize prize data for display
     const rawPrize = winnerPrize || {};
@@ -105,7 +105,7 @@ export default function SpinGamePage() {
       prize: normalizedPrize,
     };
 
-    console.log("🎯 Normalized Game Result:", normalizedResult);
+    // console.log("🎯 Normalized Game Result:", normalizedResult);
 
     setGameResult(normalizedResult);
     setIsResultModalOpen(true);

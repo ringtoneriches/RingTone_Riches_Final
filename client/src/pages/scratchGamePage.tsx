@@ -36,11 +36,11 @@ export default function ScratchGamePage() {
   // Ensures query invalidation happens even if child component unmounts
   const completeScratchMutation = useMutation({
     mutationFn: async (params: { sessionId: string; payload: CompleteSessionPayload }) => {
-      console.log('🔒 Parent mutation: Completing scratch session:', params.sessionId);
+      // console.log('🔒 Parent mutation: Completing scratch session:', params.sessionId);
       return await completeSession(params.sessionId, params.payload);
     },
     onSuccess: (data) => {
-      console.log('✅ Parent mutation success: Balance credited, invalidating queries');
+      // console.log('✅ Parent mutation success: Balance credited, invalidating queries');
       
       // ✅ CRITICAL: Query invalidation happens HERE in parent (survives child unmount)
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
@@ -101,7 +101,7 @@ export default function ScratchGamePage() {
     queryFn: async () => {
       const res = await apiRequest(`/api/scratch-order/${orderId}`, "GET");
       const data = await res.json();
-      console.log("✅ Scratch order data:", data);
+      // console.log("✅ Scratch order data:", data);
       return data;
     },
   });
@@ -116,7 +116,7 @@ export default function ScratchGamePage() {
 
   // 🎯 Callback 1: Handle scratch reveal - shows popup INSTANTLY when user scratches to 85%
   const handleScratchReveal = (prize: any) => {
-    console.log("🎯 Scratch revealed (instant):", prize);
+    // console.log("🎯 Scratch revealed (instant):", prize);
     
     // Store prize for later use in mutation success handler
     setGameResult({ prize });
@@ -128,7 +128,7 @@ export default function ScratchGamePage() {
   // 🎯 Callback 2: Handle session commit - child requests parent to save result via mutation
   // Returns promise that child can await to handle loading/error states
   const handleCommitSession = async (sessionId: string, payload: CompleteSessionPayload): Promise<void> => {
-    console.log("🔒 Commit session requested:", sessionId, payload);
+    // console.log("🔒 Commit session requested:", sessionId, payload);
     
     // Use parent mutation (query invalidation survives child unmount)
     await completeScratchMutation.mutateAsync({ sessionId, payload });
@@ -136,7 +136,7 @@ export default function ScratchGamePage() {
   
   // 🎯 Callback 3: Refresh balance - used after reveal-all completes
   const handleRefreshBalance = () => {
-    console.log("🔄 Refreshing user balance and order data");
+    // console.log("🔄 Refreshing user balance and order data");
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     queryClient.invalidateQueries({ queryKey: ["/api/scratch-order", orderId] });
   };

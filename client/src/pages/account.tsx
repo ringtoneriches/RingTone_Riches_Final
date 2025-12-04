@@ -182,7 +182,7 @@ export default function Account() {
     user: User | null;
   };
 
-  console.log("User data:", user);
+  // console.log("User data:", user);
   const LogoutMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("/api/auth/logout", "POST");

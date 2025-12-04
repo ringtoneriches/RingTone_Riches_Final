@@ -21,7 +21,7 @@ export default function AccountDetails() {
     queryFn: async () => {
       const res = await apiRequest("/api/auth/user", "GET");
      const data = await res.json();
-  console.log("me data:", data);
+  // console.log("me data:", data);
       return data;
     },
 });

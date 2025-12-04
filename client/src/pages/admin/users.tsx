@@ -204,7 +204,7 @@ export default function AdminUsers() {
         title: "All data reset successfully",
         description: "The data has been successfully deleted.",
       });
-      console.log("all data removed")
+      // console.log("all data removed")
       setDeleteDialogOpen(false);
       setUserToDelete(null);
     },

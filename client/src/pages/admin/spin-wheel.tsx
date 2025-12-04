@@ -1246,7 +1246,7 @@ function WheelSettingsDialog2({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  console.log("WheelSettingsDialog (Wheel 2) rendering");
+  // console.log("WheelSettingsDialog (Wheel 2) rendering");
   const { toast } = useToast();
   const [segments, setSegments] = useState<WheelSegment[]>([]);
   const [maxSpinsPerUser, setMaxSpinsPerUser] = useState<string>("");
@@ -1266,10 +1266,10 @@ function WheelSettingsDialog2({
 
    useEffect(() => {
     if (config && open) {
-      console.log("Wheel 2 Config Loaded:", {
-        isVisible: config.isVisible,
-        source: '/api/admin/game-spin-2-config'
-      });
+      // console.log("Wheel 2 Config Loaded:", {
+      //   isVisible: config.isVisible,
+      //   source: '/api/admin/game-spin-2-config'
+      // });
       setIsVisible(config.isVisible ?? true);
     }
   }, [config, open]);

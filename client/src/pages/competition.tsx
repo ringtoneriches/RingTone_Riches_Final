@@ -78,7 +78,7 @@ export default function CompetitionPage() {
     enabled: !!id,
   });
 
-  console.log("✅ Competition data:", competition);
+  // console.log("✅ Competition data:", competition);
   const { data: userTickets = [] } = useQuery<any[]>({
     queryKey: ["/api/user/tickets"],
     enabled: isAuthenticated,

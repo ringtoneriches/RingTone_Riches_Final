@@ -19,11 +19,11 @@ export default function CheckoutSuccess() {
       const paymentRef = urlParams.get("paymentref");
       const orderId = urlParams.get("orderId"); // ✅ NEW
 
-      console.log("🔍 Success Page Query:", {
-        paymentJobRef,
-        paymentRef,
-        orderId,
-      });
+      // console.log("🔍 Success Page Query:", {
+      //   paymentJobRef,
+      //   paymentRef,
+      //   orderId,
+      // });
 
       // ⭐ Must include orderId when confirming:
       if (paymentJobRef && paymentRef && orderId) {
@@ -35,7 +35,7 @@ export default function CheckoutSuccess() {
           });
 
           const data = await res.json();
-          console.log(data)
+          // console.log(data)
           if (data.success) {
             toast({
               title: "Payment Successful",

@@ -596,7 +596,7 @@ ctx.stroke();
 
     try {
       // Refetch configuration for real-time updates before batch processing
-      console.log("Refetching configuration before revealing all spins...");
+      // console.log("Refetching configuration before revealing all spins...");
       await refetchConfig();
 
       // 🔒 CRITICAL: Call server with keepalive to ensure completion
@@ -699,7 +699,7 @@ ctx.stroke();
 
     try {
       // 🎯 STEP 1: Refetch configuration for real-time updates
-      console.log("Refetching wheel configuration for latest settings...");
+      // console.log("Refetching wheel configuration for latest settings...");
       const configResult = await refetchConfig();
       const freshSegments = (configResult.data?.segments || []).map((seg: any) => {
         const icon = ICON_MAP[seg.iconKey] || seg.iconKey;
@@ -724,7 +724,7 @@ ctx.stroke();
       });
 
       // 🎯 STEP 2: Call server to get the winning segment (server-side determination)
-      console.log("Calling server for winning segment...");
+      // console.log("Calling server for winning segment...");
       const response = await fetch("/api/play-spin-wheel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -740,7 +740,7 @@ ctx.stroke();
       }
 
       const result = await response.json();
-      console.log("Server returned result:", result);
+      // console.log("Server returned result:", result);
       const winningSegmentId = result.winningSegmentId;
 
       // Find the winning segment index in our segments array
@@ -751,7 +751,7 @@ ctx.stroke();
         throw new Error("Invalid winning segment received from server");
       }
 
-      console.log(`Winning segment: ${freshSegments[winningIndex].label} (index ${winningIndex})`);
+      // console.log(`Winning segment: ${freshSegments[winningIndex].label} (index ${winningIndex})`);
 
       // 🎯 STEP 3: Calculate exact rotation to land on winning segment
       const segAngle = (2 * Math.PI) / freshSegments.length;
@@ -776,7 +776,7 @@ ctx.stroke();
         targetRotation += 2 * Math.PI;
       }
 
-      console.log(`Calculated rotation: ${targetRotation} radians (${(targetRotation * 180 / Math.PI).toFixed(2)} degrees)`);
+      // console.log(`Calculated rotation: ${targetRotation} radians (${(targetRotation * 180 / Math.PI).toFixed(2)} degrees)`);
 
       // 🎯 STEP 4: Animate to the exact position
       const duration = 4000;

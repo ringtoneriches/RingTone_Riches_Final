@@ -24,10 +24,10 @@ const SpinBilling = () => {
   //     enabled: !!id,
   //   });
   
-    console.log("✅ Competition data:", competition);
-console.log("orderId:", orderId)
-  console.log(competition)
-  console.log("Wheel Type:", competition?.wheelType);
+//     console.log("✅ Competition data:", competition);
+// console.log("orderId:", orderId)
+//   console.log(competition)
+//   console.log("Wheel Type:", competition?.wheelType);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-zinc-950 via-black to-zinc-900 relative overflow-hidden">

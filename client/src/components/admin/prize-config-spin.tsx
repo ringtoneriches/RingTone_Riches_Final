@@ -144,8 +144,8 @@ export default function PrizeConfigSpin({
 
     // Verify total again before sending
     const finalTotal = processedSegments.reduce((sum, seg) => sum + seg.probability, 0);
-    console.log('Saving with segments:', processedSegments);
-    console.log('Final total before save:', finalTotal);
+    // console.log('Saving with segments:', processedSegments);
+    // console.log('Final total before save:', finalTotal);
 
     onSave({
       type: "spin",
