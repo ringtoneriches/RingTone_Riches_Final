@@ -179,8 +179,7 @@ export default function TermsAndConditions() {
             </h2>
             <div className="space-y-4">
               <p>
-                If you wish to enter any competition for free, send a stamped,
-                unenclosed letter stating:{" "}
+                If you wish to enter any competition for free, send a stamped 1st Class or Second Class letter, inside stating:{" "}
               </p>
               <p>– The competition you wish to enter</p>
               <p>– The correct answer (if applicable) </p>
