@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import Stripe from "stripe";
 import multer from "multer";
@@ -50,6 +50,7 @@ import { z } from "zod";
 import { sendOrderConfirmationEmail, sendWelcomeEmail, sendPromotionalEmail, sendPasswordResetEmail, sendTopupConfirmationEmail } from "./email";
 import { wsManager } from "./websocket";
 import { upload } from "./cloudinary";
+import { isNotRestricted } from "./restriction";
 
 // Default spin wheel configuration - 26 segments with 6 evenly-distributed black segments
 // Color palette: Black #000000, Red #FE0000, White #FFFFFF, Blue #1E54FF, Yellow #FEED00, Green #00A223
@@ -198,6 +199,8 @@ const scratchConfigSchema = z.object({
   isVisible: z.boolean().optional(),
 });
 
+
+
 // const uploadDir = path.join(process.cwd(), "attached_assets", "competitions");
 // if (!fs.existsSync(uploadDir)) {
 //   fs.mkdirSync(uploadDir, { recursive: true });
@@ -245,6 +248,8 @@ export const isAdmin = (req: any, res: any, next: any) => {
   
   next();
 };
+
+
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -3602,7 +3607,7 @@ app.post("/api/user/newsletter/unsubscribe", isAuthenticated, async (req: any, r
   }
 });
 
-app.post("/api/wallet/topup", isAuthenticated, async (req: any, res) => {
+app.post("/api/wallet/topup", isAuthenticated, isNotRestricted,  async (req: any, res) => {
   try {
     const userId = req.user.id;
     const { amount, direct } = req.body;
@@ -4222,15 +4227,33 @@ app.get("/api/admin/dashboard", isAuthenticated, isAdmin, async (req: any, res) 
   try {
     // Get total users
     const totalUsers = await db.select({ count: sql<number>`count(*)` }).from(users);
-    
+
     // Get total competitions
     const totalCompetitions = await db.select({ count: sql<number>`count(*)` }).from(competitions);
-    
+
     // Get total revenue
-    const revenueResult = await db.select({ total: sql<number>`coalesce(sum(${orders.totalAmount}), 0)` })
+    const revenueResult = await db.select({
+      total: sql<number>`coalesce(sum(${orders.totalAmount}), 0)`
+    })
       .from(orders)
       .where(eq(orders.status, "completed"));
+
+    // 👉 NEW: Total site credit across all users
+    const totalSiteCreditResult = await db.select({
+      total: sql<number>`coalesce(sum(${users.balance}), 0)`
+    }).from(users);
+
     
+   // 👉 NEW: Total approved withdrawals
+    const totalApprovedWithdrawalsResult = await db.select({
+      total: sql<number>`coalesce(sum(${withdrawalRequests.amount}), 0)`
+    })
+      .from(withdrawalRequests)
+      .where(inArray(withdrawalRequests.status, ["approved", "processed"]));
+
+
+
+
     // Get recent orders
     const recentOrders = await db
       .select()
@@ -4245,7 +4268,12 @@ app.get("/api/admin/dashboard", isAuthenticated, isAdmin, async (req: any, res) 
         totalUsers: totalUsers[0]?.count || 0,
         totalCompetitions: totalCompetitions[0]?.count || 0,
         totalRevenue: revenueResult[0]?.total || 0,
+
+        // ⭐ Added fields
+        totalSiteCredit: totalSiteCreditResult[0]?.total || 0,
+        totalApprovedWithdrawals: totalApprovedWithdrawalsResult[0]?.total || 0,
       },
+
       recentOrders: recentOrders.map(order => ({
         id: order.orders.id,
         user: {
@@ -4264,6 +4292,7 @@ app.get("/api/admin/dashboard", isAuthenticated, isAdmin, async (req: any, res) 
     res.status(500).json({ message: "Failed to fetch dashboard data" });
   }
 });
+
 
 // Manage competitions
 app.get("/api/admin/competitions", isAuthenticated, isAdmin, async (req: any, res) => {
@@ -4546,7 +4575,8 @@ app.post("/api/admin/competitions/:id/draw-winner", isAuthenticated, isAdmin, as
 });
 
 // Game Spin Wheel Configuration Routes
-// GET endpoint is accessible to all authenticated users (they need to see the wheel to play)
+
+// Update the existing game-spin-config endpoint
 app.get("/api/admin/game-spin-config", isAuthenticated, async (req: any, res) => {
   try {
     const { gameSpinConfig } = await import("@shared/schema");
@@ -4557,12 +4587,50 @@ app.get("/api/admin/game-spin-config", isAuthenticated, async (req: any, res) =>
       return res.json(DEFAULT_SPIN_WHEEL_CONFIG);
     }
     
-    res.json(config);
+    // Get win stats for all segments
+    const winStats = {};
+    
+    // Initialize with 0 for all segments
+    const segments = config.segments || [];
+    segments.forEach((segment: any) => {
+      if (segment.id) {
+        winStats[segment.id] = 0;
+      }
+    });
+    
+    // Get wins from spin_wins table (if you're tracking wins there)
+    const spinWinsData = await db
+      .select({
+        segmentId: spinWins.segmentId,
+        winCount: sql<number>`count(*)`
+      })
+      .from(spinWins)
+      .groupBy(spinWins.segmentId);
+    
+    // Add the counts
+    spinWinsData.forEach(win => {
+      if (win.segmentId && winStats[win.segmentId] !== undefined) {
+        winStats[win.segmentId] = Number(win.winCount);
+      }
+    });
+    
+    // Add win counts to segments
+    const segmentsWithWins = segments.map((segment: any) => ({
+      ...segment,
+      currentWins: winStats[segment.id] || 0
+    }));
+    
+    res.json({
+      ...config,
+      segments: segmentsWithWins
+    });
+    
   } catch (error) {
     console.error("Error fetching spin config:", error);
     res.status(500).json({ message: "Failed to fetch spin configuration" });
   }
 });
+
 
 app.put("/api/admin/game-spin-config", isAuthenticated, isAdmin, async (req: any, res) => {
   try {
@@ -4639,7 +4707,44 @@ app.get("/api/admin/game-spin-2-config", isAuthenticated, async (req: any, res) 
       return res.json(DEFAULT_SPIN_WHEEL_2_CONFIG);
     }
     
-    res.json(config);
+    // Get win stats for all segments
+    const winStats = {};
+    
+    // Initialize with 0 for all segments
+    const segments = config.segments || [];
+    segments.forEach((segment: any) => {
+      if (segment.id) {
+        winStats[segment.id] = 0;
+      }
+    });
+    
+    // Get wins from spin_wins table (if you're tracking wins there)
+    const spinWinsData = await db
+      .select({
+        segmentId: spinWins.segmentId,
+        winCount: sql<number>`count(*)`
+      })
+      .from(spinWins)
+      .groupBy(spinWins.segmentId);
+    
+    // Add the counts
+    spinWinsData.forEach(win => {
+      if (win.segmentId && winStats[win.segmentId] !== undefined) {
+        winStats[win.segmentId] = Number(win.winCount);
+      }
+    });
+    
+    // Add win counts to segments
+    const segmentsWithWins = segments.map((segment: any) => ({
+      ...segment,
+      currentWins: winStats[segment.id] || 0
+    }));
+    
+    res.json({
+      ...config,
+      segments: segmentsWithWins
+    });
+    
   } catch (error) {
     console.error("Error fetching spin config:", error);
     res.status(500).json({ message: "Failed to fetch spin configuration" });
@@ -4707,6 +4812,29 @@ app.put("/api/admin/game-spin-2-config", isAuthenticated, isAdmin, async (req: a
   } catch (error) {
     console.error("Error updating spin config:", error);
     res.status(500).json({ message: "Failed to update spin configuration" });
+  }
+});
+
+// Add a test endpoint to check spin_wins data
+app.get("/api/admin/test-spin-wins", isAuthenticated, async (req: any, res) => {
+  try {
+    const spinWinsData = await db
+      .select({
+        segmentId: spinWins.segmentId,
+        winCount: sql<number>`count(*)`
+      })
+      .from(spinWins)
+      .groupBy(spinWins.segmentId);
+    
+    const allWins = await db.select().from(spinWins).limit(10);
+    
+    res.json({
+      totalWins: spinWinsData.reduce((sum, w) => sum + Number(w.winCount), 0),
+      winsBySegment: spinWinsData,
+      recentWins: allWins
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -4903,6 +5031,52 @@ app.delete(
     }
   }
 );
+
+app.post("/api/admin/users/restrict/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await storage.getUser(id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.isRestricted)
+      return res.status(400).json({ message: "User is already restricted" });
+
+    await storage.updateUser(id, {
+      isRestricted: true,
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({ message: "User restricted successfully", userId: id });
+
+  } catch (error) {
+    console.error("Error restricting user:", error);
+    res.status(500).json({ message: "Failed to restrict user" });
+  }
+});
+
+app.post("/api/admin/users/unrestrict/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await storage.getUser(id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (!user.isRestricted)
+      return res.status(400).json({ message: "User is not restricted" });
+
+    await storage.updateUser(id, {
+      isRestricted: false,
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({ message: "User unrestricted", userId: id });
+
+  } catch (error) {
+    console.error("Error unrestricting user:", error);
+    res.status(500).json({ message: "Failed to unrestrict user" });
+  }
+});
 
 
 

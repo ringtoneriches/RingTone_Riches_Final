@@ -355,7 +355,7 @@ export default function AdminOrders() {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-sm text-muted-foreground">
-                      {new Date(order.createdAt).toLocaleDateString()}
+                      {new Date(order.createdAt).toLocaleString()}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <Button

@@ -9,6 +9,9 @@ interface DashboardStats {
     totalUsers: number;
     totalCompetitions: number;
     totalRevenue: number;
+    totalSiteCredit: number;           // ⭐ NEW
+    totalApprovedWithdrawals: number;  // ⭐ NEW
+
   };
   recentOrders: Array<{
     id: string;
@@ -129,6 +132,24 @@ export default function AdminDashboard() {
             gradient="from-green-500 to-green-700"
             delay={300}
           />
+          <StatCard
+            title="Total Site Credit"
+            value={`£${parseFloat(data?.stats.totalSiteCredit?.toString() || "0").toFixed(2)}`}
+            icon={DollarSign}
+            color="bg-purple-600"
+            gradient="from-purple-500 to-purple-700"
+            delay={400}
+          />
+
+          <StatCard
+            title="Approved Withdrawals"
+            value={`£${parseFloat(data?.stats.totalApprovedWithdrawals?.toString() || "0").toFixed(2)}`}
+            icon={TrendingUp}
+            color="bg-red-600"
+            gradient="from-red-500 to-red-700"
+            delay={500}
+          />
+
         </div>
 
         {/* Recent Orders with Modern Design */}

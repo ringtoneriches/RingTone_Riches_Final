@@ -116,9 +116,8 @@ export default function AdminEntriesPage() {
     },
   });
 
-   const totalPages= Math.ceil(entries.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedEnteries  = entries.slice(startIndex , startIndex + itemsPerPage);
+   
+
   // Delete entry mutation
   const deleteMutation = useMutation({
     mutationFn: async (entryId: string) => {
@@ -186,6 +185,10 @@ export default function AdminEntriesPage() {
       return true;
     });
   }, [entries, competitionFilter, searchInput]);
+
+  const totalPages = Math.ceil(filteredEntries.length / itemsPerPage);
+const startIndex = (currentPage - 1) * itemsPerPage;
+const paginatedEntries = filteredEntries.slice(startIndex, startIndex + itemsPerPage);
 
   const handleDeleteEntry = (entryId: string) => {
     setEntryToDelete(entryId);
@@ -413,14 +416,14 @@ export default function AdminEntriesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedEnteries.length === 0 ? (
+            {paginatedEntries.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                   No entries found
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedEnteries.map((entry) => (
+              paginatedEntries.map((entry) => (
                 <TableRow key={entry.id} data-testid={`row-entry-${entry.id}`}>
                   <TableCell className="font-mono font-bold text-primary">
                     {entry.ticketNumber}
@@ -454,7 +457,7 @@ export default function AdminEntriesPage() {
                     {entry.prizeAmount ? `£${entry.prizeAmount}` : "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
-                    {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : 'N/A'}
+                    {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : 'N/A'}
                   </TableCell>
                   <TableCell className="text-center">
                     <Button
@@ -499,8 +502,8 @@ export default function AdminEntriesPage() {
 
       {/* Results count */}
       <div className="text-sm text-muted-foreground text-center">
-        Showing {paginatedEnteries.length} of {entries.length} entries
-      </div>
+  Showing {paginatedEntries.length} of {filteredEntries.length} entries
+</div>
     </div>
 
     {/* Delete Confirmation Dialog */}
