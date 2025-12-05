@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-import { Download, Filter, Search, Ticket, Trash2, Calendar } from "lucide-react";
+import { Download, Filter, Search, Ticket, Trash2, Calendar, ArrowBigLeft, ArrowBigRight } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,11 +58,13 @@ export default function AdminEntriesPage() {
   const { toast } = useToast();
   const [searchInput, setSearchInput] = useState("");
   const [competitionFilter, setCompetitionFilter] = useState<string>("all");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("1h");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<string | null>(null);
+  const [currentPage , setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
 
   // Calculate date range based on filter (memoized to prevent infinite loops)
   const { dateFrom, dateTo } = useMemo(() => {
@@ -114,6 +116,9 @@ export default function AdminEntriesPage() {
     },
   });
 
+   const totalPages= Math.ceil(entries.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedEnteries  = entries.slice(startIndex , startIndex + itemsPerPage);
   // Delete entry mutation
   const deleteMutation = useMutation({
     mutationFn: async (entryId: string) => {
@@ -408,14 +413,14 @@ export default function AdminEntriesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredEntries.length === 0 ? (
+            {paginatedEnteries.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                   No entries found
                 </TableCell>
               </TableRow>
             ) : (
-              filteredEntries.map((entry) => (
+              paginatedEnteries.map((entry) => (
                 <TableRow key={entry.id} data-testid={`row-entry-${entry.id}`}>
                   <TableCell className="font-mono font-bold text-primary">
                     {entry.ticketNumber}
@@ -469,9 +474,32 @@ export default function AdminEntriesPage() {
         </Table>
       </div>
 
+         {/* PAGINATION */}
+        <div className="flex justify-center items-center gap-4 my-6">
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage((p) => p - 1)}
+            disabled={currentPage === 1}
+          >
+            <ArrowBigLeft />
+          </Button>
+
+          <span className="font-medium">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage((p) => p + 1)}
+            disabled={currentPage === totalPages}
+          >
+             <ArrowBigRight />
+          </Button>
+        </div>
+
       {/* Results count */}
       <div className="text-sm text-muted-foreground text-center">
-        Showing {filteredEntries.length} of {entries.length} entries
+        Showing {paginatedEnteries.length} of {entries.length} entries
       </div>
     </div>
 
