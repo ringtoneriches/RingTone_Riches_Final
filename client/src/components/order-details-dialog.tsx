@@ -103,7 +103,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsPr
             {parseFloat(pointsUsed) > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>Ringtone Points:</span>
-                <span data-testid="text-points-used">-£{pointsUsed}</span>
+                <span data-testid="text-points-used">-pts{pointsUsed}</span>
               </div>
             )}
 

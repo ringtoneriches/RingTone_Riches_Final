@@ -3609,6 +3609,7 @@ app.post("/api/user/newsletter/unsubscribe", isAuthenticated, async (req: any, r
 
 app.post("/api/wallet/topup", isAuthenticated, isNotRestricted,  async (req: any, res) => {
   try {
+      console.log("Wallet topup endpoint called - middleware passed");
     const userId = req.user.id;
     const { amount, direct } = req.body;
 
@@ -3659,7 +3660,7 @@ app.post("/api/wallet/topup", isAuthenticated, isNotRestricted,  async (req: any
   }
 });
 
-app.post("/api/wallet/topup-checkout", isAuthenticated, async (req: any, res) => {
+app.post("/api/wallet/topup-checkout", isAuthenticated, isNotRestricted ,  async (req: any, res) => {
   try {
     const { amount } = req.body;
     const userId = req.user.id; // Get from authenticated session
@@ -5291,6 +5292,9 @@ app.get("/api/admin/orders", isAuthenticated, isAdmin, async (req: any, res) => 
       paymentMethod: order.orders.paymentMethod,
       status: order.orders.status,
       createdAt: order.orders.createdAt,
+      walletAmount: order.orders.walletAmount,       // ✅ add this
+    pointsAmount: order.orders.pointsAmount,       // ✅ add this
+    cashflowsAmount: order.orders.cashflowsAmount, // ✅ add this
     })));
   } catch (error) {
     console.error("Error fetching orders:", error);
@@ -5302,26 +5306,28 @@ app.get("/api/admin/orders", isAuthenticated, isAdmin, async (req: any, res) => 
 app.delete("/api/admin/orders/:id", isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // First, delete associated tickets
+
+    // Delete dependent transactions first
+    await db.delete(transactions).where(eq(transactions.orderId, id));
+
+    // Delete dependent tickets
     await db.delete(tickets).where(eq(tickets.orderId, id));
-    
-    // Then delete the order
+
+    // Delete the order
     const [deleted] = await db
       .delete(orders)
       .where(eq(orders.id, id))
       .returning();
-    
-    if (!deleted) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-    
+
+    if (!deleted) return res.status(404).json({ message: "Order not found" });
+
     res.json({ message: "Order deleted successfully" });
   } catch (error) {
     console.error("Error deleting order:", error);
     res.status(500).json({ message: "Failed to delete order" });
   }
 });
+
 
 // Get system analytics
 app.get("/api/admin/analytics", isAuthenticated, isAdmin, async (req: any, res) => {

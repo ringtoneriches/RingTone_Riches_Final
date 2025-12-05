@@ -49,6 +49,8 @@ export const users = pgTable("users", {
   addressCity: text("address_city"),
   addressPostcode: varchar("address_postcode"),
   addressCountry: varchar("address_country"),
+  isRestricted: boolean("is_restricted").default(false),
+  restrictedAt: timestamp("restricted_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
