@@ -614,6 +614,18 @@ export default function AdminUsers() {
                     <span className="text-xs text-muted-foreground">(Cannot change own role)</span>
                   )}
                 </div>
+                 <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="isDisabled"
+                    className="w-4 h-4"
+                    data-testid="checkbox-is-disabled"
+                  />
+                  <Label htmlFor="isDisabled">Disable User</Label>
+                  {/* {editingUser?.id === currentUser?.id && (
+                    <span className="text-xs text-muted-foreground">(Cannot change own role)</span>
+                  )} */}
+                </div>
               </div>
 
               <div className="space-y-3 border-t pt-4">
