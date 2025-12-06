@@ -951,7 +951,7 @@ function WheelSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-8xl max-h-[90vh] bg-gray-700">
         <DialogHeader>
           <DialogTitle>Configure Spin Wheel 1</DialogTitle>
           <p className="text-sm text-muted-foreground">
@@ -976,7 +976,7 @@ function WheelSettingsDialog({
           </div>
 
           {/* Max Spins Per User */}
-          <div>
+          {/* <div>
             <Label>Max Spins Per User (optional)</Label>
             <Input
               type="number"
@@ -985,10 +985,10 @@ function WheelSettingsDialog({
               placeholder="Leave empty for unlimited"
               data-testid="input-max-spins"
             />
-          </div>
+          </div> */}
 
           {/* Mystery Prize Configuration */}
-          <div className="space-y-3 rounded-lg border p-4 bg-card">
+          {/* <div className="space-y-3 rounded-lg border p-4 bg-card">
             <div>
               <Label className="text-sm font-semibold">Mystery Prize (R Prize - Segment 26)</Label>
               <p className="text-xs text-muted-foreground mt-1">
@@ -1056,7 +1056,7 @@ function WheelSettingsDialog({
                 />
               </div>
             </div>
-          </div>
+          </div> */}
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -1069,17 +1069,17 @@ function WheelSettingsDialog({
               </div>
             </div>
 
-            <div className="grid gap-3 max-h-[50vh] overflow-y-auto pr-2">
+            <div className="grid  grid-cols-1 md:grid-cols-2 gap-3 max-h-[50vh]   overflow-y-auto pr-2">
               {segments.map((segment, index) => {
                 const isMaxWinsReached = segment.maxWins && segment.maxWins > 0 && 
                                          (segment.currentWins || 0) >= segment.maxWins;
                 return (
                   <div
                     key={segment.id}
-                    className="border border-border rounded-lg p-4 space-y-3 bg-card"
+                    className="border border-border  rounded-lg p-4 space-y-3 bg-card"
                   >
                     {/* Simplified header */}
-                    <div className="flex items-center justify-between mb-2 pb-2 border-b">
+                    <div className="flex items-center  justify-between mb-2 pb-2 border-b">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-sm">Position {index + 1}</span>
                         {segment.iconKey === "R_Prize" && (
@@ -1138,23 +1138,38 @@ function WheelSettingsDialog({
                     </div>
 
                     <div className="grid grid-cols-5 gap-3">
-                      <div>
-                        <Label className="text-xs">Reward Type</Label>
-                        <select
-                          value={segment.rewardType}
-                          onChange={(e) =>
-                            updateSegment(index, {
-                              rewardType: e.target.value as any,
-                            })
-                          }
-                          className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                          data-testid={`select-reward-type-${index}`}
-                        >
-                          <option value="cash">Cash (£)</option>
-                          <option value="points">Points</option>
-                          <option value="lose">No Win</option>
-                        </select>
-                      </div>
+                     <div>
+  <Label className="text-xs">Reward Type</Label>
+
+  <select
+    value={segment.rewardType}
+    onChange={(e) =>
+      updateSegment(index, { rewardType: e.target.value as any })
+    }
+    className={`
+      w-full h-10 px-3 rounded-md border 
+      appearance-none
+      ${
+        segment.rewardType === "cash"
+          ? "bg-green-600 text-white border-green-700"
+          :
+          segment.rewardType === "points"?
+          "bg-yellow-500 text-white border-blue-700"
+          :
+          segment.rewardType === "lose"
+          ? "bg-red-600 text-white border-red-700"
+          : "bg-background text-foreground border-input"
+      }
+    `}
+    data-testid={`select-reward-type-${index}`}
+  >
+    <option value="cash" className="bg-white text-black">Cash (£)</option>
+    <option value="points" className="bg-white text-black">Points</option>
+    <option value="lose" className="bg-white text-black">No Win</option>
+  </select>
+</div>
+
+
                       <div>
                         <Label className="text-xs">Reward Value</Label>
                         <Input
@@ -1426,7 +1441,7 @@ function WheelSettingsDialog2({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-7xl max-h-[90vh] bg-gray-700 overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Configure Christmas Wheel</DialogTitle>
           <p className="text-sm text-muted-foreground">
@@ -1451,7 +1466,7 @@ function WheelSettingsDialog2({
           </div>
 
           {/* Max Spins Per User */}
-          <div>
+          {/* <div>
             <Label>Max Spins Per User (optional)</Label>
             <Input
               type="number"
@@ -1460,10 +1475,10 @@ function WheelSettingsDialog2({
               placeholder="Leave empty for unlimited"
               data-testid="input-max-spins"
             />
-          </div>
+          </div> */}
 
           {/* Mystery Prize Configuration */}
-          <div className="space-y-3 rounded-lg border p-4 bg-card">
+          {/* <div className="space-y-3 rounded-lg border p-4 bg-card">
             <div>
               <Label className="text-sm font-semibold">Mystery Prize (R Prize - Segment 26)</Label>
               <p className="text-xs text-muted-foreground mt-1">
@@ -1531,7 +1546,7 @@ function WheelSettingsDialog2({
                 />
               </div>
             </div>
-          </div>
+          </div> */}
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -1544,7 +1559,7 @@ function WheelSettingsDialog2({
               </div>
             </div>
 
-            <div className="grid gap-3 max-h-[50vh] overflow-y-auto pr-2">
+            <div className="grid  grid-cols-1 md:grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto pr-2">
               {segments.map((segment, index) => {
                 const isMaxWinsReached = segment.maxWins && segment.maxWins > 0 && 
                                          (segment.currentWins || 0) >= segment.maxWins;
@@ -1620,23 +1635,36 @@ function WheelSettingsDialog2({
                     </div>
 
                     <div className="grid grid-cols-5 gap-3">
-                      <div>
-                        <Label className="text-xs">Reward Type</Label>
-                        <select
-                          value={segment.rewardType}
-                          onChange={(e) =>
-                            updateSegment(index, {
-                              rewardType: e.target.value as any,
-                            })
-                          }
-                          className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                          data-testid={`select-reward-type-${index}`}
-                        >
-                          <option value="cash">Cash (£)</option>
-                          <option value="points">Points</option>
-                          <option value="lose">No Win</option>
-                        </select>
-                      </div>
+                        <div>
+  <Label className="text-xs">Reward Type</Label>
+
+  <select
+    value={segment.rewardType}
+    onChange={(e) =>
+      updateSegment(index, { rewardType: e.target.value as any })
+    }
+    className={`
+      w-full h-10 px-3 rounded-md border 
+      appearance-none
+      ${
+        segment.rewardType === "cash"
+          ? "bg-green-600 text-white border-green-700"
+          :
+          segment.rewardType === "points"?
+          "bg-yellow-500 text-white border-blue-700"
+          :
+          segment.rewardType === "lose"
+          ? "bg-red-600 text-white border-red-700"
+          : "bg-background text-foreground border-input"
+      }
+    `}
+    data-testid={`select-reward-type-${index}`}
+  >
+    <option value="cash" className="bg-white text-black">Cash (£)</option>
+    <option value="points" className="bg-white text-black">Points</option>
+    <option value="lose" className="bg-white text-black">No Win</option>
+  </select>
+</div>
                       <div>
                         <Label className="text-xs">Reward Value</Label>
                         <Input
