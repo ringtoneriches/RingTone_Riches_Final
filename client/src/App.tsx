@@ -50,6 +50,8 @@ import AdminPastWinners from "./pages/admin/past-winners";
 import AdminMarketing from "./pages/admin/marketing";
 import ScrollToTop from "./lib/ScrollToTop ";
 import MaintenancePage from "./pages/MaintenancePage";
+import UserAuditPage from "./pages/admin/audit";
+import WheelSettings1 from "./pages/admin/wheelSettings1";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -112,6 +114,8 @@ function Router() {
       <Route path="/admin/past-winners" component={AdminPastWinners} />
       <Route path="/admin/marketing" component={AdminMarketing} />
       <Route path="/admin/settings" component={AdminSettings} />
+      <Route path="/admin/users/:id" component={UserAuditPage} />
+      
 
       <Route component={NotFound} />
     </Switch>

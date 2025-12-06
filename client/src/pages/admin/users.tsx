@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, Search, AlertTriangle, Calendar } from "lucide-react";
+import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useLocation } from "wouter";
 
 interface User {
   id: string;
@@ -45,6 +46,8 @@ interface User {
 }
 
 type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
+type SortOrder = "asc" | "desc" | null;
+type SortField = "balance" | "ringtonePoints" | "createdAt" | "email" | null;
 
 export default function AdminUsers() {
   const { toast } = useToast();
@@ -68,7 +71,9 @@ export default function AdminUsers() {
     phoneNumber:"",
     isAdmin: false,
   });
-
+const [, setLocation] = useLocation();
+const [sortField, setSortField] = useState<SortField>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(null);
   // Calculate date range (memoized to prevent infinite loops)
   const { dateFrom, dateTo } = useMemo(() => {
     if (dateFilter === "all") {
@@ -116,23 +121,95 @@ export default function AdminUsers() {
     },
   });
 
-  // Client-side filtering for instant search (no reload)
+   // Handle sorting
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // Cycle through: asc -> desc -> null
+      if (sortOrder === "asc") {
+        setSortOrder("desc");
+      } else if (sortOrder === "desc") {
+        setSortField(null);
+        setSortOrder(null);
+      } else {
+        setSortOrder("asc");
+        setSortField(field);
+      }
+    } else {
+      // New field, start with asc
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  // Get sort icon for a field
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return null;
+    }
+    return sortOrder === "asc" ? (
+      <ArrowUp className="w-3 h-3 ml-1" />
+    ) : (
+      <ArrowDown className="w-3 h-3 ml-1" />
+    );
+  };
+
+  // Client-side filtering and sorting
   const users = useMemo(() => {
     if (!allUsers) return [];
     
-    if (!searchInput.trim()) return allUsers;
+    let filtered = [...allUsers];
     
-    const searchLower = searchInput.toLowerCase().trim();
-    return allUsers.filter((user) => {
-      const fullName = `${user.firstName || ""} ${user.lastName || ""}`.toLowerCase().trim();
-      const email = user.email?.toLowerCase() || "";
-      
-      return (
-        fullName.includes(searchLower) ||
-        email.includes(searchLower)
-      );
-    });
-  }, [allUsers, searchInput]);
+    // Apply search filter
+    if (searchInput.trim()) {
+      const searchLower = searchInput.toLowerCase().trim();
+      filtered = filtered.filter((user) => {
+        const fullName = `${user.firstName || ""} ${user.lastName || ""}`.toLowerCase().trim();
+        const email = user.email?.toLowerCase() || "";
+        
+        return (
+          fullName.includes(searchLower) ||
+          email.includes(searchLower)
+        );
+      });
+    }
+    
+    // Apply sorting
+    if (sortField && sortOrder) {
+      filtered.sort((a, b) => {
+        let aValue: any, bValue: any;
+        
+        switch (sortField) {
+          case "balance":
+            aValue = parseFloat(a.balance);
+            bValue = parseFloat(b.balance);
+            break;
+          case "ringtonePoints":
+            aValue = a.ringtonePoints;
+            bValue = b.ringtonePoints;
+            break;
+          case "createdAt":
+            aValue = new Date(a.createdAt).getTime();
+            bValue = new Date(b.createdAt).getTime();
+            break;
+          case "email":
+            aValue = a.email.toLowerCase();
+            bValue = b.email.toLowerCase();
+            break;
+          default:
+            return 0;
+        }
+        
+        if (sortOrder === "asc") {
+          return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+        } else {
+          return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+        }
+      });
+    }
+    
+    return filtered;
+  }, [allUsers, searchInput, sortField, sortOrder]);
+ 
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
@@ -412,6 +489,14 @@ export default function AdminUsers() {
           />
         </div>
 
+         {/* Sort info */}
+        {sortField && sortOrder && (
+          <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded-md">
+            Sorted by <span className="font-medium">{sortField}</span> in 
+            <span className="font-medium"> {sortOrder === "asc" ? "ascending" : "descending"}</span> order
+          </div>
+        )}
+
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -423,20 +508,38 @@ export default function AdminUsers() {
                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
                     Name
                   </th>
-                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
                     Phone
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                    Balance
+                  <th 
+                    className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                    onClick={() => handleSort("balance")}
+                  >
+                    <div className="flex items-center">
+                      Balance
+                      {getSortIcon("balance")}
+                    </div>
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                    Points
+                  <th 
+                    className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                    onClick={() => handleSort("ringtonePoints")}
+                  >
+                    <div className="flex items-center">
+                      Points
+                      {getSortIcon("ringtonePoints")}
+                    </div>
                   </th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
                     Role
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                    Joined
+                  <th 
+                    className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                    onClick={() => handleSort("createdAt")}
+                  >
+                    <div className="flex items-center">
+                      Joined
+                      {getSortIcon("createdAt")}
+                    </div>
                   </th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
                     Actions
@@ -475,6 +578,16 @@ export default function AdminUsers() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex gap-2">
+                         <Button
+                          variant="outline"
+                          size="sm"
+                         onClick={() => user?.id && setLocation(`/admin/users/${user.id}`)}
+
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950"
+                          data-testid={`button-audit-user-${user.id}`}
+                        >
+                          <FileText className="w-4 h-4" />
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"

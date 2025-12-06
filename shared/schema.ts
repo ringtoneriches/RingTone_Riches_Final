@@ -275,6 +275,24 @@ export const campaignEmails = pgTable("campaign_emails", {
   deliveryStatus: varchar("delivery_status", { enum: ["sent", "delivered", "failed", "bounced"] }).default("sent"),
 });
 
+export const auditLogs = pgTable("audit_logs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").notNull(),
+  userName: text("user_name").notNull(),
+  email: text("email").notNull(),
+  action: text("action").notNull(),
+  competitionId: uuid("competition_id").references(() => competitions.id),
+  description: text("description"),
+  startBalance: decimal("start_balance", { precision: 12, scale: 2 }),
+  endBalance: decimal("end_balance", { precision: 12, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Add indexes for common queries
+  index("audit_logs_user_id_idx").on(table.userId),
+  index("audit_logs_action_idx").on(table.action),
+  index("audit_logs_created_at_idx").on(table.createdAt),
+]);
+
 // Insert schemas
 export const insertCompetitionSchema = createInsertSchema(competitions);
 export const insertTicketSchema = createInsertSchema(tickets);
@@ -290,7 +308,10 @@ export const insertScratchCardWinSchema = createInsertSchema(scratchCardWins).om
 export const insertWithdrawalRequestSchema = createInsertSchema(withdrawalRequests).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPromotionalCampaignSchema = createInsertSchema(promotionalCampaigns).omit({ id: true, createdAt: true, sentAt: true });
 export const insertCampaignEmailSchema = createInsertSchema(campaignEmails).omit({ id: true, sentAt: true });
-
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ 
+  id: true, 
+  createdAt: true 
+});
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -326,6 +347,9 @@ export type PromotionalCampaign = typeof promotionalCampaigns.$inferSelect;
 export type InsertPromotionalCampaign = z.infer<typeof insertPromotionalCampaignSchema>;
 export type CampaignEmail = typeof campaignEmails.$inferSelect;
 export type InsertCampaignEmail = z.infer<typeof insertCampaignEmailSchema>;
+// Type definitions
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 
 // Registration and login schemas
 export const registerUserSchema = createInsertSchema(users).pick({

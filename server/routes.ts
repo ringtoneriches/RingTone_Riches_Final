@@ -39,6 +39,7 @@ import {
   promotionalCampaigns,
   platformSettings,
   spinWheel2Configs,
+  auditLogs
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -746,6 +747,7 @@ app.post("/api/create-payment-intent", isAuthenticated, async (req: any, res) =>
     if (!session.hostedPageUrl) {
       return res.status(500).json({ message: "Failed to get Cashflows checkout URL" });
     }
+    
 
     res.json({
       success: true,
@@ -760,6 +762,8 @@ app.post("/api/create-payment-intent", isAuthenticated, async (req: any, res) =>
     });
   }
 });
+
+
 
 // Update the payment success route (IDEMPOTENT)
 app.post("/api/payment-success/competition", isAuthenticated, async (req: any, res) => {
@@ -785,22 +789,84 @@ app.post("/api/payment-success/competition", isAuthenticated, async (req: any, r
     console.log("📊 Payment Status:", paymentStatus);
 
     const successStatuses = ["SUCCESS", "COMPLETED", "PAID", "Paid"];
+    
+    // AUDIT LOG: Payment attempt (before checking status)
+    const user = await storage.getUser(userId);
+    const balance = parseFloat(user?.balance || "0");
+    
     if (!successStatuses.includes(paymentStatus)) {
+      await db.insert(auditLogs)
+        .values({
+          userId,
+          userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer',
+          email: user?.email || '',
+          action: "payment_failed",
+          description: `Payment failed for order ${orderId}. Status: ${paymentStatus}`,
+          startBalance: balance,
+          endBalance: balance,
+          createdAt: new Date(),
+        })
+        .execute();
+        
       return res.status(400).json({ message: `Payment not completed. Status: ${paymentStatus}` });
     }
 
     // Retrieve order
     const order = await storage.getOrder(orderId);
     if (!order || order.userId !== userId) {
+      await db.insert(auditLogs)
+        .values({
+          userId,
+          userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer',
+          email: user?.email || '',
+          action: "order_not_found",
+          description: `Order ${orderId} not found or belongs to wrong user`,
+          startBalance: balance,
+          endBalance: balance,
+          createdAt: new Date(),
+        })
+        .execute();
+        
       return res.status(404).json({ message: "Order not found or belongs to wrong user" });
     }
 
     // Get competition type
     const competition = await storage.getCompetition(order.competitionId);
-    const competitionType = competition?.type || "competition";
+    if (!competition) {
+      await db.insert(auditLogs)
+        .values({
+          userId,
+          userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer',
+          email: user?.email || '',
+          action: "competition_not_found",
+          description: `Competition not found for order ${orderId}`,
+          startBalance: balance,
+          endBalance: balance,
+          createdAt: new Date(),
+        })
+        .Execute();
+        
+      return res.status(404).json({ message: "Competition not found" });
+    }
+
+    const competitionType = competition.type || "competition";
+    const competitionId = order.competitionId;
 
     // Idempotency: avoid duplicates
     if (order.status === "completed") {
+      await db.insert(auditLogs)
+        .values({
+          userId,
+          userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer',
+          email: user?.email || '',
+          action: "order_already_processed",
+          description: `Order ${orderId} was already processed`,
+          startBalance: balance,
+          endBalance: balance,
+          createdAt: new Date(),
+        })
+        .execute();
+        
       return res.json({
         success: true,
         orderId,
@@ -811,7 +877,25 @@ app.post("/api/payment-success/competition", isAuthenticated, async (req: any, r
     }
 
     const ticketCount = order.quantity;
-    const competitionId = order.competitionId;
+    const totalAmount = parseFloat(order.totalAmount || "0");
+
+    // AUDIT LOG: Start of competition purchase processing
+    const startBalance = parseFloat(user?.balance || "0");
+    
+    // Log before creating tickets
+    await db.insert(auditLogs)
+      .values({
+        userId,
+        userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer',
+        email: user?.email || '',
+        action: "competition_payment_started",
+        competitionId,
+        description: `Processing payment for ${ticketCount} ticket(s) in ${competition.title}`,
+        startBalance: startBalance,
+        endBalance: startBalance,
+        createdAt: new Date(),
+      })
+      .execute();
 
     // Create tickets
     const ticketsCreated = [];
@@ -832,38 +916,92 @@ app.post("/api/payment-success/competition", isAuthenticated, async (req: any, r
     // Mark order complete
     await storage.updateOrderStatus(orderId, "completed");
 
-    // -------------------------
-// SEND ORDER CONFIRMATION EMAIL
-// -------------------------
-try {
-  const user = await storage.getUser(order.userId);
-  const tickets = await storage.getTicketsByOrderId(order.id);
-  const ticketNumbers = tickets.map(t => t.ticketNumber);
+   // Default action for normal competitions
+let auditAction = "competition_purchase";
+let auditDescription = `Purchased ${ticketCount} ticket(s) for ${competition.title}`;
 
-  if (user?.email && tickets.length > 0) {
-    const orderType = competition.type === 'spin' ? 'spin' :
-                      competition.type === 'scratch' ? 'scratch' : 'competition';
-
-    await sendOrderConfirmationEmail(user.email, {
-      orderId: order.id,
-      userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
-      orderType,
-      itemName: competition.title,
-      quantity: tickets.length,
-      totalAmount: order.totalAmount,
-      orderDate: new Date().toLocaleDateString('en-GB', { 
-        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
-      }),
-      paymentMethod: 'Card Payment (Cashflows)',
-      skillQuestion: competition.skillQuestion || undefined,
-      skillAnswer: order.skillAnswer || undefined,
-      ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
-    });
-  }
-} catch (err) {
-  console.error('Failed to send order confirmation email for Cashflows payment:', err);
+// Override based on type
+if (competitionType === "spin") {
+  auditAction = "spin_purchase";
+  auditDescription = `Purchased ${ticketCount} spin(s) for ${competition.title}`;
+} else if (competitionType === "scratch") {
+  auditAction = "scratch_purchase";
+  auditDescription = `Purchased ${ticketCount} scratch card(s) for ${competition.title}`;
+} else if (competitionType === "instant") {
+  // you can keep this or remove since default already matches
+  auditAction = "competition_purchase";
+  auditDescription = `Purchased ${ticketCount} competition ticket(s) for ${competition.title}`;
 }
 
+
+    // Calculate end balance (if payment was from wallet)
+    let endBalance = startBalance;
+    if (order.walletAmount && parseFloat(order.walletAmount) > 0) {
+      endBalance = startBalance - parseFloat(order.walletAmount);
+    }
+
+    // AUDIT LOG: Successful competition purchase
+    await db.insert(auditLogs)
+      .values({
+        userId,
+        userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer',
+        email: user?.email || '',
+        action: auditAction,
+        competitionId,
+        description: auditDescription,
+        startBalance: startBalance,
+        endBalance: endBalance,
+        createdAt: new Date(),
+      })
+      .execute();
+
+    console.log(`✅ AUDIT LOG: ${auditAction} recorded for order ${orderId}`);
+
+    // -------------------------
+    // SEND ORDER CONFIRMATION EMAIL
+    // -------------------------
+    try {
+      const tickets = await storage.getTicketsByOrderId(order.id);
+      const ticketNumbers = tickets.map(t => t.ticketNumber);
+
+      if (user?.email && tickets.length > 0) {
+        const orderType = competition.type === 'spin' ? 'spin' :
+                          competition.type === 'scratch' ? 'scratch' : 'competition';
+
+        await sendOrderConfirmationEmail(user.email, {
+          orderId: order.id,
+          userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
+          orderType,
+          itemName: competition.title,
+          quantity: tickets.length,
+          totalAmount: order.totalAmount,
+          orderDate: new Date().toLocaleDateString('en-GB', { 
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+          }),
+          paymentMethod: 'Card Payment (Cashflows)',
+          skillQuestion: competition.skillQuestion || undefined,
+          skillAnswer: order.skillAnswer || undefined,
+          ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to send order confirmation email for Cashflows payment:', err);
+      
+      // AUDIT LOG: Email failure
+      await db.insert(auditLogs)
+        .values({
+          userId,
+          userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer',
+          email: user?.email || '',
+          action: "email_failed",
+          competitionId,
+          description: `Failed to send confirmation email for order ${orderId}`,
+          startBalance: endBalance,
+          endBalance: endBalance,
+          createdAt: new Date(),
+        })
+        .execute();
+    }
 
     // Log transaction (cash or points)
     const amount =
@@ -879,6 +1017,21 @@ try {
 
     console.log("✅ Competition payment processed successfully!");
 
+    // AUDIT LOG: Final success log
+    await db.insert(auditLogs)
+      .values({
+        userId,
+        userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer',
+        email: user?.email || '',
+        action: "payment_complete",
+        competitionId,
+        description: `Payment completed successfully for ${ticketCount} ${competitionType} entries`,
+        startBalance: startBalance,
+        endBalance: endBalance,
+        createdAt: new Date(),
+      })
+      .execute();
+
     return res.json({
       success: true,
       ticketsCreated,
@@ -889,11 +1042,84 @@ try {
 
   } catch (error) {
     console.error("❌ Error confirming competition payment:", error);
+    
+    // AUDIT LOG: General error
+    try {
+      const user = await storage.getUser(req.user.id);
+      const balance = parseFloat(user?.balance || "0");
+      
+      await db.insert(auditLogs)
+        .values({
+          userId: req.user.id,
+          userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer',
+          email: user?.email || '',
+          action: "payment_error",
+          description: `Error processing payment: ${error.message}`,
+          startBalance: balance,
+          endBalance: balance,
+          createdAt: new Date(),
+        })
+        .execute();
+    } catch (auditError) {
+      console.error("Failed to log audit error:", auditError);
+    }
+    
     return res.status(500).json({ message: "Failed to confirm competition payment" });
   }
-}); 
+});
 
 
+app.get("/api/admin/users/audit/:id", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // USER INFO
+    const user = await storage.getUser(id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // AUDIT LOGS
+    const logs = await db.query.auditLogs.findMany({
+      where: (a) => eq(a.userId, id),
+      orderBy: (a) => [desc(a.createdAt)],
+    });
+
+    // Get competition names (optional)
+    const competitionIds = logs
+      .filter((l) => l.competitionId)
+      .map((l) => l.competitionId);
+
+    const competitions =
+      competitionIds.length > 0
+        ? await db.query.competitions.findMany({
+            where: (c) => inArray(c.id, competitionIds),
+          })
+        : [];
+
+    // Map competitionId → title
+    const compMap = {};
+    competitions.forEach((c) => {
+      compMap[c.id] = c.title;
+    });
+
+    // FORMAT RESPONSE
+    const audit = logs.map((log) => ({
+      name: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      action: log.action, // FIXED
+      competition: log.competitionId ? compMap[log.competitionId] : null,
+      startBalance: log.startBalance,
+      endBalance: log.endBalance,
+      description: log.description, // FIXED
+      date: log.createdAt,
+    }));
+
+    res.json({ audit });
+
+  } catch (error) {
+    console.error("Audit Error", error);
+    res.status(500).json({ message: "Audit route failed" });
+  }
+});
 
 // Add webhook handler for Cashflows notifications
 app.post("/api/cashflows/webhook", async (req, res) => {
@@ -1204,7 +1430,7 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     });
   }
 } catch (err) {
-  console.error('Failed to send order confirmation email for instant competition:', err);
+  console.error('Failed to send order confirmation email for  competition:', err);
 }
 
     // -------------------------
@@ -1242,6 +1468,32 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     } catch (err) {
       console.error("Referral error:", err);
     }
+
+// Refresh user after all deductions
+const updatedUser = await storage.getUser(userId);
+
+// BALANCE TRACKING
+const startBalance = Number(updatedUser.balance) + Number(totalAmount);
+const endBalance = Number(updatedUser.balance);
+
+
+// AUDIT LOG
+await db.insert(auditLogs)
+  .values({
+    userId,
+    userName: `${updatedUser.firstName} ${updatedUser.lastName}`,
+    email: updatedUser.email,
+    action: "buy_competition",
+    competitionId: competition.id,
+    description: `Bought ${quantity} ticket(s) for ${competition.title}`,
+    startBalance,
+    endBalance,
+    createdAt: new Date(),
+  })
+  .execute();
+
+console.log("✅ AUDIT LOG SAVED");
+
 
     // -------------------------
     // 9️⃣ RESPONSE
@@ -1486,6 +1738,26 @@ app.post("/api/process-spin-payment", isAuthenticated, async (req: any, res) => 
         paymentBreakdown: JSON.stringify(paymentBreakdown)
       });
 
+
+      // -----------------------------
+    // 5️⃣ Audit log
+    // -----------------------------
+    const startBalance = Number(user.balance) + totalAmount;
+    const endBalance = Number(user.balance);
+
+    await db.insert(auditLogs).values({
+      userId,
+      userName: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      action: "buy_spin",
+      competitionId: competition.id,
+      description: `Bought ${order.quantity} spin(s) for ${competition.title}`,
+      startBalance,
+      endBalance,
+      createdAt: new Date(),
+    });
+
+    console.log("✅ Spin audit log saved");
       // Send order confirmation email (non-blocking)
       if (user?.email) {
         const paymentMethodText = walletUsed > 0 && pointsUsed > 0 
@@ -2355,6 +2627,26 @@ app.post("/api/process-scratch-payment", isAuthenticated, async (req: any, res) 
         cashflowsAmount: "0",
         paymentBreakdown: JSON.stringify(paymentBreakdown),
       });
+
+        // -----------------------------
+    // 5️⃣ Audit log
+    // -----------------------------
+    const startBalance = Number(user.balance) + totalAmount;
+    const endBalance = Number(user.balance);
+
+    await db.insert(auditLogs).values({
+      userId,
+      userName: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      action: "buy_scratch",
+      competitionId: competition.id,
+      description: `Bought ${order.quantity} scratch(s) for ${competition.title}`,
+      startBalance,
+      endBalance,
+      createdAt: new Date(),
+    });
+
+    console.log("✅ Scratch audit log saved");
 
       // Send order confirmation email (non-blocking)
       if (user?.email) {
@@ -3660,24 +3952,45 @@ app.post("/api/wallet/topup", isAuthenticated, isNotRestricted,  async (req: any
   }
 });
 
-app.post("/api/wallet/topup-checkout", isAuthenticated, isNotRestricted ,  async (req: any, res) => {
+app.post("/api/wallet/topup-checkout", isAuthenticated, isNotRestricted, async (req: any, res) => {
   try {
     const { amount } = req.body;
-    const userId = req.user.id; // Get from authenticated session
+    const userId = req.user.id;
     
-    if (!amount) return res.status(400).json({ message: "Missing amount" });
+    if (!amount || Number(amount) <= 0) 
+      return res.status(400).json({ message: "Missing or invalid amount" });
+
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     console.log("➡️ Creating Cashflows payment session for amount:", amount, "userId:", userId);
 
     const session = await cashflows.createPaymentSession(amount, userId);
 
-    if (!session.hostedPageUrl) {
+    if (!session?.hostedPageUrl) {
       console.error("❌ No hosted page URL found in response");
       return res.status(500).json({
         message: "Payment session created but no redirect URL found",
-        fullResponse: session.fullResponse,
+        fullResponse: session,
       });
     }
+
+    // // -----------------------------
+    // // 5️⃣ Audit log for wallet top-up
+    // // -----------------------------
+    // const startBalance = Number(user.balance);
+    // const endBalance = Number(user.balance); 
+    // await db.insert(auditLogs).values({
+    //   userId,
+    //   userName: `${user.firstName} ${user.lastName}`,
+    //   email: user.email,
+    //   action: "wallet_topup",
+    //   description: `Initiated wallet top-up of £${amount}`,
+    //   startBalance,
+    //   endBalance,
+    //   createdAt: new Date(),
+    // });
+    // console.log("✅ Wallet audit log saved");
 
     res.json({
       success: true,
@@ -3685,6 +3998,7 @@ app.post("/api/wallet/topup-checkout", isAuthenticated, isNotRestricted ,  async
       sessionId: session.paymentJobReference,
       message: "Payment session created successfully",
     });
+
   } catch (error: any) {
     console.error("❌ Error creating payment session:", error.message);
     res.status(500).json({
@@ -3694,9 +4008,10 @@ app.post("/api/wallet/topup-checkout", isAuthenticated, isNotRestricted ,  async
   }
 });
 
- app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => {
+
+app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => {
   try {
-    const { paymentJobRef , paymentRef } = req.body;
+    const { paymentJobRef, paymentRef } = req.body;
     if (!paymentJobRef || !paymentRef) return res.status(400).json({ message: "Missing paymentJobRef or paymentRef" });
 
     console.log("🔍 Confirming Cashflows top-up:", { paymentJobRef, paymentRef });
@@ -3707,7 +4022,7 @@ app.post("/api/wallet/topup-checkout", isAuthenticated, isNotRestricted ,  async
     
     console.log(`📊 Payment status: ${status}`, payment.metadata);
     
-   const successStatuses = ["SUCCESS", "COMPLETED", "PAID", "Paid"];
+    const successStatuses = ["SUCCESS", "COMPLETED", "PAID", "Paid"];
     if (successStatuses.includes(status)) {
       // Extract user ID (metadata may be nested)
       const userId =
@@ -3722,12 +4037,18 @@ app.post("/api/wallet/topup-checkout", isAuthenticated, isNotRestricted ,  async
         parseFloat(payment?.data?.amountToCollect) ||
         0;
 
-
       if (!userId) {
         console.error("❌ No userId found in payment metadata or session");
         return res.status(400).json({ message: "Invalid payment metadata" });
       }
 
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const startBalance = parseFloat(user?.balance || "0");
+      
       // ✅ IDEMPOTENCY CHECK: Check if transaction already exists for this session
       const existingTransactions = await db
         .select()
@@ -3743,17 +4064,32 @@ app.post("/api/wallet/topup-checkout", isAuthenticated, isNotRestricted ,  async
         .limit(1);
 
       if (existingTransactions.length > 0) {
-                console.log("✓ Already processed");
+        console.log("✓ Already processed");
         return res.json({ success: true, alreadyProcessed: true });
-
       }
 
-      const user = await storage.getUser(userId);
-      const newBalance = (
-        parseFloat(user?.balance || "0") + amount
-      ).toString();
+      const newBalance = (startBalance + amount).toString();
+      
+      // AUDIT LOG: Wallet top-up before update
+      await db.insert(auditLogs)
+        .values({
+          userId,
+          userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
+          email: user.email,
+          action: "wallet_topup",
+          description: `Wallet top-up of £${amount.toFixed(2)} via Cashflows (Ref: ${paymentRef})`,
+          startBalance: startBalance,
+          endBalance: startBalance + amount,
+          createdAt: new Date(),
+        })
+        .execute();
+      
+      console.log("✅ AUDIT LOG: Wallet top-up recorded");
+
+      // Update user balance
       await storage.updateUserBalance(userId, newBalance);
 
+      // Create transaction record
       await storage.createTransaction({
         userId,
         type: "deposit",
@@ -3762,13 +4098,13 @@ app.post("/api/wallet/topup-checkout", isAuthenticated, isNotRestricted ,  async
       });
 
       console.log(`✓ Successfully processed wallet top-up for user ${userId}: £${amount}`);
-        // ✅ SEND CONFIRMATION EMAIL
+      
+      // ✅ SEND CONFIRMATION EMAIL
       try {
-        // Get user email
         const userEmail = user?.email;
         if (userEmail) {
           const topupData = {
-            userName: user?.name || user?.username || "Customer",
+            userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || "Customer",
             amount: amount.toString(),
             newBalance: newBalance,
             paymentRef: paymentRef,
@@ -3791,6 +4127,26 @@ app.post("/api/wallet/topup-checkout", isAuthenticated, isNotRestricted ,  async
       }
 
       return res.json({ success: true, newBalance, amount });
+    }
+
+    // AUDIT LOG: Failed payment attempt
+    const userId = payment?.metadata?.userId || req.user.id;
+    const user = userId ? await storage.getUser(userId) : null;
+    
+    if (user) {
+      const balance = parseFloat(user.balance || "0");
+      await db.insert(auditLogs)
+        .values({
+          userId,
+          userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
+          email: user.email,
+          action: "wallet_topup_failed",
+          description: `Failed wallet top-up attempt via Cashflows. Status: ${status}`,
+          startBalance: balance,
+          endBalance: balance,
+          createdAt: new Date(),
+        })
+        .execute();
     }
 
     res.status(400).json({ message: `Payment not completed. Status: ${status}` });
@@ -4097,9 +4453,10 @@ app.get("/api/admin/entries/download/:competitionId", isAuthenticated, isAdmin, 
 
 // ====== WINNERS PUBLIC ENDPOINTS ======
 app.get("/api/winners", async (req, res) => {
-  try{
-    const winners = await storage.getRecentWinners(50, true); // Only showcase winners for public
-    console.log("🧩 Winners from storage:", winners);
+  try {
+    // Pass undefined to get all winners
+    const winners = await storage.getRecentWinners(); 
+    console.log("🧩 All showcase winners:", winners);
     res.json(winners);
   } catch (error) {
     console.error("Error fetching winners:", error);
@@ -4107,16 +4464,75 @@ app.get("/api/winners", async (req, res) => {
   }
 });
 
+
 // ====== WINNERS ADMIN ENDPOINTS ======
 app.get("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
   try {
-    const winners = await storage.getRecentWinners();
-    res.json(winners);
+    const { dateFrom, dateTo } = req.query;
+
+    let query = db
+      .select()
+      .from(winners)
+      .leftJoin(users, eq(users.id, winners.userId))
+      .leftJoin(competitions, eq(competitions.id, winners.competitionId));
+
+    // Apply filters
+    const conditions = [];
+
+    // Date from
+    if (dateFrom) {
+      conditions.push(gte(winners.createdAt, new Date(dateFrom)));
+    }
+
+    // Date to
+    if (dateTo) {
+      const endDate = new Date(dateTo);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(winners.createdAt, endDate));
+    }
+
+    // If any conditions exist → add to query
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    // Order newest first
+    const allWinners = await query.orderBy(desc(winners.createdAt));
+
+    // Transform shape to match frontend
+    const result = allWinners.map((row) => ({
+      winners: {
+        id: row.winners.id,
+        userId: row.winners.userId,
+        competitionId: row.winners.competitionId,
+        prizeDescription: row.winners.prizeDescription,
+        prizeValue: row.winners.prizeValue,
+        imageUrl: row.winners.imageUrl,
+        createdAt: row.winners.createdAt,
+      },
+      users: row.users
+        ? {
+            id: row.users.id,
+            firstName: row.users.firstName,
+            lastName: row.users.lastName,
+            email: row.users.email,
+          }
+        : null,
+      competitions: row.competitions
+        ? {
+            id: row.competitions.id,
+            title: row.competitions.title,
+          }
+        : null,
+    }));
+
+    res.json(result);
   } catch (error) {
     console.error("Error fetching winners for admin:", error);
     res.status(500).json({ message: "Failed to fetch winners" });
   }
 });
+
 
 app.post("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
   try {
@@ -5166,6 +5582,48 @@ app.get("/api/admin/users", isAuthenticated, isAdmin, async (req: any, res) => {
     res.status(500).json({ message: "Failed to fetch users" });
   }
 });
+// Get single user by ID (simple version)
+app.get("/api/admin/users/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    
+    const user = await storage.getUser(id);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    res.json({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      dateOfBirth: user.dateOfBirth,
+      phoneNumber: user.phoneNumber,
+      profileImageUrl: user.profileImageUrl,
+      balance: user.balance,
+      ringtonePoints: user.ringtonePoints,
+      isAdmin: user.isAdmin,
+      isActive: user.isActive,
+      isRestricted: user.isRestricted,
+      restrictedAt: user.restrictedAt,
+      emailVerified: user.emailVerified,
+      receiveNewsletter: user.receiveNewsletter,
+      referralCode: user.referralCode,
+      referredBy: user.referredBy,
+      addressStreet: user.addressStreet,
+      addressCity: user.addressCity,
+      addressPostcode: user.addressPostcode,
+      addressCountry: user.addressCountry,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    });
+    
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    res.status(500).json({ message: "Failed to fetch user" });
+  }
+});
 
 // Update user
 app.put("/api/admin/users/:id", isAuthenticated, isAdmin, async (req: any, res) => {
@@ -5711,6 +6169,174 @@ app.post("/api/admin/maintenance/off", isAuthenticated, isAdmin, async (req, res
   res.json({ message: "Maintenance mode disabled", settings: updated });
 });
 
+app.get("/api/admin/users/:id/audit", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+
+     // 1️⃣ USER
+    const user = await storage.getUser(id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // 2️⃣ ORDERS (Competition purchases)
+    const orders = await db.query.orders.findMany({
+      where: (o, { eq }) => eq(o.userId, id), // FIXED: Use eq() function
+      with: {
+        competition: true,
+      },
+      orderBy: (o, { desc }) => [desc(o.createdAt)], // FIXED: Use desc() function
+    });
+
+    // 3️⃣ WALLET TRANSACTIONS
+    const transactions = await db.query.transactions.findMany({
+      where: (t, { eq }) => eq(t.userId, id), // FIXED
+      orderBy: (t, { desc }) => [desc(t.createdAt)], // FIXED
+    });
+
+    // 4️⃣ TICKETS / ENTRIES
+    const tickets = await db.query.tickets.findMany({
+      where: (t, { eq }) => eq(t.userId, id), // FIXED
+      with: {
+        competition: true,
+      },
+      orderBy: (t, { desc }) => [desc(t.createdAt)], // FIXED
+    });
+
+    // 5️⃣ SPIN USAGE
+    const spinUsage = await db.query.spinUsage.findMany({
+      where: (s, { eq }) => eq(s.userId, id), // FIXED
+      orderBy: (s, { desc }) => [desc(s.usedAt)], // FIXED
+    });
+
+    // 6️⃣ SPIN WINS
+    const spinWins = await db.query.spinWins.findMany({
+      where: (w, { eq }) => eq(w.userId, id), // FIXED
+      orderBy: (w, { desc }) => [desc(w.wonAt)], // FIXED
+    });
+
+    // 7️⃣ SCRATCH USAGE
+    const scratchUsage = await db.query.scratchCardUsage.findMany({
+      where: (s, { eq }) => eq(s.userId, id), // FIXED
+      orderBy: (s, { desc }) => [desc(s.usedAt)], // FIXED
+    });
+
+    // 8️⃣ SCRATCH WINS
+    const scratchWins = await db.query.scratchCardWins.findMany({
+      where: (w, { eq }) => eq(w.userId, id), // FIXED
+      orderBy: (w, { desc }) => [desc(w.wonAt)], // FIXED
+    });
+
+    // 9️⃣ WITHDRAWALS
+    const withdrawals = await db.query.withdrawalRequests.findMany({
+      where: (w, { eq }) => eq(w.userId, id), // FIXED
+      orderBy: (w, { desc }) => [desc(w.createdAt)], // FIXED
+    });
+
+    // 1️⃣0️⃣ BUILD UNIFIED AUDIT LOG
+    const audit = [];
+
+    // Orders audit
+    orders.forEach((o) =>
+      audit.push({
+        type: "order",
+        competition: o.competition?.title,
+        amount: o.totalAmount,
+        quantity: o.quantity,
+        paymentMethod: o.paymentMethod,
+        createdAt: o.createdAt,
+      })
+    );
+
+    // Wallet transactions audit
+    transactions.forEach((t) =>
+      audit.push({
+        type: "transaction",
+        action: t.type,
+        amount: t.amount,
+        description: t.description,
+        createdAt: t.createdAt,
+      })
+    );
+
+    // Tickets audit
+    tickets.forEach((ticket) =>
+      audit.push({
+        type: "ticket",
+        competition: ticket.competition?.title,
+        ticketNumber: ticket.ticketNumber,
+        isWinner: ticket.isWinner,
+        prizeAmount: ticket.prizeAmount,
+        createdAt: ticket.createdAt,
+      })
+    );
+
+    // Spin usage audit
+    spinUsage.forEach((s) =>
+      audit.push({
+        type: "spin_play",
+        orderId: s.orderId,
+        usedAt: s.usedAt,
+      })
+    );
+
+    // Spin wins audit
+    spinWins.forEach((s) =>
+      audit.push({
+        type: "spin_win",
+        rewardType: s.rewardType,
+        rewardValue: s.rewardValue,
+        wonAt: s.wonAt,
+      })
+    );
+
+    // Scratch usage audit
+    scratchUsage.forEach((s) =>
+      audit.push({
+        type: "scratch_play",
+        orderId: s.orderId,
+        usedAt: s.usedAt,
+      })
+    );
+
+    // Scratch wins audit
+    scratchWins.forEach((s) =>
+      audit.push({
+        type: "scratch_win",
+        rewardType: s.rewardType,
+        rewardValue: s.rewardValue,
+        wonAt: s.wonAt,
+      })
+    );
+
+    // Withdrawal audit
+    withdrawals.forEach((w) =>
+      audit.push({
+        type: "withdrawal",
+        amount: w.amount,
+        status: w.status,
+        createdAt: w.createdAt,
+      })
+    );
+
+    // Sort everything by date desc
+    audit.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    return res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        balance: user.balance,
+        createdAt: user.createdAt,
+      },
+      audit,
+    });
+
+  } catch (err) {
+    console.error("AUDIT ERROR", err);
+    res.status(500).json({ message: "Audit route failed", error: err });
+  }
+});
 
 
 const httpServer = createServer(app);

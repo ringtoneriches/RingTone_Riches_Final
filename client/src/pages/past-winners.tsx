@@ -36,7 +36,7 @@ export default function PastWinners() {
       prizeValue: item.winners.prizeValue?.replace("£", "") ?? "0",
       imageUrl: item.winners.imageUrl,
       createdAt: item.winners.createdAt,
-
+      isShowcase: item.winners?.isShowcase ?? false, 
       user: {
         firstName: item.users?.firstName ?? "",
         lastName: item.users?.lastName ?? "",
@@ -51,7 +51,8 @@ export default function PastWinners() {
 
   const totalPages = Math.ceil(winnersData.length / itemsPerPage);
    const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedWinners = winnersData.slice(startIndex, startIndex + itemsPerPage);
+   const showcaseWinners = winnersData.filter((winner) => winner.isShowcase);
+  const paginatedWinners = showcaseWinners.slice(startIndex, startIndex + itemsPerPage);
 
   // console.log("API Response:", winnersData);
   // console.log("Loading:", isLoading);
@@ -115,7 +116,7 @@ export default function PastWinners() {
                       <img
                         src={winner.imageUrl}
                         alt={winner.prizeDescription}
-                        className="w-full h-48 object-cover"
+                        className="w-full h-98 object-cover"
                       />
                     )}
                     <div className="p-6 space-y-3">

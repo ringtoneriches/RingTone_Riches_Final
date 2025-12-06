@@ -1,8 +1,8 @@
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, Upload, ArrowBigRight, ArrowBigLeft } from "lucide-react";
+import { Plus, Edit, Trash2, Upload, ArrowBigRight, ArrowBigLeft, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -92,6 +92,7 @@ interface WinnerPayload {
   prizeValue: string;
   imageUrl: string | null;
 }
+type DateFilter = "all" | "1h" | "24h" | "7d" | "30d" | "custom";
 
 function WinnerForm({
   data,
@@ -114,7 +115,6 @@ function WinnerForm({
     imageUrl: data?.imageUrl || "",
   });
   const [uploading, setUploading] = useState(false);
- 
 
   // Fetch users for selection
   const { data: users = [] } = useQuery<User[]>({
@@ -305,11 +305,55 @@ export default function AdminPastWinners() {
   const [deletingWinner, setDeletingWinner] = useState<Winner | undefined>();
    const [currentPage , setCurrentPage] = useState(1);
   const itemsPerPage = 50;
+  const [dateFilter, setDateFilter] = useState<DateFilter>("1h");
+   const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo, setCustomDateTo] = useState("");
+ 
+  // Calculate date range (memoized to prevent infinite loops)
+  const { dateFrom, dateTo } = useMemo(() => {
+    if (dateFilter === "all") {
+      return { dateFrom: "", dateTo: "" };
+    }
 
+    const now = new Date();
+    let dateFrom = "";
+    let dateTo = "";
+
+    switch (dateFilter) {
+        case "1h":
+    dateFrom = new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString();
+    break;
+      case "24h":
+        dateFrom = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case "7d":
+        dateFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case "30d":
+        dateFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case "custom":
+        dateFrom = customDateFrom ? new Date(customDateFrom).toISOString() : "";
+        dateTo = customDateTo ? new Date(customDateTo).toISOString() : "";
+        break;
+    }
+
+    return { dateFrom, dateTo };
+  }, [dateFilter, customDateFrom, customDateTo]);
   // Fetch winners with user and competition details
   const { data: winnersData = [], isLoading } = useQuery<WinnerWithDetails[]>({
-    queryKey: ["/api/admin/winners"],
-  });
+  queryKey: ["/api/admin/winners", dateFrom, dateTo], // ⬅ IMPORTANT
+  queryFn: async () => {
+    const url = new URL("/api/admin/winners", window.location.origin);
+
+    if (dateFrom) url.searchParams.append("dateFrom", dateFrom);
+    if (dateTo) url.searchParams.append("dateTo", dateTo);
+
+    const res = await fetch(url.toString());
+    return res.json();
+  },
+});
+
 
   const totalPages= Math.ceil(winnersData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -418,7 +462,85 @@ export default function AdminPastWinners() {
             Add Winner
           </Button>
         </div>
-
+ {/* Date Filters */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <Calendar className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-foreground mr-2">Date Range:</span>
+          <Button
+            variant={dateFilter === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("all")}
+            data-testid="button-filter-all"
+          >
+            All Time
+          </Button>
+          
+          <Button
+            variant={dateFilter === "1h" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("1h")}
+            data-testid="button-filter-1h"
+          >
+            Last 1 Hour
+          </Button>
+          <Button
+            variant={dateFilter === "24h" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("24h")}
+            data-testid="button-filter-24h"
+          >
+            Last 24 Hours
+          </Button>
+          <Button
+            variant={dateFilter === "7d" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("7d")}
+            data-testid="button-filter-7d"
+          >
+            Last 7 Days
+          </Button>
+          <Button
+            variant={dateFilter === "30d" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("30d")}
+            data-testid="button-filter-30d"
+          >
+            Last 30 Days
+          </Button>
+          <Button
+            variant={dateFilter === "custom" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("custom")}
+            data-testid="button-filter-custom"
+          >
+            Custom Range
+          </Button>
+        </div>
+         {/* Custom Date Range Inputs */}
+                {dateFilter === "custom" && (
+                  <div className="flex gap-4 items-center">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm font-medium text-foreground">From:</label>
+                      <Input
+                        type="date"
+                        value={customDateFrom}
+                        onChange={(e) => setCustomDateFrom(e.target.value)}
+                        className="w-auto"
+                        data-testid="input-date-from"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm font-medium text-foreground">To:</label>
+                      <Input
+                        type="date"
+                        value={customDateTo}
+                        onChange={(e) => setCustomDateTo(e.target.value)}
+                        className="w-auto"
+                        data-testid="input-date-to"
+                      />
+                    </div>
+                  </div>
+                )}
         {isLoading ? (
           <div className="text-center py-8">Loading winners...</div>
         ) : paginatedWinners.length === 0 ? (

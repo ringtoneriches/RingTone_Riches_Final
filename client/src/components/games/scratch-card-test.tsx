@@ -47,7 +47,7 @@ interface ScratchCardProps {
 
 const CSS_WIDTH = 500;
 const CSS_HEIGHT = 350;
-const AUTO_CLEAR_THRESHOLD = 0.85; // ✅ Changed from 0.7 to 0.85
+const AUTO_CLEAR_THRESHOLD = 0.50; // ✅ Changed from 0.7 to 0.85
 const SAMPLE_GAP = 4;
 
 const landmarkImages = [
@@ -186,7 +186,7 @@ useEffect(() => {
       
       // If scratch was started more than 5 minutes ago, mark as lost
       if (timestamp < fiveMinutesAgo) {
-        console.log("⏰ Old incomplete scratch found, marking as lost");
+        // console.log("⏰ Old incomplete scratch found, marking as lost");
         
         setScratchHistory(prev => {
           const updated = [...prev];
@@ -201,7 +201,7 @@ useEffect(() => {
         
         localStorage.removeItem(`scratchInProgress_${orderId}`);
       } else {
-        console.log("🔄 Scratch was in progress recently, keeping as Scratching");
+        // console.log("🔄 Scratch was in progress recently, keeping as Scratching");
       }
     }
   };
@@ -234,7 +234,7 @@ useEffect(() => {
   
   // 🎯 Apply lost scratches
   if (lostScratches.length > 0) {
-    console.log("📋 Found lost scratches:", lostScratches);
+    // console.log("📋 Found lost scratches:", lostScratches);
     
     finalHistory = savedHistory.map((item, index) => {
       const wasLost = lostScratches.some((lost: any) => lost.index === index);
@@ -334,7 +334,7 @@ useEffect(() => {
         orderId && 
         localStorage.getItem(`scratchInProgress_${orderId}`)) {
       
-      console.log("👁️ User switched tabs while scratching!");
+      // console.log("👁️ User switched tabs while scratching!");
       
       // Mark as lost
       const inProgressData = localStorage.getItem(`scratchInProgress_${orderId}`);
@@ -374,7 +374,7 @@ useEffect(() => {
   if (scratchHistory.length > 0 && scratchHistory.every(s => 
     s.status === "Scratched" || s.status === "Lost")) {
     
-    console.log("🧹 All scratches completed, cleaning up localStorage");
+    // console.log("🧹 All scratches completed, cleaning up localStorage");
     
     if (orderId) {
       localStorage.removeItem(`scratchInProgress_${orderId}`);
@@ -389,7 +389,7 @@ const commitCurrentScratch = () => {
   const firstUnscratched = scratchHistory.findIndex(s => s.status === "Not Scratched");
   if (firstUnscratched === -1) return;
   
-  console.log("📝 Committing scratch at index:", firstUnscratched);
+  // console.log("📝 Committing scratch at index:", firstUnscratched);
   
   setScratchHistory(prev => {
     const updated = [...prev];
@@ -417,8 +417,8 @@ const completeScratchSession = async (): Promise<void> => {
   if (!currentSession || !orderId) return;
 
   try {
-    console.log("🎯 Starting completeScratchSession");
-    console.log("Prize to set:", currentSession.prize);
+    // console.log("🎯 Starting completeScratchSession");
+    // console.log("Prize to set:", currentSession.prize);
 
     const response = await fetch(`/api/scratch-session/${currentSession.sessionId}/complete`, {
       method: 'POST',
@@ -438,7 +438,7 @@ const completeScratchSession = async (): Promise<void> => {
 
     const result = await response.json();
 
-    console.log("🔍 Looking for 'Scratching' items to update...");
+    // console.log("🔍 Looking for 'Scratching' items to update...");
     
     setScratchHistory(prev => {
       const updated = [...prev];
@@ -451,7 +451,7 @@ const completeScratchSession = async (): Promise<void> => {
             prize: currentSession.prize,
           };
           updatedCount++;
-          console.log(`✅ Updated scratch at index ${i} with prize:`, currentSession.prize);
+          // console.log(`✅ Updated scratch at index ${i} with prize:`, currentSession.prize);
         }
       }
       
@@ -481,7 +481,7 @@ const completeScratchSession = async (): Promise<void> => {
     }
 
     setSessionState('completed');
-    console.log("✅ completeScratchSession finished");
+    // console.log("✅ completeScratchSession finished");
     
   } catch (error) {
     console.error('Error completing scratch session:', error);
