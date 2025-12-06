@@ -116,7 +116,7 @@ export default function PastWinners() {
                       <img
                         src={winner.imageUrl}
                         alt={winner.prizeDescription}
-                        className="w-full h-98 object-cover"
+                        className="w-full h-48 object-cover"
                       />
                     )}
                     <div className="p-6 space-y-3">
