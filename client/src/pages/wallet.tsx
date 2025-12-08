@@ -929,9 +929,10 @@ const isAuthenticated = !!user;
                                 <div className="flex items-center gap-2 mb-1">
                                   {getTransactionTypeBadge(transaction.type)}
                                 </div>
-                                <p className="font-medium text-sm text-white">
-                                  {transaction.description}
-                                </p>
+                              <p className="font-medium text-sm text-white">
+                                {transaction.description.replace("Spin Wheel wheel2", "The festive spin win")}
+                              </p>
+
                                 <p className="text-xs text-gray-400 mt-1">
                                   {format(
                                     new Date(transaction.createdAt!),
