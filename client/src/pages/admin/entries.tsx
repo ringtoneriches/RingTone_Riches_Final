@@ -116,7 +116,7 @@ export default function AdminEntriesPage() {
     },
   });
 
-   
+   console.log("Fetched entries:", entries);
 
   // Delete entry mutation
   const deleteMutation = useMutation({
@@ -409,8 +409,8 @@ const paginatedEntries = filteredEntries.slice(startIndex, startIndex + itemsPer
               <TableHead>Type</TableHead>
               <TableHead>User</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Winner</TableHead>
-              <TableHead>Prize</TableHead>
+              {/* <TableHead>Winner</TableHead>
+              <TableHead>Prize</TableHead> */}
               <TableHead>Entry Date</TableHead>
               <TableHead className="text-center">Actions</TableHead>
             </TableRow>
@@ -432,7 +432,7 @@ const paginatedEntries = filteredEntries.slice(startIndex, startIndex + itemsPer
                   <TableCell>
                     {entry.competition ? (
                       <span className="capitalize px-2 py-1 text-xs rounded-full bg-primary/10 text-primary">
-                        {entry.competition.type}
+                        {entry.competition.type === "instant" ? "Competition" : entry.competition.type}
                       </span>
                     ) : (
                       <span className="text-muted-foreground text-xs">-</span>
@@ -444,7 +444,7 @@ const paginatedEntries = filteredEntries.slice(startIndex, startIndex + itemsPer
                   <TableCell className="text-muted-foreground">
                     {entry.user?.email || 'N/A'}
                   </TableCell>
-                  <TableCell>
+                  {/* <TableCell>
                     {entry.isWinner ? (
                       <span className="px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 font-medium">
                         ✓ Winner
@@ -455,7 +455,7 @@ const paginatedEntries = filteredEntries.slice(startIndex, startIndex + itemsPer
                   </TableCell>
                   <TableCell>
                     {entry.prizeAmount ? `£${entry.prizeAmount}` : "-"}
-                  </TableCell>
+                  </TableCell> */}
                   <TableCell className="text-muted-foreground text-sm">
                     {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : 'N/A'}
                   </TableCell>

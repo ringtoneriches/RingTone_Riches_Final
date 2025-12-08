@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, Upload, ArrowBigRight, ArrowBigLeft, Calendar } from "lucide-react";
+import { Plus, Edit, Trash2, Upload, ArrowBigRight, ArrowBigLeft, Calendar, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -300,6 +300,7 @@ function WinnerForm({
 
 export default function AdminPastWinners() {
   const { toast } = useToast();
+  const [searchInput, setSearchInput] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingWinner, setEditingWinner] = useState<Winner | undefined>();
   const [deletingWinner, setDeletingWinner] = useState<Winner | undefined>();
@@ -354,10 +355,40 @@ export default function AdminPastWinners() {
   },
 });
 
+ const winners = useMemo(() => {
+  if (!winnersData) return [];
 
-  const totalPages= Math.ceil(winnersData.length / itemsPerPage);
+  if (!searchInput.trim()) return winnersData;
+
+  const searchLower = searchInput.toLowerCase().trim();
+
+  return winnersData.filter((item) => {
+    const fullName = `${item.users?.firstName || ""} ${item.users?.lastName || ""}`
+      .toLowerCase()
+      .trim();
+
+    const email = item.users?.email?.toLowerCase() || "";
+    const competition = item.competitions?.title?.toLowerCase() || "";
+    const winnerId = item.winners?.id?.toLowerCase() || "";
+    const prizeDescription = item.winners?.prizeDescription?.toLowerCase() || "";
+    const prizeValue = item.winners?.prizeValue?.toLowerCase() || "";
+
+    return (
+      fullName.includes(searchLower) ||
+      email.includes(searchLower) ||
+      competition.includes(searchLower) ||
+      prizeDescription.includes(searchLower) ||
+      prizeValue.includes(searchLower) ||
+      winnerId.includes(searchLower)
+    );
+  });
+}, [winnersData, searchInput]);
+
+
+
+  const totalPages= Math.ceil(winners.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedWinners  = winnersData.slice(startIndex , startIndex + itemsPerPage);
+  const paginatedWinners  = winners.slice(startIndex , startIndex + itemsPerPage);
   // Create winner mutation
   const createMutation = useMutation({
     mutationFn: async (data: WinnerPayload) => {
@@ -541,6 +572,17 @@ export default function AdminPastWinners() {
                     </div>
                   </div>
                 )}
+
+                <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
+          <Input
+            placeholder="Search orders by user email or competition..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-10"
+            data-testid="input-search-orders"
+          />
+        </div>
         {isLoading ? (
           <div className="text-center py-8">Loading winners...</div>
         ) : paginatedWinners.length === 0 ? (

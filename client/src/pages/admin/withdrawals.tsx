@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/admin/admin-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +17,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowDownCircle, CheckCircle, XCircle, Clock, Search, User, Mail, Phone, Wallet, Coins } from "lucide-react";
+import { ArrowDownCircle, CheckCircle, XCircle, Clock, Search, User, Mail, Phone, Wallet, Coins, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -37,7 +37,9 @@ export default function AdminWithdrawals() {
   const [adminNotes, setAdminNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-
+  const [pendingPage, setPendingPage] = useState(1);
+  const [processedPage, setProcessedPage] = useState(1);
+  const itemsPerPage = 25; 
   const { data: withdrawalRequests = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/withdrawal-requests"],
   });
@@ -166,6 +168,27 @@ export default function AdminWithdrawals() {
     (r) => r.status !== "pending",
   );
 
+  // PAGINATION FOR PENDING
+const pendingTotalPages = Math.ceil(pendingRequests.length / itemsPerPage);
+const pendingStart = (pendingPage - 1) * itemsPerPage;
+const pendingPaginated = pendingRequests.slice(
+  pendingStart,
+  pendingStart + itemsPerPage
+);
+
+// PAGINATION FOR PROCESSED
+const processedTotalPages = Math.ceil(processedRequests.length / itemsPerPage);
+const processedStart = (processedPage - 1) * itemsPerPage;
+const processedPaginated = processedRequests.slice(
+  processedStart,
+  processedStart + itemsPerPage
+);
+
+useEffect(() => {
+  setPendingPage(1);
+  setProcessedPage(1);
+}, [searchQuery, statusFilter]);
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -223,19 +246,19 @@ export default function AdminWithdrawals() {
           <CardHeader className="border-b border-yellow-500/20">
             <CardTitle className="text-xl text-yellow-400 flex items-center gap-2">
               <Clock className="h-5 w-5" />
-              Pending Requests ({pendingRequests.length})
+              Pending Requests ({pendingPaginated.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
             {isLoading ? (
               <p className="text-gray-400 text-center py-8">Loading...</p>
-            ) : pendingRequests.length === 0 ? (
+            ) : pendingPaginated.length === 0 ? (
               <p className="text-gray-400 text-center py-8">
                 No pending withdrawal requests
               </p>
             ) : (
               <div className="space-y-4">
-                {pendingRequests.map((request) => (
+                {pendingPaginated.map((request) => (
                   <div
                     key={request.id}
                     className="bg-black/50 rounded-lg p-5 border border-yellow-500/20 hover:border-yellow-500/40 transition-colors"
@@ -341,7 +364,30 @@ export default function AdminWithdrawals() {
                   </div>
                 ))}
               </div>
+              
             )}
+            <div className="flex justify-center gap-3 mt-4">
+            <Button 
+              disabled={pendingPage === 1}
+              onClick={() => setPendingPage(pendingPage - 1)}
+              className="bg-yellow-600 hover:bg-yellow-500"
+            >
+              <ChevronLeft />
+            </Button>
+
+            <span className="text-gray-300 text-sm mt-2">
+              Page {pendingPage} / {pendingTotalPages}
+            </span>
+
+            <Button 
+              disabled={pendingPage === pendingTotalPages}
+              onClick={() => setPendingPage(pendingPage + 1)}
+              className="bg-yellow-600 hover:bg-yellow-500"
+            >
+              <ChevronRight />
+            </Button>
+          </div>
+
           </CardContent>
         </Card>
 
@@ -350,17 +396,17 @@ export default function AdminWithdrawals() {
           <CardHeader className="border-b border-yellow-500/20">
             <CardTitle className="text-xl text-yellow-400 flex items-center gap-2">
               <ArrowDownCircle className="h-5 w-5" />
-              Processed Requests ({processedRequests.length})
+              Processed Requests ({processedPaginated.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
-            {processedRequests.length === 0 ? (
+            {processedPaginated.length === 0 ? (
               <p className="text-gray-400 text-center py-8">
                 No processed withdrawal requests
               </p>
             ) : (
               <div className="space-y-4">
-                {processedRequests.map((request) => (
+                {processedPaginated.map((request) => (
                   <div
                     key={request.id}
                     className="bg-black/50 rounded-lg p-4 border border-yellow-500/10 hover:border-yellow-500/20 transition-colors"
@@ -444,7 +490,30 @@ export default function AdminWithdrawals() {
                   </div>
                 ))}
               </div>
+              
             )}
+            <div className="flex justify-center gap-3 mt-4">
+            <Button 
+              disabled={processedPage === 1}
+              onClick={() => setProcessedPage(processedPage - 1)}
+              className="bg-yellow-600 hover:bg-yellow-500"
+            >
+             <ChevronLeft />
+            </Button>
+
+            <span className="text-gray-300 text-sm mt-2">
+              Page {processedPage} / {processedTotalPages}
+            </span>
+
+            <Button 
+              disabled={processedPage === processedTotalPages}
+              onClick={() => setProcessedPage(processedPage + 1)}
+              className="bg-yellow-600 hover:bg-yellow-500"
+            >
+             <ChevronRight />
+            </Button>
+          </div>
+
           </CardContent>
         </Card>
       </div>

@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown } from "lucide-react";
+import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -28,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLocation } from "wouter";
+import { Textarea } from "@/components/ui/textarea";
 
 interface User {
   id: string;
@@ -43,6 +44,7 @@ interface User {
   addressCity: string | null;
   addressPostcode: string | null;
   addressCountry: string | null;
+  notes: string | null;
 }
 
 type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
@@ -70,6 +72,7 @@ export default function AdminUsers() {
     ringtonePoints: "",
     phoneNumber:"",
     isAdmin: false,
+    notes:"",
   });
 const [, setLocation] = useLocation();
 const [sortField, setSortField] = useState<SortField>(null);
@@ -141,17 +144,24 @@ const [sortField, setSortField] = useState<SortField>(null);
     }
   };
 
-  // Get sort icon for a field
-  const getSortIcon = (field: SortField) => {
-    if (sortField !== field) {
-      return null;
-    }
+ // Get sort icon for a field
+const getSortIcon = (field: SortField) => {
+  if (sortField === field) {
     return sortOrder === "asc" ? (
-      <ArrowUp className="w-3 h-3 ml-1" />
+      <ChevronUp className="w-4 h-4 ml-1" />
     ) : (
-      <ArrowDown className="w-3 h-3 ml-1" />
+      <ChevronDown className="w-4 h-4 ml-1" />
     );
-  };
+  } else {
+    // Show neutral chevrons (both up and down)
+    return (
+      <div className="inline-flex flex-col ml-1">
+        <ChevronUp className="w-3 h-3 -mb-1 text-gray-400 opacity-50" />
+        <ChevronDown className="w-3 h-3 text-gray-400 opacity-50" />
+      </div>
+    );
+  }
+};
 
   // Client-side filtering and sorting
   const users = useMemo(() => {
@@ -294,6 +304,7 @@ const [sortField, setSortField] = useState<SortField>(null);
     },
   });
 
+  
   const handleResetAll = () => {
 
    resetAllMutation.mutate()
@@ -328,9 +339,56 @@ const [sortField, setSortField] = useState<SortField>(null);
       balance: user.balance,
       ringtonePoints: user.ringtonePoints.toString(),
       phoneNumber:user.phoneNumber || "",
+      notes: user.notes || "",
       isAdmin: user.isAdmin,
     });
   };
+
+// Update the handleRestrictToggle function to properly update state
+// const handleRestrictToggle = async (isRestricted: boolean) => {
+//   if (!editingUser) return;
+
+//   try {
+//     // Update local state immediately for better UX
+//     setEditForm({ ...editForm, isRestricted });
+
+//     const endpoint = isRestricted
+//       ? `/api/admin/users/restrict/${editingUser.id}`
+//       : `/api/admin/users/unrestrict/${editingUser.id}`;
+
+//     await apiRequest(endpoint, "POST");
+
+//     // Also update the user in the query cache
+//     queryClient.setQueryData(["/api/admin/users", { dateFrom, dateTo }], 
+//       (oldData: User[] | undefined) => {
+//         if (!oldData) return oldData;
+//         return oldData.map(user => 
+//           user.id === editingUser.id 
+//             ? { ...user, isRestricted } 
+//             : user
+//         );
+//       });
+
+//     toast({
+//       title: `User ${isRestricted ? "disabled" : "enabled"} successfully`,
+//       variant: "success",
+//     });
+//   } catch (error: any) {
+//     console.error("Error updating restriction:", error);
+    
+//     // Revert local state on error
+//     setEditForm({ ...editForm, isRestricted: !isRestricted });
+    
+//     toast({
+//       title: "Failed to update user",
+//       description: error?.response?.data?.message || "Something went wrong",
+//       variant: "destructive",
+//     });
+//   }
+// };
+
+
+
 
   const handlePasswordReset = () => {
     if (!editingUser || !newPassword || newPassword.length < 6) {
@@ -369,6 +427,7 @@ const [sortField, setSortField] = useState<SortField>(null);
         phoneNumber: editForm.phoneNumber,
         balance: parseFloat(editForm.balance).toFixed(2),
         ringtonePoints: parseInt(editForm.ringtonePoints),
+        notes: editForm.notes,
         isAdmin: editForm.isAdmin,
       },
     });
@@ -490,12 +549,12 @@ const [sortField, setSortField] = useState<SortField>(null);
         </div>
 
          {/* Sort info */}
-        {sortField && sortOrder && (
+        {/* {sortField && sortOrder && (
           <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded-md">
             Sorted by <span className="font-medium">{sortField}</span> in 
             <span className="font-medium"> {sortOrder === "asc" ? "ascending" : "descending"}</span> order
           </div>
-        )}
+        )} */}
 
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
@@ -686,7 +745,18 @@ const [sortField, setSortField] = useState<SortField>(null);
                   />
                 </div>
               </div>
-              
+              <div>
+
+              <Label>Notes</Label>
+              <Textarea
+              value={editForm.notes || ""}
+              onChange={(e) =>
+                      setEditForm({ ...editForm, notes: e.target.value })
+                    }
+              placeholder="Add notes about this user..."
+              className="border p-2 rounded w-full"
+            />
+              </div>
               {/* Address Information */}
               {(editingUser?.addressStreet || editingUser?.addressCity || editingUser?.addressPostcode) && (
                 <div className="space-y-3 border-t pt-4">
@@ -727,18 +797,14 @@ const [sortField, setSortField] = useState<SortField>(null);
                     <span className="text-xs text-muted-foreground">(Cannot change own role)</span>
                   )}
                 </div>
-                 <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="isDisabled"
-                    className="w-4 h-4"
-                    data-testid="checkbox-is-disabled"
-                  />
-                  <Label htmlFor="isDisabled">Disable User</Label>
-                  {/* {editingUser?.id === currentUser?.id && (
-                    <span className="text-xs text-muted-foreground">(Cannot change own role)</span>
-                  )} */}
-                </div>
+               <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isRestricted"
+                className="w-4 h-4"
+              />
+              <Label htmlFor="isRestricted">Disable User</Label>
+            </div>
               </div>
 
               <div className="space-y-3 border-t pt-4">

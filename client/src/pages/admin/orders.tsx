@@ -1,7 +1,7 @@
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-import { Search, Trash2, Calendar } from "lucide-react";
+import { Search, Trash2, Calendar, ArrowBigLeft, ArrowBigRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -44,7 +44,8 @@ export default function AdminOrders() {
   const [customDateTo, setCustomDateTo] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
-
+  const [currentPage , setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
   // Calculate date range (memoized to prevent infinite loops)
   const { dateFrom, dateTo } = useMemo(() => {
     if (dateFilter === "all") {
@@ -94,7 +95,7 @@ export default function AdminOrders() {
       return res.json();
     },
   });
-
+  // console.log("Fetched orders:", allOrders);
   // Client-side filtering for instant search (no reload)
   const orders = useMemo(() => {
     if (!allOrders) return [];
@@ -116,6 +117,10 @@ export default function AdminOrders() {
       );
     });
   }, [allOrders, searchInput]);
+
+   const totalPages= Math.ceil(orders.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedOrders  = orders.slice(startIndex , startIndex + itemsPerPage);
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -323,7 +328,7 @@ export default function AdminOrders() {
                 </tr>
               </thead>
               <tbody>
-                {orders?.map((order) => (
+                {paginatedOrders?.map((order) => (
                   <tr key={order.id} className="border-b border-border hover:bg-muted/50">
                     <td className="py-3 px-4 text-sm text-muted-foreground font-mono">
                       {order.id.slice(0, 8)}...
@@ -373,9 +378,36 @@ export default function AdminOrders() {
               </tbody>
             </table>
           </div>
+          
         </div>
       </div>
+    {/* PAGINATION */}
+        <div className="flex justify-center items-center gap-4 my-6">
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage((p) => p - 1)}
+            disabled={currentPage === 1}
+          >
+            <ArrowBigLeft />
+          </Button>
 
+          <span className="font-medium">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage((p) => p + 1)}
+            disabled={currentPage === totalPages}
+          >
+              <ArrowBigRight />
+          </Button>
+        </div>
+
+        {/* ENTRY COUNT */}
+        <p className="text-center text-sm text-muted-foreground">
+          Showing {paginatedOrders.length} of {allOrders.length} filtered entries
+        </p>
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>

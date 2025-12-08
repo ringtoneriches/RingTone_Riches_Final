@@ -720,39 +720,187 @@ app.get("/api/competitions/:id", async (req, res) => {
 
 app.post("/api/create-payment-intent", isAuthenticated, async (req: any, res) => {
   try {
-    const { orderId, quantity } = req.body;
+    const { orderId, quantity, useWalletBalance = false, useRingtonePoints = false } = req.body;
     const userId = req.user.id;
 
     if (!orderId || typeof orderId !== "string") {
       return res.status(400).json({ message: "Invalid or missing order ID" });
     }
 
-       console.log("📋 Creating payment for orderId:", orderId); 
+    console.log("📋 Creating payment for orderId:", orderId); 
 
     const order = await storage.getOrder(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
+    
+    if (order.userId !== userId) {
+      return res.status(403).json({ message: "Not authorized for this order" });
+    }
 
     const competition = await storage.getCompetition(order.competitionId);
     if (!competition) return res.status(404).json({ message: "Competition not found" });
 
-    const totalAmount = parseFloat(competition.ticketPrice) * (quantity || 1);
+    // Get user's current balances
+    const user = await storage.getUser(userId);
+    const walletBalance = parseFloat(user?.balance || "0");
+    const ringtonePoints = user?.ringtonePoints || 0;
+    const pointsValue = ringtonePoints * 0.01;
+    
+    const totalAmount = parseFloat(order.totalAmount);
+    let remainingAmount = totalAmount;
+    let walletUsed = 0;
+    let pointsUsed = 0;
+    
+    const paymentBreakdown = [];
 
-    const session = await cashflows.createCompetitionPaymentSession(totalAmount, {
+    // -------------------------
+    // APPLY WALLET IF SELECTED
+    // -------------------------
+    if (useWalletBalance) {
+      walletUsed = Math.min(walletBalance, remainingAmount);
+      if (walletUsed > 0) {
+        const newBalance = (walletBalance - walletUsed).toFixed(2);
+        await storage.updateUserBalance(userId, newBalance);
+
+        await storage.createTransaction({
+          userId,
+          type: "purchase",
+          amount: `-${walletUsed}`,
+          description: `Wallet payment for ${competition.title}`,
+          orderId,
+        });
+
+        remainingAmount -= walletUsed;
+        paymentBreakdown.push({
+          method: "wallet",
+          amount: walletUsed,
+        });
+      }
+    }
+
+    // -------------------------
+    // APPLY POINTS IF SELECTED
+    // -------------------------
+    if (useRingtonePoints && remainingAmount > 0) {
+      const pointsToMoney = Math.min(pointsValue, remainingAmount);
+      pointsUsed = Math.floor(pointsToMoney * 100); // convert to points (1p)
+
+      if (pointsUsed > 0) {
+        const newPoints = ringtonePoints - pointsUsed;
+
+        await storage.updateUserRingtonePoints(userId, newPoints);
+
+        await storage.createTransaction({
+          userId,
+          type: "purchase",
+          amount: `-${pointsUsed}`,
+          description: `Ringtone Points payment for ${competition.title}`,
+          orderId,
+        });
+
+        remainingAmount -= pointsToMoney;
+        paymentBreakdown.push({
+          method: "points",
+          amount: pointsToMoney,
+          pointsUsed,
+        });
+      }
+    }
+
+    // Check if anything is left to pay via Cashflows
+    if (remainingAmount <= 0) {
+      // Fully paid with wallet/points - complete the order immediately
+      let paymentMethodText = "pending";
+      if (walletUsed > 0 && pointsUsed > 0) {
+        paymentMethodText = "Wallet+Points";
+      } else if (walletUsed > 0) {
+        paymentMethodText = "Wallet Credit";
+      } else if (pointsUsed > 0) {
+        paymentMethodText = "Points";
+      }
+
+      // Update order with payment info
+      await storage.updateOrderPaymentInfo(orderId, {
+        paymentMethod: paymentMethodText,
+        walletAmount: walletUsed.toString(),
+        pointsAmount: pointsUsed.toString(),
+        cashflowsAmount: "0",
+        paymentBreakdown: JSON.stringify(paymentBreakdown),
+      });
+
+      await storage.updateOrderStatus(orderId, "completed");
+
+      // Create tickets
+      const tickets = [];
+      const actualQuantity = quantity || order.quantity || 1;
+      for (let i = 0; i < actualQuantity; i++) {
+        const ticketNumber = nanoid(8).toUpperCase();
+        const ticket = await storage.createTicket({
+          userId,
+          competitionId: competition.id,
+          orderId,
+          ticketNumber,
+          isWinner: false,
+        });
+        tickets.push(ticket);
+      }
+
+      return res.json({
+        success: true,
+        message: "Payment completed successfully with wallet/points",
+        orderId,
+        competitionId: competition.id,
+        tickets,
+        paymentMethod: paymentMethodText,
+        fullyPaid: true,
+      });
+    }
+
+    // If there's remaining amount, create Cashflows session
+    const session = await cashflows.createCompetitionPaymentSession(remainingAmount, {
       orderId,
       competitionId: competition.id,
       userId,
-      quantity: quantity.toString(),
+      quantity: (quantity || order.quantity || 1).toString(),
+      paymentBreakdown: JSON.stringify(paymentBreakdown),
     });
 
     if (!session.hostedPageUrl) {
+      // If Cashflows fails, refund wallet + points
+      if (walletUsed > 0) {
+        await storage.updateUserBalance(userId, (walletBalance + walletUsed).toFixed(2));
+      }
+      if (pointsUsed > 0) {
+        await storage.updateUserRingtonePoints(userId, ringtonePoints + pointsUsed);
+      }
+      
       return res.status(500).json({ message: "Failed to get Cashflows checkout URL" });
     }
-    
+
+    // Save partial payment info
+    let paymentMethodText = "Cashflow";
+    if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
+      paymentMethodText = "Wallet+Points+Cashflow";
+    } else if (walletUsed > 0 && remainingAmount > 0) {
+      paymentMethodText = "Wallet+Cashflow";
+    } else if (pointsUsed > 0 && remainingAmount > 0) {
+      paymentMethodText = "Points+Cashflow";
+    }
+
+    await storage.updateOrderPaymentInfo(orderId, {
+      paymentMethod: paymentMethodText,
+      walletAmount: walletUsed.toString(),
+      pointsAmount: pointsUsed.toString(),
+      cashflowsAmount: remainingAmount.toString(),
+      paymentBreakdown: JSON.stringify(paymentBreakdown),
+    });
 
     res.json({
       success: true,
       redirectUrl: session.hostedPageUrl,
       sessionId: session.paymentJobReference,
+      fullyPaid: false,
+      paymentMethod: paymentMethodText,
+      remainingAmount,
     });
   } catch (error: any) {
     console.error("❌ Error creating Cashflows session:", error);
@@ -1343,6 +1491,7 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     // 6️⃣ CASHFLOWS NEEDED?
     // -------------------------
     if (remainingAmount > 0) {
+      
       const session = await cashflows.createCompetitionPaymentSession(
         remainingAmount,
         {
@@ -1367,9 +1516,19 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
         return res.status(500).json({ message: "Failed to create payment session" });
       }
 
-      // Save partial payment info
+      // Determine payment method text for mixed payment
+      let paymentMethodText = "Cashflow";
+      if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
+        paymentMethodText = "Wallet+Points+Cashflow";
+      } else if (walletUsed > 0 && remainingAmount > 0) {
+        paymentMethodText = "Wallet+Cashflow";
+      } else if (pointsUsed > 0 && remainingAmount > 0) {
+        paymentMethodText = "Points+Cashflow";
+      }
+
+      // Save partial payment info with descriptive payment method
       await storage.updateOrderPaymentInfo(orderId, {
-        paymentMethod: "mixed",
+        paymentMethod: paymentMethodText,
         walletAmount: walletUsed.toString(),
         pointsAmount: pointsUsed.toString(),
         cashflowsAmount: remainingAmount.toString(),
@@ -1386,6 +1545,26 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     // -------------------------
     // 7️⃣ FULLY PAID — COMPLETE ORDER
     // -------------------------
+    
+    // Determine payment method for wallet/points only
+    let paymentMethodText = "pending";
+    if (walletUsed > 0 && pointsUsed > 0) {
+      paymentMethodText = "Wallet+Points";
+    } else if (walletUsed > 0) {
+      paymentMethodText = "Wallet Credit";
+    } else if (pointsUsed > 0) {
+      paymentMethodText = "Points";
+    }
+
+    // Update order with correct payment method
+    await storage.updateOrderPaymentInfo(orderId, {
+      paymentMethod: paymentMethodText,
+      walletAmount: walletUsed.toString(),
+      pointsAmount: pointsUsed.toString(),
+      cashflowsAmount: "0",
+      paymentBreakdown: JSON.stringify(paymentBreakdown),
+    });
+
     await storage.updateOrderStatus(orderId, "completed");
 
     // Create tickets
@@ -1407,31 +1586,26 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     }
 
     try {
-  if (user?.email) {
-    const ticketNumbers = tickets.map(t => t.ticketNumber);
+      if (user?.email) {
+        const ticketNumbers = tickets.map(t => t.ticketNumber);
 
-    await sendOrderConfirmationEmail(user.email, {
-      orderId: order.id,
-      userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
-      orderType: 'competition', // instant competitions are normal 'competition'
-      itemName: competition.title,
-      quantity: quantity,
-      totalAmount: order.totalAmount,
-      orderDate: new Date().toLocaleDateString('en-GB', { 
-        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
-      }),
-      paymentMethod:
-        walletUsed > 0 && pointsUsed > 0
-          ? 'Wallet + Ringtone Points'
-          : walletUsed > 0
-          ? 'Wallet Balance'
-          : 'Ringtone Points',
-      ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
-    });
-  }
-} catch (err) {
-  console.error('Failed to send order confirmation email for  competition:', err);
-}
+        await sendOrderConfirmationEmail(user.email, {
+          orderId: order.id,
+          userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
+          orderType: 'competition',
+          itemName: competition.title,
+          quantity: quantity,
+          totalAmount: order.totalAmount,
+          orderDate: new Date().toLocaleDateString('en-GB', { 
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+          }),
+          paymentMethod: paymentMethodText,
+          ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to send order confirmation email for competition:', err);
+    }
 
     // -------------------------
     // 8️⃣ APPLY REFERRAL BONUS (FIRST PURCHASE ONLY)
@@ -1469,31 +1643,29 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
       console.error("Referral error:", err);
     }
 
-// Refresh user after all deductions
-const updatedUser = await storage.getUser(userId);
+    // Refresh user after all deductions
+    const updatedUser = await storage.getUser(userId);
 
-// BALANCE TRACKING
-const startBalance = Number(updatedUser.balance) + Number(totalAmount);
-const endBalance = Number(updatedUser.balance);
+    // BALANCE TRACKING
+    const startBalance = Number(updatedUser.balance) + Number(totalAmount);
+    const endBalance = Number(updatedUser.balance);
 
+    // AUDIT LOG
+    await db.insert(auditLogs)
+      .values({
+        userId,
+        userName: `${updatedUser.firstName} ${updatedUser.lastName}`,
+        email: updatedUser.email,
+        action: "buy_competition",
+        competitionId: competition.id,
+        description: `Bought ${quantity} ticket(s) for ${competition.title}`,
+        startBalance,
+        endBalance,
+        createdAt: new Date(),
+      })
+      .execute();
 
-// AUDIT LOG
-await db.insert(auditLogs)
-  .values({
-    userId,
-    userName: `${updatedUser.firstName} ${updatedUser.lastName}`,
-    email: updatedUser.email,
-    action: "buy_competition",
-    competitionId: competition.id,
-    description: `Bought ${quantity} ticket(s) for ${competition.title}`,
-    startBalance,
-    endBalance,
-    createdAt: new Date(),
-  })
-  .execute();
-
-console.log("✅ AUDIT LOG SAVED");
-
+    console.log("✅ AUDIT LOG SAVED");
 
     // -------------------------
     // 9️⃣ RESPONSE
@@ -1504,12 +1676,7 @@ console.log("✅ AUDIT LOG SAVED");
       orderId,
       competitionId,
       tickets,
-      paymentMethod:
-        walletUsed > 0 && pointsUsed > 0
-          ? "wallet_points"
-          : walletUsed > 0
-          ? "wallet"
-          : "points",
+      paymentMethod: paymentMethodText,
     });
   } catch (error) {
     console.error("Error purchasing ticket:", error);
@@ -1691,9 +1858,19 @@ app.post("/api/process-spin-payment", isAuthenticated, async (req: any, res) => 
         return res.status(500).json({ message: "Failed to create Cashflows session" });
       }
 
+      // Determine payment method text for mixed payment
+      let paymentMethodText = "Cashflow";
+      if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
+        paymentMethodText = "Wallet+Points+Cashflow";
+      } else if (walletUsed > 0 && remainingAmount > 0) {
+        paymentMethodText = "Wallet+Cashflow";
+      } else if (pointsUsed > 0 && remainingAmount > 0) {
+        paymentMethodText = "Points+Cashflow";
+      }
+
       // Update order with partial payment info
       await storage.updateOrderPaymentInfo(orderId, {
-        paymentMethod: "mixed",
+        paymentMethod: paymentMethodText,
         walletAmount: walletUsed.toString(),
         pointsAmount: pointsUsed.toString(),
         cashflowsAmount: cashflowsUsed.toString(),
@@ -1713,6 +1890,26 @@ app.post("/api/process-spin-payment", isAuthenticated, async (req: any, res) => 
       });
     } else {
       // Full payment completed with wallet/points only
+      
+      // Determine payment method text
+      let paymentMethodText = "pending";
+      if (walletUsed > 0 && pointsUsed > 0) {
+        paymentMethodText = "Wallet+Points";
+      } else if (walletUsed > 0) {
+        paymentMethodText = "Wallet Credit";
+      } else if (pointsUsed > 0) {
+        paymentMethodText = "Points";
+      }
+
+      // Update order with correct payment method
+      await storage.updateOrderPaymentInfo(orderId, {
+        paymentMethod: paymentMethodText,
+        walletAmount: walletUsed.toString(),
+        pointsAmount: pointsUsed.toString(),
+        cashflowsAmount: "0",
+        paymentBreakdown: JSON.stringify(paymentBreakdown)
+      });
+
       await storage.updateOrderStatus(orderId, "completed");
       
       // Create tickets for live draw (one per spin purchased)
@@ -1730,40 +1927,28 @@ app.post("/api/process-spin-payment", isAuthenticated, async (req: any, res) => 
         tickets.push(ticket);
       }
 
-      await storage.updateOrderPaymentInfo(orderId, {
-        paymentMethod: "wallet_points_only",
-        walletAmount: walletUsed.toString(),
-        pointsAmount: pointsUsed.toString(),
-        cashflowsAmount: "0",
-        paymentBreakdown: JSON.stringify(paymentBreakdown)
+      // -----------------------------
+      // 5️⃣ Audit log
+      // -----------------------------
+      const startBalance = Number(user.balance) + totalAmount;
+      const endBalance = Number(user.balance);
+
+      await db.insert(auditLogs).values({
+        userId,
+        userName: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        action: "buy_spin",
+        competitionId: competition.id,
+        description: `Bought ${order.quantity} spin(s) for ${competition.title}`,
+        startBalance,
+        endBalance,
+        createdAt: new Date(),
       });
 
-
-      // -----------------------------
-    // 5️⃣ Audit log
-    // -----------------------------
-    const startBalance = Number(user.balance) + totalAmount;
-    const endBalance = Number(user.balance);
-
-    await db.insert(auditLogs).values({
-      userId,
-      userName: `${user.firstName} ${user.lastName}`,
-      email: user.email,
-      action: "buy_spin",
-      competitionId: competition.id,
-      description: `Bought ${order.quantity} spin(s) for ${competition.title}`,
-      startBalance,
-      endBalance,
-      createdAt: new Date(),
-    });
-
-    console.log("✅ Spin audit log saved");
+      console.log("✅ Spin audit log saved");
+      
       // Send order confirmation email (non-blocking)
       if (user?.email) {
-        const paymentMethodText = walletUsed > 0 && pointsUsed > 0 
-          ? 'Wallet + Ringtone Points' 
-          : walletUsed > 0 ? 'Wallet Balance' : 'Ringtone Points';
-        
         // Use already-created tickets array to avoid extra database query
         const ticketNumbers = tickets.map(t => t.ticketNumber);
         
@@ -1789,7 +1974,7 @@ app.post("/api/process-spin-payment", isAuthenticated, async (req: any, res) => 
         orderId: order.id,
         tickets: tickets.map(t => ({ ticketNumber: t.ticketNumber })),
         spinsPurchased: order.quantity,
-        paymentMethod: "wallet_points_only",
+        paymentMethod: paymentMethodText,
         paymentBreakdown
       });
     }
@@ -2587,8 +2772,18 @@ app.post("/api/process-scratch-payment", isAuthenticated, async (req: any, res) 
         return res.status(500).json({ message: "Failed to create Cashflows session" });
       }
 
+      // Determine payment method text for mixed payment
+      let paymentMethodText = "Cashflow";
+      if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
+        paymentMethodText = "Wallet+Points+Cashflow";
+      } else if (walletUsed > 0 && remainingAmount > 0) {
+        paymentMethodText = "Wallet+Cashflow";
+      } else if (pointsUsed > 0 && remainingAmount > 0) {
+        paymentMethodText = "Points+Cashflow";
+      }
+
       await storage.updateOrderPaymentInfo(orderId, {
-        paymentMethod: "mixed",
+        paymentMethod: paymentMethodText,
         walletAmount: walletUsed.toString(),
         pointsAmount: pointsUsed.toString(),
         cashflowsAmount: cashflowsUsed.toString(),
@@ -2603,6 +2798,26 @@ app.post("/api/process-scratch-payment", isAuthenticated, async (req: any, res) 
       });
     } else {
       // Fully covered by wallet/points
+      
+      // Determine payment method text
+      let paymentMethodText = "pending";
+      if (walletUsed > 0 && pointsUsed > 0) {
+        paymentMethodText = "Wallet+Points";
+      } else if (walletUsed > 0) {
+        paymentMethodText = "Wallet Credit";
+      } else if (pointsUsed > 0) {
+        paymentMethodText = "Points";
+      }
+
+      // Update order with correct payment method
+      await storage.updateOrderPaymentInfo(orderId, {
+        paymentMethod: paymentMethodText,
+        walletAmount: walletUsed.toString(),
+        pointsAmount: pointsUsed.toString(),
+        cashflowsAmount: "0",
+        paymentBreakdown: JSON.stringify(paymentBreakdown),
+      });
+
       await storage.updateOrderStatus(orderId, "completed");
       
       // Create tickets for live draw (one per scratch card purchased)
@@ -2619,41 +2834,29 @@ app.post("/api/process-scratch-payment", isAuthenticated, async (req: any, res) 
         });
         tickets.push(ticket);
       }
-      
-      await storage.updateOrderPaymentInfo(orderId, {
-        paymentMethod: "wallet_points_only",
-        walletAmount: walletUsed.toString(),
-        pointsAmount: pointsUsed.toString(),
-        cashflowsAmount: "0",
-        paymentBreakdown: JSON.stringify(paymentBreakdown),
+
+      // -----------------------------
+      // 5️⃣ Audit log
+      // -----------------------------
+      const startBalance = Number(user.balance) + totalAmount;
+      const endBalance = Number(user.balance);
+
+      await db.insert(auditLogs).values({
+        userId,
+        userName: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        action: "buy_scratch",
+        competitionId: competition.id,
+        description: `Bought ${order.quantity} scratch(s) for ${competition.title}`,
+        startBalance,
+        endBalance,
+        createdAt: new Date(),
       });
 
-        // -----------------------------
-    // 5️⃣ Audit log
-    // -----------------------------
-    const startBalance = Number(user.balance) + totalAmount;
-    const endBalance = Number(user.balance);
-
-    await db.insert(auditLogs).values({
-      userId,
-      userName: `${user.firstName} ${user.lastName}`,
-      email: user.email,
-      action: "buy_scratch",
-      competitionId: competition.id,
-      description: `Bought ${order.quantity} scratch(s) for ${competition.title}`,
-      startBalance,
-      endBalance,
-      createdAt: new Date(),
-    });
-
-    console.log("✅ Scratch audit log saved");
+      console.log("✅ Scratch audit log saved");
 
       // Send order confirmation email (non-blocking)
       if (user?.email) {
-        const paymentMethodText = walletUsed > 0 && pointsUsed > 0 
-          ? 'Wallet + Ringtone Points' 
-          : walletUsed > 0 ? 'Wallet Balance' : 'Ringtone Points';
-        
         // Use already-created tickets array to avoid extra database query
         const ticketNumbers = tickets.map(t => t.ticketNumber);
         
@@ -2679,7 +2882,7 @@ app.post("/api/process-scratch-payment", isAuthenticated, async (req: any, res) 
         orderId: order.id,
         tickets: tickets.map(t => ({ ticketNumber: t.ticketNumber })),
         cardsPurchased: order.quantity,
-        paymentMethod: "wallet_points_only",
+        paymentMethod: paymentMethodText,
         paymentBreakdown,
       });
     }
@@ -5576,6 +5779,7 @@ app.get("/api/admin/users", isAuthenticated, isAdmin, async (req: any, res) => {
       addressCity: user.addressCity,
       addressPostcode: user.addressPostcode,
       addressCountry: user.addressCountry,
+      notes: user.notes, 
     })));
   } catch (error) {
     console.error("Error fetching users:", error);
@@ -5653,6 +5857,7 @@ app.put("/api/admin/users/:id", isAuthenticated, isAdmin, async (req: any, res) 
       balance: updatedUser.balance,
       ringtonePoints: updatedUser.ringtonePoints,
       isAdmin: updatedUser.isAdmin,
+      notes: updatedUser.notes, 
     });
   } catch (error) {
     console.error("Error updating user:", error);

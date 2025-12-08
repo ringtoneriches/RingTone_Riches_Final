@@ -168,7 +168,7 @@ const [revealAllSummary, setRevealAllSummary] = useState<{ wins: number; losses:
 const [showOutOfScratchesDialog, setShowOutOfScratchesDialog] = useState(false);
 const outOfScratchClickCount = useRef(0);
 const hasCommittedCurrentScratch = useRef(false);
-
+const [allScratchesCompleted, setAllScratchesCompleted] = useState(false);
   // Check if all scratch cards are used
   const allScratchesUsed = scratchHistory.length > 0 && scratchHistory.every(s => s.status === "Scratched");
 
@@ -208,6 +208,22 @@ useEffect(() => {
   
   checkIncompleteScratches();
 }, [orderId]);
+
+// Update this effect to check when all scratches are completed
+useEffect(() => {
+  if (scratchHistory.length > 0) {
+    const completed = scratchHistory.every(s => 
+      s.status === "Scratched" || s.status === "Lost"
+    );
+    setAllScratchesCompleted(completed);
+    
+    // If all completed, clear current session
+    if (completed && currentSession) {
+      setCurrentSession(null);
+      setSessionState('completed');
+    }
+  }
+}, [scratchHistory, currentSession]);
 
   // Fix canvas not rendering after Reveal All
 useEffect(() => {
@@ -490,6 +506,7 @@ const completeScratchSession = async (): Promise<void> => {
 
   // 🎯 NEW: Fetch session on mount or when we need a new one
   useEffect(() => {
+    if (allScratchesCompleted) return;
     // Only fetch if we have remaining cards and no current session
     if (orderId && scratchHistory.length > 0 && !currentSession) {
       const hasRemaining = scratchHistory.some(s => s.status === "Not Scratched");
@@ -497,7 +514,7 @@ const completeScratchSession = async (): Promise<void> => {
         fetchScratchSession();
       }
     }
-  }, [orderId, scratchHistory, currentSession, sessionState]);
+  }, [orderId, scratchHistory, currentSession, sessionState , allScratchesCompleted]);
 
   // ✅ Save to localStorage whenever scratchHistory changes (order-specific)
   useEffect(() => {
@@ -590,31 +607,56 @@ const completeScratchSession = async (): Promise<void> => {
   }, []);
 
  function initCanvas() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const canvas = canvasRef.current;
+  if (!canvas) return;
 
-    const container = canvas.parentElement;
-    if (!container) return;
+  const container = canvas.parentElement;
+  if (!container) return;
 
-    // Get container dimensions
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
+  // Get container dimensions
+  const containerWidth = container.clientWidth;
+  const containerHeight = container.clientHeight;
 
-    // Set canvas CSS dimensions to match container
-    canvas.style.width = `${containerWidth}px`;
-    canvas.style.height = `${containerHeight}px`;
+  // Set canvas CSS dimensions to match container
+  canvas.style.width = `${containerWidth}px`;
+  canvas.style.height = `${containerHeight}px`;
 
-    // Set canvas internal dimensions (accounting for device pixel ratio)
-    const ratio = window.devicePixelRatio || 1;
-    canvas.width = Math.round(containerWidth * ratio);
-    canvas.height = Math.round(containerHeight * ratio);
+  // Set canvas internal dimensions (accounting for device pixel ratio)
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.round(containerWidth * ratio);
+  canvas.height = Math.round(containerHeight * ratio);
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
-    // Scale the context to account for device pixel ratio
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  // Scale the context to account for device pixel ratio
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  
+  // 🎯 NEW: Check if all scratches are completed
+  if (allScratchesCompleted) {
+    // Create a semi-transparent overlay
+    ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+    ctx.fillRect(0, 0, containerWidth, containerHeight);
+    
+    // Add "All Scratches Used" text
+    ctx.fillStyle = "#fff";
+    const fontSize = Math.max(18, containerWidth * 0.06);
+    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.textAlign = "center";
+    ctx.fillText("ALL SCRATCHES USED", containerWidth / 2, containerHeight / 2 - 30);
+    
+    // Add smaller instruction text
+    const smallFontSize = Math.max(14, containerWidth * 0.04);
+    ctx.font = `${smallFontSize}px Arial`;
+    ctx.fillText("Check your progress table for results", 
+      containerWidth / 2, containerHeight / 2 + 20);
+    
+    setRevealed(true); // Prevent scratching
+    return; // Exit early - don't show scratchable surface
+  }
 
+  // 🎯 Only show scratchable surface if NOT all completed
+  if (!allScratchesCompleted && sessionState === 'ready') {
     ctx.globalCompositeOperation = "source-over";
     const gradient = ctx.createLinearGradient(0, 0, containerWidth, containerHeight);
 
@@ -630,27 +672,31 @@ const completeScratchSession = async (): Promise<void> => {
     ctx.font = `bold ${fontSize}px Arial`;
     ctx.textAlign = "center";
     ctx.fillText("SCRATCH TO REVEAL", containerWidth / 2, containerHeight / 2);
-    setRevealed(false);
-    setPercentScratched(0);
   }
+  
+  setRevealed(false);
+  setPercentScratched(0);
+}
 
-  function scratchAt(x: number, y: number) {
-    if (revealed) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+function scratchAt(x: number, y: number) {
+  // 🎯 NEW: Prevent scratching if all scratches are completed
+  if (revealed || allScratchesCompleted) return;
+  
+  const canvas = canvasRef.current;
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
-    // Make brush size responsive based on canvas size
-    const brush = Math.max(15, canvas.clientWidth * 0.09);
+  // Make brush size responsive based on canvas size
+  const brush = Math.max(15, canvas.clientWidth * 0.09);
 
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.beginPath();
-    ctx.arc(x, y, brush, 0, Math.PI * 2);
-    ctx.fill();
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.beginPath();
+  ctx.arc(x, y, brush, 0, Math.PI * 2);
+  ctx.fill();
 
-    if (!rafRef.current) rafRef.current = requestAnimationFrame(() => checkPercentScratched());
-  }
+  if (!rafRef.current) rafRef.current = requestAnimationFrame(() => checkPercentScratched());
+}
 
 
 
@@ -949,171 +995,206 @@ useEffect(() => {
           </div>
         </div>
       )} */}
+        
 
-      <video
-    autoPlay
-    loop
-    muted
-    playsInline
-    preload="auto"
-    className="absolute inset-0 w-full h-full object-cover opacity-20"
-    style={{
-      imageRendering: "auto",
-      transform: "scale(1.02)",
-      filter: "brightness(0.6)",
-    }}
-  >
-    <source
-      src="https://res.cloudinary.com/dziy5sjas/video/upload/f_auto,q_auto:best/v1761649166/WhatsApp_Video_2025-10-25_at_3.50.25_PM_drcoh0.mp4"
-      type="video/mp4"
-    />
-  </video>
+        <video
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="auto"
+      className="absolute inset-0 w-full h-full object-cover opacity-20"
+      style={{
+        imageRendering: "auto",
+        transform: "scale(1.02)",
+        filter: "brightness(0.6)",
+      }}
+    >
+      <source
+        src="https://res.cloudinary.com/dziy5sjas/video/upload/f_auto,q_auto:best/v1761649166/WhatsApp_Video_2025-10-25_at_3.50.25_PM_drcoh0.mp4"
+        type="video/mp4"
+      />
+    </video>
 
-  {/* Premium gradient overlay */}
-  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40"></div>
+    {/* Premium gradient overlay */}
+    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40"></div>
 
-  {/* Decorative glow effects - Brand Colors */}
-  <div className="absolute top-20 left-10 w-96 h-96 bg-[#FACC15]/20 rounded-full blur-3xl animate-pulse"></div>
-  <div className="absolute bottom-20 right-10 w-96 h-96 bg-[#F59E0B]/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-      <div className="relative z-10 p-4 sm:p-6 w-full max-w-5xl">
-        {/* Premium Scratches Badge */}
-        <div className="flex justify-center mb-6 sm:mb-8">
-          {scratchTicketCount !== undefined && (
-            <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-full blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
-              <div className="relative bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 px-6 py-3 rounded-full text-sm sm:text-base font-black shadow-2xl flex items-center gap-2">
-                <span className="text-lg sm:text-xl">🎟️</span>
-                <span>Available Scratch Cards: {scratchHistory.filter(s => s.status === "Not Scratched").length}</span>
-              </div>
-            </div>
-          )}
-        </div>
+    {/* Decorative glow effects - Brand Colors */}
+    <div className="absolute top-20 left-10 w-96 h-96 bg-[#FACC15]/20 rounded-full blur-3xl animate-pulse"></div>
+    <div className="absolute bottom-20 right-10 w-96 h-96 bg-[#F59E0B]/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
 
-        {/* PREMIUM Eye-Catching Title */}
-        <div className="text-center mb-6 sm:mb-10">
-          <div className="relative inline-block mb-4">
-            {/* Glow behind text */}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#FACC15]/30 via-[#F59E0B]/30 to-[#FACC15]/30 blur-3xl"></div>
-
-            <h2 
-              className="relative text-3xl sm:text-4xl md:text-6xl font-black tracking-tight leading-[1.1]"
-              style={{ 
-                background: "linear-gradient(135deg, #FACC15 0%, #F59E0B 50%, #FACC15 100%)",
-                backgroundSize: "200% 100%",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-                filter: "drop-shadow(0 0 24px rgba(250, 204, 21, 0.4))"
-              }}
-            >
-              Scratch & Match
-            </h2>
-
-            {/* Premium underline */}
-            <div className="h-1 mt-3 bg-gradient-to-r from-transparent via-[#FACC15] to-transparent rounded-full"></div>
-          </div>
-
-          <p className="text-white/90 text-base sm:text-lg md:text-xl font-semibold">
-            Match 3 same images to win amazing prizes! 🎁
-          </p>
-        </div>
-
-        {/* PREMIUM Scratch Card Container with Gold Border & Glow */}
-        <div className="relative mx-auto mb-8 sm:mb-12 group">
-          {/* Premium outer glow effect - Brand Colors */}
-          <div className="absolute -inset-4 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-3xl blur-2xl opacity-40 group-hover:opacity-60 transition-all duration-700"></div>
-
-          {/* Card container with premium gold border */}
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-[#FACC15]/60 shadow-[#FACC15]/30 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 w-full sm:w-[550px] md:w-[600px] mx-auto">
-            <div className="relative min-h-[350px] sm:min-h-[420px] md:min-h-[450px]">
-            {/* UNDERLAY - Enhanced with premium background (2x3 grid = 6 tiles) */}
-            <div className="absolute inset-0 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center p-3 sm:p-5">
-              {!hideImagesAfterRevealAll &&
-                ( 
-                <div className="grid grid-cols-3 grid-rows-2 gap-2 sm:gap-3 md:gap-4 w-full h-full max-w-lg mx-auto p-2">
-                {images.slice(0, 6).map((img, i) => (
-                  <div
-                    key={i}
-                    className="bg-white rounded-lg sm:rounded-xl shadow-2xl flex items-center justify-center p-2 sm:p-3 border-2 border-gray-200 aspect-square overflow-hidden hover:scale-105 transition-transform duration-200"
-                  >
-                    <img
-                      src={img.src}
-                      alt={img.name}
-                      className="w-full h-full object-contain select-none"
-                    />
-                  </div>
-                ))}
-              </div>
-              )
-              }
-            </div>
-
-            {/* SCRATCH LAYER */}
-            <canvas
-              key={sessionKey}
-              ref={canvasRef}
-              className="absolute inset-0 cursor-pointer touch-none w-full h-full"
-           onMouseDown={(e) => {
-  if (allScratchesUsed) {
-    setShowOutOfScratchesDialog(true);
-    return;
-  }
-  
-  // 🚨 COMMIT ON FIRST SCRATCH
-  if (!hasCommittedCurrentScratch.current) {
-    commitCurrentScratch();
-  }
-  
-  drawingRef.current = true;
-  startScratchSound();
-  const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-  scratchAt(e.clientX - rect.left, e.clientY - rect.top);
-}}
-            onMouseMove={(e) => {
-              if (!drawingRef.current) return;
-              const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-              scratchAt(e.clientX - rect.left, e.clientY - rect.top);
-            }}
-            onTouchStart={(e) => {
-              
-             if (allScratchesUsed) {
-              setShowOutOfScratchesDialog(true);
-              return;
-            }
-             // 🚨 COMMIT ON FIRST SCRATCH
-  if (!hasCommittedCurrentScratch.current) {
-    commitCurrentScratch();
-  }
-              drawingRef.current = true;
-              startScratchSound();
-              const t = e.touches[0];
-              const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-              scratchAt(t.clientX - rect.left, t.clientY - rect.top);
-            }}
-            onTouchMove={(e) => {
-              if (!drawingRef.current) return;
-              const t = e.touches[0];
-              const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-              scratchAt(t.clientX - rect.left, t.clientY - rect.top);
-            }}
-            onMouseUp={() => {
-              drawingRef.current = false;
-              stopScratchSound(); // 🎵 Stop sound when pointer released
-            }}
-            onMouseLeave={() => {
-              drawingRef.current = false;
-              stopScratchSound(); // 🎵 Stop sound when pointer leaves canvas
-            }}
-            onTouchEnd={() => {
-              drawingRef.current = false;
-              stopScratchSound(); // 🎵 Stop sound when touch ends
-            }}
-            />
+    <div className="relative z-10 p-4 sm:p-6 w-full max-w-5xl">
+      {/* Premium Scratches Badge */}
+      <div className="flex justify-center mb-6 sm:mb-8">
+        {scratchTicketCount !== undefined && (
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-full blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
+            <div className="relative bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 px-6 py-3 rounded-full text-sm sm:text-base font-black shadow-2xl flex items-center gap-2">
+              <span className="text-lg sm:text-xl">🎟️</span>
+              <span>Available Scratch Cards: {scratchHistory.filter(s => s.status === "Not Scratched").length}</span>
             </div>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Reveal All Button - Premium Styling */}
+      {!allScratchesCompleted && (
+        <>
+          {/* PREMIUM Eye-Catching Title */}
+          <div className="text-center mb-6 sm:mb-10">
+            <div className="relative inline-block mb-4">
+              {/* Glow behind text */}
+              <div className="absolute inset-0 bg-gradient-to-r from-[#FACC15]/30 via-[#F59E0B]/30 to-[#FACC15]/30 blur-3xl"></div>
+              <h2 
+                className="relative text-3xl sm:text-4xl md:text-6xl font-black tracking-tight leading-[1.1]"
+                style={{ 
+                  background: "linear-gradient(135deg, #FACC15 0%, #F59E0B 50%, #FACC15 100%)",
+                  backgroundSize: "200% 100%",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                  filter: "drop-shadow(0 0 24px rgba(250, 204, 21, 0.4))"
+                }}
+              >
+                Scratch & Match
+              </h2>
+              <div className="h-1 mt-3 bg-gradient-to-r from-transparent via-[#FACC15] to-transparent rounded-full"></div>
+            </div>
+            <p className="text-white/90 text-base sm:text-lg md:text-xl font-semibold">
+              Match 3 same images to win amazing prizes! 🎁
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* PREMIUM Scratch Card Container with Gold Border & Glow */}
+      <div className="relative mx-auto mb-8 sm:mb-12 group">
+        {/* Premium outer glow effect - Brand Colors */}
+        <div className="absolute -inset-4 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-3xl blur-2xl opacity-40 group-hover:opacity-60 transition-all duration-700"></div>
+
+        {/* Card container with premium gold border */}
+        <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-[#FACC15]/60 shadow-[#FACC15]/30 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 w-full sm:w-[550px] md:w-[600px] mx-auto">
+          <div className="relative min-h-[350px] sm:min-h-[420px] md:min-h-[450px]">
+            
+            {!allScratchesCompleted ? (
+              <>
+                {/* UNDERLAY - Enhanced with premium background (2x3 grid = 6 tiles) */}
+                <div className="absolute inset-0 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center p-3 sm:p-5">
+                  {!hideImagesAfterRevealAll && (
+                    <div className="grid grid-cols-3 grid-rows-2 gap-2 sm:gap-3 md:gap-4 w-full h-full max-w-lg mx-auto p-2">
+                      {images.slice(0, 6).map((img, i) => (
+                        <div
+                          key={i}
+                          className="bg-white rounded-lg sm:rounded-xl shadow-2xl flex items-center justify-center p-2 sm:p-3 border-2 border-gray-200 aspect-square overflow-hidden hover:scale-105 transition-transform duration-200"
+                        >
+                          <img
+                            src={img.src}
+                            alt={img.name}
+                            className="w-full h-full object-contain select-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* SCRATCH LAYER (only shown when not all completed) */}
+                <canvas
+                  key={sessionKey}
+                  ref={canvasRef}
+                  className="absolute inset-0 cursor-pointer touch-none w-full h-full"
+                  onMouseDown={(e) => {
+                    if (allScratchesUsed) {
+                      setShowOutOfScratchesDialog(true);
+                      return;
+                    }
+                    
+                    if (!hasCommittedCurrentScratch.current) {
+                      commitCurrentScratch();
+                    }
+                    
+                    drawingRef.current = true;
+                    startScratchSound();
+                    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
+                    scratchAt(e.clientX - rect.left, e.clientY - rect.top);
+                  }}
+                  onMouseMove={(e) => {
+                    if (!drawingRef.current) return;
+                    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
+                    scratchAt(e.clientX - rect.left, e.clientY - rect.top);
+                  }}
+                  onTouchStart={(e) => {
+                    if (allScratchesUsed) {
+                      setShowOutOfScratchesDialog(true);
+                      return;
+                    }
+                    
+                    if (!hasCommittedCurrentScratch.current) {
+                      commitCurrentScratch();
+                    }
+                    
+                    drawingRef.current = true;
+                    startScratchSound();
+                    const t = e.touches[0];
+                    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
+                    scratchAt(t.clientX - rect.left, t.clientY - rect.top);
+                  }}
+                  onTouchMove={(e) => {
+                    if (!drawingRef.current) return;
+                    const t = e.touches[0];
+                    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
+                    scratchAt(t.clientX - rect.left, t.clientY - rect.top);
+                  }}
+                  onMouseUp={() => {
+                    drawingRef.current = false;
+                    stopScratchSound();
+                  }}
+                  onMouseLeave={() => {
+                    drawingRef.current = false;
+                    stopScratchSound();
+                  }}
+                  onTouchEnd={() => {
+                    drawingRef.current = false;
+                    stopScratchSound();
+                  }}
+                />
+              </>
+            ) : (
+              /* 🎯 ALL SCRATCHES COMPLETED - Replace canvas with message */
+              <div 
+                className="absolute inset-0 flex flex-col items-center justify-center p-6 cursor-pointer"
+                onClick={() => {
+                  // Open dialog when clicked
+                  setShowOutOfScratchesDialog(true);
+                }}
+              >
+                {/* Background similar to scratch overlay */}
+                <div className="absolute inset-0 bg-gradient-to-br from-[#cca60e] to-[#e67e22]"></div>
+                
+                {/* Content */}
+                <div className="relative z-10 text-center p-8 max-w-md">
+                  {/* <div className="text-6xl mb-6">🎉</div> */}
+                  <h3 className=" text-lg sm:text-3xl font-bold text-white mb-4">
+                    All Scratches Used!
+                  </h3>
+                  <p className="text-white/90 text-sm sm:text-lg mb-6">
+                    You've used all your scratch cards. 
+                    Click to buy more or check your results below.
+                  </p>
+                  {/* <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
+                    <span className="text-white text-sm">Click to continue </span>
+                  </div> */}
+                </div>
+                
+                {/* Subtle overlay effect */}
+                <div className="absolute inset-0 bg-black/10"></div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Reveal All Button - Only show when not all completed */}
+      {!allScratchesCompleted && (
         <div className="flex justify-center mb-6 sm:mb-8">
           <button
             onClick={() => setShowRevealAllDialog(true)}
@@ -1135,6 +1216,7 @@ useEffect(() => {
             </span>
           </button>
         </div>
+      )}
 
         {/* PREMIUM Progress Table - Mobile Optimized */}
         <div className="w-full max-w-3xl mx-auto relative px-2 sm:px-4">

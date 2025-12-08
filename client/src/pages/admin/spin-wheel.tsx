@@ -869,7 +869,7 @@ function WheelSettingsDialog({
         queryKey: ["/api/admin/game-spin-config"],
       });
       toast({ title: "Wheel settings saved successfully" });
-      onOpenChange(false);
+      
     },
     onError: (error: any) => {
       toast({
@@ -1337,7 +1337,7 @@ function WheelSettingsDialog2({
         queryKey: ["/api/admin/game-spin-2-config"],
       });
       toast({ title: "Wheel settings saved successfully" });
-      onOpenChange(false);
+      // onOpenChange(false);
     },
     onError: (error: any) => {
       toast({
