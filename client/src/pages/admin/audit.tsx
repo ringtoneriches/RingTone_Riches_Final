@@ -89,6 +89,7 @@ export default function UserAuditPage() {
       const res = await apiRequest(`https://ringtoneriches.co.uk/api/admin/users/${id}`, "GET");
       return res.json() as Promise<UserInfo>;
     },
+    
     enabled: !!id,
    refetchInterval: 10000, 
   refetchIntervalInBackground: true,
