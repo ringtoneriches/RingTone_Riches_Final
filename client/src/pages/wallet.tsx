@@ -26,6 +26,7 @@ import {
   UserCircle,
   Home,
   Sparkles,
+  Headphones,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -54,6 +55,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import Support from "./support";
 
 const getTransactionIcon = (type: string) => {
   switch (type) {
@@ -299,6 +301,11 @@ function ChangePasswordModal() {
   );
 }
 
+export function getTotalCashflow(transactions: Transaction[]): string {
+  const total = transactions.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+  return total % 1 === 0 ? total.toFixed() : total.toFixed(2);
+}
+
 export default function Wallet() {
   const { toast } = useToast();
   const { data: user, isLoading, isError } = useQuery({
@@ -354,6 +361,15 @@ const isAuthenticated = !!user;
     enabled: isAuthenticated,
   });
 
+  const { data: cashflowTransactions = [] } = useQuery<Transaction[]>({
+    queryKey: ["/api/user/cashflow-transactions"],
+    enabled: isAuthenticated,
+  });
+
+ const totalCashflow = getTotalCashflow(cashflowTransactions);
+
+console.log("Total Cashflow:", totalCashflow);
+
   const { data: tickets = [] } = useQuery<Ticket[]>({
     queryKey: ["/api/user/tickets"],
     enabled: isAuthenticated,
@@ -383,6 +399,13 @@ const isAuthenticated = !!user;
     queryKey: ["/api/withdrawal-requests/me"],
     enabled: isAuthenticated,
   });
+
+   const { data: supportUnreadData } = useQuery<{ count: number }>({
+    queryKey: ["/api/support/unread-count"],
+    enabled: isAuthenticated,
+    refetchInterval: 5000,
+  });
+
 
   const filteredTransactions =
     filterType === "all"
@@ -614,10 +637,10 @@ const isAuthenticated = !!user;
 
   const handleTopUp = () => {
     const amountNum = Number(topUpAmount);
-    if (amountNum < 5) {
+    if (amountNum < 0.50) {
       toast({
         title: "Invalid Amount",
-        description: "Minimum top-up amount is £5",
+        description: "Minimum top-up amount is £0.50",
         variant: "destructive",
       });
       return;
@@ -695,6 +718,20 @@ const isAuthenticated = !!user;
     return null;
   }
 
+  const NotificationBadge = ({ count }: { count?: number }) => {
+  const displayCount = count || 0;
+  
+  if (displayCount <= 0) {
+    return null;
+  }
+  
+  return (
+    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+      {displayCount > 9 ? "9+" : displayCount}
+    </span>
+  );
+};
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black text-white">
       <Header />
@@ -725,7 +762,7 @@ const isAuthenticated = !!user;
             className="w-full"
           >
             <TabsList
-              className="grid w-full h-full grid-cols-4 md:grid-cols-7 gap-2 bg-zinc-900/50 border border-yellow-500/20 p-2 rounded-xl mb-12 relative z-10"
+              className="grid w-full h-full grid-cols-4 md:grid-cols-8 gap-2 bg-zinc-900/50 border border-yellow-500/20 p-2 rounded-xl mb-12 relative z-10"
               data-testid="tabs-account"
             >
               <TabsTrigger
@@ -784,6 +821,15 @@ const isAuthenticated = !!user;
                 <Home className="h-4 w-4" />
                 <span>Address</span>
               </TabsTrigger>
+               <TabsTrigger
+                value="support"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3 relative"
+                data-testid="tab-support"
+              >
+                <Headphones className="h-4 w-4" />
+                <span>Support</span>
+                <NotificationBadge count={supportUnreadData?.count} />
+              </TabsTrigger>
             </TabsList>
 
             {/* WALLET TAB */}
@@ -795,12 +841,16 @@ const isAuthenticated = !!user;
               <div className="grid lg:grid-cols-2 gap-6">
                 {/* Wallet Balance Card */}
                 <Card className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
-                  <CardHeader className="border-b border-yellow-500/20">
-                    <CardTitle className="text-2xl text-yellow-400 flex items-center gap-2">
-                      <WalletIcon className="h-6 w-6" />
-                      Wallet Balance
-                    </CardTitle>
-                  </CardHeader>
+              <CardHeader className="border-b border-yellow-500/20 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-0">
+              <div className="flex items-center gap-2 text-yellow-400 justify-center sm:justify-start">
+                <WalletIcon className="h-6 w-6" />
+                <span className="text-xl sm:text-2xl font-medium">Wallet Balance</span>
+              </div>
+              <div className="flex items-center gap-2 text-yellow-400 justify-center sm:justify-end">
+                <span className="text-lg sm:text-xl font-medium">Cashflow Spent=£{totalCashflow}</span>
+              </div>
+            </CardHeader>
+
                   <CardContent className="pt-6">
                     <div className="text-center space-y-6">
                       <div>
@@ -838,7 +888,7 @@ const isAuthenticated = !!user;
                           </div>
                           <input
                             type="number"
-                            min="5"
+                            min="0.50"
                             max="1000"
                             value={topUpAmount}
                             onChange={(e) => setTopUpAmount(e.target.value)}
@@ -1473,7 +1523,7 @@ transaction.type === "referral_bonus"
                     </h2>
                     <div className="flex justify-center items-baseline gap-3">
                       <span
-                        className="text-7xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent"
+                        className="text-6xl sm:text-7xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent"
                         data-testid="text-points-balance"
                       >
                         {ringtonePoints.toLocaleString()}
@@ -2022,6 +2072,15 @@ transaction.type === "referral_bonus"
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* Support tab */}
+            <TabsContent
+              value="support"
+              className="space-y-6 pt-12 relative z-0"
+              data-testid="content-support"
+            >
+              <Support/>
             </TabsContent>
           </Tabs>
         </div>

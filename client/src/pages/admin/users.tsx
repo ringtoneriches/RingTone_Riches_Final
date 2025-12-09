@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown } from "lucide-react";
+import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown, ArrowBigLeft, ArrowBigRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -29,6 +29,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLocation } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
+import { Transaction } from "@shared/schema";
+import { getTotalCashflow } from "../wallet";
 
 interface User {
   id: string;
@@ -50,6 +52,7 @@ interface User {
 type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
 type SortOrder = "asc" | "desc" | null;
 type SortField = "balance" | "ringtonePoints" | "createdAt" | "email" | null;
+
 
 export default function AdminUsers() {
   const { toast } = useToast();
@@ -77,6 +80,8 @@ export default function AdminUsers() {
 const [, setLocation] = useLocation();
 const [sortField, setSortField] = useState<SortField>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
+   const [currentPage , setCurrentPage] = useState(1);
+    const itemsPerPage = 50;
   // Calculate date range (memoized to prevent infinite loops)
   const { dateFrom, dateTo } = useMemo(() => {
     if (dateFilter === "all") {
@@ -220,6 +225,10 @@ const getSortIcon = (field: SortField) => {
     return filtered;
   }, [allUsers, searchInput, sortField, sortOrder]);
  
+    const totalPages= Math.ceil(users.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedUsers  = users.slice(startIndex , startIndex + itemsPerPage);
+
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
@@ -304,7 +313,13 @@ const getSortIcon = (field: SortField) => {
     },
   });
 
-  
+   const { data: cashflowTransactions = [] } = useQuery<Transaction[]>({
+      queryKey: ["/api/admin/users/cashflow-transactions"],
+    });
+ const getCashflowTotal = (userId: string) => {
+  const userTx = cashflowTransactions.find(tx => tx.userId === userId);
+  return userTx ? parseFloat(userTx.totalCashflow).toFixed(2) : "0.00";
+};
   const handleResetAll = () => {
 
    resetAllMutation.mutate()
@@ -570,6 +585,9 @@ const getSortIcon = (field: SortField) => {
                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
                     Phone
                   </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                    Cashflow Balance
+                  </th>
                   <th 
                     className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
                     onClick={() => handleSort("balance")}
@@ -606,7 +624,7 @@ const getSortIcon = (field: SortField) => {
                 </tr>
               </thead>
               <tbody>
-                {users?.map((user) => (
+                {paginatedUsers?.map((user) => (
                   <tr key={user.id} className="border-b border-border hover:bg-muted/50">
                     <td className="py-3 px-4 text-sm text-foreground">{user.email}</td>
                     <td className="py-3 px-4 text-sm text-foreground">
@@ -614,6 +632,9 @@ const getSortIcon = (field: SortField) => {
                     </td>
                      <td className="py-3 px-4 text-sm text-foreground">
                       {user.phoneNumber} 
+                    </td>
+                     <td className="py-3 px-4 text-sm text-foreground">
+                      £{getCashflowTotal(user.id)}
                     </td>
                     <td className="py-3 px-4 text-sm text-primary font-medium">
                       £{parseFloat(user.balance).toFixed(2)}
@@ -672,7 +693,34 @@ const getSortIcon = (field: SortField) => {
             </table>
           </div>
         </div>
-
+         {/* PAGINATION */}
+                <div className="flex justify-center items-center gap-4 my-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ArrowBigLeft />
+                  </Button>
+        
+                  <span className="font-medium">
+                    Page {currentPage} of {totalPages}
+                  </span>
+        
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                      <ArrowBigRight />
+                  </Button>
+                </div>
+        
+                {/* ENTRY COUNT */}
+                <p className="text-center text-sm text-muted-foreground">
+                  Showing {paginatedUsers.length} of {allUsers.length} filtered entries
+                </p>
+        {/* Edit User Dialog */}
         <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
           <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>

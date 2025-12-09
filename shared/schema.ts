@@ -10,6 +10,7 @@ import {
   decimal,
   boolean,
   uuid,
+  serial,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -414,3 +415,59 @@ export type RegisterUser = z.infer<typeof registerUserSchema>;
 export type LoginUser = z.infer<typeof loginUserSchema>;
 export type ChangeAdminUsername = z.infer<typeof changeAdminUsernameSchema>;
 export type ChangeAdminPassword = z.infer<typeof changeAdminPasswordSchema>;
+
+// Support tickets
+export const supportTickets = pgTable("support_tickets", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketNumber: serial("ticket_number").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  subject: text("subject").notNull(),
+  description: text("description").notNull(),
+  status: varchar("status", { enum: ["open", "in_progress", "resolved", "closed"] }).default("open"),
+  priority: varchar("priority", { enum: ["low", "medium", "high"] }).default("medium"),
+  imageUrls: text("image_urls").array(),
+  adminResponse: text("admin_response"),
+  adminImageUrls: text("admin_image_urls").array(),
+  userHasUnread: boolean("user_has_unread").default(false),
+  adminHasUnread: boolean("admin_has_unread").default(true),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertSupportTicketSchema = createInsertSchema(supportTickets).omit({
+  id: true,
+  ticketNumber: true,
+  status: true,
+  priority: true,
+  adminResponse: true,
+  adminImageUrls: true,
+  userHasUnread: true,
+  adminHasUnread: true,
+  resolvedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
+
+// Support ticket messages (chat thread)
+export const supportMessages = pgTable("support_messages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketId: uuid("ticket_id").notNull().references(() => supportTickets.id, { onDelete: "cascade" }),
+  senderId: varchar("sender_id").notNull(),
+  senderType: varchar("sender_type", { enum: ["user", "admin"] }).notNull(),
+  message: text("message").notNull(),
+  imageUrls: text("image_urls").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSupportMessageSchema = createInsertSchema(supportMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SupportMessage = typeof supportMessages.$inferSelect;
+export type InsertSupportMessage = z.infer<typeof insertSupportMessageSchema>;
+

@@ -51,7 +51,8 @@ import AdminMarketing from "./pages/admin/marketing";
 import ScrollToTop from "./lib/ScrollToTop ";
 import MaintenancePage from "./pages/MaintenancePage";
 import UserAuditPage from "./pages/admin/audit";
-import WheelSettings1 from "./pages/admin/wheelSettings1";
+import AdminTransactions from "./pages/admin/transactions";
+import AdminSupport from "./pages/admin/support";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -100,6 +101,7 @@ function Router() {
       <Route path="/scratch" component={scratchcard} />
       <Route path="/spin-billing/:orderId/:competitionId" component={SpinBilling} />
       <Route path="/scratch-billing/:orderId" component={ScratchBilling} />
+      {/* <Route path="/support" component={Support} /> */}
 
       {/* Admin routes - always registered, auth checked in component */}
       <Route path="/admin/login" component={AdminLogin} />
@@ -115,7 +117,9 @@ function Router() {
       <Route path="/admin/marketing" component={AdminMarketing} />
       <Route path="/admin/settings" component={AdminSettings} />
       <Route path="/admin/users/:id" component={UserAuditPage} />
-      
+      <Route path="/admin/transactions" component={AdminTransactions} />
+      <Route path="/admin/support" component={AdminSupport} />
+      <Route path="/admin/users/:id" component={UserAuditPage} />
 
       <Route component={NotFound} />
     </Switch>

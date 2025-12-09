@@ -14,6 +14,8 @@ import {
   withdrawalRequests,
   promotionalCampaigns,
   campaignEmails,
+  supportTickets,
+  supportMessages,
   type User,
   type UpsertUser,
   type Competition,
@@ -40,9 +42,13 @@ import {
   type InsertPromotionalCampaign,
   type CampaignEmail,
   type InsertCampaignEmail,
+  type SupportTicket,
+  type InsertSupportTicket,
+  type SupportMessage,
+  type InsertSupportMessage,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sum, sql } from "drizzle-orm";
+import { eq, desc, and, sum, sql, notInArray } from "drizzle-orm";
 import { hashPassword } from "./customAuth";
 
 export interface IStorage {
@@ -149,6 +155,18 @@ saveUserReferral(data: { userId: string; referrerId: string }): Promise<void>;
   updatePromotionalCampaign(id: string, data: Partial<PromotionalCampaign>): Promise<PromotionalCampaign>;
   deletePromotionalCampaign(id: string): Promise<void>;
   createCampaignEmail(email: InsertCampaignEmail): Promise<CampaignEmail>;
+
+   // Support ticket operations
+  createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket>;
+  getSupportTickets(): Promise<SupportTicket[]>;
+  getUserSupportTickets(userId: string): Promise<SupportTicket[]>;
+  getSupportTicket(id: string): Promise<SupportTicket | undefined>;
+  updateSupportTicket(id: string, data: Partial<SupportTicket>): Promise<SupportTicket>;
+  deleteSupportTicket(id: string): Promise<void>;
+  getUserUnreadTicketCount(userId: string): Promise<number>;
+  getAdminUnreadTicketCount(): Promise<number>;
+  markTicketsAsReadByUser(userId: string): Promise<void>;
+  markTicketAsReadByAdmin(ticketId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -781,6 +799,114 @@ async recordSpinUsage(orderId: string, userId: string): Promise<void> {
       .values(email)
       .returning();
     return created;
+  }
+
+  // Support ticket operations
+  async createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket> {
+    const [created] = await db
+      .insert(supportTickets)
+      .values({
+        ...ticket,
+        adminHasUnread: true,
+        userHasUnread: false,
+      })
+      .returning();
+    return created;
+  }
+
+  async getSupportTickets(): Promise<SupportTicket[]> {
+    return await db
+      .select()
+      .from(supportTickets)
+      .orderBy(desc(supportTickets.createdAt));
+  }
+
+  async getUserSupportTickets(userId: string): Promise<SupportTicket[]> {
+    return await db
+      .select()
+      .from(supportTickets)
+      .where(eq(supportTickets.userId, userId))
+      .orderBy(desc(supportTickets.createdAt));
+  }
+
+  async getSupportTicket(id: string): Promise<SupportTicket | undefined> {
+    const [ticket] = await db
+      .select()
+      .from(supportTickets)
+      .where(eq(supportTickets.id, id));
+    return ticket;
+  }
+
+  async updateSupportTicket(id: string, data: Partial<SupportTicket>): Promise<SupportTicket> {
+    const [updated] = await db
+      .update(supportTickets)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(supportTickets.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSupportTicket(id: string): Promise<void> {
+    await db
+      .delete(supportTickets)
+      .where(eq(supportTickets.id, id));
+  }
+
+  async getUserUnreadTicketCount(userId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(supportTickets)
+      .where(and(
+        eq(supportTickets.userId, userId),
+        eq(supportTickets.userHasUnread, true),
+        notInArray(supportTickets.status, ['resolved', 'closed'])
+      ));
+    return result[0]?.count || 0;
+  }
+
+  async getAdminUnreadTicketCount(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(supportTickets)
+      .where(and(
+        eq(supportTickets.adminHasUnread, true),
+        notInArray(supportTickets.status, ['resolved', 'closed'])
+      ));
+    return result[0]?.count || 0;
+  }
+
+  async markTicketsAsReadByUser(userId: string): Promise<void> {
+    await db
+      .update(supportTickets)
+      .set({ userHasUnread: false })
+      .where(eq(supportTickets.userId, userId));
+  }
+
+  async markTicketAsReadByAdmin(ticketId: string): Promise<void> {
+    await db
+      .update(supportTickets)
+      .set({ adminHasUnread: false })
+      .where(eq(supportTickets.id, ticketId));
+  }
+
+  // Support Messages
+  async createSupportMessage(data: InsertSupportMessage): Promise<SupportMessage> {
+    const [message] = await db
+      .insert(supportMessages)
+      .values(data)
+      .returning();
+    return message;
+  }
+
+  async getMessagesByTicketId(ticketId: string): Promise<SupportMessage[]> {
+    return await db
+      .select()
+      .from(supportMessages)
+      .where(eq(supportMessages.ticketId, ticketId))
+      .orderBy(supportMessages.createdAt);
   }
 }
 

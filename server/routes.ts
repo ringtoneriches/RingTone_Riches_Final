@@ -39,7 +39,10 @@ import {
   promotionalCampaigns,
   platformSettings,
   spinWheel2Configs,
-  auditLogs
+  auditLogs,
+  supportTickets,
+  insertSupportMessageSchema,
+  insertSupportTicketSchema,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -3938,6 +3941,126 @@ app.get("/api/user/transactions", isAuthenticated, async (req: any, res) => {
   }
 });
 
+app.get("/api/user/cashflow-transactions", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+
+    const cashflowDeposits = await db
+      .select({
+        id: transactions.id,
+        amount: transactions.amount,
+        description: transactions.description,
+        createdAt: transactions.createdAt,
+        type: transactions.type
+      })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.type, "deposit") // Only cashflow top-ups
+        )
+      );
+
+    res.json(cashflowDeposits);
+
+  } catch (error) {
+    console.error("Error fetching cashflow deposits:", error);
+    res.status(500).json({ message: "Failed to fetch cashflow deposits" });
+  }
+});
+
+app.get("/api/admin/users/cashflow-transactions", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    // 1️⃣ Get all users with their cashflow deposits
+    const usersCashflow = await db
+      .select({
+        userId: users.id,
+        userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        userEmail: users.email,
+        totalCashflow: sql<number>`COALESCE(SUM(${transactions.amount}), 0)`,
+      })
+      .from(users)
+      .leftJoin(transactions, and(
+        eq(transactions.userId, users.id),
+        eq(transactions.type, 'deposit')
+      ))
+      .groupBy(users.id);
+
+    res.json(usersCashflow);
+
+  } catch (error) {
+    console.error("Error fetching users cashflow transactions:", error);
+    res.status(500).json({ message: "Failed to fetch users cashflow transactions" });
+  }
+});
+
+
+app.get("/api/admin/cashflow-transactions", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    //
+    // 1️⃣ CASHFLOW DEPOSITS (Wallet top-ups)
+    //
+    const cashflowDeposits = await db
+      .select({
+        id: transactions.id,
+        userId: transactions.userId,
+        userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        userEmail: users.email,
+        type: transactions.type,
+        amount: transactions.amount,
+        description: transactions.description,
+        createdAt: transactions.createdAt,
+        source: sql`'transaction'`,
+      })
+      .from(transactions)
+      .leftJoin(users, eq(transactions.userId, users.id))
+      .where(sql`${transactions.type} = 'deposit'`);
+
+
+
+    //
+    // 2️⃣ CASHFLOW USED IN ORDERS (cashflowsAmount > 0)
+    //
+    const cashflowOrders = await db
+      .select({
+        id: orders.id,
+        userId: orders.userId,
+        userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        userEmail: users.email,
+        competitionId: orders.competitionId,
+        competitionTitle: competitions.title,
+        type: sql`'cashflow_spent'`,
+        amount: orders.cashflowsAmount,
+        description: sql`COALESCE(${competitions.title}, ${orders.paymentBreakdown}, 'Competition Purchase')`,
+        createdAt: orders.createdAt,
+        source: sql`'order'`,
+      })
+      .from(orders)
+      .leftJoin(users, eq(orders.userId, users.id))
+      .leftJoin(competitions, eq(orders.competitionId, competitions.id))
+      .where(sql`${orders.cashflowsAmount} > 0`);
+
+
+
+    //
+    // 3️⃣ MERGE RESULTS
+    //
+    const allCashflowTx = [...cashflowDeposits, ...cashflowOrders];
+
+    //
+    // 4️⃣ SORT NEWEST FIRST
+    //
+    allCashflowTx.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json(allCashflowTx);
+
+  } catch (error) {
+    console.error("Error fetching cashflow transactions:", error);
+    res.status(500).json({ message: "Failed to fetch cashflow transactions" });
+  }
+});
+
+
 app.get("/api/user/tickets", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -4510,6 +4633,8 @@ app.patch("/api/admin/withdrawal-requests/:id", isAuthenticated, isAdmin, async 
     res.status(500).json({ message: "Failed to update withdrawal request" });
   }
 });
+
+
 
 // ====== ENTRIES ADMIN ENDPOINTS ======
 app.get("/api/admin/entries", isAuthenticated, isAdmin, async (req, res) => {
@@ -6374,174 +6499,391 @@ app.post("/api/admin/maintenance/off", isAuthenticated, isAdmin, async (req, res
   res.json({ message: "Maintenance mode disabled", settings: updated });
 });
 
-app.get("/api/admin/users/:id/audit", isAuthenticated, isAdmin, async (req: any, res) => {
+// ==================== SUPPORT TICKET ROUTES ====================
+
+// User: Get unread ticket count
+app.get("/api/support/unread-count", isAuthenticated, async (req: any, res) => {
   try {
-    const { id } = req.params;
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const count = await storage.getUserUnreadTicketCount(userId);
+    res.json({ count });
+  } catch (error) {
+    console.error("Error getting unread count:", error);
+    res.status(500).json({ message: "Failed to get unread count" });
+  }
+});
 
-     // 1️⃣ USER
-    const user = await storage.getUser(id);
-    if (!user) return res.status(404).json({ message: "User not found" });
+// Admin: Get unread ticket count
+app.get("/api/admin/support/unread-count", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const count = await storage.getAdminUnreadTicketCount();
+    res.json({ count });
+  } catch (error) {
+    console.error("Error getting admin unread count:", error);
+    res.status(500).json({ message: "Failed to get unread count" });
+  }
+});
 
-    // 2️⃣ ORDERS (Competition purchases)
-    const orders = await db.query.orders.findMany({
-      where: (o, { eq }) => eq(o.userId, id), // FIXED: Use eq() function
-      with: {
-        competition: true,
-      },
-      orderBy: (o, { desc }) => [desc(o.createdAt)], // FIXED: Use desc() function
+
+// User: Get their support tickets
+app.get("/api/support/tickets", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const tickets = await storage.getUserSupportTickets(userId);
+    // Mark as read by user when they view the list
+    await storage.markTicketsAsReadByUser(userId);
+    res.json(tickets);
+  } catch (error) {
+    console.error("Error getting user tickets:", error);
+    res.status(500).json({ message: "Failed to get tickets" });
+  }
+});
+
+// User: Create a support ticket
+app.post("/api/support/tickets", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { subject, description, imageUrls } = req.body;
+    
+    if (!subject || !description) {
+      return res.status(400).json({ message: "Subject and description are required" });
+    }
+
+    const ticket = await storage.createSupportTicket({
+      userId,
+      subject,
+      description,
+      imageUrls: imageUrls || [],
     });
 
-    // 3️⃣ WALLET TRANSACTIONS
-    const transactions = await db.query.transactions.findMany({
-      where: (t, { eq }) => eq(t.userId, id), // FIXED
-      orderBy: (t, { desc }) => [desc(t.createdAt)], // FIXED
-    });
+    res.status(201).json(ticket);
+  } catch (error) {
+    console.error("Error creating ticket:", error);
+    res.status(500).json({ message: "Failed to create ticket" });
+  }
+});
 
-    // 4️⃣ TICKETS / ENTRIES
-    const tickets = await db.query.tickets.findMany({
-      where: (t, { eq }) => eq(t.userId, id), // FIXED
-      with: {
-        competition: true,
-      },
-      orderBy: (t, { desc }) => [desc(t.createdAt)], // FIXED
-    });
+// User: Get single ticket
+app.get("/api/support/tickets/:id", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    // 5️⃣ SPIN USAGE
-    const spinUsage = await db.query.spinUsage.findMany({
-      where: (s, { eq }) => eq(s.userId, id), // FIXED
-      orderBy: (s, { desc }) => [desc(s.usedAt)], // FIXED
-    });
+    const ticket = await storage.getSupportTicket(req.params.id);
+    
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
 
-    // 6️⃣ SPIN WINS
-    const spinWins = await db.query.spinWins.findMany({
-      where: (w, { eq }) => eq(w.userId, id), // FIXED
-      orderBy: (w, { desc }) => [desc(w.wonAt)], // FIXED
-    });
+    if (ticket.userId !== userId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
 
-    // 7️⃣ SCRATCH USAGE
-    const scratchUsage = await db.query.scratchCardUsage.findMany({
-      where: (s, { eq }) => eq(s.userId, id), // FIXED
-      orderBy: (s, { desc }) => [desc(s.usedAt)], // FIXED
-    });
+    // Mark as read by user
+    if (ticket.userHasUnread) {
+      await storage.updateSupportTicket(ticket.id, { userHasUnread: false });
+    }
 
-    // 8️⃣ SCRATCH WINS
-    const scratchWins = await db.query.scratchCardWins.findMany({
-      where: (w, { eq }) => eq(w.userId, id), // FIXED
-      orderBy: (w, { desc }) => [desc(w.wonAt)], // FIXED
-    });
+    res.json(ticket);
+  } catch (error) {
+    console.error("Error getting ticket:", error);
+    res.status(500).json({ message: "Failed to get ticket" });
+  }
+});
 
-    // 9️⃣ WITHDRAWALS
-    const withdrawals = await db.query.withdrawalRequests.findMany({
-      where: (w, { eq }) => eq(w.userId, id), // FIXED
-      orderBy: (w, { desc }) => [desc(w.createdAt)], // FIXED
-    });
-
-    // 1️⃣0️⃣ BUILD UNIFIED AUDIT LOG
-    const audit = [];
-
-    // Orders audit
-    orders.forEach((o) =>
-      audit.push({
-        type: "order",
-        competition: o.competition?.title,
-        amount: o.totalAmount,
-        quantity: o.quantity,
-        paymentMethod: o.paymentMethod,
-        createdAt: o.createdAt,
+// Admin: Get all support tickets
+app.get("/api/admin/support/tickets", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const tickets = await storage.getSupportTickets();
+    
+    // Get user info for each ticket
+    const ticketsWithUsers = await Promise.all(
+      tickets.map(async (ticket) => {
+        const user = await storage.getUser(ticket.userId);
+        return {
+          ...ticket,
+          user: user ? {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+          } : null,
+        };
       })
     );
+    
+    res.json(ticketsWithUsers);
+  } catch (error) {
+    console.error("Error getting admin tickets:", error);
+    res.status(500).json({ message: "Failed to get tickets" });
+  }
+});
 
-    // Wallet transactions audit
-    transactions.forEach((t) =>
-      audit.push({
-        type: "transaction",
-        action: t.type,
-        amount: t.amount,
-        description: t.description,
-        createdAt: t.createdAt,
-      })
-    );
+// Admin: Get single ticket
+app.get("/api/admin/support/tickets/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const ticket = await storage.getSupportTicket(req.params.id);
+    
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
 
-    // Tickets audit
-    tickets.forEach((ticket) =>
-      audit.push({
-        type: "ticket",
-        competition: ticket.competition?.title,
-        ticketNumber: ticket.ticketNumber,
-        isWinner: ticket.isWinner,
-        prizeAmount: ticket.prizeAmount,
-        createdAt: ticket.createdAt,
-      })
-    );
+    // Mark as read by admin
+    await storage.markTicketAsReadByAdmin(ticket.id);
 
-    // Spin usage audit
-    spinUsage.forEach((s) =>
-      audit.push({
-        type: "spin_play",
-        orderId: s.orderId,
-        usedAt: s.usedAt,
-      })
-    );
-
-    // Spin wins audit
-    spinWins.forEach((s) =>
-      audit.push({
-        type: "spin_win",
-        rewardType: s.rewardType,
-        rewardValue: s.rewardValue,
-        wonAt: s.wonAt,
-      })
-    );
-
-    // Scratch usage audit
-    scratchUsage.forEach((s) =>
-      audit.push({
-        type: "scratch_play",
-        orderId: s.orderId,
-        usedAt: s.usedAt,
-      })
-    );
-
-    // Scratch wins audit
-    scratchWins.forEach((s) =>
-      audit.push({
-        type: "scratch_win",
-        rewardType: s.rewardType,
-        rewardValue: s.rewardValue,
-        wonAt: s.wonAt,
-      })
-    );
-
-    // Withdrawal audit
-    withdrawals.forEach((w) =>
-      audit.push({
-        type: "withdrawal",
-        amount: w.amount,
-        status: w.status,
-        createdAt: w.createdAt,
-      })
-    );
-
-    // Sort everything by date desc
-    audit.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-    return res.json({
-      user: {
+    const user = await storage.getUser(ticket.userId);
+    
+    res.json({
+      ...ticket,
+      user: user ? {
         id: user.id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        balance: user.balance,
-        createdAt: user.createdAt,
-      },
-      audit,
+      } : null,
     });
-
-  } catch (err) {
-    console.error("AUDIT ERROR", err);
-    res.status(500).json({ message: "Audit route failed", error: err });
+  } catch (error) {
+    console.error("Error getting ticket:", error);
+    res.status(500).json({ message: "Failed to get ticket" });
   }
 });
+
+// Admin: Update ticket status/response
+app.patch("/api/admin/support/tickets/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { status, adminResponse, priority, adminImageUrls } = req.body;
+    
+    const ticket = await storage.getSupportTicket(req.params.id);
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    const updateData: any = {};
+    
+    if (status) {
+      updateData.status = status;
+      if (status === "resolved" || status === "closed") {
+        updateData.resolvedAt = new Date();
+      }
+    }
+    
+    if (adminResponse !== undefined) {
+      updateData.adminResponse = adminResponse;
+      updateData.userHasUnread = true; // Notify user of update
+    }
+    
+    if (priority) {
+      updateData.priority = priority;
+    }
+    
+    if (adminImageUrls !== undefined) {
+      // Append new images to existing ones
+      const existingImages = ticket.adminImageUrls || [];
+      updateData.adminImageUrls = [...existingImages, ...adminImageUrls];
+      updateData.userHasUnread = true; // Notify user of update
+    }
+
+    const updated = await storage.updateSupportTicket(req.params.id, updateData);
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating ticket:", error);
+    res.status(500).json({ message: "Failed to update ticket" });
+  }
+});
+
+// Admin: Delete ticket
+app.delete("/api/admin/support/tickets/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const ticket = await storage.getSupportTicket(req.params.id);
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    await storage.deleteSupportTicket(req.params.id);
+    res.json({ message: "Ticket deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting ticket:", error);
+    res.status(500).json({ message: "Failed to delete ticket" });
+  }
+});
+
+// Upload support ticket images - use local storage fallback when Cloudinary is not configured
+// const supportUploadStorage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     const uploadDir = 'public/uploads/support';
+//     cb(null, uploadDir);
+//   },
+//   filename: (req, file, cb) => {
+//     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+//     const ext = file.originalname.split('.').pop();
+//     cb(null, `support-${uniqueSuffix}.${ext}`);
+//   }
+// });
+
+// const supportUpload = multer({ 
+//   storage: supportUploadStorage,
+//   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+//   fileFilter: (req, file, cb) => {
+//     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+//     if (allowedTypes.includes(file.mimetype)) {
+//       cb(null, true);
+//     } else {
+//       cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'));
+//     }
+//   }
+// });
+
+app.post("/api/support/upload", isAuthenticated, upload.array("images", 5), async (req: any, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No files uploaded" });
+    }
+
+    // Map uploaded files to their Cloudinary URLs
+    const imageUrls = (req.files as Express.Multer.File[]).map(file => file.path);
+
+    res.json({ imageUrls }); // return array of uploaded image URLs
+  } catch (error) {
+    console.error("Error uploading images:", error);
+    res.status(500).json({ message: "Failed to upload images" });
+  }
+});
+
+// Get messages for a ticket (user)
+app.get("/api/support/tickets/:id/messages", isAuthenticated, async (req: any, res) => {
+  try {
+    const ticket = await storage.getSupportTicket(req.params.id);
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+    if (ticket.userId !== req.user!.id) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    const messages = await storage.getMessagesByTicketId(req.params.id);
+    res.json(messages);
+  } catch (error) {
+    console.error("Error fetching messages:", error);
+    res.status(500).json({ message: "Failed to fetch messages" });
+  }
+});
+
+// User: Add a message to their ticket
+app.post("/api/support/tickets/:id/messages", isAuthenticated, async (req: any, res) => {
+  try {
+    const ticket = await storage.getSupportTicket(req.params.id);
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+    if (ticket.userId !== req.user!.id) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    if (ticket.status === "closed") {
+      return res.status(400).json({ message: "Cannot add messages to a closed ticket" });
+    }
+
+    const parsed = insertSupportMessageSchema.safeParse({
+      ticketId: req.params.id,
+      senderId: req.user!.id,
+      senderType: "user",
+      message: req.body.message,
+      imageUrls: req.body.imageUrls || [],
+    });
+
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid message data", errors: parsed.error.errors });
+    }
+
+    const message = await storage.createSupportMessage(parsed.data);
+
+    // Mark ticket as unread for admin
+    await storage.updateSupportTicket(req.params.id, { 
+      adminHasUnread: true,
+      updatedAt: new Date() 
+    });
+
+    res.json(message);
+  } catch (error) {
+    console.error("Error adding message:", error);
+    res.status(500).json({ message: "Failed to add message" });
+  }
+});
+
+// Admin: Get messages for a ticket
+app.get("/api/admin/support/tickets/:id/messages", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const messages = await storage.getMessagesByTicketId(req.params.id);
+    res.json(messages);
+  } catch (error) {
+    console.error("Error fetching messages:", error);
+    res.status(500).json({ message: "Failed to fetch messages" });
+  }
+});
+
+// Admin: Add a message to a ticket
+app.post("/api/admin/support/tickets/:id/messages", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const ticket = await storage.getSupportTicket(req.params.id);
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    const parsed = insertSupportMessageSchema.safeParse({
+      ticketId: req.params.id,
+      senderId: req.user!.id,
+      senderType: "admin",
+      message: req.body.message,
+      imageUrls: req.body.imageUrls || [],
+    });
+
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid message data", errors: parsed.error.errors });
+    }
+
+    const message = await storage.createSupportMessage(parsed.data);
+
+    // Mark ticket as unread for user and update status
+    await storage.updateSupportTicket(req.params.id, { 
+      userHasUnread: true,
+      status: "in_progress",
+      updatedAt: new Date() 
+    });
+
+    res.json(message);
+  } catch (error) {
+    console.error("Error adding message:", error);
+    res.status(500).json({ message: "Failed to add message" });
+  }
+});
+
+app.patch("/api/admin/support/tickets/:id/mark-as-read", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    
+       // Use the correct method name
+    await storage.markTicketAsReadByAdmin(id);
+    
+    // Fetch the updated ticket
+    const updatedTicket = await storage.getSupportTicket(id);
+    
+    res.json(updatedTicket)
+  } catch (error) {
+    console.error("Error marking ticket as read:", error);
+    res.status(500).json({ message: "Failed to mark ticket as read" });
+  }
+});
+
 
 
 const httpServer = createServer(app);

@@ -15,6 +15,8 @@ import {
   Ticket,
   Award,
   Mail,
+  Euro,
+  MessageSquare,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -31,8 +33,10 @@ const sidebarItems = [
   { name: "Entries", path: "/admin/entries", icon: Ticket },
   { name: "Past Winners", path: "/admin/past-winners", icon: Award },
   { name: "Users", path: "/admin/users", icon: Users },
+  { name: "Transactions", path: "/admin/transactions", icon: Euro },
   { name: "Orders", path: "/admin/orders", icon: ShoppingCart },
   { name: "Withdrawals", path: "/admin/withdrawals", icon: ArrowDownCircle },
+  { name: "Support", path: "/admin/support", icon: MessageSquare, hasNotification: true },
   { name: "Marketing", path: "/admin/marketing", icon: Mail },
   { name: "Settings", path: "/admin/settings", icon: Settings },
 ];
@@ -53,6 +57,11 @@ export default function AdminLayout({
   const { data: maintenanceData, refetch: refetchMaintenance } = useQuery({
     queryKey: ["/api/maintenance"],
     queryFn: () => fetch("/api/maintenance").then((res) => res.json()),
+  });
+
+   const { data: supportUnreadData } = useQuery({
+    queryKey: ["/api/admin/support/unread-count"],
+    refetchInterval: 1000,
   });
 
   const enableMaintenance = useMutation({
@@ -137,10 +146,11 @@ export default function AdminLayout({
             </p>
           </div>
 
-          <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-2">
             {sidebarItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.path;
+              const unreadCount = item.hasNotification && supportUnreadData?.count > 0 ? supportUnreadData.count : 0;
               return (
                 <Link
                   key={item.path}
@@ -157,6 +167,11 @@ export default function AdminLayout({
                   >
                     <Icon className="w-5 h-5" />
                     <span className="font-medium">{item.name}</span>
+                    {unreadCount > 0 && (
+                      <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-red-500 rounded-full">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
                   </div>
                 </Link>
               );
