@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
-import { Zap, Shield, Trophy, Sparkles } from "lucide-react";
+import { Zap, Shield, Trophy, Sparkles, Snowflake, Gift, Star } from "lucide-react";
 
 interface FeaturedCompetitionsProps {
   competitions: Competition[];
@@ -43,8 +43,73 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
           {instantCompetitions.map((competition) => (
             <div key={competition.id}>
               <div className="relative rounded-xl md:rounded-2xl overflow-hidden">
-                {/* Mobile-First Layout */}
-                <div className="relative min-h-[550px] md:min-h-[550px] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+                {/* Mobile-First Layout with SPECTACULAR Christmas Theme */}
+                <div className="relative min-h-[550px] md:min-h-[550px] bg-gradient-to-br from-red-950 via-slate-900 to-green-950">
+                  
+                  {/* Animated Christmas Lights Border */}
+                  <div className="absolute top-0 left-0 right-0 h-8 z-[8] flex items-center justify-center gap-3 bg-gradient-to-b from-black/40 to-transparent">
+                    {Array.from({ length: 20 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="w-3 h-3 rounded-full animate-twinkle-light shadow-lg"
+                        style={{
+                          backgroundColor: ['#ef4444', '#22c55e', '#facc15', '#3b82f6', '#ec4899'][i % 5],
+                          boxShadow: `0 0 10px 2px ${['#ef4444', '#22c55e', '#facc15', '#3b82f6', '#ec4899'][i % 5]}`,
+                          animationDelay: `${i * 0.15}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  
+                  {/* Christmas Snow Particles - Reduced */}
+                  <div className="absolute inset-0 pointer-events-none overflow-hidden z-[5]">
+                    {Array.from({ length: 10 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="absolute bg-white rounded-full opacity-70"
+                        style={{
+                          width: `${2 + Math.random() * 4}px`,
+                          height: `${2 + Math.random() * 4}px`,
+                          left: `${Math.random() * 100}%`,
+                          top: `-10px`,
+                          animation: `featured-snow ${3 + Math.random() * 4}s linear infinite`,
+                          animationDelay: `${Math.random() * 3}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Glowing Corner Ornaments */}
+                  <div className="absolute top-10 left-3 z-[6]">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-red-500 blur-xl opacity-50 animate-pulse"></div>
+                      <div className="relative w-6 h-6 md:w-8 md:h-8 bg-gradient-to-br from-red-400 to-red-600 rounded-full border-2 border-yellow-400 shadow-lg shadow-red-500/50 animate-bounce-slow"></div>
+                    </div>
+                  </div>
+                  <div className="absolute top-10 right-3 z-[6]">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-green-500 blur-xl opacity-50 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                      <div className="relative w-6 h-6 md:w-8 md:h-8 bg-gradient-to-br from-green-400 to-green-600 rounded-full border-2 border-yellow-400 shadow-lg shadow-green-500/50 animate-bounce-slow" style={{ animationDelay: '0.5s' }}></div>
+                    </div>
+                  </div>
+                  
+                  {/* Floating Stars */}
+                  <div className="absolute top-20 left-1/4 z-[6] hidden md:block">
+                    <Star className="w-6 h-6 text-yellow-400 fill-yellow-400 animate-pulse drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]" />
+                  </div>
+                  <div className="absolute top-32 right-1/4 z-[6] hidden md:block">
+                    <Star className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse drop-shadow-[0_0_12px_rgba(253,224,71,0.8)]" style={{ animationDelay: '1s' }} />
+                  </div>
+                  
+                  {/* Candy Cane Corner Accents */}
+                  <div className="absolute bottom-0 left-0 w-16 h-16 md:w-24 md:h-24 z-[6] opacity-40">
+                    <div className="absolute bottom-2 left-2 w-2 h-12 md:h-16 bg-gradient-to-b from-red-500 via-white to-red-500 rounded-full transform -rotate-12"></div>
+                    <div className="absolute bottom-2 left-5 w-2 h-10 md:h-14 bg-gradient-to-b from-white via-red-500 to-white rounded-full transform rotate-12"></div>
+                  </div>
+                  <div className="absolute bottom-0 right-0 w-16 h-16 md:w-24 md:h-24 z-[6] opacity-40 transform scale-x-[-1]">
+                    <div className="absolute bottom-2 left-2 w-2 h-12 md:h-16 bg-gradient-to-b from-red-500 via-white to-red-500 rounded-full transform -rotate-12"></div>
+                    <div className="absolute bottom-2 left-5 w-2 h-10 md:h-14 bg-gradient-to-b from-white via-red-500 to-white rounded-full transform rotate-12"></div>
+                  </div>
                   
                   {/* Background Image - FULLY VISIBLE on mobile! */}
                   <div className="absolute inset-0">
@@ -57,30 +122,34 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
                       className="w-full h-full object-cover opacity-20"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-transparent"></div>
+                    {/* Christmas glow overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-green-500/5"></div>
                   </div>
 
                   {/* Content Container */}
                   <div className="relative z-10 h-full flex flex-col justify-between p-4 md:p-12">
                     
-                    {/* Top Badge */}
+                    {/* Top Badge - Christmas themed */}
                     <div className="flex justify-center md:justify-start">
-                      <div className="inline-flex items-center gap-2 bg-gradient-to-r from-primary to-yellow-400 text-slate-900 px-3 md:px-4 py-1.5 md:py-2 rounded-full font-bold text-[10px] md:text-sm shadow-xl animate-pulse">
-                        <Zap className="w-3 h-3 md:w-4 md:h-4" />
-                        🔥 LIVE NOW - LIMITED ENTRIES
+                      <div className="inline-flex items-center gap-2 bg-gradient-to-r from-red-500 to-green-600 text-white px-3 md:px-4 py-1.5 md:py-2 rounded-full font-bold text-[10px] md:text-sm shadow-xl shadow-red-500/30 animate-pulse border border-white/20">
+                        <Gift className="w-3 h-3 md:w-4 md:h-4" />
+                        <Snowflake className="w-2.5 h-2.5 md:w-3 md:h-3" />
+                        CHRISTMAS SPECIAL
+                        <Snowflake className="w-2.5 h-2.5 md:w-3 md:h-3" />
                       </div>
                     </div>
 
                     {/* Center Content */}
                     <div className="flex-1 flex flex-col md:flex-row items-center gap-4 md:gap-12 py-4 md:py-6">
                       
-                      {/* PREMIUM Prize Image with Gold Border */}
+                      {/* PREMIUM Prize Image with Christmas Border */}
                       <div className="w-full md:w-1/2 flex items-center justify-center">
                         <div className="relative group">
-                          {/* Premium Glow Effect - Brand Colors */}
-                          <div className="absolute -inset-3 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-3xl blur-2xl opacity-40 group-hover:opacity-60 transition-all duration-700"></div>
+                          {/* Christmas Glow Effect */}
+                          <div className="absolute -inset-3 bg-gradient-to-r from-red-500 via-green-500 to-red-500 rounded-3xl blur-2xl opacity-30 group-hover:opacity-50 transition-all duration-700"></div>
                           
-                          {/* Image Container with Premium Gold Border */}
-                          <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-[#FACC15]/60 shadow-[#FACC15]/30">
+                          {/* Image Container with Christmas Border */}
+                          <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-red-500/50 group-hover:border-green-500/60 transition-colors shadow-red-500/20">
                             <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
                               <img
                                 src={
@@ -91,14 +160,14 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
                                 className="w-full h-full object-cover"
                               />
                               
-                              {/* Light Premium Overlay Effects - Minimal */}
+                              {/* Light Christmas Overlay Effects */}
                               <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none z-10"></div>
-                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(250,204,21,0.05),transparent_60%)] pointer-events-none z-10"></div>
+                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(239,68,68,0.08),transparent_60%)] pointer-events-none z-10"></div>
                               
-                              {/* Trending Badge - Brand Colors */}
-                              <div className="absolute bottom-2 md:bottom-3 left-2 md:left-3 bg-gradient-to-r from-[#FACC15]/95 to-[#F59E0B]/95 backdrop-blur-md text-gray-900 px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[10px] md:text-sm font-bold flex items-center gap-1.5 md:gap-2 shadow-xl z-20">
-                                <span>🔥</span>
-                                <span>Trending</span>
+                              {/* Christmas Badge */}
+                              <div className="absolute bottom-2 md:bottom-3 left-2 md:left-3 bg-gradient-to-r from-red-500/95 to-green-500/95 backdrop-blur-md text-white px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[10px] md:text-sm font-bold flex items-center gap-1.5 md:gap-2 shadow-xl z-20 border border-white/20">
+                                <Gift className="w-3 h-3" />
+                                <span>Christmas Deal</span>
                               </div>
                             </div>
                           </div>
@@ -178,9 +247,13 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
                           <button
                             onClick={() => handleViewCompetition(competition.id)}
                             data-testid="button-enter-competition"
-                            className="w-full md:w-auto bg-gradient-to-r from-primary via-yellow-400 to-primary hover:from-yellow-400 hover:via-primary hover:to-yellow-400 text-slate-900 font-black py-3 md:py-5 px-8 md:px-16 rounded-xl transition-all duration-300 shadow-2xl hover:shadow-primary/50 text-sm md:text-2xl uppercase tracking-wide hover:scale-105 transform break-words"
+                            className="w-full md:w-auto bg-gradient-to-r from-red-500 via-green-500 to-red-500 hover:from-green-500 hover:via-red-500 hover:to-green-500 text-white font-black py-3 md:py-5 px-8 md:px-16 rounded-xl transition-all duration-300 shadow-2xl hover:shadow-green-500/50 text-sm md:text-2xl uppercase tracking-wide hover:scale-105 transform break-words border-2 border-white/30"
                           >
-                            🎯 ENTER NOW
+                            <span className="flex items-center justify-center gap-2">
+                              <Gift className="w-4 h-4 md:w-6 md:h-6" />
+                              ENTER NOW
+                              <Gift className="w-4 h-4 md:w-6 md:h-6" />
+                            </span>
                           </button>
                         </div>
                       </div>
@@ -224,6 +297,41 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
           .featured-slider .slick-dots li button:before {
             font-size: 10px;
           }
+        }
+
+        @keyframes featured-snow {
+          0% {
+            transform: translateY(0) rotate(0deg);
+            opacity: 0;
+          }
+          10% {
+            opacity: 0.8;
+          }
+          90% {
+            opacity: 0.6;
+          }
+          100% {
+            transform: translateY(600px) rotate(360deg);
+            opacity: 0;
+          }
+        }
+        
+        @keyframes twinkle-light {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(0.8); }
+        }
+        
+        .animate-twinkle-light {
+          animation: twinkle-light 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes bounce-slow {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+        
+        .animate-bounce-slow {
+          animation: bounce-slow 2s ease-in-out infinite;
         }
       `}</style>
     </div>

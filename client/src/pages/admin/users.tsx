@@ -51,7 +51,8 @@ interface User {
 
 type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
 type SortOrder = "asc" | "desc" | null;
-type SortField = "balance" | "ringtonePoints" | "createdAt" | "email" | null;
+type SortField = "balance" | "ringtonePoints" | "phoneNumber" | "firstName" | "createdAt" | "email" | null;
+type SortFieldCashflow = "cashflowBalance" | null;
 
 
 export default function AdminUsers() {
@@ -79,6 +80,8 @@ export default function AdminUsers() {
   });
 const [, setLocation] = useLocation();
 const [sortField, setSortField] = useState<SortField>(null);
+const [sortFieldCashflow, setSortFieldCashflow] = useState<SortFieldCashflow>(null);
+
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
    const [currentPage , setCurrentPage] = useState(1);
     const itemsPerPage = 50;
@@ -129,26 +132,36 @@ const [sortField, setSortField] = useState<SortField>(null);
     },
   });
 
+   const { data: cashflowTransactions = [] } = useQuery<Transaction[]>({
+      queryKey: ["/api/admin/users/cashflow-transactions"],
+    });
+ const getCashflowTotal = (userId: string) => {
+  const userTx = cashflowTransactions.find(tx => tx.userId === userId);
+  return userTx ? parseFloat(userTx.totalCashflow).toFixed(2) : "0.00";
+};
+  
    // Handle sorting
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      // Cycle through: asc -> desc -> null
-      if (sortOrder === "asc") {
-        setSortOrder("desc");
-      } else if (sortOrder === "desc") {
-        setSortField(null);
-        setSortOrder(null);
-      } else {
-        setSortOrder("asc");
-        setSortField(field);
-      }
+const handleSort = (field: SortField) => {
+  if (sortField === field) {
+    // Cycle through: asc -> desc -> null
+    if (sortOrder === "asc") {
+      setSortOrder("desc");
+    } else if (sortOrder === "desc") {
+      setSortField(null);
+      setSortOrder(null);
     } else {
-      // New field, start with asc
-      setSortField(field);
       setSortOrder("asc");
+      setSortField(field);
     }
-  };
+  } else {
+    // New field, start with asc and reset cashflow sort
+    setSortFieldCashflow(null);
+    setSortField(field);
+    setSortOrder("asc");
+  }
+};
 
+  
  // Get sort icon for a field
 const getSortIcon = (field: SortField) => {
   if (sortField === field) {
@@ -169,61 +182,81 @@ const getSortIcon = (field: SortField) => {
 };
 
   // Client-side filtering and sorting
-  const users = useMemo(() => {
-    if (!allUsers) return [];
-    
-    let filtered = [...allUsers];
-    
-    // Apply search filter
-    if (searchInput.trim()) {
-      const searchLower = searchInput.toLowerCase().trim();
-      filtered = filtered.filter((user) => {
-        const fullName = `${user.firstName || ""} ${user.lastName || ""}`.toLowerCase().trim();
-        const email = user.email?.toLowerCase() || "";
-        
-        return (
-          fullName.includes(searchLower) ||
-          email.includes(searchLower)
-        );
-      });
-    }
-    
-    // Apply sorting
-    if (sortField && sortOrder) {
-      filtered.sort((a, b) => {
-        let aValue: any, bValue: any;
-        
+ // Client-side filtering and sorting
+const users = useMemo(() => {
+  if (!allUsers) return [];
+  
+  let filtered = [...allUsers];
+  
+  // Apply search filter
+  if (searchInput.trim()) {
+    const searchLower = searchInput.toLowerCase().trim();
+    filtered = filtered.filter((user) => {
+      const fullName = `${user.firstName || ""} ${user.lastName || ""}`.toLowerCase().trim();
+      const email = user.email?.toLowerCase() || "";
+      
+      return (
+        fullName.includes(searchLower) ||
+        email.includes(searchLower)
+      );
+    });
+  }
+  
+  // Apply sorting - check both sortField and sortFieldCashflow
+  if ((sortField || sortFieldCashflow) && sortOrder) {
+    filtered.sort((a, b) => {
+      let aValue: any, bValue: any;
+      
+      // Handle cashflow sorting
+      if (sortFieldCashflow === "cashflowBalance") {
+        aValue = parseFloat(getCashflowTotal(a.id));
+        bValue = parseFloat(getCashflowTotal(b.id));
+      } 
+      // Handle regular field sorting
+      else if (sortField) {
         switch (sortField) {
-          case "balance":
-            aValue = parseFloat(a.balance);
-            bValue = parseFloat(b.balance);
-            break;
-          case "ringtonePoints":
-            aValue = a.ringtonePoints;
-            bValue = b.ringtonePoints;
-            break;
-          case "createdAt":
-            aValue = new Date(a.createdAt).getTime();
-            bValue = new Date(b.createdAt).getTime();
-            break;
-          case "email":
-            aValue = a.email.toLowerCase();
-            bValue = b.email.toLowerCase();
-            break;
-          default:
-            return 0;
+           case "balance":
+      aValue = parseFloat(a.balance);
+      bValue = parseFloat(b.balance);
+      break;
+    case "ringtonePoints":
+      aValue = a.ringtonePoints;
+      bValue = b.ringtonePoints;
+      break;
+    case "firstName":
+      // Sort by full name or individual first name
+      aValue = `${a.firstName || ""} ${a.lastName || ""}`.toLowerCase().trim();
+      bValue = `${b.firstName || ""} ${b.lastName || ""}`.toLowerCase().trim();
+      break;
+    case "phoneNumber":
+      aValue = a.phoneNumber?.toLowerCase() || "";
+      bValue = b.phoneNumber?.toLowerCase() || "";
+      break;
+    case "createdAt":
+      aValue = new Date(a.createdAt).getTime();
+      bValue = new Date(b.createdAt).getTime();
+      break;
+    case "email":
+      aValue = a.email.toLowerCase();
+      bValue = b.email.toLowerCase();
+      break;
+    default:
+      return 0;
         }
-        
-        if (sortOrder === "asc") {
-          return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-        } else {
-          return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
-        }
-      });
-    }
-    
-    return filtered;
-  }, [allUsers, searchInput, sortField, sortOrder]);
+      } else {
+        return 0;
+      }
+      
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+      } else {
+        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+      }
+    });
+  }
+  
+  return filtered;
+}, [allUsers, searchInput, sortField, sortFieldCashflow, sortOrder, getCashflowTotal]); // Add getCashflowTotal to dependencies
  
     const totalPages= Math.ceil(users.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -313,12 +346,43 @@ const getSortIcon = (field: SortField) => {
     },
   });
 
-   const { data: cashflowTransactions = [] } = useQuery<Transaction[]>({
-      queryKey: ["/api/admin/users/cashflow-transactions"],
-    });
- const getCashflowTotal = (userId: string) => {
-  const userTx = cashflowTransactions.find(tx => tx.userId === userId);
-  return userTx ? parseFloat(userTx.totalCashflow).toFixed(2) : "0.00";
+
+
+const handleSortCashflow = (field: SortFieldCashflow) => {
+  if (sortFieldCashflow === field) {
+    // Cycle: asc → desc → none
+    if (sortOrder === "asc") {
+      setSortOrder("desc");
+    } else if (sortOrder === "desc") {
+      setSortFieldCashflow(null);
+      setSortOrder(null);
+    } else {
+      setSortOrder("asc");
+    }
+  } else {
+    // New field - reset regular sort field
+    setSortField(null);
+    setSortFieldCashflow(field);
+    setSortOrder("asc");
+  }
+};
+
+
+  const getSortIconCashflow = (field: SortFieldCashflow) => {
+  if (sortFieldCashflow === field) {
+    return sortOrder === "asc" ? (
+      <ChevronUp className="w-4 h-4 ml-1" />
+    ) : (
+      <ChevronDown className="w-4 h-4 ml-1" />
+    );
+  }
+
+  return (
+    <div className="inline-flex flex-col ml-1">
+      <ChevronUp className="w-3 h-3 -mb-1 text-gray-400 opacity-50" />
+      <ChevronDown className="w-3 h-3 text-gray-400 opacity-50" />
+    </div>
+  );
 };
   const handleResetAll = () => {
 
@@ -448,6 +512,7 @@ const getSortIcon = (field: SortField) => {
     });
   };
 
+  
   if (isLoading) {
     return (
       <AdminLayout>
@@ -576,17 +641,45 @@ const getSortIcon = (field: SortField) => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                  <th 
+                  className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => handleSort("email")}
+                >
+                  <div className="flex items-center">
                     Email
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                    {getSortIcon("email")}
+                  </div>
+                </th>
+                <th 
+                  className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => handleSort("firstName")}
+                >
+                  <div className="flex items-center">
                     Name
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                    {getSortIcon("firstName")}
+                  </div>
+                </th>
+                <th 
+                  className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => handleSort("phoneNumber")}
+                >
+                  <div className="flex items-center">
                     Phone
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                    Cashflow Balance
+                    {getSortIcon("phoneNumber")}
+                  </div>
+                </th>
+                  <th 
+                  className="text-left py-3 px-4 text-sm font-medium text-muted-foreground flex cursor-pointer hover:bg-muted transition-colors"
+                    onClick={() => handleSortCashflow("cashflowBalance")}>
+                      <div>
+                       Cashflow Balance 
+                      </div>
+                      <div>
+                      {getSortIconCashflow("cashflowBalance")}
+                      </div>
+                   
+                  
+                    
                   </th>
                   <th 
                     className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"

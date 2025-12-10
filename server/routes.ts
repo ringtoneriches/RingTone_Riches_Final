@@ -4619,7 +4619,29 @@ app.patch("/api/admin/withdrawal-requests/:id", isAuthenticated, isAdmin, async 
       return res.status(400).json({ message: "This request has already been processed" });
     }
 
-    // Just update the status - admin will manually process the payment
+    // --- REFUND LOGIC FOR REJECTIONS ---
+    if (status === "rejected") {
+      const user = await storage.getUser(request.userId);
+      if (user) {
+        const currentBalance = parseFloat(user.balance);
+        const withdrawalAmount = parseFloat(request.amount);
+        
+        // Refund the amount to the user's balance
+        const newBalance = (currentBalance + withdrawalAmount).toFixed(2);
+        await storage.updateUserBalance(request.userId, newBalance);
+        
+        // Create a transaction record for the refund
+        await storage.createTransaction({
+          userId: request.userId,
+          type: "refund", // Or "credit", "reversal" - choose a suitable type
+          amount: `+${request.amount}`, // Positive amount
+          description: `Withdrawal request rejected - amount refunded`,
+        });
+      }
+    }
+    // --- END REFUND LOGIC ---
+
+    // Update the withdrawal request status
     const updated = await storage.updateWithdrawalRequestStatus(
       id,
       status,
@@ -4627,7 +4649,10 @@ app.patch("/api/admin/withdrawal-requests/:id", isAuthenticated, isAdmin, async 
       processedBy
     );
 
-    res.json({ message: `Withdrawal request ${status} successfully`, request: updated });
+    res.json({ 
+      message: `Withdrawal request ${status} successfully`, 
+      request: updated 
+    });
   } catch (error) {
     console.error("Error updating withdrawal request:", error);
     res.status(500).json({ message: "Failed to update withdrawal request" });

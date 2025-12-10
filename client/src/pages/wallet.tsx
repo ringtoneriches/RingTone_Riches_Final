@@ -4,7 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import { Link, useLocation } from "wouter";
+import { Link, Router, useLocation } from "wouter";
 import { Transaction, User, Ticket, Competition } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -27,6 +27,7 @@ import {
   Home,
   Sparkles,
   Headphones,
+  RefreshCcw,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -56,6 +57,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import Support from "./support";
+import { navigate } from "wouter/use-browser-location";
+import { useNavigation } from "react-day-picker";
 
 const getTransactionIcon = (type: string) => {
   switch (type) {
@@ -70,7 +73,9 @@ const getTransactionIcon = (type: string) => {
     case "referral":
       return <Users className="h-4 w-4 text-purple-500" />;
     case "referral_bonus":
-      return <Gift className="h-4 w-4 text-yellow-500" />; 
+      return <Gift className="h-4 w-4 text-yellow-500" />;
+    case "refund":
+      return <RefreshCcw className="h-4 w-4 text-orange-500" />; // New case
     default:
       return <DollarSign className="h-4 w-4 text-gray-500" />;
   }
@@ -84,6 +89,7 @@ const getTransactionTypeBadge = (type: string) => {
     prize: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
     referral: "bg-purple-500/10 text-purple-500 border-purple-500/20",
     referral_bonus: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+    refund: "bg-orange-500/10 text-orange-500 border-orange-500/20", // New case
   };
 
   return (
@@ -344,6 +350,10 @@ const isAuthenticated = !!user;
     sortCode: "",
   });
 
+  const [errors, setErrors] = useState({
+  accountNumber: "",
+  sortCode: ""
+});
   // Load user's existing address when user data is available
   useEffect(() => {
     if (user) {
@@ -368,7 +378,6 @@ const isAuthenticated = !!user;
 
  const totalCashflow = getTotalCashflow(cashflowTransactions);
 
-console.log("Total Cashflow:", totalCashflow);
 
   const { data: tickets = [] } = useQuery<Ticket[]>({
     queryKey: ["/api/user/tickets"],
@@ -536,6 +545,8 @@ console.log("Total Cashflow:", totalCashflow);
     },
   });
 
+ 
+
   const withdrawalRequestMutation = useMutation({
     mutationFn: async (data: {
       amount: string;
@@ -568,15 +579,54 @@ console.log("Total Cashflow:", totalCashflow);
       });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
     },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to submit withdrawal request",
-        variant: "destructive",
-      });
-    },
+   onError: async (error: any) => {
+  let friendlyMessage = "Failed to submit withdrawal request";
+
+  try {
+    const err = await error.response.json();
+
+    if (err?.errors?.length > 0) {
+      // Use the Zod message from backend
+      friendlyMessage = err.errors[0].message;
+    } else if (err?.message) {
+      friendlyMessage = err.message;
+    }
+  } catch {
+    // ignore JSON parsing errors
+  }
+
+  toast({
+    title: "Error",
+    description: friendlyMessage,
+    variant: "destructive",
+  });
+},
+
   });
 
+   // Real-time validation on change
+const handleAccountNumberChange = (e) => {
+  const value = e.target.value.replace(/\D/g, "");
+  setWithdrawalForm({ ...withdrawalForm, accountNumber: value });
+  
+  // Real-time validation feedback
+  if (value && value.length !== 8) {
+    setErrors(prev => ({ ...prev, accountNumber: "Account number must be 8 digits" }));
+  } else {
+    setErrors(prev => ({ ...prev, accountNumber: "" }));
+  }
+};
+
+const handleSortCodeChange = (e) => {
+  const value = e.target.value.replace(/\D/g, "");
+  setWithdrawalForm({ ...withdrawalForm, sortCode: value });
+  
+  if (value && value.length !== 6) {
+    setErrors(prev => ({ ...prev, sortCode: "Sort code must be 6 digits" }));
+  } else {
+    setErrors(prev => ({ ...prev, sortCode: "" }));
+  }
+};
   const LogoutMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("/api/auth/logout", "POST");
@@ -703,6 +753,9 @@ console.log("Total Cashflow:", totalCashflow);
     LogoutMutation.mutate();
   };
 
+
+  const [, setLocation] = useLocation(); 
+  
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black flex items-center justify-center">
@@ -847,7 +900,7 @@ console.log("Total Cashflow:", totalCashflow);
                 <span className="text-xl sm:text-2xl font-medium">Wallet Balance</span>
               </div>
               <div className="flex items-center gap-2 text-yellow-400 justify-center sm:justify-end">
-                <span className="text-lg sm:text-xl font-medium">Cashflow Spent=£{totalCashflow}</span>
+                <span className="text-lg sm:text-xl font-medium">Total Spend=£{totalCashflow}</span>
               </div>
             </CardHeader>
 
@@ -948,6 +1001,7 @@ console.log("Total Cashflow:", totalCashflow);
                             <SelectItem value="prize">Prizes</SelectItem>
                             <SelectItem value="referral">Referrals</SelectItem>
                             <SelectItem value="referral_bonus">Referrals Bonus</SelectItem>
+                            <SelectItem value="refund">Refund</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -992,25 +1046,26 @@ console.log("Total Cashflow:", totalCashflow);
                               </div>
                             </div>
                             <div
-                              className={`font-bold text-lg whitespace-nowrap ${
-                                (transaction.type === "deposit" ||
-                                  transaction.type === "prize" ||
-                                  transaction.type === "referral" ||
-                                  transaction.type === "referral_bonus")
-                                    ? "text-green-400"
-                                    : "text-red-400"
-
-                              }`}
-                            >
-                              {transaction.type === "deposit" ||
-transaction.type === "prize" ||
-transaction.type === "referral" ||
-transaction.type === "referral_bonus"
-  ? "+"
-  : "-"
-}
-                             {formatAmount(transaction)}
-                            </div>
+                       className={`font-bold text-lg whitespace-nowrap ${
+                          (transaction.type === "deposit" ||
+                          transaction.type === "prize" ||
+                          transaction.type === "referral" ||
+                          transaction.type === "referral_bonus" ||
+                          transaction.type === "refund") 
+                            ? "text-green-400"
+                            : "text-red-400"
+                        }`}
+                      >
+                        {(transaction.type === "deposit" ||
+                        transaction.type === "prize" ||
+                        transaction.type === "referral" ||
+                        transaction.type === "referral_bonus" ||
+                        transaction.type === "refund")
+                          ? "+"
+                          : "-"
+                        }
+                        {formatAmount(transaction)}
+                      </div>
                           </div>
                         ))
                       )}
@@ -1270,16 +1325,29 @@ transaction.type === "referral_bonus"
                                   )}
                                 </td>
                                 <td className="py-4 px-4">
-                                  <button
-                                    onClick={() => {
-                                      setSelectedOrder(order);
-                                      setDialogOpen(true);
-                                    }}
-                                    className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-bold hover:from-yellow-500 hover:to-yellow-400 transition-all"
-                                    data-testid={`button-view-order-${order.orders.id}`}
-                                  >
-                                    VIEW
-                                  </button>
+                                    <button
+                                      onClick={() => {
+                                        if (order.orders.status === "pending") {
+                                          // Check competition type for proper routing
+                                          if (order.competitions?.type === "spin") {
+                                            setLocation(`/spin-billing/${order.orders.id}/${order.orders.competitionId}`);
+                                          } else if (order.competitions?.type === "scratch") {
+                                            setLocation(`/scratch-billing/${order.orders.id}`);
+                                          } else {
+                                            // Normal competition → go to checkout
+                                            setLocation(`/checkout/${order.orders.id}`);
+                                          }
+                                        } else {
+                                          // Completed order → open details modal
+                                          setSelectedOrder(order);
+                                          setDialogOpen(true);
+                                        }
+                                      }}
+                                      className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-bold hover:from-yellow-500 hover:to-yellow-400 transition-all"
+                                    >
+                                      {order.orders.status === "pending" ? "RESUME" : "VIEW"}
+                                    </button>
+                                
                                 </td>
                               </tr>
                             ))}
@@ -2140,37 +2208,38 @@ transaction.type === "referral_bonus"
                 data-testid="input-account-name"
               />
             </div>
-            <div className="space-y-2">
+           <div className="space-y-2">
               <Label>Account Number (8 digits)</Label>
               <Input
                 placeholder="12345678"
                 maxLength={8}
                 value={withdrawalForm.accountNumber}
-                onChange={(e) =>
-                  setWithdrawalForm({
-                    ...withdrawalForm,
-                    accountNumber: e.target.value.replace(/\D/g, ""),
-                  })
-                }
-                className="bg-black/50 border-yellow-500/30 text-white"
+                onChange={handleAccountNumberChange}
+                className={`bg-black/50 border-yellow-500/30 text-white ${
+                  errors.accountNumber ? "border-red-500" : ""
+                }`}
                 data-testid="input-account-number"
               />
+              {errors.accountNumber && (
+                <p className="text-red-500 text-sm">{errors.accountNumber}</p>
+              )}
             </div>
+
             <div className="space-y-2">
               <Label>Sort Code (6 digits)</Label>
               <Input
                 placeholder="123456"
                 maxLength={6}
                 value={withdrawalForm.sortCode}
-                onChange={(e) =>
-                  setWithdrawalForm({
-                    ...withdrawalForm,
-                    sortCode: e.target.value.replace(/\D/g, ""),
-                  })
-                }
-                className="bg-black/50 border-yellow-500/30 text-white"
+                onChange={handleSortCodeChange}
+                className={`bg-black/50 border-yellow-500/30 text-white ${
+                  errors.sortCode ? "border-red-500" : ""
+                }`}
                 data-testid="input-sort-code"
               />
+              {errors.sortCode && (
+                <p className="text-red-500 text-sm">{errors.sortCode}</p>
+              )}
             </div>
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-gray-300">
               <p className="font-semibold text-yellow-400 mb-1">
