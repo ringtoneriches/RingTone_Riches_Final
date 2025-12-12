@@ -23,7 +23,7 @@ const [averageRating, setAverageRating] = useState<string>('N/A');
 const [loading, setLoading] = useState(true);
 
 useEffect(() => {
-  fetch("http://localhost:6500/api/trustpilot-reviews")
+  fetch("https://ringtoneriches.co.uk/api/trustpilot-reviews")
     .then((res) => res.json())
     .then((data: ApiResponse) => {
       setReviews(data.reviews || []);
