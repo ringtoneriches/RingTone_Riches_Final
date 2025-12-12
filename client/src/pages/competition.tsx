@@ -694,9 +694,31 @@ const purchaseTicketMutation = useMutation({
                         </button>
                       )}
                     </div>
+                      <div className="flex justify-center mt-5">
+  <a
+    href="https://www.trustpilot.com/review/ringtoneriches.co.uk"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="flex justify-center border border-2 border-[#0AB67B] cursor-pointer bg-white w-fit items-center space-x-2"
+  >
+    <span className="flex items-center text-black gap-1 mx-4 my-4">
+      Review us on
+      <svg
+        className="w-5 h-5 text-[#0AB67B]"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+      >
+        <path d="M10 15l-5.878 3.09L5.451 11 0 6.91l6.061-.88L10 0l3.939 6.03 6.061.88L14.549 11l1.329 7.09z" />
+      </svg>
+      Trustpilot
+    </span>
+  </a>
+</div>
                   </div>
                 </div>
+                
                 </div>
+                
 
                 {/* User Balance (if authenticated) - GOLD THEME */}
                 {isAuthenticated && user && (

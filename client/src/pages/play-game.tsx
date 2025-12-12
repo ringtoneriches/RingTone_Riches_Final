@@ -70,7 +70,7 @@ const [isResultModalOpen, setIsResultModalOpen] = useState(false);
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "/login";
         }, 1000);
         return;
       }
@@ -102,7 +102,7 @@ const playScratchCardMutation = useMutation({
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        window.location.href = "//login";
       }, 1000);
       return;
     }
@@ -173,7 +173,7 @@ const playScratchCardMutation = useMutation({
           <h1 className="text-4xl font-bold mb-4">Login Required</h1>
           <p className="text-muted-foreground mb-8">Please login to play games.</p>
           <button 
-            onClick={() => window.location.href = "/api/login"}
+            onClick={() => window.location.href = "//login"}
             className="bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:opacity-90 transition-opacity"
           >
             Login

@@ -170,6 +170,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               </p>
             </div>
           )}
+          
 
           {/* ===== PROGRESS BAR - Spectacular ===== */}
           {competition.maxTickets && (

@@ -174,7 +174,7 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
   },
   onSuccess: (data) => {
     setIsProcessing(false);
-    
+    localStorage.removeItem('pendingOrderInfo');
     // ✅ Check if this is actually an error disguised as success
     if (data.remainingAmount > 0) {
       setShowTopUpModal(true);
@@ -598,8 +598,19 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
             </Button>
             <Button
               onClick={() => {
-                setShowTopUpModal(false);
-                setLocation("/wallet");
+               // Save pending order info before redirecting
+              localStorage.setItem('pendingOrderInfo', JSON.stringify({
+                orderId,
+                orderType,
+                wheelType,
+                totalAmount,
+                finalAmount, // Amount needed
+                topupCompleted: false,
+                timestamp: Date.now()
+              }));
+              
+              setShowTopUpModal(false);
+              setLocation("/wallet?tab=wallet");
               }}
               className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-bold gap-2"
             >

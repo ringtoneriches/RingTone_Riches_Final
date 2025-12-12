@@ -28,6 +28,9 @@ import {
   Sparkles,
   Headphones,
   RefreshCcw,
+  ArrowRight,
+  X,
+  AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -679,7 +682,7 @@ const handleSortCodeChange = (e) => {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        window.location.href = "/login";
       }, 500);
       return;
     }
@@ -755,6 +758,73 @@ const handleSortCodeChange = (e) => {
 
 
   const [, setLocation] = useLocation(); 
+
+  // Add this state for pending order banner
+  const [pendingOrder, setPendingOrder] = useState<any>(null);
+  
+  // Add this useEffect to check for pending orders
+  useEffect(() => {
+    const checkPendingOrder = () => {
+      try {
+        const saved = localStorage.getItem('pendingOrderInfo');
+        if (saved) {
+          const orderInfo = JSON.parse(saved);
+          const now = Date.now();
+          const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
+          
+          // Check if order is still valid (less than 1 hour old)
+          if (now - orderInfo.timestamp < oneHour) {
+            setPendingOrder(orderInfo);
+          } else {
+            // Remove expired order
+            localStorage.removeItem('pendingOrderInfo');
+          }
+        }
+      } catch (error) {
+        console.error('Error reading pending order:', error);
+      }
+    };
+    
+    checkPendingOrder();
+  }, [location]); // Re-run when location changes (user navigates)
+  
+  // Function to clear pending order when user completes it
+  const clearPendingOrder = () => {
+    localStorage.removeItem('pendingOrderInfo');
+    setPendingOrder(null);
+  };
+  
+  // Function to navigate back to the order
+  const handleResumeOrder = () => {
+    if (!pendingOrder) return;
+    
+    // Determine the correct route based on order type
+    let route = '';
+    switch (pendingOrder.orderType) {
+      case 'spin':
+        route = `/spin-billing/${pendingOrder.orderId}/${pendingOrder.wheelType || 'wheel1'}`;
+        break;
+      case 'scratch':
+        route = `/scratch-billing/${pendingOrder.orderId}`;
+        break;
+      case 'competition':
+      default:
+        route = `/checkout/${pendingOrder.orderId}`;
+        break;
+    }
+    
+    clearPendingOrder();
+    setLocation(route);
+  };
+  
+  // Function to dismiss the banner
+  const handleDismissBanner = () => {
+    clearPendingOrder();
+    toast({
+      title: "Reminder",
+      description: "You can always find pending orders in the 'Orders' tab",
+    });
+  };
   
   if (isLoading) {
     return (
@@ -788,6 +858,51 @@ const handleSortCodeChange = (e) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black text-white">
       <Header />
+
+       {/* 🔥 PENDING ORDER BANNER - Shows when user returns from top-up */}
+    {pendingOrder && (
+      <div className="bg-gradient-to-r from-yellow-900/30 to-amber-900/20 border-y border-yellow-500/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-1">
+              <div className="bg-yellow-500/20 p-2 rounded-full">
+                <AlertCircle className="w-6 h-6 text-yellow-500" />
+              </div>
+              <div>
+                <h3 className="font-bold text-yellow-400 text-lg">
+                  Complete Your Order!
+                </h3>
+                <p className="text-gray-300 text-sm">
+                 Topup your wallet . You have a pending order waiting to be completed.
+                </p>
+                <p className="text-gray-300 text-sm">
+                 Or you can complete it later in the <span className="font-bold">'Orders'</span> tab.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleResumeOrder}
+                className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-bold px-6"
+                data-testid="button-resume-pending-order"
+              >
+                <ArrowRight className="w-4 h-4 mr-2" />
+                Complete Order Now
+              </Button>
+              
+              <button
+                onClick={handleDismissBanner}
+                className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/10"
+                data-testid="button-dismiss-banner"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
 
       <div className="container mx-auto px-4 py-8">
         {/* Premium Header */}
