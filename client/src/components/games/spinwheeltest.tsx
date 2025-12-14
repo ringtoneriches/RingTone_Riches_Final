@@ -37,7 +37,7 @@ import prize20 from "../../../../attached_assets/Car/wv.png";
 import pointer from "../../../../attached_assets/pointer.png";
 import ring from "../../../../attached_assets/ring.png";
 
-import congrats from "../../../../attached_assets/sounds/congrats.mp3"
+import MiddleVideo from "../../../../attached_assets/Middlevideo.mp4"
 import { useLocation } from "wouter";
 
 // Icon mapping for admin configuration - uses car PNG images
@@ -931,7 +931,7 @@ if (congratsAudioRef.current) {
         className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
       >
         <source
-          src="/attached_assets/wheelbgvideo_1762893751007.mp4"
+          src="/attached_assets/wheel1bg.mp4"
           type="video/mp4"
         />
       </video>
@@ -983,7 +983,7 @@ if (congratsAudioRef.current) {
           className="absolute w-32 h-32 md:w-52 md:h-52 rounded-full object-cover pointer-events-none border-2 border-yellow-400 z-10"
         >
           <source
-            src="https://res.cloudinary.com/dziy5sjas/video/upload/v1761140835/Middlevideo_s9eiiy.mp4"
+            src={MiddleVideo}
             type="video/mp4"
           />
         </video>

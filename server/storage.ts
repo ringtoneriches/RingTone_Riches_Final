@@ -429,13 +429,24 @@ async getUserRingtonePoints(userId: string): Promise<number> {
     return created;
   }
 
-  async getUserTransactions(userId: string): Promise<Transaction[]> {
-    return await db
-      .select()
-      .from(transactions)
-      .where(eq(transactions.userId, userId))
-      .orderBy(desc(transactions.createdAt));
-  }
+ async getUserTransactions(userId: string): Promise<Transaction[]> {
+  return await db
+    .select({
+      ...transactions, 
+      description: sql`
+        COALESCE(
+          ${competitions.title},
+          ${transactions.description}
+        )
+      `,
+    })
+    .from(transactions)
+    .leftJoin(orders, eq(transactions.orderId, orders.id))
+    .leftJoin(competitions, eq(orders.competitionId, competitions.id))
+    .where(eq(transactions.userId, userId))
+    .orderBy(desc(transactions.createdAt));
+}
+
 
   // Winner operations
   async getRecentWinners(limit: number, showcaseOnly: boolean = false): Promise<any[]> {

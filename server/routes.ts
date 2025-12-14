@@ -3547,6 +3547,272 @@ app.post("/api/reveal-all-scratch-cards", isAuthenticated, async (req: any, res)
 
 // 🎯 NEW ARCHITECTURE: Pre-load scratch session BEFORE scratching starts
 // Step 1: Start a scratch session - pre-determine result and tile layout
+// app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) => {
+//   try {
+//     const userId = req.user.id;
+//     const { orderId } = req.body;
+
+//     if (!orderId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Order ID is required",
+//       });
+//     }
+
+//     // Verify valid completed order
+//     const order = await storage.getOrder(orderId);
+//     if (!order || order.userId !== userId || order.status !== "completed") {
+//       return res.status(400).json({
+//         success: false,
+//         message: "No valid scratch card purchase found",
+//       });
+//     }
+
+//     // Check cards remaining
+//     const used = await storage.getScratchCardsUsed(orderId);
+//     const remaining = order.quantity - used;
+
+//     if (remaining <= 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "No scratch cards remaining in this purchase",
+//       });
+//     }
+
+//     // Get user
+//     const user = await storage.getUser(userId);
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+
+//     // 🎲 Pre-determine the result using atomic transaction
+//     let selectedPrize: any;
+//     let tileLayout: string[] = [];
+    
+//     try {
+//       await db.transaction(async (tx) => {
+//         // Lock and fetch eligible prizes
+//         const allPrizes = await tx
+//           .select()
+//           .from(scratchCardImages)
+//           .where(eq(scratchCardImages.isActive, true))
+//           .for("update"); 
+
+//         if (!allPrizes || allPrizes.length === 0) {
+//           throw new Error("No prizes configured");
+//         }
+
+//         // Filter prizes that haven't reached maxWins
+//         const eligiblePrizes = allPrizes.filter(prize => {
+//           if (!prize.weight || prize.weight <= 0) return false;
+//           if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins) return false;
+//           return true;
+//         });
+
+//         if (eligiblePrizes.length === 0) {
+//           throw new Error("No prizes available");
+//         }
+
+//         // Weighted random selection
+//         const totalWeight = eligiblePrizes.reduce((sum, prize) => sum + prize.weight, 0);
+//         if (totalWeight <= 0) {
+//           throw new Error("Invalid prize weights");
+//         }
+
+//         let random = Math.random() * totalWeight;
+//         selectedPrize = eligiblePrizes[0];
+
+//         for (const prize of eligiblePrizes) {
+//           random -= prize.weight;
+//           if (random <= 0) {
+//             selectedPrize = prize;
+//             break;
+//           }
+//         }
+//       });
+
+//       // 🖼️ Generate 2x3 tile layout (6 tiles) based on win/loss
+//       const isWinner = selectedPrize.rewardType !== 'try_again' && selectedPrize.rewardType !== 'lose';
+      
+//       // Define winning patterns for 2x3 grid:
+//       // [0] [1] [2]
+//       // [3] [4] [5]
+//       const winningPatterns = [
+//         [0, 1, 2], // Top row
+//         [3, 4, 5], // Bottom row
+//         [0, 2, 4], // Diagonal
+//         [1, 3, 5], // Diagonal
+//       ];
+      
+//       if (isWinner && selectedPrize.imageName) {
+//         // ✅ WINNER: Show EXACTLY 3 matching images, 3 different non-matching images
+//         const winningImage = selectedPrize.imageName;
+//         const winPositions = winningPatterns[Math.floor(Math.random() * winningPatterns.length)];
+        
+//         // Get all other images (excluding winning image)
+//         const otherPrizes = await db
+//           .select()
+//           .from(scratchCardImages)
+//           .where(eq(scratchCardImages.isActive, true));
+        
+//         const otherImages = otherPrizes
+//           .filter(p => p.imageName !== winningImage && p.imageName)
+//           .map(p => p.imageName as string);
+        
+//         if (otherImages.length < 3) {
+//           throw new Error("Not enough different images configured - need at least 4 total images");
+//         }
+        
+//         // Build 2x3 grid (6 tiles)
+//         tileLayout = Array(6).fill('');
+        
+//         // Place EXACTLY 3 winning images in winning positions
+//         winPositions.forEach(pos => {
+//           tileLayout[pos] = winningImage;
+//         });
+        
+//         // 🛡️ CRITICAL: Fill remaining 3 positions with 3 DIFFERENT images (no duplicates)
+//         // This ensures we never accidentally create a 4th or 5th matching image
+//         const shuffledOthers = [...otherImages].sort(() => Math.random() - 0.5);
+//         const nonWinningPositions = [0, 1, 2, 3, 4, 5].filter(pos => !winPositions.includes(pos));
+        
+//         // Pick 3 different images for the 3 non-winning positions
+//         nonWinningPositions.forEach((pos, index) => {
+//           tileLayout[pos] = shuffledOthers[index % shuffledOthers.length];
+//         });
+        
+//         // 🔒 Final safety check: Ensure only ONE set of 3 matching exists
+//         const matchCount: { [key: string]: number } = {};
+//         tileLayout.forEach(img => {
+//           matchCount[img] = (matchCount[img] || 0) + 1;
+//         });
+        
+//         // Verify winning image appears exactly 3 times
+//         if (matchCount[winningImage] !== 3) {
+//           console.error(`❌ CRITICAL: Winning image appears ${matchCount[winningImage]} times instead of 3!`);
+//         }
+        
+//         // Verify no other image appears 3+ times
+//         Object.entries(matchCount).forEach(([img, count]) => {
+//           if (img !== winningImage && count >= 3) {
+//             console.error(`❌ CRITICAL: Non-winning image "${img}" appears ${count} times!`);
+//           }
+//         });
+//       } else {
+//         // 🔴 LOSER: Create layout ensuring NO 3 matching images
+//         const allPrizes = await db
+//           .select()
+//           .from(scratchCardImages)
+//           .where(eq(scratchCardImages.isActive, true));
+        
+//         const allImages = allPrizes
+//           .filter(p => p.imageName)
+//           .map(p => p.imageName as string);
+        
+//         if (allImages.length < 3) {
+//           throw new Error("Not enough images configured - need at least 3 different images");
+//         }
+        
+//         // 🎯 Strategy: Create pairs (2 of each image) to ensure max 2 same, never 3
+//         // This guarantees the game cannot be won
+//         tileLayout = [];
+        
+//         // Pick 3 different images randomly
+//         const shuffled = [...allImages].sort(() => Math.random() - 0.5);
+//         const image1 = shuffled[0];
+//         const image2 = shuffled[1];
+//         const image3 = shuffled[2];
+        
+//         // Create pairs: 2 of image1, 2 of image2, 2 of image3
+//         const tiles = [image1, image1, image2, image2, image3, image3];
+        
+//         // Shuffle the tiles randomly
+//         tileLayout = tiles.sort(() => Math.random() - 0.5);
+        
+//         // 🛡️ Safety check: Ensure NO winning pattern exists
+//         let safetyAttempts = 0;
+//         while (safetyAttempts < 20) {
+//           const hasWinningPattern = winningPatterns.some(pattern => {
+//             const images = pattern.map(pos => tileLayout[pos]);
+//             return images[0] === images[1] && images[1] === images[2];
+//           });
+          
+//           if (!hasWinningPattern) {
+//             break; // Success! No 3 matching
+//           }
+          
+//           // Re-shuffle and try again
+//           tileLayout = tiles.sort(() => Math.random() - 0.5);
+//           safetyAttempts++;
+//         }
+        
+//         // Final verification
+//         const finalCheck = winningPatterns.some(pattern => {
+//           const images = pattern.map(pos => tileLayout[pos]);
+//           return images[0] === images[1] && images[1] === images[2];
+//         });
+        
+//         if (finalCheck) {
+//           console.error("❌ CRITICAL: Failed to generate non-winning layout! Force-fixing...");
+//           // Force fix: manually ensure no pattern matches
+//           tileLayout = [image1, image2, image3, image1, image2, image3];
+//         }
+//       }
+
+//       // Generate unique session ID
+//       const sessionId = nanoid();
+
+//       // Prepare prize response
+//       let prizeInfo: any = {
+//         type: 'none',
+//         value: '0',
+//         label: selectedPrize.label || 'Try Again',
+//       };
+
+//       if (isWinner) {
+//         if (selectedPrize.rewardType === 'cash') {
+//           prizeInfo = {
+//             type: 'cash',
+//             value: parseFloat(String(selectedPrize.rewardValue)).toFixed(2),
+//             label: selectedPrize.label,
+//           };
+//         } else if (selectedPrize.rewardType === 'points') {
+//           prizeInfo = {
+//             type: 'points',
+//             value: String(selectedPrize.rewardValue),
+//             label: selectedPrize.label,
+//           };
+//         } else if (selectedPrize.rewardType === 'physical') {
+//           prizeInfo = {
+//             type: 'physical',
+//             value: selectedPrize.label,
+//             label: selectedPrize.label,
+//           };
+//         }
+//       }
+
+//       // Return session data to frontend (NO database changes yet)
+//       res.json({
+//         success: true,
+//         sessionId,
+//         isWinner,
+//         prize: prizeInfo,
+//         tileLayout, // 9-element array of image names
+//         prizeId: selectedPrize.id,
+//         orderId,
+//       });
+
+//     } catch (error) {
+//       console.error("Error creating scratch session:", error);
+//       throw error;
+//     }
+
+//   } catch (error) {
+//     console.error("Error starting scratch session:", error);
+//     res.status(500).json({ message: "Failed to start scratch session" });
+//   }
+// });
+
 app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -3644,23 +3910,37 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
         [1, 3, 5], // Diagonal
       ];
       
+      // Get ONLY ACTIVE prizes with weight > 0 (not disabled) for tile generation
+      const activePrizes = await db
+        .select()
+        .from(scratchCardImages)
+        .where(eq(scratchCardImages.isActive, true));
+      
+      // Filter for prizes with weight > 0 AND that have an image name
+      const activeImages = activePrizes
+        .filter(p => p.imageName && p.imageName.trim() !== '' && p.weight && p.weight > 0)
+        .map(p => p.imageName as string);
+      
+      if (activeImages.length < 3) {
+        throw new Error("Not enough active images configured - need at least 3 different images with weight > 0");
+      }
+      
       if (isWinner && selectedPrize.imageName) {
         // ✅ WINNER: Show EXACTLY 3 matching images, 3 different non-matching images
         const winningImage = selectedPrize.imageName;
+        
+        // Verify winning image is actually in active images
+        if (!activeImages.includes(winningImage)) {
+          throw new Error(`Winning image "${winningImage}" is not active or has weight = 0`);
+        }
+        
         const winPositions = winningPatterns[Math.floor(Math.random() * winningPatterns.length)];
         
-        // Get all other images (excluding winning image)
-        const otherPrizes = await db
-          .select()
-          .from(scratchCardImages)
-          .where(eq(scratchCardImages.isActive, true));
-        
-        const otherImages = otherPrizes
-          .filter(p => p.imageName !== winningImage && p.imageName)
-          .map(p => p.imageName as string);
+        // Get other active images (excluding winning image)
+        const otherImages = activeImages.filter(img => img !== winningImage);
         
         if (otherImages.length < 3) {
-          throw new Error("Not enough different images configured - need at least 4 total images");
+          throw new Error("Not enough different active images configured - need at least 4 total active images");
         }
         
         // Build 2x3 grid (6 tiles)
@@ -3671,17 +3951,15 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
           tileLayout[pos] = winningImage;
         });
         
-        // 🛡️ CRITICAL: Fill remaining 3 positions with 3 DIFFERENT images (no duplicates)
-        // This ensures we never accidentally create a 4th or 5th matching image
+        // Fill remaining 3 positions with 3 DIFFERENT active images (no duplicates)
         const shuffledOthers = [...otherImages].sort(() => Math.random() - 0.5);
         const nonWinningPositions = [0, 1, 2, 3, 4, 5].filter(pos => !winPositions.includes(pos));
         
-        // Pick 3 different images for the 3 non-winning positions
         nonWinningPositions.forEach((pos, index) => {
           tileLayout[pos] = shuffledOthers[index % shuffledOthers.length];
         });
         
-        // 🔒 Final safety check: Ensure only ONE set of 3 matching exists
+        // 🔒 Final safety check
         const matchCount: { [key: string]: number } = {};
         tileLayout.forEach(img => {
           matchCount[img] = (matchCount[img] || 0) + 1;
@@ -3698,27 +3976,19 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
             console.error(`❌ CRITICAL: Non-winning image "${img}" appears ${count} times!`);
           }
         });
+        
       } else {
-        // 🔴 LOSER: Create layout ensuring NO 3 matching images
-        const allPrizes = await db
-          .select()
-          .from(scratchCardImages)
-          .where(eq(scratchCardImages.isActive, true));
-        
-        const allImages = allPrizes
-          .filter(p => p.imageName)
-          .map(p => p.imageName as string);
-        
-        if (allImages.length < 3) {
-          throw new Error("Not enough images configured - need at least 3 different images");
-        }
+        // 🔴 LOSER: Create layout ensuring NO 3 matching images using ONLY active images
         
         // 🎯 Strategy: Create pairs (2 of each image) to ensure max 2 same, never 3
-        // This guarantees the game cannot be won
         tileLayout = [];
         
-        // Pick 3 different images randomly
-        const shuffled = [...allImages].sort(() => Math.random() - 0.5);
+        if (activeImages.length < 3) {
+          throw new Error("Not enough active images - need at least 3 different images with weight > 0");
+        }
+        
+        // Pick 3 different active images randomly
+        const shuffled = [...activeImages].sort(() => Math.random() - 0.5);
         const image1 = shuffled[0];
         const image2 = shuffled[1];
         const image3 = shuffled[2];
@@ -3797,7 +4067,7 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
         sessionId,
         isWinner,
         prize: prizeInfo,
-        tileLayout, // 9-element array of image names
+        tileLayout, // 6-element array of image names (2x3 grid)
         prizeId: selectedPrize.id,
         orderId,
       });

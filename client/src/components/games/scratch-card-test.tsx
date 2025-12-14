@@ -31,6 +31,8 @@ import TimesSquare from "../../../../attached_assets/Land Mark/Times S.webp";
 import TowerBridge from "../../../../attached_assets/Land Mark/Tower Bridge.webp";
 import TowerOfPisa from "../../../../attached_assets/Land Mark/Tower of Pisa.webp";
 import TryAgain from "../../../../attached_assets/Land Mark/tryAgain.jpg";
+import scratchBackgroundVideo from "../../../../attached_assets/scratchbg.mp4";
+
 import { useLocation, useParams } from "wouter";
 
 interface ScratchCardProps {
@@ -598,86 +600,166 @@ const completeScratchSession = async (): Promise<void> => {
   }, []);
 
     useEffect(() => {
-    const handleResize = () => {
+  const handleResize = () => {
+    // Use requestAnimationFrame for smoother resize handling
+    requestAnimationFrame(() => {
       initCanvas();
-    };
+    });
+  };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // Add debounce to prevent too many redraws
+  let resizeTimer: NodeJS.Timeout;
+  const debouncedResize = () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(handleResize, 150);
+  };
 
- function initCanvas() {
+  window.addEventListener('resize', debouncedResize);
+  
+  // Initial canvas setup
+  setTimeout(() => {
+    initCanvas();
+  }, 100);
+  
+  return () => {
+    window.removeEventListener('resize', debouncedResize);
+    clearTimeout(resizeTimer);
+  };
+}, []);
+
+function initCanvas() {
   const canvas = canvasRef.current;
   if (!canvas) return;
 
   const container = canvas.parentElement;
   if (!container) return;
 
-  // Get container dimensions
+  const ratio = window.devicePixelRatio || 1;
   const containerWidth = container.clientWidth;
   const containerHeight = container.clientHeight;
 
-  // Set canvas CSS dimensions to match container
+  // Get current scratch percentage before resize
+  const oldScratchPercent = percentScratched;
+
+  // Get current context to check existing scratches
+  const ctx = canvas.getContext('2d');
+  let existingScratches: ImageData | null = null;
+  
+  // Only try to preserve scratches if they exist
+  if (ctx && oldScratchPercent > 0 && oldScratchPercent < 100) {
+    try {
+      existingScratches = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    } catch (e) {
+      console.log("Could not get existing scratches during resize");
+    }
+  }
+
+  // Resize canvas (internal pixels)
+  canvas.width = Math.round(containerWidth * ratio);
+  canvas.height = Math.round(containerHeight * ratio);
   canvas.style.width = `${containerWidth}px`;
   canvas.style.height = `${containerHeight}px`;
 
-  // Set canvas internal dimensions (accounting for device pixel ratio)
-  const ratio = window.devicePixelRatio || 1;
-  canvas.width = Math.round(containerWidth * ratio);
-  canvas.height = Math.round(containerHeight * ratio);
+  // Get new context with reset transform
+  const newCtx = canvas.getContext('2d');
+  if (!newCtx) return;
+  newCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
+  // Always redraw the base overlay first
+  drawOverlay(newCtx, containerWidth, containerHeight);
 
-  // Scale the context to account for device pixel ratio
-  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  
-  // 🎯 NEW: Check if all scratches are completed
+  // If we had scratches before and they weren't complete, try to restore them
+  if (existingScratches && oldScratchPercent > 0 && oldScratchPercent < 100) {
+    try {
+      // Create a temporary canvas to handle the scaling
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas.width / ratio;
+      tempCanvas.height = canvas.height / ratio;
+      const tempCtx = tempCanvas.getContext('2d');
+      
+      if (tempCtx) {
+        // Put the old scratches on temp canvas
+        tempCtx.putImageData(existingScratches, 0, 0);
+        
+        // Clear the scratched areas on main canvas using destination-out
+        newCtx.globalCompositeOperation = 'destination-out';
+        newCtx.drawImage(tempCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
+        newCtx.globalCompositeOperation = 'source-over';
+      }
+    } catch (e) {
+      console.log("Failed to restore scratches during resize");
+      // If restoration fails, just use current percentage to approximate
+      if (oldScratchPercent > 0) {
+        newCtx.globalCompositeOperation = 'destination-out';
+        newCtx.fillStyle = 'rgba(0,0,0,1)';
+        
+        // Create a simple scratch pattern based on percentage
+        const scratchArea = (oldScratchPercent / 100) * (containerWidth * containerHeight);
+        const numCircles = Math.max(5, Math.floor(scratchArea / 500));
+        
+        for (let i = 0; i < numCircles; i++) {
+          const x = Math.random() * containerWidth;
+          const y = Math.random() * containerHeight;
+          const radius = Math.max(10, Math.min(30, containerWidth * 0.04));
+          
+          newCtx.beginPath();
+          newCtx.arc(x, y, radius, 0, Math.PI * 2);
+          newCtx.fill();
+        }
+        
+        newCtx.globalCompositeOperation = 'source-over';
+      }
+    }
+  }
+
+  // If all scratches are completed, draw "all used" overlay
   if (allScratchesCompleted) {
-    // Create a semi-transparent overlay
-    ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-    ctx.fillRect(0, 0, containerWidth, containerHeight);
-    
-    // Add "All Scratches Used" text
-    ctx.fillStyle = "#fff";
-    const fontSize = Math.max(18, containerWidth * 0.06);
-    ctx.font = `bold ${fontSize}px Arial`;
-    ctx.textAlign = "center";
-    ctx.fillText("ALL SCRATCHES USED", containerWidth / 2, containerHeight / 2 - 30);
-    
-    // Add smaller instruction text
-    const smallFontSize = Math.max(14, containerWidth * 0.04);
-    ctx.font = `${smallFontSize}px Arial`;
-    ctx.fillText("Check your progress table for results", 
-      containerWidth / 2, containerHeight / 2 + 20);
-    
-    setRevealed(true); // Prevent scratching
-    return; // Exit early - don't show scratchable surface
+    drawAllUsedOverlay(newCtx, containerWidth, containerHeight);
+    setRevealed(true);
+  } else {
+    setRevealed(false);
   }
-
-  // 🎯 Only show scratchable surface if NOT all completed
-  if (!allScratchesCompleted && sessionState === 'ready') {
-    ctx.globalCompositeOperation = "source-over";
-    const gradient = ctx.createLinearGradient(0, 0, containerWidth, containerHeight);
-
-    // Add color stops (start and end colors)
-    gradient.addColorStop(0, "#cca60eff"); // coral
-    gradient.addColorStop(1, "#e67e22"); // dodger blue
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, containerWidth, containerHeight);
-    ctx.fillStyle = "#fff";
-
-    // Responsive font size
-    const fontSize = Math.max(16, containerWidth * 0.05);
-    ctx.font = `bold ${fontSize}px Arial`;
-    ctx.textAlign = "center";
-    ctx.fillText("SCRATCH TO REVEAL", containerWidth / 2, containerHeight / 2);
-  }
-  
-  setRevealed(false);
-  setPercentScratched(0);
 }
 
+
+function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, "#cca60eff");
+  gradient.addColorStop(1, "#e67e22");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#fff";
+  const fontSize = Math.max(16, width * 0.05);
+  ctx.font = `bold ${fontSize}px Arial`;
+  ctx.textAlign = "center";
+  ctx.fillText("SCRATCH TO REVEAL", width / 2, height / 2);
+}
+
+function drawAllUsedOverlay(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#fff";
+  const fontSize = Math.max(18, width * 0.06);
+  ctx.font = `bold ${fontSize}px Arial`;
+  ctx.textAlign = "center";
+  ctx.fillText("ALL SCRATCHES USED", width / 2, height / 2 - 30);
+
+  const smallFontSize = Math.max(14, width * 0.04);
+  ctx.font = `${smallFontSize}px Arial`;
+  ctx.fillText("Check your progress table for results", width / 2, height / 2 + 20);
+}
+
+
+
+// Add these refs at the top with your other refs
+const canvasWidthBeforeResize = useRef(0);
+const canvasHeightBeforeResize = useRef(0);
+const scratchPathsRef = useRef<Array<Array<{x: number, y: number}>>>([]);
+const currentScratchPathRef = useRef<Array<{x: number, y: number}>>([]);
+
+// Update your scratchAt function to store paths
 function scratchAt(x: number, y: number) {
   // 🎯 NEW: Prevent scratching if all scratches are completed
   if (revealed || allScratchesCompleted) return;
@@ -686,6 +768,12 @@ function scratchAt(x: number, y: number) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+
+  // Store the point in current path
+  if (!currentScratchPathRef.current) {
+    currentScratchPathRef.current = [];
+  }
+  currentScratchPathRef.current.push({ x, y });
 
   // Make brush size responsive based on canvas size
   const brush = Math.max(15, canvas.clientWidth * 0.09);
@@ -698,8 +786,7 @@ function scratchAt(x: number, y: number) {
   if (!rafRef.current) rafRef.current = requestAnimationFrame(() => checkPercentScratched());
 }
 
-
-
+// Update your checkScratchCompletion function to save paths when complete
 function checkPercentScratched(force = false) {
   rafRef.current = null;
   const canvas = canvasRef.current;
@@ -739,11 +826,16 @@ function checkPercentScratched(force = false) {
     stopScratchSound(); // Stop sound immediately
     setRevealed(true);
     setSessionState('scratching'); // Update state to indicate scratching completed
+    
+    // Save the completed scratch path
+    if (currentScratchPathRef.current.length > 0) {
+      scratchPathsRef.current.push([...currentScratchPathRef.current]);
+      currentScratchPathRef.current = [];
+    }
 
     // Images are ALREADY in final position (pre-loaded), just show popup
     (async () => {
       try {
-
         const prizeWon = currentSession.prize;
 
         // 🎯 Images are ALREADY in correct positions (pre-loaded from backend)
@@ -762,14 +854,15 @@ function checkPercentScratched(force = false) {
         // 🎉 Show popup IMMEDIATELY
         setSelectedPrize(prizeWon);
 
-      
-
         // Prepare for next scratch (fetch next session in background)
         setTimeout(async () => {
           hasCompletedRef.current = false;
           setCurrentSession(null); // Clear current session
           setSessionState('loading'); // Trigger fetch of next session
           setRevealed(false);
+          // Clear scratch paths for next session
+          scratchPathsRef.current = [];
+          currentScratchPathRef.current = [];
         }, 1000);
       } catch (error) {
         console.error("Error completing scratch:", error);
@@ -1011,7 +1104,7 @@ useEffect(() => {
       }}
     >
       <source
-        src="https://res.cloudinary.com/dziy5sjas/video/upload/f_auto,q_auto:best/v1761649166/WhatsApp_Video_2025-10-25_at_3.50.25_PM_drcoh0.mp4"
+        src={scratchBackgroundVideo}
         type="video/mp4"
       />
     </video>

@@ -247,7 +247,7 @@ const handleClose = () => {
               } transition-all duration-300 shadow-lg`}
               data-testid="button-continue"
             >
-              {isWinner ? '🎉 Fantastic!' : 'Try Again'}
+              {isWinner ? '🏆 Get in!' : 'Try Again'}
             </Button>
           </div>
         </div>

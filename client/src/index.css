@@ -509,6 +509,52 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     }
 }
 
+/* Add to your container's CSS */
+.scratch-container {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  will-change: transform; /* Hardware acceleration */
+  contain: layout style paint; /* Performance optimization */
+}
+
+/* Ensure the grid maintains aspect ratio */
+.scratch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  aspect-ratio: 3/2; /* 3:2 aspect ratio for 2x3 grid */
+  width: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Fallback for browsers that don't support aspect-ratio */
+@supports not (aspect-ratio: 3/2) {
+  .scratch-grid {
+    height: 0;
+    padding-bottom: 66.67%; /* 2/3 = 66.67% */
+  }
+  
+  .scratch-grid > * {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+/* Add this for canvas smoothing */
+canvas {
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-crisp-edges;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  transform: translateZ(0); /* Force GPU acceleration */
+}
+
 /* 🎨 Slider track */
 input[type="range"] {
   appearance: none;
