@@ -97,27 +97,31 @@ export default function AdminOrders() {
   });
   // console.log("Fetched orders:", allOrders);
   // Client-side filtering for instant search (no reload)
-  const orders = useMemo(() => {
-    if (!allOrders) return [];
+ const orders = useMemo(() => {
+  if (!allOrders) return [];
+  
+  // First, filter to show only completed orders
+  const completedOrders = allOrders.filter(order => order.status === "completed");
+  
+  // If there's no search input, return all completed orders
+  if (!searchInput.trim()) return completedOrders;
+  
+  // If there's search input, filter the completed orders by search
+  const searchLower = searchInput.toLowerCase().trim();
+  return completedOrders.filter((order) => {
+    const fullName = `${order.user.firstName || ""} ${order.user.lastName || ""}`.toLowerCase().trim();
+    const email = order.user.email?.toLowerCase() || "";
+    const competition = order.competition?.toLowerCase() || "";
+    const orderId = order.id?.toLowerCase() || "";
     
-    if (!searchInput.trim()) return allOrders;
-    
-    const searchLower = searchInput.toLowerCase().trim();
-    return allOrders.filter((order) => {
-      const fullName = `${order.user.firstName || ""} ${order.user.lastName || ""}`.toLowerCase().trim();
-      const email = order.user.email?.toLowerCase() || "";
-      const competition = order.competition?.toLowerCase() || "";
-      const orderId = order.id?.toLowerCase() || "";
-      
-      return (
-        fullName.includes(searchLower) ||
-        email.includes(searchLower) ||
-        competition.includes(searchLower) ||
-        orderId.includes(searchLower)
-      );
-    });
-  }, [allOrders, searchInput]);
-
+    return (
+      fullName.includes(searchLower) ||
+      email.includes(searchLower) ||
+      competition.includes(searchLower) ||
+      orderId.includes(searchLower)
+    );
+  });
+}, [allOrders, searchInput]);
    const totalPages= Math.ceil(orders.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedOrders  = orders.slice(startIndex , startIndex + itemsPerPage);

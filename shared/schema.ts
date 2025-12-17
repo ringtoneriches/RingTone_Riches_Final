@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   index,
+  uniqueIndex,
   jsonb,
   pgTable,
   timestamp,
@@ -116,10 +117,30 @@ export const transactions = pgTable("transactions", {
   userId: varchar("user_id").notNull().references(() => users.id),
   type: varchar("type", { enum: ["deposit", "withdrawal", "purchase", "prize", "referral" , "referral_bonus"] }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  paymentRef: varchar("payment_ref").unique(), 
   description: text("description"),
   orderId: uuid("order_id").references(() => orders.id),
   createdAt: timestamp("created_at").defaultNow(),
+},
+ (table) => [
+     uniqueIndex("transactions_payment_ref_idx")
+      .on(table.paymentRef)
+      .where(sql`${table.paymentRef} IS NOT NULL`),
+  ]
+);
+
+
+export const pendingPayments = pgTable("pending_payments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  paymentJobReference: text("payment_job_reference").notNull().unique(),
+  userId: varchar("user_id").notNull().references(() => users.id), // <- varchar to match users.id
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  status: text("status").default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+
 
 // Withdrawal requests
 export const withdrawalRequests = pgTable("withdrawal_requests", {

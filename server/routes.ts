@@ -43,6 +43,7 @@ import {
   supportTickets,
   insertSupportMessageSchema,
   insertSupportTicketSchema,
+  pendingPayments,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -1274,265 +1275,138 @@ app.get("/api/admin/users/audit/:id", isAuthenticated, isAdmin, async (req, res)
 
 // Add webhook handler for Cashflows notifications
 app.post("/api/cashflows/webhook", async (req, res) => {
-  const webhookId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-  
+  const { paymentJobReference, paymentReference } = req.body;
+
+  console.log("🌊 Webhook received:", JSON.stringify(req.body, null, 2));
+
   try {
-    const event = req.body;
-    
-    console.log(`🔔 [${webhookId}] Webhook received:`, {
-      type: event.type,
-      data: event.data,
-      metadata: event.metadata
-    });
-    
-    // Verify webhook signature if available
-    // const signature = req.headers['x-signature'];
-    // verifySignature(signature, event);
-    
-    switch (event.type) {
-      case "PAYMENT_COMPLETED":
-      case "payment.completed":
-        console.log(`✅ [${webhookId}] Payment completed webhook received`);
-        
-        // Get metadata from different possible locations
-        const metadata = event.metadata || 
-                        event.data?.metadata || 
-                        event.checkout?.metadata ||
-                        {};
-        
-        console.log(`📋 [${webhookId}] Metadata:`, metadata);
-        
-        // Get payment details
-        const userId = metadata.userId || metadata.user_id;
-        const paymentRef = event.data?.reference || 
-                          event.reference || 
-                          event.data?.paymentRef ||
-                          event.paymentRef ||
-                          event.data?.id;
-        
-        const amount = parseFloat(event.data?.amount || 
-                                event.amount || 
-                                event.data?.amountToCollect || 
-                                event.data?.amountPaid ||
-                                "0");
-        
-        console.log(`💰 [${webhookId}] Payment details:`, {
-          userId, paymentRef, amount
+    // Immediately respond to avoid timeout
+    res.status(200).json({ received: true });
+
+    // Process asynchronously
+    setTimeout(async () => {
+      try {
+        // 1. Look up payment from our database
+        const pendingPayment = await db.query.pendingPayments.findFirst({
+          where: (payments, { eq }) => eq(payments.paymentJobReference, paymentJobReference)
         });
-        
-        if (!userId) {
-          console.error(`❌ [${webhookId}] ERROR: No userId in webhook metadata`);
-          // Still respond with 200 so Cashflows doesn't retry
-          return res.status(200).json({ 
-            received: true, 
-            error: "No userId in metadata" 
-          });
+
+        if (!pendingPayment) {
+          console.warn("❌ No pending payment found for:", paymentJobReference);
+          return;
         }
+
+        // 2. Get payment status from Cashflows to confirm
+        const payment = await cashflows.getPaymentStatus(paymentJobReference, paymentReference);
         
-        if (!paymentRef) {
-          console.error(`❌ [${webhookId}] ERROR: No paymentRef in webhook data`);
-          return res.status(200).json({ 
-            received: true, 
-            error: "No paymentRef in data" 
-          });
+        // Check if payment is successful
+        const status = payment?.data?.paymentStatus || 
+                      payment?.data?.payments?.[0]?.status || 
+                      '';
+        
+        const isSuccess = status.toUpperCase().includes("PAID") || 
+                         status.toUpperCase().includes("SUCCESS") || 
+                         status.toUpperCase().includes("COMPLETED");
+
+        if (!isSuccess) {
+          console.log("ℹ️ Payment not successful, skipping:", status);
+          
+          // Update status in database
+          await db.update(pendingPayments)
+            .set({ status: 'failed', updatedAt: new Date() })
+            .where(eq(pendingPayments.paymentJobReference, paymentJobReference));
+          return;
         }
-        
-        // Process wallet top-up
-        await processWalletTopupFromWebhook(userId, paymentRef, amount, webhookId);
-        break;
-        
-      case "PAYMENT_FAILED":
-      case "payment.failed":
-        console.log(`❌ [${webhookId}] Payment failed webhook`);
-        // Log failed payment but don't need to do anything else
-        break;
-        
-      case "PAYMENT_CANCELLED":
-      case "payment.cancelled":
-        console.log(`🚫 [${webhookId}] Payment cancelled webhook`);
-        // Log cancelled payment
-        break;
-        
-      default:
-        console.log(`🔔 [${webhookId}] Unknown webhook type: ${event.type}`);
-    }
-    
-    res.status(200).json({ 
-      received: true,
-      message: "Webhook processed successfully"
-    });
-    
-  } catch (error) {
-    console.error(`❌ Webhook error [${webhookId}]:`, error);
-    res.status(500).json({ 
-      error: "Webhook processing failed",
-      message: error.message 
-    });
+
+        // 3. Get the actual paid amount from Cashflows
+        const paidAmount = Number(
+          payment?.data?.paidAmount || 
+          payment?.data?.amountCollected || 
+          payment?.data?.payments?.[0]?.paidAmount || 
+          pendingPayment.amount
+        );
+
+        // 4. Process wallet top-up
+        await processWalletTopup(
+          pendingPayment.userId, 
+          paymentReference, 
+          paidAmount
+        );
+
+        // 5. Update pending payment status
+        await db.update(pendingPayments)
+          .set({ 
+            status: 'completed', 
+            updatedAt: new Date() 
+          })
+          .where(eq(pendingPayments.paymentJobReference, paymentJobReference));
+
+        console.log("✅ Wallet top-up processed", { 
+          userId: pendingPayment.userId, 
+          paymentReference, 
+          amount: paidAmount 
+        });
+
+      } catch (err) {
+        console.error("❌ Error processing webhook:", err);
+      }
+    }, 100);
+
+  } catch (err) {
+    console.error("❌ Webhook error:", err);
+    res.status(500).json({ error: "Webhook failed" });
   }
 });
 
-// Helper function to process wallet top-up from webhook
-async function processWalletTopupFromWebhook(userId, paymentRef, amount, webhookId) {
-  try {
-    console.log(`💰 [${webhookId}] STEP 1: Starting wallet top-up processing`);
-    console.log(`💰 [${webhookId}] User: ${userId}, Ref: ${paymentRef}, Amount: £${amount}`);
-    
-    // 1. Get user
-    console.log(`👤 [${webhookId}] STEP 2: Getting user ${userId} from database...`);
-    const user = await storage.getUser(userId);
-    if (!user) {
-      console.error(`❌ [${webhookId}] ERROR: User ${userId} not found in database`);
-      return;
-    }
-    console.log(`✅ [${webhookId}] User found: ${user.email}`);
-    
-    // 2. Check if transaction already processed (idempotency)
-    console.log(`🔍 [${webhookId}] STEP 3: Checking for existing transactions...`);
-    const existingTransactions = await db
-      .select()
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.userId, userId),
-          eq(transactions.type, "deposit"),
-          like(transactions.description, `%${paymentRef}%`)
-        )
-      )
-      .limit(1);
-    
-    console.log(`📊 [${webhookId}] Existing transactions found: ${existingTransactions.length}`);
-    
-    if (existingTransactions.length > 0) {
-      console.log(`✓ [${webhookId}] Wallet top-up already processed for paymentRef: ${paymentRef}`);
-      console.log(`📋 [${webhookId}] Existing transaction:`, existingTransactions[0]);
-      return;
-    }
-    
-    // 3. Calculate new balance
-    console.log(`🧮 [${webhookId}] STEP 4: Calculating new balance...`);
-    const startBalance = parseFloat(user.balance || "0");
-    const newBalance = (startBalance + amount).toString();
-    
-    console.log(`📈 [${webhookId}] Balance update: £${startBalance.toFixed(2)} → £${newBalance}`);
-    
-    // 4. Create AUDIT LOG
-    console.log(`📝 [${webhookId}] STEP 5: Creating audit log...`);
-    await db.insert(auditLogs).values({
-      userId,
-      userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
-      email: user.email,
-      action: "wallet_topup_webhook",
-      description: `Wallet top-up of £${amount.toFixed(2)} via Cashflows webhook (Ref: ${paymentRef})`,
-      startBalance: startBalance,
-      endBalance: parseFloat(newBalance),
-      createdAt: new Date(),
-    }).execute();
-    
-    console.log(`✅ [${webhookId}] Audit log created`);
-    
-    // 5. Update user balance
-    console.log(`🔄 [${webhookId}] STEP 6: Updating user balance...`);
-    await storage.updateUserBalance(userId, newBalance);
-    console.log(`✅ [${webhookId}] User balance updated to: £${newBalance}`);
-    
-    // 6. Create transaction record
-    console.log(`💾 [${webhookId}] STEP 7: Creating transaction record...`);
-    await storage.createTransaction({
+async function processWalletTopup(userId: string, paymentRef: string, amount: number) {
+  console.log("💰 processWalletTopup called", { userId, paymentRef, amount });
+
+  // Fetch the user once
+  const user = await db.query.users.findFirst({
+    where: (u, { eq }) => eq(u.id, userId),
+  });
+
+  const userName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() : "Unknown";
+
+  await db.transaction(async (tx) => {
+    // 1️⃣ Insert transaction
+    await tx.insert(transactions).values({
       userId,
       type: "deposit",
-      amount: amount.toString(),
-      description: `Cashflows top-up £${amount} (Webhook, Ref: ${paymentRef})`,
+      amount: amount.toFixed(2),
+      paymentRef,
+      description: `Cashflows wallet top-up £${amount}`,
+      createdAt: new Date(),
     });
-    
-    console.log(`✅ [${webhookId}] Transaction record created`);
-    
-    // 7. Send confirmation email
-    console.log(`📧 [${webhookId}] STEP 8: Sending confirmation email...`);
-    try {
-      const userEmail = user.email;
-      if (userEmail) {
-        const topupData = {
-          userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || "Customer",
-          amount: amount.toFixed(2),
-          newBalance: newBalance,
-          paymentRef: paymentRef,
-          paymentMethod: "Cashflows",
-          topupDate: new Date().toLocaleDateString('en-GB', { 
-            day: 'numeric', 
-            month: 'long', 
-            year: 'numeric', 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          })
-        };
-        
-        await sendTopupConfirmationEmail(userEmail, topupData);
-        console.log(`✅ [${webhookId}] Confirmation email sent to ${userEmail}`);
-      } else {
-        console.log(`⚠️ [${webhookId}] No email found for user`);
-      }
-    } catch (emailError) {
-      console.error(`❌ [${webhookId}] Email failed:`, emailError);
-      // Don't fail the whole process
-    }
-    
-    console.log(`🎉🎉🎉 [${webhookId}] SUCCESS: Wallet top-up completed via webhook!`);
-    console.log(`🎉🎉🎉 [${webhookId}] User: ${userId}, Added: £${amount}, New Balance: £${newBalance}`);
-    
-  } catch (error) {
-    console.error(`❌❌❌ [${webhookId}] CRITICAL ERROR in processWalletTopupFromWebhook:`);
-    console.error(`❌❌❌ [${webhookId}] Error message:`, error instanceof Error ? error.message : String(error));
-    console.error(`❌❌❌ [${webhookId}] Error stack:`, error instanceof Error ? error.stack : 'N/A');
-    console.error(`❌❌❌ [${webhookId}] Error details:`, error);
-    
-    // Also log the exact step that failed if we can determine it
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes("getUser")) {
-      console.error(`❌❌❌ [${webhookId}] Failed at STEP 2: getUser`);
-    } else if (errorMessage.includes("select") || errorMessage.includes("transactions")) {
-      console.error(`❌❌❌ [${webhookId}] Failed at STEP 3: Checking existing transactions`);
-    } else if (errorMessage.includes("insert") || errorMessage.includes("auditLogs")) {
-      console.error(`❌❌❌ [${webhookId}] Failed at STEP 5: Creating audit log`);
-    } else if (errorMessage.includes("updateUserBalance")) {
-      console.error(`❌❌❌ [${webhookId}] Failed at STEP 6: Updating balance`);
-    } else if (errorMessage.includes("createTransaction")) {
-      console.error(`❌❌❌ [${webhookId}] Failed at STEP 7: Creating transaction`);
-    }
-    
-    throw error; // Re-throw so main webhook catches it
+
+    // 2️⃣ Update balance
+    await tx.execute(sql`
+      UPDATE users
+      SET balance = balance + ${amount}
+      WHERE id = ${userId}
+    `);
+
+    // 3️⃣ Audit log
+    await tx.insert(auditLogs).values({
+      userId,
+      userName: userName,
+       email: user.email,
+      action: "wallet_topup",
+      description: `Wallet top-up £${amount} (Ref: ${paymentRef})`,
+      createdAt: new Date(),
+    });
+  });
+
+  // 4️⃣ Send email
+  if (user?.email) {
+    await sendTopupConfirmationEmail(user.email, { amount: amount.toFixed(2), paymentRef });
+    console.log("📧 Confirmation email sent");
   }
 }
 
 
-app.post("/test-webhook", async (req, res) => {
-  console.log("🔧 TEST WEBHOOK CALLED");
-  
-  // Simulate what Cashflows would send
-  const testEvent = {
-    type: "PAYMENT_COMPLETED",
-    data: {
-      reference: "251221117230200900", // Use your actual paymentRef
-      status: "Paid",
-      amount: "5.00",
-      metadata: {
-        userId: "85ba77bf-6850-4879-bb2a-f6f220288a6b", // Your userId
-        isWalletTopup: "true"
-      }
-    }
-  };
-  
-  // Forward to your actual webhook
-  const response = await fetch("http://localhost:6500/api/cashflows/webhook", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(testEvent)
-  });
-  
-  const result = await response.json();
-  res.json({ test: "complete", result });
-});
+
+
   // Ticket purchase route
 app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
   try {
@@ -4659,7 +4533,7 @@ app.post("/api/user/newsletter/unsubscribe", isAuthenticated, async (req: any, r
   }
 });
 
-app.post("/api/wallet/topup", isAuthenticated, isNotRestricted,  async (req: any, res) => {
+app.post("/api/wallet/topup", isAuthenticated, async (req: any, res) => {
   try {
       console.log("Wallet topup endpoint called - middleware passed");
     const userId = req.user.id;
@@ -4712,316 +4586,130 @@ app.post("/api/wallet/topup", isAuthenticated, isNotRestricted,  async (req: any
   }
 });
 
-app.post("/api/wallet/topup-checkout", isAuthenticated, isNotRestricted, async (req: any, res) => {
-  try {
-    const { amount } = req.body;
-    const userId = req.user.id;
-    
-    if (!amount || Number(amount) <= 0) 
-      return res.status(400).json({ message: "Missing or invalid amount" });
+app.post(
+  "/api/wallet/topup-checkout",
+  isAuthenticated,
+  async (req: any, res) => {
+    try {
+      const { amount } = req.body;
+      const userId = req.user.id;
 
-    const user = await storage.getUser(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
+      if (!amount || Number(amount) <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
 
-    console.log("➡️ Creating Cashflows payment session for amount:", amount, "userId:", userId);
+      const session = await cashflows.createPaymentSession(amount, userId);
 
-    const session = await cashflows.createPaymentSession(amount, userId);
+      if (!session?.hostedPageUrl) {
+        return res.status(500).json({ message: "Failed to create payment session" });
+      }
 
-    if (!session?.hostedPageUrl) {
-      console.error("❌ No hosted page URL found in response");
-      return res.status(500).json({
-        message: "Payment session created but no redirect URL found",
-        fullResponse: session,
+      // Store payment info in database
+      await db.insert(pendingPayments).values({
+        paymentJobReference: session.paymentJobReference,
+        userId,
+        amount: Number(amount).toFixed(2),
+        status: 'pending',
+        createdAt: new Date()
       });
-    }
 
-    // // -----------------------------
-    // // 5️⃣ Audit log for wallet top-up
-    // // -----------------------------
-    // const startBalance = Number(user.balance);
-    // const endBalance = Number(user.balance); 
-    // await db.insert(auditLogs).values({
-    //   userId,
-    //   userName: `${user.firstName} ${user.lastName}`,
-    //   email: user.email,
-    //   action: "wallet_topup",
-    //   description: `Initiated wallet top-up of £${amount}`,
-    //   startBalance,
-    //   endBalance,
-    //   createdAt: new Date(),
-    // });
-    // console.log("✅ Wallet audit log saved");
-
-    res.json({
-      success: true,
-      redirectUrl: session.hostedPageUrl,
-      sessionId: session.paymentJobReference,
-      message: "Payment session created successfully",
-    });
-
-  } catch (error: any) {
-    console.error("❌ Error creating payment session:", error.message);
-    res.status(500).json({
-      message: "Failed to create payment session",
-      error: error.response?.data || error.message,
-    });
-  }
-});
-
-
-app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => {
-  // Generate a unique ID for this request
-  const requestId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  try {
-    const { paymentJobRef, paymentRef } = req.body;
-    
-    if (!paymentJobRef || !paymentRef) {
-      console.log(`❌ [${requestId}] Missing paymentJobRef or paymentRef`);
-      return res.status(400).json({ message: "Missing paymentJobRef or paymentRef" });
-    }
-
-    console.log(`🔍 [${requestId}] Confirming Cashflows top-up:`, { 
-      paymentJobRef, 
-      paymentRef,
-      userId: req.user.id 
-    });
-
-    // Step 1: Check payment status
-    const payment = await cashflows.getPaymentStatus(paymentJobRef, paymentRef);
-    
-    // Log the FULL payment response to see what's happening
-    console.log(`📦 [${requestId}] Full payment response:`, JSON.stringify(payment, null, 2));
-    
-    // Check status in multiple possible locations
-    const status = payment?.status || payment?.checkout?.status || payment?.data?.status;
-    
-    console.log(`📊 [${requestId}] Payment status: ${status}`);
-    
-    // Success statuses
-    const successStatuses = ["SUCCESS", "COMPLETED", "PAID", "Paid"];
-    
-    // NEW: Also check for PENDING/processing status
-    const pendingStatuses = ["PENDING", "PROCESSING", "IN_PROGRESS"];
-    
-    if (pendingStatuses.includes(status)) {
-      console.log(`⏳ [${requestId}] Payment is still processing. Status: ${status}`);
-      return res.status(202).json({ 
-        message: `Payment is still processing. Status: ${status}`,
-        status: status 
+      console.log("💾 Stored pending payment:", {
+        paymentJobReference: session.paymentJobReference,
+        userId,
+        amount
       });
+
+      res.json({
+        success: true,
+        redirectUrl: session.hostedPageUrl,
+        paymentJobRef: session.paymentJobReference,
+      });
+    } catch (err) {
+      console.error("Checkout error:", err);
+      res.status(500).json({ message: "Checkout failed" });
     }
-    
-    if (successStatuses.includes(status)) {
-      console.log(`✅ [${requestId}] Payment SUCCESS detected`);
-      
-      // Get user ID - try multiple sources
-      const userId = payment?.metadata?.userId || 
-                    payment?.data?.metadata?.userId || 
-                    req.user.id;
-      
-      console.log(`👤 [${requestId}] User ID from payment:`, userId);
-      
-      // Get payment amount
-      const amount = parseFloat(payment?.amount) || 
-                    parseFloat(payment?.amountToCollect) || 
-                    parseFloat(payment?.data?.amountToCollect) || 0;
-      
-      console.log(`💰 [${requestId}] Amount: £${amount}`);
-      
-      if (!userId) {
-        console.error(`❌ [${requestId}] No userId found anywhere!`);
-        return res.status(400).json({ message: "Invalid payment metadata" });
-      }
-      
-      // Get user
-      const user = await storage.getUser(userId);
-      if (!user) {
-        console.error(`❌ [${requestId}] User ${userId} not found in database`);
-        return res.status(404).json({ message: "User not found" });
-      }
-      
-      // ✅ IMPORTANT FIX: Use database transaction to prevent race conditions
-      let transactionProcessed = false;
-      let newBalance = "0";
-      
-      try {
-        // START TRANSACTION-LIKE PROCESS
-        console.log(`🔒 [${requestId}] Starting top-up process for user ${userId}`);
-        
-        // 1. FIRST check if transaction already exists (with paymentRef)
-        const existingTransactions = await db
-          .select()
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.userId, userId),
-              eq(transactions.type, "deposit"),
-              like(transactions.description, `%${paymentRef}%`)
-            )
-          )
-          .limit(1);
-        
-        if (existingTransactions.length > 0) {
-          console.log(`✓ [${requestId}] Transaction already processed for paymentRef: ${paymentRef}`);
-          return res.json({ 
-            success: true, 
-            alreadyProcessed: true,
-            message: "Payment already processed"
-          });
-        }
-        
-        // 2. Also check in a different way - by paymentJobRef
-        const existingByJobRef = await db
-          .select()
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.userId, userId),
-              eq(transactions.type, "deposit"),
-              like(transactions.description, `%${paymentJobRef}%`)
-            )
-          )
-          .limit(1);
-        
-        if (existingByJobRef.length > 0) {
-          console.log(`✓ [${requestId}] Transaction already processed for jobRef: ${paymentJobRef}`);
-          return res.json({ 
-            success: true, 
-            alreadyProcessed: true,
-            message: "Payment already processed"
-          });
-        }
-        
-        // 3. Get current balance
-        const startBalance = parseFloat(user?.balance || "0");
-        newBalance = (startBalance + amount).toString();
-        
-        console.log(`📈 [${requestId}] Balance update: £${startBalance} → £${newBalance}`);
-        
-        // 4. Create AUDIT LOG first
-        await db.insert(auditLogs).values({
-          userId,
-          userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
-          email: user.email,
-          action: "wallet_topup",
-          description: `Wallet top-up of £${amount.toFixed(2)} via Cashflows (Ref: ${paymentRef})`,
-          startBalance: startBalance,
-          endBalance: parseFloat(newBalance),
-          createdAt: new Date(),
-        }).execute();
-        
-        console.log(`📝 [${requestId}] Audit log created`);
-        
-        // 5. Update user balance
-        await storage.updateUserBalance(userId, newBalance);
-        console.log(`✅ [${requestId}] User balance updated`);
-        
-        // 6. Create transaction record
-        await storage.createTransaction({
-          userId,
-          type: "deposit",
-          amount: amount.toString(),
-          description: `Cashflows top-up £${amount} (Ref: ${paymentRef}, Job: ${paymentJobRef})`,
-          // ADD THIS: Store payment reference separately if you have a column for it
-        });
-        
-        console.log(`💾 [${requestId}] Transaction record created`);
-        
-        transactionProcessed = true;
-        
-        // 7. Send confirmation email
-        try {
-          const userEmail = user?.email;
-          if (userEmail) {
-            const topupData = {
-              userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || "Customer",
-              amount: amount.toFixed(2),
-              newBalance: newBalance,
-              paymentRef: paymentRef,
-              paymentMethod: "Cashflows",
-              topupDate: new Date().toLocaleDateString('en-GB', { 
-                day: 'numeric', 
-                month: 'long', 
-                year: 'numeric', 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              })
-            };
-            
-            await sendTopupConfirmationEmail(userEmail, topupData);
-            console.log(`📧 [${requestId}] Confirmation email sent to ${userEmail}`);
-          }
-        } catch (emailError) {
-          console.error(`❌ [${requestId}] Email failed:`, emailError);
-          // Don't fail the request
-        }
-        
-        console.log(`🎉 [${requestId}] SUCCESS: Top-up completed for user ${userId}: £${amount}`);
-        
-        return res.json({ 
-          success: true, 
-          newBalance, 
-          amount,
-          message: "Top-up successful"
-        });
-        
-      } catch (dbError) {
-        console.error(`❌ [${requestId}] Database error:`, dbError);
-        
-        // Check if it's a duplicate error
-        if (dbError.message && dbError.message.includes("duplicate") || 
-            dbError.message && dbError.message.includes("already exists")) {
-          return res.json({ 
-            success: true, 
-            alreadyProcessed: true,
-            message: "Payment was already processed"
-          });
-        }
-        
-        throw dbError;
-      }
-    }
-    
-    // If payment failed or is not successful
-    console.log(`❌ [${requestId}] Payment NOT successful. Status: ${status}`);
-    
-    // AUDIT LOG: Failed payment attempt
-    const userId = payment?.metadata?.userId || req.user.id;
-    const user = userId ? await storage.getUser(userId) : null;
-    
-    if (user) {
-      try {
-        const balance = parseFloat(user.balance || "0");
-        await db.insert(auditLogs).values({
-          userId,
-          userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
-          email: user.email,
-          action: "wallet_topup_failed",
-          description: `Failed wallet top-up attempt via Cashflows. Status: ${status}`,
-          startBalance: balance,
-          endBalance: balance,
-          createdAt: new Date(),
-        }).execute();
-        console.log(`📝 [${requestId}] Failed payment audit log created`);
-      } catch (auditError) {
-        console.error(`❌ [${requestId}] Failed to create failed audit log:`, auditError);
-      }
-    }
-    
-    return res.status(400).json({ 
-      message: `Payment not completed. Status: ${status}`,
-      status: status 
-    });
-    
-  } catch (error) {
-    console.error(`❌ [${requestId}] Error confirming Cashflows top-up:`, error);
-    return res.status(500).json({ 
-      message: "Failed to confirm top-up",
-      error: error.message 
-    });
   }
-});
+);
+
+
+
+app.post(
+  "/api/wallet/confirm-topup",
+  isAuthenticated,
+  async (req: any, res) => {
+    try {
+      const { paymentJobRef, paymentRef } = req.body;
+      const userId = req.user.id;
+
+      if (!paymentJobRef || !paymentRef) {
+        return res.status(400).json({ message: "Missing payment information" });
+      }
+
+      // 1️⃣ Fetch payment status from Cashflows
+      const payment = await cashflows.getPaymentStatus(paymentJobRef, paymentRef);
+
+      const rawStatus =
+        payment?.status ||
+        payment?.data?.status ||
+        payment?.checkout?.status ||
+        "";
+
+      const status = rawStatus.toString().toUpperCase();
+
+      // 2️⃣ STILL PROCESSING
+      if (status.includes("PENDING") || status.includes("PROCESS")) {
+        return res.status(202).json({
+          status: rawStatus,
+          message: "Payment is processing. Wallet will update shortly.",
+        });
+      }
+
+      // 3️⃣ SUCCESS: Process wallet top-up immediately
+      if (status.includes("PAID") || status.includes("SUCCESS") || status.includes("COMPLETED")) {
+        // Fetch the pending payment from DB
+        const pendingPayment = await db.query.pendingPayments.findFirst({
+          where: (p, { eq }) => eq(p.paymentJobReference, paymentJobRef),
+        });
+
+        if (!pendingPayment) {
+          return res.status(404).json({ message: "Pending payment not found" });
+        }
+
+        if (pendingPayment.status !== "completed") {
+          // Process wallet top-up
+          await processWalletTopup(
+            pendingPayment.userId,
+            paymentRef,
+            Number(pendingPayment.amount)
+          );
+
+          // Update pending payment status
+          await db.update(pendingPayments)
+            .set({ status: "completed", updatedAt: new Date() })
+            .where(eq(pendingPayments.paymentJobReference, paymentJobRef));
+        }
+
+        return res.status(200).json({
+          status: rawStatus,
+          message: "Payment received. Wallet updated successfully.",
+        });
+      }
+
+      // 4️⃣ FAILED
+      return res.status(400).json({
+        status: rawStatus,
+        message: "Payment failed or cancelled",
+      });
+
+    } catch (err) {
+      console.error("Confirm error:", err);
+      res.status(500).json({ message: "Confirm failed" });
+    }
+  }
+);
+
+
+
 
 // Withdrawal Request Routes - Collect details for manual processing
 const withdrawalRequestInputSchema = insertWithdrawalRequestSchema.extend({

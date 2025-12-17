@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -130,6 +130,7 @@ export default function Support() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const { data: tickets = [], isLoading: ticketsLoading } = useQuery<SupportTicket[]>({
     queryKey: ["/api/support/tickets"],
@@ -181,7 +182,12 @@ export default function Support() {
       queryClient.invalidateQueries({ queryKey: ["/api/support/tickets"] });
       setReplyMessage("");
       setReplyImages([]);
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+      // Scroll to bottom after a short delay to ensure DOM is updated
+      setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      }, 100);
     },
     onError: () => {
       toast({
@@ -191,6 +197,13 @@ export default function Support() {
       });
     },
   });
+
+  // Auto-scroll to bottom when messages load or change
+  useEffect(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, [messages, selectedTicket]);
 
   const handleReplyImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -308,8 +321,7 @@ export default function Support() {
   }
 
   return (
-    <div className="min-h-screen  text-white">
-      
+    <div className="min-h-screen text-white">
       <main className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="flex items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-3">
@@ -387,147 +399,162 @@ export default function Support() {
               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto space-y-4 pb-4">
-              <div className="flex justify-end">
-                <div className="max-w-[80%] space-y-2">
-                  <div className="bg-yellow-500 text-black p-4 rounded-2xl rounded-br-md">
-                    <p className="whitespace-pre-wrap ">{selectedTicket.description}</p>
-                  </div>
-                  {selectedTicket.imageUrls && selectedTicket.imageUrls.length > 0 && (
-                    <div className="flex flex-wrap gap-2 justify-end">
-                      {selectedTicket.imageUrls.map((url, index) => (
-                        <a
-                          key={index}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block w-20 h-20 rounded-lg overflow-hidden border border-yellow-500/50 hover:border-yellow-500 transition-colors"
-                        >
-                          <img
-                            src={url}
-                            alt={`Attachment ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 text-right">
-                    {format(new Date(selectedTicket.createdAt), "p")}
-                  </p>
-                </div>
-              </div>
-
-              {selectedTicket.adminResponse && (
-                <div className="flex justify-start">
+            {/* Messages Container - Fixed scroll behavior */}
+            <div 
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto space-y-4 pb-4"
+              style={{ 
+                display: 'flex', 
+                flexDirection: 'column',
+                justifyContent: 'flex-end',
+                minHeight: 0
+              }}
+            >
+              <div className="space-y-4">
+                {/* Original Ticket */}
+                <div className="flex justify-end">
                   <div className="max-w-[80%] space-y-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                        <MessageSquare className="h-4 w-4 text-yellow-500" />
-                      </div>
-                      <span className="text-sm text-yellow-500 font-medium">Support Team</span>
+                    <div className="bg-yellow-500 text-black p-4 rounded-2xl rounded-br-md">
+                      <p className="whitespace-pre-wrap ">{selectedTicket.description}</p>
                     </div>
-                    <div className="bg-[#2a2a2a] border border-gray-700 text-white p-4 rounded-2xl rounded-bl-md ml-10">
-                      <p className="whitespace-pre-wrap">{selectedTicket.adminResponse}</p>
-                    </div>
-                    {selectedTicket.adminImageUrls && selectedTicket.adminImageUrls.length > 0 && (
-                      <div className="flex flex-wrap gap-2 ml-10">
-                        {selectedTicket.adminImageUrls.map((url, index) => (
+                    {selectedTicket.imageUrls && selectedTicket.imageUrls.length > 0 && (
+                      <div className="flex flex-wrap gap-2 justify-end">
+                        {selectedTicket.imageUrls.map((url, index) => (
                           <a
                             key={index}
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="block w-20 h-20 rounded-lg overflow-hidden border border-gray-600 hover:border-yellow-500 transition-colors"
+                            className="block w-20 h-20 rounded-lg overflow-hidden border border-yellow-500/50 hover:border-yellow-500 transition-colors"
                           >
                             <img
                               src={url}
-                              alt={`Support attachment ${index + 1}`}
+                              alt={`Attachment ${index + 1}`}
                               className="w-full h-full object-cover"
                             />
                           </a>
                         ))}
                       </div>
                     )}
-                    <p className="text-xs text-gray-500 ml-10">
-                      {format(new Date(selectedTicket.updatedAt), "p")}
+                    <p className="text-xs text-gray-500 text-right">
+                      {format(new Date(selectedTicket.createdAt), "p")}
                     </p>
                   </div>
                 </div>
-              )}
 
-              {messagesLoading ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
-                </div>
-              ) : (
-                messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${msg.senderType === "user" ? "justify-end" : "justify-start"}`}
-                  >
+                {/* Admin Response */}
+                {selectedTicket.adminResponse && (
+                  <div className="flex justify-start">
                     <div className="max-w-[80%] space-y-2">
-                      {msg.senderType === "admin" && (
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                            <MessageSquare className="h-4 w-4 text-yellow-500" />
-                          </div>
-                          <span className="text-sm text-yellow-500 font-medium">Support Team</span>
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                          <MessageSquare className="h-4 w-4 text-yellow-500" />
                         </div>
-                      )}
-                      <div
-                        className={`p-4 rounded-2xl ${
-                          msg.senderType === "user"
-                            ? "bg-yellow-500 text-black rounded-br-md"
-                            : "bg-[#2a2a2a] border border-gray-700 text-white rounded-bl-md ml-10"
-                        }`}
-                      >
-                        <p className="whitespace-pre-wrap">{msg.message}</p>
+                        <span className="text-sm text-yellow-500 font-medium">Support Team</span>
                       </div>
-                      {msg.imageUrls && msg.imageUrls.length > 0 && (
-                        <div className={`flex flex-wrap gap-2 ${msg.senderType === "user" ? "justify-end" : "ml-10"}`}>
-                          {msg.imageUrls.map((url, index) => (
+                      <div className="bg-[#2a2a2a] border border-gray-700 text-white p-4 rounded-2xl rounded-bl-md ml-10">
+                        <p className="whitespace-pre-wrap">{selectedTicket.adminResponse}</p>
+                      </div>
+                      {selectedTicket.adminImageUrls && selectedTicket.adminImageUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-2 ml-10">
+                          {selectedTicket.adminImageUrls.map((url, index) => (
                             <a
                               key={index}
                               href={url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className={`block w-20 h-20 rounded-lg overflow-hidden border ${
-                                msg.senderType === "user" ? "border-yellow-500/50 hover:border-yellow-500" : "border-gray-600 hover:border-yellow-500"
-                              } transition-colors`}
+                              className="block w-20 h-20 rounded-lg overflow-hidden border border-gray-600 hover:border-yellow-500 transition-colors"
                             >
                               <img
                                 src={url}
-                                alt={`Attachment ${index + 1}`}
+                                alt={`Support attachment ${index + 1}`}
                                 className="w-full h-full object-cover"
                               />
                             </a>
                           ))}
                         </div>
                       )}
-                      <p className={`text-xs text-gray-500 ${msg.senderType === "user" ? "text-right" : "ml-10"}`}>
-                        {format(new Date(msg.createdAt), "p")}
+                      <p className="text-xs text-gray-500 ml-10">
+                        {format(new Date(selectedTicket.updatedAt), "p")}
                       </p>
                     </div>
                   </div>
-                ))
-              )}
+                )}
 
-              {selectedTicket.resolvedAt && (
-                <div className="flex justify-center">
-                  <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-2 rounded-full text-sm">
-                    Resolved on {format(new Date(selectedTicket.resolvedAt), "PPp")}
+                {/* Messages List */}
+                {messagesLoading ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
                   </div>
-                </div>
-              )}
+                ) : (
+                  messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.senderType === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div className="max-w-[80%] space-y-2">
+                        {msg.senderType === "admin" && (
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                              <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500" />
+                            </div>
+                            <span className="text-xs sm:text-sm text-yellow-500 font-medium">Support Team</span>
+                          </div>
+                        )}
+                        <div
+                          className={`p-2 sm:p-4 rounded-md sm:rounded-2xl ${
+                            msg.senderType === "user"
+                              ? "bg-yellow-500 text-black rounded-br-md mr-1 text-sm sm:text-lg"
+                              : "bg-[#2a2a2a] border border-gray-700 text-white rounded-bl-md ml-10 text-sm sm:text-lg"
+                          }`}
+                        >
+                          <p className="whitespace-pre-wrap">{msg.message}</p>
+                        </div>
+                        {msg.imageUrls && msg.imageUrls.length > 0 && (
+                          <div className={`flex flex-wrap gap-2 ${msg.senderType === "user" ? "justify-end" : "ml-10"}`}>
+                            {msg.imageUrls.map((url, index) => (
+                              <a
+                                key={index}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`block w-20 h-20 rounded-lg overflow-hidden border ${
+                                  msg.senderType === "user" ? "border-yellow-500/50 hover:border-yellow-500" : "border-gray-600 hover:border-yellow-500"
+                                } transition-colors`}
+                              >
+                                <img
+                                  src={url}
+                                  alt={`Attachment ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                        <p className={`text-[10px] sm:text-xs text-gray-500 ${msg.senderType === "user" ? "text-right" : "ml-10"}`}>
+                          {format(new Date(msg.createdAt), "p")}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
 
-              {!selectedTicket.adminResponse && messages.length === 0 && selectedTicket.status === "open" && (
-                <div className="flex justify-center">
-                  <div className="bg-gray-800 text-gray-400 px-4 py-2 rounded-full text-sm">
-                    Waiting for support response...
+                {selectedTicket.resolvedAt && (
+                  <div className="flex justify-center">
+                    <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-2 rounded-full text-sm">
+                      Resolved on {format(new Date(selectedTicket.resolvedAt), "PPp")}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+
+                {!selectedTicket.adminResponse && messages.length === 0 && selectedTicket.status === "open" && (
+                  <div className="flex justify-center">
+                    <div className="bg-gray-800 text-gray-400 px-4 py-2 rounded-full text-sm">
+                      Waiting for support response...
+                    </div>
+                  </div>
+                )}
+              </div>
               <div ref={messagesEndRef} />
             </div>
 
@@ -561,7 +588,7 @@ export default function Support() {
                         onChange={(e) => setReplyMessage(e.target.value)}
                         placeholder="Type your reply..."
                         rows={2}
-                        className="bg-[#1a1a1a] border-gray-600 text-white placeholder:text-gray-500 resize-none focus:border-yellow-500 focus:ring-yellow-500/20"
+                        className="bg-[#1a1a1a] text-sm sm:text-md border-gray-600 text-white placeholder:text-gray-500 placeholder:text-sm resize-none focus:border-yellow-500 focus:ring-yellow-500/20"
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
@@ -571,7 +598,7 @@ export default function Support() {
                         data-testid="textarea-reply"
                       />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col items-center sm:flex-row  gap-2">
                       <input
                         type="file"
                         ref={replyFileInputRef}
@@ -775,7 +802,6 @@ export default function Support() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }
