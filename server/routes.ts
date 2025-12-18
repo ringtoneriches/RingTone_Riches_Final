@@ -44,6 +44,7 @@ import {
   insertSupportMessageSchema,
   insertSupportTicketSchema,
   pendingPayments,
+  wellbeingRequests,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -55,7 +56,7 @@ import { z } from "zod";
 import { sendOrderConfirmationEmail, sendWelcomeEmail, sendPromotionalEmail, sendPasswordResetEmail, sendTopupConfirmationEmail } from "./email";
 import { wsManager } from "./websocket";
 import { upload } from "./cloudinary";
-import { isNotRestricted } from "./restriction";
+import { applySelfSuspensionExpiry, isNotRestricted } from "./restriction";
 
 // Default spin wheel configuration - 26 segments with 6 evenly-distributed black segments
 // Color palette: Black #000000, Red #FE0000, White #FFFFFF, Blue #1E54FF, Yellow #FEED00, Green #00A223
@@ -430,7 +431,7 @@ app.post("/api/auth/login", async (req, res) => {
     if (!result.success) {
       return res.status(400).json({ message: "Invalid login data" });
     }
-
+     const now = new Date();
     const { email, password } = result.data;
 
     // Get user by email
@@ -439,33 +440,64 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
+  // 1️⃣ Check admin disables first
+    if (user.disabled) {
+      if (user.disabledUntil && now > new Date(user.disabledUntil)) {
+        await db.update(users)
+          .set({ disabled: false, disabledAt: null, disabledUntil: null, updatedAt: now })
+          .where(eq(users.id, user.id));
+        user.disabled = false;
+      }
+
+      if (user.disabled) {
+        return res.status(403).json({ message: "This account has been closed." });
+      }
+    }
+
+    // 2️⃣ Check self-suspension before password verification
+    if (user.selfSuspended && user.selfSuspensionEndsAt && now < new Date(user.selfSuspensionEndsAt)) {
+      return res.status(403).json({
+        code: "SELF_SUSPENDED",
+        message: "Your account is temporarily suspended due to a wellbeing request.",
+        endsAt: user.selfSuspensionEndsAt,
+      });
+    }
+
+    // 3️⃣ Apply self-suspension expiry for past suspensions
+    await applySelfSuspensionExpiry(user.id);
+
+    // Refresh user object after potential suspension removal
+    const freshUser = await storage.getUser(user.id);
+
     // Verify password
-    const isValidPassword = await verifyPassword(password, user.password);
+    const isValidPassword = await verifyPassword(password, freshUser.password);
     if (!isValidPassword) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
     // Store user ID in session
-    (req as any).session.userId = user.id;
+    (req as any).session.userId = freshUser.id;
 
-   res.json({
-  message: "Login successful",
-  user: { 
-    id: user.id,
-    email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    balance: user.balance,
-    ringtonePoints: user.ringtonePoints,
-    isAdmin: user.isAdmin || false
-  },
-});
+    res.json({
+      message: "Login successful",
+      user: { 
+        id: freshUser.id,
+        email: freshUser.email,
+        firstName: freshUser.firstName,
+        lastName: freshUser.lastName,
+        balance: freshUser.balance,
+        ringtonePoints: freshUser.ringtonePoints,
+        isAdmin: freshUser.isAdmin || false
+      },
+    });
 
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Failed to log in" });
   }
 });
+
+
 
 // Logout route
 app.post("/api/auth/logout", (req: any, res) => {
@@ -2030,7 +2062,7 @@ const spinCooldowns = new Map<string, number>();
 const SPIN_COOLDOWN_MS = 3000; // 3 seconds minimum between spins
 
 // SERVER-SIDE: Spin wheel play route with probability and max wins enforcement
-app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
+app.post("/api/play-spin-wheel", isAuthenticated,  async (req: any, res) => {
   try {
     const userId = req.user.id;
     const { orderId, competitionId } = req.body; // ← ADD competitionId
@@ -2704,7 +2736,7 @@ app.post("/api/create-scratch-order", isAuthenticated, async (req: any, res) => 
   }
 });
 
-app.post("/api/process-scratch-payment", isAuthenticated, async (req: any, res) => {
+app.post("/api/process-scratch-payment", isAuthenticated,  async (req: any, res) => {
   try {
     const userId = req.user.id;
     const { orderId, useWalletBalance = false, useRingtonePoints = false } = req.body;
@@ -4533,7 +4565,7 @@ app.post("/api/user/newsletter/unsubscribe", isAuthenticated, async (req: any, r
   }
 });
 
-app.post("/api/wallet/topup", isAuthenticated, async (req: any, res) => {
+app.post("/api/wallet/topup", isAuthenticated,  async (req: any, res) => {
   try {
       console.log("Wallet topup endpoint called - middleware passed");
     const userId = req.user.id;
@@ -4589,6 +4621,7 @@ app.post("/api/wallet/topup", isAuthenticated, async (req: any, res) => {
 app.post(
   "/api/wallet/topup-checkout",
   isAuthenticated,
+  
   async (req: any, res) => {
     try {
       const { amount } = req.body;
@@ -4597,6 +4630,8 @@ app.post(
       if (!amount || Number(amount) <= 0) {
         return res.status(400).json({ message: "Invalid amount" });
       }
+
+        await enforceDailySpendLimit(userId, Number(amount));
 
       const session = await cashflows.createPaymentSession(amount, userId);
 
@@ -4636,6 +4671,7 @@ app.post(
 app.post(
   "/api/wallet/confirm-topup",
   isAuthenticated,
+  
   async (req: any, res) => {
     try {
       const { paymentJobRef, paymentRef } = req.body;
@@ -4707,6 +4743,322 @@ app.post(
     }
   }
 );
+
+
+app.post("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const { limit } = req.body;
+
+  const parsed = Number(limit);
+
+  if (isNaN(parsed) || parsed < 0) {
+    return res.status(400).json({ error: "Invalid limit" });
+  }
+
+  await db.update(users)
+    .set({
+      dailySpendLimit: parsed.toFixed(2),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
+
+  // Audit (important for compliance)
+  await db.insert(auditLogs).values({
+    userId,
+    userName: `${req.user.firstName} ${req.user.lastName}`,
+    email: req.user.email,
+    action: "daily_spend",
+    description: `Daily spend limit set to £${parsed.toFixed(2)}`,
+    createdAt: new Date(),
+  });
+
+  res.json({
+    success: true,
+    dailySpendLimit: parsed.toFixed(2),
+  });
+});
+
+
+app.put("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
+   const userId = req.user.id;
+   const { limit } = req.body;
+
+   const parsed =Number(limit);
+  
+   if (isNaN(parsed) || parsed < 0) {
+     return res.status(400).json({ error: "Invalid limit"});
+   }
+
+   await db.update(users)
+      .set({
+        dailySpendLimit: parsed.toFixed(2),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+      
+
+      // Audit (important for compliance)
+      await db.insert(auditLogs).values({
+        userId,
+        userName: `${req.user.firstName} ${req.user.lastName}`,
+        email: req.user.email,
+        action: "daily_spend_updated",
+        description:
+          parsed === 0
+            ? "Daily spend limit removed"
+            : `Daily spend limit set to £${parsed.toFixed(2)}`,
+        createdAt: new Date(),
+      });
+
+            res.json({
+          success: true,
+          dailySpendLimit: parsed.toFixed(2),
+        });
+})
+
+app.get("/api/wellbeing", isAuthenticated, async (req, res) => {
+  const spentToday = await getTodaysCashSpend(req.user.id);
+
+  res.json({
+    dailySpendLimit: req.user.dailySpendLimit,
+    spentToday: spentToday.toFixed(2),
+    remaining:
+      Math.max(
+        0,
+        Number(req.user.dailySpendLimit) - spentToday
+      ).toFixed(2),
+  });
+});
+
+
+
+async function getTodaysCashSpend(userId: string) {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const result = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(${transactions.amount}), 0)`
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.userId, userId),
+        eq(transactions.type, "deposit"),
+        gte(transactions.createdAt, startOfDay),
+        lte(transactions.createdAt, endOfDay)
+      )
+    );
+
+  return Number(result[0]?.total || 0);
+}
+
+
+
+
+async function enforceDailySpendLimit(userId: string, newSpendAmount: number) {
+  const user = await db.query.users.findFirst({
+    where: (u, { eq }) => eq(u.id, userId),
+  });
+
+  if (!user) throw new Error("User not found");
+
+  const dailyLimit = Number(user.dailySpendLimit);
+
+  // 🚫 Full block
+  if (dailyLimit === 0) {
+    throw new Error(
+      "Your daily spending limit has been reached. Please refer to the Well Being section."
+    );
+  }
+
+  const spentToday = await getTodaysCashSpend(userId);
+
+  if (spentToday + newSpendAmount > dailyLimit) {
+    throw new Error(
+      "Your daily spending limit has been reached. Please refer to the Well Being section."
+    );
+  }
+}
+
+
+app.post("/api/wellbeing/suspend", isAuthenticated, async (req, res) => {
+  const user = req.user;
+  const { days } = req.body;
+
+  const parsedDays = Number(days);
+
+  if (
+    isNaN(parsedDays) ||
+    parsedDays <= 0 ||
+    parsedDays > 365
+  ) {
+    return res.status(400).json({ error: "Invalid suspension duration" });
+  }
+
+  // 🚫 Already suspended
+  if (
+    user.selfSuspended &&
+    user.selfSuspensionEndsAt &&
+    new Date() < new Date(user.selfSuspensionEndsAt)
+  ) {
+    return res.status(400).json({
+      error: "Your account is already suspended",
+      endsAt: user.selfSuspensionEndsAt,
+    });
+  }
+
+  const endsAt = new Date();
+  endsAt.setDate(endsAt.getDate() + parsedDays);
+
+  await db.insert(wellbeingRequests).values({
+  userId: user.id,
+  type: "suspension",
+  daysRequested: parsedDays,
+});
+
+
+  // Apply immediately
+  await db.update(users)
+    .set({
+      selfSuspended: true,
+      selfSuspensionEndsAt: endsAt,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, user.id));
+
+  // Audit log (VERY IMPORTANT)
+  await db.insert(auditLogs).values({
+    userId: user.id,
+    userName: `${user.firstName} ${user.lastName}`,
+    email: user.email,
+    action: "self_suspension_requested",
+    description: `User self-suspended for ${parsedDays} days until ${endsAt.toISOString()}`,
+    createdAt: new Date(),
+  });
+
+  res.json({
+    success: true,
+    suspendedUntil: endsAt,
+    message:
+      "Once submitted, this suspension cannot be reversed or removed early.",
+  });
+});
+
+// Testing only - unsuspend immediately
+app.post("/api/wellbeing/unsuspend", async (req, res) => {
+  const { userId, secret } = req.body;
+
+  if (secret !== process.env.UNSUSPEND_SECRET) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  try {
+    await db.update(users)
+      .set({
+        selfSuspended: false,
+        selfSuspensionEndsAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    const freshUser = await storage.getUser(userId);
+
+    res.json({ 
+      success: true, 
+      message: "User is now unsuspended.",
+      user: {
+        id: freshUser.id,
+        email: freshUser.email,
+        firstName: freshUser.firstName,
+        lastName: freshUser.lastName,
+        selfSuspended: freshUser.selfSuspended,
+        selfSuspensionEndsAt: freshUser.selfSuspensionEndsAt,
+      }
+    });
+  } catch (err) {
+    console.error("Unsuspend error:", err);
+    res.status(500).json({ success: false, message: "Failed to unsuspend" });
+  }
+});
+
+
+
+app.post("/api/wellbeing/close-account", isAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    // 1️⃣ Disable the account
+    await db.update(users)
+      .set({
+        disabled: true,
+        disabledAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+        await db.insert(wellbeingRequests).values({
+    userId,
+    type: "full_closure",
+    daysRequested: null,
+  });
+
+    // 2️⃣ Audit log (important for compliance)
+    await db.insert(auditLogs).values({
+      userId,
+      userName: `${req.user.firstName} ${req.user.lastName}`,
+      email: req.user.email,
+      action: "account_closed",
+      description: `User requested full account closure.`,
+      createdAt: new Date(),
+    });
+
+    // 3️⃣ Destroy session and respond
+    req.session.destroy((err) => {
+      if (err) console.error("Failed to destroy session:", err);
+
+      res.json({
+        success: true,
+        message: "Your account has been disabled and you have been logged out.",
+      });
+    });
+
+  } catch (err) {
+    console.error("Account closure error:", err);
+    res.status(500).json({ success: false, message: "Failed to close account" });
+  }
+});
+
+
+app.post("/api/wellbeing/undo-close-account", async (req, res) => {
+  const { userId, secret } = req.body;
+
+  if (secret !== process.env.UNDO_CLOSE_SECRET) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  try {
+    await db.update(users)
+      .set({
+        disabled: false,
+        disabledAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    res.json({
+      success: true,
+      message: "Account re-enabled for testing.",
+    });
+  } catch (err) {
+    console.error("Undo account closure error:", err);
+    res.status(500).json({ success: false, message: "Failed to re-enable account" });
+  }
+});
+
 
 
 
@@ -5259,6 +5611,7 @@ app.get("/api/admin/dashboard", isAuthenticated, isAdmin, async (req: any, res) 
       .from(orders)
       .leftJoin(users, eq(orders.userId, users.id))
       .leftJoin(competitions, eq(orders.competitionId, competitions.id))
+      .where(eq(orders.status, "completed")) 
       .orderBy(desc(orders.createdAt))
       .limit(10);
 
@@ -5291,6 +5644,164 @@ app.get("/api/admin/dashboard", isAuthenticated, isAdmin, async (req: any, res) 
     res.status(500).json({ message: "Failed to fetch dashboard data" });
   }
 });
+
+
+app.get("/api/admin/wellbeing/daily-top-users",isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Sum deposits per user for today
+    const topDailyCashflowUsers = await db
+      .select({
+        userId: transactions.userId,
+        totalDeposited: sql<number>`SUM(${transactions.amount})`,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(transactions)
+      .leftJoin(users, eq(users.id, transactions.userId))
+      .where(
+        and(
+          eq(transactions.type, "deposit"),
+          gte(transactions.createdAt, startOfDay),
+          lte(transactions.createdAt, endOfDay)
+        )
+      )
+      .groupBy(transactions.userId, users.email, users.firstName, users.lastName)
+      .orderBy(sql`SUM(${transactions.amount})`, "desc")
+      .limit(10); // Top 10 for today
+
+    res.json({ success: true, topDailyCashflowUsers });
+  } catch (err) {
+    console.error("Admin daily top users error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch daily top users" });
+  }
+});
+
+
+app.get("/api/admin/wellbeing/requests",isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const requests = await db
+      .select({
+        id: wellbeingRequests.id,
+        userId: wellbeingRequests.userId,
+        email: users.email,          
+        type: wellbeingRequests.type,
+        daysRequested: wellbeingRequests.daysRequested,
+        createdAt: wellbeingRequests.createdAt,
+      })
+      .from(wellbeingRequests)
+      .leftJoin(users, eq(users.id, wellbeingRequests.userId))
+      .orderBy(wellbeingRequests.createdAt, "desc");
+
+    res.json({ success: true, requests });
+  } catch (err) {
+    console.error("Admin wellbeing requests error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch requests" });
+  }
+});
+
+app.post("/api/admin/users/:id/disable", isAuthenticated, isAdmin, async (req, res) => {
+  const { id } = req.params; 
+  const { days } = req.body; 
+
+  try {
+    const now = new Date();
+    let disabledUntil = null;
+
+    if (days && days > 0) {
+      disabledUntil = new Date();
+      disabledUntil.setDate(disabledUntil.getDate() + Number(days)); 
+    }
+
+    await db.update(users)
+      .set({
+        disabled: true,
+        disabledAt: now,
+        disabledUntil,
+        updatedAt: now,
+      })
+      .where(eq(users.id, id));
+
+    res.json({
+      success: true,
+      message: days
+        ? `User disabled for ${days} days`
+        : "User disabled indefinitely",
+      disabledUntil,
+    });
+
+  } catch (err) {
+    console.error("Admin disable error:", err);
+    res.status(500).json({ success: false, message: "Failed to disable user" });
+  }
+});
+
+app.post("/api/admin/users/:userId/enable", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Update user in database
+    await db.update(users)
+      .set({
+        disabled: false,
+        disabledAt: null,
+        disabledUntil: null
+      })
+      .where(eq(users.id, userId));
+    
+    res.json({ 
+      success: true, 
+      message: "User enabled successfully" 
+    });
+  } catch (error) {
+    console.error("Error enabling user:", error);
+    res.status(500).json({ message: "Failed to enable user" });
+  }
+});
+
+app.get("/api/admin/users/search", isAuthenticated, isAdmin, async (req, res) => {
+  const { email } = req.query;
+
+  if (!email || typeof email !== "string") {
+    return res.status(400).json({ success: false, message: "Email is required" });
+  }
+
+  try {
+    const user = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        dailySpendLimit: users.dailySpendLimit,
+        selfSuspended: users.selfSuspended,
+        selfSuspensionEndsAt: users.selfSuspensionEndsAt,
+        disabled: users.disabled,
+        disabledAt: users.disabledAt,
+        disabledUntil: users.disabledUntil,
+      })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
+      .then(res => res[0] || null);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error("Search user error:", err);
+    res.status(500).json({ success: false, message: "Failed to search user" });
+  }
+});
+
 
 
 // Manage competitions
@@ -6150,7 +6661,7 @@ app.get("/api/admin/users", isAuthenticated, isAdmin, async (req: any, res) => {
       firstName: user.firstName,
       lastName: user.lastName,
       balance: user.balance,
-      phoneNumber:user.phoneNumber,
+      phoneNumber: user.phoneNumber,
       ringtonePoints: user.ringtonePoints,
       isAdmin: user.isAdmin,
       createdAt: user.createdAt,
@@ -6159,6 +6670,11 @@ app.get("/api/admin/users", isAuthenticated, isAdmin, async (req: any, res) => {
       addressPostcode: user.addressPostcode,
       addressCountry: user.addressCountry,
       notes: user.notes, 
+      
+      // ADD THESE DISABLE FIELDS:
+      disabled: user.disabled,           // Add this line
+      disabledAt: user.disabledAt,       // Add this line
+      disabledUntil: user.disabledUntil  // Add this line
     })));
   } catch (error) {
     console.error("Error fetching users:", error);

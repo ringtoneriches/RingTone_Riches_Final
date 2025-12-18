@@ -1320,7 +1320,7 @@ useEffect(() => {
             {/* Header with premium styling */}
             <div className="bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] px-3 sm:px-6 py-3 sm:py-4">
               <h3 className="text-center text-base sm:text-xl md:text-2xl font-black text-gray-900 flex items-center justify-center gap-1 sm:gap-2">
-                <span className="text-lg sm:text-2xl">📊</span>
+                {/* <span className="text-lg sm:text-2xl">📊</span> */}
                 <span className="whitespace-nowrap">Progress</span>
               </h3>
             </div>

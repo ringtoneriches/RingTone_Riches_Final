@@ -1,8 +1,8 @@
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown, ArrowBigLeft, ArrowBigRight } from "lucide-react";
+import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown, ArrowBigLeft, ArrowBigRight, CheckCircle,  XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -47,6 +47,10 @@ interface User {
   addressPostcode: string | null;
   addressCountry: string | null;
   notes: string | null;
+
+   disabled: boolean;
+  disabledAt: string | null;
+  disabledUntil: string | null;
 }
 
 type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
@@ -81,6 +85,9 @@ export default function AdminUsers() {
 const [, setLocation] = useLocation();
 const [sortField, setSortField] = useState<SortField>(null);
 const [sortFieldCashflow, setSortFieldCashflow] = useState<SortFieldCashflow>(null);
+const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false);
+const [userToDisable, setUserToDisable] = useState<User | null>(null);
+const [disableDays, setDisableDays] = useState("7");
 
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
    const [currentPage , setCurrentPage] = useState(1);
@@ -346,7 +353,77 @@ const users = useMemo(() => {
     },
   });
 
+// In your AdminUsers component, add this useEffect
+useEffect(() => {
+  if (allUsers && allUsers.length > 0) {
+    console.log("Sample user data:", {
+      email: allUsers[0].email,
+      disabled: allUsers[0].disabled,
+      disabledAt: allUsers[0].disabledAt,
+      disabledUntil: allUsers[0].disabledUntil,
+      // Check if these fields exist
+      hasDisabledField: 'disabled' in allUsers[0],
+      allFields: Object.keys(allUsers[0])
+    });
+  }
+}, [allUsers]);
+  // Disable user mutation
+const disableUserMutation = useMutation({
+  mutationFn: async ({ userId, days }: { userId: string; days: number }) => {
+    const res = await apiRequest(`/api/admin/users/${userId}/disable`, "POST", { days });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error?.message || "Failed to disable user");
+    }
+    return res.json();
+  },
+  onSuccess: () => {
+    toast({
+      title: "Success",
+      description: "User has been disabled successfully",
+    });
+    setIsDisableDialogOpen(false);
+    setUserToDisable(null);
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+  },
+  onError: (error: any) => {
+    toast({
+      title: "Error",
+      description: error.message || "Failed to disable user",
+      variant: "destructive",
+    });
+  },
+});
 
+
+// Enable user mutation
+const enableUserMutation = useMutation({
+  mutationFn: async (userId: string) => {
+    const res = await apiRequest(`/api/admin/users/${userId}/enable`, "POST");
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error?.message || "Failed to enable user");
+    }
+    return res.json();
+  },
+  onSuccess: () => {
+    toast({
+      title: "Success",
+      description: "User has been enabled successfully",
+    });
+    setIsDisableDialogOpen(false);
+    setUserToDisable(null);
+    setDisableDays("7"); // Reset to default
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+  },
+  onError: (error: any) => {
+    toast({
+      title: "Error",
+      description: error.message || "Failed to enable user",
+      variant: "destructive",
+    });
+  },
+});
 
 const handleSortCashflow = (field: SortFieldCashflow) => {
   if (sortFieldCashflow === field) {
@@ -714,6 +791,9 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
                     Actions
                   </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+  Status
+</th>
                 </tr>
               </thead>
               <tbody>
@@ -750,36 +830,72 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>
                     <td className="py-3 px-4">
-                      <div className="flex gap-2">
-                         <Button
-                          variant="outline"
-                          size="sm"
-                         onClick={() => user?.id && setLocation(`/admin/users/${user.id}`)}
-
-                          className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950"
-                          data-testid={`button-audit-user-${user.id}`}
-                        >
-                          <FileText className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(user)}
-                          data-testid={`button-edit-user-${user.id}`}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteUser(user)}
-                          className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
-                          data-testid={`button-delete-user-${user.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      {/* In the table row actions section */}
+<td className="py-3 px-4">
+  <div className="flex gap-2">
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => user?.id && setLocation(`/admin/users/${user.id}`)}
+      className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950"
+      data-testid={`button-audit-user-${user.id}`}
+    >
+      <FileText className="w-4 h-4" />
+    </Button>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => handleEdit(user)}
+      data-testid={`button-edit-user-${user.id}`}
+    >
+      <Edit className="w-4 h-4" />
+    </Button>
+    
+    {/* Add Disable Button */}
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        setUserToDisable(user);
+        setIsDisableDialogOpen(true);
+      }}
+      className={`${
+        user.disabled 
+          ? "text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-950"
+          : "text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-950"
+      }`}
+      data-testid={`button-disable-user-${user.id}`}
+    >
+      {user.disabled ? (
+        <CheckCircle className="w-4 h-4" />
+      ) : (
+        <XCircle className="w-4 h-4" />
+      )}
+    </Button>
+    
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => handleDeleteUser(user)}
+      className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
+      data-testid={`button-delete-user-${user.id}`}
+    >
+      <Trash2 className="w-4 h-4" />
+    </Button>
+  </div>
+</td>
                     </td>
+                    <td className="py-3 px-4">
+  <span
+    className={`px-2 py-1 rounded-full text-xs font-medium ${
+      user.disabled
+        ? "bg-red-500/20 text-red-500"
+        : "bg-green-500/20 text-green-500"
+    }`}
+  >
+    {user.disabled ? "Disabled" : "Active"}
+  </span>
+</td>
                   </tr>
                 ))}
               </tbody>
@@ -947,7 +1063,24 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
               <Label htmlFor="isRestricted">Disable User</Label>
             </div>
               </div>
-
+{/* In the edit dialog, add this section */}
+<div className="space-y-3 border-t pt-4">
+  <Label className="text-base font-semibold">Account Status</Label>
+  <div className="flex items-center gap-2">
+    <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+      editingUser?.disabled
+        ? "bg-red-500/20 text-red-500"
+        : "bg-green-500/20 text-green-500"
+    }`}>
+      {editingUser?.disabled ? "Disabled" : "Active"}
+    </div>
+    {editingUser?.disabledAt && (
+      <p className="text-sm text-muted-foreground">
+        Disabled on: {new Date(editingUser.disabledAt).toLocaleDateString()}
+      </p>
+    )}
+  </div>
+</div>
               <div className="space-y-3 border-t pt-4">
                 <Label className="text-base font-semibold">Password Reset</Label>
                 <p className="text-sm text-muted-foreground">
@@ -1015,6 +1148,119 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
           </DialogContent>
         </Dialog>
 
+
+{/* Disable User Dialog */}
+<Dialog open={isDisableDialogOpen} onOpenChange={setIsDisableDialogOpen}>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>
+        {userToDisable?.disabled ? "Enable User" : "Disable User"}
+      </DialogTitle>
+      <DialogDescription>
+        {userToDisable?.disabled 
+          ? "This will enable the user account and restore access."
+          : "Temporarily disable this user account."
+        }
+      </DialogDescription>
+    </DialogHeader>
+    
+    {!userToDisable?.disabled && (
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="disableDays">Duration (days)</Label>
+          <Input
+            id="disableDays"
+            type="number"
+            min="0"
+            placeholder="Enter days (0 for indefinite)"
+            value={disableDays}
+            onChange={(e) => setDisableDays(e.target.value)}
+            className="mt-1"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Enter 0 to disable indefinitely
+          </p>
+        </div>
+        
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-amber-500">User will not be able to:</p>
+              <ul className="list-disc list-inside mt-1 text-amber-500/80">
+                <li>Log into their account</li>
+                <li>Make purchases</li>
+                <li>Enter competitions</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    
+    {userToDisable?.disabled && (
+      <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+        <div className="flex items-start gap-2">
+          <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-green-500">User will be able to:</p>
+            <ul className="list-disc list-inside mt-1 text-green-500/80">
+              <li>Access their account normally</li>
+              <li>Make purchases and entries</li>
+              <li>Use all platform features</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    )}
+    
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() => {
+          setIsDisableDialogOpen(false);
+          setUserToDisable(null);
+        }}
+      >
+        Cancel
+      </Button>
+   <Button
+  variant={userToDisable?.disabled ? "default" : "destructive"}
+  onClick={() => {
+    if (userToDisable) {
+      if (userToDisable.disabled) {
+        // Enable user - FIXED: Call the enable mutation
+        enableUserMutation.mutate(userToDisable.id);
+      } else {
+        // Disable user
+        const days = parseInt(disableDays);
+        if (isNaN(days) || days < 0) {
+          toast({
+            title: "Invalid duration",
+            description: "Please enter a valid number of days",
+            variant: "destructive",
+          });
+          return;
+        }
+        disableUserMutation.mutate({ 
+          userId: userToDisable.id, 
+          days 
+        });
+      }
+    }
+  }}
+  disabled={disableUserMutation.isPending || enableUserMutation.isPending} // Added enableUserMutation.isPending
+>
+  {disableUserMutation.isPending || enableUserMutation.isPending // Updated condition
+    ? "Processing..." 
+    : userToDisable?.disabled 
+      ? "Enable User" 
+      : "Disable User"
+  }
+</Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>

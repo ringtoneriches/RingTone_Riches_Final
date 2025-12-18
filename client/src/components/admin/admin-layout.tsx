@@ -17,6 +17,7 @@ import {
   Mail,
   Euro,
   MessageSquare,
+  Heart,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ const sidebarItems = [
   { name: "Orders", path: "/admin/orders", icon: ShoppingCart },
   { name: "Withdrawals", path: "/admin/withdrawals", icon: ArrowDownCircle },
   { name: "Support", path: "/admin/support", icon: MessageSquare, hasNotification: true },
+  { name: "Well-being", path: "/admin/well-being", icon: Heart },
   { name: "Marketing", path: "/admin/marketing", icon: Mail },
   { name: "Settings", path: "/admin/settings", icon: Settings },
 ];

@@ -31,6 +31,7 @@ import {
   ArrowRight,
   X,
   AlertCircle,
+  Heart,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -62,6 +63,7 @@ import {
 import Support from "./support";
 import { navigate } from "wouter/use-browser-location";
 import { useNavigation } from "react-day-picker";
+import Wellbeing from "./wellbeing";
 
 const getTransactionIcon = (type: string) => {
   switch (type) {
@@ -930,7 +932,7 @@ const handleSortCodeChange = (e) => {
             className="w-full"
           >
             <TabsList
-              className="grid w-full h-full grid-cols-4 md:grid-cols-8 gap-2 bg-zinc-900/50 border border-yellow-500/20 p-2 rounded-xl mb-12 relative z-10"
+              className="grid w-full h-full grid-cols-4 md:grid-cols-9 gap-2 bg-zinc-900/50 border border-yellow-500/20 p-2 rounded-xl mb-12 relative z-10"
               data-testid="tabs-account"
             >
               <TabsTrigger
@@ -998,6 +1000,18 @@ const handleSortCodeChange = (e) => {
                 <span>Support</span>
                 <NotificationBadge count={supportUnreadData?.count} />
               </TabsTrigger>
+
+               <TabsTrigger
+                value="wellbeing"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3 relative"
+                data-testid="tab-support"
+              >
+                <Heart className="h-4 w-4" />
+                <span>Well-Being</span>
+              </TabsTrigger>
+
+              
+
             </TabsList>
 
             {/* WALLET TAB */}
@@ -2264,6 +2278,15 @@ const handleSortCodeChange = (e) => {
               data-testid="content-support"
             >
               <Support/>
+            </TabsContent>
+
+            {/* WellBeing tab */}
+            <TabsContent
+              value="wellbeing"
+              className="space-y-6 pt-1 relative z-0"
+              data-testid="content-wellbeing"
+            >
+              <Wellbeing/>
             </TabsContent>
           </Tabs>
         </div>

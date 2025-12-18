@@ -1019,7 +1019,7 @@ if (congratsAudioRef.current) {
           <div className="bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] px-3 sm:px-6 py-3 sm:py-4">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
               <h3 className="text-center sm:text-left text-base sm:text-xl md:text-2xl font-black text-gray-900 flex items-center gap-1 sm:gap-2">
-                <span className="text-lg sm:text-2xl">🎡</span>
+                {/* <span className="text-lg sm:text-2xl">🎡</span> */}
                 <span className="whitespace-nowrap">Spin Progress</span>
               </h3>
               {spinHistory.filter(s => s.status === "NOT SPUN").length > 0 && (
@@ -1029,7 +1029,7 @@ if (congratsAudioRef.current) {
                   className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-900 hover:bg-gray-800 text-[#FACC15] font-bold text-xs sm:text-sm rounded-lg border border-[#FACC15] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                   data-testid="button-reveal-all"
                 >
-                  🎰 Reveal All
+                   Reveal All
                 </button>
               )}
             </div>

@@ -1,5 +1,8 @@
 import { NextFunction } from "express";
 import { storage } from "./storage";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import { users } from "@shared/schema";
 
 export const isNotRestricted = async (
   req: Request, 
@@ -42,3 +45,29 @@ export const isNotRestricted = async (
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
+async function applySelfSuspensionExpiry(userId: string) {
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+  });
+
+  if (
+    user?.selfSuspended &&
+    user.selfSuspensionEndsAt &&
+    new Date() >= new Date(user.selfSuspensionEndsAt)
+  ) {
+    await db.update(users)
+      .set({
+        selfSuspended: false,
+        selfSuspensionEndsAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+  }
+}
+
+
+
+export { applySelfSuspensionExpiry };

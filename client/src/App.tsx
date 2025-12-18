@@ -53,6 +53,7 @@ import MaintenancePage from "./pages/MaintenancePage";
 import UserAuditPage from "./pages/admin/audit";
 import AdminTransactions from "./pages/admin/transactions";
 import AdminSupport from "./pages/admin/support";
+import AdminWellbeing from "./pages/admin/well-being";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -119,6 +120,7 @@ function Router() {
       <Route path="/admin/users/:id" component={UserAuditPage} />
       <Route path="/admin/transactions" component={AdminTransactions} />
       <Route path="/admin/support" component={AdminSupport} />
+      <Route path="/admin/well-being" component={AdminWellbeing} />
       <Route path="/admin/users/:id" component={UserAuditPage} />
 
       <Route component={NotFound} />

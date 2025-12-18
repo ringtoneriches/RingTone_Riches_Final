@@ -37,7 +37,13 @@ export const users = pgTable("users", {
   dateOfBirth: varchar("date_of_birth"), // Store as YYYY-MM-DD format
   profileImageUrl: varchar("profile_image_url"),
   balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
+  dailySpendLimit: decimal("daily_spend_limit", { precision: 10, scale: 2 }).default("0.00"),
+  selfSuspended: boolean("self_suspended").default(false),
+  selfSuspensionEndsAt: timestamp("self_suspension_ends_at"),
   stripeCustomerId: varchar("stripe_customer_id"),
+  disabled: boolean("disabled").default(false),
+  disabledAt: timestamp("disabled_at"),
+  disabledUntil: timestamp("disabled_until"),
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   emailVerified: boolean("email_verified").default(false),
   ringtonePoints: integer("ringtone_points").default(0),
@@ -140,7 +146,14 @@ export const pendingPayments = pgTable("pending_payments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-
+export const wellbeingRequests = pgTable("wellbeing_requests", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(), 
+  type: varchar("type", { enum: ["suspension", "full_closure"] }).notNull(),
+  daysRequested: integer("days_requested"), 
+  processed: boolean("processed").default(false), 
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
 // Withdrawal requests
 export const withdrawalRequests = pgTable("withdrawal_requests", {
