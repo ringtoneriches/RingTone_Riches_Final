@@ -353,20 +353,6 @@ const users = useMemo(() => {
     },
   });
 
-// In your AdminUsers component, add this useEffect
-useEffect(() => {
-  if (allUsers && allUsers.length > 0) {
-    console.log("Sample user data:", {
-      email: allUsers[0].email,
-      disabled: allUsers[0].disabled,
-      disabledAt: allUsers[0].disabledAt,
-      disabledUntil: allUsers[0].disabledUntil,
-      // Check if these fields exist
-      hasDisabledField: 'disabled' in allUsers[0],
-      allFields: Object.keys(allUsers[0])
-    });
-  }
-}, [allUsers]);
   // Disable user mutation
 const disableUserMutation = useMutation({
   mutationFn: async ({ userId, days }: { userId: string; days: number }) => {

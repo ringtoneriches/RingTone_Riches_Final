@@ -44,7 +44,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
       <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 h-full rounded-2xl overflow-hidden flex flex-col z-10 border border-white/10">
         
         {/* ===== CHRISTMAS LIGHTS GARLAND ===== */}
-        <div className="absolute top-0 left-0 right-0 h-3 z-30 flex items-center justify-around px-2">
+        {/* <div className="absolute top-0 left-0 right-0 h-3 z-30 flex items-center justify-around px-2">
           {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="relative">
               <div 
@@ -58,10 +58,10 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               <div className="absolute top-[-4px] left-1/2 -translate-x-1/2 w-0.5 h-1 bg-slate-600"></div>
             </div>
           ))}
-        </div>
+        </div> */}
 
         {/* ===== FLOATING ORNAMENTS ===== */}
-        <div className="absolute top-5 left-2 z-20">
+        {/* <div className="absolute top-5 left-2 z-20">
           <div className="relative animate-float" style={{ animationDelay: '0s' }}>
             <div className="w-5 h-5 md:w-6 md:h-6 bg-gradient-to-br from-red-400 via-red-500 to-red-700 rounded-full border-2 border-yellow-400 shadow-lg shadow-red-500/60">
               <div className="absolute top-1 left-1 w-1.5 h-1.5 bg-white/40 rounded-full"></div>
@@ -74,7 +74,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               <div className="absolute top-1 left-1 w-1.5 h-1.5 bg-white/40 rounded-full"></div>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* ===== HOT / SELLING FAST BADGE ===== */}
         {isHot && (
@@ -268,7 +268,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
             
             {/* Button Content */}
             <span className="relative flex items-center justify-center gap-2 text-white drop-shadow-lg">
-              <Gift className="w-4 h-4 md:w-5 md:h-5 animate-bounce" style={{ animationDuration: '1s' }} />
+              {/* <Gift className="w-4 h-4 md:w-5 md:h-5 animate-bounce" style={{ animationDuration: '1s' }} /> */}
               <span>
                 {competition.type === "scratch"
                   ? "SCRATCH & WIN"
@@ -276,7 +276,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                   ? "SPIN TO WIN"
                   : "ENTER NOW"}
               </span>
-              <Snowflake className="w-4 h-4 md:w-5 md:h-5 animate-spin" style={{ animationDuration: '3s' }} />
+              {/* <Snowflake className="w-4 h-4 md:w-5 md:h-5 animate-spin" style={{ animationDuration: '3s' }} /> */}
             </span>
           </button>
         </div>

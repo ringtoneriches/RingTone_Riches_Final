@@ -35,7 +35,7 @@ function MagicalSnowfall() {
       size: number;
       type: 'snowflake' | 'star' | 'sparkle';
       opacity: number;
-    }> = Array.from({ length: 30 }, (_, i) => ({
+    }> = Array.from({ length: 10 }, (_, i) => ({
       id: i,
       left: Math.random() * 100,
       delay: Math.random() * 8,

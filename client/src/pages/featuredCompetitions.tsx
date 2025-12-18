@@ -47,7 +47,7 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
                 <div className="relative min-h-[550px] md:min-h-[550px] bg-gradient-to-br from-red-950 via-slate-900 to-green-950">
                   
                   {/* Animated Christmas Lights Border */}
-                  <div className="absolute top-0 left-0 right-0 h-8 z-[8] flex items-center justify-center gap-3 bg-gradient-to-b from-black/40 to-transparent">
+                  {/* <div className="absolute top-0 left-0 right-0 h-8 z-[8] flex items-center justify-center gap-3 bg-gradient-to-b from-black/40 to-transparent">
                     {Array.from({ length: 20 }).map((_, i) => (
                       <div
                         key={i}
@@ -59,7 +59,7 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
                         }}
                       />
                     ))}
-                  </div>
+                  </div> */}
                   
                   {/* Christmas Snow Particles - Reduced */}
                   <div className="absolute inset-0 pointer-events-none overflow-hidden z-[5]">
