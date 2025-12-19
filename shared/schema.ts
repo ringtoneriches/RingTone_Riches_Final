@@ -37,7 +37,7 @@ export const users = pgTable("users", {
   dateOfBirth: varchar("date_of_birth"), // Store as YYYY-MM-DD format
   profileImageUrl: varchar("profile_image_url"),
   balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
-  dailySpendLimit: decimal("daily_spend_limit", { precision: 10, scale: 2 }).default("0.00"),
+  dailySpendLimit: decimal("daily_spend_limit", { precision: 10, scale: 2 }),
   selfSuspended: boolean("self_suspended").default(false),
   selfSuspensionEndsAt: timestamp("self_suspension_ends_at"),
   stripeCustomerId: varchar("stripe_customer_id"),

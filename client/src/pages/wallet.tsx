@@ -59,6 +59,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import Support from "./support";
 import { navigate } from "wouter/use-browser-location";
@@ -523,32 +524,59 @@ const isAuthenticated = !!user;
     ? `${window.location.origin}/register?ref=${referralCodeData.referralCode}`
     : "";
 
-  const topUpMutation = useMutation({
-    mutationFn: async (amount: number) => {
-      const response = await apiRequest("/api/wallet/topup-checkout", "POST", {
-        amount,
-      });
-      return response.json();
-    },
-    onSuccess: (data) => {
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to get Cashflows checkout URL",
-          variant: "destructive",
-        });
-      }
-    },
-    onError: (error: any) => {
+ const topUpMutation = useMutation({
+  mutationFn: async (amount: number) => {
+    const response = await apiRequest("/api/wallet/topup-checkout", "POST", {
+      amount,
+    });
+    
+    // Check if response is not OK
+    if (!response.ok) {
+      const errorData = await response.json();
+      // Throw an error with the backend's message and code
+      throw new Error(JSON.stringify(errorData)); // Stringify to preserve the object
+    }
+    
+    return response.json();
+  },
+  onSuccess: (data) => {
+    if (data.redirectUrl) {
+      window.location.href = data.redirectUrl;
+    } else {
       toast({
         title: "Error",
-        description: error.message || "Failed to start checkout session",
+        description: "Failed to get Cashflows checkout URL",
         variant: "destructive",
       });
-    },
-  });
+    }
+  },
+  onError: (error: any) => {
+    try {
+      // Parse the error message as JSON
+      const errorData = JSON.parse(error.message);
+      
+      // Check if it's a daily limit error
+      if (errorData.code === "DAILY_LIMIT_EXCEEDED" || errorData.message?.includes("Daily spend limit")) {
+        // Show dialog only, no toast
+        setDialogOpen(true);
+        return;
+      }
+    } catch (e) {
+      // If not JSON, check string
+      if (error.message?.includes("Daily spend limit") || error.message?.includes("DAILY_LIMIT")) {
+        setDialogOpen(true);
+        return;
+      }
+    }
+    
+    // For other errors, show toast
+    toast({
+      title: "Error",
+      description: error.message || "Failed to start checkout session",
+      variant: "destructive",
+    });
+  },
+});
 
  
 
@@ -2416,6 +2444,34 @@ const handleSortCodeChange = (e) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Daily spending limit reached</DialogTitle>
+      <DialogDescription>
+        You have reached your daily spending limit.
+        <br />
+        To continue, please visit the Wellbeing section and increase your limit.
+      </DialogDescription>
+    </DialogHeader>
+
+    <div className="flex gap-3 justify-end">
+      <Button variant="outline" onClick={() => setDialogOpen(false)}>
+        Cancel
+      </Button>
+      <Button
+        onClick={() => {
+          setDialogOpen(false);
+          handleTabChange("wellbeing"); // 👈 go to wellbeing tab
+        }}
+      >
+        Go to Wellbeing
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
+
 
       <Footer />
     </div>

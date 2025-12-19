@@ -4659,10 +4659,23 @@ app.post(
         redirectUrl: session.hostedPageUrl,
         paymentJobRef: session.paymentJobReference,
       });
-    } catch (err) {
-      console.error("Checkout error:", err);
-      res.status(500).json({ message: "Checkout failed" });
-    }
+   } catch (err: any) {
+  console.error("Checkout error:", err);
+
+  if (
+    err.message === "DAILY_LIMIT_REACHED" ||
+    err.message === "DAILY_LIMIT_EXCEEDED"
+  ) {
+    return res.status(400).json({
+      message: "You have reached your daily spending limit",
+      code: "DAILY_LIMIT_EXCEEDED",
+    });
+  }
+
+  res.status(500).json({ message: "Checkout failed" });
+}
+
+
   }
 );
 
@@ -4818,18 +4831,56 @@ app.put("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
 
 app.get("/api/wellbeing", isAuthenticated, async (req, res) => {
   const spentToday = await getTodaysCashSpend(req.user.id);
+  const limit = req.user.dailySpendLimit;
+
+  if (limit === null) {
+    return res.json({
+      dailySpendLimit: null,
+      spentToday: spentToday.toFixed(2),
+      remaining: null,
+    });
+  }
+
+  const limitNum = Number(limit);
 
   res.json({
-    dailySpendLimit: req.user.dailySpendLimit,
+    dailySpendLimit: limit,
     spentToday: spentToday.toFixed(2),
-    remaining:
-      Math.max(
-        0,
-        Number(req.user.dailySpendLimit) - spentToday
-      ).toFixed(2),
+    remaining: Math.max(0, limitNum - spentToday).toFixed(2),
   });
 });
 
+app.post(
+  "/api/admin/migrate/daily-limit-null",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      // 1️⃣ Remove default at DB level (safe to run multiple times)
+      await db.execute(
+        sql`ALTER TABLE users ALTER COLUMN daily_spend_limit DROP DEFAULT`
+      );
+
+      // 2️⃣ Normalize existing data
+      const result = await db.execute(
+        sql`
+          UPDATE users
+          SET daily_spend_limit = NULL
+          WHERE daily_spend_limit = 0
+        `
+      );
+
+      res.json({
+        success: true,
+        message: "Daily spend limits normalized",
+        affectedRows: result.rowCount ?? 0,
+      });
+    } catch (err) {
+      console.error("Migration error:", err);
+      res.status(500).json({ error: "Migration failed" });
+    }
+  }
+);
 
 
 async function getTodaysCashSpend(userId: string) {
@@ -4864,25 +4915,27 @@ async function enforceDailySpendLimit(userId: string, newSpendAmount: number) {
     where: (u, { eq }) => eq(u.id, userId),
   });
 
-  if (!user) throw new Error("User not found");
+  if (!user) throw new Error("USER_NOT_FOUND");
+
+  // ✅ No limit set → allow
+  if (user.dailySpendLimit === null) {
+    return;
+  }
 
   const dailyLimit = Number(user.dailySpendLimit);
 
-  // 🚫 Full block
+  // 🚫 Explicit block
   if (dailyLimit === 0) {
-    throw new Error(
-      "Your daily spending limit has been reached. Please refer to the Well Being section."
-    );
+    throw new Error("DAILY_LIMIT_REACHED");
   }
 
   const spentToday = await getTodaysCashSpend(userId);
 
   if (spentToday + newSpendAmount > dailyLimit) {
-    throw new Error(
-      "Your daily spending limit has been reached. Please refer to the Well Being section."
-    );
+    throw new Error("DAILY_LIMIT_REACHED");
   }
 }
+
 
 
 app.post("/api/wellbeing/suspend", isAuthenticated, async (req, res) => {

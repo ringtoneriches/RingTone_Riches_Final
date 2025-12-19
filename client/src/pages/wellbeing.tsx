@@ -23,10 +23,11 @@ import {
 } from "@/components/ui/dialog";
 
 interface WellbeingData {
-  dailySpendLimit: string;
-  spentToday: string;
-  remaining: string;
+  dailySpendLimit?: string | null;
+  spentToday?: string;
+  remaining?: string | null;
 }
+
 
 interface User {
   id: number;
@@ -61,20 +62,21 @@ export default function Wellbeing() {
     enabled: !!user,
   });
 
-  const hasDailyLimit = wellbeingData?.dailySpendLimit !== null &&
-    wellbeingData?.dailySpendLimit !== undefined &&
-    Number(wellbeingData.dailySpendLimit) > 0;
+const hasDailyLimit = wellbeingData?.dailySpendLimit !== null &&
+  wellbeingData?.dailySpendLimit !== undefined &&
+  Number(wellbeingData.dailySpendLimit) > 0;
 
   // Set initial daily limit from fetched data
-  useEffect(() => {
-    if (wellbeingData?.dailySpendLimit !== undefined) {
-      setDailyLimit(
-        Number(wellbeingData.dailySpendLimit) > 0
-          ? wellbeingData.dailySpendLimit
-          : ""
-      );
-    }
-  }, [wellbeingData?.dailySpendLimit]);
+useEffect(() => {
+  if (!wellbeingData) return;
+  
+  if (wellbeingData.dailySpendLimit === null || wellbeingData.dailySpendLimit === undefined) {
+    setDailyLimit("");
+  } else {
+    setDailyLimit(wellbeingData.dailySpendLimit);
+  }
+}, [wellbeingData]);
+
 
   // Mutation for setting daily limit
   const setDailyLimitMutation = useMutation({
@@ -86,14 +88,19 @@ export default function Wellbeing() {
       }
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/wellbeing"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      toast({
-        title: "Success",
-        description: `Daily spending limit set to £${Number(dailyLimit).toFixed(2)}`,
-      });
-    },
+    onSuccess: (_, limit) => {
+  queryClient.invalidateQueries({ queryKey: ["/api/wellbeing"] });
+  queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+
+  toast({
+    title: "Success",
+    description:
+      limit === null
+        ? "Daily spending limit removed"
+        : `Daily spending limit updated to £${Number(limit).toFixed(2)}`,
+  });
+},
+
     onError: (error: any) => {
       toast({
         title: "Error",
@@ -105,7 +112,7 @@ export default function Wellbeing() {
 
   // Mutation for updating daily limit
   const updateDailyLimitMutation = useMutation({
-    mutationFn: async (limit: string) => {
+    mutationFn: async (limit: string | null) => {
       const res = await apiRequest( "/api/wellbeing/daily-limit", "PUT",{ limit });
       if (!res.ok) {
         const error = await res.json();
@@ -221,7 +228,7 @@ export default function Wellbeing() {
   };
 
   const handleRemoveDailyLimit = () => {
-    updateDailyLimitMutation.mutate("0");
+    updateDailyLimitMutation.mutate(null as any);
     setDailyLimit("");
   };
 
@@ -242,14 +249,27 @@ export default function Wellbeing() {
     closeAccountMutation.mutate();
   };
 
-  const spentToday = parseFloat(wellbeingData?.spentToday || "0");
-  const dailyLimitValue = parseFloat(wellbeingData?.dailySpendLimit || "0");
-  const remaining = parseFloat(wellbeingData?.remaining || "0");
-  const progressPercentage = dailyLimitValue > 0 ? (spentToday / dailyLimitValue) * 100 : 0;
+const spentToday = parseFloat(wellbeingData?.spentToday || "0");
+  const dailyLimitValue =
+  wellbeingData?.dailySpendLimit !== null && wellbeingData?.dailySpendLimit !== undefined
+    ? parseFloat(wellbeingData.dailySpendLimit)
+    : null;
+
+const remaining =
+  wellbeingData?.remaining !== null  && wellbeingData?.remaining !== undefined
+    ? parseFloat(wellbeingData.remaining)
+    : null;
+
+const progressPercentage = dailyLimitValue && dailyLimitValue > 0
+  ? (spentToday / dailyLimitValue) * 100
+  : 0;
 
   const isCurrentlySuspended = userData?.selfSuspended && 
     userData.selfSuspensionEndsAt && 
     new Date(userData.selfSuspensionEndsAt) > new Date();
+
+const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
+
 
   // If user is suspended or disabled, show a message and redirect
   if (isCurrentlySuspended || userData?.disabled) {
@@ -371,7 +391,7 @@ export default function Wellbeing() {
             </CardHeader>
             <CardContent>
               <p className="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent">
-                {dailyLimitValue > 0 ? `£${dailyLimitValue.toFixed(2)}` : "No limit"}
+                {showProgress ? `£${dailyLimitValue!.toFixed(2)}` : "No limit"}
               </p>
               <p className="text-sm text-gray-400 mt-2">
                 {dailyLimitValue > 0 ? "Your maximum daily spend" : "No spending limit set"}
@@ -388,7 +408,9 @@ export default function Wellbeing() {
             </CardHeader>
             <CardContent>
               <p className="text-4xl font-bold bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent">
-                £{remaining.toFixed(2)}
+                {showProgress && remaining !== null
+    ? `£${remaining.toFixed(2)}`
+    : "—"}
               </p>
               <p className="text-sm text-gray-400 mt-2">Available to spend today</p>
             </CardContent>
@@ -409,18 +431,18 @@ export default function Wellbeing() {
           
           <CardContent className="space-y-8">
             {/* Progress Bar */}
-            {dailyLimitValue > 0 && (
+            {showProgress  && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-300">Spending Progress</span>
-                  <span className={`text-sm font-bold ${
-                    progressPercentage >= 90 ? "text-red-400" :
-                    progressPercentage >= 80 ? "text-amber-400" :
-                    "text-emerald-400"
-                  }`}>
-                    {progressPercentage.toFixed(1)}%
-                  </span>
-                </div>
+  <span className="text-sm font-medium text-gray-300">Spending Progress</span>
+  <span className={`text-sm font-bold ${
+    progressPercentage >= 90 ? "text-red-400" :
+    progressPercentage >= 80 ? "text-amber-400" :
+    "text-emerald-400"
+  }`}>
+    {progressPercentage.toFixed(1)}%
+  </span>
+</div>
                 <div className="relative">
                   <Progress 
                     value={progressPercentage} 
