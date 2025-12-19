@@ -4850,37 +4850,37 @@ app.get("/api/wellbeing", isAuthenticated, async (req, res) => {
   });
 });
 
-app.post(
-  "/api/admin/migrate/daily-limit-null",
-  isAuthenticated,
-  isAdmin,
-  async (req, res) => {
-    try {
-      // 1️⃣ Remove default at DB level (safe to run multiple times)
-      await db.execute(
-        sql`ALTER TABLE users ALTER COLUMN daily_spend_limit DROP DEFAULT`
-      );
+// app.post(
+//   "/api/admin/migrate/daily-limit-null",
+//   isAuthenticated,
+//   isAdmin,
+//   async (req, res) => {
+//     try {
+//       // 1️⃣ Remove default at DB level (safe to run multiple times)
+//       await db.execute(
+//         sql`ALTER TABLE users ALTER COLUMN daily_spend_limit DROP DEFAULT`
+//       );
 
-      // 2️⃣ Normalize existing data
-      const result = await db.execute(
-        sql`
-          UPDATE users
-          SET daily_spend_limit = NULL
-          WHERE daily_spend_limit = 0
-        `
-      );
+//       // 2️⃣ Normalize existing data
+//       const result = await db.execute(
+//         sql`
+//           UPDATE users
+//           SET daily_spend_limit = NULL
+//           WHERE daily_spend_limit = 0
+//         `
+//       );
 
-      res.json({
-        success: true,
-        message: "Daily spend limits normalized",
-        affectedRows: result.rowCount ?? 0,
-      });
-    } catch (err) {
-      console.error("Migration error:", err);
-      res.status(500).json({ error: "Migration failed" });
-    }
-  }
-);
+//       res.json({
+//         success: true,
+//         message: "Daily spend limits normalized",
+//         affectedRows: result.rowCount ?? 0,
+//       });
+//     } catch (err) {
+//       console.error("Migration error:", err);
+//       res.status(500).json({ error: "Migration failed" });
+//     }
+//   }
+// );
 
 
 async function getTodaysCashSpend(userId: string) {
@@ -5727,7 +5727,7 @@ app.get("/api/admin/wellbeing/daily-top-users",isAuthenticated, isAdmin, async (
       )
       .groupBy(transactions.userId, users.email, users.firstName, users.lastName)
       .orderBy(sql`SUM(${transactions.amount})`, "desc")
-      .limit(10); // Top 10 for today
+      
 
     res.json({ success: true, topDailyCashflowUsers });
   } catch (err) {
