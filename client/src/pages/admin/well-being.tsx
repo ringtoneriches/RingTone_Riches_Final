@@ -205,14 +205,66 @@ const [isTopUserDialogOpen, setIsTopUserDialogOpen] = useState(false);
     disableUserMutation.mutate({ userId: selectedUser.id, days });
   };
 
-  const handleExportData = () => {
-    toast({
-      title: "Export Started",
-      description: "Daily spending data export has been initiated",
-    });
-    // In a real app, you would trigger a CSV/Excel download here
-  };
+const handleExportData = () => {
+  try {
+    if (!topUsersData?.topDailyCashflowUsers || topUsersData.topDailyCashflowUsers.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No daily spending data available to export",
+        variant: "destructive",
+      });
+      return;
+    }
 
+    // Create CSV content
+    const headers = ["Rank", "User ID", "Email", "Name", "Total Deposited (£)", "Date"];
+    
+    // REVERSE the array to show highest spenders first
+    const sortedUsers = [...topUsersData.topDailyCashflowUsers].sort((a, b) => 
+      parseFloat(b.totalDeposited) - parseFloat(a.totalDeposited)
+    );
+    
+    const rows = sortedUsers.map((user, index) => [
+      index + 1, // Rank (highest spender = rank 1)
+      user.userId,
+      user.email,
+      `${user.firstName} ${user.lastName}`.trim(),
+      parseFloat(user.totalDeposited).toFixed(2),
+      format(new Date(), 'yyyy-MM-dd')
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `daily-top-spenders-${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Export Completed",
+      description: `Daily spending data exported (${sortedUsers.length} records) - Highest spenders first`,
+    });
+  } catch (error) {
+    toast({
+      title: "Export Failed",
+      description: "Failed to export daily spending data",
+      variant: "destructive",
+    });
+    console.error("Export error:", error);
+  }
+};
  // Update the filteredRequests to sort by date descending
 const filteredRequests = (requestsData?.requests || [])
   .filter(request => {

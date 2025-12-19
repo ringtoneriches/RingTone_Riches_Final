@@ -48,6 +48,7 @@ interface Winner {
   prizeDescription: string;
   prizeValue: string;
   imageUrl: string | null;
+  isShowcase: boolean;
   createdAt: string;
 }
 
@@ -83,6 +84,7 @@ interface WinnerFormData {
   prizeDescription: string;
   prizeValue: string;
   imageUrl: string;
+  isShowcase: boolean;
 }
 
 interface WinnerPayload {
@@ -91,6 +93,7 @@ interface WinnerPayload {
   prizeDescription: string;
   prizeValue: string;
   imageUrl: string | null;
+  isShowcase?: boolean; 
 }
 type DateFilter = "all" | "1h" | "24h" | "7d" | "30d" | "custom";
 
@@ -113,6 +116,7 @@ function WinnerForm({
     prizeDescription: data?.prizeDescription || "",
     prizeValue: data?.prizeValue || "",
     imageUrl: data?.imageUrl || "",
+    isShowcase: data?.isShowcase || false,
   });
   const [uploading, setUploading] = useState(false);
 
@@ -244,6 +248,7 @@ function WinnerForm({
                 if (file) handleImageUpload(file);
               }}
             />
+           
             <Button
               type="button"
               variant="outline"
@@ -267,6 +272,31 @@ function WinnerForm({
         </div>
       </div>
 
+
+{data && (
+  <div className="flex items-center gap-2 mt-2">
+    <input
+      type="checkbox"
+      id="isShowcase"
+      checked={form.isShowcase}
+      onChange={(e) =>
+        setForm({ ...form, isShowcase: e.target.checked })
+      }
+    />
+    <label htmlFor="isShowcase" className="text-sm font-medium">
+      Show in Showcase
+    </label>
+    <span className="text-xs text-gray-500 ml-2">
+      (Check to show on public winners page)
+    </span>
+  </div>
+)}
+
+{data && (
+  <div className="text-xs text-gray-500 mt-2">
+    ⓘ New winners are automatically shown in the showcase
+  </div>
+)}
       <DialogFooter className="flex gap-2">
         <Button
           type="button"
@@ -285,6 +315,7 @@ function WinnerForm({
               ...form,
               competitionId: form.competitionId || null,
               imageUrl: form.imageUrl || null,
+               isShowcase: data ? form.isShowcase : true,
             };
             onSubmit(payload);
           }}
@@ -461,6 +492,8 @@ export default function AdminPastWinners() {
   });
 
   const handleSubmit = (payload: WinnerPayload) => {
+  //    console.log('Submitting winner payload:', payload);
+  // console.log('isShowcase value:', payload.isShowcase, 'Type:', typeof payload.isShowcase);
     if (editingWinner) {
       updateMutation.mutate({ id: editingWinner.id, data: payload });
     } else {
@@ -469,6 +502,11 @@ export default function AdminPastWinners() {
   };
 
   const handleEdit = (winner: WinnerWithDetails) => {
+  //     console.log("Editing winner:", {
+  //   id: winner.winners.id,
+  //   isShowcase: winner.winners.isShowcase, // Check if this is true/false
+  //   prize: winner.winners.prizeDescription
+  // });
     setEditingWinner(winner.winners);
     setDialogOpen(true);
   };
@@ -598,6 +636,7 @@ export default function AdminPastWinners() {
                   <TableHead>Competition</TableHead>
                   <TableHead>Prize Description</TableHead>
                   <TableHead>Prize Value</TableHead>
+                  <TableHead>Showcase</TableHead>
                   <TableHead>Date Added</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -626,6 +665,17 @@ export default function AdminPastWinners() {
                     <TableCell className="font-semibold text-primary">
                       {item.winners.prizeValue}
                     </TableCell>
+                     <TableCell>
+        {item.winners.isShowcase ? (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            Yes
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+            No
+          </span>
+        )}
+      </TableCell>
                     <TableCell>
                       {new Date(item.winners.createdAt).toLocaleString()}
                     </TableCell>

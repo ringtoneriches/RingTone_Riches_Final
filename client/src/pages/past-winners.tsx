@@ -10,6 +10,7 @@ interface WinnerWithDetails {
   prizeValue: string;
   imageUrl: string;
   createdAt: string;
+  updatedAt: string;
   user: {
     firstName: string;
     lastName: string;
@@ -17,41 +18,93 @@ interface WinnerWithDetails {
   competition: {
     title: string;
   };
+  isShowcase: boolean;
 }
 
 export default function PastWinners() {
-
-  const [currentPage , setCurrentPage] = useState(1);
-  const itemsPerPage = 50
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
   
- const { data: winnersData = [], isLoading } = useQuery({
-  queryKey: ["/api/winners"],
-  queryFn: async () => {
-    const res = await fetch("/api/winners");
-    const json = await res.json();
-
-    return json.map((item: any) => ({
-      id: item.winners.id,
-      prizeDescription: item.winners.prizeDescription,
-      prizeValue: item.winners.prizeValue?.replace("£", "") ?? "0",
-      imageUrl: item.winners.imageUrl,
-      createdAt: item.winners.createdAt,
-      isShowcase: item.winners?.isShowcase ?? false, 
-      user: {
-        firstName: item.users?.firstName ?? "",
-        lastName: item.users?.lastName ?? "",
-      },
-
-      competition: {
-        title: item.competitions?.title ?? "",
-      },
-    }));
-  },
-});
-
+   // Fetch SHOWCASE winners only
+  const { data: winnersData = [], isLoading } = useQuery<WinnerWithDetails[]>({
+    queryKey: ["/api/winners", "showcase"],
+    queryFn: async () => {
+      const res = await fetch("/api/winners?showcase=true"); 
+      
+      if (!res.ok) {
+        throw new Error("Failed to fetch winners");
+      }
+      
+      const json = await res.json();
+      // console.log("🎯 API Response:", json); // Debug
+      
+      let winners: WinnerWithDetails[] = [];
+      
+      // Check API response structure
+      if (Array.isArray(json)) {
+        if (json.length > 0 && json[0].prizeDescription) {
+          // Direct winner objects
+          winners = json.map((item: any) => ({
+            id: item.id,
+            prizeDescription: item.prizeDescription,
+            prizeValue: item.prizeValue?.replace("£", "") ?? "0",
+            imageUrl: item.imageUrl || "",
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt || item.createdAt, // Add updatedAt
+            isShowcase: item.isShowcase ?? true,
+            user: item.user ? {
+              firstName: item.user.firstName ?? "",
+              lastName: item.user.lastName ?? "",
+            } : { firstName: "", lastName: "" },
+            competition: {
+              title: item.competition?.title || "",
+            },
+          }));
+        } else if (json.length > 0 && json[0].winners) {
+          // Nested structure
+          winners = json.map((item: any) => ({
+            id: item.winners.id,
+            prizeDescription: item.winners.prizeDescription,
+            prizeValue: item.winners.prizeValue?.replace("£", "") ?? "0",
+            imageUrl: item.winners.imageUrl || "",
+            createdAt: item.winners.createdAt,
+            updatedAt: item.winners.updatedAt || item.winners.createdAt, // Add updatedAt
+            isShowcase: item.winners.isShowcase ?? true,
+            user: {
+              firstName: item.users?.firstName ?? "",
+              lastName: item.users?.lastName ?? "",
+            },
+            competition: {
+              title: item.competitions?.title ?? "",
+            },
+          }));
+        }
+      }
+      
+      // Debug: Show what we have
+      // console.log("🔄 Transformed winners:", winners.map(w => ({
+      //   id: w.id,
+      //   prize: w.prizeDescription,
+      //   updatedAt: w.updatedAt,
+      //   createdAt: w.createdAt
+      // })));
+      
+      // Sort by updatedAt (newest first), then createdAt as fallback
+      winners.sort((a, b) => {
+        const dateA = new Date(a.updatedAt).getTime();
+        const dateB = new Date(b.updatedAt).getTime();
+        return dateB - dateA; // Newest first
+      });
+      
+      // console.log("✅ Sorted winners (newest first):", winners.slice(0, 3));
+      return winners;
+    },
+  });
   const totalPages = Math.ceil(winnersData.length / itemsPerPage);
    const startIndex = (currentPage - 1) * itemsPerPage;
-   const showcaseWinners = winnersData.filter((winner) => winner.isShowcase);
+   const showcaseWinners = winnersData
+   .filter((winner) => winner.isShowcase)
+
   const paginatedWinners = showcaseWinners.slice(startIndex, startIndex + itemsPerPage);
 
   // console.log("API Response:", winnersData);

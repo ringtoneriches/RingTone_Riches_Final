@@ -449,20 +449,49 @@ async getUserRingtonePoints(userId: string): Promise<number> {
 
 
   // Winner operations
-  async getRecentWinners(limit: number, showcaseOnly: boolean = false): Promise<any[]> {
-  const query = db
-    .select()
-    .from(winners)
-    .leftJoin(users, eq(winners.userId, users.id))
-    .leftJoin(competitions, eq(winners.competitionId, competitions.id))
-    .orderBy(desc(winners.createdAt))
-    .limit(limit);
-  
-  if (showcaseOnly) {
-    return await query.where(eq(winners.isShowcase, true));
+async getRecentWinners(limit?: number, showcaseOnly = false): Promise<Winner[]> {
+  try {
+    let query = db
+      .select()
+      .from(winners)
+      .leftJoin(users, eq(users.id, winners.userId))
+      .orderBy(desc(winners.updatedAt)) // <-- sort by updatedAt first
+      .orderBy(desc(winners.createdAt)); // fallback to createdAt
+    // Add showcase filter if showcaseOnly is true
+    if (showcaseOnly) {
+      query = query.where(eq(winners.isShowcase, true));
+      console.log('Filtering by isShowcase = true');
+    }
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    const results = await query;
+    
+    // console.log(`Fetched ${results.length} winners, showcaseOnly: ${showcaseOnly}`);
+    // if (showcaseOnly) {
+    //   console.log('Showcase winners found:', results.map(w => ({
+    //     id: w.winners.id,
+    //     isShowcase: w.winners.isShowcase,
+    //     prize: w.winners.prizeDescription
+    //   })));
+    // }
+    
+    return results.map(row => ({
+      ...row.winners,
+      updatedAt: row.winners.updatedAt, 
+      user: row.users ? {
+        id: row.users.id,
+        firstName: row.users.firstName,
+        lastName: row.users.lastName,
+        email: row.users.email
+      } : null
+    }));
+  } catch (error) {
+    console.error("Error fetching winners:", error);
+    throw error;
   }
-  
-  return await query;
 }
 
 async getWinner(id: string): Promise<Winner | undefined> {
@@ -482,14 +511,26 @@ async createWinner(winner: Omit<Winner, "id" | "createdAt">): Promise<Winner> {
   return created;
 }
 
-async updateWinner(id: string, data: Partial<Omit<Winner, 'id' | 'createdAt'>>): Promise<Winner> {
+async updateWinner(
+  id: string,
+  data: Partial<Omit<Winner, 'id' | 'createdAt'>>
+): Promise<Winner> {
+  // Remove the column renaming - keep isShowcase as is
+  const dbData: any = { ...data, updatedAt: new Date() };
+
   const [updated] = await db
     .update(winners)
-    .set(data)
+    .set(dbData)
     .where(eq(winners.id, id))
     .returning();
+// console.log('updateWinner data:', {
+//   id,
+//   data,
+//   isShowcaseInData: data.isShowcase
+// });
   return updated;
 }
+
 
 async deleteWinner(id: string): Promise<void> {
   await db

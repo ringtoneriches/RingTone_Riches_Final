@@ -5441,15 +5441,23 @@ app.get("/api/admin/entries/download/:competitionId", isAuthenticated, isAdmin, 
 // ====== WINNERS PUBLIC ENDPOINTS ======
 app.get("/api/winners", async (req, res) => {
   try {
-    // Pass undefined to get all winners
-    const winners = await storage.getRecentWinners(); 
-    console.log("🧩 All showcase winners:", winners);
+    // Check if showcase parameter is provided
+    const showcaseOnly = req.query.showcase === 'true';
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+    
+    // console.log(`Fetching winners - showcaseOnly: ${showcaseOnly}, limit: ${limit}`);
+    
+    const winners = await storage.getRecentWinners(limit, showcaseOnly);
+
+    // console.log(`✅ Returning ${winners.length} winners, showcaseOnly: ${showcaseOnly}`);
+
     res.json(winners);
   } catch (error) {
     console.error("Error fetching winners:", error);
     res.status(500).json({ message: "Failed to fetch winners" });
   }
 });
+
 
 
 // ====== WINNERS ADMIN ENDPOINTS ======
@@ -5495,6 +5503,7 @@ app.get("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
         prizeDescription: row.winners.prizeDescription,
         prizeValue: row.winners.prizeValue,
         imageUrl: row.winners.imageUrl,
+        isShowcase: row.winners.isShowcase, 
         createdAt: row.winners.createdAt,
       },
       users: row.users
@@ -5548,7 +5557,7 @@ app.post("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
 app.patch("/api/admin/winners/:id", isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId, competitionId, prizeDescription, prizeValue, imageUrl } = req.body;
+    const { userId, competitionId, prizeDescription, prizeValue, imageUrl, isShowcase } = req.body;
 
     const existingWinner = await storage.getWinner(id);
     if (!existingWinner) {
@@ -5561,7 +5570,13 @@ app.patch("/api/admin/winners/:id", isAuthenticated, isAdmin, async (req, res) =
     if (prizeDescription !== undefined) updateData.prizeDescription = prizeDescription;
     if (prizeValue !== undefined) updateData.prizeValue = prizeValue;
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl === null || imageUrl === "" ? null : imageUrl;
-
+    if (isShowcase !== undefined) updateData.isShowcase = !!isShowcase; // Use isShowcase (not is_showcase)
+// console.log('PATCH winner request:', {
+//   id,
+//   body: req.body,
+//   isShowcase: req.body.isShowcase,
+//   typeofIsShowcase: typeof req.body.isShowcase
+// });
     const updatedWinner = await storage.updateWinner(id, updateData);
     res.json(updatedWinner);
   } catch (error) {
