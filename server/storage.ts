@@ -452,15 +452,26 @@ async getUserRingtonePoints(userId: string): Promise<number> {
 async getRecentWinners(limit?: number, showcaseOnly = false): Promise<Winner[]> {
   try {
     let query = db
-      .select()
+      .select({
+        winners: winners,
+        users: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email
+        },
+        competitions: {
+          id: competitions.id,
+          title: competitions.title
+        }
+      })
       .from(winners)
       .leftJoin(users, eq(users.id, winners.userId))
-      .orderBy(desc(winners.updatedAt)) // <-- sort by updatedAt first
-      .orderBy(desc(winners.createdAt)); // fallback to createdAt
-    // Add showcase filter if showcaseOnly is true
+      .leftJoin(competitions, eq(competitions.id, winners.competitionId))
+      .orderBy(desc(winners.updatedAt), desc(winners.createdAt));
+
     if (showcaseOnly) {
       query = query.where(eq(winners.isShowcase, true));
-      console.log('Filtering by isShowcase = true');
     }
 
     if (limit) {
@@ -469,23 +480,19 @@ async getRecentWinners(limit?: number, showcaseOnly = false): Promise<Winner[]> 
 
     const results = await query;
     
-    // console.log(`Fetched ${results.length} winners, showcaseOnly: ${showcaseOnly}`);
-    // if (showcaseOnly) {
-    //   console.log('Showcase winners found:', results.map(w => ({
-    //     id: w.winners.id,
-    //     isShowcase: w.winners.isShowcase,
-    //     prize: w.winners.prizeDescription
-    //   })));
-    // }
-    
+    // Transform the data structure
     return results.map(row => ({
       ...row.winners,
-      updatedAt: row.winners.updatedAt, 
+      updatedAt: row.winners.updatedAt,
       user: row.users ? {
         id: row.users.id,
         firstName: row.users.firstName,
         lastName: row.users.lastName,
         email: row.users.email
+      } : null,
+      competition: row.competitions ? {
+        id: row.competitions.id,
+        title: row.competitions.title
       } : null
     }));
   } catch (error) {

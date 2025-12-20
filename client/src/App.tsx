@@ -100,7 +100,11 @@ function Router() {
       <Route path="/failed" component={CheckoutFailed} />
       <Route path="/cancelled" component={CheckoutCancelled} />
       <Route path="/scratch" component={scratchcard} />
-      <Route path="/spin-billing/:orderId/:competitionId" component={SpinBilling} />
+   <Route
+  path="/spin-billing/:orderId/:wheelType"
+  component={SpinBilling}
+/>
+
       <Route path="/scratch-billing/:orderId" component={ScratchBilling} />
       {/* <Route path="/support" component={Support} /> */}
 

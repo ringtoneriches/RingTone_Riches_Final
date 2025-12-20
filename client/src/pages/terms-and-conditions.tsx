@@ -542,7 +542,7 @@ export default function TermsAndConditions() {
 
           <div className="mt-8 pt-6 border-t border-gray-700">
             <p className="text-center text-sm italic">
-              Last updated: December 2024
+              Last updated: December 2025
             </p>
           </div>
         </div>

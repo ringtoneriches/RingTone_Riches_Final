@@ -7,17 +7,32 @@ import { Competition } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 
 const SpinBilling = () => {
-  const { orderId , competitionId  } = useParams();
+  const { orderId, wheelType } = useParams();
 
-   const { data: competition, isLoading } = useQuery<Competition>({
-    queryKey: ["/api/competitions", competitionId ],
+
+  const { data: orderData, isLoading: orderLoading } = useQuery({
+  queryKey: ["/api/spin-order", orderId],
+  enabled: !!orderId,
+  queryFn: async () => {
+    const res = await fetch(`/api/spin-order/${orderId}`);
+    if (!res.ok) throw new Error("Failed to load spin order");
+    return res.json();
+  },
+});
+
+const competitionId = orderData?.order?.competitionId;
+
+const { data: competition, isLoading: competitionLoading } =
+  useQuery<Competition>({
+    queryKey: ["/api/competitions", competitionId],
+    enabled: !!competitionId,
     queryFn: async () => {
-      const res = await fetch(`/api/competitions/${competitionId }`);
+      const res = await fetch(`/api/competitions/${competitionId}`);
       if (!res.ok) throw new Error("Failed to load competition");
       return res.json();
     },
-    enabled: !!competitionId ,
   });
+
 
   // const { data: competition, isLoading } = useQuery<Competition>({
   //     queryKey: ["/api/competitions", id],
@@ -56,11 +71,11 @@ const SpinBilling = () => {
               <Target className="w-10 h-10 text-yellow-500" />
             </div>
             
-            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent">
-              {/* {competition?.title} */}  {competition?.wheelType === "wheel2"
-    ? "The Festive Spin"
-    : "The Luxury Car Spin"}
-            </h1>
+           <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent">
+            {wheelType === "wheel2"
+              ? "The Festive Spin"
+              : "The Luxury Car Spin"}
+          </h1>
             
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">
               Complete your purchase and get ready to spin for amazing prizes! 
@@ -71,7 +86,7 @@ const SpinBilling = () => {
           <div className="relative">
             <div className="absolute -inset-1 bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 rounded-2xl blur opacity-75" />
             <div className="relative">
-              {orderId && <UnifiedBilling orderId={orderId} orderType="spin"   wheelType={competition?.wheelType} />}
+              {orderId && <UnifiedBilling orderId={orderId} orderType="spin"   wheelType={wheelType} />}
             </div>
           </div>
         </div>

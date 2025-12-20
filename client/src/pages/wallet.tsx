@@ -794,27 +794,35 @@ const handleSortCodeChange = (e) => {
   
   // Add this useEffect to check for pending orders
   useEffect(() => {
-    const checkPendingOrder = () => {
-      try {
-        const saved = localStorage.getItem('pendingOrderInfo');
-        if (saved) {
-          const orderInfo = JSON.parse(saved);
-          const now = Date.now();
-          const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
-          
-          // Check if order is still valid (less than 1 hour old)
-          if (now - orderInfo.timestamp < oneHour) {
-            setPendingOrder(orderInfo);
-          } else {
-            // Remove expired order
-            localStorage.removeItem('pendingOrderInfo');
-          }
-        }
-      } catch (error) {
-        console.error('Error reading pending order:', error);
-      }
-    };
-    
+   const checkPendingOrder = () => {
+  try {
+    const saved = localStorage.getItem("pendingOrderInfo");
+    if (!saved) return;
+
+    const orderInfo = JSON.parse(saved);
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000;
+
+    // ⏰ Expired order → remove it
+    if (now - orderInfo.timestamp > oneHour) {
+      localStorage.removeItem("pendingOrderInfo");
+      return;
+    }
+
+    // 🔒 Spin orders MUST have wheelType
+    if (orderInfo.orderType === "spin" && !orderInfo.wheelType) {
+      console.warn("Pending spin order missing wheelType", orderInfo);
+      localStorage.removeItem("pendingOrderInfo");
+      return;
+    }
+
+    // ✅ Safe to restore
+    setPendingOrder(orderInfo);
+  } catch (error) {
+    console.error("Error reading pending order:", error);
+  }
+};
+
     checkPendingOrder();
   }, [location]); // Re-run when location changes (user navigates)
   
@@ -825,28 +833,46 @@ const handleSortCodeChange = (e) => {
   };
   
   // Function to navigate back to the order
-  const handleResumeOrder = () => {
-    if (!pendingOrder) return;
-    
-    // Determine the correct route based on order type
-    let route = '';
-    switch (pendingOrder.orderType) {
-      case 'spin':
-        route = `/spin-billing/${pendingOrder.orderId}/${pendingOrder.wheelType || 'wheel1'}`;
-        break;
-      case 'scratch':
-        route = `/scratch-billing/${pendingOrder.orderId}`;
-        break;
-      case 'competition':
-      default:
-        route = `/checkout/${pendingOrder.orderId}`;
-        break;
-    }
-    
-    clearPendingOrder();
-    setLocation(route);
-  };
+// Function to navigate back to the order
+const handleResumeOrder = () => {
+  if (!pendingOrder) return;
   
+  console.log('🎯 RESUMING ORDER FROM WALLET:', {
+    pendingOrder,
+    wheelType: pendingOrder.wheelType,
+    hasWheelType: !!pendingOrder.wheelType
+  });
+  
+  // Determine the correct route based on order type
+  let route = '';
+  switch (pendingOrder.orderType) {
+    case 'spin':
+      // ✅ Use the stored wheelType, default to 'wheel1' only if undefined
+       const wheelType = pendingOrder.wheelType; // REQUIRED
+
+  if (!wheelType) {
+    console.error("❌ Spin order missing wheelType", pendingOrder);
+    return;
+  }
+      route = `/spin-billing/${pendingOrder.orderId}/${wheelType}`;
+      // console.log('🔄 Building spin route with wheelType:', wheelType);
+      break;
+    case 'scratch':
+      route = `/scratch-billing/${pendingOrder.orderId}`;
+      break;
+    case 'competition':
+    default:
+      route = `/checkout/${pendingOrder.orderId}`;
+      break;
+  }
+  
+  console.log('📍 Navigating to:', route);
+  clearPendingOrder();
+  setLocation(route);
+};
+
+  
+
   // Function to dismiss the banner
   const handleDismissBanner = () => {
     clearPendingOrder();
@@ -1012,6 +1038,14 @@ const handleSortCodeChange = (e) => {
                 <span>Account</span>
               </TabsTrigger>
               <TabsTrigger
+                value="wellbeing"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3 relative"
+                data-testid="tab-support"
+              >
+                <Heart className="h-4 w-4" />
+                <span>Well-Being</span>
+              </TabsTrigger>
+              <TabsTrigger
                 value="address"
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3"
                 data-testid="tab-address"
@@ -1029,14 +1063,7 @@ const handleSortCodeChange = (e) => {
                 <NotificationBadge count={supportUnreadData?.count} />
               </TabsTrigger>
 
-               <TabsTrigger
-                value="wellbeing"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3 relative"
-                data-testid="tab-support"
-              >
-                <Heart className="h-4 w-4" />
-                <span>Well-Being</span>
-              </TabsTrigger>
+               
 
               
 
