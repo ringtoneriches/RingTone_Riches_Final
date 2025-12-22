@@ -449,7 +449,7 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
                 data-testid="checkbox-terms"
               />
               <label className="text-sm text-gray-300 leading-relaxed">
-                I have read and agree to the{" "}
+                I am over 18 and agree to the{" "}
                 <a href="/terms-and-conditions" className="text-yellow-400 hover:text-yellow-300 underline">
                   terms and conditions
                 </a>

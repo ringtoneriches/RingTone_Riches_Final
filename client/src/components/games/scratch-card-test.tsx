@@ -49,7 +49,7 @@ interface ScratchCardProps {
 
 const CSS_WIDTH = 500;
 const CSS_HEIGHT = 350;
-const AUTO_CLEAR_THRESHOLD = 0.50; // ✅ Changed from 0.7 to 0.85
+const AUTO_CLEAR_THRESHOLD = 0.60; // ✅ Changed from 0.7 to 0.85
 const SAMPLE_GAP = 4;
 
 const landmarkImages = [
@@ -776,7 +776,7 @@ function scratchAt(x: number, y: number) {
   currentScratchPathRef.current.push({ x, y });
 
   // Make brush size responsive based on canvas size
-  const brush = Math.max(15, canvas.clientWidth * 0.09);
+ const brush = Math.max(14, canvas.clientWidth * 0.045);
 
   ctx.globalCompositeOperation = "destination-out";
   ctx.beginPath();

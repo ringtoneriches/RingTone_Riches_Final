@@ -139,6 +139,7 @@ export const transactions = pgTable("transactions", {
 export const pendingPayments = pgTable("pending_payments", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   paymentJobReference: text("payment_job_reference").notNull().unique(),
+  paymentReference: varchar("payment_reference"),
   userId: varchar("user_id").notNull().references(() => users.id), // <- varchar to match users.id
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   status: text("status").default("pending"),

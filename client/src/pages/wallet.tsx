@@ -505,10 +505,11 @@ const isAuthenticated = !!user;
 
   const completedOrders = orders.filter(
     (order) =>
+      order.orders.status === "completed" &&
       !(
         (order.competitions?.type === "spin" ||
           order.competitions?.type === "scratch") &&
-        order.orders.status === "completed" &&
+        
         (order.remainingPlays || 0) > 0
       ),
   );

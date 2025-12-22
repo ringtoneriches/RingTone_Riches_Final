@@ -429,23 +429,35 @@ async getUserRingtonePoints(userId: string): Promise<number> {
     return created;
   }
 
- async getUserTransactions(userId: string): Promise<Transaction[]> {
-  return await db
+// storage.ts or wherever your storage object is defined
+async getUserTransactions(userId: string): Promise<Transaction[]> {
+  const userTransactions = await db
     .select({
-      ...transactions, 
+      id: transactions.id,
+      type: transactions.type,
+      amount: transactions.amount,
+      createdAt: transactions.createdAt,
       description: sql`
         COALESCE(
           ${competitions.title},
-          ${transactions.description}
+          ${transactions.description},
+          'Wallet top-up'
         )
       `,
     })
-    .from(transactions)
+    .from(transactions) // this is the table
     .leftJoin(orders, eq(transactions.orderId, orders.id))
     .leftJoin(competitions, eq(orders.competitionId, competitions.id))
     .where(eq(transactions.userId, userId))
     .orderBy(desc(transactions.createdAt));
+
+  // console.log("User transactions for", userId, userTransactions); // ✅ renamed
+
+  return userTransactions;
 }
+
+
+
 
 
   // Winner operations

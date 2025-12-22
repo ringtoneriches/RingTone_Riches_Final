@@ -9,6 +9,7 @@ import { autoSeedProduction } from "./auto-seed";
 import { autoCreateAdmin } from "./auto-admin";
 import axios from 'axios';
 import { load } from 'cheerio';
+import { startCrons } from "./cron";
   dotenv.config();
 
 
@@ -80,6 +81,8 @@ app.use((req, res, next) => {
   await autoSeedProduction();
   await autoCreateAdmin();
   const server = await registerRoutes(app);
+
+  startCrons();
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

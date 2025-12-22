@@ -132,6 +132,7 @@ export default function Footer() {
                 </li>
               </ul>
             </div>
+            
           </div>
 
           {/* Useful Information - Mobile Optimized */}
@@ -206,9 +207,19 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-border mt-8 pt-8 text-center text-muted-foreground">
-          <p>&copy; 2025 RingTone Riches. All rights reserved.</p>
-        </div>
+       <div className="border-t border-border mt-8 pt-6 flex flex-col items-center gap-4 text-muted-foreground">
+  {/* 18+ Badge */}
+  <div className="flex items-center justify-center">
+    <div className="w-11 h-11 rounded-full border-2 border-yellow-400 text-yellow-400 flex items-center justify-center font-bold text-sm tracking-wide">
+      18+
+    </div>
+  </div>
+
+  <p className="text-xs sm:text-sm text-center">
+    &copy; 2025 RingTone Riches. All rights reserved.
+  </p>
+</div>
+
       </div>
     </footer>
   );

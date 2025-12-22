@@ -92,12 +92,13 @@ useEffect(() => {
   queryClient.invalidateQueries({ queryKey: ["/api/wellbeing"] });
   queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
 
+  const parsedLimit = Number(limit);
   toast({
     title: "Success",
     description:
-      limit === null
+      parsedLimit === 0
         ? "Daily spending limit removed"
-        : `Daily spending limit updated to £${Number(limit).toFixed(2)}`,
+        : `Daily spending limit updated to £${parsedLimit.toFixed(2)}`,
   });
 },
 
@@ -211,6 +212,13 @@ useEffect(() => {
 
   const handleSetDailyLimit = () => {
     const parsed = Number(dailyLimit);
+
+     if (parsed === 0) {
+    updateDailyLimitMutation.mutate("0");
+    setDailyLimit("");
+    return;
+  }
+
     if (isNaN(parsed) || parsed < 0) {
       toast({
         title: "Invalid limit",
@@ -250,8 +258,8 @@ useEffect(() => {
   };
 
 const spentToday = parseFloat(wellbeingData?.spentToday || "0");
-  const dailyLimitValue =
-  wellbeingData?.dailySpendLimit !== null && wellbeingData?.dailySpendLimit !== undefined
+ const dailyLimitValue =
+  wellbeingData?.dailySpendLimit !== null && wellbeingData?.dailySpendLimit !== undefined && Number(wellbeingData.dailySpendLimit) > 0
     ? parseFloat(wellbeingData.dailySpendLimit)
     : null;
 
@@ -390,12 +398,12 @@ const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent">
-                {showProgress ? `£${dailyLimitValue!.toFixed(2)}` : "No limit"}
-              </p>
-              <p className="text-sm text-gray-400 mt-2">
-                {dailyLimitValue > 0 ? "Your maximum daily spend" : "No spending limit set"}
-              </p>
+             <p className="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent">
+              {dailyLimitValue !== null ? `£${dailyLimitValue.toFixed(2)}` : "No limit"}
+            </p>
+            <p className="text-sm text-gray-400 mt-2">
+              {dailyLimitValue !== null ? "Your maximum daily spend" : "No spending limit set"}
+            </p>
             </CardContent>
           </Card>
 
@@ -499,7 +507,7 @@ const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
                         : "Set Limit"}
                     </Button>
                     
-                    {hasDailyLimit  && (
+                    {/* {hasDailyLimit  && (
                       <Button
                         variant="outline"
                         onClick={handleRemoveDailyLimit}
@@ -508,7 +516,7 @@ const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
                       >
                         Remove Limit
                       </Button>
-                    )}
+                    )} */}
                   </div>
                 </div>
               </div>
