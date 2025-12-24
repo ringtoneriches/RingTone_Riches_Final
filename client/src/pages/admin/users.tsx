@@ -1040,33 +1040,32 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
                     <span className="text-xs text-muted-foreground">(Cannot change own role)</span>
                   )}
                 </div>
-               <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="isRestricted"
-                className="w-4 h-4"
-              />
-              <Label htmlFor="isRestricted">Disable User</Label>
-            </div>
+              
               </div>
-{/* In the edit dialog, add this section */}
-<div className="space-y-3 border-t pt-4">
-  <Label className="text-base font-semibold">Account Status</Label>
-  <div className="flex items-center gap-2">
-    <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-      editingUser?.disabled
-        ? "bg-red-500/20 text-red-500"
-        : "bg-green-500/20 text-green-500"
-    }`}>
-      {editingUser?.disabled ? "Disabled" : "Active"}
-    </div>
-    {editingUser?.disabledAt && (
-      <p className="text-sm text-muted-foreground">
-        Disabled on: {new Date(editingUser.disabledAt).toLocaleDateString()}
-      </p>
-    )}
-  </div>
-</div>
+              {/* In the edit dialog, add this section */}
+              <div className="space-y-3 border-t pt-4">
+                <Label className="text-base font-semibold">Account Status</Label>
+                <div className="flex items-center gap-2">
+                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    editingUser?.disabled
+                      ? "bg-red-500/20 text-red-500"
+                      : "bg-green-500/20 text-green-500"
+                  }`}>
+                    {editingUser?.disabled ? "Disabled" : "Active"}
+                  </div>
+                  {editingUser?.disabledAt && (
+                    <p className="text-sm text-muted-foreground">
+                      Disabled on: {new Date(editingUser.disabledAt).toLocaleDateString()}
+                    </p>
+                  )}
+                   {editingUser?.disabledUntil && (
+                    <p className="text-sm text-muted-foreground">
+                      Disabled until:{" "}
+                      {new Date(editingUser.disabledUntil).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              </div>
               <div className="space-y-3 border-t pt-4">
                 <Label className="text-base font-semibold">Password Reset</Label>
                 <p className="text-sm text-muted-foreground">

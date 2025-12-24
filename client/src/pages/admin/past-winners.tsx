@@ -666,16 +666,16 @@ export default function AdminPastWinners() {
                       {item.winners.prizeValue}
                     </TableCell>
                      <TableCell>
-        {item.winners.isShowcase ? (
-          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            Yes
-          </span>
-        ) : (
-          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-            No
-          </span>
-        )}
-      </TableCell>
+                      {item.winners.isShowcase ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-light bg-green-600 text-white">
+                          Yes
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-light bg-red-600 text-white">
+                          No
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {new Date(item.winners.createdAt).toLocaleString()}
                     </TableCell>

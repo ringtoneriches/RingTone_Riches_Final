@@ -22,6 +22,10 @@ import {
   TrendingUp,
   Clock,
   CircleCheckBig,
+  ChevronsRight,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronLeft,
 } from "lucide-react";
 import {
   Select,
@@ -81,6 +85,9 @@ export default function UserAuditPage() {
   const [dateRange, setDateRange] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
 
   // Fetch user info
   const { data: userData, isLoading: loadingUser } = useQuery({
@@ -200,6 +207,16 @@ export default function UserAuditPage() {
 
     return true;
   });
+
+const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+const startIndex = (currentPage - 1) * itemsPerPage;
+const endIndex = startIndex + itemsPerPage;
+const paginatedLogs = filteredLogs.slice(startIndex, endIndex);
+
+// Reset to page 1 when filters change
+useEffect(() => {
+  setCurrentPage(1);
+}, [searchTerm, dateRange, actionFilter]);
 
   // Get action badge color
   const getActionColor = (action: string) => {
@@ -480,7 +497,7 @@ export default function UserAuditPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLogs.length === 0 ? (
+                  {paginatedLogs.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-8">
                         <div className="flex flex-col items-center gap-2">
@@ -494,7 +511,7 @@ export default function UserAuditPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredLogs.map((log) => {
+                    paginatedLogs.map((log) => {
                       const balanceChange = log.endBalance - log.startBalance;
                       const isPositive = balanceChange > 0;
 
@@ -562,9 +579,10 @@ export default function UserAuditPage() {
             {/* Summary */}
             {filteredLogs.length > 0 && (
               <div className="flex items-center justify-between mt-4">
-                <p className="text-sm text-muted-foreground">
-                  Showing {filteredLogs.length} of {auditLogs.length} entries
-                </p>
+               <p className="text-sm text-muted-foreground">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredLogs.length)} of {filteredLogs.length} entries
+                (Filtered from {auditLogs.length} total)
+              </p>
                 <div className="text-sm text-muted-foreground">
                   Total balance change:{" "}
                   <span className={`font-semibold ${
@@ -579,7 +597,191 @@ export default function UserAuditPage() {
                 </div>
               </div>
             )}
+        
+
+{/* Pagination Controls */}
+{filteredLogs.length > itemsPerPage && (
+  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t">
+    {/* Items per page selector */}
+    <div className="flex items-center gap-3">
+      <span className="text-sm text-muted-foreground">Show</span>
+      <Select
+        value={itemsPerPage.toString()}
+        onValueChange={(value) => {
+          setItemsPerPage(Number(value));
+          setCurrentPage(1);
+        }}
+      >
+        <SelectTrigger className="w-[100px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="10">10 rows</SelectItem>
+          <SelectItem value="20">20 rows</SelectItem>
+          <SelectItem value="50">50 rows</SelectItem>
+          <SelectItem value="100">100 rows</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
+    {/* Page info */}
+    <div className="text-sm text-muted-foreground">
+      <span className="font-medium text-foreground">
+        {startIndex + 1}-{Math.min(endIndex, filteredLogs.length)}
+      </span>{" "}
+      of{" "}
+      <span className="font-medium text-foreground">{filteredLogs.length}</span>{" "}
+      items
+    </div>
+
+    {/* Pagination buttons */}
+    <div className="flex items-center gap-1">
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => setCurrentPage(1)}
+        disabled={currentPage === 1}
+        className="h-8 w-8"
+      >
+        <ChevronsLeft className="h-4 w-4" />
+      </Button>
+      
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+        disabled={currentPage === 1}
+        className="h-8 w-8"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+
+      {/* Page numbers - cleaner version */}
+      <div className="flex items-center gap-1 mx-1">
+        {(() => {
+          const pages = [];
+          const maxVisible = 5;
+          
+          // Always show first page
+          pages.push(
+            <Button
+              key={1}
+              variant={currentPage === 1 ? "default" : "outline"}
+              size="sm"
+              onClick={() => setCurrentPage(1)}
+              className="h-8 w-8"
+            >
+              1
+            </Button>
+          );
+
+          // Calculate range of pages to show
+          let startPage = Math.max(2, currentPage - 1);
+          let endPage = Math.min(totalPages - 1, currentPage + 1);
+
+          // Adjust if near start or end
+          if (currentPage <= 3) {
+            endPage = Math.min(5, totalPages - 1);
+          }
+          if (currentPage >= totalPages - 2) {
+            startPage = Math.max(2, totalPages - 4);
+          }
+
+          // Add ellipsis after first page if needed
+          if (startPage > 2) {
+            pages.push(
+              <span key="ellipsis-start" className="px-2 text-muted-foreground">
+                ...
+              </span>
+            );
+          }
+
+          // Add middle pages
+          for (let i = startPage; i <= endPage; i++) {
+            if (i > 1 && i < totalPages) {
+              pages.push(
+                <Button
+                  key={i}
+                  variant={currentPage === i ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentPage(i)}
+                  className="h-8 w-8"
+                >
+                  {i}
+                </Button>
+              );
+            }
+          }
+
+          // Add ellipsis before last page if needed
+          if (endPage < totalPages - 1) {
+            pages.push(
+              <span key="ellipsis-end" className="px-2 text-muted-foreground">
+                ...
+              </span>
+            );
+          }
+
+          // Always show last page if there is one
+          if (totalPages > 1) {
+            pages.push(
+              <Button
+                key={totalPages}
+                variant={currentPage === totalPages ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentPage(totalPages)}
+                className="h-8 w-8"
+              >
+                {totalPages}
+              </Button>
+            );
+          }
+
+          return pages;
+        })()}
+      </div>
+
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+        disabled={currentPage === totalPages}
+        className="h-8 w-8"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+      
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => setCurrentPage(totalPages)}
+        disabled={currentPage === totalPages}
+        className="h-8 w-8"
+      >
+        <ChevronsRight className="h-4 w-4" />
+      </Button>
+    </div>
+
+    {/* Page input (optional) */}
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground">Go to page</span>
+      <Input
+        type="number"
+        min="1"
+        max={totalPages}
+        value={currentPage}
+        onChange={(e) => {
+          const page = Math.max(1, Math.min(totalPages, Number(e.target.value) || 1));
+          setCurrentPage(page);
+        }}
+        className="w-16 h-8 text-center"
+      />
+      <span className="text-sm text-muted-foreground">of {totalPages}</span>
+    </div>
+  </div>
+)}
           </CardContent>
+          
         </Card>
 
         {/* Summary Tabs */}

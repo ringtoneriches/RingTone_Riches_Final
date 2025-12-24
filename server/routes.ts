@@ -258,47 +258,153 @@ export const isAdmin = (req: any, res: any, next: any) => {
 
 // ✅ Top of the file or after imports
 export async function recheckPendingPayments() {
+  // ⏱️ Time window
+  const minAge = new Date(Date.now() - 5 * 60 * 1000);       // 5 minutes ago
+  const maxAge = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+
   const pendings = await db.query.pendingPayments.findMany({
-    where: (p, { eq }) => eq(p.status, "pending"),
+    where: (p, { and, eq, gte, lte }) =>
+      and(
+        eq(p.status, "pending"),
+        gte(p.createdAt, maxAge), // newer than 24h
+        lte(p.createdAt, minAge)  // older than 5m
+      ),
   });
+
+  console.log(`🔎 Rechecking ${pendings.length} eligible pending payments`);
 
   for (const p of pendings) {
     try {
       if (!p.paymentReference) {
-        console.log("⚠️ Skipping pending payment without paymentReference:", p.paymentJobReference);
+        console.log("⚠️ Skipping pending without paymentReference:", p.paymentJobReference);
         continue;
       }
 
-      const payment = await cashflows.getPaymentStatus(
-        p.paymentJobReference,
-        p.paymentReference
-      );
+      let payment;
+      try {
+        payment = await cashflows.getPaymentStatus(
+          p.paymentJobReference,
+          p.paymentReference
+        );
+      } catch (err) {
+        // Handle 404 - payment might be completed and archived
+        if (err.response?.status === 404) {
+          console.log(`📭 Payment ${p.paymentJobReference} not found (likely completed)`);
+          
+          // Check if we have a transaction for this payment
+          const existingTransaction = await db.query.transactions.findFirst({
+            where: (t, { eq }) => eq(t.paymentRef, p.paymentReference),
+          });
+          
+          if (existingTransaction) {
+            console.log(`✅ Found existing transaction, marking as completed: ${p.paymentJobReference}`);
+            await db.update(pendingPayments)
+              .set({
+                status: "completed",
+                updatedAt: new Date(),
+              })
+              .where(eq(pendingPayments.id, p.id));
+          } else {
+            console.log(`❓ Payment ${p.paymentJobReference} not found and no transaction exists`);
+          }
+          continue;
+        }
+        throw err;
+      }
 
       const { status, paidAmount } = normalizeCashflowsStatus(payment);
 
       if (status !== "PAID") continue;
 
-      const amount = paidAmount > 0 ? paidAmount : Number(p.amount);
+      // 🔒 SAFETY CHECKS
+      if (!paidAmount || paidAmount <= 0) {
+        console.warn("❌ Invalid paid amount (cron)", p.paymentJobReference);
+        continue;
+      }
 
-      await processWalletTopup(p.userId, p.paymentReference, amount);
+      if (paidAmount !== Number(p.amount)) {
+        console.error("❌ Amount mismatch (cron)", {
+          expected: p.amount,
+          paid: paidAmount,
+        });
+        continue;
+      }
+
+      await processWalletTopup(
+        p.userId,
+        p.paymentReference,
+        paidAmount
+      );
 
       await db.update(pendingPayments)
-        .set({ status: "completed", updatedAt: new Date() })
+        .set({
+          status: "completed",
+          updatedAt: new Date(),
+        })
         .where(eq(pendingPayments.id, p.id));
 
       console.log("♻️ Recovered payment:", p.paymentJobReference);
 
     } catch (err) {
-      console.error("❌ Recheck error:", p.paymentJobReference, err);
+      console.error("❌ Recheck error:", p.paymentJobReference, err.message);
+    }
+  }
+}
+
+
+export async function cleanup404Payments() {
+  // Find payments that are pending but keep getting 404s
+  // Mark them as "archived" after 7 days
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  
+  const oldPending = await db.query.pendingPayments.findMany({
+    where: (p, { and, eq, lte }) =>
+      and(
+        eq(p.status, "pending"),
+        lte(p.createdAt, cutoff),
+        // Optional: only those with paymentReference
+        sql`${p.paymentReference} IS NOT NULL`
+      ),
+  });
+  
+  console.log(`🧹 Found ${oldPending.length} old pending payments to cleanup`);
+  
+  for (const p of oldPending) {
+    // Check if transaction exists (payment was processed)
+    const transaction = await db.query.transactions.findFirst({
+      where: (t, { eq }) => eq(t.paymentRef, p.paymentReference),
+    });
+    
+    if (transaction) {
+      // Transaction exists, so payment was processed
+      await db.update(pendingPayments)
+        .set({
+          status: "completed",
+          updatedAt: new Date(),
+        })
+        .where(eq(pendingPayments.id, p.id));
+      console.log(`✅ Cleaned up completed payment: ${p.paymentJobReference}`);
+    } else {
+      // No transaction, mark as expired
+      await db.update(pendingPayments)
+        .set({
+          status: "expired",
+          updatedAt: new Date(),
+        })
+        .where(eq(pendingPayments.id, p.id));
+      console.log(`📭 Marked expired payment: ${p.paymentJobReference}`);
     }
   }
 }
 
 
 
+
+
+
 function normalizeCashflowsStatus(payment: any): {
-  status: "PAID" | "PENDING" | "FAILED" | "UNKNOWN",
-  paidAmount: number
+  status: "PAID" | "PENDING" | "FAILED" | "UNKNOWN";
+  paidAmount: number;
 } {
   const raw =
     payment?.status ||
@@ -307,7 +413,7 @@ function normalizeCashflowsStatus(payment: any): {
     payment?.data?.payments?.[0]?.status ||
     "";
 
-  const status = raw.toUpperCase();
+  const status = String(raw).toUpperCase();
 
   const paidAmount = Number(
     payment?.data?.paidAmount ||
@@ -316,7 +422,11 @@ function normalizeCashflowsStatus(payment: any): {
     0
   );
 
-  if (status.includes("PAID") || status.includes("SUCCESS") || status.includes("CAPTURE")) {
+  if (
+    status.includes("PAID") ||
+    status.includes("SUCCESS") ||
+    status.includes("CAPTURE")
+  ) {
     return { status: "PAID", paidAmount };
   }
 
@@ -324,7 +434,11 @@ function normalizeCashflowsStatus(payment: any): {
     return { status: "FAILED", paidAmount: 0 };
   }
 
-  if (status.includes("PENDING") || status.includes("PROCESS") || status.includes("AUTHOR")) {
+  if (
+    status.includes("PENDING") ||
+    status.includes("PROCESS") ||
+    status.includes("AUTHOR")
+  ) {
     return { status: "PENDING", paidAmount: 0 };
   }
 
@@ -332,55 +446,43 @@ function normalizeCashflowsStatus(payment: any): {
 }
 
 
+
 async function processWalletTopup(
   userId: string,
   paymentRef: string,
   amount: number
 ) {
-  console.log("💰 processWalletTopup called", { userId, paymentRef, amount });
+  console.log("💰 processWalletTopup", { userId, paymentRef, amount });
 
   await db.transaction(async (tx) => {
-    // 1️⃣ Check for duplicate
+    // Prevent duplicates
     const existing = await tx.query.transactions.findFirst({
-      where: (t, { eq }) => eq(t.paymentRef, paymentRef)
+      where: (t, { eq }) => eq(t.paymentRef, paymentRef),
     });
 
     if (existing) {
-      console.warn("⚠️ Duplicate transaction found, skipping:", paymentRef);
+      console.warn("⚠️ Duplicate topup skipped:", paymentRef);
       return;
     }
 
-    console.log("📝 Inserting transaction...");
-    try {
-      await tx.insert(transactions).values({
-        userId,
-        type: "deposit",
-        amount: Math.round(amount * 100) / 100, // ensure number
-        paymentRef,
-        description: `Cashflows wallet top-up £${amount}`,
-      });
-      console.log("✅ Transaction inserted");
-    } catch (err) {
-      console.error("❌ Failed to insert transaction:", err);
-      throw err; // re-throw so balance update does not silently fail
-    }
+    await tx.insert(transactions).values({
+      userId,
+      type: "deposit",
+      amount: Math.round(amount * 100) / 100,
+      paymentRef,
+      description: `Cashflows wallet top-up £${amount}`,
+    });
 
-    console.log("💳 Updating user balance...");
-    try {
-      const result = await tx.execute(sql`
-        UPDATE users
-        SET balance = balance + ${amount}
-        WHERE id = ${userId}
-      `);
-      console.log("✅ Balance updated", result);
-    } catch (err) {
-      console.error("❌ Failed to update balance:", err);
-      throw err;
-    }
+    await tx.execute(sql`
+      UPDATE users
+      SET balance = balance + ${amount}
+      WHERE id = ${userId}
+    `);
 
-    console.log("🎉 Wallet top-up completed for user:", userId);
+    console.log("✅ Wallet credited:", userId);
   });
 }
+
 
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -400,6 +502,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: error.message || "File upload failed" });
     }
   });
+
+  app.post("/api/admin/cleanup-payments", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    console.log("🔧 Manual cleanup triggered by admin");
+    await cleanup404Payments();
+    
+    // Also run recheck to see current state
+    await recheckPendingPayments();
+    
+    res.json({ 
+      success: true, 
+      message: "Cleanup completed manually" 
+    });
+  } catch (err) {
+    console.error("❌ Manual cleanup error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Cleanup failed",
+      error: err.message 
+    });
+  }
+});
 
   // Registration route
 app.post("/api/auth/register", async (req, res) => {
@@ -1435,73 +1559,65 @@ app.get("/api/admin/users/audit/:id", isAuthenticated, isAdmin, async (req, res)
 app.post("/api/cashflows/webhook", async (req, res) => {
   const { paymentJobReference, paymentReference } = req.body;
 
-  console.log("🌊 Webhook received", req.body);
+  // console.log("🌊 Webhook received", req.body);
 
-  // Always reply immediately
+  // Reply immediately
   res.status(200).json({ received: true });
 
   try {
-    const pendingPayment = await db.query.pendingPayments.findFirst({
+    const pending = await db.query.pendingPayments.findFirst({
       where: (p, { eq }) =>
         eq(p.paymentJobReference, paymentJobReference),
     });
 
-    if (!pendingPayment) {
+    if (!pending) {
       console.warn("No pending payment:", paymentJobReference);
       return;
     }
 
-    // Save paymentReference if we get it for first time
-    if (!pendingPayment.paymentReference && paymentReference) {
+    if (!pending.paymentReference && paymentReference) {
       await db.update(pendingPayments)
         .set({ paymentReference })
-        .where(eq(pendingPayments.id, pendingPayment.id));
+        .where(eq(pendingPayments.id, pending.id));
     }
 
-    // Already processed? Stop.
-    if (pendingPayment.status === "completed") {
+    if (pending.status === "completed") {
       console.log("Already completed:", paymentJobReference);
       return;
     }
 
     const payment = await cashflows.getPaymentStatus(
       paymentJobReference,
-      paymentReference
+      paymentReference ?? undefined
     );
 
     const { status, paidAmount } = normalizeCashflowsStatus(payment);
 
-    console.log("💳 Normalized status", {
-      paymentJobReference,
-      status,
-      paidAmount,
-    });
+    console.log("💳 Normalized", { status, paidAmount });
 
     if (status === "PENDING") return;
 
     if (status === "FAILED") {
       await db.update(pendingPayments)
         .set({ status: "failed", updatedAt: new Date() })
-        .where(eq(pendingPayments.id, pendingPayment.id));
+        .where(eq(pendingPayments.id, pending.id));
       return;
     }
 
-    // ✅ PAID
     const finalAmount =
-      paidAmount > 0 ? paidAmount : Number(pendingPayment.amount);
+      paidAmount > 0 ? paidAmount : Number(pending.amount);
 
     await processWalletTopup(
-      pendingPayment.userId,
-      paymentReference,
+      pending.userId,
+      paymentReference ?? paymentJobReference,
       finalAmount
     );
 
     await db.update(pendingPayments)
       .set({ status: "completed", updatedAt: new Date() })
-      .where(eq(pendingPayments.id, pendingPayment.id));
+      .where(eq(pendingPayments.id, pending.id));
 
-    console.log("✅ Wallet credited", paymentJobReference);
-
+    console.log("✅ Wallet credited:", paymentJobReference);
   } catch (err) {
     console.error("Webhook error:", err);
   }
@@ -4708,7 +4824,8 @@ app.post(
         return res.status(400).json({ message: "Invalid amount" });
       }
 
-      await enforceDailySpendLimit(userId, Number(amount));
+      // ❌ DO NOT enforce spend limit on deposits
+      // await enforceDailySpendLimit(userId, Number(amount));
 
       const session = await cashflows.createPaymentSession(amount, userId);
 
@@ -4728,13 +4845,13 @@ app.post(
         redirectUrl: session.hostedPageUrl,
         paymentJobRef: session.paymentJobReference,
       });
-
-    } catch (err: any) {
+    } catch (err) {
       console.error("Checkout error:", err);
       res.status(500).json({ message: "Checkout failed" });
     }
   }
 );
+
 
 
 
@@ -4747,10 +4864,17 @@ app.post(
 
     const payment = await cashflows.getPaymentStatus(
       paymentJobRef,
-      paymentRef
+      paymentRef ?? undefined
     );
 
     const { status } = normalizeCashflowsStatus(payment);
+
+    // ✅ Save paymentReference for recovery job
+    if (paymentRef && status === "PAID") {
+      await db.update(pendingPayments)
+        .set({ paymentReference: paymentRef })
+        .where(eq(pendingPayments.paymentJobReference, paymentJobRef));
+    }
 
     res.json({
       status,
@@ -4761,6 +4885,7 @@ app.post(
     });
   }
 );
+
 
 
 
