@@ -509,52 +509,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     }
 }
 
-/* Add to your container's CSS */
-.scratch-container {
-  position: relative;
-  width: 100%;
-  max-width: 600px;
-  margin: 0 auto;
-  will-change: transform; /* Hardware acceleration */
-  contain: layout style paint; /* Performance optimization */
-}
-
-/* Ensure the grid maintains aspect ratio */
-.scratch-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  aspect-ratio: 3/2; /* 3:2 aspect ratio for 2x3 grid */
-  width: 100%;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-/* Fallback for browsers that don't support aspect-ratio */
-@supports not (aspect-ratio: 3/2) {
-  .scratch-grid {
-    height: 0;
-    padding-bottom: 66.67%; /* 2/3 = 66.67% */
-  }
-  
-  .scratch-grid > * {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-  }
-}
-
-/* Add this for canvas smoothing */
-canvas {
-  image-rendering: -moz-crisp-edges;
-  image-rendering: -webkit-crisp-edges;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  transform: translateZ(0); /* Force GPU acceleration */
-}
-
 /* 🎨 Slider track */
 input[type="range"] {
   appearance: none;
@@ -619,4 +573,273 @@ input[type="range"]::-moz-range-thumb:hover {
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: #FACC15 rgba(250, 204, 21, 0.1);
+}
+
+/* Ringtone Pop Balloon Animations */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes bounce-once {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes confetti-particle {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-60px) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-bounce-once {
+  animation: bounce-once 0.4s ease-out forwards;
+}
+
+.animate-confetti-particle {
+  animation: confetti-particle 0.6s ease-out forwards;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+/* ===== PREMIUM CELEBRATION ANIMATIONS ===== */
+
+/* Snowfall Animation */
+@keyframes snowfall {
+  0% {
+    transform: translateY(-10vh) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) translateX(20px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* Shimmer Effect */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Border Glow Rotation */
+@keyframes border-glow {
+  0%, 100% {
+    opacity: 1;
+    filter: blur(10px);
+  }
+  50% {
+    opacity: 0.6;
+    filter: blur(15px);
+  }
+}
+
+/* Floating Animation Enhanced */
+@keyframes float-enhanced {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-15px) rotate(2deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-20px) rotate(-2deg);
+  }
+}
+
+/* Sparkle Twinkle */
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+/* Glow Pulse */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4),
+                0 0 40px rgba(139, 92, 246, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.6),
+                0 0 60px rgba(139, 92, 246, 0.3),
+                0 0 80px rgba(217, 70, 239, 0.2);
+  }
+}
+
+/* Rainbow Border */
+@keyframes rainbow-border {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Bounce In */
+@keyframes bounce-in {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Slide Up Fade */
+@keyframes slide-up-fade {
+  0% {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Premium Utility Classes */
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.animate-float-enhanced {
+  animation: float-enhanced 6s ease-in-out infinite;
+}
+
+.animate-twinkle {
+  animation: twinkle 2s ease-in-out infinite;
+}
+
+.animate-border-glow {
+  animation: border-glow 2s ease-in-out infinite;
+}
+
+.animate-rainbow-border {
+  background: linear-gradient(90deg, #8b5cf6, #d946ef, #fbbf24, #8b5cf6);
+  background-size: 300% 100%;
+  animation: rainbow-border 4s ease infinite;
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.6s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slide-up-fade 0.5s ease-out forwards;
+}
+
+/* Snowflake Particle */
+.snowflake {
+  position: absolute;
+  background: white;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snowfall linear infinite;
+}
+
+/* Card Premium Hover Glow */
+.card-premium-glow {
+  position: relative;
+  overflow: visible;
+}
+
+.card-premium-glow::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(45deg, #8b5cf6, #d946ef, #fbbf24, #8b5cf6);
+  background-size: 300% 300%;
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0;
+  animation: rainbow-border 4s ease infinite;
+  transition: opacity 0.3s ease;
+}
+
+.card-premium-glow:hover::before {
+  opacity: 1;
+}
+
+/* Featured Slider Premium Styles */
+.featured-slider .slick-dots {
+  bottom: 20px;
+}
+
+.featured-slider .slick-dots li button:before {
+  color: rgba(139, 92, 246, 0.5);
+  font-size: 10px;
+}
+
+.featured-slider .slick-dots li.slick-active button:before {
+  color: #8b5cf6;
 }

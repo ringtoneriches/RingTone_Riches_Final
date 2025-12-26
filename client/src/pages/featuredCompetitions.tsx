@@ -3,8 +3,7 @@ import { useLocation } from "wouter";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
-import { Zap, Shield, Trophy, Sparkles, Snowflake, Gift, Star } from "lucide-react";
-
+import { Zap, Shield, Trophy, Sparkles, ChevronRight, Star, Users, Clock, Award } from "lucide-react";
 interface FeaturedCompetitionsProps {
   competitions: Competition[];
 }
@@ -35,235 +34,223 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
 
   return (
     <div className="w-full">
-      <div className="max-w-7xl mx-auto px-0">
-        <Slider
-          {...sliderSettings}
-          className="featured-slider"
-        >
+      <div className="max-w-7xl mx-auto px-4">
+        <Slider {...sliderSettings} className="featured-slider">
           {instantCompetitions.map((competition) => (
-            <div key={competition.id}>
-              <div className="relative rounded-xl md:rounded-2xl overflow-hidden">
-                {/* Mobile-First Layout with SPECTACULAR Christmas Theme */}
-                <div className="relative min-h-[550px] md:min-h-[550px] bg-gradient-to-br from-red-950 via-slate-900 to-green-950">
-                  
-                  {/* Animated Christmas Lights Border */}
-                  {/* <div className="absolute top-0 left-0 right-0 h-8 z-[8] flex items-center justify-center gap-3 bg-gradient-to-b from-black/40 to-transparent">
-                    {Array.from({ length: 20 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="w-3 h-3 rounded-full animate-twinkle-light shadow-lg"
-                        style={{
-                          backgroundColor: ['#ef4444', '#22c55e', '#facc15', '#3b82f6', '#ec4899'][i % 5],
-                          boxShadow: `0 0 10px 2px ${['#ef4444', '#22c55e', '#facc15', '#3b82f6', '#ec4899'][i % 5]}`,
-                          animationDelay: `${i * 0.15}s`,
-                        }}
-                      />
-                    ))}
-                  </div> */}
-                  
-                  {/* Christmas Snow Particles - Reduced */}
-                  <div className="absolute inset-0 pointer-events-none overflow-hidden z-[5]">
-                    {Array.from({ length: 10 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="absolute bg-white rounded-full opacity-70"
-                        style={{
-                          width: `${2 + Math.random() * 4}px`,
-                          height: `${2 + Math.random() * 4}px`,
-                          left: `${Math.random() * 100}%`,
-                          top: `-10px`,
-                          animation: `featured-snow ${3 + Math.random() * 4}s linear infinite`,
-                          animationDelay: `${Math.random() * 3}s`,
-                        }}
-                      />
-                    ))}
-                  </div>
+            <div key={competition.id} data-testid={`slide-featured-competition-${competition.id}`}>
+              <div className="relative rounded-3xl overflow-hidden" data-testid={`card-featured-${competition.id}`}>
+                
+                {/* Cinematic Background with Multiple Layers */}
+                <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0c0a20] to-slate-950" />
+                
+                {/* Aurora Effect - Top */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_60%_at_50%_-10%,rgba(139,92,246,0.4),transparent)]" />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_40%_at_70%_-20%,rgba(217,70,239,0.25),transparent)]" />
+                
+                {/* Ambient Glow - Bottom Right */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_50%_at_90%_90%,rgba(251,191,36,0.15),transparent)]" />
+                
+                {/* Animated Sparkle Particles */}
+                <div className="absolute inset-0">
+                  <div className="absolute top-[8%] left-[12%] w-2 h-2 bg-violet-400 rounded-full animate-twinkle" />
+                  <div className="absolute top-[15%] right-[18%] w-2.5 h-2.5 bg-amber-400 rounded-full animate-twinkle" style={{animationDelay: '0.5s'}} />
+                  <div className="absolute top-[25%] left-[35%] w-1.5 h-1.5 bg-pink-400 rounded-full animate-twinkle" style={{animationDelay: '1s'}} />
+                  <div className="absolute bottom-[35%] right-[28%] w-2 h-2 bg-violet-300 rounded-full animate-twinkle" style={{animationDelay: '1.5s'}} />
+                  <div className="absolute bottom-[25%] left-[22%] w-1.5 h-1.5 bg-amber-300 rounded-full animate-twinkle" style={{animationDelay: '0.8s'}} />
+                  <div className="absolute top-[40%] right-[8%] w-1 h-1 bg-fuchsia-400 rounded-full animate-twinkle" style={{animationDelay: '1.2s'}} />
+                  <div className="absolute top-[5%] left-[50%] w-1.5 h-1.5 bg-cyan-400 rounded-full animate-twinkle" style={{animationDelay: '0.3s'}} />
+                  <div className="absolute bottom-[15%] right-[45%] w-2 h-2 bg-emerald-400 rounded-full animate-twinkle" style={{animationDelay: '1.8s'}} />
+                </div>
+                
+                {/* Floating Orbs */}
+                <div className="absolute top-[20%] left-[5%] w-24 h-24 bg-violet-500/20 rounded-full blur-2xl animate-float-enhanced" />
+                <div className="absolute bottom-[20%] right-[5%] w-32 h-32 bg-fuchsia-500/15 rounded-full blur-2xl animate-float-enhanced" style={{animationDelay: '2s'}} />
+                <div className="absolute top-[50%] right-[30%] w-20 h-20 bg-amber-500/10 rounded-full blur-xl animate-float-enhanced" style={{animationDelay: '4s'}} />
 
-                  {/* Glowing Corner Ornaments */}
-                  <div className="absolute top-10 left-3 z-[6]">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-red-500 blur-xl opacity-50 animate-pulse"></div>
-                      <div className="relative w-6 h-6 md:w-8 md:h-8 bg-gradient-to-br from-red-400 to-red-600 rounded-full border-2 border-yellow-400 shadow-lg shadow-red-500/50 animate-bounce-slow"></div>
-                    </div>
-                  </div>
-                  <div className="absolute top-10 right-3 z-[6]">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-green-500 blur-xl opacity-50 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                      <div className="relative w-6 h-6 md:w-8 md:h-8 bg-gradient-to-br from-green-400 to-green-600 rounded-full border-2 border-yellow-400 shadow-lg shadow-green-500/50 animate-bounce-slow" style={{ animationDelay: '0.5s' }}></div>
-                    </div>
-                  </div>
+                {/* Animated Glass Border Effect */}
+                <div className="absolute inset-0 rounded-3xl border-2 border-white/10" />
+                <div className="absolute inset-[2px] rounded-3xl border border-violet-500/30 animate-border-glow" />
+                
+                {/* Shimmer Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent rounded-3xl" />
+                
+                {/* Content Container */}
+                <div className="relative z-10 min-h-[520px] md:min-h-[560px] flex flex-col p-6 md:p-10 lg:p-14">
                   
-                  {/* Floating Stars */}
-                  <div className="absolute top-20 left-1/4 z-[6] hidden md:block">
-                    <Star className="w-6 h-6 text-yellow-400 fill-yellow-400 animate-pulse drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]" />
-                  </div>
-                  <div className="absolute top-32 right-1/4 z-[6] hidden md:block">
-                    <Star className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse drop-shadow-[0_0_12px_rgba(253,224,71,0.8)]" style={{ animationDelay: '1s' }} />
-                  </div>
-                  
-                  {/* Candy Cane Corner Accents */}
-                  <div className="absolute bottom-0 left-0 w-16 h-16 md:w-24 md:h-24 z-[6] opacity-40">
-                    <div className="absolute bottom-2 left-2 w-2 h-12 md:h-16 bg-gradient-to-b from-red-500 via-white to-red-500 rounded-full transform -rotate-12"></div>
-                    <div className="absolute bottom-2 left-5 w-2 h-10 md:h-14 bg-gradient-to-b from-white via-red-500 to-white rounded-full transform rotate-12"></div>
-                  </div>
-                  <div className="absolute bottom-0 right-0 w-16 h-16 md:w-24 md:h-24 z-[6] opacity-40 transform scale-x-[-1]">
-                    <div className="absolute bottom-2 left-2 w-2 h-12 md:h-16 bg-gradient-to-b from-red-500 via-white to-red-500 rounded-full transform -rotate-12"></div>
-                    <div className="absolute bottom-2 left-5 w-2 h-10 md:h-14 bg-gradient-to-b from-white via-red-500 to-white rounded-full transform rotate-12"></div>
-                  </div>
-                  
-                  {/* Background Image - FULLY VISIBLE on mobile! */}
-                  <div className="absolute inset-0">
-                    <img
-                      src={
-                        competition.imageUrl ||
-                        "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1200&q=80"
-                      }
-                      alt=""
-                      className="w-full h-full object-cover opacity-20"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-transparent"></div>
-                    {/* Christmas glow overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-green-500/5"></div>
-                  </div>
-
-                  {/* Content Container */}
-                  <div className="relative z-10 h-full flex flex-col justify-between p-4 md:p-12">
-                    
-                    {/* Top Badge - Christmas themed */}
-                    <div className="flex justify-center md:justify-start">
-                      <div className="inline-flex items-center gap-2 bg-gradient-to-r from-red-500 to-green-600 text-white px-3 md:px-4 py-1.5 md:py-2 rounded-full font-bold text-[10px] md:text-sm shadow-xl shadow-red-500/30 animate-pulse border border-white/20">
-                        <Gift className="w-3 h-3 md:w-4 md:h-4" />
-                        <Snowflake className="w-2.5 h-2.5 md:w-3 md:h-3" />
-                        CHRISTMAS SPECIAL
-                        <Snowflake className="w-2.5 h-2.5 md:w-3 md:h-3" />
+                  {/* Top Section - Badge & Stats */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    {/* Featured Badge with Animated Glow */}
+                    <div className="relative group">
+                      <div className="absolute -inset-1.5 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-violet-600 rounded-full blur-md opacity-60 animate-pulse" style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 3s ease infinite, pulse 2s ease-in-out infinite' }} />
+                      <div className="relative inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 border border-violet-300/40 shadow-lg shadow-violet-500/30">
+                        <Star className="w-4 h-4 text-amber-300 fill-amber-300 animate-spin-slow" style={{ animationDuration: '4s' }} />
+                        <span className="text-sm font-bold text-white tracking-wider uppercase">Featured Prize</span>
                       </div>
                     </div>
+                    
+                    {/* Live Stats */}
+                    <div className="flex items-center gap-4 text-xs text-slate-400">
+                      <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10" data-testid={`text-entries-${competition.id}`}>
+                        <Users className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>{competition.soldTickets || 0} entries</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10" data-testid={`badge-live-${competition.id}`}>
+                        <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Live Now</span>
+                      </div>
+                    </div>
+                  </div>
 
-                    {/* Center Content */}
-                    <div className="flex-1 flex flex-col md:flex-row items-center gap-4 md:gap-12 py-4 md:py-6">
-                      
-                      {/* PREMIUM Prize Image with Christmas Border */}
-                      <div className="w-full md:w-1/2 flex items-center justify-center">
-                        <div className="relative group">
-                          {/* Christmas Glow Effect */}
-                          <div className="absolute -inset-3 bg-gradient-to-r from-red-500 via-green-500 to-red-500 rounded-3xl blur-2xl opacity-30 group-hover:opacity-50 transition-all duration-700"></div>
+                  {/* Main Content - Asymmetric Split */}
+                  <div className="flex-1 flex flex-col lg:flex-row items-center gap-8 lg:gap-14">
+                    
+                    {/* Prize Image with Cinematic Animated Frame */}
+                    <div className="w-full lg:w-[55%] flex items-center justify-center">
+                      <div className="relative group w-full max-w-lg " style={{ animationDuration: '8s' }}>
+                        {/* Animated Outer Glow Ring */}
+                        <div className="absolute -inset-4 bg-gradient-to-r from-violet-500/40 via-fuchsia-500/40 to-amber-500/30 rounded-3xl blur-2xl animate-glow-pulse" />
+                        
+                        {/* Rainbow Border Animation */}
+                        <div className="absolute -inset-1 rounded-2xl animate-rainbow-border opacity-70" style={{ backgroundSize: '300% 300%' }} />
+                        
+                        {/* Inner Glow with Pulse */}
+                        <div className="absolute -inset-0.5 bg-gradient-to-br from-violet-500/50 to-fuchsia-500/50 rounded-2xl blur-lg animate-pulse" />
+                        
+                        {/* Glass Frame */}
+                        <div className="relative rounded-2xl p-1 bg-gradient-to-br from-white/20 via-white/5 to-white/10 overflow-hidden">
+                          {/* Frame Shimmer */}
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
                           
-                          {/* Image Container with Christmas Border */}
-                          <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-red-500/50 group-hover:border-green-500/60 transition-colors shadow-red-500/20">
-                            <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+                          <div className="relative rounded-xl overflow-hidden bg-slate-900/90 backdrop-blur-sm">
+                            <div className="relative">
                               <img
-                                src={
-                                  competition.imageUrl ||
-                                  "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=600&q=80"
-                                }
+                                src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80"}
                                 alt={competition.title}
-                                className="w-full h-full object-cover"
+                                className="w-full h-auto min-h-[200px] md:min-h-[280px] lg:min-h-[320px] object-contain transition-transform duration-700 group-hover:scale-105"
                               />
                               
-                              {/* Light Christmas Overlay Effects */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none z-10"></div>
-                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(239,68,68,0.08),transparent_60%)] pointer-events-none z-10"></div>
+                              {/* Image Overlay Gradient */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent" />
                               
-                              {/* Christmas Badge */}
-                              <div className="absolute bottom-2 md:bottom-3 left-2 md:left-3 bg-gradient-to-r from-red-500/95 to-green-500/95 backdrop-blur-md text-white px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[10px] md:text-sm font-bold flex items-center gap-1.5 md:gap-2 shadow-xl z-20 border border-white/20">
-                                <Gift className="w-3 h-3" />
-                                <span>Christmas Deal</span>
+                              {/* Type Badge - Premium Glass */}
+                              <div className="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-md text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border border-white/10 shadow-xl">
+                                {competition.type === "spin" ? <Zap className="w-4 h-4 text-amber-400" /> : 
+                                 competition.type === "scratch" ? <Sparkles className="w-4 h-4 text-violet-400" /> :
+                                 <Trophy className="w-4 h-4 text-amber-400" />}
+                                <span className="capitalize">{competition.type}</span>
+                              </div>
+                              
+                              {/* Prize Value Overlay */}
+                              <div className="absolute bottom-4 left-4 right-4">
+                                <div className="bg-slate-900/80 backdrop-blur-md rounded-xl p-3 border border-white/10">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <Award className="w-5 h-5 text-amber-400" />
+                                      <span className="text-white/80 text-sm font-medium">Top Prize</span>
+                                    </div>
+                                    <span className="text-amber-400 font-bold">WIN BIG!</span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
                       </div>
-
-                      {/* Text Content - FULL TEXT VISIBLE ON MOBILE! */}
-                      <div className="w-full md:w-1/2 text-center md:text-left space-y-3 md:space-y-6">
-                        <div>
-                          <div className="flex items-center justify-center md:justify-start gap-2 text-primary font-bold text-xs md:text-base mb-2">
-                            <Trophy className="w-4 h-4 md:w-5 md:h-5" />
-                            <span className="uppercase tracking-wide">Win Big Today</span>
-                          </div>
-                          
-                          {/* PREMIUM Eye-Catching Title - Mobile Optimized */}
-                          <div className="relative mb-2 md:mb-4">
-                            {/* Subtle glow behind text */}
-                            <div className="absolute inset-0 bg-gradient-to-r from-[#FACC15]/20 via-[#F59E0B]/20 to-[#FACC15]/20 blur-2xl"></div>
-                            
-                            <h2 
-                              className="relative text-xl sm:text-2xl md:text-5xl lg:text-6xl font-black break-words leading-[1.1] tracking-tight"
-                              style={{ 
-                                wordBreak: 'break-word', 
-                                hyphens: 'auto',
-                                background: "linear-gradient(135deg, #FACC15 0%, #F59E0B 50%, #FACC15 100%)",
-                                backgroundSize: "200% 100%",
-                                WebkitBackgroundClip: "text",
-                                WebkitTextFillColor: "transparent",
-                                backgroundClip: "text",
-                                filter: "drop-shadow(0 0 24px rgba(250, 204, 21, 0.3))"
-                              }}
-                            >
-                              {competition.title}
-                            </h2>
-                            
-                            {/* Premium underline accent */}
-                            <div className="h-0.5 md:h-1 mt-2 bg-gradient-to-r from-transparent via-[#FACC15] to-transparent rounded-full opacity-60"></div>
-                          </div>
-
-                          <p className="text-slate-300 text-sm md:text-lg font-medium break-words">
-                            Enter for your chance to win amazing prizes!
-                          </p>
-                        </div>
-
-                        {/* Trust Badges */}
-                        <div className="flex flex-wrap justify-center md:justify-start gap-2 md:gap-4">
-                          <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-2 md:px-3 py-1.5 md:py-2 rounded-lg border border-white/20">
-                            <Shield className="w-3 h-3 md:w-4 md:h-4 text-green-400" />
-                            <span className="text-[10px] md:text-sm text-white font-semibold">100% Secure</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-2 md:px-3 py-1.5 md:py-2 rounded-lg border border-white/20">
-                            <Sparkles className="w-3 h-3 md:w-4 md:h-4 text-primary" />
-                            <span className="text-[10px] md:text-sm text-white font-semibold">Fair Play</span>
-                          </div>
-                          {(competition.type === "spin" || competition.type === "scratch") && (
-                            <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-2 md:px-3 py-1.5 md:py-2 rounded-lg border border-white/20">
-                              <Trophy className="w-3 h-3 md:w-4 md:h-4 text-primary" />
-                              <span className="text-[10px] md:text-sm text-white font-semibold">Instant Win</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Price and CTA */}
-                        <div className="space-y-3 md:space-y-4">
-                          <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                            <span className="text-slate-400 text-base md:text-2xl font-bold line-through">
-                              £{(parseFloat(competition.ticketPrice) * 2).toFixed(2)}
-                            </span>
-                            <span className="text-3xl md:text-6xl font-black text-primary">
-                              £{parseFloat(competition.ticketPrice).toFixed(2)}
-                            </span>
-                            <span className="text-slate-300 text-sm md:text-xl font-semibold">
-                              per entry
-                            </span>
-                          </div>
-
-                          <button
-                            onClick={() => handleViewCompetition(competition.id)}
-                            data-testid="button-enter-competition"
-                            className="w-full md:w-auto bg-gradient-to-r from-red-500 via-green-500 to-red-500 hover:from-green-500 hover:via-red-500 hover:to-green-500 text-white font-black py-3 md:py-5 px-8 md:px-16 rounded-xl transition-all duration-300 shadow-2xl hover:shadow-green-500/50 text-sm md:text-2xl uppercase tracking-wide hover:scale-105 transform break-words border-2 border-white/30"
-                          >
-                            <span className="flex items-center justify-center gap-2">
-                              <Gift className="w-4 h-4 md:w-6 md:h-6" />
-                              ENTER NOW
-                              <Gift className="w-4 h-4 md:w-6 md:h-6" />
-                            </span>
-                          </button>
-                        </div>
-                      </div>
                     </div>
 
-                    {/* Bottom Trust Line */}
-                    <div className="text-center md:text-left">
-                      <p className="text-slate-400 text-[10px] md:text-sm break-words">
-                        ✓ Every entry has a chance to win • ✓ Prizes guaranteed • ✓ Fair and transparent draws
-                      </p>
+                    {/* Text Content - Premium Layout */}
+                    <div className="w-full lg:w-[45%] text-center lg:text-left space-y-6">
+                      
+                      {/* Title with Gradient */}
+                      <div className="space-y-3">
+                        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-[3.5rem] font-black leading-[1.1] tracking-tight" data-testid={`text-title-${competition.id}`}>
+                          <span className="bg-gradient-to-r from-white via-white to-white/80 bg-clip-text text-transparent">
+                            {competition.title}
+                          </span>
+                        </h2>
+                        <p className="text-slate-400 text-base md:text-lg max-w-md mx-auto lg:mx-0">
+                          Enter for your chance to win amazing prizes!
+                        </p>
+                      </div>
+
+                      {/* Trust Badges - Premium Glass */}
+                      <div className="flex flex-wrap justify-center lg:justify-start gap-2">
+                        <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/10">
+                          <Shield className="w-4 h-4 text-emerald-400" />
+                          <span className="text-white/80 text-sm font-medium">100% Secure</span>
+                        </div>
+                        <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/10">
+                          <Trophy className="w-4 h-4 text-amber-400" />
+                          <span className="text-white/80 text-sm font-medium">Fair Play</span>
+                        </div>
+                        {(competition.type === "spin" || competition.type === "scratch") && (
+                          <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/10">
+                            <Zap className="w-4 h-4 text-violet-400" />
+                            <span className="text-white/80 text-sm font-medium">Instant Win</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Price Display - Premium Animated */}
+                      <div className="flex flex-wrap items-end justify-center lg:justify-start gap-3">
+                        <span className="text-slate-500 text-xl font-medium line-through decoration-2">
+                          £{(parseFloat(competition.ticketPrice) * 2).toFixed(2)}
+                        </span>
+                        <div className="relative group">
+                          {/* Price Glow */}
+                          <div className="absolute -inset-3 bg-gradient-to-r from-amber-400/30 via-yellow-400/40 to-amber-400/30 rounded-xl blur-xl animate-glow-pulse -z-10" />
+                          <span 
+                            className="text-5xl md:text-6xl font-black bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 bg-clip-text text-transparent" 
+                            data-testid={`text-price-${competition.id}`}
+                            style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 3s ease infinite' }}
+                          >
+                            £{parseFloat(competition.ticketPrice).toFixed(2)}
+                          </span>
+                        </div>
+                        <span className="text-slate-400 text-base pb-2">
+                          per entry
+                        </span>
+                      </div>
+
+                      {/* CTA Button - Premium Animated */}
+                      <div className="pt-2">
+                        <button
+                          onClick={() => handleViewCompetition(competition.id)}
+                          data-testid="button-enter-competition"
+                          className="relative group w-full lg:w-auto"
+                        >
+                          {/* Animated Outer Glow */}
+                          <div className="absolute -inset-2 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-violet-600 rounded-2xl blur-lg opacity-60 group-hover:opacity-100 transition-all duration-300 animate-glow-pulse" style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 3s ease infinite, glow-pulse 2s ease-in-out infinite' }} />
+                          
+                          {/* Button with Shimmer */}
+                          <div className="relative bg-gradient-to-r from-violet-600 via-fuchsia-600 to-violet-600 hover:from-violet-500 hover:via-fuchsia-500 hover:to-violet-500 text-white font-bold py-4 px-12 rounded-xl transition-all duration-300 shadow-2xl flex items-center justify-center gap-3 text-lg uppercase tracking-wide border border-white/30 overflow-hidden"
+                            style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 3s ease infinite' }}
+                          >
+                            {/* Button Shimmer Effect */}
+                            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                            <span className="relative">Enter Now</span>
+                            <ChevronRight className="relative w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" />
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom Trust Line */}
+                  <div className="text-center mt-6 pt-6 border-t border-white/5">
+                    <div className="text-slate-500 text-xs md:text-sm flex items-center justify-center gap-4 flex-wrap">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block" />
+                        Every entry has a chance to win
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-amber-400 rounded-full inline-block" />
+                        Prizes guaranteed
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-violet-400 rounded-full inline-block" />
+                        Fair and transparent draws
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -275,63 +262,41 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
 
       <style>{`
         .featured-slider .slick-dots {
-          bottom: 20px;
+          bottom: 24px;
+        }
+        
+        .featured-slider .slick-dots li {
+          margin: 0 4px;
         }
         
         .featured-slider .slick-dots li button:before {
-          color: #FACC15;
-          opacity: 0.6;
-          font-size: 12px;
+          content: '';
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: rgba(139, 92, 246, 0.3);
+          opacity: 1;
         }
         
         .featured-slider .slick-dots li.slick-active button:before {
-          opacity: 1;
-          color: #FACC15;
+          background: linear-gradient(to right, #8b5cf6, #d946ef);
+          width: 24px;
+          border-radius: 4px;
         }
 
         @media (max-width: 768px) {
           .featured-slider .slick-dots {
-            bottom: 15px;
+            bottom: 16px;
           }
           
           .featured-slider .slick-dots li button:before {
-            font-size: 10px;
+            width: 6px;
+            height: 6px;
           }
-        }
-
-        @keyframes featured-snow {
-          0% {
-            transform: translateY(0) rotate(0deg);
-            opacity: 0;
+          
+          .featured-slider .slick-dots li.slick-active button:before {
+            width: 18px;
           }
-          10% {
-            opacity: 0.8;
-          }
-          90% {
-            opacity: 0.6;
-          }
-          100% {
-            transform: translateY(600px) rotate(360deg);
-            opacity: 0;
-          }
-        }
-        
-        @keyframes twinkle-light {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.4; transform: scale(0.8); }
-        }
-        
-        .animate-twinkle-light {
-          animation: twinkle-light 1.5s ease-in-out infinite;
-        }
-        
-        @keyframes bounce-slow {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-8px); }
-        }
-        
-        .animate-bounce-slow {
-          animation: bounce-slow 2s ease-in-out infinite;
         }
       `}</style>
     </div>
