@@ -337,15 +337,17 @@ useEffect(() => {
   };
 
   const handleDeleteClick = (id: string) => {
-    setTicketToDelete(id);
-    setDeleteDialogOpen(true);
-  };
+  setTicketToDelete(id);
+  setDeleteDialogOpen(true);
+};
 
-  const confirmDelete = () => {
-    if (ticketToDelete) {
-      deleteTicketMutation.mutate(ticketToDelete);
-    }
-  };
+ const confirmDelete = () => {
+  if (ticketToDelete) {
+    deleteTicketMutation.mutate(ticketToDelete);
+  }
+  setSelectedTicket(null);
+  setDeleteDialogOpen(false);
+};
 
   const filteredTickets = tickets.filter((ticket) => {
     const searchLower = searchQuery.toLowerCase();
@@ -833,7 +835,12 @@ useEffect(() => {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
+  setDeleteDialogOpen(open);
+  if (!open) {
+    setTicketToDelete(null);
+  }
+}}>
           <DialogContent className="bg-[#2a2a2a] border-gray-700 text-white">
             <DialogHeader>
               <DialogTitle className="text-red-500">Delete Ticket</DialogTitle>

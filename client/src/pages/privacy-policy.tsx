@@ -254,7 +254,12 @@ export default function PrivacyPolicy() {
               <div>
                 <h2 className="font-semibold text-white text-xl">Access to Your Information</h2>
                 <p>
-                  You have the right to access the personal data we hold about you. Requests can be made free of charge by emailing support@ringtoneriches.co.uk. If any information we hold about you is incorrect, please contact us so we can promptly update or correct it.
+                  You have the right to access the personal data we hold about you. Requests can be made free of charge by emailing  <a
+              href="mailto:support@ringtoneriches.co.uk"
+              className="text-primary underline"
+            >
+              support@ringtoneriches.co.uk
+            </a> If any information we hold about you is incorrect, please contact us so we can promptly update or correct it.
                 </p>
                 
               </div>

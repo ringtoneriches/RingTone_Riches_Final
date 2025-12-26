@@ -513,14 +513,14 @@ function ChristmasBanner() {
               </div>
 
               {/* Countdown Timer */}
-              <div className="mb-3 sm:mb-4">
+              {/* <div className="mb-3 sm:mb-4">
                 <p className="text-white/80 text-[10px] sm:text-xs md:text-sm font-semibold mb-1.5 sm:mb-2 uppercase tracking-wider sm:tracking-widest">
                   <Snowflake className="inline w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />
                   <span className="hidden sm:inline">Countdown to </span>Christmas
                   <Snowflake className="inline w-2.5 h-2.5 sm:w-3 sm:h-3 ml-1" />
                 </p>
                 <ChristmasCountdown />
-              </div>
+              </div> */}
 
               {/* Decorative bottom - fewer on mobile */}
               <div className="flex items-center justify-center gap-2 sm:gap-3 mt-3 sm:mt-4">

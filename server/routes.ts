@@ -45,6 +45,7 @@ import {
   insertSupportTicketSchema,
   pendingPayments,
   wellbeingRequests,
+  supportMessages,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -55,9 +56,12 @@ import { count } from "drizzle-orm/sql";
 import { z } from "zod";
 import { sendOrderConfirmationEmail, sendWelcomeEmail, sendPromotionalEmail, sendPasswordResetEmail, sendTopupConfirmationEmail } from "./email";
 import { wsManager } from "./websocket";
-import { upload } from "./cloudinary";
-import { applySelfSuspensionExpiry, isNotRestricted } from "./restriction";
 
+import { applySelfSuspensionExpiry, isNotRestricted } from "./restriction";
+import { createS3Uploader, deleteR2Object } from "./cloudeflare/cloudeflareHelper";
+
+const supportUpload = createS3Uploader("support");
+const competitionUpload = createS3Uploader("competitions");
 // Default spin wheel configuration - 26 segments with 6 evenly-distributed black segments
 // Color palette: Black #000000, Red #FE0000, White #FFFFFF, Blue #1E54FF, Yellow #FEED00, Green #00A223
 // 6 Black segments evenly distributed: X icons at positions 1, 5, 10, 15, 20 + R_Prize at position 26 (mystery prize)
@@ -490,13 +494,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupCustomAuth(app);
 
   // File upload endpoint for competition images
-  app.post("/api/upload/competition-image", isAuthenticated, isAdmin, upload.single("image"), (req, res) => {
+  app.post("/api/upload/competition-image", isAuthenticated, isAdmin, competitionUpload.single("image"), (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
-      const imagePath = req.file.path;
-      return res.status(200).json({ imagePath });
+      const fileKey = (req.file as any).key; // e.g., competitions/12345.png
+    const publicUrl = `${process.env.R2_PUBLIC_URL}/${fileKey}`; // use your public URL
+
+    return res.status(200).json({ imagePath: publicUrl })
     } catch (error: any) {
       console.error("File upload error:", error);
       return res.status(500).json({ message: error.message || "File upload failed" });
@@ -6089,12 +6095,13 @@ app.put("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: any
   try {
     const { id } = req.params;
 
+    // 1️⃣ Get existing competition first
+    const existing = await db.select().from(competitions).where(eq(competitions.id, id)).limit(1);
+    const oldCompetition = existing[0];
+    if (!oldCompetition) return res.status(404).json({ message: "Competition not found" });
+
     const formattedUpdateData: any = { ...req.body };
-
-    // Always override updatedAt
     formattedUpdateData.updatedAt = new Date();
-
-    // MUST NOT allow updating createdAt
     delete formattedUpdateData.createdAt;
     delete formattedUpdateData.created_at;
 
@@ -6133,17 +6140,21 @@ app.put("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: any
       }
     }
 
+    // sanitize timestamps as before...
     sanitizeTimestamps(formattedUpdateData);
+
+    // 2️⃣ Delete old image if a new one is uploaded
+    if (formattedUpdateData.imageUrl && oldCompetition.imageUrl && oldCompetition.imageUrl !== formattedUpdateData.imageUrl) {
+      // extract key from old URL
+      const oldKey = oldCompetition.imageUrl.replace(`${process.env.R2_PUBLIC_URL}/`, "");
+      await deleteR2Object(oldKey);
+    }
 
     const [updatedCompetition] = await db
       .update(competitions)
       .set(formattedUpdateData)
       .where(eq(competitions.id, id))
       .returning();
-
-    if (!updatedCompetition) {
-      return res.status(404).json({ message: "Competition not found" });
-    }
 
     wsManager.broadcast({ type: 'competition_updated', competitionId: id });
     res.json(updatedCompetition);
@@ -6153,6 +6164,7 @@ app.put("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: any
     res.status(500).json({ message: "Failed to update competition" });
   }
 });
+
 
 // Update competition display order
 app.patch("/api/admin/competitions/:id/display-order", isAuthenticated, isAdmin, async (req: any, res) => {
@@ -6190,7 +6202,18 @@ app.delete("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: 
   try {
     const { id } = req.params;
 
-    // 🔥 NEW: First, get all order IDs for this competition
+    // 1️⃣ Get existing competition
+    const existing = await db.select().from(competitions).where(eq(competitions.id, id)).limit(1);
+    const competition = existing[0];
+    if (!competition) return res.status(404).json({ message: "Competition not found" });
+
+    // 2️⃣ Delete competition image from R2
+    if (competition.imageUrl) {
+      const key = competition.imageUrl.replace(`${process.env.R2_PUBLIC_URL}/`, "");
+      await deleteR2Object(key);
+    }
+
+    // 3️⃣ Delete all related orders, tickets, winners, transactions, etc. (your current code)
     const competitionOrders = await db
       .select({ id: orders.id })
       .from(orders)
@@ -6199,52 +6222,18 @@ app.delete("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: 
     const orderIds = competitionOrders.map(order => order.id);
 
     if (orderIds.length > 0) {
-      // ✅ 1. Delete spin usage (NEW - this was missing!)
-      await db
-        .delete(spinUsage)
-        .where(inArray(spinUsage.orderId, orderIds));
-
-      // ✅ 2. Delete spin wins related to these orders
-      await db
-        .delete(spinWins)
-        .where(inArray(spinWins.userId, db.select({ userId: orders.userId }).from(orders).where(eq(orders.competitionId, id))));
-
-      // ✅ 3. Delete scratch card usage
-      await db
-        .delete(scratchCardUsage)
-        .where(inArray(scratchCardUsage.orderId, orderIds));
-
-      // ✅ 4. Delete scratch card wins
-      await db
-        .delete(scratchCardWins)
-        .where(inArray(scratchCardWins.userId, db.select({ userId: orders.userId }).from(orders).where(eq(orders.competitionId, id))));
+      await db.delete(spinUsage).where(inArray(spinUsage.orderId, orderIds));
+      await db.delete(spinWins).where(inArray(spinWins.userId, db.select({ userId: orders.userId }).from(orders).where(eq(orders.competitionId, id))));
+      await db.delete(scratchCardUsage).where(inArray(scratchCardUsage.orderId, orderIds));
+      await db.delete(scratchCardWins).where(inArray(scratchCardWins.userId, db.select({ userId: orders.userId }).from(orders).where(eq(orders.competitionId, id))));
     }
 
-    // ✅ 5. Delete all transactions related to orders for this competition
-    await db
-      .delete(transactions)
-      .where(inArray(transactions.orderId, orderIds));
-
-    // ✅ 6. Delete all tickets related to this competition
+    await db.delete(transactions).where(inArray(transactions.orderId, orderIds));
     await db.delete(tickets).where(eq(tickets.competitionId, id));
-
-    // ✅ 7. Delete all winners related to this competition
     await db.delete(winners).where(eq(winners.competitionId, id));
-
-    // ✅ 8. Delete all orders related to this competition
     await db.delete(orders).where(eq(orders.competitionId, id));
 
-    // ✅ 9. Finally, delete the competition itself
-    const [deletedCompetition] = await db
-      .delete(competitions)
-      .where(eq(competitions.id, id))
-      .returning();
-
-    if (!deletedCompetition) {
-      return res.status(404).json({ message: "Competition not found" });
-    }
-
-    // Broadcast real-time update
+    const [deletedCompetition] = await db.delete(competitions).where(eq(competitions.id, id)).returning();
     wsManager.broadcast({ type: 'competition_deleted', competitionId: id });
 
     res.json({ message: "Competition deleted successfully" });
@@ -6253,6 +6242,7 @@ app.delete("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: 
     res.status(500).json({ message: "Failed to delete competition" });
   }
 });
+
 
 // Get tickets for a competition
 app.get("/api/admin/competitions/:id/tickets", isAuthenticated, isAdmin, async (req: any, res) => {
@@ -7724,13 +7714,46 @@ app.delete("/api/admin/support/tickets/:id", isAuthenticated, isAdmin, async (re
       return res.status(404).json({ message: "Ticket not found" });
     }
 
+    // 1️⃣ Combine all image arrays safely
+    const parseArray = (arr: any) => {
+      if (!arr) return [];
+      if (Array.isArray(arr)) return arr;
+      try {
+        const parsed = JSON.parse(arr);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const allImages = [
+      ...parseArray(ticket.imageUrls),
+      ...parseArray(ticket.adminImageUrls),
+    ];
+
+    console.log("Deleting images:", allImages);
+
+    // 2️⃣ Delete each image from R2
+    for (const url of allImages) {
+      if (!url) continue;
+      const key = url.replace(`${process.env.R2_PUBLIC_URL}/`, "").replace(/^\/+/, ""); // remove leading slash
+      if (key) await deleteR2Object(key);
+    }
+
+    // 3️⃣ Delete messages for this ticket
+    await db.delete(supportMessages).where(eq(supportMessages.ticketId, ticket.id));
+
+    // 4️⃣ Delete ticket itself
     await storage.deleteSupportTicket(req.params.id);
-    res.json({ message: "Ticket deleted successfully" });
+
+    res.json({ message: "Ticket, messages, and all images deleted successfully" });
   } catch (error) {
     console.error("Error deleting ticket:", error);
     res.status(500).json({ message: "Failed to delete ticket" });
   }
 });
+
+
 
 // Upload support ticket images - use local storage fallback when Cloudinary is not configured
 // const supportUploadStorage = multer.diskStorage({
@@ -7758,16 +7781,18 @@ app.delete("/api/admin/support/tickets/:id", isAuthenticated, isAdmin, async (re
 //   }
 // });
 
-app.post("/api/support/upload", isAuthenticated, upload.array("images", 5), async (req: any, res) => {
+app.post("/api/support/upload", isAuthenticated, supportUpload.array("images", 5), async (req: any, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: "No files uploaded" });
     }
 
-    // Map uploaded files to their Cloudinary URLs
-    const imageUrls = (req.files as Express.Multer.File[]).map(file => file.path);
+     const imageUrls = (req.files as any[]).map((file) => {
+      const fileKey = file.key; // e.g., support/12345.png
+      return `${process.env.R2_PUBLIC_URL}/${fileKey}`; // use your public URL
+    });
 
-    res.json({ imageUrls }); // return array of uploaded image URLs
+    res.json({ imageUrls }); 
   } catch (error) {
     console.error("Error uploading images:", error);
     res.status(500).json({ message: "Failed to upload images" });
