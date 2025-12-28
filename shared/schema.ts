@@ -70,7 +70,7 @@ export const competitions = pgTable("competitions", {
   title: text("title").notNull(),
   description: text("description"),
   imageUrl: text("image_url"),
-  type: varchar("type", { enum: ["spin", "scratch", "instant"] }).notNull(),
+  type: varchar("type", { enum: ["spin", "scratch", "instant", "pop"] }).notNull(),
   ticketPrice: decimal("ticket_price", { precision: 10, scale: 2 }).notNull(),
   maxTickets: integer("max_tickets"),
   soldTickets: integer("sold_tickets").default(0),
@@ -272,6 +272,57 @@ export const scratchCardImages = pgTable("scratch_card_images", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Ringtone Pop game configuration - single active config
+export const gamePopConfig = pgTable("game_pop_config", {
+  id: varchar("id").primaryKey().default("active"),
+  prizes: jsonb("prizes").notNull(), // Array of prize configurations [{id, value, probability, maxWins, quantityWon}]
+  rPrizeEnabled: boolean("r_prize_enabled").default(true), // R symbol gives free play
+  rPrizeProbability: decimal("r_prize_probability", { precision: 5, scale: 2 }).default("5.00"), // 5% chance
+  winProbability: decimal("win_probability", { precision: 5, scale: 2 }).default("10.00"), // 10% chance to win
+  isActive: boolean("is_active").default(true),
+  isVisible: boolean("is_visible").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Ringtone Pop prize configurations
+export const popPrizes = pgTable("pop_prizes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  prizeName: varchar("prize_name").notNull(), // e.g., "£1", "£5", "£10"
+  prizeValue: decimal("prize_value", { precision: 10, scale: 2 }).notNull(),
+  rewardType: varchar("reward_type", { enum: ["cash", "points", "try_again"] }).notNull(),
+  weight: integer("weight").notNull().default(10), // For weighted random selection
+  maxWins: integer("max_wins"), // null = unlimited
+  quantityWon: integer("quantity_won").default(0),
+  isActive: boolean("is_active").default(true),
+  displayOrder: integer("display_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Track Ringtone Pop usage per order
+export const popUsage = pgTable("pop_usage", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").notNull().references(() => orders.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  usedAt: timestamp("used_at").defaultNow(),
+});
+
+// Track Ringtone Pop wins for maxWins enforcement
+export const popWins = pgTable("pop_wins", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  prizeId: text("prize_id").notNull(), // References prize.id from config
+  balloonValues: jsonb("balloon_values").notNull(), // Array of 3 values revealed
+  rewardType: varchar("reward_type", { enum: ["cash", "points", "try_again", "lose"] }).notNull(),
+  rewardValue: text("reward_value").notNull(),
+  isWin: boolean("is_win").default(false),
+  wonAt: timestamp("won_at").defaultNow(),
+});
+
+
+
 // Platform settings - single record for platform-wide configuration
 export const platformSettings = pgTable("platform_settings", {
   id: varchar("id").primaryKey().default("active"),
@@ -339,6 +390,9 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({ i
 export const insertGameSpinConfigSchema = createInsertSchema(gameSpinConfig);
 export const insertSpinWheel2ConfigSchema = createInsertSchema(spinWheel2Configs);
 export const insertGameScratchConfigSchema = createInsertSchema(gameScratchConfig);
+export const insertGamePopConfigSchema = createInsertSchema(gamePopConfig);
+export const insertPopPrizeSchema = createInsertSchema(popPrizes).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPopWinSchema = createInsertSchema(popWins).omit({ id: true, wonAt: true });
 export const insertScratchCardImageSchema = createInsertSchema(scratchCardImages).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPlatformSettingsSchema = createInsertSchema(platformSettings);
 export const insertSpinWinSchema = createInsertSchema(spinWins).omit({ id: true, wonAt: true });
@@ -377,6 +431,13 @@ export type GameScratchConfig = typeof gameScratchConfig.$inferSelect;
 export type InsertGameScratchConfig = z.infer<typeof insertGameScratchConfigSchema>;
 export type ScratchCardImage = typeof scratchCardImages.$inferSelect;
 export type InsertScratchCardImage = z.infer<typeof insertScratchCardImageSchema>;
+export type GamePopConfig = typeof gamePopConfig.$inferSelect;
+export type InsertGamePopConfig = z.infer<typeof insertGamePopConfigSchema>;
+export type PopPrize = typeof popPrizes.$inferSelect;
+export type InsertPopPrize = z.infer<typeof insertPopPrizeSchema>;
+export type PopUsage = typeof popUsage.$inferInsert;
+export type PopWin = typeof popWins.$inferSelect;
+export type InsertPopWin = z.infer<typeof insertPopWinSchema>;
 export type PlatformSettings = typeof platformSettings.$inferSelect;
 export type InsertPlatformSettings = z.infer<typeof insertPlatformSettingsSchema>;
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect;

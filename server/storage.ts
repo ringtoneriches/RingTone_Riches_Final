@@ -9,6 +9,8 @@ import {
   spinWins,
   scratchCardWins,
   scratchCardUsage,
+  popUsage,
+  popWins,
   platformSettings,
   scratchCardImages,
   withdrawalRequests,
@@ -116,6 +118,11 @@ export interface IStorage {
    // Scratch card wins tracking (for maxWins enforcement)
    getScratchCardPrizeWinCount(prizeId: string): Promise<number>;
    recordScratchCardWin(data: InsertScratchCardWin): Promise<ScratchCardWin>;
+
+     // Pop game usage tracking
+   recordPopUsage(orderId: string, userId: string): Promise<void>;
+   getPopGamesUsed(orderId: string): Promise<number>;
+   getPopGameHistory(orderId: string): Promise<any[]>;
 
   // Referral operations
   getUserReferralCode(userId: string): Promise<string>;
@@ -345,7 +352,7 @@ async getUserRingtonePoints(userId: string): Promise<number> {
     return order;
   }
 
-  async getUserOrders(userId: string): Promise<any[]> {
+ async getUserOrders(userId: string): Promise<any[]> {
     const ordersList = await db
       .select()
       .from(orders)
@@ -365,7 +372,7 @@ async getUserRingtonePoints(userId: string): Promise<number> {
           ))
           .orderBy(tickets.createdAt);
 
-        // Calculate remaining plays for spin and scratch orders
+        // Calculate remaining plays for spin, scratch, and pop orders
         let remainingPlays = 0;
         const competitionType = order.competitions?.type;
         
@@ -374,6 +381,9 @@ async getUserRingtonePoints(userId: string): Promise<number> {
           remainingPlays = order.orders.quantity - used;
         } else if (competitionType === 'scratch' && order.orders.status === 'completed') {
           const used = await this.getScratchCardsUsed(order.orders.id);
+          remainingPlays = order.orders.quantity - used;
+        } else if (competitionType === 'pop' && order.orders.status === 'completed') {
+          const used = await this.getPopGamesUsed(order.orders.id);
           remainingPlays = order.orders.quantity - used;
         }
 
@@ -619,6 +629,36 @@ async recordSpinUsage(orderId: string, userId: string): Promise<void> {
     
     return result[0]?.count || 0;
   }
+
+
+ // Pop game usage tracking
+  async recordPopUsage(orderId: string, userId: string): Promise<void> {
+    await db.insert(popUsage).values({
+      orderId,
+      userId,
+      usedAt: new Date()
+    });
+  }
+
+  async getPopGamesUsed(orderId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(popUsage)
+      .where(eq(popUsage.orderId, orderId));
+    
+    return result[0]?.count || 0;
+  }
+
+  async getPopGameHistory(orderId: string): Promise<any[]> {
+    const history = await db
+      .select()
+      .from(popWins)
+      .where(eq(popWins.orderId, orderId))
+      .orderBy(desc(popWins.wonAt));
+    
+    return history;
+  }
+
 
   // Referral operations
   async getUserReferralCode(userId: string): Promise<string> {

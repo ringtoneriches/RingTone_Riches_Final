@@ -36,6 +36,9 @@ import SpinBilling from "./pages/spinBilling";
 import ScratchBilling from "./pages/scratchBilling";
 import ScratchGamePage from "./pages/scratchGamePage";
 import SpinGamePage from "./pages/spinGamePage";
+import PopGamePage from "./pages/popGamePage";
+import PopBilling from "./pages/popBilling";
+import RingtonePopPage from "./pages/ringtone-pop";
 import AdminLogin from "./pages/admin/login";
 import AdminDashboard from "./pages/admin/dashboard";
 import AdminCompetitions from "./pages/admin/competitions";
@@ -54,6 +57,8 @@ import UserAuditPage from "./pages/admin/audit";
 import AdminTransactions from "./pages/admin/transactions";
 import AdminSupport from "./pages/admin/support";
 import AdminWellbeing from "./pages/admin/well-being";
+import AdminRingtonePop from "./pages/admin/ringtone-pop";
+import AdminPopBalloon from "./pages/admin/admin-pop-balloon";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -86,6 +91,7 @@ function Router() {
         component={ScratchGamePage}
       />
       <Route path="/spin/:competitionId/:orderId" component={SpinGamePage} />
+        <Route path="/pop/:competitionId/:orderId" component={PopGamePage} />
 
       {/* Authenticated routes - always registered, auth checked in component */}
       <Route path="/instant" component={instant} />
@@ -93,6 +99,7 @@ function Router() {
       <Route path="/checkout/:orderId" component={Checkout} />
       <Route path="/spin-wheel" component={spinWheel} />
       <Route path="/scratch-card" component={ScratchCardPage} />
+       <Route path="/ringtone-pop" component={RingtonePopPage} />
       <Route path="/wallet/success" component={WalletSuccess} />
       <Route path="/wallet/cancelled" component={PaymentCancelled} />
       <Route path="/wallet/failed" component={PaymentFailed} />
@@ -106,6 +113,7 @@ function Router() {
 />
 
       <Route path="/scratch-billing/:orderId" component={ScratchBilling} />
+          <Route path="/pop-billing/:orderId" component={PopBilling} />
       {/* <Route path="/support" component={Support} /> */}
 
       {/* Admin routes - always registered, auth checked in component */}
@@ -125,6 +133,8 @@ function Router() {
       <Route path="/admin/transactions" component={AdminTransactions} />
       <Route path="/admin/support" component={AdminSupport} />
       <Route path="/admin/well-being" component={AdminWellbeing} />
+            <Route path="/admin/ringtone-pop/settings" component={AdminRingtonePop} />
+            <Route path="/admin/add-ringtone-pop" component={AdminPopBalloon} />
       <Route path="/admin/users/:id" component={UserAuditPage} />
 
       <Route component={NotFound} />

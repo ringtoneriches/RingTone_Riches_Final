@@ -76,6 +76,8 @@ const getTransactionIcon = (type: string) => {
       return <ShoppingCart className="h-4 w-4 text-blue-500" />;
     case "prize":
       return <Gift className="h-4 w-4 text-yellow-500" />;
+       case "pop_purchase": // 🎈 Add this case
+      return <Gift className="w-4 h-4 text-pink-400" />; // or Balloon icon
     case "referral":
       return <Users className="h-4 w-4 text-purple-500" />;
     case "referral_bonus":
@@ -93,6 +95,7 @@ const getTransactionTypeBadge = (type: string) => {
     withdrawal: "bg-red-500/10 text-red-500 border-red-500/20",
     purchase: "bg-blue-500/10 text-blue-500 border-blue-500/20",
     prize: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+    pop_purchase: "bg-pink-500/20 text-pink-400 border-pink-500/30",
     referral: "bg-purple-500/10 text-purple-500 border-purple-500/20",
     referral_bonus: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
     refund: "bg-orange-500/10 text-orange-500 border-orange-500/20", // New case
@@ -495,21 +498,22 @@ const isAuthenticated = !!user;
   });
 
   // Orders pagination
-  const incompleteGames = orders.filter(
+    const incompleteGames = orders.filter(
     (order) =>
       (order.competitions?.type === "spin" ||
-        order.competitions?.type === "scratch") &&
+        order.competitions?.type === "scratch" ||
+        order.competitions?.type === "pop") &&
       order.orders.status === "completed" &&
       (order.remainingPlays || 0) > 0,
   );
 
   const completedOrders = orders.filter(
     (order) =>
-      order.orders.status === "completed" &&
       !(
         (order.competitions?.type === "spin" ||
-          order.competitions?.type === "scratch") &&
-        
+          order.competitions?.type === "scratch" ||
+          order.competitions?.type === "pop") &&
+        order.orders.status === "completed" &&
         (order.remainingPlays || 0) > 0
       ),
   );
@@ -1361,6 +1365,8 @@ const handleResumeOrder = () => {
                               <p className="text-xs text-gray-400">
                                 {order.competitions?.type === "spin"
                                   ? "Spin Wheel"
+                                  : order.competitions?.type === "pop"
+                                  ? "Ringtone Pop"
                                   : "Scratch Card"}
                               </p>
                             </div>
@@ -1389,6 +1395,8 @@ const handleResumeOrder = () => {
                             href={
                               order.competitions?.type === "spin"
                                 ? `/spin/${order.orders.competitionId}/${order.orders.id}`
+                                : order.competitions?.type === "pop"
+                                ? `/pop/${order.orders.competitionId}/${order.orders.id}`
                                 : `/scratch/${order.orders.competitionId}/${order.orders.id}`
                             }
                             className="block"

@@ -28,7 +28,7 @@ import {
 
 interface UnifiedBillingProps {
   orderId: string;
-  orderType: 'competition' | 'spin' | 'scratch';
+  orderType: 'competition' | 'spin' | 'scratch' | 'pop';
   wheelType?: string;
 }
 
@@ -49,6 +49,7 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
     switch(orderType) {
       case 'spin': return '/api/spin-order';
       case 'scratch': return '/api/scratch-order';
+      case 'pop': return '/api/pop-order';
       default: return '/api/order';
     }
   };
@@ -64,6 +65,8 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
     switch (orderType) {
       case "scratch":
         return "The Landmark Loot Purchase";
+        case "pop":
+      return "Ringtone Pop Purchase";
       default:
         return "Competition Tickets";
     }
@@ -80,6 +83,8 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
     switch (orderType) {
       case "scratch":
         return "Scratch Cards";
+        case "pop":
+      return "Pop Games";
       default:
         return "Tickets";
     }
@@ -105,7 +110,7 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
   // ✅ FIXED: Add itemCost variable
   const itemCost = orderType === 'competition' 
     ? parseFloat(competition?.ticketPrice || '0') 
-    : parseFloat(orderData?.scratchCost || orderData?.spinCost || '2');
+    : parseFloat(orderData?.scratchCost || orderData?.spinCost || orderData?.popCost || '2');
 
   const totalAmount = Number(order?.totalAmount) || 0;
   const walletBalance = Number(user?.balance) || 0;
@@ -134,6 +139,9 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
       case "scratch":
         endpoint = "/api/process-scratch-payment";
         break;
+      case 'pop': 
+      endpoint =  '/api/process-pop-payment';
+      break;
       default: // competition
         endpoint = "/api/purchase-ticket";
         break;
@@ -195,6 +203,8 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
       setTimeout(() => {
         if (orderType === 'spin') setLocation(`/spin/${competitionId}/${orderId}`);
         else if (orderType === 'scratch') setLocation(`/scratch/${competitionId}/${orderId}`);
+         else if (orderType === 'pop')  setLocation(`/pop/${competitionId}/${orderId}`);
+          
         else setLocation(`/success/competition?orderId=${orderId}`);
       }, 1500);
     }

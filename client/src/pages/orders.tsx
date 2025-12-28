@@ -54,10 +54,10 @@ export default function Orders() {
   }
 );
 
-  // Filter incomplete games (spin/scratch with remaining plays)
+  // Filter incomplete games (spin/scratch/pop with remaining plays)
   const incompleteGames = orders.filter(
     (order) => 
-      (order.competitions?.type === 'spin' || order.competitions?.type === 'scratch') &&
+      (order.competitions?.type === 'spin' || order.competitions?.type === 'scratch' || order.competitions?.type === 'pop') &&
       order.orders.status === 'completed' &&
       (order.remainingPlays || 0) > 0
   );
@@ -65,7 +65,7 @@ export default function Orders() {
   // Filter completed orders (exclude incomplete games)
   const completedOrders = orders.filter(
     (order) => 
-      !((order.competitions?.type === 'spin' || order.competitions?.type === 'scratch') &&
+      !((order.competitions?.type === 'spin' || order.competitions?.type === 'scratch' || order.competitions?.type === 'pop') &&
         order.orders.status === 'completed' &&
         (order.remainingPlays || 0) > 0)
   );
@@ -97,7 +97,7 @@ export default function Orders() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/login";
+        window.location.href = "/api/login";
       }, 500);
       return;
     }
@@ -170,7 +170,7 @@ export default function Orders() {
                           {order.competitions?.title || "Unknown Competition"}
                         </h3>
                         <p className="text-xs text-muted-foreground">
-                          {order.competitions?.type === 'spin' ? 'Spin Wheel' : 'Scratch Card'}
+                          {order.competitions?.type === 'spin' ? 'Spin Wheel' : order.competitions?.type === 'pop' ? 'Ringtone Pop' : 'Scratch Card'}
                         </p>
                       </div>
                     </div>
@@ -196,6 +196,8 @@ export default function Orders() {
                       to={
                         order.competitions?.type === 'spin'
                           ? `/spin/${order.orders.competitionId}/${order.orders.id}`
+                          : order.competitions?.type === 'pop'
+                          ? `/pop/${order.orders.competitionId}/${order.orders.id}`
                           : `/scratch/${order.orders.competitionId}/${order.orders.id}`
                       }
                       className="block"

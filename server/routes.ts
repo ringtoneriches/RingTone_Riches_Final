@@ -46,6 +46,10 @@ import {
   pendingPayments,
   wellbeingRequests,
   supportMessages,
+    gamePopConfig,
+  popPrizes,
+  popUsage,
+  popWins,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -209,6 +213,38 @@ const scratchConfigSchema = z.object({
   isVisible: z.boolean().optional(),
 });
 
+
+// Ringtone Pop configuration schema (matching Spin Wheel segments structure)
+const popSegmentSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  rewardType: z.enum(["cash", "points", "lose", "try_again"]),
+  rewardValue: z.union([z.number(), z.string()]),
+  probability: z.number().min(0).max(100),
+  maxWins: z.number().nullable(),
+  currentWins: z.number().default(0),
+});
+
+const popConfigSchema = z.object({
+  segments: z.array(popSegmentSchema),
+  isVisible: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
+// Default Ringtone Pop configuration (matching Spin Wheel pattern)
+const DEFAULT_POP_CONFIG = {
+  id: "active",
+  segments: [
+    { id: "1", label: "£1 Cash", rewardType: "cash", rewardValue: 1, probability: 25, maxWins: null, currentWins: 0 },
+    { id: "2", label: "£5 Cash", rewardType: "cash", rewardValue: 5, probability: 15, maxWins: null, currentWins: 0 },
+    { id: "3", label: "£10 Cash", rewardType: "cash", rewardValue: 10, probability: 10, maxWins: 100, currentWins: 0 },
+    { id: "4", label: "£25 Cash", rewardType: "cash", rewardValue: 25, probability: 5, maxWins: 50, currentWins: 0 },
+    { id: "5", label: "Free Replay", rewardType: "try_again", rewardValue: 0, probability: 10, maxWins: null, currentWins: 0 },
+    { id: "6", label: "No Win", rewardType: "lose", rewardValue: 0, probability: 35, maxWins: null, currentWins: 0 },
+  ],
+  isActive: true,
+  isVisible: true,
+};
 
 
 // const uploadDir = path.join(process.cwd(), "attached_assets", "competitions");
@@ -975,9 +1011,10 @@ app.get("/api/competitions", async (req, res) => {
       .orderBy(asc(competitions.displayOrder), desc(competitions.createdAt));
     
     // Check visibility settings for game types
-    const { gameSpinConfig, gameScratchConfig } = await import("@shared/schema");
+    const { gameSpinConfig, gameScratchConfig, gamePopConfig } = await import("@shared/schema");
     const [spinConfig] = await db.select().from(gameSpinConfig).where(eq(gameSpinConfig.id, "active"));
     const [scratchConfig] = await db.select().from(gameScratchConfig).where(eq(gameScratchConfig.id, "active"));
+    const [popConfig] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
     
     // Filter out hidden competitions based on game type visibility
     const visibleCompetitions = competitionsList.filter((comp) => {
@@ -985,6 +1022,9 @@ app.get("/api/competitions", async (req, res) => {
         return false;
       }
       if (comp.type === "scratch" && scratchConfig && scratchConfig.isVisible === false) {
+        return false;
+      }
+      if (comp.type === "pop" && popConfig && popConfig.isVisible === false) {
         return false;
       }
       return true;
@@ -996,6 +1036,7 @@ app.get("/api/competitions", async (req, res) => {
     res.status(500).json({ message: "Failed to fetch competitions" });
   }
 });
+
 
 app.get("/api/competitions/:id", async (req, res) => {
   try {
@@ -2936,6 +2977,60 @@ app.post("/api/create-scratch-order", isAuthenticated, async (req: any, res) => 
   }
 });
 
+
+// Create Pop Game order
+app.post("/api/create-pop-order", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { competitionId, quantity = 1 } = req.body;
+
+    const competition = await storage.getCompetition(competitionId);
+    if (!competition) {
+      return res.status(404).json({ message: "Competition not found" });
+    }
+
+    const popCostPerGame = parseFloat(competition.ticketPrice);
+    const totalAmount = popCostPerGame * quantity;
+
+    const user = await storage.getUser(userId);
+    const userBalance = parseFloat(user?.balance || "0");
+    const userPoints = user?.ringtonePoints || 0;
+    const pointsValue = userPoints * 0.01;
+
+    
+    const order = await storage.createOrder({
+      userId,
+      competitionId,
+      quantity,
+      totalAmount: totalAmount.toString(),
+      paymentMethod: "pending",
+      status: "pending",
+    });
+
+    res.json({
+      success: true,
+      orderId: order.id,
+      competitionId: competitionId,
+      totalAmount,
+      quantity,
+      userBalance: {
+        wallet: userBalance,
+        ringtonePoints: userPoints,
+        pointsValue,
+      },
+      popCost: popCostPerGame,
+      competition: {
+        title: competition.title,
+        type: competition.type,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating pop order:", error);
+    res.status(500).json({ message: "Failed to create pop order" });
+  }
+});
+
+
 app.post("/api/process-scratch-payment", isAuthenticated,  async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -4392,6 +4487,171 @@ app.get("/api/scratch-order/:orderId", isAuthenticated, async (req: any, res) =>
   } catch (error) {
     console.error("Error fetching scratch order:", error);
     res.status(500).json({ message: "Failed to fetch scratch order" });
+  }
+});
+
+
+// Get Pop order details for billing and game page
+app.get("/api/pop-order/:orderId", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId } = req.params;
+
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const user = await storage.getUser(userId);
+    const competition = await storage.getCompetition(order.competitionId);
+    const popCost = parseFloat(competition?.ticketPrice || "2");
+
+    // Get usage for game page
+    const used = await storage.getPopGamesUsed(orderId);
+    const remaining = order.quantity - used;
+    const history = await storage.getPopGameHistory(orderId);
+
+    res.json({
+      order: {
+        id: order.id,
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        totalAmount: order.totalAmount,
+        status: order.status,
+      },
+      user: {
+        balance: user?.balance || "0",
+        ringtonePoints: user?.ringtonePoints || 0,
+      },
+      competition: competition,
+      popCost: popCost,
+      playsRemaining: remaining,
+      history: history,
+    });
+  } catch (error) {
+    console.error("Error fetching pop order:", error);
+    res.status(500).json({ message: "Failed to fetch pop order" });
+  }
+});
+
+// Process Pop Game payment
+app.post("/api/process-pop-payment", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, useWalletBalance = false, useRingtonePoints = false } = req.body;
+
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (order.status !== "pending") {
+      return res.status(400).json({ message: "Order already processed" });
+    }
+
+    const competition = await storage.getCompetition(order.competitionId);
+    if (!competition || competition.type !== "pop") {
+      return res.status(400).json({ message: "Invalid competition type" });
+    }
+
+    const user = await storage.getUser(userId);
+    const totalAmount = parseFloat(order.totalAmount);
+    let remainingAmount = totalAmount;
+    let walletUsed = 0;
+    let pointsUsed = 0;
+
+    const paymentBreakdown = [];
+
+    // Wallet
+    if (useWalletBalance) {
+      const walletBalance = parseFloat(user?.balance || "0");
+      walletUsed = Math.min(walletBalance, remainingAmount);
+      remainingAmount -= walletUsed;
+      if (walletUsed > 0) {
+        paymentBreakdown.push({ method: "wallet", amount: walletUsed });
+      }
+    }
+
+    // Points
+    if (useRingtonePoints && remainingAmount > 0) {
+      const userPoints = user?.ringtonePoints || 0;
+      const pointsValue = userPoints * 0.01;
+      const pointsToUse = Math.min(pointsValue, remainingAmount);
+      pointsUsed = Math.ceil(pointsToUse * 100);
+      remainingAmount -= pointsToUse;
+      if (pointsUsed > 0) {
+        paymentBreakdown.push({ method: "points", amount: pointsToUse, pointsUsed });
+      }
+    }
+
+    // If remaining, need Cashflows
+    if (remainingAmount > 0.01) {
+      return res.json({
+        success: false,
+        message: "Card payment required for remaining balance",
+        remainingAmount,
+        requiresCashflows: true,
+      });
+    }
+
+    // Complete payment with wallet/points only
+    if (walletUsed > 0) {
+      const newBalance = parseFloat(user?.balance || "0") - walletUsed;
+      await storage.updateUserBalance(userId, newBalance.toFixed(2));
+    }
+
+    if (pointsUsed > 0) {
+      const newPoints = (user?.ringtonePoints || 0) - pointsUsed;
+      await storage.updateUserRingtonePoints(userId, newPoints);
+    }
+
+    // Update order status and payment info
+    await storage.updateOrderStatus(orderId, "completed");
+    await storage.updateOrderPaymentInfo(orderId, {
+      paymentMethod: paymentBreakdown.map(p => p.method).join("+") || "free",
+    });
+
+  // Increment soldTickets for the competition
+    if (competition) {
+      const newSoldTickets = (competition.soldTickets || 0) + order.quantity;
+      await db
+        .update(competitions)
+        .set({ soldTickets: newSoldTickets })
+        .where(eq(competitions.id, competition.id));
+    }
+
+    // Create transaction record
+    await storage.createTransaction({
+      userId,
+      type: "pop_purchase",
+      amount: totalAmount.toFixed(2),
+      description: `Pop Game Purchase - ${order.quantity} games`,
+      orderId: orderId,
+    });
+
+    // Create tickets for pop game entries (so they show in entries tab)
+    for (let i = 0; i < order.quantity; i++) {
+      await storage.createTicket({
+        competitionId: order.competitionId,
+        orderId: orderId,
+        userId,
+        ticketNumber: `POP-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, '0')}`,
+        isWinner: false,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Pop game purchase complete!",
+      competitionId: order.competitionId,
+      orderId: order.id,
+      quantity: order.quantity,
+      paymentBreakdown,
+    });
+
+  } catch (error) {
+    console.error("Error processing pop payment:", error);
+    res.status(500).json({ message: "Failed to process pop payment" });
   }
 });
 
@@ -6647,6 +6907,733 @@ app.put("/api/admin/game-scratch-config", isAuthenticated, isAdmin, async (req: 
   }
 });
 
+
+// ========== RINGTONE POP GAME ROUTES ==========
+
+// Get Ringtone Pop configuration (admin)
+app.get("/api/admin/game-pop-config", isAuthenticated, async (req: any, res) => {
+  try {
+    const [config] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
+    
+    if (!config) {
+      return res.json(DEFAULT_POP_CONFIG);
+    }
+    
+    // Get segment win stats
+    const segmentWinStats = await db
+      .select({
+        prizeId: popWins.prizeId,
+        winCount: sql<number>`count(*)`
+      })
+      .from(popWins)
+      .where(eq(popWins.isWin, true))
+      .groupBy(popWins.prizeId);
+    
+    // Support both old 'prizes' format and new 'segments' format
+    const segments = (config as any).segments || (config as any).prizes || DEFAULT_POP_CONFIG.segments;
+    const segmentsWithStats = segments.map((segment: any) => ({
+      ...segment,
+      currentWins: segmentWinStats.find(s => s.prizeId === segment.id)?.winCount || segment.currentWins || 0
+    }));
+    
+    res.json({
+      ...config,
+      segments: segmentsWithStats
+    });
+  } catch (error) {
+    console.error("Error fetching pop config:", error);
+    res.status(500).json({ message: "Failed to fetch pop configuration" });
+  }
+});
+
+// Update Ringtone Pop configuration (admin)
+app.put("/api/admin/game-pop-config", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { segments, isVisible, isActive } = req.body;
+    console.log("Saving pop config:", { segmentsCount: segments?.length, isVisible, isActive });
+    
+    // Validate probability totals to 100%
+    if (segments) {
+      const totalProbability = segments.reduce((sum: number, seg: any) => sum + (Number(seg.probability) || 0), 0);
+      if (Math.abs(totalProbability - 100) > 0.01) {
+        return res.status(400).json({ message: `Total probability must equal 100%. Current: ${totalProbability.toFixed(2)}%` });
+      }
+    }
+    
+    const [existing] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
+    
+    if (existing) {
+      const [updated] = await db
+        .update(gamePopConfig)
+        .set({
+          prizes: segments ?? (existing as any).segments ?? (existing as any).prizes,
+          isVisible: isVisible ?? existing.isVisible,
+          isActive: isActive ?? existing.isActive,
+          updatedAt: new Date(),
+        })
+        .where(eq(gamePopConfig.id, "active"))
+        .returning();
+      
+      res.json({ ...updated, segments: (updated as any).prizes });
+    } else {
+      const [created] = await db
+        .insert(gamePopConfig)
+        .values({
+          id: "active",
+          prizes: segments || DEFAULT_POP_CONFIG.segments,
+          isVisible: isVisible ?? true,
+          isActive: isActive ?? true,
+        })
+        .returning();
+      
+      res.json({ ...created, segments: (created as any).prizes });
+    }
+  } catch (error) {
+    console.error("Error updating pop config:", error);
+    res.status(500).json({ message: "Failed to update pop configuration" });
+  }
+});
+
+// Get pop prizes (admin)
+app.get("/api/admin/pop-prizes", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const prizes = await db
+      .select()
+      .from(popPrizes)
+      .orderBy(asc(popPrizes.displayOrder));
+    
+    res.json(prizes);
+  } catch (error) {
+    console.error("Error fetching pop prizes:", error);
+    res.status(500).json({ message: "Failed to fetch pop prizes" });
+  }
+});
+
+// Create pop prize (admin)
+app.post("/api/admin/pop-prizes", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { prizeName, prizeValue, rewardType, weight, maxWins, isActive, displayOrder } = req.body;
+    
+    const [created] = await db
+      .insert(popPrizes)
+      .values({
+        prizeName,
+        prizeValue: prizeValue.toString(),
+        rewardType,
+        weight: weight || 10,
+        maxWins: maxWins || null,
+        isActive: isActive ?? true,
+        displayOrder: displayOrder || 0,
+      })
+      .returning();
+    
+    res.json(created);
+  } catch (error) {
+    console.error("Error creating pop prize:", error);
+    res.status(500).json({ message: "Failed to create pop prize" });
+  }
+});
+
+// Update pop prize (admin)
+app.put("/api/admin/pop-prizes/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const { prizeName, prizeValue, rewardType, weight, maxWins, isActive, displayOrder } = req.body;
+    
+    const [updated] = await db
+      .update(popPrizes)
+      .set({
+        prizeName,
+        prizeValue: prizeValue?.toString(),
+        rewardType,
+        weight,
+        maxWins,
+        isActive,
+        displayOrder,
+        updatedAt: new Date(),
+      })
+      .where(eq(popPrizes.id, id))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ message: "Prize not found" });
+    }
+    
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating pop prize:", error);
+    res.status(500).json({ message: "Failed to update pop prize" });
+  }
+});
+
+// Delete pop prize (admin)
+app.delete("/api/admin/pop-prizes/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    
+    await db.delete(popPrizes).where(eq(popPrizes.id, id));
+    
+    res.json({ message: "Prize deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting pop prize:", error);
+    res.status(500).json({ message: "Failed to delete pop prize" });
+  }
+});
+
+// Reset pop prize win counts (admin)
+app.post("/api/admin/pop-prizes/reset-wins", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    // Reset quantityWon in pop prizes
+    await db.update(popPrizes).set({ quantityWon: 0 });
+    
+    // Also update the prizes in config
+    const [config] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
+    if (config) {
+      const resetPrizes = (config.prizes as any[]).map(p => ({ ...p, quantityWon: 0 }));
+      await db
+        .update(gamePopConfig)
+        .set({ prizes: resetPrizes, updatedAt: new Date() })
+        .where(eq(gamePopConfig.id, "active"));
+    }
+    
+    res.json({ message: "Pop prize win counts reset successfully" });
+  } catch (error) {
+    console.error("Error resetting pop wins:", error);
+    res.status(500).json({ message: "Failed to reset pop wins" });
+  }
+});
+
+// Pop game cooldown tracker
+const popCooldowns = new Map<string, number>();
+const POP_COOLDOWN_MS = 3000; // 3 seconds between plays
+
+// Play Ringtone Pop game (user)
+app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, competitionId } = req.body;
+
+    if (!orderId || !competitionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID and Competition ID are required",
+      });
+    }
+
+    // Cooldown check
+    const cooldownKey = `${userId}-${orderId}`;
+    const lastPlayTime = popCooldowns.get(cooldownKey) || 0;
+    const now = Date.now();
+    
+    if (now - lastPlayTime < POP_COOLDOWN_MS) {
+      return res.status(429).json({
+        success: false,
+        message: "Please wait a moment before playing again",
+      });
+    }
+    
+    popCooldowns.set(cooldownKey, now);
+
+    // Verify valid completed order
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "No valid pop game purchase found",
+      });
+    }
+
+    // Check plays remaining
+    const playsUsed = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(popUsage)
+      .where(eq(popUsage.orderId, orderId));
+    
+    const usedCount = Number(playsUsed[0]?.count || 0);
+    const playsRemaining = order.quantity - usedCount;
+
+    if (playsRemaining <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No plays remaining in this purchase",
+      });
+    }
+
+    // Get user
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Get pop config
+    const [config] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
+    const popConfig = config || DEFAULT_POP_CONFIG;
+    
+    if (!popConfig.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "Ringtone Pop is currently unavailable",
+      });
+    }
+
+    // Get segments (support both old 'prizes' and new 'segments' format)
+    const segments = (popConfig as any).segments || (popConfig as any).prizes || DEFAULT_POP_CONFIG.segments;
+    
+    // Filter eligible segments (check maxWins)
+    const eligibleSegments = segments.filter((seg: any) => {
+      if (seg.maxWins !== null && (seg.currentWins || 0) >= seg.maxWins) return false;
+      return true;
+    });
+
+    if (eligibleSegments.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No prizes available at this time",
+      });
+    }
+
+    // Weighted random selection based on probability
+    const totalProbability = eligibleSegments.reduce((sum: number, seg: any) => sum + (seg.probability || 0), 0);
+    let random = Math.random() * totalProbability;
+    let selectedSegment: any = eligibleSegments[0];
+
+    for (const seg of eligibleSegments) {
+      random -= (seg.probability || 0);
+      if (random <= 0) {
+        selectedSegment = seg;
+        break;
+      }
+    }
+
+    let balloonValues: number[] = [];
+    let rewardType = selectedSegment.rewardType || "lose";
+    let rewardValue = "0";
+    const isRPrize = rewardType === "try_again";
+    const isWin = rewardType === "cash" || rewardType === "points";
+
+    if (isRPrize) {
+      // Free Replay - show ONE R symbol and two random non-matching values
+      const cashSegments = segments.filter((seg: any) => seg.rewardType === "cash");
+      const availableValues = cashSegments.map((seg: any) => parseFloat(seg.rewardValue?.toString() || "1"));
+      // Pick two different random cash values
+      let val1 = availableValues.length > 0 ? availableValues[Math.floor(Math.random() * availableValues.length)] : 1;
+      let val2 = availableValues.length > 1 ? availableValues[Math.floor(Math.random() * availableValues.length)] : 5;
+      while (val2 === val1 && availableValues.length > 1) {
+        val2 = availableValues[Math.floor(Math.random() * availableValues.length)];
+      }
+      // Place the R (-1) in a random position among the three balloons
+      const rPosition = Math.floor(Math.random() * 3);
+      balloonValues = rPosition === 0 ? [-1, val1, val2] : rPosition === 1 ? [val1, -1, val2] : [val1, val2, -1];
+      rewardValue = "0";
+      
+      // Grant a free replay by increasing order quantity
+      await db
+        .update(orders)
+        .set({ quantity: order.quantity + 1 })
+        .where(eq(orders.id, orderId));
+      
+      // Track try_again wins for maxWins enforcement
+      const updatedSegments = segments.map((seg: any) => 
+        seg.id === selectedSegment.id 
+          ? { ...seg, currentWins: (seg.currentWins || 0) + 1 }
+          : seg
+      );
+      await db
+        .update(gamePopConfig)
+        .set({ prizes: updatedSegments, updatedAt: new Date() })
+        .where(eq(gamePopConfig.id, "active"));
+    } else if (isWin) {
+      // Win - show matching values
+      const value = parseFloat(selectedSegment.rewardValue?.toString() || "0");
+      balloonValues = [value, value, value];
+      rewardValue = value.toString();
+
+      if (rewardType === "cash") {
+        // Award cash prize
+        const finalBalance = parseFloat(user.balance || "0") + value;
+        await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+
+        await storage.createTransaction({
+          userId,
+          type: "prize",
+          amount: value.toFixed(2),
+          description: `Ringtone Pop Win - £${value}`,
+        });
+
+        await storage.createWinner({
+          userId,
+          competitionId: null,
+          prizeDescription: `Ringtone Pop Winner`,
+          prizeValue: `£${value}`,
+          imageUrl: null,
+          isShowcase: false,
+        });
+      } else if (rewardType === "points") {
+        // Award points
+        const pointsValue = Math.floor(value);
+        const currentPoints = user.ringtonePoints || 0;
+        const newPoints = currentPoints + pointsValue;
+        await db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
+
+        // Create points transaction with ringtone_points type
+        await storage.createTransaction({
+          userId,
+          type: "ringtone_points",
+          amount: pointsValue.toString(),
+          description: `Ringtone Pop Win - ${pointsValue.toLocaleString()} pts`,
+        });
+      }
+
+      // Update segment win count in config
+      const updatedSegments = segments.map((seg: any) => 
+        seg.id === selectedSegment.id 
+          ? { ...seg, currentWins: (seg.currentWins || 0) + 1 }
+          : seg
+      );
+      await db
+        .update(gamePopConfig)
+        .set({ prizes: updatedSegments, updatedAt: new Date() })
+        .where(eq(gamePopConfig.id, "active"));
+    } else {
+      // Loss - generate non-matching balloon values
+      const cashSegments = segments.filter((seg: any) => seg.rewardType === "cash");
+      const availableValues = cashSegments.map((seg: any) => parseFloat(seg.rewardValue?.toString() || "1"));
+      if (availableValues.length >= 2) {
+        const val1 = availableValues[Math.floor(Math.random() * availableValues.length)];
+        let val2 = availableValues[Math.floor(Math.random() * availableValues.length)];
+        while (val2 === val1 && availableValues.length > 1) {
+          val2 = availableValues[Math.floor(Math.random() * availableValues.length)];
+        }
+        let val3 = availableValues[Math.floor(Math.random() * availableValues.length)];
+        if (val1 === val2 && val2 === val3) {
+          val3 = availableValues.find((v: number) => v !== val1) || val1 + 1;
+        }
+        balloonValues = [val1, val2, val3];
+      } else {
+        balloonValues = [1, 5, 10];
+      }
+    }
+
+    const selectedPrize = isWin ? selectedSegment : null;
+
+    // Record usage
+    await db.insert(popUsage).values({
+      orderId,
+      userId,
+      usedAt: new Date(),
+    });
+
+    // Record result
+    await db.insert(popWins).values({
+      orderId,
+      userId,
+      prizeId: selectedPrize?.id || "none",
+      balloonValues,
+      rewardType,
+      rewardValue,
+      isWin,
+      wonAt: new Date(),
+    });
+
+    res.json({
+      success: true,
+      result: {
+        balloonValues,
+        isWin,
+        isRPrize,
+        rewardType,
+        rewardValue: parseFloat(rewardValue),
+        prizeName: selectedPrize ? `£${selectedPrize.value}` : null,
+      },
+      playsRemaining: playsRemaining - 1,
+    });
+  } catch (error) {
+    console.error("Error playing pop game:", error);
+    res.status(500).json({ message: "Failed to play pop game" });
+  }
+});
+
+// Reveal all pop games (batch processing)
+app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, count } = req.body;
+
+    if (!orderId || !count || count <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid orderId and count are required",
+      });
+    }
+
+    // Verify valid completed order
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "No valid pop game purchase found",
+      });
+    }
+
+    // Check plays remaining
+    const playsUsed = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(popUsage)
+      .where(eq(popUsage.orderId, orderId));
+    
+    const usedCount = Number(playsUsed[0]?.count || 0);
+    const playsRemaining = order.quantity - usedCount;
+
+    if (playsRemaining <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No plays remaining",
+      });
+    }
+
+    const playsToProcess = Math.min(count, playsRemaining);
+
+    // Get user and config
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const [config] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
+    const popConfig = config || DEFAULT_POP_CONFIG;
+    
+    // Get segments (support both old 'prizes' and new 'segments' format)
+    const segments = (popConfig as any).segments || (popConfig as any).prizes || DEFAULT_POP_CONFIG.segments;
+
+    let totalCash = 0;
+    let totalPoints = 0;
+    let freeReplaysWon = 0;
+    const results: any[] = [];
+    const segmentWinCounts = new Map<string, number>();
+
+    // Initialize segment win counts
+    segments.forEach((seg: any) => segmentWinCounts.set(seg.id, seg.currentWins || 0));
+
+    // Process all plays
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < playsToProcess; i++) {
+        // Filter eligible segments
+        const eligibleSegments = segments.filter((seg: any) => {
+          const currentWins = segmentWinCounts.get(seg.id) || 0;
+          if (seg.maxWins !== null && currentWins >= seg.maxWins) return false;
+          return true;
+        });
+
+        if (eligibleSegments.length === 0) {
+          break; // No eligible segments left
+        }
+
+        // Weighted random selection based on probability
+        const totalProbability = eligibleSegments.reduce((sum: number, seg: any) => sum + (seg.probability || 0), 0);
+        let random = Math.random() * totalProbability;
+        let selectedSegment: any = eligibleSegments[0];
+
+        for (const seg of eligibleSegments) {
+          random -= (seg.probability || 0);
+          if (random <= 0) {
+            selectedSegment = seg;
+            break;
+          }
+        }
+
+        let balloonValues: number[] = [];
+        const rewardType = selectedSegment.rewardType || "lose";
+        let rewardValue = "0";
+        const isRPrize = rewardType === "try_again";
+        const isWin = rewardType === "cash" || rewardType === "points";
+
+        if (isRPrize) {
+          // Free Replay - show ONE R symbol and two random non-matching values
+          const cashSegments = segments.filter((seg: any) => seg.rewardType === "cash");
+          const availableValues = cashSegments.map((seg: any) => parseFloat(seg.rewardValue?.toString() || "1"));
+          let val1 = availableValues.length > 0 ? availableValues[Math.floor(Math.random() * availableValues.length)] : 1;
+          let val2 = availableValues.length > 1 ? availableValues[Math.floor(Math.random() * availableValues.length)] : 5;
+          while (val2 === val1 && availableValues.length > 1) {
+            val2 = availableValues[Math.floor(Math.random() * availableValues.length)];
+          }
+          const rPosition = Math.floor(Math.random() * 3);
+          balloonValues = rPosition === 0 ? [-1, val1, val2] : rPosition === 1 ? [val1, -1, val2] : [val1, val2, -1];
+          rewardValue = "0";
+          freeReplaysWon++;
+          // Track try_again wins for maxWins enforcement
+          segmentWinCounts.set(selectedSegment.id, (segmentWinCounts.get(selectedSegment.id) || 0) + 1);
+        } else if (isWin) {
+          const value = parseFloat(selectedSegment.rewardValue?.toString() || "0");
+          balloonValues = [value, value, value];
+          rewardValue = value.toString();
+
+          if (rewardType === "cash") {
+            totalCash += value;
+          } else if (rewardType === "points") {
+            totalPoints += Math.floor(value);
+          }
+
+          // Update local win count
+          segmentWinCounts.set(selectedSegment.id, (segmentWinCounts.get(selectedSegment.id) || 0) + 1);
+        } else {
+          // Loss - generate non-matching balloon values
+          const cashSegments = segments.filter((seg: any) => seg.rewardType === "cash");
+          const availableValues = cashSegments.map((seg: any) => parseFloat(seg.rewardValue?.toString() || "1"));
+          if (availableValues.length >= 2) {
+            const val1 = availableValues[Math.floor(Math.random() * availableValues.length)];
+            let val2 = availableValues[Math.floor(Math.random() * availableValues.length)];
+            let val3 = availableValues[Math.floor(Math.random() * availableValues.length)];
+            if (val1 === val2 && val2 === val3) {
+              val3 = availableValues.find((v: number) => v !== val1) || val1 + 1;
+            }
+            balloonValues = [val1, val2, val3];
+          } else {
+            balloonValues = [1, 5, 10];
+          }
+        }
+
+        // Record usage
+        await tx.insert(popUsage).values({
+          orderId,
+          userId,
+          usedAt: new Date(),
+        });
+
+        // Record result
+        await tx.insert(popWins).values({
+          orderId,
+          userId,
+          prizeId: selectedSegment?.id || "none",
+          balloonValues,
+          rewardType,
+          rewardValue,
+          isWin,
+          wonAt: new Date(),
+        });
+
+        results.push({
+          balloonValues,
+          isWin,
+          isRPrize,
+          prize: { type: rewardType, value: rewardValue },
+        });
+      }
+
+      // Update user balance
+      if (totalCash > 0) {
+        const finalBalance = parseFloat(user.balance || "0") + totalCash;
+        await tx
+          .update(users)
+          .set({ balance: finalBalance.toFixed(2), updatedAt: new Date() })
+          .where(eq(users.id, userId));
+
+        await tx.insert(transactions).values({
+          userId,
+          type: "prize",
+          amount: totalCash.toFixed(2),
+          description: `Ringtone Pop Batch Win - £${totalCash.toFixed(2)}`,
+          createdAt: new Date(),
+        });
+      }
+
+      // Update user points
+      if (totalPoints > 0) {
+        const currentPoints = user.ringtonePoints || 0;
+        const newPoints = currentPoints + totalPoints;
+        await tx.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
+
+        // Create points transaction with ringtone_points type
+        await tx.insert(transactions).values({
+          userId,
+          type: "ringtone_points",
+          amount: totalPoints.toString(),
+          description: `Ringtone Pop Batch Win - ${totalPoints.toLocaleString()} pts`,
+          createdAt: new Date(),
+        });
+      }
+
+      // Grant free replays
+      if (freeReplaysWon > 0) {
+        await tx.update(orders).set({ quantity: order.quantity + freeReplaysWon }).where(eq(orders.id, orderId));
+      }
+
+      // Update segment win counts in config
+      const updatedSegments = segments.map((seg: any) => ({
+        ...seg,
+        currentWins: segmentWinCounts.get(seg.id) || seg.currentWins || 0
+      }));
+      await tx
+        .update(gamePopConfig)
+        .set({ prizes: updatedSegments, updatedAt: new Date() })
+        .where(eq(gamePopConfig.id, "active"));
+    });
+
+    res.json({
+      success: true,
+      processed: playsToProcess,
+      results,
+      totalWon: totalCash,
+      freeReplaysWon,
+      playsRemaining: playsRemaining - playsToProcess + freeReplaysWon,
+    });
+  } catch (error) {
+    console.error("Error revealing all pop games:", error);
+    res.status(500).json({ message: "Failed to reveal all pop games" });
+  }
+});
+
+// Get pop order info (user)
+app.get("/api/pop-order/:orderId", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId } = req.params;
+
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const playsUsed = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(popUsage)
+      .where(eq(popUsage.orderId, orderId));
+    
+    const usedCount = Number(playsUsed[0]?.count || 0);
+
+    // Get play history for this order
+    const history = await db
+      .select()
+      .from(popWins)
+      .where(eq(popWins.userId, userId))
+      .orderBy(desc(popWins.wonAt))
+      .limit(order.quantity);
+
+    res.json({
+      order,
+      playsUsed: usedCount,
+      playsRemaining: order.quantity - usedCount,
+      history,
+    });
+  } catch (error) {
+    console.error("Error fetching pop order:", error);
+    res.status(500).json({ message: "Failed to fetch pop order" });
+  }
+});
+
+// Get pop config visibility (public)
+app.get("/api/pop-config", async (req, res) => {
+  try {
+    const [config] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
+    
+    res.json({
+      isVisible: config?.isVisible ?? true,
+      isActive: config?.isActive ?? true,
+    });
+  } catch (error) {
+    console.error("Error fetching pop config:", error);
+    res.status(500).json({ message: "Failed to fetch pop configuration" });
+  }
+});
 
 
 app.delete("/api/admin/users/:id", isAuthenticated, isAdmin, async (req: any, res) => {

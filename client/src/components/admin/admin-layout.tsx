@@ -18,6 +18,7 @@ import {
   Euro,
   MessageSquare,
   Heart,
+  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,8 @@ const sidebarItems = [
   { name: "Dashboard", path: "/admin", icon: LayoutDashboard },
   { name: "Spin Wheel", path: "/admin/spin-wheel", icon: CircleDot },
   { name: "Scratch Card", path: "/admin/scratch-card", icon: CreditCard },
+  { name: "Ringtone Pop", path: "/admin/add-ringtone-pop", icon: Sparkles },
+  // { name: "Ringtone Pop", path: "/admin/ringtone-pop", icon: Sparkles },
   { name: "Competitions", path: "/admin/competitions", icon: Trophy },
   { name: "Entries", path: "/admin/entries", icon: Ticket },
   { name: "Past Winners", path: "/admin/past-winners", icon: Award },

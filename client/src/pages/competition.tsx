@@ -114,7 +114,12 @@ const purchaseTicketMutation = useMutation({
       // 🎯 Create Scratch Card order
       const response = await apiRequest("/api/create-scratch-order", "POST", data);
       return response.json();
-    } 
+    }
+    else if (competitionType === "pop") {
+      // 🎈 Create Pop Game order
+      const response = await apiRequest("/api/create-pop-order", "POST", data);
+      return response.json();
+    }
     else {
       // 🎟️ Regular competition - create order for billing page
       const response = await apiRequest("/api/create-competition-order", "POST", data);
@@ -134,6 +139,12 @@ const purchaseTicketMutation = useMutation({
     if (competitionType === "scratch") {
       // ✅ Redirect to scratch billing
       setLocation(`/scratch-billing/${data.orderId}`);
+      return;
+    }
+
+    if (competitionType === "pop") {
+      // ✅ Redirect to pop billing
+      setLocation(`/pop-billing/${data.orderId}`);
       return;
     }
 
@@ -194,7 +205,7 @@ const purchaseTicketMutation = useMutation({
   const type = competition.type?.toLowerCase();
 
   // ✅ Only check ticket limits for regular COMPETITIONS (not spin/scratch)
-  if (type !== "spin" && type !== "scratch") {
+  if (type !== "spin" && type !== "scratch"  && type !== "pop") {
     const competitionRemainingTickets =
       (competition.maxTickets ?? 0) - (competition.soldTickets ?? 0);
 
@@ -461,6 +472,8 @@ const purchaseTicketMutation = useMutation({
                             ? "🎡 Spin Wheel"
                             : competition.type === "scratch"
                             ? "🎫 Scratch Card"
+                            : competition.type === "pop"  // 🎈 Add this
+                            ? "🎈 Pop Balloon"
                             : "🏆 Competition"}
                         </span>
                       </div>
@@ -643,7 +656,7 @@ const purchaseTicketMutation = useMutation({
                         </p>
                       </div>
 
-                      {availableTickets.length > 0 && competition.type !== "spin" && competition.type !== "scratch" ? (
+                      {availableTickets.length > 0 && competition.type !== "spin" && competition.type !== "scratch" && competition.type !== "pop" ? (
                         <div className="space-y-2.5 md:space-y-3">
                           {/* Existing Tickets Badge - GOLD THEME */}
                           <div className="bg-gradient-to-r from-[#facc15]/20 to-[#f59e0b]/20 border border-[#facc15]/30 rounded-lg p-2.5 md:p-3 text-center">
@@ -694,31 +707,9 @@ const purchaseTicketMutation = useMutation({
                         </button>
                       )}
                     </div>
-                      <div className="flex justify-center mt-5">
-  <a
-    href="https://www.trustpilot.com/review/ringtoneriches.co.uk"
-    target="_blank"
-    rel="noopener noreferrer"
-    className="flex justify-center border border-2 border-[#0AB67B] cursor-pointer bg-white w-fit items-center space-x-2"
-  >
-    <span className="flex items-center text-black gap-1 mx-4 my-4">
-      Review us on
-      <svg
-        className="w-5 h-5 text-[#0AB67B]"
-        viewBox="0 0 20 20"
-        fill="currentColor"
-      >
-        <path d="M10 15l-5.878 3.09L5.451 11 0 6.91l6.061-.88L10 0l3.939 6.03 6.061.88L14.549 11l1.329 7.09z" />
-      </svg>
-      Trustpilot
-    </span>
-  </a>
-</div>
                   </div>
                 </div>
-                
                 </div>
-                
 
                 {/* User Balance (if authenticated) - GOLD THEME */}
                 {isAuthenticated && user && (
@@ -930,6 +921,8 @@ const purchaseTicketMutation = useMutation({
             ? "🎡 BUY SPINS NOW"
             : competition.type === "scratch"
             ? "🎫 BUY SCRATCHES NOW"
+             : competition.type === "pop"  // 🎈 Add this
+    ? "🎈 BUY POP GAMES NOW"
             : "🚀 ENTER NOW"}
         </span>
         {/* Shimmer effect on button */}
