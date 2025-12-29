@@ -61,12 +61,7 @@ export default function PastWinners() {
       },
     }));
     
-    // Sort by updatedAt (newest first)
-    winners.sort((a, b) => {
-      const dateA = new Date(a.updatedAt).getTime();
-      const dateB = new Date(b.updatedAt).getTime();
-      return dateB - dateA;
-    });
+  
     
     // console.log("🔄 First transformed winner:", winners[0]);
     return winners;

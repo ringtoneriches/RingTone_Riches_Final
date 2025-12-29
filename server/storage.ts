@@ -473,24 +473,28 @@ async getUserTransactions(userId: string): Promise<Transaction[]> {
   // Winner operations
 async getRecentWinners(limit?: number, showcaseOnly = false): Promise<Winner[]> {
   try {
-    let query = db
-      .select({
-        winners: winners,
-        users: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          email: users.email
-        },
-        competitions: {
-          id: competitions.id,
-          title: competitions.title
-        }
-      })
-      .from(winners)
-      .leftJoin(users, eq(users.id, winners.userId))
-      .leftJoin(competitions, eq(competitions.id, winners.competitionId))
-      .orderBy(desc(winners.updatedAt), desc(winners.createdAt));
+   let query = db
+  .select({
+    winners: winners,
+    users: {
+      id: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      email: users.email
+    },
+    competitions: {
+      id: competitions.id,
+      title: competitions.title
+    }
+  })
+  .from(winners)
+  .leftJoin(users, eq(users.id, winners.userId))
+  .leftJoin(competitions, eq(competitions.id, winners.competitionId))
+  .orderBy(
+    desc(sql<number>`CAST(REPLACE(${winners.prizeValue}, '£', '') AS DECIMAL)`),
+    desc(winners.updatedAt)
+  );
+
 
     if (showcaseOnly) {
       query = query.where(eq(winners.isShowcase, true));
