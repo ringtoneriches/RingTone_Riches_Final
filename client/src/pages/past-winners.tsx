@@ -95,7 +95,7 @@ export default function PastWinners() {
               <span className="gradient-text">PAST WINNERS</span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              See who's been winning amazing prizes! These could be you next.
+               See who's been winning amazing prizes over £100! This could be you next.
             </p>
           </div>
         </div>
