@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown, ArrowBigLeft, ArrowBigRight, CheckCircle,  XCircle } from "lucide-react";
+import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown, ArrowBigLeft, ArrowBigRight, CheckCircle,  XCircle, Users, Badge, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -31,6 +31,8 @@ import { useLocation } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
 import { Transaction } from "@shared/schema";
 import { getTotalCashflow } from "../wallet";
+import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SelectItem } from "@radix-ui/react-select";
 
 interface User {
   id: string;
@@ -88,6 +90,8 @@ const [sortFieldCashflow, setSortFieldCashflow] = useState<SortFieldCashflow>(nu
 const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false);
 const [userToDisable, setUserToDisable] = useState<User | null>(null);
 const [disableDays, setDisableDays] = useState("7");
+
+const [roleFilter, setRoleFilter] = useState<string>("all");
 
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
    const [currentPage , setCurrentPage] = useState(1);
@@ -208,6 +212,15 @@ const users = useMemo(() => {
       );
     });
   }
+
+   // ✅ NEW: Apply role filter
+  if (roleFilter !== "all") {
+    filtered = filtered.filter((user) => {
+      if (roleFilter === "admin") return user.isAdmin === true;
+      if (roleFilter === "user") return user.isAdmin !== true;
+      return true;
+    });
+  }
   
   // Apply sorting - check both sortField and sortFieldCashflow
   if ((sortField || sortFieldCashflow) && sortOrder) {
@@ -263,7 +276,7 @@ const users = useMemo(() => {
   }
   
   return filtered;
-}, [allUsers, searchInput, sortField, sortFieldCashflow, sortOrder, getCashflowTotal]); // Add getCashflowTotal to dependencies
+}, [allUsers, searchInput, sortField, sortFieldCashflow, roleFilter, sortOrder, getCashflowTotal]); // Add getCashflowTotal to dependencies
  
     const totalPages= Math.ceil(users.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -691,6 +704,51 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
           />
         </div>
 
+  <div className="flex items-center gap-3">
+  <Label className="text-sm font-medium text-gray-400">Role Filter:</Label>
+  
+  <div className="flex items-center bg-black/30 border border-blue-500/30 rounded-lg p-1">
+    <button
+      onClick={() => setRoleFilter("all")}
+      className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+        roleFilter === "all"
+          ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20"
+          : "text-gray-400 hover:text-gray-300 hover:bg-white/5"
+      }`}
+    >
+      All Users
+    </button>
+    
+    <button
+      onClick={() => setRoleFilter("admin")}
+      className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+        roleFilter === "admin"
+          ? "bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-lg shadow-purple-500/20"
+          : "text-gray-400 hover:text-gray-300 hover:bg-white/5"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <Shield className="h-4 w-4" />
+        Admins
+      </div>
+    </button>
+    
+    <button
+      onClick={() => setRoleFilter("user")}
+      className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+        roleFilter === "user"
+          ? "bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+          : "text-gray-400 hover:text-gray-300 hover:bg-white/5"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <Users className="h-4 w-4" />
+        Users
+      </div>
+    </button>
+  </div>
+  
+</div>
          {/* Sort info */}
         {/* {sortField && sortOrder && (
           <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded-md">
@@ -912,9 +970,9 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
                 </div>
         
                 {/* ENTRY COUNT */}
-                <p className="text-center text-sm text-muted-foreground">
-                  Showing {paginatedUsers.length} of {allUsers.length} filtered entries
-                </p>
+              <p className="text-center text-sm text-muted-foreground">
+                Showing {paginatedUsers?.length || 0} of {allUsers?.length || 0} filtered entries
+              </p>
         {/* Edit User Dialog */}
         <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
           <DialogContent className="max-h-[90vh] overflow-y-auto">

@@ -6193,27 +6193,57 @@ app.get("/api/admin/wellbeing/daily-top-users",isAuthenticated, isAdmin, async (
 });
 
 
-app.get("/api/admin/wellbeing/requests",isAuthenticated, isAdmin, async (req, res) => {
-  try {
-    const requests = await db
-      .select({
-        id: wellbeingRequests.id,
-        userId: wellbeingRequests.userId,
-        email: users.email,          
-        type: wellbeingRequests.type,
-        daysRequested: wellbeingRequests.daysRequested,
-        createdAt: wellbeingRequests.createdAt,
-      })
-      .from(wellbeingRequests)
-      .leftJoin(users, eq(users.id, wellbeingRequests.userId))
-      .orderBy(wellbeingRequests.createdAt, "desc");
+app.get(
+  "/api/admin/wellbeing/requests",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const now = new Date();
 
-    res.json({ success: true, requests });
-  } catch (err) {
-    console.error("Admin wellbeing requests error:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch requests" });
+      const requests = await db
+        .select({
+          id: wellbeingRequests.id,
+          userId: wellbeingRequests.userId,
+          email: users.email,
+          type: wellbeingRequests.type,
+          daysRequested: wellbeingRequests.daysRequested,
+          processed: wellbeingRequests.processed,
+          createdAt: wellbeingRequests.createdAt,
+        })
+        .from(wellbeingRequests)
+        .leftJoin(users, eq(users.id, wellbeingRequests.userId))
+        .orderBy(wellbeingRequests.createdAt, "desc");
+
+      // ⏳ Apply cooling-off calculation
+      const requestsWithCoolingOff = requests.map((req) => {
+        const coolingOffUntil = new Date(req.createdAt);
+        coolingOffUntil.setHours(coolingOffUntil.getHours() + 24);
+
+        const isCoolingOff = now < coolingOffUntil;
+
+        return {
+          ...req,
+          coolingOffUntil,
+          isCoolingOff,
+          canBeProcessed: !req.processed && !isCoolingOff,
+        };
+      });
+
+      res.json({
+        success: true,
+        requests: requestsWithCoolingOff,
+      });
+    } catch (err) {
+      console.error("Admin wellbeing requests error:", err);
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch requests",
+      });
+    }
   }
-});
+);
+
 
 app.post("/api/admin/users/:id/disable", isAuthenticated, isAdmin, async (req, res) => {
   const { id } = req.params; 
@@ -6271,6 +6301,92 @@ app.post("/api/admin/users/:userId/enable", isAuthenticated, isAdmin, async (req
   } catch (error) {
     console.error("Error enabling user:", error);
     res.status(500).json({ message: "Failed to enable user" });
+  }
+});
+
+// Add this route to your routes.ts
+// In your cleanup route, change 'withdrawals' to 'withdrawalRequests'
+app.post("/api/admin/cleanup-rejected-withdrawals", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    console.log("🧹 Starting cleanup of rejected withdrawals...");
+    
+    // 1. Get all rejected withdrawals - FIXED TABLE NAME
+    const rejectedWithdrawals = await db
+      .select()
+      .from(withdrawalRequests) // Changed from 'withdrawals' to 'withdrawalRequests'
+      .where(eq(withdrawalRequests.status, "rejected")); // Fixed
+    
+    console.log(`Found ${rejectedWithdrawals.length} rejected withdrawals`);
+    
+    if (rejectedWithdrawals.length === 0) {
+      return res.json({
+        success: true,
+        message: "No rejected withdrawals found to cleanup",
+        summary: {
+          deletedWithdrawals: 0,
+          deletedSpinWins: 0,
+          deletedScratchWins: 0
+        }
+      });
+    }
+    
+    let deletedSpinWins = 0;
+    let deletedScratchWins = 0;
+    
+    // 2. For each rejected withdrawal, delete associated wins
+    for (const withdrawal of rejectedWithdrawals) {
+      const userId = withdrawal.userId;
+      
+      // Delete spin wins for this user
+      const spinWinsResult = await db
+        .delete(spinWins)
+        .where(eq(spinWins.userId, userId));
+      
+      if (spinWinsResult.rowCount > 0) {
+        deletedSpinWins += spinWinsResult.rowCount;
+        console.log(`🗑️ Deleted ${spinWinsResult.rowCount} spin wins for user ${userId}`);
+      }
+      
+      // Delete scratch card wins for this user
+      const scratchWinsResult = await db
+        .delete(scratchCardWins)
+        .where(eq(scratchCardWins.userId, userId));
+      
+      if (scratchWinsResult.rowCount > 0) {
+        deletedScratchWins += scratchWinsResult.rowCount;
+        console.log(`🗑️ Deleted ${scratchWinsResult.rowCount} scratch wins for user ${userId}`);
+      }
+    }
+    
+    // 3. Delete all rejected withdrawals - FIXED TABLE NAME
+    const deleteResult = await db
+      .delete(withdrawalRequests) // Changed from 'withdrawals' to 'withdrawalRequests'
+      .where(eq(withdrawalRequests.status, "rejected")); // Fixed
+    
+    const deletedWithdrawals = deleteResult.rowCount || 0;
+    
+    console.log(`✅ Cleanup completed:`);
+    console.log(`   - Deleted ${deletedWithdrawals} rejected withdrawals`);
+    console.log(`   - Deleted ${deletedSpinWins} spin wins`);
+    console.log(`   - Deleted ${deletedScratchWins} scratch card wins`);
+    
+    res.json({
+      success: true,
+      message: "Cleanup completed successfully",
+      summary: {
+        deletedWithdrawals,
+        deletedSpinWins,
+        deletedScratchWins
+      }
+    });
+    
+  } catch (error) {
+    console.error("Cleanup error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to cleanup rejected withdrawals",
+      error: error.message
+    });
   }
 });
 
@@ -6517,7 +6633,7 @@ app.delete(
       await db
   .delete(auditLogs)
   .where(eq(auditLogs.competitionId, id));
-  
+
       // 6️⃣ Finally delete competition
       await db
         .delete(competitions)

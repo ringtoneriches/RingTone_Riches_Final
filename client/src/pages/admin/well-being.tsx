@@ -67,10 +67,17 @@ interface WellbeingRequest {
   id: string;
   userId: string;
   email: string;
-  type: 'suspension' | 'full_closure';
+  type: "suspension" | "full_closure";
   daysRequested: number | null;
   createdAt: string;
+
+  // 🔥 NEW (from backend)
+  processed: boolean;
+  isCoolingOff: boolean;
+  canBeProcessed: boolean;
+  coolingOffUntil: string;
 }
+
 
 interface UserSearchResult {
   id: string;
@@ -303,7 +310,17 @@ const totalDailyDeposits = sortedTopSpenders.reduce((sum, user) => {
   const totalSuspensionRequests = requestsData?.requests?.filter(r => r.type === "suspension").length || 0;
   const totalClosureRequests = requestsData?.requests?.filter(r => r.type === "full_closure").length || 0;
   
-  
+ const getCoolingOffTimeLeft = (coolingOffUntil: string) => {
+  const diffMs = new Date(coolingOffUntil).getTime() - Date.now(); // both in UTC internally
+  if (diffMs <= 0) return "Cooling-off complete";
+
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+  return `${hours}h ${minutes}m remaining`;
+};
+
+
 
   return (
      <AdminLayout>
@@ -686,6 +703,12 @@ const totalDailyDeposits = sortedTopSpenders.reduce((sum, user) => {
               <TableRow key={request.id} className="border-zinc-700 hover:bg-zinc-800/50">
                 <TableCell className="font-medium text-gray-300">
                   {request.email}
+                  {/* {request.isCoolingOff && (
+  <Badge className="mt-1 bg-amber-500/20 text-amber-400 text-xs">
+    Cooling-off
+  </Badge>
+)} */}
+
                 </TableCell>
                 <TableCell>
                   <Badge variant={request.type === "suspension" ? "secondary" : "destructive"}>
@@ -704,11 +727,30 @@ const totalDailyDeposits = sortedTopSpenders.reduce((sum, user) => {
                       {format(new Date(request.createdAt), "HH:mm:ss")}
                     </div>
                   </div>
+                  {/* {request.isCoolingOff && (
+                    <div className="text-xs text-amber-400 flex items-center gap-1 mt-1">
+                      <Clock className="h-3 w-3" />
+                      {getCoolingOffTimeLeft(request.coolingOffUntil)}
+                    </div>
+                  )} */}
+
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className="border-emerald-500/30 text-emerald-400">
-                    Completed
-                  </Badge>
+                  {request.processed ? (
+                    <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      Completed
+                    </Badge>
+                  ) : request.isCoolingOff ? (
+                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 w-fit">
+                      <Clock className="h-3 w-3" />
+                      Cooling-off
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                      Ready
+                    </Badge>
+                  )}
+
                 </TableCell>
               </TableRow>
             ))}

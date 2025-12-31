@@ -17,7 +17,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowDownCircle, CheckCircle, XCircle, Clock, Search, User, Mail, Phone, Wallet, Coins, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowDownCircle, CheckCircle, XCircle, Clock, Search, User, Mail, Phone, Wallet, Coins, ChevronLeft, ChevronRight, Trash2, AlertTriangle } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -40,9 +40,43 @@ export default function AdminWithdrawals() {
   const [pendingPage, setPendingPage] = useState(1);
   const [processedPage, setProcessedPage] = useState(1);
   const itemsPerPage = 25; 
+
+  const [isCleanupDialogOpen, setIsCleanupDialogOpen] = useState(false);
+const [cleanupLoading, setCleanupLoading] = useState(false);
   const { data: withdrawalRequests = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/withdrawal-requests"],
   });
+
+
+  const cleanupMutation = useMutation({
+  mutationFn: async () => {
+    const response = await apiRequest(
+      "/api/admin/cleanup-rejected-withdrawals",
+      "POST"
+    );
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Cleanup failed");
+    }
+    return response.json();
+  },
+  onSuccess: (data) => {
+    toast({
+      title: "✅ Cleanup Successful",
+      description: `Deleted ${data.summary.deletedWithdrawals} withdrawals, ${data.summary.deletedSpinWins} spin wins, and ${data.summary.deletedScratchWins} scratch wins`,
+    });
+    setIsCleanupDialogOpen(false);
+    // Refresh data
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/withdrawal-requests"] });
+  },
+  onError: (error: any) => {
+    toast({
+      title: "❌ Cleanup Failed",
+      description: error.message,
+      variant: "destructive",
+    });
+  },
+});
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({
@@ -210,6 +244,8 @@ useEffect(() => {
             </div>
           </div>
         </div>
+
+      
 
         {/* Search and Filter */}
         <Card className="bg-zinc-900 border-yellow-500/30">
@@ -393,12 +429,26 @@ useEffect(() => {
 
         {/* Processed Requests */}
         <Card className="bg-zinc-900 border-yellow-500/30">
-          <CardHeader className="border-b border-yellow-500/20">
-            <CardTitle className="text-xl text-yellow-400 flex items-center gap-2">
-              <ArrowDownCircle className="h-5 w-5" />
-              Processed Requests ({processedPaginated.length})
-            </CardTitle>
-          </CardHeader>
+            <CardHeader className="border-b border-yellow-500/20">
+    <div className="flex items-center justify-between"> {/* Add flex container */}
+      <CardTitle className="text-xl text-yellow-400 flex items-center gap-2">
+        <ArrowDownCircle className="h-5 w-5" />
+        Processed Requests ({processedPaginated.length})
+      </CardTitle>
+      
+      {/* Cleanup Button - moved inside the flex container */}
+      <Button
+        variant="outline"
+        onClick={() => setIsCleanupDialogOpen(true)}
+        className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+        disabled={cleanupMutation.isPending}
+      >
+        <Trash2 className="h-4 w-4 mr-2" />
+        Cleanup Rejected
+      </Button>
+    </div>
+  </CardHeader>
+  
           <CardContent className="pt-6">
             {processedPaginated.length === 0 ? (
               <p className="text-gray-400 text-center py-8">
@@ -592,6 +642,70 @@ useEffect(() => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog open={isCleanupDialogOpen} onOpenChange={setIsCleanupDialogOpen}>
+  <DialogContent className="bg-zinc-900 border-red-500/30">
+    <DialogHeader>
+      <DialogTitle className="text-red-400 text-xl">
+        ⚠️ Cleanup Rejected Withdrawals
+      </DialogTitle>
+      <DialogDescription className="text-gray-400">
+        This will permanently delete all rejected withdrawals and their associated spin/scratch wins.
+      </DialogDescription>
+    </DialogHeader>
+    
+    <div className="space-y-4">
+      <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm text-red-300 font-semibold mb-2">
+              This action cannot be undone and will:
+            </p>
+            <ul className="text-sm text-red-300 space-y-1">
+              <li>• Permanently delete all rejected withdrawals</li>
+              <li>• Delete all spin wins for users with rejected withdrawals</li>
+              <li>• Delete all scratch card wins for users with rejected withdrawals</li>
+              <li>• This data will be lost forever</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      
+      <div className="bg-black/40 rounded-lg p-4 border border-zinc-700">
+        <p className="text-sm text-gray-300 mb-2">
+          <span className="font-semibold">Impact:</span> This cleanup affects data integrity and should only be done for maintenance purposes.
+        </p>
+        <p className="text-xs text-gray-500">
+          Note: User balances and transactions will NOT be affected, only wins and withdrawal records.
+        </p>
+      </div>
+    </div>
+    
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() => setIsCleanupDialogOpen(false)}
+        className="border-zinc-700 text-gray-400 hover:bg-zinc-800"
+      >
+        Cancel
+      </Button>
+      <Button
+        variant="destructive"
+        onClick={() => cleanupMutation.mutate()}
+        disabled={cleanupMutation.isPending}
+      >
+        {cleanupMutation.isPending ? (
+          <>
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+            Cleaning up...
+          </>
+        ) : (
+          "Confirm Cleanup"
+        )}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
     </AdminLayout>
   );
 }
