@@ -6458,50 +6458,83 @@ app.patch("/api/admin/competitions/:id/display-order", isAuthenticated, isAdmin,
 });
 
 // Delete competition
-app.delete("/api/admin/competitions/:id", isAuthenticated, isAdmin, async (req: any, res) => {
-  try {
-    const { id } = req.params;
+app.delete(
+  "/api/admin/competitions/:id",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { id } = req.params;
 
-    // 1️⃣ Get existing competition
-    const existing = await db.select().from(competitions).where(eq(competitions.id, id)).limit(1);
-    const competition = existing[0];
-    if (!competition) return res.status(404).json({ message: "Competition not found" });
+      // 1️⃣ Get competition
+      const [competition] = await db
+        .select()
+        .from(competitions)
+        .where(eq(competitions.id, id))
+        .limit(1);
 
-    // 2️⃣ Delete competition image from R2
-    if (competition.imageUrl) {
-      const key = competition.imageUrl.replace(`${process.env.R2_PUBLIC_URL}/`, "");
-      await deleteR2Object(key);
+      if (!competition) {
+        return res.status(404).json({ message: "Competition not found" });
+      }
+
+      // 2️⃣ Delete image from R2
+      if (competition.imageUrl) {
+        const key = competition.imageUrl.replace(
+          `${process.env.R2_PUBLIC_URL}/`,
+          ""
+        );
+        await deleteR2Object(key);
+      }
+
+      // 3️⃣ Get ALL orders for this competition
+      const competitionOrders = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(eq(orders.competitionId, id));
+
+      const orderIds = competitionOrders.map(o => o.id);
+
+      if (orderIds.length > 0) {
+        // 🔥 DELETE CHILD TABLES FIRST (orderId based)
+
+        await db.delete(spinUsage).where(inArray(spinUsage.orderId, orderIds));
+        await db.delete(scratchCardUsage).where(
+          inArray(scratchCardUsage.orderId, orderIds)
+        );
+        await db.delete(transactions).where(
+          inArray(transactions.orderId, orderIds)
+        );
+      }
+
+      // 4️⃣ Tables linked directly to competition
+      await db.delete(tickets).where(eq(tickets.competitionId, id));
+      await db.delete(winners).where(eq(winners.competitionId, id));
+
+      // 5️⃣ NOW it is safe to delete orders
+      await db.delete(orders).where(eq(orders.competitionId, id));
+
+
+      await db
+  .delete(auditLogs)
+  .where(eq(auditLogs.competitionId, id));
+  
+      // 6️⃣ Finally delete competition
+      await db
+        .delete(competitions)
+        .where(eq(competitions.id, id));
+
+      wsManager.broadcast({
+        type: "competition_deleted",
+        competitionId: id,
+      });
+
+      res.json({ message: "Competition deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting competition:", error);
+      res.status(500).json({ message: "Failed to delete competition" });
     }
-
-    // 3️⃣ Delete all related orders, tickets, winners, transactions, etc. (your current code)
-    const competitionOrders = await db
-      .select({ id: orders.id })
-      .from(orders)
-      .where(eq(orders.competitionId, id));
-    
-    const orderIds = competitionOrders.map(order => order.id);
-
-    if (orderIds.length > 0) {
-      await db.delete(spinUsage).where(inArray(spinUsage.orderId, orderIds));
-      await db.delete(spinWins).where(inArray(spinWins.userId, db.select({ userId: orders.userId }).from(orders).where(eq(orders.competitionId, id))));
-      await db.delete(scratchCardUsage).where(inArray(scratchCardUsage.orderId, orderIds));
-      await db.delete(scratchCardWins).where(inArray(scratchCardWins.userId, db.select({ userId: orders.userId }).from(orders).where(eq(orders.competitionId, id))));
-    }
-
-    await db.delete(transactions).where(inArray(transactions.orderId, orderIds));
-    await db.delete(tickets).where(eq(tickets.competitionId, id));
-    await db.delete(winners).where(eq(winners.competitionId, id));
-    await db.delete(orders).where(eq(orders.competitionId, id));
-
-    const [deletedCompetition] = await db.delete(competitions).where(eq(competitions.id, id)).returning();
-    wsManager.broadcast({ type: 'competition_deleted', competitionId: id });
-
-    res.json({ message: "Competition deleted successfully" });
-  } catch (error) {
-    console.error("Error deleting competition:", error);
-    res.status(500).json({ message: "Failed to delete competition" });
   }
-});
+);
 
 
 // Get tickets for a competition
