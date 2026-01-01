@@ -81,6 +81,7 @@ export const competitions = pgTable("competitions", {
   displayOrder: integer("display_order").default(999), // Lower numbers appear first
   endDate: timestamp("end_date"), // Optional countdown timer end date
   wheelType: varchar("wheel_type", { enum: ["wheel1", "wheel2"] }).default("wheel1"),
+  status: text("status").default("active"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

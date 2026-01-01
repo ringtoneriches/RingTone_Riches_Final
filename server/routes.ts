@@ -1005,51 +1005,93 @@ if (email) {
   // Competition routes
 app.get("/api/competitions", async (req, res) => {
   try {
-    const competitionsList = await db.select()
+    console.log("🔍 [API] Fetching competitions...");
+    
+    const competitionsList = await db
+      .select()
       .from(competitions)
-      .where(eq(competitions.isActive, true))
-      .orderBy(asc(competitions.displayOrder), desc(competitions.createdAt));
+      .where(
+        and(
+          eq(competitions.isActive, true),
+          eq(competitions.status, "active")
+        )
+      )
+      .orderBy(
+        asc(competitions.displayOrder),
+        desc(competitions.createdAt)
+      );
+
+    console.log(`📊 [API] Found ${competitionsList.length} active competitions`);
     
-    // Check visibility settings for game types
-    const { gameSpinConfig, gameScratchConfig, gamePopConfig } = await import("@shared/schema");
-    const [spinConfig] = await db.select().from(gameSpinConfig).where(eq(gameSpinConfig.id, "active"));
-    const [scratchConfig] = await db.select().from(gameScratchConfig).where(eq(gameScratchConfig.id, "active"));
-    const [popConfig] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
-    
-    // Filter out hidden competitions based on game type visibility
+    // Log each competition's details
+    competitionsList.forEach(comp => {
+      console.log(`  - ID: ${comp.id}, Type: ${comp.type}, Title: ${comp.title}, Status: ${comp.status}`);
+    });
+
+    // game visibility logic stays SAME
+    const { gameSpinConfig, gameScratchConfig, gamePopConfig } =
+      await import("@shared/schema");
+
+    const [spinConfig] = await db
+      .select()
+      .from(gameSpinConfig)
+      .where(eq(gameSpinConfig.id, "active"));
+
+    const [scratchConfig] = await db
+      .select()
+      .from(gameScratchConfig)
+      .where(eq(gameScratchConfig.id, "active"));
+
+    const [popConfig] = await db
+      .select()
+      .from(gamePopConfig)
+      .where(eq(gamePopConfig.id, "active"));
+
+    console.log(`⚙️ [API] Game configs - Spin: ${spinConfig?.isVisible}, Scratch: ${scratchConfig?.isVisible}, Pop: ${popConfig?.isVisible}`);
+
     const visibleCompetitions = competitionsList.filter((comp) => {
-      if (comp.type === "spin" && spinConfig && spinConfig.isVisible === false) {
-        return false;
-      }
-      if (comp.type === "scratch" && scratchConfig && scratchConfig.isVisible === false) {
-        return false;
-      }
-      if (comp.type === "pop" && popConfig && popConfig.isVisible === false) {
-        return false;
-      }
+      if (comp.type === "spin" && spinConfig?.isVisible === false) return false;
+      if (comp.type === "scratch" && scratchConfig?.isVisible === false) return false;
+      if (comp.type === "pop" && popConfig?.isVisible === false) return false;
       return true;
     });
-    
+
+    console.log(`✅ [API] Returning ${visibleCompetitions.length} visible competitions`);
+    console.log(`📝 [API] Competition types: ${visibleCompetitions.map(c => c.type).join(', ')}`);
+
     res.json(visibleCompetitions);
   } catch (error) {
-    console.error("Error fetching competitions:", error);
+    console.error("❌ [API] Error fetching competitions:", error);
     res.status(500).json({ message: "Failed to fetch competitions" });
   }
 });
 
 
+
 app.get("/api/competitions/:id", async (req, res) => {
   try {
-    const competition = await storage.getCompetition(req.params.id);
-    if (!competition) {
+    const competition = await db
+      .select()
+      .from(competitions)
+      .where(
+        and(
+          eq(competitions.id, req.params.id),
+          eq(competitions.status, "active")
+        )
+      )
+      .limit(1);
+
+    if (!competition.length) {
       return res.status(404).json({ message: "Competition not found" });
     }
-    res.json(competition);
+
+    res.json(competition[0]);
   } catch (error) {
     console.error("Error fetching competition:", error);
     res.status(500).json({ message: "Failed to fetch competition" });
   }
- });
+});
+
 
 app.post("/api/create-payment-intent", isAuthenticated, async (req: any, res) => {
   try {
@@ -6582,7 +6624,6 @@ app.delete(
     try {
       const { id } = req.params;
 
-      // 1️⃣ Get competition
       const [competition] = await db
         .select()
         .from(competitions)
@@ -6593,64 +6634,51 @@ app.delete(
         return res.status(404).json({ message: "Competition not found" });
       }
 
-      // 2️⃣ Delete image from R2
-      if (competition.imageUrl) {
-        const key = competition.imageUrl.replace(
-          `${process.env.R2_PUBLIC_URL}/`,
-          ""
-        );
-        await deleteR2Object(key);
-      }
-
-      // 3️⃣ Get ALL orders for this competition
-      const competitionOrders = await db
-        .select({ id: orders.id })
-        .from(orders)
-        .where(eq(orders.competitionId, id));
-
-      const orderIds = competitionOrders.map(o => o.id);
-
-      if (orderIds.length > 0) {
-        // 🔥 DELETE CHILD TABLES FIRST (orderId based)
-
-        await db.delete(spinUsage).where(inArray(spinUsage.orderId, orderIds));
-        await db.delete(scratchCardUsage).where(
-          inArray(scratchCardUsage.orderId, orderIds)
-        );
-        await db.delete(transactions).where(
-          inArray(transactions.orderId, orderIds)
-        );
-      }
-
-      // 4️⃣ Tables linked directly to competition
-      await db.delete(tickets).where(eq(tickets.competitionId, id));
-      await db.delete(winners).where(eq(winners.competitionId, id));
-
-      // 5️⃣ NOW it is safe to delete orders
-      await db.delete(orders).where(eq(orders.competitionId, id));
-
-
+      // 🔥 VISUAL DELETE ONLY
       await db
-  .delete(auditLogs)
-  .where(eq(auditLogs.competitionId, id));
-
-      // 6️⃣ Finally delete competition
-      await db
-        .delete(competitions)
+        .update(competitions)
+        .set({
+          status: "hidden",
+          isActive: false,
+          updatedAt: new Date(),
+        })
         .where(eq(competitions.id, id));
 
       wsManager.broadcast({
-        type: "competition_deleted",
+        type: "competition_hidden",
         competitionId: id,
       });
 
-      res.json({ message: "Competition deleted successfully" });
+      res.json({ message: "Competition hidden successfully" });
     } catch (error) {
-      console.error("Error deleting competition:", error);
-      res.status(500).json({ message: "Failed to delete competition" });
+      console.error("Error hiding competition:", error);
+      res.status(500).json({ message: "Failed to hide competition" });
     }
   }
 );
+
+
+app.post(
+  "/api/admin/competitions/:id/restore",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    const { id } = req.params;
+
+    await db
+      .update(competitions)
+      .set({
+        status: "active",
+        isActive: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(competitions.id, id));
+
+    res.json({ message: "Competition restored" });
+  }
+);
+
+
 
 
 // Get tickets for a competition
