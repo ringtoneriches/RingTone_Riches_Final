@@ -212,7 +212,7 @@ export default function Landing() {
               { icon: Shield, text: "SSL Secure" },
               { icon: CheckCircle, text: "Verified Fair" },
               { icon: Coins, text: "Instant Payouts" },
-              { icon: Award, text: "UK Licensed" }
+              // { icon: Award, text: "UK Licensed" }
             ].map((badge, index) => (
               <div key={index} className="flex items-center gap-2">
                 <badge.icon className="w-4 h-4" />
