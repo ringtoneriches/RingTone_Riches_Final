@@ -183,7 +183,7 @@ export default function Landing() {
                   {/* Image with premium frame */}
                   <div className="relative rounded-2xl overflow-hidden border-2 border-amber-500/40 shadow-[0_0_80px_rgba(212,175,55,0.3)]">
                     <img 
-                      src="/attached_assets/explosive_jackpot_winning_moment.png"
+                      src="/attached_assets/trophy_winner_celebration_moment.png"
                       alt="Win Amazing Prizes"
                       className="w-full h-auto object-cover"
                     />

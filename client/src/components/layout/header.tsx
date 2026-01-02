@@ -74,7 +74,7 @@ export default function Header() {
               <img
                 src={logoImage}
                 alt="RingTone Riches"
-                className="h-12 sm:h-14 lg:h-16 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+                className="h-16 sm:h-14 lg:h-16 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
                 data-testid="img-logo"
               />
             </div>
@@ -116,7 +116,7 @@ export default function Header() {
                   </div>
                 </Link>
                 
-                <Link href="/wallet?tab=account">
+                {/* <Link href="/wallet?tab=account">
                   <button className="hidden lg:flex btn-modern-primary text-xs px-6 py-3" data-testid="button-account">
                     MY ACCOUNT
                   </button>
@@ -128,7 +128,7 @@ export default function Header() {
                   data-testid="button-logout"
                 >
                   LOGOUT
-                </button>
+                </button> */}
               </>
             ) : (
               <div className="hidden lg:flex items-center gap-3">

@@ -165,10 +165,10 @@ export default function Home() {
                   Welcome back, <span className="text-amber-400 font-bold">{user?.firstName || user?.email?.split('@')[0] || 'Champion'}</span>
                 </span>
                 <span className="block text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white leading-none">
-                  Your Fortune
+                  Ready to Join the
                 </span>
                 <span className="block text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-none animate-text-shimmer">
-                  Awaits
+                  Winner List
                 </span>
               </h1>
               
@@ -266,9 +266,9 @@ export default function Home() {
                     {/* Game Cards - Responsive */}
                     <div className="relative space-y-2.5 sm:space-y-4">
   {[
-    { Icon: RotateCw, title: "Spin & Win", tagline: "Spin to Win Big", prize: "£500", stars: 5, winChance: "High", badge: "HOT", badgeColor: "bg-red-500", gradient: "from-purple-600 via-purple-500 to-violet-600", borderColor: "border-purple-400/50", glowColor: "shadow-purple-500/50", filter: "spin" },
-    { Icon: Ticket, title: "Scratch Cards", tagline: "Reveal Your Fortune", prize: "£1,000", stars: 4, winChance: "Best Odds", badge: "POPULAR", badgeColor: "bg-emerald-500", gradient: "from-emerald-600 via-emerald-500 to-teal-600", borderColor: "border-emerald-400/50", glowColor: "shadow-emerald-500/50", filter: "scratch" },
-    { Icon: Zap, title: "Competition", tagline: "Know in Seconds", prize: "£2,500", stars: 5, winChance: "Mega Jackpot", badge: "MEGA", badgeColor: "bg-amber-500", gradient: "from-amber-500 via-yellow-500 to-orange-500", borderColor: "border-amber-400/50", glowColor: "shadow-amber-500/50", filter: "instant" }
+    { Icon: RotateCw, title: "Spin & Win", tagline: "Spin to Win Big",  stars: 5, winChance: "High", badge: "HOT", badgeColor: "bg-red-500", gradient: "from-purple-600 via-purple-500 to-violet-600", borderColor: "border-purple-400/50", glowColor: "shadow-purple-500/50", filter: "spin" },
+    { Icon: Ticket, title: "Scratch Cards", tagline: "Reveal Your Fortune",  stars: 5, winChance: "Best Odds", badge: "POPULAR", badgeColor: "bg-emerald-500", gradient: "from-emerald-600 via-emerald-500 to-teal-600", borderColor: "border-emerald-400/50", glowColor: "shadow-emerald-500/50", filter: "scratch" },
+    { Icon: Zap, title: "Competition", tagline: "Win Big Prizes",  stars: 5, winChance: "Mega Jackpot", badge: "MEGA", badgeColor: "bg-amber-500", gradient: "from-amber-500 via-yellow-500 to-orange-500", borderColor: "border-amber-400/50", glowColor: "shadow-amber-500/50", filter: "instant" }
   ].map((game, index) => (
     <button
       key={index}
@@ -380,7 +380,7 @@ export default function Home() {
                   { icon: Shield, text: "SSL Secure", color: "text-emerald-400" },
                   { icon: CheckCircle2, text: "Verified Fair", color: "text-amber-400" },
                   { icon: Coins, text: "Instant Payouts", color: "text-purple-400" },
-                  { icon: Award, text: "UK Licensed", color: "text-amber-400" }
+                  // { icon: Award, text: "UK Licensed", color: "text-amber-400" }
                 ].map((badge, index) => (
                   <div key={index} className="flex items-center gap-2 text-white/40">
                     <badge.icon className={`w-4 h-4 ${badge.color}`} />
