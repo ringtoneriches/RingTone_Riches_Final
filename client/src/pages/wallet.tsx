@@ -1711,9 +1711,7 @@ const handleResumeOrder = () => {
                   groupedEntries.map((entry, groupIndex) => (
                     <Card
     key={entry.competition.id}
-    className={`bg-zinc-900 border-yellow-500/30 overflow-hidden shadow-xl shadow-yellow-500/10
-      ${!entry.competition.isActive ? "opacity-60 grayscale" : ""}`}
-  >
+    className="bg-zinc-900 border-yellow-500/30 overflow-hidden shadow-xl shadow-yellow-500/10">
                       <div className="bg-gradient-to-r from-yellow-900/20 to-zinc-900 p-4 border-b border-yellow-500/30">
                         <div className="flex items-start gap-4">
                           {entry.competition.imageUrl && (
