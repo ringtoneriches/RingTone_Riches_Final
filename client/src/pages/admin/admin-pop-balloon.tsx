@@ -532,9 +532,9 @@ export default function AdminPopBalloon() {
               <p className="text-muted-foreground mb-4">
                 No pop balloon games yet
               </p>
-              <Button onClick={() => setCreateDialogOpen(true)}>
+              {/* <Button onClick={() => setCreateDialogOpen(true)}>
                 Create Your First Pop Game
-              </Button>
+              </Button> */}
             </div>
           ) : (
             competitions.map((competition) => (
