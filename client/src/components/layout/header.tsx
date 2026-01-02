@@ -116,7 +116,7 @@ export default function Header() {
                   </div>
                 </Link>
                 
-                {/* <Link href="/wallet?tab=account">
+                <Link href="/wallet?tab=account">
                   <button className="hidden lg:flex btn-modern-primary text-xs px-6 py-3" data-testid="button-account">
                     MY ACCOUNT
                   </button>
@@ -128,7 +128,7 @@ export default function Header() {
                   data-testid="button-logout"
                 >
                   LOGOUT
-                </button> */}
+                </button>
               </>
             ) : (
               <div className="hidden lg:flex items-center gap-3">

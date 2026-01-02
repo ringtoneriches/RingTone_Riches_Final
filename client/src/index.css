@@ -213,6 +213,18 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   .btn-modern-primary:active {
     transform: translateY(-1px) scale(0.99);
   }
+  @media (max-width: 768px) {
+  .btn-modern-primary {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .btn-modern-secondary,
+  .btn-modern-icon {
+    display: none !important;
+  }
+}
   
   /* Secondary - Ghost with Gold Border */
   .btn-modern-secondary {
