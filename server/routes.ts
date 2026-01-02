@@ -1066,6 +1066,30 @@ app.get("/api/competitions", async (req, res) => {
   }
 });
 
+app.get(
+  "/api/user/entry-competitions",
+  isAuthenticated,
+  async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+
+      const rows = await db
+        .selectDistinct()
+        .from(competitions)
+        .innerJoin(
+          tickets,
+          eq(tickets.competitionId, competitions.id)
+        )
+        .where(eq(tickets.userId, userId));
+
+      // return ONLY competitions
+      res.json(rows.map((r) => r.competitions));
+    } catch (error) {
+      console.error("Error fetching entry competitions:", error);
+      res.status(500).json({ message: "Failed to fetch entry competitions" });
+    }
+  }
+);
 
 
 app.get("/api/competitions/:id", async (req, res) => {
@@ -6616,8 +6640,11 @@ app.patch("/api/admin/competitions/:id/display-order", isAuthenticated, isAdmin,
 });
 
 // Delete competition
-app.delete(
-  "/api/admin/competitions/:id",
+// In your backend routes file (e.g., routes.ts or server.ts)
+
+// Archive endpoint (replaces delete)
+app.post(
+  "/api/admin/competitions/:id/archive",
   isAuthenticated,
   isAdmin,
   async (req: any, res) => {
@@ -6634,47 +6661,69 @@ app.delete(
         return res.status(404).json({ message: "Competition not found" });
       }
 
-      // 🔥 VISUAL DELETE ONLY
+      // Archive the competition by setting isActive to false
       await db
         .update(competitions)
         .set({
-          status: "hidden",
           isActive: false,
           updatedAt: new Date(),
         })
         .where(eq(competitions.id, id));
 
+      // Broadcast to WebSocket if needed
       wsManager.broadcast({
-        type: "competition_hidden",
+        type: "competition_archived",
         competitionId: id,
       });
 
-      res.json({ message: "Competition hidden successfully" });
+      res.json({ message: "Competition archived successfully" });
     } catch (error) {
-      console.error("Error hiding competition:", error);
-      res.status(500).json({ message: "Failed to hide competition" });
+      console.error("Error archiving competition:", error);
+      res.status(500).json({ message: "Failed to archive competition" });
     }
   }
 );
 
-
+// Unarchive endpoint
 app.post(
-  "/api/admin/competitions/:id/restore",
+  "/api/admin/competitions/:id/unarchive",
   isAuthenticated,
   isAdmin,
   async (req: any, res) => {
-    const { id } = req.params;
+    try {
+      const { id } = req.params;
 
-    await db
-      .update(competitions)
-      .set({
-        status: "active",
-        isActive: true,
-        updatedAt: new Date(),
-      })
-      .where(eq(competitions.id, id));
+      const [competition] = await db
+        .select()
+        .from(competitions)
+        .where(eq(competitions.id, id))
+        .limit(1);
 
-    res.json({ message: "Competition restored" });
+      if (!competition) {
+        return res.status(404).json({ message: "Competition not found" });
+      }
+
+      // Unarchive the competition by setting isActive to true
+      await db
+        .update(competitions)
+        .set({
+          isActive: true,
+          status: "active",
+          updatedAt: new Date(),
+        })
+        .where(eq(competitions.id, id));
+
+      // Broadcast to WebSocket if needed
+      wsManager.broadcast({
+        type: "competition_unarchived",
+        competitionId: id,
+      });
+
+      res.json({ message: "Competition unarchived successfully" });
+    } catch (error) {
+      console.error("Error unarchiving competition:", error);
+      res.status(500).json({ message: "Failed to unarchive competition" });
+    }
   }
 );
 

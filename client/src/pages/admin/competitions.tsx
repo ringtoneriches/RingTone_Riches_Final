@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, Trophy, Upload } from "lucide-react";
+import { Plus, Edit, Trash2, Trophy, Upload, Archive, ArchiveRestore } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -300,14 +300,19 @@ export default function AdminCompetitions() {
   const { toast } = useToast();
   const [editingCompetition, setEditingCompetition] = useState<Competition | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [archiveConfirm, setArchiveConfirm] = useState<string | null>(null);
+  const [unarchiveConfirm, setUnarchiveConfirm] = useState<string | null>(null);
   const [drawWinnerCompetition, setDrawWinnerCompetition] = useState<Competition | null>(null);
+  const [showArchivedModal, setShowArchivedModal] = useState(false);
 
   const { data: allCompetitions, isLoading } = useQuery<Competition[]>({
     queryKey: ["/api/admin/competitions"],
   });
 
+  // Filter competitions by type and status
   const competitions = allCompetitions?.filter((c) => c.type === "instant") || [];
+  const activeCompetitions = competitions.filter((c) => c.isActive);
+  const archivedCompetitions = competitions.filter((c) => !c.isActive);
 
   const createMutation = useMutation({
     mutationFn: async (formData: CompetitionFormData) => {
@@ -379,20 +384,40 @@ export default function AdminCompetitions() {
     },
   });
 
-  const deleteMutation = useMutation({
+  const archiveMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await apiRequest(`/api/admin/competitions/${id}`, "DELETE");
+      const res = await apiRequest(`/api/admin/competitions/${id}/archive`, "POST");
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/competitions"] });
-      setDeleteConfirm(null);
-      toast({ title: "Competition deleted successfully" });
+      setArchiveConfirm(null);
+      toast({ title: "Competition archived successfully" });
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to delete competition",
+        title: "Failed to archive competition",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const unarchiveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest(`/api/admin/competitions/${id}/unarchive`, "POST");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/competitions"] });
+      setUnarchiveConfirm(null);
+      toast({ title: "Competition unarchived successfully" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to unarchive competition",
         description: error.message,
         variant: "destructive",
       });
@@ -441,90 +466,99 @@ export default function AdminCompetitions() {
               Manage your competitions
             </p>
           </div>
-          <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-instant">
-            <Plus className="w-4 h-4 mr-2" />
-            Create Competition
-          </Button>
+          
+          <div className="flex flex-col sm:flex-row gap-2">
+            {/* View Archived Button - Top Right */}
+            {archivedCompetitions.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => setShowArchivedModal(true)}
+                className="gap-2"
+                data-testid="button-view-archived"
+              >
+                <Archive className="w-4 h-4" />
+                View Archived ({archivedCompetitions.length})
+              </Button>
+            )}
+            
+            <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-instant">
+              <Plus className="w-4 h-4 mr-2" />
+              Create Competition
+            </Button>
+          </div>
         </div>
 
-        <div className="grid gap-4">
-          {competitions?.map((competition) => (
-            <div
-              key={competition.id}
-              className="bg-card border border-border rounded-lg p-6 hover:shadow-lg transition-shadow"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex gap-4 flex-1">
-                  {competition.imageUrl && (
-                    <img
-                      src={competition.imageUrl}
-                      alt={competition.title}
-                      className="w-24 h-24 object-cover rounded-lg"
-                    />
-                  )}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="text-xl font-bold text-foreground">
-                        {competition.title}
-                      </h3>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          competition.type === "spin"
-                            ? "bg-purple-500/20 text-purple-500"
-                            : competition.type === "scratch"
-                            ? "bg-blue-500/20 text-blue-500"
-                            : "bg-primary/20 text-primary"
-                        }`}
-                      >
-                        {competition.type === "instant" && "Competition"}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {competition.description}
-                    </p>
-                    <div className="flex gap-6 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Price: </span>
-                        <span className="font-medium text-primary">
-                          £{parseFloat(competition.ticketPrice).toFixed(2)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Sold: </span>
-                        <span className="font-medium text-foreground">
-                          {competition.soldTickets || 0} / {competition.maxTickets}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Status: </span>
-                        <span
-                          className={`font-medium ${
-                            competition.isActive ? "text-green-500" : "text-red-500"
-                          }`}
-                        >
-                          {competition.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Display Order: </span>
-                        <Input
-                          type="number"
-                          min="0"
-                          defaultValue={competition.displayOrder ?? 999}
-                          onBlur={(e) => {
-                            const parsedValue = parseInt(e.target.value);
-                            const newOrder = isNaN(parsedValue) ? 999 : parsedValue;
-                            const currentOrder = competition.displayOrder ?? 999;
-                            if (newOrder !== currentOrder) {
-                              updateDisplayOrderMutation.mutate({
-                                id: competition.id,
-                                displayOrder: newOrder,
-                              });
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              const parsedValue = parseInt((e.target as HTMLInputElement).value);
+        {/* Active Competitions Section */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Active Competitions</h2>
+          <div className="grid gap-4">
+            {activeCompetitions.length === 0 ? (
+              <div className="text-center py-12 border border-dashed rounded-lg">
+                <p className="text-muted-foreground mb-4">
+                  No active competitions yet
+                </p>
+                <Button onClick={() => setCreateDialogOpen(true)}>
+                  Create Your First Competition
+                </Button>
+              </div>
+            ) : (
+              activeCompetitions.map((competition) => (
+                <div
+                  key={competition.id}
+                  className="bg-card border border-border rounded-lg p-6 hover:shadow-lg transition-shadow"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex gap-4 flex-1">
+                      {competition.imageUrl && (
+                        <img
+                          src={competition.imageUrl}
+                          alt={competition.title}
+                          className="w-24 h-24 object-cover rounded-lg"
+                        />
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-xl font-bold text-foreground">
+                            {competition.title}
+                          </h3>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary/20 text-primary">
+                            COMPETITION
+                          </span>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-500">
+                            ACTIVE
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          {competition.description}
+                        </p>
+                        <div className="flex gap-6 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Price: </span>
+                            <span className="font-medium text-primary">
+                              £{parseFloat(competition.ticketPrice).toFixed(2)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Sold: </span>
+                            <span className="font-medium text-foreground">
+                              {competition.soldTickets || 0} / {competition.maxTickets}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Status: </span>
+                            <span className="font-medium text-green-500">
+                              Active
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-muted-foreground">Display Order: </span>
+                          <Input
+                            type="number"
+                            min="0"
+                            defaultValue={competition.displayOrder ?? 999}
+                            onBlur={(e) => {
+                              const parsedValue = parseInt(e.target.value);
                               const newOrder = isNaN(parsedValue) ? 999 : parsedValue;
                               const currentOrder = competition.displayOrder ?? 999;
                               if (newOrder !== currentOrder) {
@@ -533,50 +567,166 @@ export default function AdminCompetitions() {
                                   displayOrder: newOrder,
                                 });
                               }
-                              (e.target as HTMLInputElement).blur();
-                            }
-                          }}
-                          className="w-20 h-8 text-sm"
-                          data-testid={`input-display-order-${competition.id}`}
-                          disabled={updateDisplayOrderMutation.isPending}
-                        />
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const parsedValue = parseInt((e.target as HTMLInputElement).value);
+                                const newOrder = isNaN(parsedValue) ? 999 : parsedValue;
+                                const currentOrder = competition.displayOrder ?? 999;
+                                if (newOrder !== currentOrder) {
+                                  updateDisplayOrderMutation.mutate({
+                                    id: competition.id,
+                                    displayOrder: newOrder,
+                                  });
+                                }
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            className="w-20 h-8 text-sm"
+                            data-testid={`input-display-order-${competition.id}`}
+                            disabled={updateDisplayOrderMutation.isPending}
+                          />
+                        </div>
                       </div>
+                    </div>
+
+                    <div className="flex  gap-2">
+                      {/* <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDrawWinnerCompetition(competition)}
+                        className="text-primary hover:text-primary"
+                        data-testid={`button-draw-${competition.id}`}
+                      >
+                        <Trophy className="w-4 h-4" />
+                      </Button> */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingCompetition(competition)}
+                        data-testid={`button-edit-${competition.id}`}
+                        className="gap-1"
+                      >
+                        <Edit className="w-4 h-4" />
+                       
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setArchiveConfirm(competition.id)}
+                        className="gap-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50"
+                        data-testid={`button-archive-${competition.id}`}
+                      >
+                        <Archive className="w-4 h-4" />
+                       
+                      </Button>
                     </div>
                   </div>
                 </div>
+              ))
+            )}
+          </div>
+        </div>
 
-                <div className="flex gap-2">
-                  {/* <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDrawWinnerCompetition(competition)}
-                    className="text-primary hover:text-primary"
-                    data-testid={`button-draw-${competition.id}`}
-                  >
-                    <Trophy className="w-4 h-4" />
-                  </Button> */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setEditingCompetition(competition)}
-                    data-testid={`button-edit-${competition.id}`}
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDeleteConfirm(competition.id)}
-                    className="text-red-500 hover:text-red-600"
-                    data-testid={`button-delete-${competition.id}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+        {/* Archived Games Modal */}
+        <Dialog open={showArchivedModal} onOpenChange={setShowArchivedModal}>
+  <DialogContent className="max-w-7xl max-h-[80vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2">
+        <Archive className="w-5 h-5" />
+        Archived Competitions ({archivedCompetitions.length})
+      </DialogTitle>
+    </DialogHeader>
+    
+    <div className="space-y-4 py-4">
+      {archivedCompetitions.length === 0 ? (
+        <div className="text-center py-8">
+          <Archive className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">No archived competitions</p>
+        </div>
+      ) : (
+        archivedCompetitions.map((competition) => (
+          <div
+            key={competition.id}
+            className="bg-card border border-border rounded-lg p-6 opacity-90"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex gap-4 flex-1">
+                {competition.imageUrl && (
+                  <img
+                    src={competition.imageUrl}
+                    alt={competition.title}
+                    className="w-20 h-20 object-cover rounded-lg"
+                  />
+                )}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-lg font-bold text-foreground">
+                      {competition.title}
+                    </h3>
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary/20 text-primary">
+                      COMPETITION
+                    </span>
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-500">
+                      ARCHIVED
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {competition.description}
+                  </p>
+                  <div className="flex flex-wrap gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Price: </span>
+                      <span className="font-medium text-primary">
+                        £{parseFloat(competition.ticketPrice).toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Sold: </span>
+                      <span className="font-medium text-foreground">
+                        {competition.soldTickets || 0} / {competition.maxTickets}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Status: </span>
+                      <span className="font-medium text-red-500">
+                        Inactive (Archived)
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setUnarchiveConfirm(competition.id);
+                  }}
+                  className="gap-1 text-green-500 hover:text-green-600 hover:bg-green-50"
+                  data-testid={`button-unarchive-modal-${competition.id}`}
+                >
+                  <ArchiveRestore className="w-4 h-4" />
+                  Unarchive
+                </Button>
+              </div>
             </div>
-          ))}
-        </div>
+          </div>
+        ))
+      )}
+    </div>
+    
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() => setShowArchivedModal(false)}
+      >
+        Close
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
 
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogContent className="max-w-2xl">
@@ -614,28 +764,63 @@ export default function AdminCompetitions() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+        {/* Archive Confirmation Dialog */}
+        <Dialog
+          open={!!archiveConfirm}
+          onOpenChange={(open) => !open && setArchiveConfirm(null)}
+        >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogTitle>Archive Competition</DialogTitle>
             </DialogHeader>
             <p className="text-muted-foreground">
-              Are you sure you want to delete this competition? This action cannot be undone and will also delete all related orders, tickets, and transactions.
+              Are you sure you want to archive this competition? Archived competitions will become inactive and won't be shown on the frontend.
             </p>
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setDeleteConfirm(null)}
-                disabled={deleteMutation.isPending}
+                onClick={() => setArchiveConfirm(null)}
+                disabled={archiveMutation.isPending}
               >
                 Cancel
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm)}
-                disabled={deleteMutation.isPending}
+                onClick={() => archiveConfirm && archiveMutation.mutate(archiveConfirm)}
+                disabled={archiveMutation.isPending}
               >
-                {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                {archiveMutation.isPending ? "Archiving..." : "Archive"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Unarchive Confirmation Dialog */}
+        <Dialog
+          open={!!unarchiveConfirm}
+          onOpenChange={(open) => !open && setUnarchiveConfirm(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Unarchive Competition</DialogTitle>
+            </DialogHeader>
+            <p className="text-muted-foreground">
+              Are you sure you want to unarchive this competition? The competition will become active and will be shown on the frontend.
+            </p>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setUnarchiveConfirm(null)}
+                disabled={unarchiveMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="default"
+                onClick={() => unarchiveConfirm && unarchiveMutation.mutate(unarchiveConfirm)}
+                disabled={unarchiveMutation.isPending}
+              >
+                {unarchiveMutation.isPending ? "Unarchiving..." : "Unarchive"}
               </Button>
             </DialogFooter>
           </DialogContent>

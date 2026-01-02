@@ -1,304 +1,323 @@
 import { Competition } from "@shared/schema";
 import { useLocation } from "wouter";
 import Slider from "react-slick";
-import "slick-carousel/slick/slick.css";
-import "slick-carousel/slick/slick-theme.css";
-import { Zap, Shield, Trophy, Sparkles, ChevronRight, Star, Users, Clock, Award } from "lucide-react";
+import { Zap, Shield, Trophy, ChevronRight, Star, Users, Crown, Play, Ticket, RotateCw, Timer, Flame, CheckCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+
 interface FeaturedCompetitionsProps {
   competitions: Competition[];
 }
 
 export default function FeaturedCompetitions({ competitions }: FeaturedCompetitionsProps) {
   const [, setLocation] = useLocation();
+  const [activeSlide, setActiveSlide] = useState(0);
 
   const instantCompetitions = competitions
     .filter((c) => c.type === "scratch" || c.type === "spin" || c.type === "instant")
     .slice(0, 5);
 
   const sliderSettings = {
-    dots: true,
+    dots: false,
     infinite: true,
     speed: 600,
     slidesToShow: 1,
     slidesToScroll: 1,
     autoplay: true,
-    autoplaySpeed: 5000,
+    autoplaySpeed: 6000,
     arrows: false,
     pauseOnHover: true,
     adaptiveHeight: false,
+    beforeChange: (_: number, next: number) => setActiveSlide(next),
   };
 
   const handleViewCompetition = (id: string) => {
     setLocation(`/competition/${id}`);
   };
 
+  const getGameIcon = (type: string) => {
+    switch (type) {
+      case "spin": return RotateCw;
+      case "scratch": return Ticket;
+      default: return Zap;
+    }
+  };
+
+  const getGameColor = (type: string) => {
+    switch (type) {
+      case "spin": return { bg: "from-purple-500/20 to-purple-600/10", border: "border-purple-500/40", text: "text-purple-400" };
+      case "scratch": return { bg: "from-emerald-500/20 to-emerald-600/10", border: "border-emerald-500/40", text: "text-emerald-400" };
+      default: return { bg: "from-amber-500/20 to-amber-600/10", border: "border-amber-500/40", text: "text-amber-400" };
+    }
+  };
+
+  const getGameLabel = (type: string) => {
+    switch (type) {
+      case "spin": return "Spin";
+      case "scratch": return "Scratch";
+      default: return "Instant";
+    }
+  };
+
   return (
-    <div className="w-full">
+    <div className="w-full relative" style={{ perspective: "1200px" }}>
+      {/* Section Header - Compact on mobile */}
+      <div className="max-w-7xl mx-auto px-4 mb-4 sm:mb-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+              <Flame className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
+            </div>
+            <div>
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white">Featured Prizes</h2>
+              <p className="text-white/50 text-xs sm:text-sm hidden sm:block">Premium competitions</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-red-500/10 border border-red-500/30 flex-shrink-0">
+            <Timer className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-400" />
+            <span className="text-red-400 text-xs sm:text-sm font-bold">Limited</span>
+          </div>
+        </div>
+      </div>
+
       <div className="max-w-7xl mx-auto px-4">
         <Slider {...sliderSettings} className="featured-slider">
-          {instantCompetitions.map((competition) => (
-            <div key={competition.id} data-testid={`slide-featured-competition-${competition.id}`}>
-              <div className="relative rounded-3xl overflow-hidden" data-testid={`card-featured-${competition.id}`}>
-                
-                {/* Cinematic Background with Multiple Layers */}
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0c0a20] to-slate-950" />
-                
-                {/* Aurora Effect - Top */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_60%_at_50%_-10%,rgba(139,92,246,0.4),transparent)]" />
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_40%_at_70%_-20%,rgba(217,70,239,0.25),transparent)]" />
-                
-                {/* Ambient Glow - Bottom Right */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_50%_at_90%_90%,rgba(251,191,36,0.15),transparent)]" />
-                
-                {/* Animated Sparkle Particles */}
-                <div className="absolute inset-0">
-                  <div className="absolute top-[8%] left-[12%] w-2 h-2 bg-violet-400 rounded-full animate-twinkle" />
-                  <div className="absolute top-[15%] right-[18%] w-2.5 h-2.5 bg-amber-400 rounded-full animate-twinkle" style={{animationDelay: '0.5s'}} />
-                  <div className="absolute top-[25%] left-[35%] w-1.5 h-1.5 bg-pink-400 rounded-full animate-twinkle" style={{animationDelay: '1s'}} />
-                  <div className="absolute bottom-[35%] right-[28%] w-2 h-2 bg-violet-300 rounded-full animate-twinkle" style={{animationDelay: '1.5s'}} />
-                  <div className="absolute bottom-[25%] left-[22%] w-1.5 h-1.5 bg-amber-300 rounded-full animate-twinkle" style={{animationDelay: '0.8s'}} />
-                  <div className="absolute top-[40%] right-[8%] w-1 h-1 bg-fuchsia-400 rounded-full animate-twinkle" style={{animationDelay: '1.2s'}} />
-                  <div className="absolute top-[5%] left-[50%] w-1.5 h-1.5 bg-cyan-400 rounded-full animate-twinkle" style={{animationDelay: '0.3s'}} />
-                  <div className="absolute bottom-[15%] right-[45%] w-2 h-2 bg-emerald-400 rounded-full animate-twinkle" style={{animationDelay: '1.8s'}} />
-                </div>
-                
-                {/* Floating Orbs */}
-                <div className="absolute top-[20%] left-[5%] w-24 h-24 bg-violet-500/20 rounded-full blur-2xl animate-float-enhanced" />
-                <div className="absolute bottom-[20%] right-[5%] w-32 h-32 bg-fuchsia-500/15 rounded-full blur-2xl animate-float-enhanced" style={{animationDelay: '2s'}} />
-                <div className="absolute top-[50%] right-[30%] w-20 h-20 bg-amber-500/10 rounded-full blur-xl animate-float-enhanced" style={{animationDelay: '4s'}} />
-
-                {/* Animated Glass Border Effect */}
-                <div className="absolute inset-0 rounded-3xl border-2 border-white/10" />
-                <div className="absolute inset-[2px] rounded-3xl border border-violet-500/30 animate-border-glow" />
-                
-                {/* Shimmer Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent rounded-3xl" />
-                
-                {/* Content Container */}
-                <div className="relative z-10 min-h-[520px] md:min-h-[560px] flex flex-col p-6 md:p-10 lg:p-14">
+          {instantCompetitions.map((competition) => {
+            const GameIcon = getGameIcon(competition.type);
+            const colors = getGameColor(competition.type);
+            const soldPercent = Math.min(((competition.soldTickets || 0) / (competition.maxTickets || 100)) * 100, 95);
+            
+            return (
+              <div key={competition.id} data-testid={`slide-featured-competition-${competition.id}`}>
+                {/* 3D Card Container */}
+                <div 
+                  className="relative group"
+                  style={{ transformStyle: "preserve-3d" }}
+                  data-testid={`card-featured-${competition.id}`}
+                >
+                  {/* 3D Shadow/Glow Layer - Behind card */}
+                  <div 
+                    className="absolute inset-0 rounded-2xl sm:rounded-3xl opacity-60 group-hover:opacity-80 transition-opacity duration-500"
+                    style={{ 
+                      transform: "translateZ(-40px) scale(0.95)",
+                      background: "radial-gradient(ellipse at center, rgba(212,175,55,0.25), transparent 70%)",
+                      filter: "blur(40px)"
+                    }}
+                  />
                   
-                  {/* Top Section - Badge & Stats */}
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                    {/* Featured Badge with Animated Glow */}
-                    <div className="relative group">
-                      <div className="absolute -inset-1.5 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-violet-600 rounded-full blur-md opacity-60 animate-pulse" style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 3s ease infinite, pulse 2s ease-in-out infinite' }} />
-                      <div className="relative inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 border border-violet-300/40 shadow-lg shadow-violet-500/30">
-                        <Star className="w-4 h-4 text-amber-300 fill-amber-300 animate-spin-slow" style={{ animationDuration: '4s' }} />
-                        <span className="text-sm font-bold text-white tracking-wider uppercase">Featured Prize</span>
-                      </div>
+                  {/* Main 3D Card */}
+                  <div 
+                    className="relative rounded-2xl sm:rounded-3xl overflow-hidden transition-transform duration-500 group-hover:scale-[1.01]"
+                    style={{ 
+                      transformStyle: "preserve-3d",
+                      transform: "translateZ(0px)",
+                      boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5), 0 0 80px rgba(212,175,55,0.1)"
+                    }}
+                  >
+                    {/* Background with 3D depth layers */}
+                    <div className="absolute inset-0">
+                      <div className="absolute inset-0 bg-gradient-to-b from-[#0a0f1a] via-[#030712] to-[#0a0f1a]" />
+                      <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_50%_at_50%_0%,rgba(212,175,55,0.12),transparent_60%)]" />
                     </div>
                     
-                    {/* Live Stats */}
-                    <div className="flex items-center gap-4 text-xs text-slate-400">
-                      <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10" data-testid={`text-entries-${competition.id}`}>
-                        <Users className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>{competition.soldTickets || 0} entries</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10" data-testid={`badge-live-${competition.id}`}>
-                        <Clock className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Live Now</span>
-                      </div>
-                    </div>
-                  </div>
+                    {/* 3D Border Effect - Multiple layers */}
+                    <div className="absolute inset-0 rounded-2xl sm:rounded-3xl border border-amber-500/30" style={{ transform: "translateZ(2px)" }} />
+                    <div className="absolute top-0 left-[10%] right-[10%] h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" style={{ transform: "translateZ(4px)" }} />
+                    <div className="absolute bottom-0 left-[10%] right-[10%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-                  {/* Main Content - Asymmetric Split */}
-                  <div className="flex-1 flex flex-col lg:flex-row items-center gap-8 lg:gap-14">
-                    
-                    {/* Prize Image with Cinematic Animated Frame */}
-                    <div className="w-full lg:w-[55%] flex items-center justify-center">
-                      <div className="relative group w-full max-w-lg " style={{ animationDuration: '8s' }}>
-                        {/* Animated Outer Glow Ring */}
-                        <div className="absolute -inset-4 bg-gradient-to-r from-violet-500/40 via-fuchsia-500/40 to-amber-500/30 rounded-3xl blur-2xl animate-glow-pulse" />
+                    {/* Content */}
+                    <div className="relative z-10 p-4 sm:p-6 md:p-8" style={{ transform: "translateZ(10px)" }}>
+                      
+                      {/* Top Badges - Compact */}
+                      <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500"
+                            style={{ transform: "translateZ(15px)", boxShadow: "0 4px 15px rgba(212,175,55,0.4)" }}
+                          >
+                            <Crown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-900" />
+                            <span className="text-[10px] sm:text-xs font-black text-slate-900 uppercase">Featured</span>
+                          </div>
+                          <div className={`inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-full bg-gradient-to-r ${colors.bg} border ${colors.border}`}>
+                            <GameIcon className={`w-3 h-3 ${colors.text}`} />
+                            <span className={`text-[10px] sm:text-xs font-bold ${colors.text}`}>
+                              {competition.type === "instant"
+                              ? "Competition"
+                              : getGameLabel(competition.type)}</span>
+                          </div>
+                        </div>
                         
-                        {/* Rainbow Border Animation */}
-                        <div className="absolute -inset-1 rounded-2xl animate-rainbow-border opacity-70" style={{ backgroundSize: '300% 300%' }} />
-                        
-                        {/* Inner Glow with Pulse */}
-                        <div className="absolute -inset-0.5 bg-gradient-to-br from-violet-500/50 to-fuchsia-500/50 rounded-2xl blur-lg animate-pulse" />
-                        
-                        {/* Glass Frame */}
-                        <div className="relative rounded-2xl p-1 bg-gradient-to-br from-white/20 via-white/5 to-white/10 overflow-hidden">
-                          {/* Frame Shimmer */}
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
-                          
-                          <div className="relative rounded-xl overflow-hidden bg-slate-900/90 backdrop-blur-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10" data-testid={`text-entries-${competition.id}`}>
+                            <Users className="w-3 h-3 text-emerald-400" />
+                            <span className="text-white/60 text-[10px]">{competition.soldTickets || 0}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30" data-testid={`badge-live-${competition.id}`}>
                             <div className="relative">
+                              <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                              <div className="absolute inset-0 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
+                            </div>
+                            <span className="text-emerald-400 text-[10px] font-bold">LIVE</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* RESPONSIVE LAYOUT: Stack on mobile, side-by-side on desktop */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                        
+                        {/* IMAGE - 3D Effect */}
+                        <div className="relative" style={{ transformStyle: "preserve-3d" }}>
+                          <div 
+                            className="relative rounded-xl sm:rounded-2xl overflow-hidden border border-amber-500/30 transition-transform duration-500 group-hover:scale-[1.02]"
+                            style={{ 
+                              transform: "translateZ(20px)",
+                              boxShadow: "0 20px 40px -20px rgba(0,0,0,0.6), 0 0 30px rgba(212,175,55,0.15)"
+                            }}
+                          >
+                            <div className="relative w-full aspect-[16/10] sm:aspect-[4/3] lg:aspect-[4/3]">
                               <img
-                                src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80"}
+                                src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1200&q=90"}
                                 alt={competition.title}
-                                className="w-full h-auto min-h-[200px] md:min-h-[280px] lg:min-h-[320px] object-contain transition-transform duration-700 group-hover:scale-105"
+                                className="w-full h-98 object-cover transition-transform duration-700 group-hover:scale-105"
                               />
                               
-                              {/* Image Overlay Gradient */}
+                              {/* Overlay */}
                               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent" />
                               
-                              {/* Type Badge - Premium Glass */}
-                              <div className="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-md text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border border-white/10 shadow-xl">
-                                {competition.type === "spin" ? <Zap className="w-4 h-4 text-amber-400" /> : 
-                                 competition.type === "scratch" ? <Sparkles className="w-4 h-4 text-violet-400" /> :
-                                 <Trophy className="w-4 h-4 text-amber-400" />}
-                                <span className="capitalize">{competition.type}</span>
+                              {/* Premium Badge - 3D */}
+                              <div 
+                                className="absolute top-2 sm:top-3 left-2 sm:left-3 flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/60 backdrop-blur-sm border border-white/10"
+                                style={{ transform: "translateZ(5px)" }}
+                              >
+                                <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                <span className="text-white text-[10px] sm:text-xs font-bold">Premium</span>
                               </div>
                               
-                              {/* Prize Value Overlay */}
-                              <div className="absolute bottom-4 left-4 right-4">
-                                <div className="bg-slate-900/80 backdrop-blur-md rounded-xl p-3 border border-white/10">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <Award className="w-5 h-5 text-amber-400" />
-                                      <span className="text-white/80 text-sm font-medium">Top Prize</span>
-                                    </div>
-                                    <span className="text-amber-400 font-bold">WIN BIG!</span>
-                                  </div>
+                              {/* Progress bar */}
+                              <div className="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 right-2 sm:right-3">
+                                <div className="flex items-center justify-between text-[10px] sm:text-xs mb-1">
+                                  <span className="text-white/70">Filling fast</span>
+                                  <span className="text-amber-400 font-bold">{Math.round(soldPercent)}%</span>
+                                </div>
+                                <div className="h-1.5 sm:h-2 bg-white/10 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500"
+                                    style={{ width: `${soldPercent}%` }}
+                                  />
                                 </div>
                               </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
 
-                    {/* Text Content - Premium Layout */}
-                    <div className="w-full lg:w-[45%] text-center lg:text-left space-y-6">
-                      
-                      {/* Title with Gradient */}
-                      <div className="space-y-3">
-                        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-[3.5rem] font-black leading-[1.1] tracking-tight" data-testid={`text-title-${competition.id}`}>
-                          <span className="bg-gradient-to-r from-white via-white to-white/80 bg-clip-text text-transparent">
-                            {competition.title}
-                          </span>
-                        </h2>
-                        <p className="text-slate-400 text-base md:text-lg max-w-md mx-auto lg:mx-0">
-                          Enter for your chance to win amazing prizes!
-                        </p>
-                      </div>
-
-                      {/* Trust Badges - Premium Glass */}
-                      <div className="flex flex-wrap justify-center lg:justify-start gap-2">
-                        <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/10">
-                          <Shield className="w-4 h-4 text-emerald-400" />
-                          <span className="text-white/80 text-sm font-medium">100% Secure</span>
-                        </div>
-                        <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/10">
-                          <Trophy className="w-4 h-4 text-amber-400" />
-                          <span className="text-white/80 text-sm font-medium">Fair Play</span>
-                        </div>
-                        {(competition.type === "spin" || competition.type === "scratch") && (
-                          <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/10">
-                            <Zap className="w-4 h-4 text-violet-400" />
-                            <span className="text-white/80 text-sm font-medium">Instant Win</span>
+                        {/* CONTENT - 3D layered */}
+                        <div className="flex flex-col justify-center" style={{ transform: "translateZ(15px)" }}>
+                          {/* Title & Description - Responsive text sizes */}
+                          <div className="mb-3 sm:mb-4">
+                            <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white leading-tight mb-1.5 sm:mb-2" data-testid={`text-title-${competition.id}`}>
+                              {competition.title}
+                            </h2>
+                            <p className="text-white/50 text-sm sm:text-base line-clamp-2">
+                              Enter now for your chance to win this incredible prize!
+                            </p>
                           </div>
-                        )}
-                      </div>
 
-                      {/* Price Display - Premium Animated */}
-                      <div className="flex flex-wrap items-end justify-center lg:justify-start gap-3">
-                        <span className="text-slate-500 text-xl font-medium line-through decoration-2">
-                          £{(parseFloat(competition.ticketPrice) * 2).toFixed(2)}
-                        </span>
-                        <div className="relative group">
-                          {/* Price Glow */}
-                          <div className="absolute -inset-3 bg-gradient-to-r from-amber-400/30 via-yellow-400/40 to-amber-400/30 rounded-xl blur-xl animate-glow-pulse -z-10" />
-                          <span 
-                            className="text-5xl md:text-6xl font-black bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 bg-clip-text text-transparent" 
-                            data-testid={`text-price-${competition.id}`}
-                            style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 3s ease infinite' }}
-                          >
-                            £{parseFloat(competition.ticketPrice).toFixed(2)}
-                          </span>
-                        </div>
-                        <span className="text-slate-400 text-base pb-2">
-                          per entry
-                        </span>
-                      </div>
-
-                      {/* CTA Button - Premium Animated */}
-                      <div className="pt-2">
-                        <button
-                          onClick={() => handleViewCompetition(competition.id)}
-                          data-testid="button-enter-competition"
-                          className="relative group w-full lg:w-auto"
-                        >
-                          {/* Animated Outer Glow */}
-                          <div className="absolute -inset-2 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-violet-600 rounded-2xl blur-lg opacity-60 group-hover:opacity-100 transition-all duration-300 animate-glow-pulse" style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 3s ease infinite, glow-pulse 2s ease-in-out infinite' }} />
-                          
-                          {/* Button with Shimmer */}
-                          <div className="relative bg-gradient-to-r from-violet-600 via-fuchsia-600 to-violet-600 hover:from-violet-500 hover:via-fuchsia-500 hover:to-violet-500 text-white font-bold py-4 px-12 rounded-xl transition-all duration-300 shadow-2xl flex items-center justify-center gap-3 text-lg uppercase tracking-wide border border-white/30 overflow-hidden"
-                            style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 3s ease infinite' }}
-                          >
-                            {/* Button Shimmer Effect */}
-                            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                            <span className="relative">Enter Now</span>
-                            <ChevronRight className="relative w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" />
+                          {/* Feature Chips - Compact grid */}
+                          <div className="grid grid-cols-2 gap-2 mb-4 sm:mb-5">
+                            {[
+                              { icon: Shield, text: "Secure", color: "text-emerald-400" },
+                              { icon: Trophy, text: "Guaranteed", color: "text-amber-400" },
+                              { icon: CheckCircle, text: "Verified", color: "text-purple-400" },
+                              { icon: Zap, text: "Instant", color: "text-pink-400" }
+                            ].map((chip, i) => (
+                              <div key={i} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10">
+                                <chip.icon className={`w-3.5 h-3.5 ${chip.color}`} />
+                                <span className="text-white/70 text-xs font-medium">{chip.text}</span>
+                              </div>
+                            ))}
                           </div>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Bottom Trust Line */}
-                  <div className="text-center mt-6 pt-6 border-t border-white/5">
-                    <div className="text-slate-500 text-xs md:text-sm flex items-center justify-center gap-4 flex-wrap">
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block" />
-                        Every entry has a chance to win
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 bg-amber-400 rounded-full inline-block" />
-                        Prizes guaranteed
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 bg-violet-400 rounded-full inline-block" />
-                        Fair and transparent draws
-                      </span>
+                          {/* Price & CTA Row */}
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                            {/* Price - 3D effect */}
+                            <div className="flex items-baseline gap-2" style={{ transform: "translateZ(5px)" }}>
+                              <span className="text-white/30 text-sm line-through">
+                                £{(parseFloat(competition.ticketPrice) * 2).toFixed(2)}
+                              </span>
+                              <span 
+                                className="text-3xl sm:text-4xl font-black bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 bg-clip-text text-transparent drop-shadow-lg" 
+                                data-testid={`text-price-${competition.id}`}
+                              >
+                                £{parseFloat(competition.ticketPrice).toFixed(2)}
+                              </span>
+                              <span className="text-white/40 text-xs sm:text-sm">per entry</span>
+                            </div>
+
+                            {/* CTA Buttons - 3D effect */}
+                            <div 
+                              className="flex gap-2 w-full sm:w-auto"
+                              style={{ transform: "translateZ(25px)" }}
+                            >
+                              <Button
+                                onClick={() => handleViewCompetition(competition.id)}
+                                data-testid="button-enter-competition"
+                                className="flex-1 sm:flex-none h-10 sm:h-12 px-4 sm:px-6 text-sm sm:text-base font-black rounded-lg sm:rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-900 border-0 shadow-[0_8px_30px_rgba(212,175,55,0.4)] hover:shadow-[0_12px_40px_rgba(212,175,55,0.6)] hover:translate-y-[-2px] transition-all"
+                              >
+                                <Play className="w-4 h-4 mr-1.5" />
+                                Enter Now
+                              </Button>
+                              
+                              <Button
+                                variant="outline"
+                                onClick={() => handleViewCompetition(competition.id)}
+                                className="h-10 sm:h-12 px-3 sm:px-4 text-sm font-bold rounded-lg sm:rounded-xl border border-white/20 text-white hover:bg-white/5"
+                              >
+                                <ChevronRight className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Trust Bar - Compact on mobile */}
+                      <div className="mt-4 pt-3 sm:pt-4 border-t border-white/5">
+                        <div className="flex flex-wrap justify-center gap-3 sm:gap-6 text-white/40 text-[10px] sm:text-xs">
+                          {[
+                            { dot: "bg-emerald-400", text: "Quick Payout" },
+                            { dot: "bg-amber-400", text: "UK Licensed" },
+                            { dot: "bg-purple-400", text: "24/7 Support" }
+                          ].map((item, i) => (
+                            <div key={i} className="flex items-center gap-1.5">
+                              <div className={`w-1 h-1 sm:w-1.5 sm:h-1.5 ${item.dot} rounded-full`} />
+                              <span>{item.text}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </Slider>
       </div>
 
-      <style>{`
-        .featured-slider .slick-dots {
-          bottom: 24px;
-        }
-        
-        .featured-slider .slick-dots li {
-          margin: 0 4px;
-        }
-        
-        .featured-slider .slick-dots li button:before {
-          content: '';
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: rgba(139, 92, 246, 0.3);
-          opacity: 1;
-        }
-        
-        .featured-slider .slick-dots li.slick-active button:before {
-          background: linear-gradient(to right, #8b5cf6, #d946ef);
-          width: 24px;
-          border-radius: 4px;
-        }
-
-        @media (max-width: 768px) {
-          .featured-slider .slick-dots {
-            bottom: 16px;
-          }
-          
-          .featured-slider .slick-dots li button:before {
-            width: 6px;
-            height: 6px;
-          }
-          
-          .featured-slider .slick-dots li.slick-active button:before {
-            width: 18px;
-          }
-        }
-      `}</style>
+      {/* Slide Indicators */}
+      <div className="max-w-7xl mx-auto px-4 mt-4 sm:mt-6">
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+          {instantCompetitions.map((_, i) => (
+            <div
+              key={i}
+              className={`h-1 sm:h-1.5 rounded-full transition-all duration-300 ${
+                i === activeSlide 
+                  ? 'w-6 sm:w-10 bg-gradient-to-r from-amber-400 to-yellow-400 shadow-lg shadow-amber-500/30' 
+                  : 'w-1 sm:w-1.5 bg-white/20'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

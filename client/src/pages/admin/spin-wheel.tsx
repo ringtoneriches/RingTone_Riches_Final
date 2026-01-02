@@ -1,8 +1,9 @@
+// app/admin-spin-wheel.tsx (updated with archive functionality)
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, Trophy, Upload, Settings, RefreshCw } from "lucide-react";
+import { Plus, Edit, Trash2, Trophy, Upload, Settings, RefreshCw, Archive, ArchiveRestore } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -232,20 +233,20 @@ function CompetitionForm({
           </div>
         )}
         <div>
-  <Label>Wheel Type</Label>
-  <select
-    className="w-full p-2 border border-border rounded-md bg-background text-foreground"
-    value={form.wheelType || "wheel1"}
-    onChange={(e) => setForm({ ...form, wheelType: e.target.value })}
-    data-testid="select-wheel-type"
-  >
-    <option value="wheel1">Car Wheel (Default)</option>
-    <option value="wheel2">Christmas wheel</option>
-  </select>
-  <p className="text-xs text-muted-foreground mt-1">
-    Choose which wheel design to use for this competition
-  </p>
-</div>
+          <Label>Wheel Type</Label>
+          <select
+            className="w-full p-2 border border-border rounded-md bg-background text-foreground"
+            value={form.wheelType || "wheel1"}
+            onChange={(e) => setForm({ ...form, wheelType: e.target.value })}
+            data-testid="select-wheel-type"
+          >
+            <option value="wheel1">Car Wheel (Default)</option>
+            <option value="wheel2">Christmas wheel</option>
+          </select>
+          <p className="text-xs text-muted-foreground mt-1">
+            Choose which wheel design to use for this competition
+          </p>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <div>
             <Label>Ticket Price (£)</Label>
@@ -353,17 +354,22 @@ export default function AdminSpinWheel() {
   const [editingCompetition, setEditingCompetition] =
     useState<Competition | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [archiveConfirm, setArchiveConfirm] = useState<string | null>(null);
+  const [unarchiveConfirm, setUnarchiveConfirm] = useState<string | null>(null);
   const [drawWinnerCompetition, setDrawWinnerCompetition] =
     useState<Competition | null>(null);
   const [wheelSettingsOpen, setWheelSettingsOpen] = useState(false);
   const [wheel2SettingsOpen, setWheel2SettingsOpen] = useState(false);
+  const [showArchivedModal, setShowArchivedModal] = useState(false);
 
   const { data: allCompetitions, isLoading } = useQuery<Competition[]>({
     queryKey: ["/api/admin/competitions"],
   });
 
+  // Filter competitions by type and status
   const competitions = allCompetitions?.filter((c) => c.type === "spin") || [];
+  const activeCompetitions = competitions.filter((c) => c.isActive);
+  const archivedCompetitions = competitions.filter((c) => !c.isActive);
 
   const createMutation = useMutation({
     mutationFn: async (formData: CompetitionFormData) => {
@@ -437,20 +443,40 @@ export default function AdminSpinWheel() {
     },
   });
 
-  const deleteMutation = useMutation({
+  const archiveMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await apiRequest(`/api/admin/competitions/${id}`, "DELETE");
+      const res = await apiRequest(`/api/admin/competitions/${id}/archive`, "POST");
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/competitions"] });
-      setDeleteConfirm(null);
-      toast({ title: "Competition deleted successfully" });
+      setArchiveConfirm(null);
+      toast({ title: "Spin Wheel competition archived successfully" });
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to delete competition",
+        title: "Failed to archive competition",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const unarchiveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest(`/api/admin/competitions/${id}/unarchive`, "POST");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/competitions"] });
+      setUnarchiveConfirm(null);
+      toast({ title: "Spin Wheel competition unarchived successfully" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to unarchive competition",
         description: error.message,
         variant: "destructive",
       });
@@ -502,169 +528,297 @@ export default function AdminSpinWheel() {
               Manage your spin wheel competitions
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setWheelSettingsOpen(true)}
-              variant="outline"
-              className="gap-2"
-              data-testid="button-wheel-settings"
-            >
-              <Settings className="w-4 h-4" />
-              Wheel Settings
-            </Button>
-            <Button
-            onClick={() => setWheel2SettingsOpen(true)} // ← NEW BUTTON
-            variant="outline"
-            className="gap-2 "
-            data-testid="button-wheel-2-settings" //
-          >
-            <Settings className="w-4 h-4" />
-            Wheel 2 Settings
-          </Button>
-          
-            {/* <Button 
-              onClick={() => setCreateDialogOpen(true)} 
-              size="icon"
-              className="bg-yellow-500 hover:bg-yellow-600 text-black"
-              data-testid="button-create-spin"
-            >
-              <Plus className="w-4 h-4" />
-            </Button> */}
+          <div className="flex flex-col sm:flex-row gap-2">
+            {/* View Archived Button - Top Right */}
+            {archivedCompetitions.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => setShowArchivedModal(true)}
+                className="gap-2"
+                data-testid="button-view-archived"
+              >
+                <Archive className="w-4 h-4" />
+                View Archived ({archivedCompetitions.length})
+              </Button>
+            )}
+            
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setWheelSettingsOpen(true)}
+                variant="outline"
+                className="gap-2"
+                data-testid="button-wheel-settings"
+              >
+                <Settings className="w-4 h-4" />
+                Wheel Settings
+              </Button>
+              {/* <Button
+                onClick={() => setWheel2SettingsOpen(true)}
+                variant="outline"
+                className="gap-2"
+                data-testid="button-wheel-2-settings"
+              >
+                <Settings className="w-4 h-4" />
+                Wheel 2 Settings
+              </Button> */}
+              
+              {/* <Button 
+                onClick={() => setCreateDialogOpen(true)} 
+                size="icon"
+                className="bg-yellow-500 hover:bg-yellow-600 text-black"
+                data-testid="button-create-spin"
+              >
+                <Plus className="w-4 h-4" />
+              </Button> */}
+            </div>
           </div>
         </div>
 
-        <div className="grid gap-4">
-          {competitions?.map((competition) => (
-            <div
-              key={competition.id}
-              className="bg-card border border-border rounded-lg p-6 hover:shadow-lg transition-shadow"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex gap-4 flex-1">
-                  {competition.imageUrl && (
-                    <img
-                      src={competition.imageUrl}
-                      alt={competition.title}
-                      className="w-24 h-24 object-cover rounded-lg"
-                    />
-                  )}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="text-xl font-bold text-foreground">
-                        {competition.title}
-                      </h3>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          competition.type === "spin"
-                            ? "bg-purple-500/20 text-purple-500"
-                            : competition.type === "scratch"
-                              ? "bg-blue-500/20 text-blue-500"
-                              : "bg-primary/20 text-primary"
-                        }`}
+        {/* Active Competitions Section */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Active Spin Wheel Competitions</h2>
+          <div className="grid gap-4">
+            {activeCompetitions.length === 0 ? (
+              <div className="text-center py-12 border border-dashed rounded-lg">
+                <p className="text-muted-foreground mb-4">
+                  No active spin wheel competitions yet
+                </p>
+                {/* <Button onClick={() => setCreateDialogOpen(true)}>
+                  Create Your First Spin Wheel
+                </Button> */}
+              </div>
+            ) : (
+              activeCompetitions.map((competition) => (
+                <div
+                  key={competition.id}
+                  className="bg-card border border-border rounded-lg p-6 hover:shadow-lg transition-shadow"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex gap-4 flex-1">
+                      {competition.imageUrl && (
+                        <img
+                          src={competition.imageUrl}
+                          alt={competition.title}
+                          className="w-24 h-24 object-cover rounded-lg"
+                        />
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-xl font-bold text-foreground">
+                            {competition.title}
+                          </h3>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-500">
+                            SPIN WHEEL
+                          </span>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-500">
+                            ACTIVE
+                          </span>
+                          {competition.wheelType === "wheel2" && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-500">
+                              CHRISTMAS WHEEL
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          {competition.description}
+                        </p>
+                        <div className="flex gap-6 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Price: </span>
+                            <span className="font-medium text-primary">
+                              £{parseFloat(competition.ticketPrice).toFixed(2)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Sold: </span>
+                            <span className="font-medium text-foreground">
+                              {competition.soldTickets || 0} /{" "}
+                              {competition.maxTickets}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Status: </span>
+                            <span className="font-medium text-green-500">
+                              Active
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-muted-foreground">Display Order: </span>
+                          <Input
+                            type="number"
+                            min="0"
+                            defaultValue={competition.displayOrder ?? 999}
+                            onBlur={(e) => {
+                              const parsedValue = parseInt(e.target.value);
+                              const newOrder = isNaN(parsedValue) ? 999 : parsedValue;
+                              const currentOrder = competition.displayOrder ?? 999;
+                              if (newOrder !== currentOrder) {
+                                updateDisplayOrderMutation.mutate({
+                                  id: competition.id,
+                                  displayOrder: newOrder,
+                                });
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const parsedValue = parseInt((e.target as HTMLInputElement).value);
+                                const newOrder = isNaN(parsedValue) ? 999 : parsedValue;
+                                const currentOrder = competition.displayOrder ?? 999;
+                                if (newOrder !== currentOrder) {
+                                  updateDisplayOrderMutation.mutate({
+                                    id: competition.id,
+                                    displayOrder: newOrder,
+                                  });
+                                }
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            className="w-24"
+                            data-testid={`input-display-order-${competition.id}`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-row gap-2">
+                      {/* <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDrawWinnerCompetition(competition)}
+                        className="text-primary hover:text-primary"
+                        data-testid={`button-draw-${competition.id}`}
                       >
-                        {competition.type.toUpperCase()}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {competition.description}
-                    </p>
-                    <div className="flex gap-6 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Price: </span>
-                        <span className="font-medium text-primary">
-                          £{parseFloat(competition.ticketPrice).toFixed(2)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Sold: </span>
-                        <span className="font-medium text-foreground">
-                          {competition.soldTickets || 0} /{" "}
-                          {competition.maxTickets}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Status: </span>
-                        <span
-                          className={`font-medium ${
-                            competition.isActive
-                              ? "text-green-500"
-                              : "text-red-500"
-                          }`}
-                        >
-                          {competition.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-muted-foreground">Display Order: </span>
-                      <Input
-                        type="number"
-                        min="0"
-                        defaultValue={competition.displayOrder ?? 999}
-                        onBlur={(e) => {
-                          const parsedValue = parseInt(e.target.value);
-                          const newOrder = isNaN(parsedValue) ? 999 : parsedValue;
-                          const currentOrder = competition.displayOrder ?? 999;
-                          if (newOrder !== currentOrder) {
-                            updateDisplayOrderMutation.mutate({
-                              id: competition.id,
-                              displayOrder: newOrder,
-                            });
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const parsedValue = parseInt((e.target as HTMLInputElement).value);
-                            const newOrder = isNaN(parsedValue) ? 999 : parsedValue;
-                            const currentOrder = competition.displayOrder ?? 999;
-                            if (newOrder !== currentOrder) {
-                              updateDisplayOrderMutation.mutate({
-                                id: competition.id,
-                                displayOrder: newOrder,
-                              });
-                            }
-                            (e.target as HTMLInputElement).blur();
-                          }
-                        }}
-                        className="w-24"
-                        data-testid={`input-display-order-${competition.id}`}
-                      />
+                        <Trophy className="w-4 h-4" />
+                      </Button> */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingCompetition(competition)}
+                        data-testid={`button-edit-${competition.id}`}
+                        className="gap-1"
+                      >
+                        <Edit className="w-4 h-4" />
+                       
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setArchiveConfirm(competition.id)}
+                        className="gap-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50"
+                        data-testid={`button-archive-${competition.id}`}
+                      >
+                        <Archive className="w-4 h-4" />
+                        
+                      </Button>
                     </div>
                   </div>
                 </div>
-
-                <div className="flex gap-2">
-                  {/* <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDrawWinnerCompetition(competition)}
-                    className="text-primary hover:text-primary"
-                    data-testid={`button-draw-${competition.id}`}
-                  >
-                    <Trophy className="w-4 h-4" />
-                  </Button> */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setEditingCompetition(competition)}
-                    data-testid={`button-edit-${competition.id}`}
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDeleteConfirm(competition.id)}
-                    className="text-red-500 hover:text-red-600"
-                    data-testid={`button-delete-${competition.id}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ))}
+              ))
+            )}
+          </div>
         </div>
+
+        {/* Archived Games Modal */}
+        <Dialog open={showArchivedModal} onOpenChange={setShowArchivedModal}>
+          <DialogContent className="max-w-7xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Archive className="w-5 h-5" />
+                Archived Spin Wheel Competitions ({archivedCompetitions.length})
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              {archivedCompetitions.length === 0 ? (
+                <div className="text-center py-8">
+                  <Archive className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No archived spin wheel competitions</p>
+                </div>
+              ) : (
+                archivedCompetitions.map((competition) => (
+                  <div
+                    key={competition.id}
+                    className="bg-card border border-border rounded-lg p-6 opacity-90"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex gap-4 flex-1">
+                        {competition.imageUrl && (
+                          <img
+                            src={competition.imageUrl}
+                            alt={competition.title}
+                            className="w-20 h-20 object-cover rounded-lg"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-lg font-bold text-foreground">
+                              {competition.title}
+                            </h3>
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-500">
+                              SPIN WHEEL
+                            </span>
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-500">
+                              ARCHIVED
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            {competition.description}
+                          </p>
+                          <div className="flex flex-wrap gap-4 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Price: </span>
+                              <span className="font-medium text-primary">
+                                £{parseFloat(competition.ticketPrice).toFixed(2)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Sold: </span>
+                              <span className="font-medium text-foreground">
+                                {competition.soldTickets || 0} /{" "}
+                                {competition.maxTickets}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Status: </span>
+                              <span className="font-medium text-red-500">
+                                Inactive (Archived)
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setUnarchiveConfirm(competition.id);
+                          }}
+                          className="gap-1 text-green-500 hover:text-green-600 hover:bg-green-50"
+                          data-testid={`button-unarchive-modal-${competition.id}`}
+                        >
+                          <ArchiveRestore className="w-4 h-4" />
+                          Unarchive
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowArchivedModal(false)}
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogContent className="max-w-2xl">
@@ -707,35 +861,67 @@ export default function AdminSpinWheel() {
           </DialogContent>
         </Dialog>
 
+        {/* Archive Confirmation Dialog */}
         <Dialog
-          open={!!deleteConfirm}
-          onOpenChange={(open) => !open && setDeleteConfirm(null)}
+          open={!!archiveConfirm}
+          onOpenChange={(open) => !open && setArchiveConfirm(null)}
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogTitle>Archive Spin Wheel Competition</DialogTitle>
             </DialogHeader>
             <p className="text-muted-foreground">
-              Are you sure you want to delete this competition? This action
-              cannot be undone and will also delete all related orders, tickets,
-              and transactions.
+              Are you sure you want to archive this spin wheel competition? Archived games will become inactive and won't be shown on the frontend.
             </p>
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setDeleteConfirm(null)}
-                disabled={deleteMutation.isPending}
+                onClick={() => setArchiveConfirm(null)}
+                disabled={archiveMutation.isPending}
               >
                 Cancel
               </Button>
               <Button
                 variant="destructive"
                 onClick={() =>
-                  deleteConfirm && deleteMutation.mutate(deleteConfirm)
+                  archiveConfirm && archiveMutation.mutate(archiveConfirm)
                 }
-                disabled={deleteMutation.isPending}
+                disabled={archiveMutation.isPending}
               >
-                {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                {archiveMutation.isPending ? "Archiving..." : "Archive"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Unarchive Confirmation Dialog */}
+        <Dialog
+          open={!!unarchiveConfirm}
+          onOpenChange={(open) => !open && setUnarchiveConfirm(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Unarchive Spin Wheel Competition</DialogTitle>
+            </DialogHeader>
+            <p className="text-muted-foreground">
+              Are you sure you want to unarchive this spin wheel competition? The game will become active and will be shown on the frontend.
+            </p>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setUnarchiveConfirm(null)}
+                disabled={unarchiveMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="default"
+                onClick={() =>
+                  unarchiveConfirm && unarchiveMutation.mutate(unarchiveConfirm)
+                }
+                disabled={unarchiveMutation.isPending}
+              >
+                {unarchiveMutation.isPending ? "Unarchiving..." : "Unarchive"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -754,10 +940,10 @@ export default function AdminSpinWheel() {
           open={wheelSettingsOpen}
           onOpenChange={setWheelSettingsOpen}
         />
-        <WheelSettingsDialog2
-        open={wheel2SettingsOpen}
-        onOpenChange={setWheel2SettingsOpen}
-      />
+        {/* <WheelSettingsDialog2
+          open={wheel2SettingsOpen}
+          onOpenChange={setWheel2SettingsOpen}
+        /> */}
       </div>
     </AdminLayout>
   );
@@ -1259,497 +1445,497 @@ function WheelSettingsDialog({
   );
 }
 
-function WheelSettingsDialog2({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const { toast } = useToast();
-  const [segments, setSegments] = useState<Array<WheelSegment & { currentWins?: number }>>([]);
-  const [maxSpinsPerUser, setMaxSpinsPerUser] = useState<string>("");
-  const [isVisible, setIsVisible] = useState<boolean>(true);
-  const [mysteryPrize, setMysteryPrize] = useState<MysteryPrize>({
-    rewardType: "cash",
-    rewardValue: 100,
-    probability: 1,
-    maxWins: 1,
-    segmentId: "26",
-  });
+// function WheelSettingsDialog2({
+//   open,
+//   onOpenChange,
+// }: {
+//   open: boolean;
+//   onOpenChange: (open: boolean) => void;
+// }) {
+//   const { toast } = useToast();
+//   const [segments, setSegments] = useState<Array<WheelSegment & { currentWins?: number }>>([]);
+//   const [maxSpinsPerUser, setMaxSpinsPerUser] = useState<string>("");
+//   const [isVisible, setIsVisible] = useState<boolean>(true);
+//   const [mysteryPrize, setMysteryPrize] = useState<MysteryPrize>({
+//     rewardType: "cash",
+//     rewardValue: 100,
+//     probability: 1,
+//     maxWins: 1,
+//     segmentId: "26",
+//   });
 
-  // Auto-refresh every 10 seconds when dialog is open
-  const { data: config, isLoading } = useQuery<{
-    segments: Array<WheelSegment & { currentWins?: number }>;
-    maxSpinsPerUser: number | null;
-    mysteryPrize: MysteryPrize;
-    isVisible: boolean;
-  }>({
-    queryKey: ["/api/admin/game-spin-2-config"],
-    enabled: open,
-    refetchInterval: open ? 10000 : false, // Auto-refresh every 10 seconds when open
-  });
+//   // Auto-refresh every 10 seconds when dialog is open
+//   const { data: config, isLoading } = useQuery<{
+//     segments: Array<WheelSegment & { currentWins?: number }>;
+//     maxSpinsPerUser: number | null;
+//     mysteryPrize: MysteryPrize;
+//     isVisible: boolean;
+//   }>({
+//     queryKey: ["/api/admin/game-spin-2-config"],
+//     enabled: open,
+//     refetchInterval: open ? 10000 : false, // Auto-refresh every 10 seconds when open
+//   });
 
-  // Update local state when config loads or dialog opens
-  useEffect(() => {
-    if (config && open) {
-      setSegments(config.segments || []);
-      setMaxSpinsPerUser(config.maxSpinsPerUser?.toString() || "");
-      setIsVisible(config.isVisible ?? true);
-      setMysteryPrize(config.mysteryPrize || {
-        rewardType: "cash",
-        rewardValue: 100,
-        probability: 1,
-        maxWins: 1,
-        segmentId: "26",
-      });
-    }
-  }, [config, open]);
+//   // Update local state when config loads or dialog opens
+//   useEffect(() => {
+//     if (config && open) {
+//       setSegments(config.segments || []);
+//       setMaxSpinsPerUser(config.maxSpinsPerUser?.toString() || "");
+//       setIsVisible(config.isVisible ?? true);
+//       setMysteryPrize(config.mysteryPrize || {
+//         rewardType: "cash",
+//         rewardValue: 100,
+//         probability: 1,
+//         maxWins: 1,
+//         segmentId: "26",
+//       });
+//     }
+//   }, [config, open]);
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      // Find the R_Prize segment
-      const rPrizeIndex = segments.findIndex(seg => seg.iconKey === "R_Prize");
+//   const saveMutation = useMutation({
+//     mutationFn: async () => {
+//       // Find the R_Prize segment
+//       const rPrizeIndex = segments.findIndex(seg => seg.iconKey === "R_Prize");
       
-      if (rPrizeIndex === -1) {
-        throw new Error("R_Prize segment not found.");
-      }
+//       if (rPrizeIndex === -1) {
+//         throw new Error("R_Prize segment not found.");
+//       }
       
-      const rPrizeSegmentId = (rPrizeIndex + 1).toString();
-      const updatedMysteryPrize = {
-        ...mysteryPrize,
-        segmentId: rPrizeSegmentId,
-      };
+//       const rPrizeSegmentId = (rPrizeIndex + 1).toString();
+//       const updatedMysteryPrize = {
+//         ...mysteryPrize,
+//         segmentId: rPrizeSegmentId,
+//       };
 
-      // Remove currentWins from segments before saving
-      const segmentsToSave = segments.map(({ currentWins, ...rest }) => rest);
+//       // Remove currentWins from segments before saving
+//       const segmentsToSave = segments.map(({ currentWins, ...rest }) => rest);
 
-      const res = await apiRequest("/api/admin/game-spin-2-config", "PUT", {
-        segments: segmentsToSave,
-        maxSpinsPerUser: maxSpinsPerUser ? parseInt(maxSpinsPerUser) : null,
-        mysteryPrize: updatedMysteryPrize,
-        isVisible,
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/admin/game-spin-2-config"],
-      });
-      toast({ title: "Wheel settings saved successfully" });
-      // onOpenChange(false);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to save wheel settings",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+//       const res = await apiRequest("/api/admin/game-spin-2-config", "PUT", {
+//         segments: segmentsToSave,
+//         maxSpinsPerUser: maxSpinsPerUser ? parseInt(maxSpinsPerUser) : null,
+//         mysteryPrize: updatedMysteryPrize,
+//         isVisible,
+//       });
+//       return res.json();
+//     },
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({
+//         queryKey: ["/api/admin/game-spin-2-config"],
+//       });
+//       toast({ title: "Wheel settings saved successfully" });
+//       // onOpenChange(false);
+//     },
+//     onError: (error: any) => {
+//       toast({
+//         title: "Failed to save wheel settings",
+//         description: error.message,
+//         variant: "destructive",
+//       });
+//     },
+//   });
 
-  const totalProbability = segments.reduce(
-    (sum, seg) => sum + seg.probability,
-    0,
-  );
-  const isProbabilityValid = Math.abs(totalProbability - 100) < 0.01;
+//   const totalProbability = segments.reduce(
+//     (sum, seg) => sum + seg.probability,
+//     0,
+//   );
+//   const isProbabilityValid = Math.abs(totalProbability - 100) < 0.01;
 
-  const updateSegment = (index: number, updates: Partial<WheelSegment>) => {
-    const newSegments = [...segments];
-    newSegments[index] = { ...newSegments[index], ...updates };
-    setSegments(newSegments);
-  };
+//   const updateSegment = (index: number, updates: Partial<WheelSegment>) => {
+//     const newSegments = [...segments];
+//     newSegments[index] = { ...newSegments[index], ...updates };
+//     setSegments(newSegments);
+//   };
 
-  // Update mystery prize and sync with R_Prize segment
-  const updateMysteryPrize = (updates: Partial<MysteryPrize>) => {
-    const updated = { ...mysteryPrize, ...updates };
-    setMysteryPrize(updated);
+//   // Update mystery prize and sync with R_Prize segment
+//   const updateMysteryPrize = (updates: Partial<MysteryPrize>) => {
+//     const updated = { ...mysteryPrize, ...updates };
+//     setMysteryPrize(updated);
 
-    setSegments(prev => prev.map((seg) => {
-      if (seg.iconKey === "R_Prize") {
-        return {
-          ...seg,
-          rewardType: updated.rewardType,
-          rewardValue: updated.rewardValue,
-          probability: updated.probability,
-          maxWins: updated.maxWins,
-        };
-      }
-      return seg;
-    }));
-  };
+//     setSegments(prev => prev.map((seg) => {
+//       if (seg.iconKey === "R_Prize") {
+//         return {
+//           ...seg,
+//           rewardType: updated.rewardType,
+//           rewardValue: updated.rewardValue,
+//           probability: updated.probability,
+//           maxWins: updated.maxWins,
+//         };
+//       }
+//       return seg;
+//     }));
+//   };
 
-  const moveSegmentUp = (index: number) => {
-    if (index === 0) return;
+//   const moveSegmentUp = (index: number) => {
+//     if (index === 0) return;
     
-    const newSegments = [...segments];
-    [newSegments[index - 1], newSegments[index]] = [newSegments[index], newSegments[index - 1]];
+//     const newSegments = [...segments];
+//     [newSegments[index - 1], newSegments[index]] = [newSegments[index], newSegments[index - 1]];
     
-    newSegments.forEach((seg, idx) => {
-      seg.id = (idx + 1).toString();
-    });
+//     newSegments.forEach((seg, idx) => {
+//       seg.id = (idx + 1).toString();
+//     });
     
-    setSegments(newSegments);
-  };
+//     setSegments(newSegments);
+//   };
 
-  const moveSegmentDown = (index: number) => {
-    if (index === segments.length - 1) return;
+//   const moveSegmentDown = (index: number) => {
+//     if (index === segments.length - 1) return;
     
-    const newSegments = [...segments];
-    [newSegments[index], newSegments[index + 1]] = [newSegments[index + 1], newSegments[index]];
+//     const newSegments = [...segments];
+//     [newSegments[index], newSegments[index + 1]] = [newSegments[index + 1], newSegments[index]];
     
-    newSegments.forEach((seg, idx) => {
-      seg.id = (idx + 1).toString();
-    });
+//     newSegments.forEach((seg, idx) => {
+//       seg.id = (idx + 1).toString();
+//     });
     
-    setSegments(newSegments);
-  };
+//     setSegments(newSegments);
+//   };
 
-  const deleteSegment = (index: number) => {
-    const seg = segments[index];
+//   const deleteSegment = (index: number) => {
+//     const seg = segments[index];
 
-    // Prevent deleting the required mystery prize segment
-    if (seg.iconKey === "R_Prize") {
-      toast({ 
-        title: "Cannot delete Mystery Prize segment",
-        variant: "destructive"
-      });
-      return;
-    }
+//     // Prevent deleting the required mystery prize segment
+//     if (seg.iconKey === "R_Prize") {
+//       toast({ 
+//         title: "Cannot delete Mystery Prize segment",
+//         variant: "destructive"
+//       });
+//       return;
+//     }
 
-    const newSegments = segments.filter((_, i) => i !== index);
+//     const newSegments = segments.filter((_, i) => i !== index);
 
-    // Reassign IDs 1..N
-    newSegments.forEach((s, idx) => {
-      s.id = (idx + 1).toString();
-    });
+//     // Reassign IDs 1..N
+//     newSegments.forEach((s, idx) => {
+//       s.id = (idx + 1).toString();
+//     });
 
-    setSegments(newSegments);
-  };
+//     setSegments(newSegments);
+//   };
 
-  if (isLoading) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+//   if (isLoading) {
+//     return (
+//       <Dialog open={open} onOpenChange={onOpenChange}>
+//         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+//           <div className="flex items-center justify-center h-64">
+//             <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+//           </div>
+//         </DialogContent>
+//       </Dialog>
+//     );
+//   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl max-h-[90vh] bg-gray-700 overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Configure Christmas Wheel</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            Win counts update automatically every 10 seconds
-          </p>
-        </DialogHeader>
+//   return (
+//     <Dialog open={open} onOpenChange={onOpenChange}>
+//       <DialogContent className="max-w-7xl max-h-[90vh] bg-gray-700 overflow-y-auto">
+//         <DialogHeader>
+//           <DialogTitle>Configure Christmas Wheel</DialogTitle>
+//           <p className="text-sm text-muted-foreground">
+//             Win counts update automatically every 10 seconds
+//           </p>
+//         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Wheel Visibility Toggle */}
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="space-y-0.5">
-              <Label className="text-sm font-medium">Show Wheel on Frontend</Label>
-              <p className="text-xs text-muted-foreground">
-                Hide the wheel on the frontend while you adjust prizes
-              </p>
-            </div>
-            <Switch
-              checked={isVisible}
-              onCheckedChange={setIsVisible}
-              data-testid="switch-wheel-visible"
-            />
-          </div>
+//         <div className="space-y-4 py-4">
+//           {/* Wheel Visibility Toggle */}
+//           <div className="flex items-center justify-between rounded-lg border p-4">
+//             <div className="space-y-0.5">
+//               <Label className="text-sm font-medium">Show Wheel on Frontend</Label>
+//               <p className="text-xs text-muted-foreground">
+//                 Hide the wheel on the frontend while you adjust prizes
+//               </p>
+//             </div>
+//             <Switch
+//               checked={isVisible}
+//               onCheckedChange={setIsVisible}
+//               data-testid="switch-wheel-visible"
+//             />
+//           </div>
 
-          {/* Max Spins Per User */}
-          {/* <div>
-            <Label>Max Spins Per User (optional)</Label>
-            <Input
-              type="number"
-              value={maxSpinsPerUser}
-              onChange={(e) => setMaxSpinsPerUser(e.target.value)}
-              placeholder="Leave empty for unlimited"
-              data-testid="input-max-spins"
-            />
-          </div> */}
+//           {/* Max Spins Per User */}
+//           {/* <div>
+//             <Label>Max Spins Per User (optional)</Label>
+//             <Input
+//               type="number"
+//               value={maxSpinsPerUser}
+//               onChange={(e) => setMaxSpinsPerUser(e.target.value)}
+//               placeholder="Leave empty for unlimited"
+//               data-testid="input-max-spins"
+//             />
+//           </div> */}
 
-          {/* Mystery Prize Configuration */}
-          {/* <div className="space-y-3 rounded-lg border p-4 bg-card">
-            <div>
-              <Label className="text-sm font-semibold">Mystery Prize (R Prize - Segment 26)</Label>
-              <p className="text-xs text-muted-foreground mt-1">
-                Configure the special mystery prize reward (Ringtone logo icon on black segment)
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Reward Type</Label>
-                <select
-                  value={mysteryPrize.rewardType}
-                  onChange={(e) =>
-                    updateMysteryPrize({ rewardType: e.target.value as any })
-                  }
-                  className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                  data-testid="select-mystery-reward-type"
-                >
-                  <option value="cash">Cash (£)</option>
-                  <option value="points">Points</option>
-                  <option value="lose">No Win</option>
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs">Reward Value</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={mysteryPrize.rewardValue}
-                  onChange={(e) =>
-                    updateMysteryPrize({ rewardValue: parseFloat(e.target.value) || 0 })
-                  }
-                  disabled={mysteryPrize.rewardType === "lose"}
-                  data-testid="input-mystery-reward-value"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Probability (%) - 0 = disabled</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  value={mysteryPrize.probability}
-                  onChange={(e) =>
-                    updateMysteryPrize({ probability: parseFloat(e.target.value) || 0 })
-                  }
-                  placeholder="e.g. 0.5, 1, 2.5"
-                  data-testid="input-mystery-probability"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Max Wins (0 = disabled)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={mysteryPrize.maxWins ?? ""}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    updateMysteryPrize({
-                      maxWins: val === "" ? null : parseInt(val, 10),
-                    });
-                  }}
-                  placeholder="Unlimited"
-                  data-testid="input-mystery-max-wins"
-                />
-              </div>
-            </div>
-          </div> */}
+//           {/* Mystery Prize Configuration */}
+//           {/* <div className="space-y-3 rounded-lg border p-4 bg-card">
+//             <div>
+//               <Label className="text-sm font-semibold">Mystery Prize (R Prize - Segment 26)</Label>
+//               <p className="text-xs text-muted-foreground mt-1">
+//                 Configure the special mystery prize reward (Ringtone logo icon on black segment)
+//               </p>
+//             </div>
+//             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+//               <div>
+//                 <Label className="text-xs">Reward Type</Label>
+//                 <select
+//                   value={mysteryPrize.rewardType}
+//                   onChange={(e) =>
+//                     updateMysteryPrize({ rewardType: e.target.value as any })
+//                   }
+//                   className="w-full h-10 px-3 rounded-md border border-input bg-background"
+//                   data-testid="select-mystery-reward-type"
+//                 >
+//                   <option value="cash">Cash (£)</option>
+//                   <option value="points">Points</option>
+//                   <option value="lose">No Win</option>
+//                 </select>
+//               </div>
+//               <div>
+//                 <Label className="text-xs">Reward Value</Label>
+//                 <Input
+//                   type="number"
+//                   step="0.01"
+//                   value={mysteryPrize.rewardValue}
+//                   onChange={(e) =>
+//                     updateMysteryPrize({ rewardValue: parseFloat(e.target.value) || 0 })
+//                   }
+//                   disabled={mysteryPrize.rewardType === "lose"}
+//                   data-testid="input-mystery-reward-value"
+//                 />
+//               </div>
+//               <div>
+//                 <Label className="text-xs">Probability (%) - 0 = disabled</Label>
+//                 <Input
+//                   type="number"
+//                   step="0.01"
+//                   min="0"
+//                   max="100"
+//                   value={mysteryPrize.probability}
+//                   onChange={(e) =>
+//                     updateMysteryPrize({ probability: parseFloat(e.target.value) || 0 })
+//                   }
+//                   placeholder="e.g. 0.5, 1, 2.5"
+//                   data-testid="input-mystery-probability"
+//                 />
+//               </div>
+//               <div>
+//                 <Label className="text-xs">Max Wins (0 = disabled)</Label>
+//                 <Input
+//                   type="number"
+//                   min="0"
+//                   value={mysteryPrize.maxWins ?? ""}
+//                   onChange={(e) => {
+//                     const val = e.target.value;
+//                     updateMysteryPrize({
+//                       maxWins: val === "" ? null : parseInt(val, 10),
+//                     });
+//                   }}
+//                   placeholder="Unlimited"
+//                   data-testid="input-mystery-max-wins"
+//                 />
+//               </div>
+//             </div>
+//           </div> */}
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-lg font-semibold">Wheel Segments</Label>
-              <div
-                className={`px-3 py-1 rounded-md ${isProbabilityValid ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
-              >
-                Total: {totalProbability.toFixed(2)}%{" "}
-                {isProbabilityValid ? "✓" : "(must be 100%)"}
-              </div>
-            </div>
+//           <div className="space-y-2">
+//             <div className="flex items-center justify-between">
+//               <Label className="text-lg font-semibold">Wheel Segments</Label>
+//               <div
+//                 className={`px-3 py-1 rounded-md ${isProbabilityValid ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
+//               >
+//                 Total: {totalProbability.toFixed(2)}%{" "}
+//                 {isProbabilityValid ? "✓" : "(must be 100%)"}
+//               </div>
+//             </div>
 
-            <div className="grid  grid-cols-1 md:grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto pr-2">
-              {segments.map((segment, index) => {
-                const isMaxWinsReached = segment.maxWins && segment.maxWins > 0 && 
-                                         (segment.currentWins || 0) >= segment.maxWins;
-                return (
-                  <div
-                    key={segment.id}
-                    className="border border-border rounded-lg p-4 space-y-3 bg-card"
-                  >
-                    {/* Simplified header */}
-                    <div className="flex items-center justify-between mb-2 pb-2 border-b">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm">Position {index + 1}</span>
-                        {segment.iconKey === "R_Prize" && (
-                          <span className="text-xs bg-yellow-500/10 text-yellow-600 px-2 py-0.5 rounded">
-                            Mystery Prize
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveSegmentUp(index)}
-                          disabled={index === 0}
-                          className="h-7 w-7 p-0"
-                        >
-                          ↑
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveSegmentDown(index)}
-                          disabled={index === segments.length - 1}
-                          className="h-7 w-7 p-0"
-                        >
-                          ↓
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteSegment(index)}
-                          className="h-7 px-2 text-xs"
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
+//             <div className="grid  grid-cols-1 md:grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto pr-2">
+//               {segments.map((segment, index) => {
+//                 const isMaxWinsReached = segment.maxWins && segment.maxWins > 0 && 
+//                                          (segment.currentWins || 0) >= segment.maxWins;
+//                 return (
+//                   <div
+//                     key={segment.id}
+//                     className="border border-border rounded-lg p-4 space-y-3 bg-card"
+//                   >
+//                     {/* Simplified header */}
+//                     <div className="flex items-center justify-between mb-2 pb-2 border-b">
+//                       <div className="flex items-center gap-2">
+//                         <span className="font-semibold text-sm">Position {index + 1}</span>
+//                         {segment.iconKey === "R_Prize" && (
+//                           <span className="text-xs bg-yellow-500/10 text-yellow-600 px-2 py-0.5 rounded">
+//                             Mystery Prize
+//                           </span>
+//                         )}
+//                       </div>
+//                       <div className="flex gap-1">
+//                         <Button
+//                           type="button"
+//                           variant="ghost"
+//                           size="sm"
+//                           onClick={() => moveSegmentUp(index)}
+//                           disabled={index === 0}
+//                           className="h-7 w-7 p-0"
+//                         >
+//                           ↑
+//                         </Button>
+//                         <Button
+//                           type="button"
+//                           variant="ghost"
+//                           size="sm"
+//                           onClick={() => moveSegmentDown(index)}
+//                           disabled={index === segments.length - 1}
+//                           className="h-7 w-7 p-0"
+//                         >
+//                           ↓
+//                         </Button>
+//                         <Button
+//                           type="button"
+//                           variant="destructive"
+//                           size="sm"
+//                           onClick={() => deleteSegment(index)}
+//                           className="h-7 px-2 text-xs"
+//                         >
+//                           Delete
+//                         </Button>
+//                       </div>
+//                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs">Label</Label>
-                        <Input
-                          value={segment.label}
-                          onChange={(e) =>
-                            updateSegment(index, { label: e.target.value })
-                          }
-                          data-testid={`input-label-${index}`}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Color (hex)</Label>
-                        <Input
-                          value={segment.color}
-                          onChange={(e) =>
-                            updateSegment(index, { color: e.target.value })
-                          }
-                          data-testid={`input-color-${index}`}
-                        />
-                      </div>
-                    </div>
+//                     <div className="grid grid-cols-2 gap-3">
+//                       <div>
+//                         <Label className="text-xs">Label</Label>
+//                         <Input
+//                           value={segment.label}
+//                           onChange={(e) =>
+//                             updateSegment(index, { label: e.target.value })
+//                           }
+//                           data-testid={`input-label-${index}`}
+//                         />
+//                       </div>
+//                       <div>
+//                         <Label className="text-xs">Color (hex)</Label>
+//                         <Input
+//                           value={segment.color}
+//                           onChange={(e) =>
+//                             updateSegment(index, { color: e.target.value })
+//                           }
+//                           data-testid={`input-color-${index}`}
+//                         />
+//                       </div>
+//                     </div>
 
-                    <div className="grid grid-cols-5 gap-3">
-                        <div>
-  <Label className="text-xs">Reward Type</Label>
+//                     <div className="grid grid-cols-5 gap-3">
+//                         <div>
+//   <Label className="text-xs">Reward Type</Label>
 
-  <select
-    value={segment.rewardType}
-    onChange={(e) =>
-      updateSegment(index, { rewardType: e.target.value as any })
-    }
-    className={`
-      w-full h-10 px-3 rounded-md border 
-      appearance-none
-      ${
-        segment.rewardType === "cash"
-          ? "bg-green-600 text-white border-green-700"
-          :
-          segment.rewardType === "points"?
-          "bg-yellow-500 text-white border-blue-700"
-          :
-          segment.rewardType === "lose"
-          ? "bg-red-600 text-white border-red-700"
-          : "bg-background text-foreground border-input"
-      }
-    `}
-    data-testid={`select-reward-type-${index}`}
-  >
-    <option value="cash" className="bg-white text-black">Cash (£)</option>
-    <option value="points" className="bg-white text-black">Points</option>
-    <option value="lose" className="bg-white text-black">No Win</option>
-  </select>
-</div>
-                      <div>
-                        <Label className="text-xs">Reward Value</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={segment.rewardValue}
-                          onChange={(e) =>
-                            updateSegment(index, {
-                              rewardValue: parseFloat(e.target.value) || 0,
-                            })
-                          }
-                          disabled={segment.rewardType === "lose"}
-                          data-testid={`input-reward-value-${index}`}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Probability (%)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          value={segment.probability}
-                          onChange={(e) =>
-                            updateSegment(index, {
-                              probability: parseFloat(e.target.value) || 0,
-                            })
-                          }
-                          placeholder="e.g. 0.5, 1, 2.5"
-                          data-testid={`input-probability-${index}`}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Max Wins</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={segment.maxWins ?? ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            updateSegment(index, {
-                              maxWins: val === "" ? null : parseInt(val, 10),
-                            });
-                          }}
-                          placeholder="Unlimited"
-                          data-testid={`input-max-wins-${index}`}
-                          className={isMaxWinsReached ? "border-red-500" : ""}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Current Wins</Label>
-                        <div className="h-10 px-3 rounded-md border border-input bg-muted flex items-center justify-center">
-                          <span className={`font-medium ${isMaxWinsReached ? "text-red-600" : "text-foreground"}`}>
-                            {segment.currentWins || 0}
-                          </span>
-                          {isMaxWinsReached && (
-                            <span className="ml-2 text-xs text-red-600 font-medium">(Max Reached)</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+//   <select
+//     value={segment.rewardType}
+//     onChange={(e) =>
+//       updateSegment(index, { rewardType: e.target.value as any })
+//     }
+//     className={`
+//       w-full h-10 px-3 rounded-md border 
+//       appearance-none
+//       ${
+//         segment.rewardType === "cash"
+//           ? "bg-green-600 text-white border-green-700"
+//           :
+//           segment.rewardType === "points"?
+//           "bg-yellow-500 text-white border-blue-700"
+//           :
+//           segment.rewardType === "lose"
+//           ? "bg-red-600 text-white border-red-700"
+//           : "bg-background text-foreground border-input"
+//       }
+//     `}
+//     data-testid={`select-reward-type-${index}`}
+//   >
+//     <option value="cash" className="bg-white text-black">Cash (£)</option>
+//     <option value="points" className="bg-white text-black">Points</option>
+//     <option value="lose" className="bg-white text-black">No Win</option>
+//   </select>
+// </div>
+//                       <div>
+//                         <Label className="text-xs">Reward Value</Label>
+//                         <Input
+//                           type="number"
+//                           step="0.01"
+//                           value={segment.rewardValue}
+//                           onChange={(e) =>
+//                             updateSegment(index, {
+//                               rewardValue: parseFloat(e.target.value) || 0,
+//                             })
+//                           }
+//                           disabled={segment.rewardType === "lose"}
+//                           data-testid={`input-reward-value-${index}`}
+//                         />
+//                       </div>
+//                       <div>
+//                         <Label className="text-xs">Probability (%)</Label>
+//                         <Input
+//                           type="number"
+//                           step="0.01"
+//                           min="0"
+//                           max="100"
+//                           value={segment.probability}
+//                           onChange={(e) =>
+//                             updateSegment(index, {
+//                               probability: parseFloat(e.target.value) || 0,
+//                             })
+//                           }
+//                           placeholder="e.g. 0.5, 1, 2.5"
+//                           data-testid={`input-probability-${index}`}
+//                         />
+//                       </div>
+//                       <div>
+//                         <Label className="text-xs">Max Wins</Label>
+//                         <Input
+//                           type="number"
+//                           min="0"
+//                           value={segment.maxWins ?? ""}
+//                           onChange={(e) => {
+//                             const val = e.target.value;
+//                             updateSegment(index, {
+//                               maxWins: val === "" ? null : parseInt(val, 10),
+//                             });
+//                           }}
+//                           placeholder="Unlimited"
+//                           data-testid={`input-max-wins-${index}`}
+//                           className={isMaxWinsReached ? "border-red-500" : ""}
+//                         />
+//                       </div>
+//                       <div>
+//                         <Label className="text-xs">Current Wins</Label>
+//                         <div className="h-10 px-3 rounded-md border border-input bg-muted flex items-center justify-center">
+//                           <span className={`font-medium ${isMaxWinsReached ? "text-red-600" : "text-foreground"}`}>
+//                             {segment.currentWins || 0}
+//                           </span>
+//                           {isMaxWinsReached && (
+//                             <span className="ml-2 text-xs text-red-600 font-medium">(Max Reached)</span>
+//                           )}
+//                         </div>
+//                       </div>
+//                     </div>
+//                   </div>
+//                 );
+//               })}
+//             </div>
+//           </div>
+//         </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={saveMutation.isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={!isProbabilityValid || saveMutation.isPending}
-            data-testid="button-save-wheel-settings"
-          >
-            {saveMutation.isPending ? "Saving..." : "Save Settings"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
+//         <DialogFooter>
+//           <Button
+//             variant="outline"
+//             onClick={() => onOpenChange(false)}
+//             disabled={saveMutation.isPending}
+//           >
+//             Cancel
+//           </Button>
+//           <Button
+//             onClick={() => saveMutation.mutate()}
+//             disabled={!isProbabilityValid || saveMutation.isPending}
+//             data-testid="button-save-wheel-settings"
+//           >
+//             {saveMutation.isPending ? "Saving..." : "Save Settings"}
+//           </Button>
+//         </DialogFooter>
+//       </DialogContent>
+//     </Dialog>
+//   );
+// }

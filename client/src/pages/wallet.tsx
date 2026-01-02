@@ -394,9 +394,10 @@ const isAuthenticated = !!user;
   });
 
   const { data: competitions = [] } = useQuery<Competition[]>({
-    queryKey: ["/api/competitions"],
-    enabled: isAuthenticated,
-  });
+  queryKey: ["/api/user/entry-competitions"],
+  enabled: isAuthenticated,
+});
+
 
   const { data: referralCodeData } = useQuery<{ referralCode: string }>({
     queryKey: ["/api/user/referral-code"],
@@ -1709,9 +1710,10 @@ const handleResumeOrder = () => {
                 ) : (
                   groupedEntries.map((entry, groupIndex) => (
                     <Card
-                      key={entry.competition.id}
-                      className="bg-zinc-900 border-yellow-500/30 overflow-hidden shadow-xl shadow-yellow-500/10"
-                    >
+    key={entry.competition.id}
+    className={`bg-zinc-900 border-yellow-500/30 overflow-hidden shadow-xl shadow-yellow-500/10
+      ${!entry.competition.isActive ? "opacity-60 grayscale" : ""}`}
+  >
                       <div className="bg-gradient-to-r from-yellow-900/20 to-zinc-900 p-4 border-b border-yellow-500/30">
                         <div className="flex items-start gap-4">
                           {entry.competition.imageUrl && (
@@ -1728,9 +1730,16 @@ const handleResumeOrder = () => {
                             <div className="flex flex-wrap gap-3 text-sm">
                               <span className="flex items-center gap-1">
                                 <span className="text-gray-400">Type:</span>
-                                <span className="capitalize bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded border border-yellow-500/30">
-                                  {entry.competition.type === "instant" && "Competition"}
-                                </span>
+                                <span className={`capitalize px-2 py-0.5 rounded border ${
+                      !entry.competition.isActive
+                        ? 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                        : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                    }`}>
+                      {entry.competition.type === "instant" && "Competition"}
+                      {entry.competition.type === "spin" && "Spin Wheel"}
+                      {entry.competition.type === "scratch" && "Scratch Card"}
+                      {entry.competition.type === "pop" && "Pop Balloon"}
+                    </span>
                               </span>
                               <span className="flex items-center gap-1">
                                 <span className="text-gray-400">Entries:</span>

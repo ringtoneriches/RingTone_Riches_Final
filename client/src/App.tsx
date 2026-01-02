@@ -169,13 +169,15 @@ function AppWithMaintenance() {
     return <MaintenancePage />;
   }
 
-  return (
-    <TooltipProvider>
-      <Toaster />
-      <ScrollToTop />
+ return (
+  <TooltipProvider>
+    <Toaster />
+    <ScrollToTop />
+    <div className="pt-20 lg:pt-24"/> 
       <Router />
-    </TooltipProvider>
-  );
+    
+  </TooltipProvider>
+);
 }
 
 

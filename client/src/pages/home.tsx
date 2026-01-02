@@ -7,172 +7,21 @@ import StatsBanner from "@/components/stats-banner";
 import { Competition, User } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import FeaturedCompetitions from "./featuredCompetitions";
-import { Sparkles, Trophy, Zap, Gift, Mail, CheckCircle2, Shield, Award, Star } from "lucide-react";
+import { Sparkles, Trophy, Zap, Gift, Mail, CheckCircle2, Shield, Award, Star, ChevronRight, Crown, Wallet, RotateCw, Ticket, Coins, Play, TrendingUp, Flame } from "lucide-react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-function PremiumCountdown() {
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-  const [prevSeconds, setPrevSeconds] = useState(0);
-  
-  useEffect(() => {
-    const calculateTimeLeft = () => {
-      const now = new Date();
-      const newYear = new Date(now.getFullYear() + 1, 0, 1);
-      const difference = newYear.getTime() - now.getTime();
-      
-      if (difference <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-      
-      return {
-        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-        minutes: Math.floor((difference / 1000 / 60) % 60),
-        seconds: Math.floor((difference / 1000) % 60),
-      };
-    };
-    
-    setTimeLeft(calculateTimeLeft());
-    const timer = setInterval(() => {
-      const newTime = calculateTimeLeft();
-      setPrevSeconds(timeLeft.seconds);
-      setTimeLeft(newTime);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [timeLeft.seconds]);
 
-  const items = [
-    { value: timeLeft.days, label: 'DAYS', gradient: 'from-violet-500 via-violet-400 to-purple-600', glow: 'violet' },
-    { value: timeLeft.hours, label: 'HOURS', gradient: 'from-fuchsia-500 via-fuchsia-400 to-pink-600', glow: 'fuchsia' },
-    { value: timeLeft.minutes, label: 'MINS', gradient: 'from-amber-400 via-amber-300 to-orange-500', glow: 'amber' },
-    { value: timeLeft.seconds, label: 'SECS', gradient: 'from-emerald-400 via-emerald-300 to-teal-500', glow: 'emerald' },
-  ];
 
-  const getGlowColor = (glow: string) => {
-    switch(glow) {
-      case 'violet': return 'shadow-violet-500/40';
-      case 'fuchsia': return 'shadow-fuchsia-500/40';
-      case 'amber': return 'shadow-amber-500/40';
-      case 'emerald': return 'shadow-emerald-500/40';
-      default: return 'shadow-violet-500/40';
-    }
-  };
-
-  return (
-    <div className="flex items-center justify-center gap-3 sm:gap-4 md:gap-5">
-      {items.map((item, idx) => (
-        <div key={item.label} className="text-center group">
-          <div className="relative">
-            {/* Outer Glow */}
-            <div className={`absolute -inset-2 bg-gradient-to-br ${item.gradient} rounded-3xl blur-xl opacity-40 group-hover:opacity-60 transition-opacity duration-500`} />
-            
-            {/* Gradient Border */}
-            <div className={`relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 rounded-2xl bg-gradient-to-br ${item.gradient} p-[2px] shadow-2xl ${getGlowColor(item.glow)}`}>
-              {/* Glass Inner */}
-              <div className="w-full h-full rounded-2xl bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center relative overflow-hidden">
-                {/* Glass Reflection */}
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent" />
-                
-                {/* Value */}
-                <span className={`text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black bg-gradient-to-b from-white to-white/80 bg-clip-text text-transparent tabular-nums relative z-10`}>
-                  {String(item.value).padStart(2, '0')}
-                </span>
-              </div>
-            </div>
-          </div>
-          <span className="text-[10px] sm:text-xs font-bold text-slate-500 mt-3 block tracking-[0.2em]">{item.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function AnimatedSnowflakes() {
-  const snowflakes = useMemo(() => {
-    return Array.from({ length: 30 }, (_, i) => ({
-      id: i,
-      left: `${Math.random() * 100}%`,
-      size: Math.random() * 4 + 2,
-      duration: Math.random() * 8 + 8,
-      delay: Math.random() * 10,
-      opacity: Math.random() * 0.6 + 0.2,
-    }));
-  }, []);
-
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {snowflakes.map((flake) => (
-        <div
-          key={flake.id}
-          className="snowflake"
-          style={{
-            left: flake.left,
-            width: flake.size,
-            height: flake.size,
-            animationDuration: `${flake.duration}s`,
-            animationDelay: `${flake.delay}s`,
-            opacity: flake.opacity,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function HeroBackground() {
-  return (
-    <div className="absolute inset-0 overflow-hidden">
-      {/* Deep Midnight Base */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#0a0614] via-slate-950 to-[#0a0614]" />
-      
-      {/* Aurora Effect - Top - Enhanced */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-40%,rgba(139,92,246,0.5),transparent)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_60%_at_60%_-30%,rgba(217,70,239,0.35),transparent)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_30%_-20%,rgba(124,58,237,0.25),transparent)]" />
-      
-      {/* Warm Glow - Bottom - Enhanced */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_80%_110%,rgba(251,191,36,0.25),transparent)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_40%_at_20%_100%,rgba(168,85,247,0.2),transparent)]" />
-      
-      {/* Center Spotlight */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_50%_50%,rgba(139,92,246,0.1),transparent)]" />
-      
-      {/* Animated Premium Border Lines */}
-      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-violet-500/80 to-transparent animate-pulse" />
-      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-amber-500/60 to-transparent animate-pulse" style={{animationDelay: '1s'}} />
-      
-      {/* Animated Floating Sparkles - Enhanced */}
-      <div className="absolute top-[8%] left-[8%] w-2 h-2 bg-violet-400 rounded-full animate-twinkle" />
-      <div className="absolute top-[12%] right-[12%] w-3 h-3 bg-amber-400 rounded-full animate-twinkle" style={{animationDelay: '0.5s'}} />
-      <div className="absolute top-[6%] left-[45%] w-1.5 h-1.5 bg-fuchsia-400 rounded-full animate-twinkle" style={{animationDelay: '1s'}} />
-      <div className="absolute top-[18%] right-[30%] w-2 h-2 bg-violet-300 rounded-full animate-twinkle" style={{animationDelay: '0.3s'}} />
-      <div className="absolute top-[25%] left-[20%] w-1.5 h-1.5 bg-amber-300 rounded-full animate-twinkle" style={{animationDelay: '0.8s'}} />
-      <div className="absolute top-[15%] right-[8%] w-1 h-1 bg-white rounded-full animate-twinkle" style={{animationDelay: '1.2s'}} />
-      <div className="absolute top-[22%] left-[35%] w-1 h-1 bg-white rounded-full animate-twinkle" style={{animationDelay: '0.7s'}} />
-      <div className="absolute top-[10%] right-[40%] w-1.5 h-1.5 bg-pink-400 rounded-full animate-twinkle" style={{animationDelay: '1.5s'}} />
-      <div className="absolute top-[5%] left-[60%] w-2 h-2 bg-emerald-400 rounded-full animate-twinkle" style={{animationDelay: '2s'}} />
-      <div className="absolute top-[20%] right-[55%] w-1.5 h-1.5 bg-cyan-400 rounded-full animate-twinkle" style={{animationDelay: '1.8s'}} />
-      
-      {/* Floating Orbs - Larger Animated */}
-      <div className="absolute top-[30%] left-[5%] w-32 h-32 bg-violet-500/10 rounded-full blur-3xl animate-float-enhanced" />
-      <div className="absolute top-[60%] right-[8%] w-40 h-40 bg-fuchsia-500/10 rounded-full blur-3xl animate-float-enhanced" style={{animationDelay: '2s'}} />
-      <div className="absolute bottom-[20%] left-[40%] w-48 h-48 bg-amber-500/10 rounded-full blur-3xl animate-float-enhanced" style={{animationDelay: '4s'}} />
-      
-      {/* Mesh Gradient Overlay */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(139,92,246,0.1)_0%,transparent_50%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(251,191,36,0.08)_0%,transparent_50%)]" />
-      
-      {/* Snowflakes */}
-      <AnimatedSnowflakes />
-    </div>
-  );
-}
 
 export default function Home() {
   const { isAuthenticated, user } = useAuth() as { isAuthenticated: boolean; user: User | null };
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   const { data: competitions = [], isLoading } = useQuery<Competition[]>({
     queryKey: ["/api/competitions"],
@@ -269,226 +118,354 @@ export default function Home() {
     <div className="min-h-screen bg-slate-950 text-foreground relative overflow-x-hidden">
       <Header />
 
-      {/* Premium Hero Section - Midnight Celebration 2025 */}
-      <section className="relative overflow-hidden bg-slate-950">
-        <HeroBackground />
+      {/* RINGTONE RICHES PORTAL - Cinematic Gamified Experience */}
+      <section className="relative min-h-screen overflow-hidden bg-[#030712]">
         
-        {/* Main Hero Content */}
-        <div className="relative z-10 py-8 sm:py-12 md:py-16 lg:py-20">
-          <div className="container mx-auto px-4">
+        {/* Immersive Background with Spotlight Effect */}
+        <div className="absolute inset-0 pointer-events-none">
+          {/* Deep base */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,#0a0f1a_0%,#030712_50%,#000_100%)]" />
+          
+          {/* Golden spotlight from top */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(212,175,55,0.25),transparent_70%)]" />
+          
+          {/* Animated glow orbs */}
+          <div className="absolute top-[20%] left-[10%] w-96 h-96 rounded-full bg-amber-500/8 blur-[100px] animate-pulse" />
+          <div className="absolute bottom-[10%] right-[10%] w-72 h-72 rounded-full bg-purple-500/6 blur-[80px] animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-[50%] right-[20%] w-64 h-64 rounded-full bg-emerald-500/5 blur-[60px] animate-pulse" style={{ animationDelay: '2s' }} />
+          
+          {/* Subtle grid pattern */}
+          <div className="absolute inset-0 opacity-[0.02]" style={{
+            backgroundImage: `linear-gradient(rgba(212,175,55,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.3) 1px, transparent 1px)`,
+            backgroundSize: '60px 60px'
+          }} />
+        </div>
+
+        {/* Header Spacer */}
+        <div className="" />
+
+        {/* Main Content */}
+        <div className="relative z-10 px-4 py-6 sm:py-8">
+          <div className="w-full max-w-7xl mx-auto">
             
-            {/* Hero Header */}
-            <div className="text-center mb-10 md:mb-14">
-              {/* Premium Animated Badge */}
-              <div className="relative inline-block mb-5 sm:mb-6 md:mb-8">
-                {/* Rotating Glow Ring */}
-                <div className="absolute -inset-2 sm:-inset-3 bg-gradient-to-r from-violet-600 via-fuchsia-500 via-amber-400 to-violet-600 rounded-full blur-lg opacity-60 animate-glow-pulse" style={{ backgroundSize: '200% 200%', animation: 'rainbow-border 4s ease infinite, glow-pulse 2s ease-in-out infinite' }} />
-                <div className="absolute -inset-1 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-violet-600 rounded-full blur opacity-70" style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 3s ease infinite' }} />
-                <div className="relative inline-flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-gradient-to-r from-violet-600/95 via-fuchsia-600/95 to-violet-600/95 border border-white/30 shadow-2xl overflow-hidden" style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 5s ease infinite' }}>
-                  {/* Shimmer Sweep */}
-                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent animate-shimmer" />
-                  <Star className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 fill-amber-300 animate-twinkle relative z-10" />
-                  <span className="text-xs sm:text-sm md:text-base font-black text-white tracking-wider uppercase relative z-10 drop-shadow-lg">New Year 2025 Celebration</span>
-                  <Star className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 fill-amber-300 animate-twinkle relative z-10" style={{animationDelay: '0.5s'}} />
-                </div>
+            {/* === TIER 1: Promise Banner + Live Feed === */}
+            <div className="text-center mb-8 sm:mb-12 animate-fade-up">
+              {/* Three-Part Promise Banner */}
+              <div className="inline-flex items-center gap-1 sm:gap-2 px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/20 border border-amber-500/40 backdrop-blur-sm mb-6">
+                <span className="text-amber-400 font-black text-sm sm:text-base tracking-wide">PLAY</span>
+                <span className="text-white/30">•</span>
+                <span className="text-emerald-400 font-black text-sm sm:text-base tracking-wide">WIN</span>
+                <span className="text-white/30">•</span>
+                <span className="text-purple-400 font-black text-sm sm:text-base tracking-wide">CELEBRATE</span>
               </div>
               
-              {/* Main Title - Ultra Premium with Layered Effects */}
-              <h1 className="text-3xl xs:text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black mb-6 md:mb-8 leading-[1.15] sm:leading-[1.1] tracking-tight relative">
-                {/* Title Glow Background */}
-                <div className="absolute inset-0 blur-3xl opacity-30 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-amber-500 -z-10" />
-                
-                {/* Line 1: Win Amazing */}
-                <span className="block sm:inline">
-                  <span className="relative inline-block mr-2 sm:mr-3">
-                    <span className="bg-gradient-to-b from-white via-white to-white/60 bg-clip-text text-transparent drop-shadow-2xl" style={{ textShadow: '0 0 60px rgba(255,255,255,0.3)' }}>Win</span>
-                  </span>
-                  <span className="relative inline-block">
-                    {/* Animated Glow Behind "Amazing" */}
-                    <span className="absolute -inset-3 sm:-inset-4 bg-gradient-to-r from-amber-400/40 via-yellow-400/50 to-amber-400/40 blur-2xl animate-glow-pulse -z-10" />
-                    <span className="bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 bg-clip-text text-transparent animate-text-shimmer" style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 3s ease infinite', filter: 'drop-shadow(0 0 30px rgba(251, 191, 36, 0.5))' }}>Amazing</span>
-                  </span>
+              {/* Personalized Welcome */}
+              <h1 className="mb-4">
+                <span className="block text-white/60 text-lg sm:text-xl font-medium mb-2">
+                  Welcome back, <span className="text-amber-400 font-bold">{user?.firstName || user?.email?.split('@')[0] || 'Champion'}</span>
                 </span>
-                
-                {/* Line 2: Prizes in 2025 */}
-                <span className="block mt-1 sm:mt-2">
-                  <span className="relative inline-block mr-2 sm:mr-3">
-                    <span className="bg-gradient-to-b from-white via-white to-white/60 bg-clip-text text-transparent drop-shadow-2xl">Prizes</span>
-                  </span>
-                  <span className="relative inline-block mr-2 sm:mr-3">
-                    <span className="bg-gradient-to-b from-white/80 via-white/70 to-white/50 bg-clip-text text-transparent drop-shadow-2xl">in</span>
-                  </span>
-                  <span className="relative inline-block group">
-                    {/* Animated Glow Behind "2025" */}
-                    <span className="absolute -inset-3 sm:-inset-4 bg-gradient-to-r from-violet-500/40 via-fuchsia-500/50 to-violet-500/40 blur-2xl animate-glow-pulse -z-10" style={{animationDelay: '1s'}} />
-                    <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-violet-400 bg-clip-text text-transparent" style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 4s ease infinite', filter: 'drop-shadow(0 0 30px rgba(139, 92, 246, 0.5))' }}>2025</span>
-                    {/* Sparkle on 2025 */}
-                    <span className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 w-2 h-2 sm:w-3 sm:h-3 bg-white rounded-full animate-twinkle" />
-                  </span>
+                <span className="block text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white leading-none">
+                  Your Fortune
+                </span>
+                <span className="block text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-none animate-text-shimmer">
+                  Awaits
                 </span>
               </h1>
               
-              {/* Subtitle - Premium with Animated Highlight */}
-              <div className="relative max-w-3xl mx-auto mb-6 sm:mb-8 md:mb-10 px-2 sm:px-0">
-                <p className="text-slate-200 text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-light leading-relaxed">
-                  <span className="text-white/90">TUI Holiday Vouchers</span>
-                  <span className="text-slate-400">,</span>
-                  <span className="text-white/90"> Cash Prizes</span>
-                  <span className="text-slate-400"> & More</span>
-                  <span className="block mt-1 sm:mt-0 sm:inline text-slate-400"> — Enter for as little as </span>
-                  <span className="relative inline-block">
-                    <span className="absolute -inset-2 bg-gradient-to-r from-amber-400/30 to-yellow-400/30 blur-lg animate-glow-pulse -z-10" />
-                    <span className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 bg-clip-text text-transparent" style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 2s ease infinite' }}>99p</span>
-                  </span>
-                </p>
-              </div>
               
-              {/* Countdown - Premium Animated Section */}
-              <div className="mb-6 sm:mb-8 md:mb-10">
-                <div className="relative inline-flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6 px-3 sm:px-5 py-1.5 sm:py-2 rounded-full bg-gradient-to-r from-white/10 via-white/5 to-white/10 border border-white/20 overflow-hidden">
-                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
-                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-emerald-400 rounded-full animate-pulse shadow-lg shadow-emerald-400/50" />
-                  <span className="text-xs sm:text-sm md:text-base text-white/80 tracking-widest uppercase font-semibold relative z-10">Countdown to 2026</span>
-                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-amber-400 rounded-full animate-pulse shadow-lg shadow-amber-400/50" style={{animationDelay: '0.5s'}} />
-                </div>
-                <PremiumCountdown />
-              </div>
+            </div>
+
+            {/* === TIER 2: Powerful Hero Section === */}
+            <div className="grid lg:grid-cols-12 gap-6 lg:gap-8 mb-8">
               
-              {/* Trust Indicators - Premium Glassmorphic Cards */}
-              <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 md:gap-4 lg:gap-5 px-2 sm:px-0">
-                {/* 100% Secure */}
-                <div className="relative group">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl blur opacity-0 group-hover:opacity-60 transition-all duration-500" />
-                  <div className="relative flex items-center gap-2 sm:gap-3 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 rounded-xl border border-emerald-500/30 hover:border-emerald-400/60 transition-all duration-300 overflow-hidden">
-                    <span className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-400/10 to-transparent opacity-0 group-hover:opacity-100 group-hover:animate-shimmer transition-opacity" />
-                    <div className="relative flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 shadow-lg shadow-emerald-500/30">
-                      <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                    </div>
-                    <div className="text-left">
-                      <span className="block text-xs sm:text-sm font-bold text-white">100% Secure</span>
-                      <span className="block text-[10px] sm:text-xs text-emerald-400/80">SSL Protected</span>
+              {/* Main Hero Image - Takes More Space */}
+              <div className="lg:col-span-8 animate-fade-up-delay-1">
+                <div className="relative">
+                  
+                  {/* Dramatic ambient glow */}
+                  <div className="absolute -inset-8 rounded-3xl bg-gradient-to-br from-amber-500/30 via-yellow-500/20 to-purple-500/10 blur-3xl" />
+                  
+                  {/* Hero Image Container - Large and Impactful */}
+                  <div className="relative z-10">
+                    {/* Outer glow ring */}
+                    <div className="absolute -inset-3 rounded-3xl bg-gradient-to-r from-amber-500/50 via-yellow-400/30 to-amber-500/50 blur-xl" />
+                    
+                    {/* Premium frame */}
+                    <div className="relative rounded-2xl overflow-hidden border-2 border-amber-500/60 shadow-[0_0_100px_rgba(212,175,55,0.5)]">
+                      {/* Hero Image - Large and Clean */}
+                      <img 
+                        src="/attached_assets/trophy_winner_celebration_moment.png"
+                        alt="Win Amazing Prizes - Spin, Scratch, Win Instantly"
+                        className="w-full h-auto object-cover"
+                      />
                     </div>
                   </div>
                 </div>
                 
-                {/* Fair Play */}
-                <div className="relative group">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl blur opacity-0 group-hover:opacity-60 transition-all duration-500" />
-                  <div className="relative flex items-center gap-2 sm:gap-3 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 rounded-xl border border-amber-500/30 hover:border-amber-400/60 transition-all duration-300 overflow-hidden">
-                    <span className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/10 to-transparent opacity-0 group-hover:opacity-100 group-hover:animate-shimmer transition-opacity" />
-                    <div className="relative flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/30">
-                      <Award className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                    </div>
-                    <div className="text-left">
-                      <span className="block text-xs sm:text-sm font-bold text-white">Fair Play</span>
-                      <span className="block text-[10px] sm:text-xs text-amber-400/80">Verified Draws</span>
-                    </div>
+                {/* Power Stats Row Below Image */}
+                <div className="grid grid-cols-3 gap-3 mt-6">
+                  <div className="text-center p-4 rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-600/5 border border-amber-500/30">
+                    <div className="text-3xl sm:text-4xl font-black animate-text-shimmer">£20K+</div>
+                    <div className="text-amber-400/80 text-xs uppercase tracking-wider font-bold mt-1">Weekly Prizes</div>
+                  </div>
+                  <div className="text-center p-4 rounded-xl bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border border-emerald-500/30">
+                    <div className="text-3xl sm:text-4xl font-black text-emerald-400">1000+</div>
+                    <div className="text-emerald-400/80 text-xs uppercase tracking-wider font-bold mt-1">Winners</div>
+                  </div>
+                  <div className="text-center p-4 rounded-xl bg-gradient-to-br from-purple-500/15 to-purple-600/5 border border-purple-500/30">
+                    <div className="text-3xl sm:text-4xl font-black text-purple-400">99p</div>
+                    <div className="text-purple-400/80 text-xs uppercase tracking-wider font-bold mt-1">From Only</div>
                   </div>
                 </div>
                 
-                {/* Real Winners */}
-                <div className="relative group">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-2xl blur opacity-0 group-hover:opacity-60 transition-all duration-500" />
-                  <div className="relative flex items-center gap-2 sm:gap-3 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 rounded-xl border border-violet-500/30 hover:border-violet-400/60 transition-all duration-300 overflow-hidden">
-                    <span className="absolute inset-0 bg-gradient-to-r from-transparent via-violet-400/10 to-transparent opacity-0 group-hover:opacity-100 group-hover:animate-shimmer transition-opacity" />
-                    <div className="relative flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-violet-400 to-fuchsia-500 shadow-lg shadow-violet-500/30">
-                      <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                {/* CTA Button */}
+                <div className="text-center mt-6">
+                  <Button 
+                    onClick={() => {
+    const section = document.getElementById("competitions-grid");
+    if (section) {
+      const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
+      window.scrollTo({
+        top: elementTop - 100, // Same offset
+        behavior: "smooth"
+      });
+    }
+  }}
+                    className="h-14 px-12 text-lg font-black rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-900 border-0 shadow-[0_0_60px_rgba(212,175,55,0.6)] hover:shadow-[0_0_80px_rgba(212,175,55,0.8)] hover:scale-105 transition-all"
+                    data-testid="button-hero-play-now"
+                  >
+                    <Play className="w-6 h-6 mr-2" />
+                    START WINNING NOW
+                  </Button>
+                </div>
+              </div>
+
+              {/* Right Panel: Ultra Premium Game Selection */}
+              <div className="lg:col-span-4 animate-fade-up-delay-2">
+                
+                {/* Animated Border Container */}
+                <div className="relative rounded-xl sm:rounded-2xl p-[2px] bg-gradient-to-r from-amber-500 via-purple-500 to-emerald-500 animate-gradient-x">
+                  <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500 via-purple-500 to-emerald-500 blur-lg sm:blur-xl opacity-40 sm:opacity-50 animate-gradient-x" />
+                  
+                  <div className="relative rounded-xl sm:rounded-2xl bg-slate-950 p-3 sm:p-5 overflow-hidden">
+                    {/* Floating orbs - hidden on mobile for performance */}
+                    <div className="hidden sm:block absolute top-4 right-4 w-20 h-20 bg-amber-500/20 rounded-full blur-2xl animate-pulse" />
+                    <div className="hidden sm:block absolute bottom-4 left-4 w-16 h-16 bg-purple-500/20 rounded-full blur-2xl animate-pulse delay-500" />
+                    
+                    {/* Header with live indicator */}
+                    <div className="relative text-center mb-4 sm:mb-6">
+                      <div className="inline-flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full bg-gradient-to-r from-red-500/20 via-orange-500/20 to-amber-500/20 border border-red-500/40 mb-2 sm:mb-4 animate-pulse">
+                        <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-red-500 rounded-full animate-ping" />
+                        <span className="text-red-400 text-xs sm:text-sm font-black tracking-wider">LIVE NOW</span>
+                        <Flame className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />
+                      </div>
+                      <h3 className="text-lg sm:text-2xl font-black text-white mb-0.5 sm:mb-1">Pick Your Winner</h3>
+                      <p className="text-white/50 text-xs sm:text-sm">3 ways to win big today</p>
                     </div>
-                    <div className="text-left">
-                      <span className="block text-xs sm:text-sm font-bold text-white">Real Winners</span>
-                      <span className="block text-[10px] sm:text-xs text-violet-400/80">Paid Daily</span>
-                    </div>
+                    
+                    {/* Game Cards - Responsive */}
+                    <div className="relative space-y-2.5 sm:space-y-4">
+  {[
+    { Icon: RotateCw, title: "Spin & Win", tagline: "Spin to Win Big", prize: "£500", stars: 5, winChance: "High", badge: "HOT", badgeColor: "bg-red-500", gradient: "from-purple-600 via-purple-500 to-violet-600", borderColor: "border-purple-400/50", glowColor: "shadow-purple-500/50", filter: "spin" },
+    { Icon: Ticket, title: "Scratch Cards", tagline: "Reveal Your Fortune", prize: "£1,000", stars: 4, winChance: "Best Odds", badge: "POPULAR", badgeColor: "bg-emerald-500", gradient: "from-emerald-600 via-emerald-500 to-teal-600", borderColor: "border-emerald-400/50", glowColor: "shadow-emerald-500/50", filter: "scratch" },
+    { Icon: Zap, title: "Competition", tagline: "Know in Seconds", prize: "£2,500", stars: 5, winChance: "Mega Jackpot", badge: "MEGA", badgeColor: "bg-amber-500", gradient: "from-amber-500 via-yellow-500 to-orange-500", borderColor: "border-amber-400/50", glowColor: "shadow-amber-500/50", filter: "instant" }
+  ].map((game, index) => (
+    <button
+      key={index}
+     onClick={() => {
+    handleFilterChange(game.filter);
+    setTimeout(() => {
+      const section = document.getElementById("competitions-grid");
+      if (section) {
+        // Get the element's position
+        const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
+        // Scroll to a position 100px above the element
+        window.scrollTo({
+          top: elementTop - 100, // Adjust this value (100px up from the element)
+          behavior: "smooth"
+        });
+      }
+    }, 100);
+  }}
+      className={`w-full group relative rounded-xl sm:rounded-2xl bg-gradient-to-r ${game.gradient} p-[2px] sm:p-1 transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl ${game.glowColor} shadow-md sm:shadow-lg`}
+      data-testid={`button-game-${game.title.toLowerCase().replace(/\s+/g, '-')}`}
+    >
+      {/* Inner card */}
+      <div className={`relative rounded-lg sm:rounded-xl bg-slate-900/90 backdrop-blur-sm p-2.5 sm:p-4 border ${game.borderColor}`}>
+        {/* Badge */}
+        <div className={`absolute -top-1.5 -right-1.5 sm:-top-2 sm:-right-2 ${game.badgeColor} text-white text-[8px] sm:text-[10px] font-black px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg`}>
+          {game.badge}
+        </div>
+        
+        {/* Shine effect */}
+        <div className="absolute inset-0 rounded-lg sm:rounded-xl bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+        
+        <div className="relative flex items-center gap-2.5 sm:gap-4">
+          {/* Glowing Icon */}
+          <div className={`relative w-10 h-10 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-gradient-to-br ${game.gradient} flex items-center justify-center shadow-lg sm:shadow-xl shrink-0`}>
+            <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-white/20" />
+            <game.Icon className="w-5 h-5 sm:w-8 sm:h-8 text-white drop-shadow-lg" />
+          </div>
+          
+          {/* Content */}
+          <div className="flex-1 text-left min-w-0">
+            <div className="text-white font-black text-sm sm:text-lg mb-0 sm:mb-0.5 truncate">{game.title}</div>
+            <div className="text-white/70 text-[10px] sm:text-xs font-medium mb-0.5 sm:mb-1">{game.tagline}</div>
+            {/* Stars Rating */}
+            <div className="flex items-center gap-0.5">
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} className={`w-2.5 h-2.5 sm:w-3 sm:h-3 ${i < game.stars ? 'text-amber-400 fill-amber-400' : 'text-white/20'}`} />
+              ))}
+              <span className="text-amber-400 text-[9px] sm:text-[10px] font-bold ml-1">{game.winChance}</span>
+            </div>
+          </div>
+          
+          {/* Prize Column */}
+          <div className="text-right shrink-0">
+            <div className="text-white/50 text-[8px] sm:text-[10px] uppercase tracking-wider font-bold hidden sm:block">Win Up To</div>
+            <div className={`text-xl sm:text-3xl font-black bg-gradient-to-r ${game.gradient} bg-clip-text text-transparent`}>{game.prize}</div>
+            <div className="flex items-center justify-end gap-0.5 sm:gap-1 mt-0.5 sm:mt-1 text-white/40 group-hover:text-white transition-colors">
+              <span className="text-[10px] sm:text-xs font-bold">PLAY</span>
+              <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </button>
+  ))}
+</div>
+                    
+                    {/* Bottom - Winning Message */}
+                    <div className="mt-3 sm:mt-5 pt-3 sm:pt-4 border-t border-white/10">
+  <div className="flex items-center justify-between">
+    <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-500/30">
+        <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400" />
+        <span className="text-amber-400 text-[10px] sm:text-xs font-bold">Your luck awaits</span>
+      </div>
+    </div>
+    <Button 
+      variant="ghost"
+      size="sm"
+      onClick={() => {
+        handleFilterChange("all");
+        setTimeout(() => {
+          const section = document.getElementById("competitions-grid");
+          if (section) {
+            const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
+            window.scrollTo({
+              top: elementTop - 100,
+              behavior: "smooth"
+            });
+          }
+        }, 100);
+      }}
+      className="text-amber-400 hover:text-amber-300 font-bold h-7 sm:h-8 text-xs sm:text-sm px-2 sm:px-3"
+      data-testid="button-view-all-prizes"
+    >
+      View All
+      <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 ml-0.5 sm:ml-1" />
+    </Button>
+  </div>
+</div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Featured Competitions */}
-        <div className="relative z-10 pb-8">
-          <div className="container mx-auto px-0">
-            {competitions.length > 0 ? (
-              <FeaturedCompetitions competitions={competitions} />
-            ) : (
-              <div className="text-center text-slate-400 py-12">
-                <Sparkles className="w-12 h-12 text-violet-500 mx-auto mb-4" />
-                <p className="text-lg">Loading amazing prizes...</p>
+            {/* === TIER 3: Trust Signals === */}
+            <div className="pt-6 border-t border-white/5 animate-fade-up-delay-4">
+              <div className="flex flex-wrap justify-center gap-6 sm:gap-10">
+                {[
+                  { icon: Shield, text: "SSL Secure", color: "text-emerald-400" },
+                  { icon: CheckCircle2, text: "Verified Fair", color: "text-amber-400" },
+                  { icon: Coins, text: "Instant Payouts", color: "text-purple-400" },
+                  { icon: Award, text: "UK Licensed", color: "text-amber-400" }
+                ].map((badge, index) => (
+                  <div key={index} className="flex items-center gap-2 text-white/40">
+                    <badge.icon className={`w-4 h-4 ${badge.color}`} />
+                    <span className="text-xs font-medium">{badge.text}</span>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
           </div>
         </div>
+      </section>
 
-        {/* Premium Divider */}
-        <div className="h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent" />
+      {/* Featured Competitions Section */}
+      <section className="relative py-8 sm:py-12 bg-slate-950">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {competitions.length > 0 ? (
+            <FeaturedCompetitions competitions={competitions} />
+          ) : (
+            <div className="text-center text-slate-400 py-12">
+              <Sparkles className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+              <p className="text-lg">Loading amazing prizes...</p>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Trust Banner */}
       <StatsBanner />
 
-      {/* Premium Filter Tabs */}
-      <section className="bg-slate-900/95 backdrop-blur-md sticky top-0 z-40 border-b border-slate-800">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex flex-wrap justify-center gap-2 md:gap-3">
+      {/* Modern Filter Tabs */}
+      <section className="glass-modern sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
             {[
-              { id: "all", label: "All Live Competitions", icon: Trophy },
-              { id: "spin", label: "Spin & Win", icon: Zap },
-              { id: "scratch", label: "Scratch Cards", icon: Sparkles },
-              { id: "instant", label: "Competitions", icon: Gift }
+              { id: "all", label: "All", icon: Trophy },
+              { id: "spin", label: "Spin", icon: Zap },
+              { id: "scratch", label: "Scratch", icon: Sparkles },
+              { id: "instant", label: "Competition", icon: Gift }
             ].map((filter) => (
               <button
                 key={filter.id}
                 onClick={() => handleFilterChange(filter.id)}
-                className={`relative px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-semibold text-sm md:text-base transition-all duration-200 ${
+                className={`px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-semibold text-sm transition-all duration-300 flex items-center gap-2 ${
                   activeFilter === filter.id
-                    ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/25"
-                    : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-300 border border-slate-700"
+                    ? "btn-modern-primary"
+                    : "bg-white/5 text-slate-400 border border-white/10 hover:border-amber-500/30 hover:text-white"
                 }`}
                 data-testid={`button-filter-${filter.id}`}
               >
-                <span className="flex items-center gap-2">
-                  <filter.icon className="w-4 h-4 md:w-5 md:h-5" />
-                  {filter.label}
-                </span>
+                <filter.icon className="w-4 h-4" />
+                {filter.label}
               </button>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Competitions Grid - Clean Premium Design */}
-      <section className="py-10 md:py-16 bg-slate-950 relative">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_30%_at_50%_0%,rgba(120,0,255,0.1),transparent)]" />
+      {/* Competitions Grid - Modern Design */}
+      <section className="py-16 sm:py-20 lg:py-24 bg-slate-950 relative">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(212,175,55,0.06),transparent)]" />
         
-        <div className="container mx-auto px-4 relative z-10">
+        <div id="competitions-grid" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           {isLoading ? (
-            <div className="text-center py-16">
-              <Sparkles className="w-12 h-12 text-violet-500 mx-auto mb-4" />
+            <div className="text-center py-20">
+              <Sparkles className="w-12 h-12 text-amber-500 mx-auto mb-4 animate-pulse" />
               <p className="text-slate-400 text-lg">Loading prizes...</p>
             </div>
           ) : filteredCompetitions.length > 0 ? (
             <>
-              <div className="text-center mb-8 md:mb-12">
-                <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black mb-3">
-                  <span className="bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 bg-clip-text text-transparent animate-text-shimmer" style={{ backgroundSize: '200% 100%', animation: 'rainbow-border 3s ease infinite', filter: 'drop-shadow(0 0 30px rgba(251, 191, 36, 0.5))' }}>
-                    {activeFilter === "all" 
-                      ? "All Live Competitions" 
-                      : activeFilter === "spin"
-                      ? "Spin & Win"
-                      : activeFilter === "scratch"
-                      ? "Scratch Cards"
-                      : "Competitions"}
-                  </span>
+              <div className="text-center mb-12 lg:mb-16">
+                <h2 className="heading-xl text-white mb-4">
+                  {activeFilter === "all" 
+                    ? "All Prizes" 
+                    : activeFilter === "spin"
+                    ? "Spin & Win"
+                    : activeFilter === "scratch"
+                    ? "Scratch Cards"
+                    : "Competitions"}
                 </h2>
-                <p className="text-slate-400 text-sm md:text-base">
-                  {activeFilter === "spin" || activeFilter === "scratch" 
-                    ? "Instant cash prizes waiting for you"
-                    : `${filteredCompetitions.length} prizes available`
-                  }
+                <p className="text-slate-500 text-base sm:text-lg">
+                  {filteredCompetitions.length} prizes available
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 xs:gap-3 sm:gap-4 md:gap-5 lg:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
                 {filteredCompetitions.map((competition) => (
                   <CompetitionCard
                     key={competition.id}
@@ -499,9 +476,9 @@ export default function Home() {
               </div>
             </>
           ) : (
-            <div className="text-center py-16">
-              <Gift className="w-20 h-20 text-red-500/50 mx-auto mb-4" />
-              <p className="text-muted-foreground text-xl">No competitions found.</p>
+            <div className="text-center py-20">
+              <Gift className="w-16 h-16 text-slate-700 mx-auto mb-4" />
+              <p className="text-slate-500 text-xl">No competitions found.</p>
             </div>
           )}
         </div>
@@ -518,31 +495,31 @@ export default function Home() {
       {/* Newsletter Section */}
       {isAuthenticated && (
         <section className="py-12 md:py-20 relative overflow-hidden">
-          {/* Magical background */}
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950" />
+          {/* Royal background */}
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950" />
           <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-10 left-10 w-72 h-72 bg-purple-500/15 rounded-full blur-[80px]" />
-            <div className="absolute bottom-10 right-10 w-72 h-72 bg-yellow-500/15 rounded-full blur-[80px]" />
+            <div className="absolute top-10 left-10 w-72 h-72 bg-amber-500/10 rounded-full blur-[80px]" />
+            <div className="absolute bottom-10 right-10 w-72 h-72 bg-yellow-500/10 rounded-full blur-[80px]" />
           </div>
 
           {/* Decorative elements */}
-          <div className="absolute left-5 top-1/2 -translate-y-1/2 text-red-500/15 pointer-events-none">
-            <Gift className="w-40 h-40 animate-float-slow" />
+          <div className="absolute left-5 top-1/2 -translate-y-1/2 text-amber-500/15 pointer-events-none">
+            <Gift className="w-40 h-40" />
           </div>
-          <div className="absolute right-5 top-1/2 -translate-y-1/2 text-green-500/15 pointer-events-none">
-            <Sparkles className="w-40 h-40 animate-float-medium" />
+          <div className="absolute right-5 top-1/2 -translate-y-1/2 text-yellow-500/15 pointer-events-none">
+            <Sparkles className="w-40 h-40" />
           </div>
 
           <div className="container mx-auto px-4 relative z-10">
             <div className="max-w-2xl mx-auto relative">
-              {/* Glowing border effect */}
-              <div className="absolute -inset-1 bg-gradient-to-r from-red-500 via-yellow-400 to-green-500 rounded-3xl blur-sm opacity-75" />
+              {/* Premium Gold Glowing border effect */}
+              <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 rounded-3xl blur-sm opacity-60" />
               
               <div className="relative bg-gradient-to-br from-slate-800/95 to-slate-900/95 backdrop-blur-sm rounded-2xl p-8 md:p-12 border border-white/10 shadow-2xl">
                 <div className="text-center mb-8">
                   <div className="relative inline-block mb-4">
-                    <div className="w-24 h-24 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-2xl shadow-red-500/40 animate-bounce-slow">
-                      <Gift className="w-12 h-12 text-white" />
+                    <div className="w-24 h-24 bg-gradient-to-br from-amber-500 to-yellow-600 rounded-full flex items-center justify-center shadow-2xl shadow-amber-500/40">
+                      <Gift className="w-12 h-12 text-slate-900" />
                     </div>
                     <div className="absolute -top-2 -right-2">
                       <Star className="w-8 h-8 text-yellow-400 animate-pulse" />
@@ -550,16 +527,16 @@ export default function Home() {
                   </div>
                   
                   <h3 className="text-2xl md:text-4xl font-black mb-3">
-                    <span className="bg-gradient-to-r from-purple-400 via-yellow-300 to-pink-400 bg-clip-text text-transparent">
+                    <span className="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 bg-clip-text text-transparent">
                       {user?.receiveNewsletter ? "You're on the VIP List!" : "Join our VIP List!"}
                     </span>
                   </h3>
                   <p className="text-slate-300 text-sm md:text-lg leading-relaxed flex items-center justify-center gap-2 flex-wrap">
-                    <Sparkles className="w-4 h-4 text-purple-300" />
+                    <Sparkles className="w-4 h-4 text-amber-400" />
                     {user?.receiveNewsletter 
-                      ? "Get ready for exclusive 2025 deals and amazing surprises!"
+                      ? "Get ready for exclusive deals and amazing surprises!"
                       : "Subscribe for exclusive deals and New Year prizes!"}
-                    <Sparkles className="w-4 h-4 text-purple-300" />
+                    <Sparkles className="w-4 h-4 text-amber-400" />
                   </p>
                 </div>
 
@@ -590,13 +567,13 @@ export default function Home() {
                 ) : (
                   <form onSubmit={handleNewsletterSubscribe} className="space-y-4">
                     <div className="relative group">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500 to-green-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition" />
+                      <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500 to-yellow-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition" />
                       <div className="relative">
                         <Input
                           type="email"
                           value={newsletterEmail}
                           onChange={(e) => setNewsletterEmail(e.target.value)}
-                          placeholder={user?.email || "Enter your email for 2025 deals"}
+                          placeholder={user?.email || "Enter your email for exclusive deals"}
                           className="bg-slate-700/80 border-slate-600 text-white placeholder:text-slate-400 h-14 md:h-16 text-base md:text-lg pl-14 pr-4 rounded-xl focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50"
                           data-testid="input-newsletter-email"
                           disabled={newsletterSubscribeMutation.isPending}
@@ -607,7 +584,7 @@ export default function Home() {
 
                     <Button
                       type="submit"
-                      className="w-full h-14 md:h-16 bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 hover:from-red-600 hover:via-yellow-400 hover:to-green-600 text-slate-900 font-black text-lg md:text-xl rounded-xl shadow-xl shadow-yellow-500/30 transition-all hover:shadow-2xl hover:shadow-yellow-500/50 hover:scale-[1.02]"
+                      className="w-full h-14 md:h-16 btn-premium text-slate-900 font-black text-lg md:text-xl rounded-xl border border-amber-300/30"
                       disabled={newsletterSubscribeMutation.isPending}
                       data-testid="button-newsletter-subscribe"
                     >
@@ -619,7 +596,7 @@ export default function Home() {
                       ) : (
                         <div className="flex items-center gap-3">
                           <Gift className="w-6 h-6" />
-                          Get 2025 Deals
+                          Get VIP Deals
                           <Star className="w-5 h-5" />
                         </div>
                       )}
