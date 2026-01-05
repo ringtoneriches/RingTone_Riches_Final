@@ -90,7 +90,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   --royal-champagne: hsl(45 40% 85%);
 }
 
-
 .dark {
   /* Royal Theme Dark Mode - Same as root for this design */
   --background: hsl(222 47% 4%);
@@ -144,16 +143,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   html {
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
-  }
-}
-
-.page-wrapper {
-  padding-top: 5rem; /* mobile header height (h-20) */
-}
-
-@media (min-width: 1024px) {
-  .page-wrapper {
-    padding-top: 6rem; /* large header height (h-24) */
   }
 }
 
@@ -213,18 +202,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   .btn-modern-primary:active {
     transform: translateY(-1px) scale(0.99);
   }
-  /* @media (max-width: 768px) {
-  .btn-modern-primary {
-    display: none;
-  }
-}
-
-@media (max-width: 768px) {
-  .btn-modern-secondary,
-  .btn-modern-icon {
-    display: none !important;
-  }
-} */
   
   /* Secondary - Ghost with Gold Border */
   .btn-modern-secondary {
@@ -1432,6 +1409,21 @@ input[type="range"]::-moz-range-thumb:hover {
   animation: rotate-gradient 3s linear infinite;
 }
 
+/* Animated gradient X for multi-color border effect */
+@keyframes gradient-x {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient-x {
+  background-size: 200% 200%;
+  animation: gradient-x 3s ease infinite;
+}
+
 /* Sparkle effect */
 @keyframes sparkle {
   0%, 100% {
@@ -1594,4 +1586,72 @@ input[type="range"]::-moz-range-thumb:hover {
   .animate-spin-reverse {
     animation-duration: 90s;
   }
+}
+
+/* Premium Game Container Animations */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+  }
+  25% {
+    transform: translateY(-10px) translateX(5px);
+  }
+  50% {
+    transform: translateY(-5px) translateX(-5px);
+  }
+  75% {
+    transform: translateY(-15px) translateX(3px);
+  }
+}
+
+@keyframes float-delayed {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+  }
+  25% {
+    transform: translateY(-8px) translateX(-4px);
+  }
+  50% {
+    transform: translateY(-12px) translateX(6px);
+  }
+  75% {
+    transform: translateY(-4px) translateX(-3px);
+  }
+}
+
+@keyframes bounce-slow {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float-delayed 7s ease-in-out infinite;
+  animation-delay: 1s;
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 3s ease-in-out infinite;
+}
+
+/* Perspective utilities */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+/* Conic gradient for rotating glow */
+.bg-gradient-conic {
+  background: conic-gradient(from 0deg, var(--tw-gradient-stops));
+}
+
+/* Radial gradient */
+.bg-gradient-radial {
+  background: radial-gradient(circle, var(--tw-gradient-stops));
 }
