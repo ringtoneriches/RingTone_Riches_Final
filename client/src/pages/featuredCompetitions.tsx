@@ -194,7 +194,9 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
                               </div>
                               
                               {/* Progress bar */}
-                              <div className="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 right-2 sm:right-3">
+                              {
+                                competition.type === "instant"  ? (
+                                   <div className="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 right-2 sm:right-3">
                                 <div className="flex items-center justify-between text-[10px] sm:text-xs mb-1">
                                   <span className="text-white/70">Filling fast</span>
                                   <span className="text-amber-400 font-bold">{Math.round(soldPercent)}%</span>
@@ -206,6 +208,8 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
                                   />
                                 </div>
                               </div>
+                                ) : null
+                              }
                             </div>
                           </div>
                         </div>

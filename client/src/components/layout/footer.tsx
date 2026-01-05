@@ -216,7 +216,7 @@ export default function Footer() {
   </div>
 
   <p className="text-xs sm:text-sm text-center">
-    &copy; 2025 RingTone Riches. All rights reserved.
+    &copy; 2026 RingTone Riches. All rights reserved.
   </p>
 </div>
 

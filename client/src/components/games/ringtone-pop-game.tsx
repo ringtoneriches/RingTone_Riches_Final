@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Volume2, VolumeX, PartyPopper, RotateCcw, Gift, Snowflake, Trophy, X, Sparkles, Star, Zap, Target, Flame } from "lucide-react";
+import { Loader2, Volume2, VolumeX, PartyPopper, RotateCcw, Gift, Trophy, X, Sparkles, Star, Zap, Target, Flame, Crown, Music, Sparkle } from "lucide-react";
 import confetti from "canvas-confetti";
 import {
   Dialog,
@@ -10,6 +10,39 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useLocation } from "wouter";
+
+type PopHistoryItem = {
+  status: "NOT PLAYED" | "PLAYED";
+  prize: { type: string; value: string };
+};
+
+const loadPopHistory = (orderId?: string): PopHistoryItem[] => {
+  if (!orderId) return [];
+  try {
+    const saved = localStorage.getItem(`popGameHistory_${orderId}`);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+};
+
+const savePopHistory = (history: PopHistoryItem[], orderId?: string) => {
+  if (!orderId) return;
+  try {
+    localStorage.setItem(`popGameHistory_${orderId}`, JSON.stringify(history));
+  } catch {}
+};
 import popSoundFile from "@assets/balloon-pop-sound_1766057573479.mp3";
 
 interface BalloonProps {
@@ -24,25 +57,31 @@ interface BalloonProps {
 
 const BALLOON_COLORS = [
   { 
-    main: "#ef4444", 
-    light: "#fca5a5", 
-    dark: "#b91c1c",
-    glow: "0 0 40px rgba(239, 68, 68, 0.6)",
-    particles: ["#ef4444", "#fca5a5", "#dc2626", "#fecaca", "#ff6b6b"]
+    main: "#a855f7", 
+    light: "#e9d5ff", 
+    dark: "#7e22ce",
+    accent: "#f0abfc",
+    glow: "0 0 60px rgba(168, 85, 247, 0.8), 0 0 100px rgba(168, 85, 247, 0.4)",
+    innerGlow: "inset 0 0 30px rgba(255, 255, 255, 0.3)",
+    particles: ["#a855f7", "#d8b4fe", "#9333ea", "#c084fc", "#e879f9", "#f0abfc"]
   },
   { 
-    main: "#22c55e", 
-    light: "#86efac", 
-    dark: "#15803d",
-    glow: "0 0 40px rgba(34, 197, 94, 0.6)",
-    particles: ["#22c55e", "#86efac", "#16a34a", "#bbf7d0", "#4ade80"]
+    main: "#10b981", 
+    light: "#a7f3d0", 
+    dark: "#047857",
+    accent: "#34d399",
+    glow: "0 0 60px rgba(16, 185, 129, 0.8), 0 0 100px rgba(16, 185, 129, 0.4)",
+    innerGlow: "inset 0 0 30px rgba(255, 255, 255, 0.3)",
+    particles: ["#10b981", "#6ee7b7", "#059669", "#34d399", "#2dd4bf", "#a7f3d0"]
   },
   { 
-    main: "#eab308", 
-    light: "#fde047", 
-    dark: "#a16207",
-    glow: "0 0 40px rgba(234, 179, 8, 0.6)",
-    particles: ["#eab308", "#fde047", "#ca8a04", "#fef08a", "#facc15"]
+    main: "#f59e0b", 
+    light: "#fef3c7", 
+    dark: "#b45309",
+    accent: "#fbbf24",
+    glow: "0 0 60px rgba(245, 158, 11, 0.8), 0 0 100px rgba(245, 158, 11, 0.4)",
+    innerGlow: "inset 0 0 30px rgba(255, 255, 255, 0.3)",
+    particles: ["#f59e0b", "#fcd34d", "#d97706", "#fbbf24", "#fde047", "#fef3c7"]
   },
 ];
 
@@ -87,55 +126,80 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }:
 
   if (isPopped) {
     return (
-      <div className="relative flex items-center justify-center" style={{ width: "120px", height: "150px" }}>
+      <div className="relative flex items-center justify-center" style={{ width: "140px", height: "170px" }}>
+        {/* Multi-layer shockwave */}
         {showShockwave && (
-          <div 
-            className="absolute inset-0 rounded-full animate-shockwave"
-            style={{
-              background: `radial-gradient(circle, ${colorScheme.main}40 0%, transparent 70%)`,
-            }}
-          />
+          <>
+            <div 
+              className="absolute inset-0 rounded-full animate-shockwave"
+              style={{
+                background: `radial-gradient(circle, ${colorScheme.main}50 0%, transparent 70%)`,
+              }}
+            />
+            <div 
+              className="absolute inset-0 rounded-full animate-shockwave"
+              style={{
+                background: `radial-gradient(circle, ${colorScheme.accent}30 0%, transparent 60%)`,
+                animationDelay: '0.1s',
+              }}
+            />
+          </>
         )}
+        {/* Enhanced particle burst */}
         {showParticles && (
           <div className="absolute inset-0 pointer-events-none z-20">
-            {[...Array(32)].map((_, i) => {
-              const angle = (i / 32) * 360;
-              const distance = 80 + Math.random() * 60;
-              const size = 4 + Math.random() * 8;
+            {[...Array(40)].map((_, i) => {
+              const angle = (i / 40) * 360;
+              const distance = 90 + Math.random() * 80;
+              const size = 5 + Math.random() * 10;
               const isConfetti = i % 3 === 0;
+              const isStar = i % 5 === 0;
               return (
                 <div
                   key={i}
-                  className={`absolute ${isConfetti ? 'rounded-sm' : 'rounded-full'}`}
+                  className={`absolute ${isStar ? 'rounded-none' : isConfetti ? 'rounded-sm' : 'rounded-full'}`}
                   style={{
                     left: "50%",
                     top: "50%",
                     width: `${size}px`,
-                    height: isConfetti ? `${size * 2}px` : `${size}px`,
+                    height: isConfetti ? `${size * 2.5}px` : `${size}px`,
                     backgroundColor: colorScheme.particles[i % colorScheme.particles.length],
-                    boxShadow: `0 0 12px ${colorScheme.particles[i % colorScheme.particles.length]}`,
-                    animation: `particle-burst-enhanced 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards`,
-                    animationDelay: `${i * 0.015}s`,
-                    transform: `translate(-50%, -50%)`,
+                    boxShadow: `0 0 15px ${colorScheme.particles[i % colorScheme.particles.length]}, 0 0 30px ${colorScheme.particles[i % colorScheme.particles.length]}50`,
+                    animation: `particle-burst-enhanced 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards`,
+                    animationDelay: `${i * 0.012}s`,
+                    transform: `translate(-50%, -50%)${isStar ? ' rotate(45deg)' : ''}`,
                     '--angle': `${angle}deg`,
                     '--distance': `${distance}px`,
-                    '--rotation': `${Math.random() * 720}deg`,
+                    '--rotation': `${Math.random() * 1080}deg`,
                   } as any}
                 />
               );
             })}
           </div>
         )}
-        <div 
-          className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center ${showValue ? 'animate-prize-reveal-bounce' : ''}`}
-          style={{
-            background: `radial-gradient(circle at 30% 30%, ${colorScheme.light}, ${colorScheme.main}, ${colorScheme.dark})`,
-            boxShadow: `0 8px 32px ${colorScheme.main}60, inset 0 -4px 12px ${colorScheme.dark}60, 0 0 60px ${colorScheme.main}40`,
-          }}
-        >
-          <span className="text-xl sm:text-2xl md:text-3xl font-bold text-white drop-shadow-lg text-center px-2">
-            {value || "?"}
-          </span>
+        {/* Prize reveal orb with premium glow */}
+        <div className="relative">
+          <div 
+            className="absolute inset-0 rounded-full blur-xl opacity-60"
+            style={{ background: colorScheme.main }}
+          />
+          <div 
+            className={`relative w-28 h-28 sm:w-32 sm:h-32 rounded-full flex items-center justify-center ${showValue ? 'animate-prize-reveal-bounce' : ''}`}
+            style={{
+              background: `radial-gradient(circle at 30% 30%, ${colorScheme.light}, ${colorScheme.main} 50%, ${colorScheme.dark})`,
+              boxShadow: `0 10px 40px ${colorScheme.main}70, ${colorScheme.innerGlow}, 0 0 80px ${colorScheme.main}50`,
+              border: `3px solid ${colorScheme.accent}80`,
+            }}
+          >
+            {/* Inner shine */}
+            <div 
+              className="absolute top-3 left-4 w-8 h-12 rounded-full opacity-60 blur-sm"
+              style={{ background: `linear-gradient(135deg, white 0%, transparent 100%)` }}
+            />
+            <span className="text-2xl sm:text-3xl md:text-4xl font-black text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] text-center px-2">
+              {value || "?"}
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -152,66 +216,118 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }:
         ${isActive && !disabled ? "scale-110" : ""}
       `}
       style={{ 
-        width: "120px", 
-        height: "150px",
+        width: "140px", 
+        height: "170px",
         animation: disabled ? "none" : `balloon-float ${2.5 + index * 0.3}s ease-in-out infinite`,
         animationDelay: `${index * 0.3}s`,
       }}
       data-testid={`balloon-${index}`}
     >
+      {/* Outer glow ring when active */}
+      {isActive && !disabled && (
+        <div 
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 w-28 h-32 sm:w-32 sm:h-36 rounded-full animate-pulse"
+          style={{
+            background: `radial-gradient(ellipse, ${colorScheme.main}30 0%, transparent 70%)`,
+            filter: 'blur(10px)',
+          }}
+        />
+      )}
+      
+      {/* Main balloon body */}
       <div 
         className={`
-          absolute bottom-6 left-1/2 -translate-x-1/2
-          w-20 h-24 sm:w-24 sm:h-28
+          absolute bottom-8 left-1/2 -translate-x-1/2
+          w-24 h-28 sm:w-28 sm:h-32
           rounded-[50%_50%_48%_48%]
           transition-all duration-200
           ${!disabled ? "hover:scale-110 active:scale-90" : ""}
         `}
         style={{
-          background: `radial-gradient(ellipse at 35% 25%, ${colorScheme.light} 0%, ${colorScheme.main} 40%, ${colorScheme.dark} 100%)`,
+          background: `radial-gradient(ellipse at 30% 25%, ${colorScheme.light} 0%, ${colorScheme.main} 35%, ${colorScheme.dark} 100%)`,
           boxShadow: !disabled 
-            ? `0 10px 40px ${colorScheme.main}50, inset 0 -10px 30px ${colorScheme.dark}70, inset 6px 6px 25px ${colorScheme.light}60, ${isActive ? colorScheme.glow : ''}`
+            ? `0 12px 50px ${colorScheme.main}60, ${colorScheme.innerGlow}, inset 8px 8px 30px ${colorScheme.light}50, ${isActive ? colorScheme.glow : `0 0 40px ${colorScheme.main}40`}`
             : `0 4px 16px rgba(0,0,0,0.3)`,
+          border: isActive ? `2px solid ${colorScheme.accent}60` : 'none',
         }}
       >
+        {/* Primary highlight */}
         <div 
-          className="absolute top-4 left-5 w-7 h-10 rounded-full blur-[2px]"
+          className="absolute top-4 left-4 w-10 h-14 rounded-full blur-[3px]"
           style={{
-            background: `linear-gradient(135deg, ${colorScheme.light}90 0%, transparent 100%)`,
+            background: `linear-gradient(135deg, ${colorScheme.light} 0%, transparent 100%)`,
+            opacity: 0.8,
           }}
         />
+        {/* Secondary bright spot */}
         <div 
-          className="absolute top-6 left-7 w-4 h-5 rounded-full"
+          className="absolute top-5 left-6 w-5 h-7 rounded-full"
           style={{
-            background: `linear-gradient(135deg, white 0%, ${colorScheme.light}80 100%)`,
+            background: `linear-gradient(135deg, white 0%, ${colorScheme.light} 100%)`,
+            opacity: 0.9,
           }}
         />
+        {/* Tertiary tiny highlight */}
+        <div 
+          className="absolute top-8 left-9 w-2 h-2 rounded-full bg-white/80"
+        />
+        
+        {/* Question mark or icon */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span 
+            className="text-4xl sm:text-5xl font-black text-white/30 select-none"
+            style={{ textShadow: `0 2px 10px ${colorScheme.dark}` }}
+          >
+            ?
+          </span>
+        </div>
+        
+        {/* Active glow overlay */}
         {isActive && !disabled && (
           <div className="absolute inset-0 rounded-[50%_50%_48%_48%] animate-pulse-glow" 
             style={{ boxShadow: colorScheme.glow }} 
           />
         )}
       </div>
+      
+      {/* Balloon knot */}
       <div 
-        className="absolute bottom-4 left-1/2 -translate-x-1/2"
+        className="absolute bottom-5 left-1/2 -translate-x-1/2"
         style={{
           width: 0,
           height: 0,
-          borderLeft: "10px solid transparent",
-          borderRight: "10px solid transparent",
-          borderTop: `14px solid ${colorScheme.dark}`,
-          filter: `drop-shadow(0 2px 4px ${colorScheme.dark}80)`,
+          borderLeft: "12px solid transparent",
+          borderRight: "12px solid transparent",
+          borderTop: `16px solid ${colorScheme.dark}`,
+          filter: `drop-shadow(0 3px 6px ${colorScheme.dark}90)`,
         }}
       />
+      
+      {/* String with curl */}
       <div 
-        className="absolute -bottom-2 left-1/2 w-[2px] h-10"
+        className="absolute -bottom-1 left-1/2 -translate-x-1/2 flex flex-col items-center"
         style={{
-          background: `linear-gradient(to bottom, ${colorScheme.dark}, #888, #666)`,
           transformOrigin: "top",
           animation: disabled ? "none" : "string-wave 3s ease-in-out infinite",
           animationDelay: `${index * 0.2}s`,
         }}
-      />
+      >
+        <div 
+          className="w-[2px] h-8"
+          style={{ background: `linear-gradient(to bottom, ${colorScheme.dark}, #666)` }}
+        />
+        <div 
+          className="w-3 h-3 rounded-full border-2 border-b-0"
+          style={{ borderColor: '#666' }}
+        />
+      </div>
+      
+      {/* Tap indicator when active */}
+      {isActive && !disabled && (
+        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap">
+          <span className="text-xs font-bold text-white/60 animate-pulse">TAP ME!</span>
+        </div>
+      )}
     </button>
   );
 }
@@ -220,16 +336,20 @@ interface RingtonePopGameProps {
   orderId: string;
   competitionId: string;
   playsRemaining: number;
+  ticketCount: number;
   onPlayComplete: (result: any) => void;
   onRefresh: () => void;
+  onAllPlaysComplete?: () => void;
 }
 
 export default function RingtonePopGame({
   orderId,
   competitionId,
   playsRemaining,
+  ticketCount,
   onPlayComplete,
   onRefresh,
+  onAllPlaysComplete,
 }: RingtonePopGameProps) {
   const [balloonValues, setBalloonValues] = useState<string[]>(["?", "?", "?"]);
   const [poppedBalloons, setPoppedBalloons] = useState<boolean[]>([false, false, false]);
@@ -239,6 +359,16 @@ export default function RingtonePopGame({
   const [gameResult, setGameResult] = useState<any>(null);
   const [showResultModal, setShowResultModal] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [, setLocation] = useLocation();
+  
+  const [popHistory, setPopHistory] = useState<PopHistoryItem[]>([]);
+  const [showRevealAllDialog, setShowRevealAllDialog] = useState(false);
+  const [showRevealAllResultDialog, setShowRevealAllResultDialog] = useState(false);
+  const [revealAllSummary, setRevealAllSummary] = useState<{ wins: number; losses: number }>({ wins: 0, losses: 0 });
+  const [showOutOfPlaysDialog, setShowOutOfPlaysDialog] = useState(false);
+  const [isRevealingAll, setIsRevealingAll] = useState(false);
+  
+  const allPlaysUsed = popHistory.length > 0 && popHistory.every(s => s.status === "PLAYED");
   
   const winSoundRef = useRef<HTMLAudioElement | null>(null);
   const loseSoundRef = useRef<HTMLAudioElement | null>(null);
@@ -315,11 +445,18 @@ export default function RingtonePopGame({
       
       const values = gameData.balloonValues || [0, 0, 0];
       const formattedValues = values.map((v: number | string) => {
-        if (v === -1) return "R";
-        const numVal = typeof v === 'string' ? parseFloat(v) : v;
-        if (isNaN(numVal)) return String(v);
-        return `£${numVal}`;
-      });
+      if (v === -1) return "R";
+      const numVal = typeof v === 'string' ? parseFloat(v) : v;
+      if (isNaN(numVal)) return String(v);
+      
+      // Check if the reward type is points, then show pts instead of £
+      if (gameData.rewardType === "points") {
+        return `${numVal} pts`;
+      }
+      
+      // Otherwise show £ for cash or other types
+      return `£${numVal}`;
+    });
       
       setBalloonValues(formattedValues);
       setIsPlaying(true);
@@ -330,42 +467,46 @@ export default function RingtonePopGame({
     }
   };
 
-  const handleBalloonPop = (index: number) => {
-    if (index !== currentBalloonIndex || !gameResult) return;
-    
-    const newPopped = [...poppedBalloons];
-    newPopped[index] = true;
-    setPoppedBalloons(newPopped);
-    
-    const nextIndex = currentBalloonIndex + 1;
-    setCurrentBalloonIndex(nextIndex);
-
-    if (nextIndex >= 3) {
-      setTimeout(() => {
-        if (gameResult.isWin) {
-          triggerWinConfetti();
-          if (!isMuted && winSoundRef.current) {
-            winSoundRef.current.currentTime = 0;
-            winSoundRef.current.play().catch(() => {});
-          }
-        } else if (gameResult.isRPrize) {
-          if (!isMuted && winSoundRef.current) {
-            winSoundRef.current.currentTime = 0;
-            winSoundRef.current.play().catch(() => {});
-          }
-        } else {
-          if (!isMuted && loseSoundRef.current) {
-            loseSoundRef.current.currentTime = 0;
-            loseSoundRef.current.play().catch(() => {});
-          }
+ const handleBalloonPop = (index: number) => {
+  if (index !== currentBalloonIndex || !gameResult) return;
+  
+  const newPopped = [...poppedBalloons];
+  newPopped[index] = true;
+  setPoppedBalloons(newPopped);
+  
+  // Check if this was the last balloon
+  const isLastBalloon = currentBalloonIndex === 2;
+  
+  if (!isLastBalloon) {
+    // Move to next balloon
+    setCurrentBalloonIndex(currentBalloonIndex + 1);
+  } else {
+    // All balloons popped - show results
+    setTimeout(() => {
+      if (gameResult.isWin) {
+        triggerWinConfetti();
+        if (!isMuted && winSoundRef.current) {
+          winSoundRef.current.currentTime = 0;
+          winSoundRef.current.play().catch(() => {});
         }
-        setShowResultModal(true);
-        setIsPlaying(false);
-        onPlayComplete(gameResult);
-        onRefresh();
-      }, 800);
-    }
-  };
+      } else if (gameResult.isRPrize) {
+        if (!isMuted && winSoundRef.current) {
+          winSoundRef.current.currentTime = 0;
+          winSoundRef.current.play().catch(() => {});
+        }
+      } else {
+        if (!isMuted && loseSoundRef.current) {
+          loseSoundRef.current.currentTime = 0;
+          loseSoundRef.current.play().catch(() => {});
+        }
+      }
+      setShowResultModal(true);
+      setIsPlaying(false);
+      onPlayComplete(gameResult);
+      onRefresh();
+    }, 800);
+  }
+};
 
   const resetGame = () => {
     setBalloonValues(["?", "?", "?"]);
@@ -390,158 +531,308 @@ export default function RingtonePopGame({
 
   return (
     <>
-      <Card className="relative overflow-hidden border-2 border-yellow-500/30">
+      <Card className="relative overflow-hidden border-0 shadow-[0_0_60px_rgba(168,85,247,0.3)]">
+        {/* Premium gradient background */}
         <div 
           className="absolute inset-0"
           style={{
             background: `
-              radial-gradient(ellipse at 50% 0%, rgba(30, 58, 138, 0.9) 0%, transparent 60%),
-              linear-gradient(180deg, #0f172a 0%, #1e3a5f 30%, #0c1929 100%)
+              radial-gradient(ellipse at 20% 20%, rgba(168, 85, 247, 0.2) 0%, transparent 50%),
+              radial-gradient(ellipse at 80% 80%, rgba(245, 158, 11, 0.15) 0%, transparent 50%),
+              radial-gradient(ellipse at 50% 50%, rgba(16, 185, 129, 0.1) 0%, transparent 60%),
+              linear-gradient(135deg, #0c0a1d 0%, #1a0f2e 25%, #0f172a 50%, #0a1628 75%, #0c0a1d 100%)
             `,
           }}
         />
+        
+        {/* Animated gradient border glow */}
+        <div className="absolute inset-0 rounded-xl opacity-60" style={{
+          background: 'linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.3), transparent)',
+          animation: 'border-sweep 3s ease-in-out infinite'
+        }} />
+        
+        {/* Floating particles */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(20)].map((_, i) => (
+          {[...Array(15)].map((_, i) => (
             <div
               key={i}
-              className="absolute rounded-full bg-white/80"
+              className="absolute rounded-full"
               style={{
-                width: `${Math.random() * 4 + 2}px`,
-                height: `${Math.random() * 4 + 2}px`,
+                width: `${3 + Math.random() * 6}px`,
+                height: `${3 + Math.random() * 6}px`,
                 left: `${Math.random() * 100}%`,
-                top: `-10px`,
-                animation: `snowfall ${Math.random() * 5 + 5}s linear infinite`,
-                animationDelay: `${Math.random() * 5}s`,
-                opacity: Math.random() * 0.6 + 0.4,
+                top: `${Math.random() * 100}%`,
+                background: ['#a855f7', '#f59e0b', '#10b981', '#ec4899'][i % 4],
+                boxShadow: `0 0 15px ${['#a855f7', '#f59e0b', '#10b981', '#ec4899'][i % 4]}`,
+                animation: `float-particle-game ${4 + Math.random() * 4}s ease-in-out infinite`,
+                animationDelay: `${Math.random() * 3}s`,
+                opacity: 0.5 + Math.random() * 0.3,
               }}
             />
           ))}
         </div>
-        <div className="absolute top-0 left-0 w-32 h-32 opacity-15">
-          <Snowflake className="w-full h-full text-white" style={{ animation: "spin-slow 20s linear infinite" }} />
+        
+        {/* Decorative corner elements */}
+        <div className="absolute top-0 left-0 w-40 h-40 opacity-20">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-transparent rounded-full blur-3xl" />
         </div>
-        <div className="absolute top-0 right-0 w-24 h-24 opacity-15">
-          <Snowflake className="w-full h-full text-white" style={{ animation: "spin-slow 25s linear infinite reverse" }} />
+        <div className="absolute bottom-0 right-0 w-40 h-40 opacity-20">
+          <div className="absolute inset-0 bg-gradient-to-tl from-amber-500 to-transparent rounded-full blur-3xl" />
         </div>
         
         <CardContent className="relative z-10 p-6 sm:p-8">
-          <div className="flex justify-between items-center mb-6">
+          {/* Top bar with plays and sound */}
+          <div className="flex justify-between items-center mb-4">
             <Badge 
               variant="outline" 
-              className="bg-gradient-to-r from-red-500/20 to-green-500/20 text-white border-white/30 px-4 py-2 text-sm sm:text-base"
+              className="bg-gradient-to-r from-purple-500/20 via-fuchsia-500/20 to-pink-500/20 text-white border-purple-500/40 px-4 py-2 text-sm sm:text-base shadow-lg shadow-purple-500/20"
             >
-              <Gift className="w-4 h-4 mr-2" />
-              {playsRemaining} Plays Left
+              <Music className="w-4 h-4 mr-2 text-purple-400" />
+              <span className="font-bold">{playsRemaining}</span>
+              <span className="text-white/70 ml-1.5">Plays Left</span>
             </Badge>
             <Button
               size="icon"
               variant="ghost"
               onClick={() => setIsMuted(!isMuted)}
-              className="text-white/70 hover:text-white hover:bg-white/10"
+              className="text-white/70 hover:text-white hover:bg-white/10 border border-white/10"
               data-testid="button-mute"
             >
               {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </Button>
           </div>
 
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <Star className="w-6 h-6 text-yellow-400 animate-pulse" />
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight">
-                <span className="bg-gradient-to-r from-red-400 via-red-500 to-red-400 bg-clip-text text-transparent drop-shadow-lg">
+          {/* Premium Jackpot Marquee - Jewel-like glass pill */}
+          <div className="relative flex justify-center mb-5">
+            {/* Outer glow layers */}
+            <div className="absolute inset-0 flex justify-center items-center">
+              <div className="w-80 h-20 bg-gradient-to-r from-amber-500/30 via-yellow-400/40 to-amber-500/30 blur-3xl" />
+            </div>
+            <div className="absolute inset-0 flex justify-center items-center">
+              <div className="w-60 h-16 bg-gradient-to-r from-purple-500/20 via-fuchsia-500/30 to-purple-500/20 blur-2xl" />
+            </div>
+            
+            {/* Main glass pill container */}
+            <div className="relative">
+              {/* Radiant burst behind */}
+              {/* <div className="absolute -left-8 top-1/2 -translate-y-1/2 w-16 h-16">
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-400/60 to-transparent blur-xl rounded-full" />
+                <Crown className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.8)]" />
+              </div> */}
+              
+              {/* Glass pill */}
+              <div className="relative flex items-center gap-3 sm:gap-4 px-6 sm:px-8 py-2.5 sm:py-3 rounded-full overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(251,191,36,0.15) 0%, rgba(168,85,247,0.1) 50%, rgba(251,191,36,0.15) 100%)',
+                  border: '1px solid rgba(251,191,36,0.4)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 4px 20px rgba(251,191,36,0.3)',
+                }}
+              >
+                {/* Static shimmer overlay */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent" 
+                  style={{ transform: 'skewX(-20deg) translateX(-30%)' }} 
+                />
+                
+                {/* Gem sparkles */}
+                <div className="absolute top-1 right-4 w-1.5 h-1.5 bg-white rounded-full opacity-80" />
+                <div className="absolute bottom-2 right-8 w-1 h-1 bg-amber-200 rounded-full opacity-60" />
+                <div className="absolute top-2 left-12 w-1 h-1 bg-yellow-200 rounded-full opacity-70" />
+                
+                {/* Trophy icon */}
+                {/* <div className="relative z-10">
+                  <Trophy className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
+                </div> */}
+                
+                {/* Text content */}
+                <div className="relative z-10 flex flex-col items-center">
+                  <span className="text-2xl sm:text-3xl md:text-4xl font-black bg-gradient-to-b from-yellow-200 via-amber-300 to-amber-500 bg-clip-text text-transparent drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">
+                    £5,000
+                  </span>
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-amber-300/90 -mt-0.5">
+                    Jackpot Prize
+                  </span>
+                </div>
+                
+                {/* Sparkle icon */}
+                {/* <div className="relative z-10">
+                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-fuchsia-400 drop-shadow-[0_0_6px_rgba(232,121,249,0.6)]" />
+                </div> */}
+              </div>
+              
+              {/* Match 3 subtitle */}
+              <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                <span className="text-[10px] sm:text-xs font-semibold tracking-wide text-purple-300/80">
+                  Match 3 to win instantly
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Premium header with crown */}
+          <div className="text-center mb-6">
+            <div className="flex justify-center mb-2">
+              <div className="relative">
+                <Crown className="w-10 h-10 sm:w-12 sm:h-12 text-amber-400" style={{ animation: 'crown-float 2s ease-in-out infinite' }} />
+                <div className="absolute inset-0 bg-amber-400 rounded-full blur-2xl opacity-40" />
+              </div>
+            </div>
+            <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3">
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400 animate-pulse" />
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight">
+                <span className="bg-gradient-to-r from-purple-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent drop-shadow-lg">
                   Ringtone
                 </span>{" "}
-                <span className="bg-gradient-to-r from-green-400 via-emerald-400 to-green-400 bg-clip-text text-transparent drop-shadow-lg">
+                <span className="bg-gradient-to-r from-amber-400 via-yellow-400 to-orange-400 bg-clip-text text-transparent drop-shadow-lg">
                   Pop!
                 </span>
               </h2>
-              <Star className="w-6 h-6 text-yellow-400 animate-pulse" />
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400 animate-pulse" />
             </div>
             <div className="relative inline-block">
-              <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/20 via-yellow-400/30 to-yellow-500/20 blur-xl rounded-full" />
-              <p className="relative text-lg sm:text-xl font-medium text-white/90 px-4 py-2">
-                <Zap className="inline-block w-5 h-5 text-yellow-400 mr-1 -mt-1" />
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 via-amber-500/20 to-purple-500/20 blur-xl rounded-full" />
+              <p className="relative text-sm sm:text-base font-medium text-white/80 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm">
+                <Zap className="inline-block w-4 h-4 text-amber-400 mr-1 -mt-1" />
                 Pop all 3 balloons - Match 3 values to{" "}
-                <span className="text-yellow-400 font-bold text-2xl animate-pulse">WIN BIG!</span>
-                <Zap className="inline-block w-5 h-5 text-yellow-400 ml-1 -mt-1" />
+                <span className="text-amber-400 font-bold">WIN BIG!</span>
+                <Zap className="inline-block w-4 h-4 text-amber-400 ml-1 -mt-1" />
               </p>
             </div>
           </div>
 
-          <div className="flex justify-center items-center gap-3 mb-6">
+          {/* Enhanced Progress indicators with connecting lines */}
+          <div className="flex justify-center items-center gap-2 sm:gap-4 mb-8">
             {[0, 1, 2].map((step) => (
-              <div key={step} className="flex flex-col items-center gap-1">
-                <div 
-                  className={`
-                    w-12 h-4 rounded-full transition-all duration-500 relative overflow-hidden
-                    ${poppedBalloons[step] 
-                      ? "bg-gradient-to-r from-green-400 to-green-500 shadow-lg shadow-green-500/50" 
-                      : step === currentBalloonIndex && isPlaying
-                        ? "bg-gradient-to-r from-yellow-400 to-yellow-500 shadow-lg shadow-yellow-500/50"
-                        : "bg-white/20"}
-                  `}
-                >
-                  {step === currentBalloonIndex && isPlaying && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
-                  )}
+              <div key={step} className="flex items-center gap-2 sm:gap-4">
+                <div className="flex flex-col items-center gap-1">
+                  {/* Step circle */}
+                  <div 
+                    className={`
+                      relative w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all duration-500 border-2
+                      ${poppedBalloons[step] 
+                        ? "bg-gradient-to-br from-emerald-400 to-green-500 border-emerald-300 shadow-lg shadow-emerald-500/50 scale-110" 
+                        : step === currentBalloonIndex && isPlaying
+                          ? "bg-gradient-to-br from-amber-400 to-yellow-500 border-amber-300 shadow-lg shadow-amber-500/50 scale-110 animate-pulse"
+                          : "bg-white/10 border-white/20"}
+                    `}
+                  >
+                    {step === currentBalloonIndex && isPlaying && (
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+                    )}
+                    {poppedBalloons[step] ? (
+                      <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                    ) : (
+                      <span className={`text-lg sm:text-xl font-black ${step === currentBalloonIndex && isPlaying ? 'text-white' : 'text-white/40'}`}>
+                        {step + 1}
+                      </span>
+                    )}
+                  </div>
+                  {/* Step label */}
+                  <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${
+                    poppedBalloons[step] ? 'text-emerald-400' : 
+                    step === currentBalloonIndex && isPlaying ? 'text-amber-400' : 
+                    'text-white/30'
+                  }`}>
+                    {poppedBalloons[step] ? 'POPPED' : step === currentBalloonIndex && isPlaying ? 'NOW' : 'READY'}
+                  </span>
                 </div>
-                <span className={`text-xs font-medium ${poppedBalloons[step] ? 'text-green-400' : step === currentBalloonIndex && isPlaying ? 'text-yellow-400' : 'text-white/50'}`}>
-                  {step + 1}
-                </span>
+                {/* Connecting line */}
+                {step < 2 && (
+                  <div className={`w-8 sm:w-12 h-1 rounded-full transition-all duration-500 ${
+                    poppedBalloons[step] ? 'bg-gradient-to-r from-emerald-400 to-emerald-500' : 'bg-white/10'
+                  }`} />
+                )}
               </div>
             ))}
           </div>
 
-          <div className="flex justify-center items-center gap-4 sm:gap-8 py-8 min-h-[200px]">
-            {[0, 1, 2].map((index) => (
-              <Balloon
-                key={index}
-                index={index}
-                value={balloonValues[index]}
-                isPopped={poppedBalloons[index]}
-                onPop={() => handleBalloonPop(index)}
-                disabled={!isPlaying || index !== currentBalloonIndex || !gameResult}
-                isMuted={isMuted}
-                isActive={isPlaying && index === currentBalloonIndex}
-              />
-            ))}
+          {/* Balloon game area with enhanced visual frame */}
+          <div className="relative">
+            {/* Game arena background */}
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-white/5 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-1/2 rounded-b-2xl bg-gradient-to-t from-purple-900/20 to-transparent" />
+            
+            <div className="relative flex justify-center items-center gap-2 sm:gap-6 py-10 min-h-[220px]">
+              {[0, 1, 2].map((index) => (
+                <Balloon
+                  key={index}
+                  index={index}
+                  value={balloonValues[index]}
+                  isPopped={poppedBalloons[index]}
+                  onPop={() => handleBalloonPop(index)}
+                  disabled={!isPlaying || index !== currentBalloonIndex || !gameResult}
+                  isMuted={isMuted}
+                  isActive={isPlaying && index === currentBalloonIndex}
+                />
+              ))}
+            </div>
           </div>
 
-          <div className="flex justify-center mt-6">
+          {/* Action button area */}
+          <div className="flex flex-col items-center gap-4 mt-6">
             {!isPlaying && !showResultModal && (
-              <Button
+              <div className="relative">
+                {/* Button glow effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 rounded-full blur-xl opacity-50 animate-pulse" />
+               <Button
                 size="lg"
                 onClick={startGame}
                 disabled={playsRemaining <= 0 || isLoading}
-                className="bg-gradient-to-r from-yellow-500 via-yellow-600 to-yellow-500 hover:from-yellow-600 hover:via-yellow-700 hover:to-yellow-600 text-black font-bold px-10 py-6 text-lg shadow-xl shadow-yellow-500/40 border border-yellow-300/50 min-w-[200px] relative overflow-hidden group"
+                className="relative bg-gradient-to-r from-amber-400 via-yellow-500 to-orange-500 hover:from-amber-500 hover:via-yellow-600 hover:to-orange-600 text-black font-black px-12 py-7 text-xl shadow-2xl shadow-yellow-500/50 border-2 border-yellow-300/50 min-w-[260px] overflow-hidden group rounded-full transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-yellow-500/60"
                 data-testid="button-start-game"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                {/* Shimmer effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                
+                {/* Sparkle decorations */}
+                <div className="absolute top-3 left-5 w-2.5 h-2.5 bg-white/80 rounded-full animate-ping" />
+                <div className="absolute bottom-4 right-7 w-2 h-2 bg-white/70 rounded-full animate-ping" style={{ animationDelay: '0.3s' }} />
+                <div className="absolute top-4 right-5 w-1.5 h-1.5 bg-white/60 rounded-full animate-ping" style={{ animationDelay: '0.6s' }} />
+                
+                {/* Inner glow */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/20 to-transparent opacity-50" />
+                
+                {/* Gold border glow */}
+                <div className="absolute -inset-[2px] rounded-full bg-gradient-to-r from-amber-400 via-yellow-500 to-orange-500 opacity-50 blur-md -z-10 group-hover:opacity-70 group-hover:blur-lg transition-all duration-300" />
+                
                 {isLoading ? (
                   <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    <Loader2 className="w-6 h-6 mr-2 animate-spin" />
                     Loading...
                   </>
                 ) : playsRemaining <= 0 ? (
                   "No Plays Left"
                 ) : (
-                  <>
-                    <Sparkles className="w-5 h-5 mr-2" />
-                    POP TO PLAY!
-                  </>
+                  <div className="flex items-center text-white justify-center gap-2 relative">
+                    <Sparkles className="w-6 h-6  drop-shadow-lg" />
+                    <span className="drop-shadow-lg">POP TO PLAY!</span>
+                    <Sparkles className="w-6 h-6  drop-shadow-lg" />
+                  </div>
                 )}
               </Button>
-            )}
-
-            {isPlaying && !showResultModal && (
-              <div className="flex flex-col items-center gap-2">
-                <div className="animate-bounce bg-gradient-to-r from-yellow-400/20 via-yellow-500/30 to-yellow-400/20 rounded-full px-6 py-3">
-                  <span className="text-xl font-bold text-yellow-400">
-                    Tap balloon {currentBalloonIndex + 1} of 3!
-                  </span>
-                </div>
               </div>
             )}
+
+           {isPlaying && !showResultModal && (
+  <div className="flex flex-col items-center gap-3">
+    {/* Animated instruction */}
+    <div className="relative">
+      <div className="absolute inset-0 bg-gradient-to-r from-amber-500/40 via-yellow-500/50 to-amber-500/40 blur-xl rounded-full animate-pulse" />
+      <div className="relative bg-gradient-to-r from-amber-500/20 via-yellow-500/30 to-amber-500/20 rounded-full px-8 py-4 border-2 border-amber-400/40 shadow-lg shadow-amber-500/30">
+        <div className="flex items-center gap-3">
+          <Target className="w-6 h-6 text-amber-400 animate-bounce" />
+          <span className="text-xl sm:text-2xl font-black bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 bg-clip-text text-transparent">
+            TAP BALLOON {currentBalloonIndex + 1}!
+          </span>
+          <Target className="w-6 h-6 text-amber-400 animate-bounce" style={{ animationDelay: '0.2s' }} />
+        </div>
+      </div>
+    </div>
+    {/* Subtle helper text */}
+    <p className="text-white/50 text-sm animate-pulse">
+      Pop all 3 to reveal your prize!
+    </p>
+  </div>
+)}
           </div>
         </CardContent>
 
@@ -559,11 +850,22 @@ export default function RingtonePopGame({
             75% { transform: rotate(-3deg); }
           }
           
-          @keyframes snowfall {
-            0% { transform: translateY(-10px) translateX(0); opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 0.8; }
-            100% { transform: translateY(100vh) translateX(20px); opacity: 0; }
+          @keyframes float-particle-game {
+            0%, 100% { transform: translateY(0) translateX(0); opacity: 0.5; }
+            25% { transform: translateY(-15px) translateX(8px); opacity: 0.8; }
+            50% { transform: translateY(-8px) translateX(-5px); opacity: 0.6; }
+            75% { transform: translateY(-20px) translateX(5px); opacity: 0.7; }
+          }
+          
+          @keyframes crown-float {
+            0%, 100% { transform: translateY(0) rotate(-3deg); }
+            50% { transform: translateY(-8px) rotate(3deg); }
+          }
+          
+          @keyframes border-sweep {
+            0% { opacity: 0; transform: translateX(-100%); }
+            50% { opacity: 0.6; }
+            100% { opacity: 0; transform: translateX(100%); }
           }
           
           @keyframes particle-burst-enhanced {

@@ -34,7 +34,7 @@ interface PopSegment {
   label: string;
   rewardType: "cash" | "points" | "lose" | "try_again";
   rewardValue: number | string;
-  probability: number;
+  probability: number | string;
   maxWins: number | null;
   currentWins?: number;
 }
@@ -87,23 +87,26 @@ export default function AdminRingtonePop() {
   });
 
   const resetWinsMutation = useMutation({
-    mutationFn: async () => {
-      const resetSegments = segments.map(seg => ({ ...seg, currentWins: 0 }));
-      return apiRequest("/api/admin/game-pop-config", "PUT", { 
-        segments: resetSegments, 
-        isVisible, 
-        isActive 
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/game-pop-config"] });
-      toast({ title: "Success", description: "All win counts reset to zero" });
-      setResetConfirmOpen(false);
-    },
-    onError: (error: any) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
+  mutationFn: async () => {
+    return apiRequest("/api/admin/game-pop-reset-wins", "POST");
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/game-pop-config"] });
+    toast({
+      title: "Success",
+      description: "All win counts have been reset",
+    });
+    setResetConfirmOpen(false);
+  },
+  onError: (error: any) => {
+    toast({
+      title: "Error",
+      description: error.message,
+      variant: "destructive",
+    });
+  },
+});
+
 
   const addSegment = (type: "cash" | "points" | "lose" | "try_again") => {
     const defaults = {
@@ -127,12 +130,13 @@ export default function AdminRingtonePop() {
     toast({ title: "Segment Added", description: `New ${defaults[type].label} segment created` });
   };
 
-  const updateSegment = (id: string, field: keyof PopSegment, value: any) => {
-    setSegments(segments.map(seg =>
-      seg.id === id ? { ...seg, [field]: value } : seg
-    ));
-    setHasChanges(true);
-  };
+const updateSegment = (id: string, field: keyof PopSegment, value: string | number | null) => {
+  setSegments(segments.map(seg =>
+    seg.id === id ? { ...seg, [field]: value } : seg
+  ));
+  setHasChanges(true);
+};
+
 
   const removeSegment = (id: string) => {
     if (segments.length <= 2) {
@@ -161,17 +165,25 @@ export default function AdminRingtonePop() {
   const isValid = Math.abs(totalProbability - 100) < 0.01;
   const probabilityDiff = totalProbability - 100;
 
-  const handleSave = () => {
-    if (!isValid) {
-      toast({
-        title: "Fix Probability First",
-        description: `Total must be 100%. Currently ${totalProbability.toFixed(2)}%`,
-        variant: "destructive",
-      });
-      return;
-    }
-    updateConfigMutation.mutate({ segments, isVisible, isActive });
-  };
+ const handleSave = () => {
+  if (!isValid) {
+    toast({
+      title: "Fix Probability First",
+      description: `Total must be 100%. Currently ${totalProbability.toFixed(2)}%`,
+      variant: "destructive",
+    });
+    return;
+  }
+
+  const cleanSegments = segments.map(({ currentWins, rewardValue, probability, ...rest }) => ({
+    ...rest,
+    rewardValue: rewardValue === "" ? 0 : parseFloat(rewardValue as string),
+    probability: probability === "" ? 0 : parseFloat(probability as string),
+  }));
+
+  updateConfigMutation.mutate({ segments: cleanSegments, isVisible, isActive });
+};
+
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -397,26 +409,35 @@ export default function AdminRingtonePop() {
                           </Label>
                           <Input
                             type="number"
-                            value={seg.rewardType === "lose" || seg.rewardType === "try_again" ? "" : seg.rewardValue}
-                            onChange={(e) => updateSegment(seg.id, "rewardValue", parseFloat(e.target.value) || 0)}
+                            step="0.01"
+                            value={
+                              seg.rewardType === "lose" || seg.rewardType === "try_again"
+                                ? ""
+                                : seg.rewardValue === null || seg.rewardValue === undefined
+                                  ? ""
+                                  : seg.rewardValue
+                            }
+                            onChange={(e) => updateSegment(seg.id, "rewardValue", e.target.value)}
                             disabled={seg.rewardType === "lose" || seg.rewardType === "try_again"}
                             placeholder="-"
                             className="h-8 text-sm"
                             data-testid={`input-value-${index}`}
                           />
+
                         </div>
                         <div>
-                          <Label className="text-xs text-muted-foreground">Chance %</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="100"
-                            value={seg.probability}
-                            onChange={(e) => updateSegment(seg.id, "probability", parseFloat(e.target.value) || 0)}
-                            className="h-8 text-sm"
-                            data-testid={`input-probability-${index}`}
-                          />
+                          <Label className="text-xs text-muted-foreground">Probability %</Label>
+                         <Input
+                          type="number"
+                          step="0.01" // allows decimals
+                          min="0"
+                          max="100"
+                          value={seg.probability === undefined || seg.probability === null ? "" : seg.probability}
+                          onChange={(e) => updateSegment(seg.id, "probability", e.target.value)}
+                          className="h-8 text-sm"
+                          data-testid={`input-probability-${index}`}
+                        />
+
                         </div>
                       </div>
 
@@ -424,12 +445,15 @@ export default function AdminRingtonePop() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <Label className="text-xs text-muted-foreground">Limit:</Label>
-                          <Input
+                           <Input
                             type="number"
                             value={seg.maxWins ?? ""}
-                            onChange={(e) => updateSegment(seg.id, "maxWins", e.target.value ? parseInt(e.target.value) : null)}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              updateSegment(seg.id, "maxWins", value ? parseInt(value) : null);
+                            }}
                             placeholder="∞"
-                            className="h-7 w-16 text-sm"
+                            className="h-10 w-20 text-sm"
                             data-testid={`input-maxwins-${index}`}
                           />
                         </div>

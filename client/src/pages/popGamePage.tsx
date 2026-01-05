@@ -188,7 +188,7 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
                                 ${isRSymbol 
                                   ? 'bg-blue-600 text-white' 
                                   : allMatch && isPoints
-                                    ? 'bg-yellow-500 text-black'
+                                    ? 'bg-yellow-500 px-5 text-black'
                                     : allMatch && isCash
                                       ? 'bg-green-600 text-white'
                                       : 'bg-muted/60 text-foreground/70'}
@@ -197,7 +197,7 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
                               {isRSymbol ? "R" : isPoints && allMatch ? (
                                 <span className="flex items-center gap-0.5">
                                   <Music className="w-3 h-3" />
-                                  <span className="text-[10px]">{val}</span>
+                                  <span className=" text-[9px] sm:text-[10px]">{val}</span>
                                 </span>
                               ) : `£${val}`}
                             </div>
@@ -209,12 +209,12 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
                         {isCash ? (
                           <div className="flex items-center gap-1 justify-end">
                             <Trophy className="w-3.5 h-3.5 text-yellow-400" />
-                            <span className="text-sm sm:text-base font-black text-green-400">£{game.rewardValue}</span>
+                            <span className="text-xs sm:text-base font-black text-green-400">£{game.rewardValue}</span>
                           </div>
                         ) : isPoints ? (
-                          <div className="flex items-center gap-1.5 justify-end">
+                          <div className="flex items-center gap-1 justify-end">
                             <Music className="w-3.5 h-3.5 text-yellow-400" />
-                            <span className="text-sm sm:text-base font-black text-yellow-400">{parseInt(game.rewardValue).toLocaleString()} pts</span>
+                            <span className="text-xs sm:text-base font-black text-yellow-400">{parseInt(game.rewardValue).toLocaleString()} pts</span>
                           </div>
                         ) : isRPrize ? (
                           <div className="flex items-center gap-1 justify-end">
@@ -415,7 +415,7 @@ export default function PopGamePage() {
             {/* Premium Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 border border-violet-500/30 mb-4">
               <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-              <span className="text-xs sm:text-sm font-semibold text-slate-300 tracking-wide">RINGTONE POP 2025</span>
+              <span className="text-xs sm:text-sm font-semibold text-slate-300 tracking-wide">RINGTONE POP 2026</span>
             </div>
             
             {/* Main Title */}
@@ -477,14 +477,14 @@ export default function PopGamePage() {
           )}
 
           <Card className="bg-gradient-to-b from-card to-card/80 border-yellow-500/20 overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-yellow-500/10 via-transparent to-yellow-500/10 border-b border-yellow-500/10">
+            {/* <CardHeader className="bg-gradient-to-r from-yellow-500/10 via-transparent to-yellow-500/10 border-b border-yellow-500/10">
               <CardTitle className="flex items-center gap-3 text-xl">
                 <div className="p-2 rounded-lg bg-yellow-500/20">
                   <History className="w-5 h-5 text-yellow-500" />
                 </div>
                 Game History
               </CardTitle>
-            </CardHeader>
+            </CardHeader> */}
             <CardContent className="p-0">
               {gameHistory.length === 0 ? (
                 <div className="py-16 text-center">

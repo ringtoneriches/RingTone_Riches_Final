@@ -7139,86 +7139,108 @@ app.put("/api/admin/game-scratch-config", isAuthenticated, isAdmin, async (req: 
 // Get Ringtone Pop configuration (admin)
 app.get("/api/admin/game-pop-config", isAuthenticated, async (req: any, res) => {
   try {
-    const [config] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
-    
-    if (!config) {
-      return res.json(DEFAULT_POP_CONFIG);
-    }
-    
-    // Get segment win stats
-    const segmentWinStats = await db
-      .select({
-        prizeId: popWins.prizeId,
-        winCount: sql<number>`count(*)`
-      })
-      .from(popWins)
-      .where(eq(popWins.isWin, true))
-      .groupBy(popWins.prizeId);
-    
-    // Support both old 'prizes' format and new 'segments' format
-    const segments = (config as any).segments || (config as any).prizes || DEFAULT_POP_CONFIG.segments;
-    const segmentsWithStats = segments.map((segment: any) => ({
-      ...segment,
-      currentWins: segmentWinStats.find(s => s.prizeId === segment.id)?.winCount || segment.currentWins || 0
-    }));
-    
-    res.json({
-      ...config,
-      segments: segmentsWithStats
+    const [config] = await db
+      .select()
+      .from(gamePopConfig)
+      .where(eq(gamePopConfig.id, "active"));
+
+    const baseConfig = config || DEFAULT_POP_CONFIG;
+
+    const segments =
+      (baseConfig as any).segments ||
+      (baseConfig as any).prizes ||
+      DEFAULT_POP_CONFIG.segments;
+
+    // SOURCE OF TRUTH: popWins table
+      const winStats = await db
+        .select({
+          prizeId: popWins.prizeId,
+          winCount: sql<number>`count(*)`,
+        })
+        .from(popWins)
+        .groupBy(popWins.prizeId);
+
+
+    const segmentsWithWins = segments.map((seg: any) => {
+      const stat = winStats.find(w => w.prizeId === seg.id);
+      return {
+        ...seg,
+        currentWins: Number(stat?.winCount ?? 0),
+      };
     });
-  } catch (error) {
-    console.error("Error fetching pop config:", error);
-    res.status(500).json({ message: "Failed to fetch pop configuration" });
+
+    res.json({
+      ...baseConfig,
+      segments: segmentsWithWins,
+    });
+  } catch (err) {
+    console.error("GET pop config error:", err);
+    res.status(500).json({ message: "Failed to load pop config" });
   }
 });
 
+
 // Update Ringtone Pop configuration (admin)
-app.put("/api/admin/game-pop-config", isAuthenticated, isAdmin, async (req: any, res) => {
-  try {
-    const { segments, isVisible, isActive } = req.body;
-    console.log("Saving pop config:", { segmentsCount: segments?.length, isVisible, isActive });
-    
-    // Validate probability totals to 100%
-    if (segments) {
-      const totalProbability = segments.reduce((sum: number, seg: any) => sum + (Number(seg.probability) || 0), 0);
-      if (Math.abs(totalProbability - 100) > 0.01) {
-        return res.status(400).json({ message: `Total probability must equal 100%. Current: ${totalProbability.toFixed(2)}%` });
+app.put(
+  "/api/admin/game-pop-config",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { segments, isVisible, isActive } = req.body;
+
+      // Validate probability
+      const total = segments.reduce(
+        (sum: number, s: any) => sum + (Number(s.probability) || 0),
+        0
+      );
+
+      if (Math.abs(total - 100) > 0.01) {
+        return res
+          .status(400)
+          .json({ message: "Total probability must be 100%" });
       }
+
+      // REMOVE currentWins before saving
+      const cleanSegments = segments.map(({ currentWins, ...rest }: any) => rest);
+
+      const [existing] = await db
+        .select()
+        .from(gamePopConfig)
+        .where(eq(gamePopConfig.id, "active"));
+
+      const [saved] = existing
+        ? await db
+            .update(gamePopConfig)
+            .set({
+              prizes: cleanSegments,
+              isVisible,
+              isActive,
+              updatedAt: new Date(),
+            })
+            .where(eq(gamePopConfig.id, "active"))
+            .returning()
+        : await db
+            .insert(gamePopConfig)
+            .values({
+              id: "active",
+              prizes: cleanSegments,
+              isVisible: true,
+              isActive: true,
+            })
+            .returning();
+
+      res.json({
+        ...saved,
+        segments: cleanSegments,
+      });
+    } catch (err) {
+      console.error("PUT pop config error:", err);
+      res.status(500).json({ message: "Failed to save pop config" });
     }
-    
-    const [existing] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
-    
-    if (existing) {
-      const [updated] = await db
-        .update(gamePopConfig)
-        .set({
-          prizes: segments ?? (existing as any).segments ?? (existing as any).prizes,
-          isVisible: isVisible ?? existing.isVisible,
-          isActive: isActive ?? existing.isActive,
-          updatedAt: new Date(),
-        })
-        .where(eq(gamePopConfig.id, "active"))
-        .returning();
-      
-      res.json({ ...updated, segments: (updated as any).prizes });
-    } else {
-      const [created] = await db
-        .insert(gamePopConfig)
-        .values({
-          id: "active",
-          prizes: segments || DEFAULT_POP_CONFIG.segments,
-          isVisible: isVisible ?? true,
-          isActive: isActive ?? true,
-        })
-        .returning();
-      
-      res.json({ ...created, segments: (created as any).prizes });
-    }
-  } catch (error) {
-    console.error("Error updating pop config:", error);
-    res.status(500).json({ message: "Failed to update pop configuration" });
   }
-});
+);
+
 
 // Get pop prizes (admin)
 app.get("/api/admin/pop-prizes", isAuthenticated, isAdmin, async (req: any, res) => {
@@ -7340,237 +7362,118 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
     const { orderId, competitionId } = req.body;
 
     if (!orderId || !competitionId) {
-      return res.status(400).json({
-        success: false,
-        message: "Order ID and Competition ID are required",
-      });
+      return res.status(400).json({ success: false, message: "Order ID and Competition ID are required" });
     }
 
-    // Cooldown check
+    // Cooldown
     const cooldownKey = `${userId}-${orderId}`;
     const lastPlayTime = popCooldowns.get(cooldownKey) || 0;
     const now = Date.now();
-    
     if (now - lastPlayTime < POP_COOLDOWN_MS) {
-      return res.status(429).json({
-        success: false,
-        message: "Please wait a moment before playing again",
-      });
+      return res.status(429).json({ success: false, message: "Please wait a moment before playing again" });
     }
-    
     popCooldowns.set(cooldownKey, now);
 
-    // Verify valid completed order
+    // Verify order
     const order = await storage.getOrder(orderId);
     if (!order || order.userId !== userId || order.status !== "completed") {
-      return res.status(400).json({
-        success: false,
-        message: "No valid pop game purchase found",
-      });
+      return res.status(400).json({ success: false, message: "No valid pop game purchase found" });
     }
 
-    // Check plays remaining
-    const playsUsed = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(popUsage)
-      .where(eq(popUsage.orderId, orderId));
-    
+    // Check remaining plays
+    const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(popUsage).where(eq(popUsage.orderId, orderId));
     const usedCount = Number(playsUsed[0]?.count || 0);
     const playsRemaining = order.quantity - usedCount;
+    if (playsRemaining <= 0) return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
 
-    if (playsRemaining <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No plays remaining in this purchase",
-      });
-    }
-
-    // Get user
     const user = await storage.getUser(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Get pop config
+    // Load active pop config
     const [config] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
     const popConfig = config || DEFAULT_POP_CONFIG;
-    
-    if (!popConfig.isActive) {
-      return res.status(400).json({
-        success: false,
-        message: "Ringtone Pop is currently unavailable",
-      });
-    }
+    if (!popConfig.isActive) return res.status(400).json({ success: false, message: "Ringtone Pop is currently unavailable" });
 
-    // Get segments (support both old 'prizes' and new 'segments' format)
     const segments = (popConfig as any).segments || (popConfig as any).prizes || DEFAULT_POP_CONFIG.segments;
-    
-    // Filter eligible segments (check maxWins)
-    const eligibleSegments = segments.filter((seg: any) => {
-      if (seg.maxWins !== null && (seg.currentWins || 0) >= seg.maxWins) return false;
+
+    // Count ALL previous pops (win + try_again + lose)
+    const counts = await db.select({ prizeId: popWins.prizeId, count: sql<number>`count(*)` })
+      .from(popWins)
+      .groupBy(popWins.prizeId);
+    const segmentWinCounts = new Map<string, number>();
+    counts.forEach(c => segmentWinCounts.set(c.prizeId, Number(c.count)));
+    segments.forEach(seg => { if (!segmentWinCounts.has(seg.id)) segmentWinCounts.set(seg.id, 0); });
+
+    // Process a single play
+    const eligibleSegments = segments.filter(seg => {
+      const wins = segmentWinCounts.get(seg.id) ?? 0;
+      // maxWins only applies to real wins
+      if (seg.maxWins !== null && (seg.rewardType === "cash" || seg.rewardType === "points")) {
+        if (wins >= seg.maxWins) return false;
+      }
       return true;
     });
 
-    if (eligibleSegments.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No prizes available at this time",
-      });
-    }
+    // Force "lose" if nothing left
+    const finalEligible = eligibleSegments.length ? eligibleSegments : [segments.find(s => s.rewardType === "lose")!];
 
-    // Weighted random selection based on probability
-    const totalProbability = eligibleSegments.reduce((sum: number, seg: any) => sum + (seg.probability || 0), 0);
+    // Weighted random selection
+    const totalProbability = finalEligible.reduce((sum, seg) => sum + (seg.probability || 0), 0);
     let random = Math.random() * totalProbability;
-    let selectedSegment: any = eligibleSegments[0];
-
-    for (const seg of eligibleSegments) {
-      random -= (seg.probability || 0);
-      if (random <= 0) {
-        selectedSegment = seg;
-        break;
-      }
+    let selectedSegment = finalEligible[0];
+    for (const seg of finalEligible) {
+      random -= seg.probability || 0;
+      if (random <= 0) { selectedSegment = seg; break; }
     }
 
     let balloonValues: number[] = [];
-    let rewardType = selectedSegment.rewardType || "lose";
+    const rewardType = selectedSegment.rewardType || "lose";
     let rewardValue = "0";
     const isRPrize = rewardType === "try_again";
     const isWin = rewardType === "cash" || rewardType === "points";
 
     if (isRPrize) {
-      // Free Replay - show ONE R symbol and two random non-matching values
-      const cashSegments = segments.filter((seg: any) => seg.rewardType === "cash");
-      const availableValues = cashSegments.map((seg: any) => parseFloat(seg.rewardValue?.toString() || "1"));
-      // Pick two different random cash values
-      let val1 = availableValues.length > 0 ? availableValues[Math.floor(Math.random() * availableValues.length)] : 1;
-      let val2 = availableValues.length > 1 ? availableValues[Math.floor(Math.random() * availableValues.length)] : 5;
-      while (val2 === val1 && availableValues.length > 1) {
-        val2 = availableValues[Math.floor(Math.random() * availableValues.length)];
-      }
-      // Place the R (-1) in a random position among the three balloons
-      const rPosition = Math.floor(Math.random() * 3);
-      balloonValues = rPosition === 0 ? [-1, val1, val2] : rPosition === 1 ? [val1, -1, val2] : [val1, val2, -1];
+      const cashSegments = segments.filter(s => s.rewardType === "cash");
+      const vals = cashSegments.map(s => parseFloat(s.rewardValue?.toString() || "1"));
+      let val1 = vals[Math.floor(Math.random() * vals.length)] || 1;
+      let val2 = vals.length > 1 ? vals[Math.floor(Math.random() * vals.length)] : val1 + 1;
+      while (val2 === val1 && vals.length > 1) val2 = vals[Math.floor(Math.random() * vals.length)];
+      const rPos = Math.floor(Math.random() * 3);
+      balloonValues = rPos === 0 ? [-1, val1, val2] : rPos === 1 ? [val1, -1, val2] : [val1, val2, -1];
       rewardValue = "0";
-      
-      // Grant a free replay by increasing order quantity
-      await db
-        .update(orders)
-        .set({ quantity: order.quantity + 1 })
-        .where(eq(orders.id, orderId));
-      
-      // Track try_again wins for maxWins enforcement
-      const updatedSegments = segments.map((seg: any) => 
-        seg.id === selectedSegment.id 
-          ? { ...seg, currentWins: (seg.currentWins || 0) + 1 }
-          : seg
-      );
-      await db
-        .update(gamePopConfig)
-        .set({ prizes: updatedSegments, updatedAt: new Date() })
-        .where(eq(gamePopConfig.id, "active"));
+      await db.update(orders).set({ quantity: order.quantity + 1 }).where(eq(orders.id, orderId));
     } else if (isWin) {
-      // Win - show matching values
       const value = parseFloat(selectedSegment.rewardValue?.toString() || "0");
       balloonValues = [value, value, value];
       rewardValue = value.toString();
-
       if (rewardType === "cash") {
-        // Award cash prize
         const finalBalance = parseFloat(user.balance || "0") + value;
         await storage.updateUserBalance(userId, finalBalance.toFixed(2));
-
-        await storage.createTransaction({
-          userId,
-          type: "prize",
-          amount: value.toFixed(2),
-          description: `Ringtone Pop Win - £${value}`,
-        });
-
-        await storage.createWinner({
-          userId,
-          competitionId: null,
-          prizeDescription: `Ringtone Pop Winner`,
-          prizeValue: `£${value}`,
-          imageUrl: null,
-          isShowcase: false,
-        });
+        await storage.createTransaction({ userId, type: "prize", amount: value.toFixed(2), description: `Ringtone Pop Win - £${value}` });
       } else if (rewardType === "points") {
-        // Award points
         const pointsValue = Math.floor(value);
-        const currentPoints = user.ringtonePoints || 0;
-        const newPoints = currentPoints + pointsValue;
+        const newPoints = (user.ringtonePoints || 0) + pointsValue;
         await db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
-
-        // Create points transaction with ringtone_points type
-        await storage.createTransaction({
-          userId,
-          type: "ringtone_points",
-          amount: pointsValue.toString(),
-          description: `Ringtone Pop Win - ${pointsValue.toLocaleString()} pts`,
-        });
+        await storage.createTransaction({ userId, type: "ringtone_points", amount: pointsValue.toString(), description: `Ringtone Pop Win - ${pointsValue} pts` });
       }
-
-      // Update segment win count in config
-      const updatedSegments = segments.map((seg: any) => 
-        seg.id === selectedSegment.id 
-          ? { ...seg, currentWins: (seg.currentWins || 0) + 1 }
-          : seg
-      );
-      await db
-        .update(gamePopConfig)
-        .set({ prizes: updatedSegments, updatedAt: new Date() })
-        .where(eq(gamePopConfig.id, "active"));
     } else {
-      // Loss - generate non-matching balloon values
-      const cashSegments = segments.filter((seg: any) => seg.rewardType === "cash");
-      const availableValues = cashSegments.map((seg: any) => parseFloat(seg.rewardValue?.toString() || "1"));
-      if (availableValues.length >= 2) {
-        const val1 = availableValues[Math.floor(Math.random() * availableValues.length)];
-        let val2 = availableValues[Math.floor(Math.random() * availableValues.length)];
-        while (val2 === val1 && availableValues.length > 1) {
-          val2 = availableValues[Math.floor(Math.random() * availableValues.length)];
-        }
-        let val3 = availableValues[Math.floor(Math.random() * availableValues.length)];
-        if (val1 === val2 && val2 === val3) {
-          val3 = availableValues.find((v: number) => v !== val1) || val1 + 1;
-        }
-        balloonValues = [val1, val2, val3];
-      } else {
-        balloonValues = [1, 5, 10];
-      }
+      const cashVals = segments.filter(s => s.rewardType === "cash").map(s => parseFloat(s.rewardValue?.toString() || "1"));
+      if (cashVals.length >= 2) {
+        let v1 = cashVals[Math.floor(Math.random() * cashVals.length)];
+        let v2 = cashVals[Math.floor(Math.random() * cashVals.length)];
+        let v3 = cashVals[Math.floor(Math.random() * cashVals.length)];
+        if (v1 === v2 && v2 === v3) v3 = cashVals.find(v => v !== v1) || v1 + 1;
+        balloonValues = [v1, v2, v3];
+      } else balloonValues = [1, 5, 10];
     }
 
-    const selectedPrize = isWin ? selectedSegment : null;
-
-    // Record usage
-    await db.insert(popUsage).values({
-      orderId,
-      userId,
-      usedAt: new Date(),
-    });
-
-    // Record result
-    await db.insert(popWins).values({
-      orderId,
-      userId,
-      prizeId: selectedPrize?.id || "none",
-      balloonValues,
-      rewardType,
-      rewardValue,
-      isWin,
-      wonAt: new Date(),
-    });
+    // Record usage and win
+    await db.insert(popUsage).values({ orderId, userId, usedAt: new Date() });
+    await db.insert(popWins).values({ orderId, userId, prizeId: selectedSegment.id || "none", balloonValues, rewardType, rewardValue, isWin, wonAt: new Date() });
 
     res.json({
       success: true,
-      result: {
-        balloonValues,
-        isWin,
-        isRPrize,
-        rewardType,
-        rewardValue: parseFloat(rewardValue),
-        prizeName: selectedPrize ? `£${selectedPrize.value}` : null,
-      },
+      result: { balloonValues, isWin, isRPrize, rewardType, rewardValue },
       playsRemaining: playsRemaining - 1,
     });
   } catch (error) {
@@ -7578,6 +7481,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
     res.status(500).json({ message: "Failed to play pop game" });
   }
 });
+
 
 // Reveal all pop games (batch processing)
 app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
@@ -7592,7 +7496,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // Verify valid completed order
+    // Verify completed order
     const order = await storage.getOrder(orderId);
     if (!order || order.userId !== userId || order.status !== "completed") {
       return res.status(400).json({
@@ -7601,84 +7505,96 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // Check plays remaining
+    // Check remaining plays
     const playsUsed = await db
       .select({ count: sql<number>`count(*)` })
       .from(popUsage)
       .where(eq(popUsage.orderId, orderId));
-    
     const usedCount = Number(playsUsed[0]?.count || 0);
     const playsRemaining = order.quantity - usedCount;
 
     if (playsRemaining <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No plays remaining",
-      });
+      return res.status(400).json({ success: false, message: "No plays remaining" });
     }
 
     const playsToProcess = Math.min(count, playsRemaining);
 
-    // Get user and config
+    // Get user and active pop config
     const user = await storage.getUser(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     const [config] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
     const popConfig = config || DEFAULT_POP_CONFIG;
-    
-    // Get segments (support both old 'prizes' and new 'segments' format)
     const segments = (popConfig as any).segments || (popConfig as any).prizes || DEFAULT_POP_CONFIG.segments;
 
     let totalCash = 0;
     let totalPoints = 0;
     let freeReplaysWon = 0;
     const results: any[] = [];
+
+    // Count existing wins for all segments from popWins table
+    const counts = await db
+      .select({ prizeId: popWins.prizeId, count: sql<number>`count(*)` })
+      .from(popWins)
+      .where(eq(popWins.isWin, true))
+      .groupBy(popWins.prizeId);
     const segmentWinCounts = new Map<string, number>();
+    counts.forEach(c => segmentWinCounts.set(c.prizeId, Number(c.count)));
 
-    // Initialize segment win counts
-    segments.forEach((seg: any) => segmentWinCounts.set(seg.id, seg.currentWins || 0));
+    // Initialize segment counts if missing
+    segments.forEach(seg => {
+      if (!segmentWinCounts.has(seg.id)) segmentWinCounts.set(seg.id, 0);
+    });
 
-    // Process all plays
-    await db.transaction(async (tx) => {
+    // Find a "lose" segment to use as fallback
+    const loseSegment = segments.find(s => s.rewardType === "lose");
+
+    // Transaction to process all plays
+    await db.transaction(async tx => {
       for (let i = 0; i < playsToProcess; i++) {
-        // Filter eligible segments
-        const eligibleSegments = segments.filter((seg: any) => {
-          const currentWins = segmentWinCounts.get(seg.id) || 0;
-          if (seg.maxWins !== null && currentWins >= seg.maxWins) return false;
+        let selectedSegment;
+        let isRPrize = false;
+        let isWin = false;
+        
+        // Eligible segments: maxWins applies only to cash/points
+        const eligibleSegments = segments.filter(seg => {
+          const wins = segmentWinCounts.get(seg.id) ?? 0;
+          if (seg.maxWins !== null && (seg.rewardType === "cash" || seg.rewardType === "points")) {
+            if (wins >= seg.maxWins) return false;
+          }
           return true;
         });
 
-        if (eligibleSegments.length === 0) {
-          break; // No eligible segments left
-        }
+        // If there are eligible segments, do weighted random selection
+        if (eligibleSegments.length > 0) {
+          const totalProbability = eligibleSegments.reduce((sum, seg) => sum + (seg.probability || 0), 0);
+          let random = Math.random() * totalProbability;
+          selectedSegment = eligibleSegments[0];
 
-        // Weighted random selection based on probability
-        const totalProbability = eligibleSegments.reduce((sum: number, seg: any) => sum + (seg.probability || 0), 0);
-        let random = Math.random() * totalProbability;
-        let selectedSegment: any = eligibleSegments[0];
-
-        for (const seg of eligibleSegments) {
-          random -= (seg.probability || 0);
-          if (random <= 0) {
-            selectedSegment = seg;
-            break;
+          for (const seg of eligibleSegments) {
+            random -= seg.probability || 0;
+            if (random <= 0) {
+              selectedSegment = seg;
+              break;
+            }
           }
+        } else {
+          // If no eligible segments (all maxWins reached), use lose segment
+          selectedSegment = loseSegment || segments[0];
         }
 
         let balloonValues: number[] = [];
         const rewardType = selectedSegment.rewardType || "lose";
         let rewardValue = "0";
-        const isRPrize = rewardType === "try_again";
-        const isWin = rewardType === "cash" || rewardType === "points";
+        isRPrize = rewardType === "try_again";
+        isWin = rewardType === "cash" || rewardType === "points";
 
         if (isRPrize) {
-          // Free Replay - show ONE R symbol and two random non-matching values
-          const cashSegments = segments.filter((seg: any) => seg.rewardType === "cash");
-          const availableValues = cashSegments.map((seg: any) => parseFloat(seg.rewardValue?.toString() || "1"));
-          let val1 = availableValues.length > 0 ? availableValues[Math.floor(Math.random() * availableValues.length)] : 1;
-          let val2 = availableValues.length > 1 ? availableValues[Math.floor(Math.random() * availableValues.length)] : 5;
+          // Free Replay - one R symbol + 2 random cash values
+          const cashSegments = segments.filter(s => s.rewardType === "cash");
+          const availableValues = cashSegments.map(s => parseFloat(s.rewardValue?.toString() || "1"));
+          let val1 = availableValues[Math.floor(Math.random() * availableValues.length)] || 1;
+          let val2 = availableValues.length > 1 ? availableValues[Math.floor(Math.random() * availableValues.length)] : val1 + 1;
           while (val2 === val1 && availableValues.length > 1) {
             val2 = availableValues[Math.floor(Math.random() * availableValues.length)];
           }
@@ -7686,50 +7602,36 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
           balloonValues = rPosition === 0 ? [-1, val1, val2] : rPosition === 1 ? [val1, -1, val2] : [val1, val2, -1];
           rewardValue = "0";
           freeReplaysWon++;
-          // Track try_again wins for maxWins enforcement
           segmentWinCounts.set(selectedSegment.id, (segmentWinCounts.get(selectedSegment.id) || 0) + 1);
         } else if (isWin) {
           const value = parseFloat(selectedSegment.rewardValue?.toString() || "0");
           balloonValues = [value, value, value];
           rewardValue = value.toString();
-
-          if (rewardType === "cash") {
-            totalCash += value;
-          } else if (rewardType === "points") {
-            totalPoints += Math.floor(value);
-          }
-
-          // Update local win count
+          if (rewardType === "cash") totalCash += value;
+          if (rewardType === "points") totalPoints += Math.floor(value);
           segmentWinCounts.set(selectedSegment.id, (segmentWinCounts.get(selectedSegment.id) || 0) + 1);
         } else {
-          // Loss - generate non-matching balloon values
-          const cashSegments = segments.filter((seg: any) => seg.rewardType === "cash");
-          const availableValues = cashSegments.map((seg: any) => parseFloat(seg.rewardValue?.toString() || "1"));
-          if (availableValues.length >= 2) {
-            const val1 = availableValues[Math.floor(Math.random() * availableValues.length)];
-            let val2 = availableValues[Math.floor(Math.random() * availableValues.length)];
-            let val3 = availableValues[Math.floor(Math.random() * availableValues.length)];
-            if (val1 === val2 && val2 === val3) {
-              val3 = availableValues.find((v: number) => v !== val1) || val1 + 1;
-            }
+          // Lose: generate random non-matching balloon values
+          const cashValues = segments.filter(s => s.rewardType === "cash").map(s => parseFloat(s.rewardValue?.toString() || "1"));
+          if (cashValues.length >= 2) {
+            let val1 = cashValues[Math.floor(Math.random() * cashValues.length)];
+            let val2 = cashValues[Math.floor(Math.random() * cashValues.length)];
+            let val3 = cashValues[Math.floor(Math.random() * cashValues.length)];
+            if (val1 === val2 && val2 === val3) val3 = cashValues.find(v => v !== val1) || val1 + 1;
             balloonValues = [val1, val2, val3];
           } else {
             balloonValues = [1, 5, 10];
           }
         }
 
-        // Record usage
-        await tx.insert(popUsage).values({
-          orderId,
-          userId,
-          usedAt: new Date(),
-        });
+        // Record pop usage
+        await tx.insert(popUsage).values({ orderId, userId, usedAt: new Date() });
 
         // Record result
         await tx.insert(popWins).values({
           orderId,
           userId,
-          prizeId: selectedSegment?.id || "none",
+          prizeId: selectedSegment.id || "none",
           balloonValues,
           rewardType,
           rewardValue,
@@ -7748,11 +7650,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       // Update user balance
       if (totalCash > 0) {
         const finalBalance = parseFloat(user.balance || "0") + totalCash;
-        await tx
-          .update(users)
-          .set({ balance: finalBalance.toFixed(2), updatedAt: new Date() })
-          .where(eq(users.id, userId));
-
+        await tx.update(users).set({ balance: finalBalance.toFixed(2), updatedAt: new Date() }).where(eq(users.id, userId));
         await tx.insert(transactions).values({
           userId,
           type: "prize",
@@ -7762,18 +7660,15 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
         });
       }
 
-      // Update user points
+      // Update points
       if (totalPoints > 0) {
-        const currentPoints = user.ringtonePoints || 0;
-        const newPoints = currentPoints + totalPoints;
+        const newPoints = (user.ringtonePoints || 0) + totalPoints;
         await tx.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
-
-        // Create points transaction with ringtone_points type
         await tx.insert(transactions).values({
           userId,
           type: "ringtone_points",
           amount: totalPoints.toString(),
-          description: `Ringtone Pop Batch Win - ${totalPoints.toLocaleString()} pts`,
+          description: `Ringtone Pop Batch Win - ${totalPoints} pts`,
           createdAt: new Date(),
         });
       }
@@ -7782,16 +7677,6 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       if (freeReplaysWon > 0) {
         await tx.update(orders).set({ quantity: order.quantity + freeReplaysWon }).where(eq(orders.id, orderId));
       }
-
-      // Update segment win counts in config
-      const updatedSegments = segments.map((seg: any) => ({
-        ...seg,
-        currentWins: segmentWinCounts.get(seg.id) || seg.currentWins || 0
-      }));
-      await tx
-        .update(gamePopConfig)
-        .set({ prizes: updatedSegments, updatedAt: new Date() })
-        .where(eq(gamePopConfig.id, "active"));
     });
 
     res.json({
@@ -7807,6 +7692,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
     res.status(500).json({ message: "Failed to reveal all pop games" });
   }
 });
+
 
 // Get pop order info (user)
 app.get("/api/pop-order/:orderId", isAuthenticated, async (req: any, res) => {
@@ -7860,6 +7746,23 @@ app.get("/api/pop-config", async (req, res) => {
     res.status(500).json({ message: "Failed to fetch pop configuration" });
   }
 });
+
+// RESET ALL POP WINS (ADMIN ONLY)
+app.post(
+  "/api/admin/game-pop-reset-wins",
+  isAuthenticated,
+  isAdmin,
+  async (_req, res) => {
+    try {
+      await db.delete(popWins);
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Reset pop wins error:", err);
+      res.status(500).json({ message: "Failed to reset pop wins" });
+    }
+  }
+);
 
 
 app.delete("/api/admin/users/:id", isAuthenticated, isAdmin, async (req: any, res) => {

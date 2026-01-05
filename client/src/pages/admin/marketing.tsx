@@ -421,7 +421,7 @@ export default function AdminMarketing() {
                     <FormControl>
                       <Input
                         {...field}
-                        placeholder="e.g., Spring Sale 2025"
+                        placeholder="e.g., Spring Sale 2026"
                         className="bg-zinc-800 border-zinc-700 text-white"
                         data-testid="input-campaign-title"
                       />
