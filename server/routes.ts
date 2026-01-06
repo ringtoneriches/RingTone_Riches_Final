@@ -3812,275 +3812,6 @@ app.post("/api/reveal-all-scratch-cards", isAuthenticated, async (req: any, res)
   }
 });
 
-// 🎯 NEW ARCHITECTURE: Pre-load scratch session BEFORE scratching starts
-// Step 1: Start a scratch session - pre-determine result and tile layout
-// app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) => {
-//   try {
-//     const userId = req.user.id;
-//     const { orderId } = req.body;
-
-//     if (!orderId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Order ID is required",
-//       });
-//     }
-
-//     // Verify valid completed order
-//     const order = await storage.getOrder(orderId);
-//     if (!order || order.userId !== userId || order.status !== "completed") {
-//       return res.status(400).json({
-//         success: false,
-//         message: "No valid scratch card purchase found",
-//       });
-//     }
-
-//     // Check cards remaining
-//     const used = await storage.getScratchCardsUsed(orderId);
-//     const remaining = order.quantity - used;
-
-//     if (remaining <= 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "No scratch cards remaining in this purchase",
-//       });
-//     }
-
-//     // Get user
-//     const user = await storage.getUser(userId);
-//     if (!user) {
-//       return res.status(404).json({ message: "User not found" });
-//     }
-
-//     // 🎲 Pre-determine the result using atomic transaction
-//     let selectedPrize: any;
-//     let tileLayout: string[] = [];
-    
-//     try {
-//       await db.transaction(async (tx) => {
-//         // Lock and fetch eligible prizes
-//         const allPrizes = await tx
-//           .select()
-//           .from(scratchCardImages)
-//           .where(eq(scratchCardImages.isActive, true))
-//           .for("update"); 
-
-//         if (!allPrizes || allPrizes.length === 0) {
-//           throw new Error("No prizes configured");
-//         }
-
-//         // Filter prizes that haven't reached maxWins
-//         const eligiblePrizes = allPrizes.filter(prize => {
-//           if (!prize.weight || prize.weight <= 0) return false;
-//           if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins) return false;
-//           return true;
-//         });
-
-//         if (eligiblePrizes.length === 0) {
-//           throw new Error("No prizes available");
-//         }
-
-//         // Weighted random selection
-//         const totalWeight = eligiblePrizes.reduce((sum, prize) => sum + prize.weight, 0);
-//         if (totalWeight <= 0) {
-//           throw new Error("Invalid prize weights");
-//         }
-
-//         let random = Math.random() * totalWeight;
-//         selectedPrize = eligiblePrizes[0];
-
-//         for (const prize of eligiblePrizes) {
-//           random -= prize.weight;
-//           if (random <= 0) {
-//             selectedPrize = prize;
-//             break;
-//           }
-//         }
-//       });
-
-//       // 🖼️ Generate 2x3 tile layout (6 tiles) based on win/loss
-//       const isWinner = selectedPrize.rewardType !== 'try_again' && selectedPrize.rewardType !== 'lose';
-      
-//       // Define winning patterns for 2x3 grid:
-//       // [0] [1] [2]
-//       // [3] [4] [5]
-//       const winningPatterns = [
-//         [0, 1, 2], // Top row
-//         [3, 4, 5], // Bottom row
-//         [0, 2, 4], // Diagonal
-//         [1, 3, 5], // Diagonal
-//       ];
-      
-//       if (isWinner && selectedPrize.imageName) {
-//         // ✅ WINNER: Show EXACTLY 3 matching images, 3 different non-matching images
-//         const winningImage = selectedPrize.imageName;
-//         const winPositions = winningPatterns[Math.floor(Math.random() * winningPatterns.length)];
-        
-//         // Get all other images (excluding winning image)
-//         const otherPrizes = await db
-//           .select()
-//           .from(scratchCardImages)
-//           .where(eq(scratchCardImages.isActive, true));
-        
-//         const otherImages = otherPrizes
-//           .filter(p => p.imageName !== winningImage && p.imageName)
-//           .map(p => p.imageName as string);
-        
-//         if (otherImages.length < 3) {
-//           throw new Error("Not enough different images configured - need at least 4 total images");
-//         }
-        
-//         // Build 2x3 grid (6 tiles)
-//         tileLayout = Array(6).fill('');
-        
-//         // Place EXACTLY 3 winning images in winning positions
-//         winPositions.forEach(pos => {
-//           tileLayout[pos] = winningImage;
-//         });
-        
-//         // 🛡️ CRITICAL: Fill remaining 3 positions with 3 DIFFERENT images (no duplicates)
-//         // This ensures we never accidentally create a 4th or 5th matching image
-//         const shuffledOthers = [...otherImages].sort(() => Math.random() - 0.5);
-//         const nonWinningPositions = [0, 1, 2, 3, 4, 5].filter(pos => !winPositions.includes(pos));
-        
-//         // Pick 3 different images for the 3 non-winning positions
-//         nonWinningPositions.forEach((pos, index) => {
-//           tileLayout[pos] = shuffledOthers[index % shuffledOthers.length];
-//         });
-        
-//         // 🔒 Final safety check: Ensure only ONE set of 3 matching exists
-//         const matchCount: { [key: string]: number } = {};
-//         tileLayout.forEach(img => {
-//           matchCount[img] = (matchCount[img] || 0) + 1;
-//         });
-        
-//         // Verify winning image appears exactly 3 times
-//         if (matchCount[winningImage] !== 3) {
-//           console.error(`❌ CRITICAL: Winning image appears ${matchCount[winningImage]} times instead of 3!`);
-//         }
-        
-//         // Verify no other image appears 3+ times
-//         Object.entries(matchCount).forEach(([img, count]) => {
-//           if (img !== winningImage && count >= 3) {
-//             console.error(`❌ CRITICAL: Non-winning image "${img}" appears ${count} times!`);
-//           }
-//         });
-//       } else {
-//         // 🔴 LOSER: Create layout ensuring NO 3 matching images
-//         const allPrizes = await db
-//           .select()
-//           .from(scratchCardImages)
-//           .where(eq(scratchCardImages.isActive, true));
-        
-//         const allImages = allPrizes
-//           .filter(p => p.imageName)
-//           .map(p => p.imageName as string);
-        
-//         if (allImages.length < 3) {
-//           throw new Error("Not enough images configured - need at least 3 different images");
-//         }
-        
-//         // 🎯 Strategy: Create pairs (2 of each image) to ensure max 2 same, never 3
-//         // This guarantees the game cannot be won
-//         tileLayout = [];
-        
-//         // Pick 3 different images randomly
-//         const shuffled = [...allImages].sort(() => Math.random() - 0.5);
-//         const image1 = shuffled[0];
-//         const image2 = shuffled[1];
-//         const image3 = shuffled[2];
-        
-//         // Create pairs: 2 of image1, 2 of image2, 2 of image3
-//         const tiles = [image1, image1, image2, image2, image3, image3];
-        
-//         // Shuffle the tiles randomly
-//         tileLayout = tiles.sort(() => Math.random() - 0.5);
-        
-//         // 🛡️ Safety check: Ensure NO winning pattern exists
-//         let safetyAttempts = 0;
-//         while (safetyAttempts < 20) {
-//           const hasWinningPattern = winningPatterns.some(pattern => {
-//             const images = pattern.map(pos => tileLayout[pos]);
-//             return images[0] === images[1] && images[1] === images[2];
-//           });
-          
-//           if (!hasWinningPattern) {
-//             break; // Success! No 3 matching
-//           }
-          
-//           // Re-shuffle and try again
-//           tileLayout = tiles.sort(() => Math.random() - 0.5);
-//           safetyAttempts++;
-//         }
-        
-//         // Final verification
-//         const finalCheck = winningPatterns.some(pattern => {
-//           const images = pattern.map(pos => tileLayout[pos]);
-//           return images[0] === images[1] && images[1] === images[2];
-//         });
-        
-//         if (finalCheck) {
-//           console.error("❌ CRITICAL: Failed to generate non-winning layout! Force-fixing...");
-//           // Force fix: manually ensure no pattern matches
-//           tileLayout = [image1, image2, image3, image1, image2, image3];
-//         }
-//       }
-
-//       // Generate unique session ID
-//       const sessionId = nanoid();
-
-//       // Prepare prize response
-//       let prizeInfo: any = {
-//         type: 'none',
-//         value: '0',
-//         label: selectedPrize.label || 'Try Again',
-//       };
-
-//       if (isWinner) {
-//         if (selectedPrize.rewardType === 'cash') {
-//           prizeInfo = {
-//             type: 'cash',
-//             value: parseFloat(String(selectedPrize.rewardValue)).toFixed(2),
-//             label: selectedPrize.label,
-//           };
-//         } else if (selectedPrize.rewardType === 'points') {
-//           prizeInfo = {
-//             type: 'points',
-//             value: String(selectedPrize.rewardValue),
-//             label: selectedPrize.label,
-//           };
-//         } else if (selectedPrize.rewardType === 'physical') {
-//           prizeInfo = {
-//             type: 'physical',
-//             value: selectedPrize.label,
-//             label: selectedPrize.label,
-//           };
-//         }
-//       }
-
-//       // Return session data to frontend (NO database changes yet)
-//       res.json({
-//         success: true,
-//         sessionId,
-//         isWinner,
-//         prize: prizeInfo,
-//         tileLayout, // 9-element array of image names
-//         prizeId: selectedPrize.id,
-//         orderId,
-//       });
-
-//     } catch (error) {
-//       console.error("Error creating scratch session:", error);
-//       throw error;
-//     }
-
-//   } catch (error) {
-//     console.error("Error starting scratch session:", error);
-//     res.status(500).json({ message: "Failed to start scratch session" });
-//   }
-// });
-
-
 app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -4243,7 +3974,6 @@ app.post("/api/scratch-session/start", isAuthenticated, async (req: any, res) =>
     res.status(500).json({ message: "Failed to start scratch session" });
   }
 });
-
 
 // Step 2: Complete scratch session - record usage and award prize
 app.post("/api/scratch-session/:sessionId/complete", isAuthenticated, async (req: any, res) => {
@@ -4601,6 +4331,33 @@ app.post("/api/process-pop-payment", isAuthenticated, async (req: any, res) => {
       });
     }
 
+    if (user?.email) {
+  try {
+    const tickets = await storage.getTicketsByOrderId(order.id);
+    const ticketNumbers = tickets.map(t => t.ticketNumber);
+
+    await sendOrderConfirmationEmail(user.email, {
+      orderId: order.id,
+      userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
+      orderType: 'pop',
+      itemName: competition.title,
+      quantity: order.quantity,
+      totalAmount: order.totalAmount,
+      orderDate: new Date().toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      paymentMethod: paymentBreakdown.map(p => p.method).join("+") || "wallet/points",
+      ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
+    });
+  } catch (err) {
+    console.error("❌ Failed to send POP confirmation email:", err);
+  }
+}
+
     res.json({
       success: true,
       message: "Pop game purchase complete!",
@@ -4756,11 +4513,74 @@ app.get("/api/admin/users/cashflow-transactions", isAuthenticated, isAdmin, asyn
 });
 
 
+// app.get("/api/admin/cashflow-transactions", isAuthenticated, isAdmin, async (req, res) => {
+//   try {
+//     //
+//     // 1️⃣ CASHFLOW DEPOSITS (Wallet top-ups)
+//     //
+//     const cashflowDeposits = await db
+//       .select({
+//         id: transactions.id,
+//         userId: transactions.userId,
+//         userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+//         userEmail: users.email,
+//         type: transactions.type,
+//         amount: transactions.amount,
+//         description: transactions.description,
+//         createdAt: transactions.createdAt,
+//         source: sql`'transaction'`,
+//       })
+//       .from(transactions)
+//       .leftJoin(users, eq(transactions.userId, users.id))
+//       .where(sql`${transactions.type} = 'deposit'`);
+
+
+
+//     //
+//     // 2️⃣ CASHFLOW USED IN ORDERS (cashflowsAmount > 0)
+//     //
+//     const cashflowOrders = await db
+//       .select({
+//         id: orders.id,
+//         userId: orders.userId,
+//         userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+//         userEmail: users.email,
+//         competitionId: orders.competitionId,
+//         competitionTitle: competitions.title,
+//         type: sql`'cashflow_spent'`,
+//         amount: orders.cashflowsAmount,
+//         description: sql`COALESCE(${competitions.title}, ${orders.paymentBreakdown}, 'Competition Purchase')`,
+//         createdAt: orders.createdAt,
+//         source: sql`'order'`,
+//       })
+//       .from(orders)
+//       .leftJoin(users, eq(orders.userId, users.id))
+//       .leftJoin(competitions, eq(orders.competitionId, competitions.id))
+//       .where(sql`${orders.cashflowsAmount} > 0`);
+
+
+
+//     //
+//     // 3️⃣ MERGE RESULTS
+//     //
+//     const allCashflowTx = [...cashflowDeposits, ...cashflowOrders];
+
+//     //
+//     // 4️⃣ SORT NEWEST FIRST
+//     //
+//     allCashflowTx.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+//     res.json(allCashflowTx);
+
+//   } catch (error) {
+//     console.error("Error fetching cashflow transactions:", error);
+//     res.status(500).json({ message: "Failed to fetch cashflow transactions" });
+//   }
+// });
+
 app.get("/api/admin/cashflow-transactions", isAuthenticated, isAdmin, async (req, res) => {
   try {
-    //
-    // 1️⃣ CASHFLOW DEPOSITS (Wallet top-ups)
-    //
+    // 1️⃣ CASHFLOW DEPOSITS ONLY (Wallet top-ups)
     const cashflowDeposits = await db
       .select({
         id: transactions.id,
@@ -4777,50 +4597,17 @@ app.get("/api/admin/cashflow-transactions", isAuthenticated, isAdmin, async (req
       .leftJoin(users, eq(transactions.userId, users.id))
       .where(sql`${transactions.type} = 'deposit'`);
 
+    // 2️⃣ SORT NEWEST FIRST
+    cashflowDeposits.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-
-    //
-    // 2️⃣ CASHFLOW USED IN ORDERS (cashflowsAmount > 0)
-    //
-    const cashflowOrders = await db
-      .select({
-        id: orders.id,
-        userId: orders.userId,
-        userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
-        userEmail: users.email,
-        competitionId: orders.competitionId,
-        competitionTitle: competitions.title,
-        type: sql`'cashflow_spent'`,
-        amount: orders.cashflowsAmount,
-        description: sql`COALESCE(${competitions.title}, ${orders.paymentBreakdown}, 'Competition Purchase')`,
-        createdAt: orders.createdAt,
-        source: sql`'order'`,
-      })
-      .from(orders)
-      .leftJoin(users, eq(orders.userId, users.id))
-      .leftJoin(competitions, eq(orders.competitionId, competitions.id))
-      .where(sql`${orders.cashflowsAmount} > 0`);
-
-
-
-    //
-    // 3️⃣ MERGE RESULTS
-    //
-    const allCashflowTx = [...cashflowDeposits, ...cashflowOrders];
-
-    //
-    // 4️⃣ SORT NEWEST FIRST
-    //
-    allCashflowTx.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-    res.json(allCashflowTx);
+    // 3️⃣ RETURN ONLY DEPOSITS
+    res.json(cashflowDeposits);
 
   } catch (error) {
     console.error("Error fetching cashflow transactions:", error);
     res.status(500).json({ message: "Failed to fetch cashflow transactions" });
   }
 });
-
 
 app.get("/api/user/tickets", isAuthenticated, async (req: any, res) => {
   try {
@@ -5080,9 +4867,6 @@ app.post(
 );
 
 
-
-
-
 app.post(
   "/api/wallet/confirm-topup",
   isAuthenticated,
@@ -5112,9 +4896,6 @@ app.post(
     });
   }
 );
-
-
-
 
 // POST endpoint
 app.post("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
@@ -5257,38 +5038,6 @@ app.get("/api/wellbeing", isAuthenticated, async (req, res) => {
   });
 });
 
-// app.post(
-//   "/api/admin/migrate/daily-limit-null",
-//   isAuthenticated,
-//   isAdmin,
-//   async (req, res) => {
-//     try {
-//       // 1️⃣ Remove default at DB level (safe to run multiple times)
-//       await db.execute(
-//         sql`ALTER TABLE users ALTER COLUMN daily_spend_limit DROP DEFAULT`
-//       );
-
-//       // 2️⃣ Normalize existing data
-//       const result = await db.execute(
-//         sql`
-//           UPDATE users
-//           SET daily_spend_limit = NULL
-//           WHERE daily_spend_limit = 0
-//         `
-//       );
-
-//       res.json({
-//         success: true,
-//         message: "Daily spend limits normalized",
-//         affectedRows: result.rowCount ?? 0,
-//       });
-//     } catch (err) {
-//       console.error("Migration error:", err);
-//       res.status(500).json({ error: "Migration failed" });
-//     }
-//   }
-// );
-
 
 async function getTodaysCashSpend(userId: string) {
   const startOfDay = new Date();
@@ -5314,9 +5063,6 @@ async function getTodaysCashSpend(userId: string) {
   return Number(result[0]?.total || 0);
 }
 
-
-
-
 async function enforceDailySpendLimit(userId: string, newSpendAmount: number) {
   const user = await db.query.users.findFirst({
     where: (u, { eq }) => eq(u.id, userId),
@@ -5337,8 +5083,6 @@ async function enforceDailySpendLimit(userId: string, newSpendAmount: number) {
     throw new Error("DAILY_LIMIT_REACHED");
   }
 }
-
-
 
 app.post("/api/wellbeing/suspend", isAuthenticated, async (req, res) => {
   const user = req.user;
@@ -5440,8 +5184,6 @@ app.post("/api/wellbeing/unsuspend", async (req, res) => {
   }
 });
 
-
-
 app.post("/api/wellbeing/close-account", isAuthenticated, async (req, res) => {
   const userId = req.user.id;
 
@@ -5513,9 +5255,6 @@ app.post("/api/wellbeing/undo-close-account", async (req, res) => {
     res.status(500).json({ success: false, message: "Failed to re-enable account" });
   }
 });
-
-
-
 
 
 // Withdrawal Request Routes - Collect details for manual processing
@@ -5696,7 +5435,6 @@ app.patch("/api/admin/withdrawal-requests/:id", isAuthenticated, isAdmin, async 
 });
 
 
-
 // ====== ENTRIES ADMIN ENDPOINTS ======
 app.get("/api/admin/entries", isAuthenticated, isAdmin, async (req, res) => {
   try {
@@ -5859,7 +5597,6 @@ app.get("/api/winners", async (req, res) => {
     res.status(500).json({ message: "Failed to fetch winners" });
   }
 });
-
 
 
 // ====== WINNERS ADMIN ENDPOINTS ======
@@ -7351,6 +7088,19 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
         await db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
         await storage.createTransaction({ userId, type: "ringtone_points", amount: pointsValue.toString(), description: `Ringtone Pop Win - ${pointsValue} pts` });
       }
+       await db.insert(winners).values({
+          userId,
+          competitionId,
+          prizeDescription: "Ringtone Pop Win",
+          prizeValue:
+            rewardType === "cash"
+              ? `£${rewardValue} Cash`
+              : `${rewardValue} Points`,
+          imageUrl: selectedSegment.imageUrl || null,
+          isShowcase: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
     } else {
       const cashVals = segments.filter(s => s.rewardType === "cash").map(s => parseFloat(s.rewardValue?.toString() || "1"));
       if (cashVals.length >= 2) {
@@ -7361,7 +7111,12 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
         balloonValues = [v1, v2, v3];
       } else balloonValues = [1, 5, 10];
     }
-
+    console.log("Pop win inserted into winners table:", {
+  userId,
+  competitionId,
+  rewardValue,
+  isShowcase: false
+});
     // Record usage and win
     await db.insert(popUsage).values({ orderId, userId, usedAt: new Date() });
     await db.insert(popWins).values({ orderId, userId, prizeId: selectedSegment.id || "none", balloonValues, rewardType, rewardValue, isWin, wonAt: new Date() });
@@ -7382,12 +7137,32 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
 app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
-    const { orderId, count } = req.body;
+    const { orderId, count , competitionId } = req.body;
 
     if (!orderId || !count || count <= 0) {
       return res.status(400).json({
         success: false,
         message: "Valid orderId and count are required",
+      });
+    }
+
+        if (!competitionId) {
+      return res.status(400).json({
+        success: false,
+        message: "competitionId is required",
+      });
+    }
+
+    const competition = await db
+      .select()
+      .from(competitions)
+      .where(eq(competitions.id, competitionId))
+      .limit(1);
+
+    if (!competition.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid competition",
       });
     }
 
@@ -7505,6 +7280,19 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
           if (rewardType === "cash") totalCash += value;
           if (rewardType === "points") totalPoints += Math.floor(value);
           segmentWinCounts.set(selectedSegment.id, (segmentWinCounts.get(selectedSegment.id) || 0) + 1);
+           await tx.insert(winners).values({
+          userId,
+          competitionId,
+          prizeDescription: "Ringtone Pop Win",
+          prizeValue:
+            rewardType === "cash"
+              ? `£${rewardValue} Cash`
+              : `${rewardValue} Points`,
+          imageUrl: selectedSegment.imageUrl || null,
+          isShowcase: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
         } else {
           // Lose: generate random non-matching balloon values
           const cashValues = segments.filter(s => s.rewardType === "cash").map(s => parseFloat(s.rewardValue?.toString() || "1"));

@@ -32,6 +32,7 @@ import {
   X,
   AlertCircle,
   Heart,
+  Star,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -76,14 +77,16 @@ const getTransactionIcon = (type: string) => {
       return <ShoppingCart className="h-4 w-4 text-blue-500" />;
     case "prize":
       return <Gift className="h-4 w-4 text-yellow-500" />;
-       case "pop_purchase": // 🎈 Add this case
+    case "pop_purchase": // 🎈 Add this case
       return <Gift className="w-4 h-4 text-pink-400" />; // or Balloon icon
+    case "ringtone_points": // Add this case
+      return <Star className="h-4 w-4 text-purple-500" />; // Using Star icon for points
     case "referral":
       return <Users className="h-4 w-4 text-purple-500" />;
     case "referral_bonus":
       return <Gift className="h-4 w-4 text-yellow-500" />;
     case "refund":
-      return <RefreshCcw className="h-4 w-4 text-orange-500" />; // New case
+      return <RefreshCcw className="h-4 w-4 text-orange-500" />;
     default:
       return <DollarSign className="h-4 w-4 text-gray-500" />;
   }
@@ -96,16 +99,36 @@ const getTransactionTypeBadge = (type: string) => {
     purchase: "bg-blue-500/10 text-blue-500 border-blue-500/20",
     prize: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
     pop_purchase: "bg-pink-500/20 text-pink-400 border-pink-500/30",
+    ringtone_points: "bg-purple-500/10 text-purple-500 border-purple-500/20", // Add this
     referral: "bg-purple-500/10 text-purple-500 border-purple-500/20",
     referral_bonus: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    refund: "bg-orange-500/10 text-orange-500 border-orange-500/20", // New case
+    refund: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+  };
+
+  // Format the display name nicely
+  const getDisplayName = (type: string) => {
+    const names: Record<string, string> = {
+      deposit: "Deposit",
+      withdrawal: "Withdrawal",
+      purchase: "Purchase",
+      prize: "Prize",
+      pop_purchase: "Pop Purchase",
+      ringtone_points: "Ringtones", // Or "RingTone Points"
+      referral: "Referral",
+      referral_bonus: "Referral Bonus",
+      refund: "Refund",
+    };
+    
+    return names[type] || type.charAt(0).toUpperCase() + type.slice(1);
   };
 
   return (
     <span
-      className={`px-2 py-1 rounded-full text-xs font-medium border ${colors[type] || "bg-gray-500/10 text-gray-500 border-gray-500/20"}`}
+      className={`px-2 py-1 rounded-full text-xs font-medium border ${
+        colors[type] || "bg-gray-500/10 text-gray-500 border-gray-500/20"
+      }`}
     >
-      {type.charAt(0).toUpperCase() + type.slice(1)}
+      {getDisplayName(type)}
     </span>
   );
 };
@@ -443,17 +466,15 @@ const isAuthenticated = !!user;
         new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime(),
     );
 
-    function formatAmount(transaction: Transaction) {
-  const isPoints =
-    transaction.description?.toLowerCase().includes("ringtone") ||
-    transaction.description?.toLowerCase().includes("points");
-
+function formatAmount(transaction: Transaction) {
   const amount = Math.abs(parseFloat(transaction.amount));
 
-  if (isPoints) {
+  // Use transaction.type instead of checking description
+  if (transaction.type === "ringtone_points") {
     return `${amount} pts`;
   }
 
+  // For everything else (prize, deposit, etc.), show as cash
   return `£${amount.toFixed(2)}`;
 }
 
@@ -1190,6 +1211,7 @@ const handleResumeOrder = () => {
                             <SelectItem value="purchase">Purchases</SelectItem>
                             <SelectItem value="prize">Prizes</SelectItem>
                             <SelectItem value="referral">Referrals</SelectItem>
+                            <SelectItem value="ringtone_points">RingTone Points</SelectItem> 
                             <SelectItem value="referral_bonus">Referrals Bonus</SelectItem>
                             <SelectItem value="refund">Refund</SelectItem>
                           </SelectContent>
@@ -1235,27 +1257,29 @@ const handleResumeOrder = () => {
                                 </p>
                               </div>
                             </div>
-                            <div
-                       className={`font-bold text-lg whitespace-nowrap ${
-                          (transaction.type === "deposit" ||
-                          transaction.type === "prize" ||
-                          transaction.type === "referral" ||
-                          transaction.type === "referral_bonus" ||
-                          transaction.type === "refund") 
-                            ? "text-green-400"
-                            : "text-red-400"
-                        }`}
-                      >
-                        {(transaction.type === "deposit" ||
-                        transaction.type === "prize" ||
-                        transaction.type === "referral" ||
-                        transaction.type === "referral_bonus" ||
-                        transaction.type === "refund")
-                          ? "+"
-                          : "-"
-                        }
-                        {formatAmount(transaction)}
-                      </div>
+                           <div
+                            className={`font-bold text-lg whitespace-nowrap ${
+                              (transaction.type === "deposit" ||
+                              transaction.type === "prize" ||
+                              transaction.type === "referral" ||
+                              transaction.type === "referral_bonus" ||
+                              transaction.type === "refund" ||
+                              transaction.type === "ringtone_points") // Add ringtone_points to positive transactions
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }`}
+                          >
+                            {(transaction.type === "deposit" ||
+                              transaction.type === "prize" ||
+                              transaction.type === "referral" ||
+                              transaction.type === "referral_bonus" ||
+                              transaction.type === "refund" ||
+                              transaction.type === "ringtone_points") // Add ringtone_points to positive transactions
+                              ? "+"
+                              : "-"
+                            }
+                            {formatAmount(transaction)}
+                          </div>
                           </div>
                         ))
                       )}

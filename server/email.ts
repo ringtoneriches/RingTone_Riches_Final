@@ -16,7 +16,7 @@ const LOGO_URL = 'https://res.cloudinary.com/dziy5sjas/image/upload/v1763133744/
 export interface OrderConfirmationPayload {
   orderId: string;
   userName: string;
-  orderType: 'competition' | 'spin' | 'scratch';
+  orderType: 'competition' | 'spin' | 'scratch' | 'pop';
   itemName: string;
   quantity: number;
   totalAmount: string;

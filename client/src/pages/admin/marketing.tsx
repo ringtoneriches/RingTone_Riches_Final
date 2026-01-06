@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Mail, Users, Send, TrendingUp, Plus, Trash2, Eye } from "lucide-react";
+import { Mail, Users, Send, TrendingUp, Plus, Trash2, Eye, ArrowBigLeft, ArrowBigRight } from "lucide-react";
 import { format } from "date-fns";
 
 interface User {
@@ -71,6 +71,8 @@ export default function AdminMarketing() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [viewCampaign, setViewCampaign] = useState<Campaign | null>(null);
   const [sendConfirmId, setSendConfirmId] = useState<string | null>(null);
+  const [currentPage , setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
 
   const form = useForm<CampaignFormData>({
     resolver: zodResolver(campaignFormSchema),
@@ -188,6 +190,11 @@ export default function AdminMarketing() {
     createCampaignMutation.mutate(data);
   };
 
+
+    const totalPages= Math.ceil(subscribers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedSubscribers  = subscribers.slice(startIndex , startIndex + itemsPerPage);
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -278,14 +285,14 @@ export default function AdminMarketing() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {subscribers.length === 0 ? (
+                  {paginatedSubscribers.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={3} className="text-center text-gray-500 py-8">
                         No subscribers yet
                       </TableCell>
                     </TableRow>
                   ) : (
-                    subscribers.map((subscriber) => (
+                    paginatedSubscribers.map((subscriber) => (
                       <TableRow key={subscriber.id} className="border-zinc-800" data-testid={`row-subscriber-${subscriber.id}`}>
                         
                         <TableCell className="text-gray-300">
@@ -306,6 +313,34 @@ export default function AdminMarketing() {
             </div>
           </CardContent>
         </Card>
+
+          {/* PAGINATION */}
+          <div className="flex justify-center items-center gap-4 my-6">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage((p) => p - 1)}
+              disabled={currentPage === 1}
+            >
+              <ArrowBigLeft />
+            </Button>
+  
+            <span className="font-medium">
+              Page {currentPage} of {totalPages}
+            </span>
+  
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage((p) => p + 1)}
+              disabled={currentPage === totalPages}
+            >
+                <ArrowBigRight />
+            </Button>
+          </div>
+  
+          {/* ENTRY COUNT */}
+        <p className="text-center text-sm text-muted-foreground">
+          Showing {paginatedSubscribers?.length || 0} of {subscribers?.length || 0} filtered entries
+        </p>
 
         {/* Campaigns List */}
         <Card className="bg-zinc-900 border-zinc-800">

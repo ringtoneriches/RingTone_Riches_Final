@@ -72,40 +72,53 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType ,congrat
   if (!isOpen) return null;
 
   const getPrizeDisplay = () => {
-    if (!prize) return { icon: '😔', text: 'No prize', subtext: 'Better luck next time!' };
+  if (!prize) return { icon: '😔', text: 'No prize', subtext: 'Better luck next time!' };
+  
+  if (prize.type === 'cash') {
+    // Format cash value to always show 2 decimal places
+    const value = prize.value;
+    let formattedValue;
     
-    if (prize.type === 'cash') {
-      return {
-        icon: money,
-        text: `£${prize.value}`,
-        subtext: 'Cash Prize!'
-      };
-    }else if (prize.type === 'points') {
-  const cleanValue = prize.value.replace(/Ringtones/gi, "Ringtone");
-
-  // If scratch → always show Ringtone tag too
-  const extraRingtoneText = gameType === "scratch" ? " Ringtone" : "";
-
-  return {
-    icon: '⭐',
-    text: `${cleanValue} ${extraRingtoneText} Points`,
-  };
-}else if (prize.type === 'car') {
-      return {
-        icon: '🏆',
-        text: prize.brand || prize.value,
-        subtext: prize.description || 'Amazing Prize!'
-      };
-    } else if (prize.type === 'prize') {
-      return {
-        icon: '🎁',
-        text: prize.value,
-        subtext: prize.description || 'Congratulations!'
-      };
+    // Check if value is a string or number
+    if (typeof value === 'string') {
+      const numValue = parseFloat(value);
+      formattedValue = !isNaN(numValue) ? numValue.toFixed(2) : "0.00";
+    } else {
+      // If it's already a number
+      formattedValue = typeof value === 'number' ? (value as number).toFixed(2) : "0.00";
     }
     
-    return { icon: '🎁', text: prize.value, subtext: 'You won!' };
-  };
+    return {
+      icon: money,
+      text: `£${formattedValue}`,
+      subtext: 'Cash Prize!'
+    };
+  } else if (prize.type === 'points') {
+    const cleanValue = prize.value.replace(/Ringtones/gi, "Ringtone");
+
+    // If scratch → always show Ringtone tag too
+    const extraRingtoneText = gameType === "scratch" ? " Ringtone" : "";
+
+    return {
+      icon: '⭐',
+      text: `${cleanValue} ${extraRingtoneText} Points`,
+    };
+  } else if (prize.type === 'car') {
+    return {
+      icon: '🏆',
+      text: prize.brand || prize.value,
+      subtext: prize.description || 'Amazing Prize!'
+    };
+  } else if (prize.type === 'prize') {
+    return {
+      icon: '🎁',
+      text: prize.value,
+      subtext: prize.description || 'Congratulations!'
+    };
+  }
+  
+  return { icon: '🎁', text: prize.value, subtext: 'You won!' };
+};
 
   const prizeInfo = getPrizeDisplay();
 

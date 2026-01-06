@@ -1325,35 +1325,35 @@ function WheelSettingsDialog({
 
                     <div className="grid grid-cols-5 gap-3">
                      <div>
-  <Label className="text-xs">Reward Type</Label>
+                  <Label className="text-xs">Reward Type</Label>
 
-  <select
-    value={segment.rewardType}
-    onChange={(e) =>
-      updateSegment(index, { rewardType: e.target.value as any })
-    }
-    className={`
-      w-full h-10 px-3 rounded-md border 
-      appearance-none
-      ${
-        segment.rewardType === "cash"
-          ? "bg-green-600 text-white border-green-700"
-          :
-          segment.rewardType === "points"?
-          "bg-yellow-500 text-white border-blue-700"
-          :
-          segment.rewardType === "lose"
-          ? "bg-red-600 text-white border-red-700"
-          : "bg-background text-foreground border-input"
-      }
-    `}
-    data-testid={`select-reward-type-${index}`}
-  >
-    <option value="cash" className="bg-white text-black">Cash (£)</option>
-    <option value="points" className="bg-white text-black">Points</option>
-    <option value="lose" className="bg-white text-black">No Win</option>
-  </select>
-</div>
+                  <select
+                    value={segment.rewardType}
+                    onChange={(e) =>
+                      updateSegment(index, { rewardType: e.target.value as any })
+                    }
+                    className={`
+                      w-full h-10 px-3 rounded-md border 
+                      appearance-none
+                      ${
+                        segment.rewardType === "cash"
+                          ? "bg-green-600 text-white border-green-700"
+                          :
+                          segment.rewardType === "points"?
+                          "bg-yellow-500 text-white border-blue-700"
+                          :
+                          segment.rewardType === "lose"
+                          ? "bg-red-600 text-white border-red-700"
+                          : "bg-background text-foreground border-input"
+                      }
+                    `}
+                    data-testid={`select-reward-type-${index}`}
+                  >
+                    <option value="cash" className="bg-white text-black">Cash (£)</option>
+                    <option value="points" className="bg-white text-black">Points</option>
+                    <option value="lose" className="bg-white text-black">No Win</option>
+                  </select>
+                </div>
 
 
                       <div>

@@ -265,28 +265,28 @@ export default function Home() {
                     
                     {/* Game Cards - Responsive */}
                     <div className="relative space-y-2.5 sm:space-y-4">
-  {[
-    { Icon: RotateCw, title: "Spin & Win", tagline: "Spin to Win Big",  stars: 5, winChance: "High", badge: "HOT", badgeColor: "bg-red-500", gradient: "from-purple-600 via-purple-500 to-violet-600", borderColor: "border-purple-400/50", glowColor: "shadow-purple-500/50", filter: "spin" },
-    { Icon: Ticket, title: "Scratch Cards", tagline: "Reveal Your Fortune",  stars: 5, winChance: "Best Odds", badge: "POPULAR", badgeColor: "bg-emerald-500", gradient: "from-emerald-600 via-emerald-500 to-teal-600", borderColor: "border-emerald-400/50", glowColor: "shadow-emerald-500/50", filter: "scratch" },
-    { Icon: Zap, title: "Competition", tagline: "Win Big Prizes",  stars: 5, winChance: "Mega Jackpot", badge: "MEGA", badgeColor: "bg-amber-500", gradient: "from-amber-500 via-yellow-500 to-orange-500", borderColor: "border-amber-400/50", glowColor: "shadow-amber-500/50", filter: "instant" }
-  ].map((game, index) => (
-    <button
-      key={index}
-     onClick={() => {
-    handleFilterChange(game.filter);
-    setTimeout(() => {
-      const section = document.getElementById("competitions-grid");
-      if (section) {
-        // Get the element's position
-        const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
-        // Scroll to a position 100px above the element
-        window.scrollTo({
-          top: elementTop - 100, // Adjust this value (100px up from the element)
-          behavior: "smooth"
-        });
-      }
-    }, 100);
-  }}
+          {[
+            { Icon: RotateCw, title: "Spin & Win", tagline: "Spin to Win Big",  stars: 5, badge: "HOT", badgeColor: "bg-red-500", gradient: "from-purple-600 via-purple-500 to-violet-600", borderColor: "border-purple-400/50", glowColor: "shadow-purple-500/50", filter: "spin" },
+            { Icon: Ticket, title: "Scratch Cards", tagline: "Reveal Your Fortune",  stars: 5, badge: "POPULAR", badgeColor: "bg-emerald-500", gradient: "from-emerald-600 via-emerald-500 to-teal-600", borderColor: "border-emerald-400/50", glowColor: "shadow-emerald-500/50", filter: "scratch" },
+            { Icon: Zap, title: "Competition", tagline: "Win Big Prizes",  stars: 5,  badge: "MEGA", badgeColor: "bg-amber-500", gradient: "from-amber-500 via-yellow-500 to-orange-500", borderColor: "border-amber-400/50", glowColor: "shadow-amber-500/50", filter: "instant" }
+          ].map((game, index) => (
+            <button
+              key={index}
+            onClick={() => {
+            handleFilterChange(game.filter);
+            setTimeout(() => {
+              const section = document.getElementById("competitions-grid");
+              if (section) {
+                // Get the element's position
+                const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
+                // Scroll to a position 100px above the element
+                window.scrollTo({
+                  top: elementTop - 100, // Adjust this value (100px up from the element)
+                  behavior: "smooth"
+                });
+              }
+            }, 100);
+          }}
       className={`w-full group relative rounded-xl sm:rounded-2xl bg-gradient-to-r ${game.gradient} p-[2px] sm:p-1 transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl ${game.glowColor} shadow-md sm:shadow-lg`}
       data-testid={`button-game-${game.title.toLowerCase().replace(/\s+/g, '-')}`}
     >

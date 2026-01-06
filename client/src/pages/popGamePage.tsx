@@ -332,7 +332,7 @@ export default function PopGamePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ orderId, count: remainingPlays }),
+        body: JSON.stringify({ orderId, competitionId, count: remainingPlays }),
       });
 
       if (!response.ok) {

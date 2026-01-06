@@ -158,21 +158,21 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               </h3>
               
               {/* Entries Info */}
-              {competition.maxTickets && competition.maxTickets > 0 && (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    <Users className="w-3 h-3 text-amber-400" />
-                    <span className="text-[10px] sm:text-xs text-slate-300">
-                      {competition.soldTickets || 0} entries
-                    </span>
-                  </div>
-                  <span className={`text-[10px] sm:text-xs font-semibold ${
-                    isAlmostGone ? 'text-red-400' : isHot ? 'text-amber-400' : 'text-slate-400'
-                  }`}>
-                    {remainingTickets} left
-                  </span>
-                </div>
-              )}
+             {competition.maxTickets && competition.maxTickets > 0 && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <Users className="w-3 h-3 text-amber-400" />
+                <span className="text-[10px] sm:text-xs text-slate-300">
+                  {Math.round(((competition.soldTickets || 0) / competition.maxTickets) * 100)}% progress
+                </span>
+              </div>
+              <span className={`text-[10px] sm:text-xs font-semibold ${
+                isAlmostGone ? 'text-red-400' : isHot ? 'text-amber-400' : 'text-slate-400'
+              }`}>
+                {remainingTickets} left
+              </span>
+            </div>
+          )}
               
               {/* Progress bar */}
               {competition.maxTickets && competition.maxTickets > 0 && (

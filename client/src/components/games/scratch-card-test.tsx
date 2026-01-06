@@ -32,6 +32,7 @@ import TowerBridge from "../../../../attached_assets/Land Mark/Tower Bridge.webp
 import TowerOfPisa from "../../../../attached_assets/Land Mark/Tower of Pisa.webp";
 import TryAgain from "../../../../attached_assets/Land Mark/tryAgain.jpg";
 import scratchBackgroundVideo from "../../../../attached_assets/scratchbg.mp4";
+import confetti from 'canvas-confetti';
 
 import { useLocation, useParams } from "wouter";
 
@@ -430,6 +431,59 @@ const commitCurrentScratch = () => {
   hasCommittedCurrentScratch.current = true;
 };
 
+const triggerWinConfetti = (winCount: number, totalWon: number = 0) => {
+  const colors = ["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#ffeaa7", "#a29bfe"];
+  
+  const duration = 4000;
+  const end = Date.now() + duration;
+
+  const frame = () => {
+    confetti({
+      particleCount: 8,
+      angle: 60,
+      spread: 85,
+      origin: { x: 0, y: 0.7 },
+      colors: colors,
+      startVelocity: 60,
+    });
+    confetti({
+      particleCount: 8,
+      angle: 120,
+      spread: 85,
+      origin: { x: 1, y: 0.7 },
+      colors: colors,
+      startVelocity: 60,
+    });
+    if (Date.now() < end) {
+      requestAnimationFrame(frame);
+    }
+  };
+  frame();
+
+  // Big center burst - more intense for multiple wins
+  const particleCount = 180 + (winCount * 20);
+  confetti({
+    particleCount: Math.min(particleCount, 300), // Cap at 300
+    spread: 120,
+    origin: { y: 0.5 },
+    colors: colors,
+    startVelocity: 50,
+  });
+
+  // Optional: Add special effect for big wins
+  if (totalWon >= 50) {
+    setTimeout(() => {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.3 },
+        colors: ["#ffd700", "#ffed4a", "#fbbf24"],
+        startVelocity: 55,
+      });
+    }, 500);
+  }
+};
+
 // Then update completeScratchSession to use the tracked index:
 const completeScratchSession = async (): Promise<void> => {
   if (!currentSession || !orderId) return;
@@ -496,6 +550,7 @@ const completeScratchSession = async (): Promise<void> => {
     if (isWin && congratsAudioRef.current) {
       congratsAudioRef.current.currentTime = 0;
       congratsAudioRef.current.play().catch(() => {});
+      triggerWinConfetti();
     }
 
     setSessionState('completed');
@@ -911,117 +966,132 @@ function checkPercentScratched(force = false) {
 
   // Reveal All function - batch reveals all remaining scratch cards
   async function handleRevealAll() {
-    if (revealed || hasCompletedRef.current || !canvasRef.current) return;
+  if (revealed || hasCompletedRef.current || !canvasRef.current) return;
 
-    // Close dialog
-    setShowRevealAllDialog(false);
+  // Close dialog
+  setShowRevealAllDialog(false);
 
-    // Stop any scratch sound
-    stopScratchSound();
+  // Stop any scratch sound
+  stopScratchSound();
 
-    // Mark as completed to prevent double triggers
-    hasCompletedRef.current = true;
-    setRevealed(true);
-    setPercentScratched(100);
+  // Mark as completed to prevent double triggers
+  hasCompletedRef.current = true;
+  setRevealed(true);
+  setPercentScratched(100);
 
-    // Get count of all remaining scratch cards
-    const remainingCount = scratchHistory.filter(s => s.status === "Not Scratched").length;
+  // Get count of all remaining scratch cards
+  const remainingCount = scratchHistory.filter(s => s.status === "Not Scratched").length;
 
-    if (remainingCount === 0) {
-      hasCompletedRef.current = false;
-      setRevealed(false);
-      return;
-    }
-    setHideImagesAfterRevealAll(true);
-
-    // 🔥 Force browser to reflow by faking resize event
-setTimeout(() => {
-  window.dispatchEvent(new Event("resize"));
-}, 50);
-
-
-    // Clear overlay immediately
-    clearOverlayInstant();
-   
-
-    try {
-      // Call batch reveal API to process all remaining scratch cards
-      const response = await fetch("/api/reveal-all-scratch-cards", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ 
-          orderId,
-          count: remainingCount
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to reveal all scratch cards");
-      }
-
-      const results = await response.json();
-
-      // Update scratch history with all results
-      setScratchHistory(prev => {
-        const updated = [...prev];
-        let notScratchedIndex = 0;
-
-        results.scratches.forEach((scratch: any) => {
-          // Find the next Not Scratched entry
-          while (notScratchedIndex < updated.length && updated[notScratchedIndex].status === "Scratched") {
-            notScratchedIndex++;
-          }
-
-          if (notScratchedIndex < updated.length) {
-            updated[notScratchedIndex] = {
-              status: "Scratched",
-              prize: scratch.prize,
-            };
-            notScratchedIndex++;
-          }
-        });
-
-        return updated;
-      });
-
-      // 🔒 CRITICAL: Invalidate queries to refresh balance and points in header
-      if (onRefreshBalance) {
-        onRefreshBalance();
-      }
-
-      // Reset state
-      hasCompletedRef.current = false;
-      isScratching.current = false; // Reset scratching state
-      setRevealed(false);
-      setSessionKey((k) => k + 1);
-
-      // Show summary message
-      // alert(`All scratch cards revealed! Check the progress table for your results.`);
-//      const wins = results.scratches.filter((s: any) =>
-//   s.prize?.type !== "none" &&
-//   s.prize?.type !== "try_again" &&
-//   s.prize?.value !== "Lose" &&
-//   s.prize?.value !== "Try Again"
-// ).length;
-
-// const losses = results.scratches.length - wins;
-
-// // Save for modal
-// setRevealAllSummary({ wins, losses });
-setShowRevealAllResultDialog(true);
-
-    } catch (error) {
-      console.error("Error revealing all scratch cards:", error);
-      alert("Failed to reveal all scratch cards. Please try again.");
-
-      // Reset on error to allow retry
-      hasCompletedRef.current = false;
-      isScratching.current = false; // Reset scratching state
-      setRevealed(false);
-      initCanvas();
-    }
+  if (remainingCount === 0) {
+    hasCompletedRef.current = false;
+    setRevealed(false);
+    return;
   }
+  setHideImagesAfterRevealAll(true);
+
+  // 🔥 Force browser to reflow by faking resize event
+  setTimeout(() => {
+    window.dispatchEvent(new Event("resize"));
+  }, 50);
+
+  // Clear overlay immediately
+  clearOverlayInstant();
+
+  try {
+    // Call batch reveal API to process all remaining scratch cards
+    const response = await fetch("/api/reveal-all-scratch-cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ 
+        orderId,
+        count: remainingCount
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to reveal all scratch cards");
+    }
+
+    const results = await response.json();
+
+    // Check if there are any wins in the results
+    let hasWins = false;
+    let winCount = 0;
+    let totalWon = 0;
+    
+    // Update scratch history with all results and check for wins
+    setScratchHistory(prev => {
+      const updated = [...prev];
+      let notScratchedIndex = 0;
+
+      results.scratches.forEach((scratch: any) => {
+        // Find the next Not Scratched entry
+        while (notScratchedIndex < updated.length && updated[notScratchedIndex].status === "Scratched") {
+          notScratchedIndex++;
+        }
+
+        if (notScratchedIndex < updated.length) {
+          // Check if this scratch was a win
+          const isWin = scratch.prize?.type !== "none" &&
+                       scratch.prize?.type !== "try_again" &&
+                       scratch.prize?.type !== "lose" &&
+                       scratch.prize?.value !== "Lose" &&
+                       scratch.prize?.value !== "Try Again" &&
+                       scratch.prize?.value !== "0" &&
+                       scratch.prize?.value !== 0;
+          
+          if (isWin) {
+            hasWins = true;
+            winCount++;
+            // Add to total if it's a cash win
+            if (scratch.prize?.type === "cash" && scratch.prize?.value) {
+              const value = parseFloat(scratch.prize.value);
+              if (!isNaN(value)) totalWon += value;
+            }
+          }
+
+          updated[notScratchedIndex] = {
+            status: "Scratched",
+            prize: scratch.prize,
+          };
+          notScratchedIndex++;
+        }
+      });
+
+      return updated;
+    });
+
+    // 🔒 CRITICAL: Invalidate queries to refresh balance and points in header
+    if (onRefreshBalance) {
+      onRefreshBalance();
+    }
+
+    // 🔥 ADD CONFETTI FOR BATCH WINS
+    if (hasWins) {
+      triggerWinConfetti(winCount, totalWon);
+    }
+
+    // Reset state
+    hasCompletedRef.current = false;
+    isScratching.current = false; // Reset scratching state
+    setRevealed(false);
+    setSessionKey((k) => k + 1);
+
+    // Show summary message
+    setShowRevealAllResultDialog(true);
+
+  } catch (error) {
+    console.error("Error revealing all scratch cards:", error);
+    alert("Failed to reveal all scratch cards. Please try again.");
+
+    // Reset on error to allow retry
+    hasCompletedRef.current = false;
+    isScratching.current = false; // Reset scratching state
+    setRevealed(false);
+    initCanvas();
+  }
+}
 
 //   if (isWinner) {
 //   const chosen = landmarkImages[Math.floor(Math.random() * landmarkImages.length)];

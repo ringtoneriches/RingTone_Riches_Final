@@ -215,11 +215,16 @@ export default function Footer() {
     </div>
   </div>
 
-  <p className="text-xs sm:text-sm text-center">
-    &copy; 2026 RingTone Riches. All rights reserved.
-  </p>
+  <p className="text-xs flex  items-center sm:text-sm text-center">
+            &copy; 2026 RingTone Riches <span className="text-[25px] mt-1">®</span>. All rights reserved.
+          </p>
 </div>
 
+{/* <div className="flex items-center justify-center mt-5">
+<p className="text-xs flex text-muted-foreground items-center sm:text-sm text-center">
+    RingTone Riches<span className="text-[25px] mt-1">®</span>
+  </p>
+</div> */}
       </div>
     </footer>
   );

@@ -12,7 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
+import confetti from 'canvas-confetti';
 import prize1 from "../../../../attached_assets/Car/astonmartin.png";
 import prize2 from "../../../../attached_assets/Car/audi.png";
 import prize3 from "../../../../attached_assets/Car/bentley.png";
@@ -375,6 +375,46 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     };
   }, []);
 
+
+  const triggerWinConfetti = () => {
+  const colors = ["#ffd700", "#ffed4a", "#fbbf24", "#f59e0b", "#22c55e", "#ef4444"];
+  
+  const duration = 3000;
+  const end = Date.now() + duration;
+
+  const frame = () => {
+    confetti({
+      particleCount: 5,
+      angle: 60,
+      spread: 80,
+      origin: { x: 0, y: 0.7 },
+      colors: colors,
+      startVelocity: 55,
+    });
+    confetti({
+      particleCount: 5,
+      angle: 120,
+      spread: 80,
+      origin: { x: 1, y: 0.7 },
+      colors: colors,
+      startVelocity: 55,
+    });
+    if (Date.now() < end) {
+      requestAnimationFrame(frame);
+    }
+  };
+  frame();
+
+  // Big burst in the center
+  confetti({
+    particleCount: 150,
+    spread: 100,
+    origin: { y: 0.5 },
+    colors: colors,
+    startVelocity: 45,
+  });
+};
+
   const drawWheel = (rotationAngle = rotation) => {
     if (segments.length === 0) return;
 
@@ -581,81 +621,95 @@ ctx.stroke();
     };
   };
 
-  const revealAllSpins = async () => {
-    if (isSpinning || !competitionId || !orderId) {
-      return;
+ const revealAllSpins = async () => {
+  if (isSpinning || !competitionId || !orderId) {
+    return;
+  }
+
+  const remainingCount = spinHistory.filter(s => s.status === "NOT SPUN").length;
+  if (remainingCount === 0) {
+    return;
+  }
+
+  setIsSpinning(true);
+  setShowRevealAllDialog(false);
+
+  try {
+    await refetchConfig();
+
+    const response = await fetch("/api/reveal-all-spins", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        competitionId,
+        orderId,
+        count: remainingCount,
+      }),
+      keepalive: true,
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to reveal all spins");
     }
 
-    const remainingCount = spinHistory.filter(s => s.status === "NOT SPUN").length;
-    if (remainingCount === 0) {
-      return;
-    }
-
-    setIsSpinning(true);
-    setShowRevealAllDialog(false); // Close dialog
-
-    try {
-      // Refetch configuration for real-time updates before batch processing
-      // console.log("Refetching configuration before revealing all spins...");
-      await refetchConfig();
-
-      // 🔒 CRITICAL: Call server with keepalive to ensure completion
-      const response = await fetch("/api/reveal-all-spins", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          competitionId,
-          orderId,
-          count: remainingCount,
-        }),
-        keepalive: true, // ✅ Ensure request completes even if user navigates away
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to reveal all spins");
-      }
-
-      const results = await response.json();
-
-      // Update spin history with all results
-      setSpinHistory(prev => {
-        const updated = [...prev];
-        let notSpunIndex = 0;
-
-        results.spins.forEach((spin: any) => {
-          // Find the next NOT SPUN entry
-          while (notSpunIndex < updated.length && updated[notSpunIndex].status === "SPUN") {
-            notSpunIndex++;
-          }
-
-          if (notSpunIndex < updated.length) {
-            updated[notSpunIndex] = {
-              status: "SPUN",
-              prize: spin.prize,
-            };
-            notSpunIndex++;
-          }
-        });
-
-        return updated;
+    const results = await response.json();
+    
+    // Check if there are any wins in the results
+    let hasWins = false;
+    if (results.spins && Array.isArray(results.spins)) {
+      hasWins = results.spins.some((spin: any) => {
+        return spin.prize.amount !== 0 && 
+               spin.prize.amount !== "-" && 
+               !spin.prize.brand?.toLowerCase().includes("lose");
       });
       
-      // 🔒 CRITICAL: Invalidate queries to refresh balance and points in header
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/spin-order", orderId] });
-
-      setIsSpinning(false);
-
-      // Show summary modal or notification
-      setShowRevealAllResultDialog(true);
-
-    } catch (error) {
-      console.error("Error revealing all spins:", error);
-      setIsSpinning(false);
-      alert("Failed to reveal all spins. Please try again.");
+      // OR check if the backend returns totalWon
+      if (results.totalWon && results.totalWon > 0) {
+        hasWins = true;
+      }
     }
-  };
+    
+    // Update spin history with all results
+    setSpinHistory(prev => {
+      const updated = [...prev];
+      let notSpunIndex = 0;
+
+      results.spins.forEach((spin: any) => {
+        while (notSpunIndex < updated.length && updated[notSpunIndex].status === "SPUN") {
+          notSpunIndex++;
+        }
+
+        if (notSpunIndex < updated.length) {
+          updated[notSpunIndex] = {
+            status: "SPUN",
+            prize: spin.prize,
+          };
+          notSpunIndex++;
+        }
+      });
+
+      return updated;
+    });
+    
+    queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/spin-order", orderId] });
+
+    setIsSpinning(false);
+
+    // 🔥 ADD CONFETTI FOR BATCH WINS
+    if (hasWins) {
+      triggerWinConfetti();
+    }
+
+    setShowRevealAllResultDialog(true);
+
+  } catch (error) {
+    console.error("Error revealing all spins:", error);
+    setIsSpinning(false);
+    alert("Failed to reveal all spins. Please try again.");
+  }
+};
 
   const spinWheel = async () => {
     // Check if all spins are used
@@ -832,6 +886,7 @@ ctx.stroke();
 if (isWin && congratsAudioRef.current) {
   congratsAudioRef.current.currentTime = 0;
   congratsAudioRef.current.play().catch(() => {});
+    triggerWinConfetti();
 }
 
           // ✅ Update spin history

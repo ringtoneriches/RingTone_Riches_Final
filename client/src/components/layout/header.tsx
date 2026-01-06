@@ -103,18 +103,18 @@ export default function Header() {
             {isAuthenticated ? (
               <>
                 <Link href="/wallet?tab=ringtone">
-                  <div className="hidden sm:flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all cursor-pointer group" data-testid="button-ringtone-points">
-                    <Music className="w-4 h-4 text-amber-400" />
-                    <span className="text-sm font-semibold text-white">{ringtonePoints.toLocaleString()}</span>
-                  </div>
-                </Link>
-                
-                <Link href="/wallet?tab=wallet">
-                  <div className="hidden sm:flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all cursor-pointer group" data-testid="button-wallet">
-                    <Wallet className="w-4 h-4 text-amber-400" />
-                    <span className="text-sm font-semibold text-white">£{parseFloat(user?.balance || "0").toFixed(2)}</span>
-                  </div>
-                </Link>
+                <div className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-full bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all cursor-pointer group" data-testid="button-ringtone-points">
+                  <Music className="w-3 h-3 md:w-4 md:h-4 text-amber-400" />
+                  <span className="text-xs md:text-sm font-semibold text-white">{ringtonePoints.toLocaleString()}</span>
+                </div>
+              </Link>
+
+              <Link href="/wallet?tab=wallet">
+                <div className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-full bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all cursor-pointer group" data-testid="button-wallet">
+                  <Wallet className="w-3 h-3 md:w-4 md:h-4 text-amber-400" />
+                  <span className="text-xs md:text-sm font-semibold text-white">£{parseFloat(user?.balance || "0").toFixed(2)}</span>
+                </div>
+              </Link>
                 
                 <Link href="/wallet?tab=account">
                 <div className="hidden lg:flex">
@@ -163,7 +163,7 @@ export default function Header() {
       {mobileOpen && (
       <div className="fixed inset-0 z-[9999] lg:hidden">
         <div 
-          className="absolute inset-0 bg-black/80 backdrop-blur-xl"
+          className="absolute inset-0 bg-black"
           onClick={() => setMobileOpen(false)}
         />
         
