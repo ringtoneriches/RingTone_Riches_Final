@@ -4,10 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 
 type LoginData = {
   email: string;
@@ -19,22 +18,80 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const loginMutation = useMutation<void, Error, LoginData>({
-    mutationFn: async (data) => {
-      const res = await apiRequest("/api/auth/login", "POST", data);
-      return res.json();
-    },
-    onSuccess: () => {
-      window.location.href = "/"; // Redirect to home after login
-    },
-    onError: (error) => {
-      toast({
-        variant: "destructive",
-        title: "Login Failed",
-        description: error.message || "Invalid email or password",
+  const loginMutation = useMutation({
+    mutationFn: async (data: LoginData) => {
+      // Use fetch directly to avoid the throwing issue
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+        credentials: "include",
       });
+
+      const responseData = await res.json();
+
+      // If not successful, throw with status and data
+      if (!res.ok) {
+        throw {
+          status: res.status,
+          data: responseData,
+        };
+      }
+
+      return responseData;
+    },
+    onSuccess: (data) => {
+      window.location.href = "/";
+    },
+    onError: (error: any) => {
+      const status = error.status;
+      const errorData = error.data || { message: "Something went wrong" };
+      
+      console.log("Login error:", status, errorData);
+
+      // Handle different error types
+      if (status === 403 && errorData.message?.includes("verify your email")) {
+        toast({
+          variant: "destructive",
+          title: "Email Not Verified",
+          description: "Please verify your email address before logging in. Check your inbox for the verification code.",
+        });
+        setLocation(`/verify-email?email=${encodeURIComponent(email)}`);
+      }
+      else if (status === 403 && errorData.message?.includes("account has been closed")) {
+        toast({
+          variant: "destructive",
+          title: "Account Closed",
+          description: "This account has been closed. Please contact support for assistance.",
+        });
+      }
+      else if (status === 403 && errorData.message?.includes("temporarily suspended")) {
+        const endsAt = errorData.endsAt ? new Date(errorData.endsAt).toLocaleDateString() : "later";
+        toast({
+          variant: "destructive",
+          title: "Account Suspended",
+          description: `Your account is temporarily suspended until ${endsAt} for wellbeing reasons.`,
+        });
+      }
+      else if (status === 401) {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: errorData.message || "Invalid email or password. Please check your credentials.",
+        });
+      }
+      else {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: errorData.message || "Something went wrong. Please try again.",
+        });
+      }
     },
   });
 
@@ -105,7 +162,7 @@ export default function Login() {
               <Button
                 type="submit"
                 className="w-full bg-yellow-600 hover:bg-ringtone-700 text-white font-bold"
-                disabled={loginMutation.isPending} // <-- FIXED
+                disabled={loginMutation.isPending}
               >
                 {loginMutation.isPending ? "LOGGING IN..." : "LOG IN"} 
               </Button>

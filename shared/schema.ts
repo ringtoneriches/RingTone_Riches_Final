@@ -46,6 +46,9 @@ export const users = pgTable("users", {
   disabledUntil: timestamp("disabled_until"),
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   emailVerified: boolean("email_verified").default(false),
+  verificationSentAt: timestamp("verification_sent_at"),
+  emailVerificationOtp: varchar("email_verification_otp"),
+  emailVerificationOtpExpiresAt: timestamp("email_verification_otp_expires_at"), 
   ringtonePoints: integer("ringtone_points").default(0),
   receiveNewsletter: boolean("receive_newsletter").default(false),
   isAdmin: boolean("is_admin").default(false),
@@ -63,6 +66,7 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
 
 // Competition types
 export const competitions = pgTable("competitions", {

@@ -59,6 +59,7 @@ import AdminSupport from "./pages/admin/support";
 import AdminWellbeing from "./pages/admin/well-being";
 import AdminRingtonePop from "./pages/admin/ringtone-pop";
 import AdminPopBalloon from "./pages/admin/admin-pop-balloon";
+import VerifyEmailPage from "./pages/verify-email";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -72,6 +73,7 @@ function Router() {
       {/* Public routes - always available */}
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/verify-email" component={VerifyEmailPage} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/termsAndConditions" component={TermsAndConditions} />

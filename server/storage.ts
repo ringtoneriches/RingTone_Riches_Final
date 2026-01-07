@@ -50,7 +50,7 @@ import {
   type InsertSupportMessage,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sum, sql, notInArray } from "drizzle-orm";
+import { eq, desc, and, sum, sql, notInArray, lt } from "drizzle-orm";
 import { hashPassword } from "./customAuth";
 
 export interface IStorage {

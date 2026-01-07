@@ -56,13 +56,15 @@ import { db } from "./db";
 import {stripe} from "./stripe";
 import { cashflows } from "./cashflows";
 import { and, asc, desc, eq, inArray, sql, like, gte, lte, or } from "drizzle-orm";
-import { count } from "drizzle-orm/sql";
+import { count, gt } from "drizzle-orm/sql";
 import { z } from "zod";
 import { sendOrderConfirmationEmail, sendWelcomeEmail, sendPromotionalEmail, sendPasswordResetEmail, sendTopupConfirmationEmail } from "./email";
 import { wsManager } from "./websocket";
 
 import { applySelfSuspensionExpiry, isNotRestricted } from "./restriction";
 import { createS3Uploader, deleteR2Object } from "./cloudeflare/cloudeflareHelper";
+import { OTPGenerator } from "./otp";
+import { sendVerificationEmail } from "./emails/verification-email";
 
 const supportUpload = createS3Uploader("support");
 const competitionUpload = createS3Uploader("competitions");
@@ -485,7 +487,7 @@ function normalizeCashflowsStatus(payment: any): {
   return { status: "UNKNOWN", paidAmount: 0 };
 }
 
-
+const FROM_EMAIL = "support@ringtoneriches.co.uk";
 
 async function processWalletTopup(
   userId: string,
@@ -567,11 +569,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 });
 
+app.post("/api/admin/verify-all-existing-users",  async (req, res) => {
+  try {
+    // Simple auth check (you can add proper admin auth)
+    const { adminKey } = req.body;
+    if (adminKey !== process.env.ADMIN_MIGRATION_KEY) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    console.log("🔧 Verifying ALL existing users...");
+    
+    const result = await db.execute(sql`
+      UPDATE users 
+      SET 
+        email_verified = true,
+        verification_sent_at = COALESCE(verification_sent_at, created_at),
+        email_verification_otp = NULL,
+        email_verification_otp_expires_at = NULL,
+        updated_at = NOW()
+      WHERE email IS NOT NULL 
+        AND email != ''
+    `);
+
+    // Count after update
+    const verifiedCount = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(sql`email_verified = true`);
+
+    res.json({ 
+      success: true, 
+      message: `Grandfathered all existing users into verified status`,
+      verifiedCount: verifiedCount[0].count,
+      rowCount: result.rowCount
+    });
+    
+  } catch (error) {
+    console.error("❌ Migration error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Migration failed",
+      error: error.message 
+    });
+  }
+});
+
   // Registration route
 app.post("/api/auth/register", async (req, res) => {
   try {
+    console.log('🚀 [register] Starting registration...');
+    console.log('   Request body:', JSON.stringify(req.body, null, 2));
+    
     const result = registerUserSchema.safeParse(req.body);
     if (!result.success) {
+      console.error('❌ [register] Validation failed:', result.error);
       return res.status(400).json({
         message: "Invalid registration data",
         errors: result.error.issues,
@@ -588,17 +639,22 @@ app.post("/api/auth/register", async (req, res) => {
       receiveNewsletter,
       birthMonth,
       birthYear,
-      referralCode, // ⭐ IMPORTANT
+      referralCode,
     } = req.body;
+
+    console.log('   Email to register:', email);
+    console.log('   Name:', firstName, lastName);
 
     // Check if user exists
     const existingUser = await storage.getUserByEmail(email);
     if (existingUser) {
+      console.log('❌ [register] User already exists:', email);
       return res.status(400).json({ message: "User already exists with this email" });
     }
 
     // Hash password
     const hashedPassword = await hashPassword(password || "");
+    console.log('   Password hashed');
 
     // Create DOB
     const dobString =
@@ -606,7 +662,14 @@ app.post("/api/auth/register", async (req, res) => {
         ? `${birthYear}-${String(birthMonth).padStart(2, "0")}-01`
         : undefined;
 
+    // Generate OTP
+    const otp = OTPGenerator.generate();
+    const expiresAt = OTPGenerator.getExpiryTime(10);
+    console.log('   Generated OTP:', otp);
+    console.log('   OTP expires at:', expiresAt);
+
     // Create new user
+    console.log('   Creating user in database...');
     const user = await storage.createUser({
       email,
       password: hashedPassword,
@@ -615,12 +678,146 @@ app.post("/api/auth/register", async (req, res) => {
       dateOfBirth: dobString,
       phoneNumber,
       receiveNewsletter: receiveNewsletter || false,
+      emailVerificationOtp: otp,
+      emailVerificationOtpExpiresAt: expiresAt,
+      verificationSentAt: new Date(),
+      referredBy: referralCode || null,
     });
+
+    console.log('✅ [register] User created:', user.id);
+
+    // Send verification email
+    console.log('   Sending verification email...');
+    const emailResult = await sendVerificationEmail(
+      email,
+      otp,
+      `${firstName} ${lastName}`.trim() || firstName || "User"
+    );
+
+    if (!emailResult.success) {
+      console.error('❌ [register] Email sending failed but user created');
+      console.error('   User ID:', user.id);
+      console.error('   Email error:', emailResult.error);
+      
+      // Still return success but note email issue
+      return res.status(201).json({
+        message: "Registration successful but we couldn't send the verification email. Please use 'Resend OTP' on the verification page.",
+        userId: user.id,
+        email: user.email,
+        emailSent: false,
+        requiresVerification: true,
+        warning: "Email delivery failed - use Resend OTP",
+      });
+    }
+
+    console.log('✅ [register] Registration complete!');
+    res.status(201).json({
+      message: "Registration successful! Please check your email for verification code.",
+      userId: user.id,
+      email: user.email,
+      emailSent: true,
+      expiresIn: "30 minutes",
+      requiresVerification: true,
+    });
+  } catch (error: any) {
+    console.error('🔥 [register] Registration error:', error);
+    console.error('   Stack:', error.stack);
+    res.status(500).json({ 
+      message: "Failed to register user",
+      error: error.message 
+    });
+  }
+});
+
+app.post("/api/test-email", async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    console.log("🧪 Testing email sending to:", email);
+    console.log("Resend API Key exists:", !!process.env.RESEND_API_KEY);
+    console.log("FROM_EMAIL:", FROM_EMAIL);
+    
+    const testOtp = "123456";
+    const result = await sendVerificationEmail(email, testOtp, "Test User");
+    
+    if (result.success) {
+      res.json({ 
+        success: true, 
+        message: "Test email sent successfully",
+        emailId: result.data?.id 
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        message: "Failed to send test email",
+        error: result.error 
+      });
+    }
+  } catch (error) {
+    console.error("Test email error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Test failed",
+      error: error.message 
+    });
+  }
+});
+
+app.post("/api/auth/verify-email", async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ 
+        message: "Email and OTP are required" 
+      });
+    }
+
+    // Get user
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if already verified
+    if (user.emailVerified) {
+      return res.status(400).json({ 
+        message: "Email already verified" 
+      });
+    }
+
+    // Check if OTP exists and matches
+    if (!user.emailVerificationOtp || user.emailVerificationOtp !== otp) {
+      return res.status(400).json({ 
+        message: "Invalid OTP" 
+      });
+    }
+
+    // Check if OTP is expired
+    if (!user.emailVerificationOtpExpiresAt || new Date() > user.emailVerificationOtpExpiresAt) {
+      return res.status(400).json({ 
+        message: "OTP has expired. Please request a new one." 
+      });
+    }
+
+    // ⭐⭐ 1. First, verify the email in database
+    await db.update(users)
+      .set({
+        emailVerified: true,
+        emailVerificationOtp: null, // Clear OTP after verification
+        emailVerificationOtpExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
 
     let bonusCashCredited = 0;
     let bonusPointsCredited = 0;
 
-    // Apply normal signup bonus
+    // ⭐⭐ 2. Apply normal signup bonus (MOVED from registration)
     try {
       const settings = await storage.getPlatformSettings();
       if (settings?.signupBonusEnabled) {
@@ -659,18 +856,13 @@ app.post("/api/auth/register", async (req, res) => {
       console.error("Signup bonus error:", bonusError);
     }
 
-    // ⭐⭐ REFERRAL SYSTEM — REWARDED ON SIGNUP ⭐⭐
+    // ⭐⭐ 3. Apply referral system (MOVED from registration)
     try {
-      if (referralCode) {
-        const referrer = await storage.getUserByReferralCode(referralCode);
+      if (user.referredBy) {
+        const referrer = await storage.getUserByReferralCode(user.referredBy);
 
         if (referrer && referrer.id !== user.id) {
-          // Save referredBy
-          await storage.saveUserReferral({
-            userId: user.id,
-            referrerId: referrer.id,
-          });
-
+          // Save referredBy is already stored in user.referredBy field
           console.log(`🎉 Referral: ${referrer.email} referred ${user.email}`);
 
           // ⭐ GIVE NEW USER 100 POINTS
@@ -696,25 +888,117 @@ app.post("/api/auth/register", async (req, res) => {
       console.error("Referral processing error:", referralError);
     }
 
-    // Send welcome email
+    // ⭐⭐ 4. Send welcome email (MOVED from registration)
     sendWelcomeEmail(email, {
-      userName: `${firstName} ${lastName}`.trim() || "there",
+      userName: `${user.firstName} ${user.lastName}`.trim() || "there",
       email,
     }).catch((err) => console.error("Failed to send welcome email:", err));
 
-    res.status(201).json({
-      message: "User registered successfully",
-      userId: user.id,
-      bonusCash: bonusCashCredited,
-      bonusPoints: bonusPointsCredited,
-      userName: `${firstName} ${lastName}`.trim() || firstName,
+    // Create session
+    (req as any).session.userId = user.id;
+
+    res.json({
+      message: "Email verified successfully! Welcome bonuses applied.",
+      verified: true,
+      bonusesApplied: {
+        cash: bonusCashCredited,
+        points: bonusPointsCredited,
+        referral: !!user.referredBy,
+      },
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        emailVerified: true,
+      },
     });
   } catch (error) {
-    console.error("Registration error:", error);
-    res.status(500).json({ message: "Failed to register user" });
+    console.error("Verification error:", error);
+    res.status(500).json({ message: "Failed to verify email" });
   }
 });
 
+
+app.post("/api/auth/resend-otp", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ 
+        message: "Email is required" 
+      });
+    }
+
+    // Get user
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if already verified
+    if (user.emailVerified) {
+      return res.status(400).json({ 
+        message: "Email already verified" 
+      });
+    }
+
+    // Check rate limiting (max 3 attempts per hour)
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    if (user.verificationSentAt && new Date(user.verificationSentAt) > oneHourAgo) {
+      // Simple check: if OTP was sent less than 20 minutes ago, limit resends
+      const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
+      if (user.verificationSentAt > twentyMinutesAgo) {
+        // Count how many times OTP was sent in last hour
+        const sentCount = await db.select()
+          .from(users)
+          .where(
+            and(
+              eq(users.email, email),
+              gt(users.verificationSentAt, oneHourAgo)
+            )
+          )
+          .then(rows => rows.length);
+        
+        if (sentCount >= 3) {
+          return res.status(429).json({
+            message: "Too many OTP requests. Please try again in 1 hour.",
+            retryAfter: "1 hour"
+          });
+        }
+      }
+    }
+
+    // Generate new OTP
+    const newOtp = OTPGenerator.generate();
+    const expiresAt = OTPGenerator.getExpiryTime(10);
+
+    // Update user with new OTP
+    await db.update(users)
+      .set({
+        emailVerificationOtp: newOtp,
+        emailVerificationOtpExpiresAt: expiresAt,
+        verificationSentAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
+
+    // Send new verification email
+    await sendVerificationEmail(
+      email,
+      newOtp,
+      `${user.firstName} ${user.lastName}`.trim() || user.firstName || "User"
+    );
+
+    res.json({
+      message: "New OTP sent successfully to your email",
+      expiresIn: "30 minutes",
+    });
+  } catch (error) {
+    console.error("Resend OTP error:", error);
+    res.status(500).json({ message: "Failed to resend OTP" });
+  }
+});
 
   // Login route
 app.post("/api/auth/login", async (req, res) => {
@@ -723,7 +1007,8 @@ app.post("/api/auth/login", async (req, res) => {
     if (!result.success) {
       return res.status(400).json({ message: "Invalid login data" });
     }
-     const now = new Date();
+    
+    const now = new Date();
     const { email, password } = result.data;
 
     // Get user by email
@@ -732,7 +1017,18 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-  // 1️⃣ Check admin disables first
+    // ⭐⭐ CHECK IF EMAIL IS VERIFIED
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        code: "EMAIL_NOT_VERIFIED",
+        message: "Please verify your email before logging in.",
+        email: user.email,
+        canResend: true,
+        userId: user.id,
+      });
+    }
+
+    // 1️⃣ Check admin disables first
     if (user.disabled) {
       if (user.disabledUntil && now > new Date(user.disabledUntil)) {
         await db.update(users)
@@ -779,13 +1075,53 @@ app.post("/api/auth/login", async (req, res) => {
         lastName: freshUser.lastName,
         balance: freshUser.balance,
         ringtonePoints: freshUser.ringtonePoints,
-        isAdmin: freshUser.isAdmin || false
+        isAdmin: freshUser.isAdmin || false,
+        emailVerified: freshUser.emailVerified,
       },
     });
 
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Failed to log in" });
+  }
+});
+
+
+app.get("/api/auth/verification-status/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if OTP is expired
+    let otpExpired = false;
+    let timeRemaining = 0;
+    
+    if (user.emailVerificationOtpExpiresAt) {
+      const now = new Date();
+      const expiresAt = new Date(user.emailVerificationOtpExpiresAt);
+      otpExpired = now > expiresAt;
+      
+      if (!otpExpired) {
+        timeRemaining = Math.floor((expiresAt.getTime() - now.getTime()) / 1000); // seconds
+      }
+    }
+
+    res.json({
+      emailVerified: user.emailVerified,
+      verificationSentAt: user.verificationSentAt,
+      hasOtp: !!user.emailVerificationOtp,
+      otpExpired: otpExpired,
+      timeRemaining: timeRemaining,
+      canResend: !user.emailVerified,
+      expiresAt: user.emailVerificationOtpExpiresAt,
+    });
+  } catch (error) {
+    console.error("Status check error:", error);
+    res.status(500).json({ message: "Failed to check status" });
   }
 });
 
@@ -2534,7 +2870,7 @@ app.post("/api/play-spin-wheel", isAuthenticated,  async (req: any, res) => {
 
       await storage.createWinner({
         userId,
-        competitionId: null,
+        competitionId,
         prizeDescription: selectedSegment.label,
         prizeValue: `£${amount}`,
         imageUrl: null,
@@ -2564,7 +2900,7 @@ app.post("/api/play-spin-wheel", isAuthenticated,  async (req: any, res) => {
 
       await storage.createWinner({
         userId,
-        competitionId: null,
+        competitionId,
         prizeDescription: selectedSegment.label,
         prizeValue: `${points} Ringtones`,
         imageUrl: null,
@@ -3467,7 +3803,7 @@ app.post("/api/play-scratch-carddd", isAuthenticated, async (req: any, res) => {
 
       await storage.createWinner({
         userId,
-        competitionId: null,
+        competitionId,
         prizeDescription: "Scratch Card Prize",
         prizeValue: `£${amount}`,
         imageUrl: null,
@@ -3500,7 +3836,7 @@ app.post("/api/play-scratch-carddd", isAuthenticated, async (req: any, res) => {
 
       await storage.createWinner({
         userId,
-        competitionId: null,
+        competitionId,
         prizeDescription: "Scratch Card Prize",
         prizeValue: `${points} Ringtones`,
         imageUrl: null,

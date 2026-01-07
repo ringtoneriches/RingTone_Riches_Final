@@ -1,3 +1,4 @@
+// Update your Register component
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { WelcomeBonusPopup } from "@/components/welcome-bonus-popup";
+// Remove WelcomeBonusPopup import - we'll show this after verification
 
 type RegisterForm = {
   firstName: string;
@@ -26,14 +27,15 @@ type RegisterForm = {
 type RegisterResponse = {
   message: string;
   userId: string;
-  bonusCash?: number;
-  bonusPoints?: number;
-  userName?: string;
+  email: string;
+  emailSent: boolean;
+  expiresIn: string;
+  requiresVerification: boolean;
 };
 
 export default function Register() {
-    const [, setLocation] = useLocation();
-   const referralCode = new URLSearchParams(window.location.search).get("ref");
+  const [, setLocation] = useLocation();
+  const referralCode = new URLSearchParams(window.location.search).get("ref");
   const [formData, setFormData] = useState<RegisterForm>({
     firstName: "",
     lastName: "",
@@ -43,14 +45,8 @@ export default function Register() {
     birthYear: "",
     receiveNewsletter: false,
     phoneNumber: "",
-    referralCode:""
+    referralCode: ""
   });
-  const [showBonusPopup, setShowBonusPopup] = useState(false);
-  const [bonusData, setBonusData] = useState<{
-    cash: number;
-    points: number;
-    userName: string;
-  }>({ cash: 0, points: 0, userName: "" });
   const { toast } = useToast();
 
   const registerMutation = useMutation({
@@ -59,25 +55,14 @@ export default function Register() {
       return res.json();
     },
     onSuccess: (data: RegisterResponse) => {
-      const hasBonusCash = (data.bonusCash || 0) > 0;
-      const hasBonusPoints = (data.bonusPoints || 0) > 0;
+      // Show success message
+      toast({
+        title: "Registration Successful!",
+        description: "Please check your email for verification code.",
+      });
       
-      if (hasBonusCash || hasBonusPoints) {
-        // Show bonus popup if user received any bonus
-        setBonusData({
-          cash: data.bonusCash || 0,
-          points: data.bonusPoints || 0,
-          userName: data.userName || formData.firstName || "there",
-        });
-        setShowBonusPopup(true);
-      } else {
-        // No bonus - show regular toast and redirect
-        toast({
-          title: "Registration Successful",
-          description: "Your account has been created. Please log in.",
-        });
-        setLocation("/login");
-      }
+      // Redirect to verification page with email
+      setLocation(`/verify-email?email=${encodeURIComponent(data.email)}`);
     },
     onError: (error: any) => {
       toast({
@@ -87,15 +72,6 @@ export default function Register() {
       });
     },
   });
-
-  const handleBonusPopupClose = () => {
-    setShowBonusPopup(false);
-    toast({
-      title: "Registration Successful",
-      description: "Your account has been created. Please log in.",
-    });
-    setLocation("/login");
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,8 +108,8 @@ export default function Register() {
     }
 
     registerMutation.mutate({
-       ...formData,
-  referralCode: referralCode || "",
+      ...formData,
+      referralCode: referralCode || "",
     });
   };
 
@@ -217,19 +193,19 @@ export default function Register() {
               </div>
 
               {/* Phone Number */}
-            <div>
-              <Label htmlFor="phoneNumber" className="text-white">Phone Number</Label>
-              <Input
-                id="phoneNumber"
-                type="tel"
-                value={formData.phoneNumber}
-                onChange={(e) => setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))}
-                className="bg-white text-black border-gray-300 mt-2"
-                data-testid="input-phone-number"
-                placeholder="+44 1234 567890"
-                required
-              />
-            </div>
+              <div>
+                <Label htmlFor="phoneNumber" className="text-white">Phone Number</Label>
+                <Input
+                  id="phoneNumber"
+                  type="tel"
+                  value={formData.phoneNumber}
+                  onChange={(e) => setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                  className="bg-white text-black border-gray-300 mt-2"
+                  data-testid="input-phone-number"
+                  placeholder="+44 1234 567890"
+                  required
+                />
+              </div>
 
               {/* Email */}
               <div>
@@ -268,7 +244,7 @@ export default function Register() {
                   data-testid="checkbox-newsletter"
                 />
                 <Label htmlFor="newsletter" className="text-white text-sm">
-                  If you would like to recive our marketing via Email and SMS please tick here.
+                  If you would like to receive our marketing via Email and SMS please tick here.
                 </Label>
               </div>
 
@@ -305,15 +281,6 @@ export default function Register() {
             </form>
           </CardContent>
         </Card>
-
-        {/* Welcome Bonus Popup */}
-        <WelcomeBonusPopup
-          isOpen={showBonusPopup}
-          onClose={handleBonusPopupClose}
-          bonusCash={bonusData.cash}
-          bonusPoints={bonusData.points}
-          userName={bonusData.userName}
-        />
       </div>
     </div>
   );
