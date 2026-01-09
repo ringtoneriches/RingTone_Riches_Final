@@ -194,7 +194,7 @@ export default function Home() {
                     <div className="relative rounded-2xl overflow-hidden border-2 border-amber-500/60 shadow-[0_0_100px_rgba(212,175,55,0.5)]">
                       {/* Hero Image - Large and Clean */}
                       <img 
-                        src="/attached_assets/trophy_winner_celebration_moment.png"
+                        src="/attached_assets/herosection.png"
                         alt="Win Amazing Prizes - Spin, Scratch, Win Instantly"
                         className="w-full h-auto object-cover"
                       />

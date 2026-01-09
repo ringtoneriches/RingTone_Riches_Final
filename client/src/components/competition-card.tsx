@@ -166,11 +166,11 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                   {Math.round(((competition.soldTickets || 0) / competition.maxTickets) * 100)}% progress
                 </span>
               </div>
-              <span className={`text-[10px] sm:text-xs font-semibold ${
+              {/* <span className={`text-[10px] sm:text-xs font-semibold ${
                 isAlmostGone ? 'text-red-400' : isHot ? 'text-amber-400' : 'text-slate-400'
               }`}>
                 {remainingTickets} left
-              </span>
+              </span> */}
             </div>
           )}
               

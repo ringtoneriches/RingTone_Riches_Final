@@ -1000,7 +1000,7 @@ if (congratsAudioRef.current) {
         <img
         onClick={spinWheel}
           src="/attached_assets/Arcade/spin-cropped.svg"
-          className="absolute w-28 h-28 md:w-[180px] md:h-[180px] z-10 cursor-pointer"
+          className="absolute w-24 h-24 md:w-[160px] bottom-[36%] sm:bottom-[37%] md:h-[160px] z-10 cursor-pointer"
           alt="Center Circle"
           />
         
