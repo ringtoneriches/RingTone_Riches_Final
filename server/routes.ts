@@ -7905,12 +7905,14 @@ app.get(
 );
 
 // --- Wheel 2 update ---
+// --- Wheel 2 update ---
 app.put(
   "/api/admin/game-spin-2-config",
   isAuthenticated,
   isAdmin,
-  async (req, res) => {
+  async (req: any, res) => {
     try {
+      const { spinWheel2Configs, spinWins } = await import("@shared/schema");
       const { segments, maxSpinsPerUser, isVisible } = req.body;
 
       if (!Array.isArray(segments) || segments.length !== 12) {
@@ -7919,29 +7921,62 @@ app.put(
         });
       }
 
-      const existingConfig = await storage.getSpinWheel2Config();
-      const existingSegmentsById = new Map(
-        (existingConfig?.segments || []).map((s) => [s.id, s])
-      );
+      // Get current wins from database for wheel2
+      const spinWinsData = await db
+        .select({
+          segmentId: spinWins.segmentId,
+          winCount: sql<number>`count(*)`,
+        })
+        .from(spinWins)
+        .where(eq(spinWins.wheelType, "wheel2"))
+        .groupBy(spinWins.segmentId);
 
-      const mergedSegments = segments.map((incoming) => {
-        const existing = existingSegmentsById.get(incoming.id);
-        return {
-          ...incoming,
-          currentWins: existing?.currentWins ?? 0, // preserve wins
-        };
+      const winStats: Record<string, number> = {};
+      spinWinsData.forEach((win) => {
+        winStats[win.segmentId] = Number(win.winCount);
       });
 
-      await storage.updateSpinWheel2Config({
-        segments: mergedSegments,
-        maxSpinsPerUser,
-        isVisible,
-      });
+      // Add currentWins to segments
+      const segmentsWithWins = segments.map((segment: any) => ({
+        ...segment,
+        currentWins: winStats[segment.id] || 0,
+      }));
 
-      res.json({ success: true });
-    } catch (err) {
-      console.error("Spin wheel save failed:", err);
-      res.status(500).json({ message: "Failed to save spin config" });
+      const [existing] = await db
+        .select()
+        .from(spinWheel2Configs)
+        .where(eq(spinWheel2Configs.id, "active"));
+
+      if (existing) {
+        const [updated] = await db
+          .update(spinWheel2Configs)
+          .set({
+            segments: segmentsWithWins,
+            maxSpinsPerUser: maxSpinsPerUser ?? null,
+            isVisible: isVisible ?? existing.isVisible,
+            updatedAt: new Date(),
+          })
+          .where(eq(spinWheel2Configs.id, "active"))
+          .returning();
+
+        res.json(updated);
+      } else {
+        const [created] = await db
+          .insert(spinWheel2Configs)
+          .values({
+            id: "active",
+            segments: segmentsWithWins,
+            maxSpinsPerUser: maxSpinsPerUser ?? null,
+            isVisible: isVisible ?? true,
+            isActive: true,
+          })
+          .returning();
+
+        res.json(created);
+      }
+    } catch (error) {
+      console.error("Error updating spin config:", error);
+      res.status(500).json({ message: "Failed to update spin configuration" });
     }
   }
 );
