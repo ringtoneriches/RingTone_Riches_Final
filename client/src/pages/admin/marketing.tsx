@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Mail, Users, Send, TrendingUp, Plus, Trash2, Eye, ArrowBigLeft, ArrowBigRight } from "lucide-react";
+import { Mail, Users, Send, TrendingUp, Plus, Trash2, Eye, ArrowBigLeft, ArrowBigRight, Download } from "lucide-react";
 import { format } from "date-fns";
 
 interface User {
@@ -66,12 +66,68 @@ const campaignFormSchema = z.object({
 
 type CampaignFormData = z.infer<typeof campaignFormSchema>;
 
+// Function to convert data to CSV format
+const convertToCSV = (data: any[], headers: string[]): string => {
+  // Create header row
+  const headerRow = headers.join(",");
+  
+  // Create data rows
+  const dataRows = data.map(item => {
+    const row = headers.map(header => {
+      let value = "";
+      
+      switch (header) {
+        case "Name":
+          const firstName = item.firstName || "";
+          const lastName = item.lastName || "";
+          value = `${firstName} ${lastName}`.trim();
+          break;
+        case "Email":
+          value = item.email || "";
+          break;
+        case "Phone":
+          value = item.phoneNumber || "";
+          break;
+        case "Subscribed Date":
+          value = item.createdAt ? format(new Date(item.createdAt), "yyyy-MM-dd HH:mm:ss") : "";
+          break;
+      }
+      
+      // Escape commas and quotes for CSV
+      if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+        value = `"${value.replace(/"/g, '""')}"`;
+      }
+      
+      return value;
+    });
+    
+    return row.join(",");
+  });
+  
+  return [headerRow, ...dataRows].join("\n");
+};
+
+// Function to download CSV file
+const downloadCSV = (csvContent: string, filename: string) => {
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  link.style.visibility = "hidden";
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 export default function AdminMarketing() {
   const { toast } = useToast();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [viewCampaign, setViewCampaign] = useState<Campaign | null>(null);
   const [sendConfirmId, setSendConfirmId] = useState<string | null>(null);
-  const [currentPage , setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
 
   const form = useForm<CampaignFormData>({
@@ -190,10 +246,39 @@ export default function AdminMarketing() {
     createCampaignMutation.mutate(data);
   };
 
+  const handleDownloadCSV = () => {
+    if (!subscribers || subscribers.length === 0) {
+      toast({
+        title: "No data to export",
+        description: "There are no subscribers to download.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    const totalPages= Math.ceil(subscribers.length / itemsPerPage);
+    try {
+      const headers = ["Name", "Email", "Phone", "Subscribed Date"];
+      const csvContent = convertToCSV(subscribers, headers);
+      const filename = `subscribers_${format(new Date(), "yyyy-MM-dd_HH-mm")}.csv`;
+      
+      downloadCSV(csvContent, filename);
+      
+      toast({
+        title: "CSV downloaded successfully",
+        description: `${subscribers.length} subscribers exported to ${filename}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to download CSV",
+        description: "An error occurred while generating the CSV file.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const totalPages = Math.ceil(subscribers.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedSubscribers  = subscribers.slice(startIndex , startIndex + itemsPerPage);
+  const paginatedSubscribers = subscribers.slice(startIndex, startIndex + itemsPerPage);
 
   return (
     <AdminLayout>
@@ -267,11 +352,22 @@ export default function AdminMarketing() {
 
         {/* Newsletter Subscribers */}
         <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader>
-            <CardTitle className="text-white">Newsletter Subscribers</CardTitle>
-            <CardDescription className="text-gray-400">
-              List of all users who subscribed to your newsletter
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-white">Newsletter Subscribers</CardTitle>
+              <CardDescription className="text-gray-400">
+                List of all users who subscribed to your newsletter
+              </CardDescription>
+            </div>
+            <Button
+              onClick={handleDownloadCSV}
+              variant="outline"
+              className="border-green-600 text-green-400 hover:bg-green-600 hover:text-white"
+              data-testid="button-download-csv"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download CSV
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -287,14 +383,13 @@ export default function AdminMarketing() {
                 <TableBody>
                   {paginatedSubscribers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-gray-500 py-8">
+                      <TableCell colSpan={4} className="text-center text-gray-500 py-8">
                         No subscribers yet
                       </TableCell>
                     </TableRow>
                   ) : (
                     paginatedSubscribers.map((subscriber) => (
                       <TableRow key={subscriber.id} className="border-zinc-800" data-testid={`row-subscriber-${subscriber.id}`}>
-                        
                         <TableCell className="text-gray-300">
                           {subscriber.firstName && subscriber.lastName
                             ? `${subscriber.firstName} ${subscriber.lastName}`
@@ -314,31 +409,31 @@ export default function AdminMarketing() {
           </CardContent>
         </Card>
 
-          {/* PAGINATION */}
-          <div className="flex justify-center items-center gap-4 my-6">
-            <Button
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p - 1)}
-              disabled={currentPage === 1}
-            >
-              <ArrowBigLeft />
-            </Button>
-  
-            <span className="font-medium">
-              Page {currentPage} of {totalPages}
-            </span>
-  
-            <Button
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p + 1)}
-              disabled={currentPage === totalPages}
-            >
-                <ArrowBigRight />
-            </Button>
-          </div>
-  
-          {/* ENTRY COUNT */}
-        <p className="text-center text-sm text-muted-foreground">
+        {/* PAGINATION */}
+        <div className="flex justify-center items-center gap-4 my-6">
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage((p) => p - 1)}
+            disabled={currentPage === 1}
+          >
+            <ArrowBigLeft />
+          </Button>
+
+          <span className="font-medium text-white">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage((p) => p + 1)}
+            disabled={currentPage === totalPages}
+          >
+            <ArrowBigRight />
+          </Button>
+        </div>
+
+        {/* ENTRY COUNT */}
+        <p className="text-center text-sm text-gray-400">
           Showing {paginatedSubscribers?.length || 0} of {subscribers?.length || 0} filtered entries
         </p>
 

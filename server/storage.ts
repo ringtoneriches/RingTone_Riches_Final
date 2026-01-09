@@ -235,6 +235,8 @@ async initializeAdminUser(): Promise<void> {
 }
 
 
+
+
   async createUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
@@ -267,6 +269,11 @@ async updateUserBalance(userId: string, amount: string): Promise<User> {
   return user;
 }
 
+async incrementCompetitionSoldTickets(competitionId: string, qty: number): Promise<void> {
+  await db.update(competitions)
+    .set({ soldTickets: sql`${competitions.soldTickets} + ${qty}` })
+    .where(eq(competitions.id, competitionId));
+}
 
   async updateStripeCustomerId(userId: string, customerId: string): Promise<User> {
     const [user] = await db

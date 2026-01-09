@@ -370,6 +370,7 @@ const isAuthenticated = !!user;
   const [selectedOrder, setSelectedOrder] =
     useState<OrderWithCompetition | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const ordersPerPage = 15;
 
@@ -520,25 +521,19 @@ function formatAmount(transaction: Transaction) {
   });
 
   // Orders pagination
-    const incompleteGames = orders.filter(
-    (order) =>
-      (order.competitions?.type === "spin" ||
-        order.competitions?.type === "scratch" ||
-        order.competitions?.type === "pop") &&
-      order.orders.status === "completed" &&
-      (order.remainingPlays || 0) > 0,
-  );
+const incompleteGames = orders.filter(
+  (order) =>
+    (order.competitions?.type === "spin" ||
+      order.competitions?.type === "scratch" ||
+      order.competitions?.type === "pop") &&
+    order.orders.status === "completed" &&
+    (order.remainingPlays || 0) > 0,
+);
 
-  const completedOrders = orders.filter(
-    (order) =>
-      !(
-        (order.competitions?.type === "spin" ||
-          order.competitions?.type === "scratch" ||
-          order.competitions?.type === "pop") &&
-        order.orders.status === "completed" &&
-        (order.remainingPlays || 0) > 0
-      ),
-  );
+// Orders that are fully completed
+const completedOrders = orders.filter(
+  (order) => order.orders.status === "completed"
+);
 
   const totalPages = Math.ceil(completedOrders.length / ordersPerPage);
   const startIndex = (currentPage - 1) * ordersPerPage;
@@ -903,10 +898,10 @@ const handleResumeOrder = () => {
   // Function to dismiss the banner
   const handleDismissBanner = () => {
     clearPendingOrder();
-    toast({
-      title: "Reminder",
-      description: "You can always find pending orders in the 'Orders' tab",
-    });
+    // toast({
+    //   title: "Reminder",
+    //   description: "You can always find pending orders in the 'Orders' tab",
+    // });
   };
   
   if (isLoading) {
@@ -958,9 +953,9 @@ const handleResumeOrder = () => {
                 <p className="text-gray-300 text-sm">
                  Topup your wallet . You have a pending order waiting to be completed.
                 </p>
-                <p className="text-gray-300 text-sm">
+                {/* <p className="text-gray-300 text-sm">
                  Or you can complete it later in the <span className="font-bold">'Orders'</span> tab.
-                </p>
+                </p> */}
               </div>
             </div>
             
@@ -1246,7 +1241,7 @@ const handleResumeOrder = () => {
                                   {getTransactionTypeBadge(transaction.type)}
                                 </div>
                               <p className="font-medium text-sm text-white">
-                                {transaction.description.replace("Spin Wheel wheel2", "The festive spin win")}
+                                {transaction.description.replace("Spin Wheel wheel2", "The retro ringtone spin win")}
                               </p>
 
                                 <p className="text-xs text-gray-400 mt-1">
@@ -1558,7 +1553,7 @@ const handleResumeOrder = () => {
                                         } else {
                                           // Completed order → open details modal
                                           setSelectedOrder(order);
-                                          setDialogOpen(true);
+                                          setOrderDialogOpen(true); 
                                         }
                                       }}
                                       className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-bold hover:from-yellow-500 hover:to-yellow-400 transition-all"
@@ -2388,8 +2383,8 @@ const handleResumeOrder = () => {
       </div>
 
       <OrderDetailsDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        open={orderDialogOpen}
+        onOpenChange={setOrderDialogOpen}
         order={selectedOrder}
       />
 

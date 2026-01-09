@@ -57,7 +57,7 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
   const getTitle = () => {
     if (orderType === "spin") {
       if (wheelType === "wheel2") {
-        return "The Festive Spin Purchase";
+        return "RETRO RINGTONE SPIN Purchase";
       }
       return "The Luxury Car Spin Purchase";
     }
@@ -75,7 +75,7 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
   const getItemName = () => {
     if (orderType === "spin") {
       if (wheelType === "wheel2") {
-        return "Festive Spins";
+        return "Retro Spins";
       }
       return "Spins";
     }

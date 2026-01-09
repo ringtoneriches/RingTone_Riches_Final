@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
-import R_Prize from "../../../../attached_assets/R_prize.png";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,63 +12,41 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import prize1 from "../../../../attached_assets/Christmas/Bauble.png";
-import prize2 from "../../../../attached_assets/Christmas/Bell.png";
-import prize3 from "../../../../attached_assets/Christmas/Candle.png";
-import prize4 from "../../../../attached_assets/Christmas/Candy cane.png";
-import prize5 from "../../../../attached_assets/Christmas/Christmas tree.png";
-import prize6 from "../../../../attached_assets/Christmas/Elf.png";
-import prize7 from "../../../../attached_assets/Christmas/Gingerbread man.png";
-import prize8 from "../../../../attached_assets/Christmas/Gold star.png";
-import prize9 from "../../../../attached_assets/Christmas/Holly.png";
-import prize10 from "../../../../attached_assets/Christmas/Mitten.png";
-import prize11 from "../../../../attached_assets/Christmas/No win.png";
-import prize12 from "../../../../attached_assets/Christmas/Present.png";
-import prize13 from "../../../../attached_assets/Christmas/Ringtone.png";
-import prize14 from "../../../../attached_assets/Christmas/Rudolph.png";
-import prize15 from "../../../../attached_assets/Christmas/Santa.png";
-import prize16 from "../../../../attached_assets/Christmas/Santas sack.png";
-import prize17 from "../../../../attached_assets/Christmas/Sleigh.png";
-import prize18 from "../../../../attached_assets/Christmas/Snow globe.png";
-import prize19 from "../../../../attached_assets/Christmas/Snowflake.png";
-import prize20 from "../../../../attached_assets/Christmas/Snowman.png";
-import prize21 from "../../../../attached_assets/Christmas/Stocking.png";
-import prize22 from "../../../../attached_assets/Christmas/Wreath.png";
+import prize1 from "../../../../attached_assets/Arcade/bomb.svg";
+import prize2 from "../../../../attached_assets/Arcade/chemical.svg";
+import prize3 from "../../../../attached_assets/Arcade/coin.svg";
+import prize4 from "../../../../attached_assets/Arcade/current.svg";
+import prize5 from "../../../../attached_assets/Arcade/diamond.svg";
+import prize6 from "../../../../attached_assets/Arcade/fire.svg";
+import prize7 from "../../../../attached_assets/Arcade/heart.svg";
+import prize8 from "../../../../attached_assets/Arcade/key.svg";
+import prize9 from "../../../../attached_assets/Arcade/shield.svg";
+import prize10 from "../../../../attached_assets/Arcade/star.svg";
+import prize11 from "../../../../attached_assets/Arcade/treasure.svg";
+import prize12 from "../../../../attached_assets/Arcade/dead.svg";
+import background from "../../../../attached_assets/Arcade/arcadeBg.mp4";
 
-import pointer from "../../../../attached_assets/pointer.png";
-import ring from "../../../../attached_assets/wheel2ring.png";
+import pointer from "../../../../attached_assets/Arcade/arrowdown.svg";
+import middlebtn from "../../../../attached_assets/Arcade/middlebtn.svg";
+import ring from "../../../../attached_assets/Arcade/ring.svg"
 import centerVideo from "../../../../attached_assets/spinweel2video.mp4"
 import congrats from "../../../../attached_assets/sounds/congrats.mp3"
 import { useLocation } from "wouter";
 
 // Icon mapping for admin configuration - uses car PNG images
-const CHRISTMAS_ICON_MAP: Record<string, any> = {
-  // Cash Prizes (10)
-  Santa: prize15,              
-  Sleigh: prize17,             
-  SantasSack: prize16,         
-  Rudolph: prize14,            
-  Elf: prize6,                
-  GoldStar: prize8,            
-  ChristmasTree: prize5,      
-  Present: prize12,            
-  Snowman: prize20,            
-  Bauble: prize1,              
-  Stocking: prize21,
-  Wreath: prize22,
-  // Ringtone Points (10)
-  Snowflake: prize19,          
-  Holly: prize9,               
-  CandyCane: prize4,          
-  Mitten: prize10,            
-  Candle: prize3,              
-  GingerbreadMan: prize7,      
-  SnowGlobe: prize18,          
-  Bell: prize2,                
-  
-  // Special
-  R_Prize: prize13,            
-  // NoWin: prize11,              
+export const ARCADE_ICON_MAP: Record<string, any> = {
+  Bomb: prize1,
+  Chemical: prize2,
+  Coin: prize3,
+  Current: prize4,
+  Diamond: prize5,
+  Fire: prize6,
+  Heart: prize7,
+  Key: prize8,
+  Shield: prize9,
+  Star: prize10,
+  Treasure: prize11,
+  Dead: prize12,
 };
 
 interface SpinWheelProps {
@@ -145,7 +122,7 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
   onAllSpinsComplete
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const centerVideoRef = useRef<HTMLVideoElement>(null);
+
   const backgroundVideoRef = useRef<HTMLVideoElement>(null);
   const [winner, setWinner] = useState<string | null>(null);
   const [loadedImages, setLoadedImages] = useState<HTMLImageElement[]>([]);
@@ -178,7 +155,7 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
   // Transform admin wheel config to component format (memoized to prevent infinite re-renders)
   const segments = useMemo(() => {
     return (wheelConfig?.segments || []).map((seg) => {
-      const icon = CHRISTMAS_ICON_MAP[seg.iconKey] || seg.iconKey;
+      const icon = ARCADE_ICON_MAP[seg.iconKey] || seg.iconKey;
       let amount: number | string = 0;
 
       if (seg.rewardType === "cash") {
@@ -201,7 +178,7 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
   }, [wheelConfig?.segments]);
 
   const [rotation, setRotation] = useState(
-    (2 * Math.PI) / Math.max(segments.length, 1) / 1.3,
+    (2 * Math.PI) / Math.max(segments.length, 1) / 2,
   );
 
   // Initialize spin history when ticketCount changes
@@ -268,12 +245,56 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
     const imageLoadPromises = segments.map((segment, index) => {
       return new Promise<void>((resolve, reject) => {
         // Handle cross/lose segments immediately
-        if (segment.isCross || segment.icon === "❌") {
-          imagesArray[index] = new Image();
-          loadedCount++;
-          resolve();
-          return;
+        if (segment.icon) {
+  // Load the image even for "lose" segments
+  const img = new Image();
+  
+  img.onload = async () => {
+    try {
+      await img.decode();
+      if (isMounted) {
+        imagesArray[index] = img;
+        loadedCount++;
+        setLoadedImages([...imagesArray]);
+        if (loadedCount === segments.length) {
+          setAllImagesLoaded(true);
         }
+      }
+      resolve();
+    } catch (decodeError) {
+      // Handle error
+      if (isMounted) {
+        imagesArray[index] = img;
+        loadedCount++;
+        setLoadedImages([...imagesArray]);
+        if (loadedCount === segments.length) {
+          setAllImagesLoaded(true);
+        }
+      }
+      resolve();
+    }
+  };
+  
+  img.onerror = () => {
+    // Handle error
+    if (isMounted) {
+      imagesArray[index] = new Image();
+      loadedCount++;
+      setLoadedImages([...imagesArray]);
+      if (loadedCount === segments.length) {
+        setAllImagesLoaded(true);
+      }
+    }
+    resolve();
+  };
+  
+  img.src = segment.icon as string;
+} else {
+  // No icon, use blank
+  imagesArray[index] = new Image();
+  loadedCount++;
+  resolve();
+}
 
         const img = new Image();
         // Remove crossOrigin for local files - it can cause issues
@@ -353,13 +374,10 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
       e.stopPropagation();
     };
 
-    const centerVideo = centerVideoRef.current;
+    
     const backgroundVideo = backgroundVideoRef.current;
 
-    if (centerVideo) {
-      centerVideo.addEventListener("click", preventVideoFullscreen);
-      centerVideo.addEventListener("touchstart", preventVideoFullscreen);
-    }
+   
 
     if (backgroundVideo) {
       backgroundVideo.addEventListener("click", preventVideoFullscreen);
@@ -367,10 +385,7 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
     }
 
     return () => {
-      if (centerVideo) {
-        centerVideo.removeEventListener("click", preventVideoFullscreen);
-        centerVideo.removeEventListener("touchstart", preventVideoFullscreen);
-      }
+      
       if (backgroundVideo) {
         backgroundVideo.removeEventListener("click", preventVideoFullscreen);
         backgroundVideo.removeEventListener(
@@ -381,166 +396,155 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
     };
   }, []);
 
-  const drawWheel = (rotationAngle = rotation) => {
-    if (segments.length === 0) return;
+ const drawWheel = (rotationAngle = rotation) => {
+  if (segments.length === 0) return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const canvas = canvasRef.current;
+  if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
-    // Responsiveness + sharpness - Crystal clear on all devices
-    const isMobile = window.innerWidth < 768;
-    const baseDpr = window.devicePixelRatio || 1;
-    // 4x DPR for crystal-clear images on both mobile and desktop
-    const dpr = Math.min(baseDpr * 2, 4);
+  // Responsiveness + sharpness - Crystal clear on all devices
+  const isMobile = window.innerWidth < 768;
+  const baseDpr = window.devicePixelRatio || 1;
+  // 4x DPR for crystal-clear images on both mobile and desktop
+  const dpr = Math.min(baseDpr * 2, 4);
 
-    // Size setup
-    const displaySize = isMobile ? Math.min(window.innerWidth - 20, 450) : 600;
-    const centerRadius = isMobile ? 35 : 45;
-    const centerFontSize = isMobile ? 11 : 14;
+  
+  // INCREASE CANVAS SIZE FOR BIGGER ICONS
+  const displaySize = isMobile ? Math.min(window.innerWidth - 10, 450) : 615; // Increased from 450/600
+  const centerRadius = isMobile ? 40 : 50;
+  const centerFontSize = isMobile ? 12 : 16;
 
-    canvas.width = displaySize * dpr;
-    canvas.height = displaySize * dpr;
-    canvas.style.width = `${displaySize}px`;
-    canvas.style.height = `${displaySize}px`;
+  canvas.width = displaySize * dpr;
+  canvas.height = displaySize * dpr;
+  canvas.style.width = `${displaySize}px`;
+  canvas.style.height = `${displaySize}px`;
 
-    ctx.scale(dpr, dpr);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
+  ctx.scale(dpr, dpr);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
 
-    const centerX = displaySize / 2;
-    const centerY = displaySize / 2;
-    const radius = Math.min(centerX, centerY) - 12;
-    const segmentAngle = (2 * Math.PI) / segments.length;
+  const centerX = displaySize / 2;
+  const centerY = displaySize / 2;
+  const radius = Math.min(centerX, centerY) - 15;
+  const segmentAngle = (2 * Math.PI) / segments.length;
 
-    ctx.clearRect(0, 0, displaySize, displaySize);
+  ctx.clearRect(0, 0, displaySize, displaySize);
 
-    // Apply rotation
+  // Apply rotation
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.rotate(rotationAngle);
+  ctx.translate(-centerX, -centerY);
+
+  // 🎡 Draw segments
+  segments.forEach((segment, index) => {
+    const startAngle = index * segmentAngle;
+    const endAngle = startAngle + segmentAngle;
+
+    // Segment fill
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+    ctx.closePath();
+    ctx.fillStyle = segment.color;
+    ctx.fill();
+
+    // Segment border (gold)
     ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotationAngle);
-    ctx.translate(-centerX, -centerY);
 
-    // 🎡 Draw segments
-    segments.forEach((segment, index) => {
-      const startAngle = index * segmentAngle;
-      const endAngle = startAngle + segmentAngle;
-
-      // Segment fill
-      ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
-      ctx.closePath();
-      ctx.fillStyle = segment.color;
-      ctx.fill();
-
-      // Segment border (gold)
-      ctx.strokeStyle = "#D4AF37";
-      ctx.lineWidth = isMobile ? 1.5 : 2.5;
-      ctx.stroke();
-
-      // Image or X
-      ctx.save();
-
-      const midAngle = startAngle + segmentAngle / 2;
-      let distanceFromCenter = radius * (isMobile ? 0.85 : 0.85);
-
-      const imageX = centerX + distanceFromCenter * Math.cos(midAngle);
-      const imageY = centerY + distanceFromCenter * Math.sin(midAngle);
-
-      // Move to that point and rotate image upright
-      ctx.translate(imageX, imageY);
-      ctx.rotate(midAngle + Math.PI / 2);
-
-      if (segment.isCross) {
-        // Draw red X for Nice Try segments
-        drawRedX(ctx, isMobile);
-      } else if (loadedImages[index]) {
-        // SPECIAL CASE: Larger size for R Prize (mystery prize)
-        let imgWidth = isMobile ? 28 : 55;
-        let imgHeight = isMobile ? 28 : 55;
-
-        if (segment.label === "R Prize") {
-          imgWidth = isMobile ? 35 : 55;
-          imgHeight = isMobile ? 35 : 55;
-        }
-        // SPECIAL CASE: WIDER image for Rolls Royce
-        else if (segment.label === "Rolls Royce") {
-          imgWidth = isMobile ? 45 : 70;
-          imgHeight = isMobile ? 30 : 45;
-        }
-
-        else if (segment.label === "Audi") {
-          imgWidth = isMobile ? 25 : 40;
-          imgHeight = isMobile ? 15 : 25;
-        }
-
-        try {
-          ctx.drawImage(
-            loadedImages[index],
-            -imgWidth / 2,
-            -imgHeight / 2,
-            imgWidth,
-            imgHeight,
-          );
-        } catch (error) {
-          console.warn(`Failed to draw image for ${segment.label}`);
-          drawFallbackText(ctx, segment.label, isMobile);
-        }
-      } else {
-        // Fallback: Draw text label
-        drawFallbackText(ctx, segment.label, isMobile);
-      }
-
-      ctx.restore();
-    });
-
-    ctx.restore(); // Restore transformation
-
-     // 🟡 Outer ring (wheel border)
-ctx.beginPath();
-ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-
-// GOLD RING GRADIENT (matches your image)
-const gradient = ctx.createLinearGradient(
-  centerX - radius, centerY - radius,  // top-left
-  centerX + radius, centerY + radius   // bottom-right
-);
-
-gradient.addColorStop(0.00, "#f6e37b");     // light
-gradient.addColorStop(0.14, "#94712aff");   // dark
-gradient.addColorStop(0.28, "#f6e37b");     // light
-gradient.addColorStop(0.42, "#94712aff");   // dark
-gradient.addColorStop(0.56, "#f6e37b");     // light
-gradient.addColorStop(0.70, "#94712aff");   // dark
-gradient.addColorStop(0.84, "#f6e37b");     // light
-gradient.addColorStop(1.00, "#94712aff");   // dark
-
-
-
-
-ctx.strokeStyle = gradient;
-ctx.lineWidth = isMobile ? 6 : 8; // thicker ring like your image
+// Glow stroke (behind)
+ctx.strokeStyle = "rgba(175, 55, 212, 0.9)";
+ctx.lineWidth = isMobile ? 6 : 6;
+ctx.shadowColor = "rgba(175, 55, 212, 1)";
+ctx.shadowBlur = isMobile ? 18 : 18;
 ctx.stroke();
 
-    // 🎯 Center circle
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, centerRadius, 0, 2 * Math.PI);
-    ctx.fillStyle = "#1a1a1a";
-    ctx.fill();
-    ctx.strokeStyle = "#D4AF37";
-    ctx.lineWidth = isMobile ? 3 : 4;
-    ctx.stroke();
+// Sharp white stroke (front)
+ctx.shadowBlur = 0;
+ctx.strokeStyle = "#ffffff";
+ctx.lineWidth = isMobile ? 2 : 3;
+ctx.stroke();
 
-    // SPIN text
-    ctx.fillStyle = "#D4AF37";
-    ctx.font = `bold ${centerFontSize}px Inter`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("SPIN", centerX, centerY);
-  };
+ctx.restore();
+
+
+    // Image or X - FIXED: Show icons for ALL segments (including "lose" segments)
+    ctx.save();
+
+    const midAngle = startAngle + segmentAngle / 2;
+    // Move icons slightly closer to center to make them bigger
+    let distanceFromCenter = radius * (isMobile ? 0.80 : 0.80);
+
+    const imageX = centerX + distanceFromCenter * Math.cos(midAngle);
+    const imageY = centerY + distanceFromCenter * Math.sin(midAngle);
+
+    // Move to that point and rotate image upright
+    ctx.translate(imageX, imageY);
+    ctx.rotate(midAngle + Math.PI / 2);
+
+    // ALWAYS show the icon if we have it loaded (even for "lose" segments)
+    if (loadedImages[index]) {
+      // MUCH BIGGER ICON SIZES
+      let imgWidth = isMobile ? 95 : 110; // Increased from 28/55
+      let imgHeight = isMobile ? 95 : 110; // Increased from 28/55
+
+      try {
+        ctx.drawImage(
+          loadedImages[index],
+          -imgWidth / 2,
+          -imgHeight / 2,
+          imgWidth,
+          imgHeight,
+        );
+      } catch (error) {
+        console.warn(`Failed to draw image for ${segment.label}`);
+        drawFallbackText(ctx, segment.label, isMobile);
+      }
+    } else {
+      // Fallback: Draw text label
+      drawFallbackText(ctx, segment.label, isMobile);
+    }
+
+    ctx.restore();
+  });
+
+  ctx.restore(); // Restore transformation
+
+  // 🟡 Outer ring (wheel border)
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+
+  // const gradient = ctx.createLinearGradient(
+  //   centerX - radius, centerY - radius,
+  //   centerX + radius, centerY + radius
+  // );
+
+  // gradient.addColorStop(0.00, "#dcaaf0ff");
+  // gradient.addColorStop(0.14, "#dcaaf0ff");
+  // gradient.addColorStop(0.28, "#fffdfd");
+  // gradient.addColorStop(0.42, "#dcaaf0ff");
+  // gradient.addColorStop(0.56, "#fffdfd");
+  // gradient.addColorStop(0.70, "#dcaaf0ff");
+  // gradient.addColorStop(0.84, "#fffdfd");
+  // gradient.addColorStop(1.00, "#dcaaf0ff");
+
+  // ctx.strokeStyle = gradient;
+  // ctx.lineWidth = isMobile ? 8 : 10; // Thicker ring
+  // ctx.stroke();
+
+  // 🎯 Center circle
+  
+
+  // SPIN text
+  ctx.fillStyle = "#D4AF37";
+  ctx.font = `bold ${centerFontSize}px Inter`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("SPIN", centerX, centerY);
+};
 
   // Helper function to draw red X
   const drawRedX = (ctx: CanvasRenderingContext2D, isMobile: boolean) => {
@@ -708,7 +712,7 @@ ctx.stroke();
       // console.log("Refetching wheel configuration for latest settings...");
       const configResult = await refetchConfig();
       const freshSegments = (configResult.data?.segments || []).map((seg: any) => {
-        const icon = CHRISTMAS_ICON_MAP[seg.iconKey] || seg.iconKey;
+        const icon = ARCADE_ICON_MAP[seg.iconKey] || seg.iconKey;
         let amount: number | string = 0;
 
         if (seg.rewardType === "cash") {
@@ -935,7 +939,7 @@ if (congratsAudioRef.current) {
     disableRemotePlayback
     className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none hidden md:block"
   >
-    <source src="/attached_assets/Snowflake.mp4" type="video/mp4" />
+    <source src="/attached_assets/Arcade desktop.mp4" type="video/mp4" />
   </video>
 
   {/* Mobile video */}
@@ -949,10 +953,10 @@ if (congratsAudioRef.current) {
     disableRemotePlayback
     className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none block md:hidden"
   >
-    <source src="/attached_assets/SnowflakeMobile.mp4" type="video/mp4" />
+    <source src={background} type="video/mp4" />
   </video>
 
-      <div className="relative w-full max-w-2xl aspect-square flex items-center justify-center z-10">
+      <div className="relative w-full max-w-2xl aspect-square flex items-center justify-center z-0">
          <img
     src={pointer}
     alt="pointer"
@@ -973,7 +977,7 @@ if (congratsAudioRef.current) {
          <img
           src={ring}
           alt="Wheel Ring"
-         className="absolute left-1 -top-4 sm:top-16 sm:left-16 md:left-1 md:-top-4 inset-0 w-[108%] h-[108%] sm:w-[80%] sm:h-[80%] md:w-[105%] md:h-[105%] object-cover z-0 pointer-events-none"
+         className="absolute -left-0.5 -top-4 sm:top-16 sm:left-16 md:-left-1 md:-top-4 inset-0 w-[108%] h-[108%] sm:w-[80%] sm:h-[80%] md:w-[105%] md:h-[105%] object-cover z-20 pointer-events-none"
         />
 
         <canvas
@@ -987,42 +991,46 @@ if (congratsAudioRef.current) {
           }}
         />
 
-        {/* Center video */}
-        <video
-          ref={centerVideoRef}
-          autoPlay
-          loop
-          muted
-          playsInline
-          disablePictureInPicture
-          disableRemotePlayback
-          className="absolute w-32 h-32 md:w-52 md:h-52 rounded-full object-cover pointer-events-none border-8 border-yellow-400 z-10"
-        >
-          <source
-            src={centerVideo}
-            type="video/mp4"
+        
+        <img
+          src={middlebtn}
+          className="absolute w-[700px] h-[700px] md:w-[800px] md:h-[800px] z-10"
+          alt="Center Circle"
           />
-        </video>
+        <img
+        onClick={spinWheel}
+          src="/attached_assets/Arcade/spin-cropped.svg"
+          className="absolute w-28 h-28 md:w-[180px] md:h-[180px] z-10 cursor-pointer"
+          alt="Center Circle"
+          />
+        
 
         {/* SPIN button */}
-        <button
-          onClick={spinWheel}
-          disabled={isSpinning}
-          aria-disabled={allSpinsUsed}
-          className={`absolute bottom-[47%]
-                      px-2 py-1 sm:px-4 sm:py-2
-                     rounded-[4px] 
-                     text-black font-bold 
-                     text-[8px] md:text-[16px] 
-                     shadow-xl transition-all
-                     z-30 cursor-pointer
-                     ${isSpinning ? 'bg-yellow-300 opacity-50 cursor-not-allowed' : 
-                       
-                       'bg-yellow-400 hover:bg-yellow-500'}`}
-          data-testid="button-spin"
-        >
-          {isSpinning ? "SPINNING" : "SPIN"}
-        </button>
+       {/* <button
+  onClick={spinWheel}
+  disabled={isSpinning || allSpinsUsed}
+  aria-disabled={allSpinsUsed}
+  data-testid="button-spin"
+  className="
+    absolute bottom-[45%]
+    z-30
+    
+    
+    font-extrabold
+    tracking-widest
+    text-[10px] sm:text-[14px] md:text-[30px]
+    text-white
+   
+    transition-all
+    cursor-pointer
+    disabled:opacity-50
+    disabled:cursor-not-allowed
+
+  "
+>
+  {isSpinning ? "SPIN" : "SPIN"}
+</button> */}
+
       </div>
 
       {/* Premium Progress Tracker - Mobile Optimized */}

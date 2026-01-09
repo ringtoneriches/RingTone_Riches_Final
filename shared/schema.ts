@@ -204,6 +204,7 @@ export const spinWins = pgTable("spin_wins", {
   userId: varchar("user_id").notNull().references(() => users.id),
   segmentId: text("segment_id").notNull(), // References segment.id from config
   rewardType: varchar("reward_type", { enum: ["cash", "points", "lose"] }).notNull(),
+  wheelType: varchar("wheel_type", { enum: ["wheel1", "wheel2"] }).default("wheel1"), 
   rewardValue: text("reward_value").notNull(), // Stringified value
   wonAt: timestamp("won_at").defaultNow(),
 });

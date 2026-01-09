@@ -73,7 +73,7 @@ const { data: competition, isLoading: competitionLoading } =
             
            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent">
             {wheelType === "wheel2"
-              ? "The Festive Spin"
+              ? "RETRO RINGTONE SPIN"
               : "The Luxury Car Spin"}
           </h1>
             
