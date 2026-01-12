@@ -3637,7 +3637,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await tx.insert(winners).values({
               id: crypto.randomUUID(),
               userId,
-              competitionId: null,
+              competitionId,
               prizeDescription: selectedSegment.label,
               prizeValue: `${points} Ringtones`,
               imageUrl: null,
@@ -4210,7 +4210,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: any, res) => {
       try {
         const userId = req.user.id;
-        const { orderId } = req.body;
+        const { orderId, competitionId } = req.body;
 
         if (!orderId) {
           return res.status(400).json({
@@ -4218,6 +4218,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             message: "Order ID is required",
           });
         }
+
+            if (!competitionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Competition ID is required",
+      });
+    }
+
+
 
         // Verify valid completed order
         const order = await storage.getOrder(orderId);
@@ -4403,7 +4412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Physical prize - just record the win
           await storage.createWinner({
             userId,
-            competitionId: null,
+            competitionId,
             prizeDescription: `Scratch Card Prize - ${selectedPrize.label}`,
             prizeValue: selectedPrize.label,
             imageUrl: null,
@@ -4435,7 +4444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: any, res) => {
       try {
         const userId = req.user.id;
-        const { orderId, count } = req.body;
+        const { orderId, count , competitionId} = req.body;
 
         if (!orderId || !count || count <= 0) {
           return res.status(400).json({
@@ -4637,7 +4646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               await tx.insert(winners).values({
                 id: crypto.randomUUID(),
                 userId,
-                competitionId: null,
+                competitionId,
                 prizeDescription: "Scratch Card Prize",
                 prizeValue: `£${amount}`,
                 imageUrl: null,
@@ -4677,7 +4686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               await tx.insert(winners).values({
                 id: crypto.randomUUID(),
                 userId,
-                competitionId: null,
+                competitionId,
                 prizeDescription: "Scratch Card Prize",
                 prizeValue: `${points} Ringtones`,
                 imageUrl: null,
@@ -4690,7 +4699,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               await tx.insert(winners).values({
                 id: crypto.randomUUID(),
                 userId,
-                competitionId: null,
+                competitionId,
                 prizeDescription: `Scratch Card Prize - ${selectedPrize.imageName}`,
                 prizeValue: selectedPrize.imageName,
                 imageUrl: null,

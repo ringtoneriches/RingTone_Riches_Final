@@ -457,6 +457,7 @@ const extractPrizeValue = (prize: string): number => {
 
   
 // Update your winners useMemo to include all sorting
+// Update your winners useMemo to include all sorting AND duplicate filtering
 const winners = useMemo(() => {
   if (!winnersData) return [];
 
@@ -486,6 +487,49 @@ const winners = useMemo(() => {
     });
   }
 
+  // 🔍 REMOVE DUPLICATES
+  // Create a map to track unique combinations
+  const uniqueWinners = new Map();
+  const deduplicated = [];
+
+  for (const winner of filtered) {
+    // Create a unique key based on user, competition, prize, and time (within 5 seconds)
+    const userKey = winner.users?.id || "";
+    const competitionKey = winner.competitions?.id || "none";
+    const prizeKey = winner.winners.prizeValue;
+    const descriptionKey = winner.winners.prizeDescription;
+    
+    // Round timestamp to nearest minute to catch duplicates that happened at similar times
+    const timestamp = new Date(winner.winners.createdAt);
+    const roundedTime = new Date(
+      timestamp.getFullYear(),
+      timestamp.getMonth(),
+      timestamp.getDate(),
+      timestamp.getHours(),
+      timestamp.getMinutes()
+    ).getTime();
+    
+    const uniqueKey = `${userKey}-${competitionKey}-${prizeKey}-${descriptionKey}-${roundedTime}`;
+    
+    // If we haven't seen this combination before, add it
+    if (!uniqueWinners.has(uniqueKey)) {
+      uniqueWinners.set(uniqueKey, true);
+      deduplicated.push(winner);
+    } else {
+      // Log duplicate found (optional)
+      console.log("Duplicate winner filtered out:", {
+        userId: userKey,
+        competitionId: competitionKey,
+        prizeValue: prizeKey,
+        description: descriptionKey,
+        createdAt: winner.winners.createdAt
+      });
+    }
+  }
+
+  // Update filtered to use deduplicated array
+  filtered = deduplicated;
+
   // Apply sorting based on sortField and sortOrder
   if (sortField && sortOrder) {
     filtered.sort((a, b) => {
@@ -508,17 +552,17 @@ const winners = useMemo(() => {
           break;
           
         case 'prizeValue':
-  // Extract only £ values, treat non-£ as 0
-  const aNum = extractPrizeValue(a.winners.prizeValue);
-  const bNum = extractPrizeValue(b.winners.prizeValue);
-  
-  // Sort by £ amount (0 for non-£ prizes)
-  if (sortOrder === 'asc') {
-    return aNum - bNum; // Low to high
-  } else {
-    return bNum - aNum; // High to low
-  }
-  break;
+          // Extract only £ values, treat non-£ as 0
+          const aNum = extractPrizeValue(a.winners.prizeValue);
+          const bNum = extractPrizeValue(b.winners.prizeValue);
+          
+          // Sort by £ amount (0 for non-£ prizes)
+          if (sortOrder === 'asc') {
+            return aNum - bNum; // Low to high
+          } else {
+            return bNum - aNum; // High to low
+          }
+          break;
           
         case 'showcase':
           aValue = a.winners.isShowcase ? 1 : 0;
@@ -547,7 +591,8 @@ const winners = useMemo(() => {
   }
 
   return filtered;
-}, [winnersData, searchInput, sortField, sortOrder]); // Add sortField and sortOrder to dependencies
+}, [winnersData, searchInput, sortField, sortOrder]);
+
   const totalPages = Math.ceil(winners.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedWinners = winners.slice(startIndex, startIndex + itemsPerPage);
@@ -976,14 +1021,14 @@ const winners = useMemo(() => {
             <div className="flex items-center gap-1">
               <Eye className="h-4 w-4 text-green-600" />
               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-light bg-green-600 text-white">
-                In Showcase
+                Showed
               </span>
             </div>
           ) : (
             <div className="flex items-center gap-1">
               <EyeOff className="h-4 w-4 text-gray-600" />
               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-light bg-red-600 text-white">
-                Not in Showcase
+                Hidden
               </span>
             </div>
           )}

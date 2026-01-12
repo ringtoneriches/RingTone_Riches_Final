@@ -920,6 +920,24 @@ const handleResumeOrder = () => {
     //   description: "You can always find pending orders in the 'Orders' tab",
     // });
   };
+
+  // Helper function to safely parse balance
+function getValidBalance(balance: string | null | undefined): number {
+  if (!balance) return 0;
+  
+  const cleaned = balance.toString().replace(/[^\d.-]/g, '');
+  
+  const parsed = parseFloat(cleaned);
+  
+  // Check if it's a valid number
+  if (isNaN(parsed) || !isFinite(parsed)) {
+    return 0;
+  }
+  
+  return Math.max(0, parsed);
+}
+
+
   
   if (isLoading) {
     return (
@@ -1116,84 +1134,84 @@ const handleResumeOrder = () => {
             >
               <div className="grid lg:grid-cols-2 gap-6">
                 {/* Wallet Balance Card */}
-                <Card className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
-              <CardHeader className="border-b border-yellow-500/20 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-0">
-              <div className="flex items-center gap-2 text-yellow-400 justify-center sm:justify-start">
-                <WalletIcon className="h-6 w-6" />
-                <span className="text-xl sm:text-2xl font-medium">Wallet Balance</span>
-              </div>
-              <div className="flex items-center gap-2 text-yellow-400 justify-center sm:justify-end">
-                <span className="text-lg sm:text-xl font-medium">Total Spend=£{totalCashflow}</span>
-              </div>
-            </CardHeader>
+               <Card className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
+                <CardHeader className="border-b border-yellow-500/20 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-0">
+                  <div className="flex items-center gap-2 text-yellow-400 justify-center sm:justify-start">
+                    <WalletIcon className="h-6 w-6" />
+                    <span className="text-xl sm:text-2xl font-medium">Wallet Balance</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-yellow-400 justify-center sm:justify-end">
+                    <span className="text-lg sm:text-xl font-medium">Total Spend=£{totalCashflow}</span>
+                  </div>
+                </CardHeader>
 
-                  <CardContent className="pt-6">
-                    <div className="text-center space-y-6">
-                      <div>
-                        <p className="text-gray-400 text-sm mb-2">
-                          Available Balance
-                        </p>
-                        <p
-                          className="text-5xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent"
-                          data-testid="text-balance"
-                        >
-                          £{parseFloat(user?.balance || "0").toFixed(2)}
-                        </p>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="space-y-3">
-                          <label className="text-sm text-gray-400">
-                            Quick Top-Up
-                          </label>
-                          <div className="grid grid-cols-4 gap-2">
-                            {[10, 25, 50, 100].map((amount) => (
-                              <button
-                                key={amount}
-                                onClick={() => setTopUpAmount(String(amount))}
-                                className={`py-3 rounded-lg font-semibold transition-all transform hover:scale-105 ${
-                                  topUpAmount === String(amount)
-                                    ? "bg-gradient-to-r from-yellow-600 to-yellow-500 text-black shadow-lg shadow-yellow-500/50"
-                                    : "bg-zinc-800 text-gray-300 hover:bg-zinc-700 border border-yellow-500/20"
-                                }`}
-                                data-testid={`button-amount-${amount}`}
-                              >
-                                £{amount}
-                              </button>
-                            ))}
-                          </div>
-                          <input
-                            type="number"
-                            min="0.50"
-                            max="1000"
-                            value={topUpAmount}
-                            onChange={(e) => setTopUpAmount(e.target.value)}
-                            className="w-full bg-black/50 border border-yellow-500/30 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-                            placeholder="Custom amount"
-                            data-testid="input-custom-amount"
-                          />
-                        </div>
-                        <button
-                          onClick={handleTopUp}
-                          disabled={topUpMutation.isPending}
-                          className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold py-4 rounded-lg hover:from-yellow-500 hover:to-yellow-400 transition-all transform hover:scale-105 shadow-lg shadow-yellow-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                          data-testid="button-topup"
-                        >
-                          {topUpMutation.isPending
-                            ? "Redirecting..."
-                            : "TOP UP NOW"}
-                        </button>
-                        <button
-                          onClick={() => setWithdrawalDialogOpen(true)}
-                          className="w-full bg-zinc-800 text-yellow-500 border border-yellow-500/30 font-bold py-4 rounded-lg hover:bg-zinc-700 hover:border-yellow-500/50 transition-all transform hover:scale-105"
-                          data-testid="button-request-withdrawal"
-                        >
-                          REQUEST WITHDRAWAL
-                        </button>
-                      </div>
+                <CardContent className="pt-6">
+                  <div className="text-center space-y-6">
+                    <div>
+                      <p className="text-gray-400 text-sm mb-2">
+                        Available Balance
+                      </p>
+                      <p
+                        className="text-5xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent"
+                        data-testid="text-balance"
+                      >
+                        £{getValidBalance(user?.balance).toFixed(2)}
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
+
+                    <div className="space-y-4">
+                      <div className="space-y-3">
+                        <label className="text-sm text-gray-400">
+                          Quick Top-Up
+                        </label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[10, 25, 50, 100].map((amount) => (
+                            <button
+                              key={amount}
+                              onClick={() => setTopUpAmount(String(amount))}
+                              className={`py-3 rounded-lg font-semibold transition-all transform hover:scale-105 ${
+                                topUpAmount === String(amount)
+                                  ? "bg-gradient-to-r from-yellow-600 to-yellow-500 text-black shadow-lg shadow-yellow-500/50"
+                                  : "bg-zinc-800 text-gray-300 hover:bg-zinc-700 border border-yellow-500/20"
+                              }`}
+                              data-testid={`button-amount-${amount}`}
+                            >
+                              £{amount}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="number"
+                          min="0.50"
+                          max="1000"
+                          value={topUpAmount}
+                          onChange={(e) => setTopUpAmount(e.target.value)}
+                          className="w-full bg-black/50 border border-yellow-500/30 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                          placeholder="Custom amount"
+                          data-testid="input-custom-amount"
+                        />
+                      </div>
+                      <button
+                        onClick={handleTopUp}
+                        disabled={topUpMutation.isPending}
+                        className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold py-4 rounded-lg hover:from-yellow-500 hover:to-yellow-400 transition-all transform hover:scale-105 shadow-lg shadow-yellow-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        data-testid="button-topup"
+                      >
+                        {topUpMutation.isPending
+                          ? "Redirecting..."
+                          : "TOP UP NOW"}
+                      </button>
+                      <button
+                        onClick={() => setWithdrawalDialogOpen(true)}
+                        className="w-full bg-zinc-800 text-yellow-500 border border-yellow-500/30 font-bold py-4 rounded-lg hover:bg-zinc-700 hover:border-yellow-500/50 transition-all transform hover:scale-105"
+                        data-testid="button-request-withdrawal"
+                      >
+                        REQUEST WITHDRAWAL
+                      </button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
                 {/* Transaction History */}
                 <Card className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
