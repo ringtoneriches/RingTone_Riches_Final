@@ -461,13 +461,13 @@ export default function AdminPopBalloon() {
                   Pop Settings
                 </Button>
               </Link>
-              <Button
+              {/* <Button
                 onClick={() => setCreateDialogOpen(true)}
                 data-testid="button-create-pop"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Pop Game
-              </Button>
+              </Button> */}
             </div>
           </div>
         </div>

@@ -530,14 +530,21 @@ function formatAmount(transaction: Transaction) {
     return bTime - aTime;
   });
 
-  // Orders pagination
+const excludedCompetitionIds = [
+  "d54eee36-2280-4372-84f6-93d07343a970", 
+  "25f0ee99-6f54-435d-9605-f4c287fe1338"
+ 
+];
+
 const incompleteGames = orders.filter(
   (order) =>
     (order.competitions?.type === "spin" ||
       order.competitions?.type === "scratch" ||
       order.competitions?.type === "pop") &&
     order.orders.status === "completed" &&
-    (order.remainingPlays || 0) > 0,
+    (order.remainingPlays || 0) > 0 &&
+    // Check if competition ID is NOT in excluded list
+    !excludedCompetitionIds.includes(order.orders.competitionId)
 );
 
 // Orders that are fully completed

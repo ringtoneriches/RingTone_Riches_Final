@@ -368,8 +368,15 @@ export default function AdminSpinWheel() {
 
   // Filter competitions by type and status
   const competitions = allCompetitions?.filter((c) => c.type === "spin") || [];
-  const activeCompetitions = competitions.filter((c) => c.isActive);
-  const archivedCompetitions = competitions.filter((c) => !c.isActive);
+  const hiddenCompetitionIds = [
+  "d54eee36-2280-4372-84f6-93d07343a970", 
+  "25f0ee99-6f54-435d-9605-f4c287fe1338"
+];
+  const filteredCompetitions = competitions.filter((c) => 
+  !hiddenCompetitionIds.includes(c.id)
+);
+  const activeCompetitions = filteredCompetitions.filter((c) => c.isActive);
+  const archivedCompetitions = filteredCompetitions.filter((c) => !c.isActive);
 
   const createMutation = useMutation({
     mutationFn: async (formData: CompetitionFormData) => {
@@ -562,14 +569,14 @@ export default function AdminSpinWheel() {
                 Wheel 2 Settings
               </Button>
               
-              <Button 
+              {/* <Button 
                 onClick={() => setCreateDialogOpen(true)} 
                 size="icon"
                 className="bg-yellow-500 hover:bg-yellow-600 text-black"
                 data-testid="button-create-spin"
               >
                 <Plus className="w-4 h-4" />
-              </Button>
+              </Button> */}
             </div>
           </div>
         </div>
