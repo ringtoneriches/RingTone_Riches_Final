@@ -113,7 +113,7 @@ const getTransactionTypeBadge = (type: string) => {
       purchase: "Purchase",
       prize: "Prize",
       pop_purchase: "Pop Purchase",
-      ringtone_points: "Ringtones", // Or "RingTone Points"
+      ringtone_points: "Ringtones", 
       referral: "Referral",
       referral_bonus: "Referral Bonus",
       refund: "Refund",
@@ -449,11 +449,18 @@ const isAuthenticated = !!user;
     refetchInterval: 5000,
   });
 
+  const sortedTransactions = [...transactions].sort(
+  (a, b) =>
+    new Date(b.createdAt!).getTime() -
+    new Date(a.createdAt!).getTime()
+);
 
-  const filteredTransactions =
-    filterType === "all"
-      ? transactions
-      : transactions.filter((t) => t.type === filterType);
+
+const filteredTransactions =
+  filterType === "all"
+    ? sortedTransactions
+    : sortedTransactions.filter((t) => t.type === filterType);
+
 
   // RingTone Points transactions
   const pointsTransactions = transactions
@@ -470,12 +477,15 @@ const isAuthenticated = !!user;
 function formatAmount(transaction: Transaction) {
   const amount = Math.abs(parseFloat(transaction.amount));
 
-  // Use transaction.type instead of checking description
-  if (transaction.type === "ringtone_points") {
+  // ✅ Treat ringtone spin wins as points
+  if (
+    transaction.type === "ringtone_points" ||
+    transaction.description?.toLowerCase().includes("ringtone")
+  ) {
     return `${amount} pts`;
   }
 
-  // For everything else (prize, deposit, etc.), show as cash
+  // 💷 Everything else is cash
   return `£${amount.toFixed(2)}`;
 }
 
