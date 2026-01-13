@@ -7872,7 +7872,7 @@ app.get(
         .select()
         .from(spinWheel2Configs)
         .where(eq(spinWheel2Configs.id, "active"));
-
+      // console.log("Fetched wheel 2 config:", config);
       if (!config) return res.json(DEFAULT_SPIN_WHEEL_2_CONFIG);
 
       const winStats: Record<string, number> = {};
@@ -7913,7 +7913,6 @@ app.get(
   }
 );
 
-// --- Wheel 2 update ---
 // --- Wheel 2 update ---
 app.put(
   "/api/admin/game-spin-2-config",

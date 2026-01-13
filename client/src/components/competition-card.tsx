@@ -11,6 +11,15 @@ interface CompetitionCardProps {
 export default function CompetitionCard({ competition, authenticated = false }: CompetitionCardProps) {
   const [, setLocation] = useLocation();
 
+   const hiddenCompetitionIds = [
+  "d54eee36-2280-4372-84f6-93d07343a970", 
+  "25f0ee99-6f54-435d-9605-f4c287fe1338"
+];
+
+    if (hiddenCompetitionIds.includes(competition.id)) {
+    return null;
+  }
+
   const handleViewCompetition = () => {
     setLocation(`/competition/${competition.id}`);
   };

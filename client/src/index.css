@@ -1655,3 +1655,12 @@ input[type="range"]::-moz-range-thumb:hover {
 .bg-gradient-radial {
   background: radial-gradient(circle, var(--tw-gradient-stops));
 }
+
+@media (max-width: 376px) { 
+
+   .spin-name {
+    width: 105px;   /* 👈 bigger button */
+    height: auto;
+    margin-bottom: 1px;
+  }
+ }

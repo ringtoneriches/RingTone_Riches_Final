@@ -29,6 +29,7 @@ import PrizeConfigInstant, {
   InstantPrizeData,
 } from "@/components/admin/prize-config-instant";
 import { Textarea } from "@/components/ui/textarea";
+import { Link } from "wouter";
 
 interface CompetitionFormData {
   title: string;
@@ -559,8 +560,8 @@ export default function AdminSpinWheel() {
                 <Settings className="w-4 h-4" />
                 Wheel Settings
               </Button>
+               <Link to="/admin/wheel-2-settings">
               <Button
-                onClick={() => setWheel2SettingsOpen(true)}
                 variant="outline"
                 className="gap-2"
                 data-testid="button-wheel-2-settings"
@@ -568,6 +569,7 @@ export default function AdminSpinWheel() {
                 <Settings className="w-4 h-4" />
                 Wheel 2 Settings
               </Button>
+            </Link>
               
               {/* <Button 
                 onClick={() => setCreateDialogOpen(true)} 
@@ -947,10 +949,10 @@ export default function AdminSpinWheel() {
           open={wheelSettingsOpen}
           onOpenChange={setWheelSettingsOpen}
         />
-        <WheelSettingsDialog2
+        {/* <WheelSettingsDialog2
           open={wheel2SettingsOpen}
           onOpenChange={setWheel2SettingsOpen}
-        />
+        /> */}
       </div>
     </AdminLayout>
   );
@@ -1452,393 +1454,393 @@ function WheelSettingsDialog({
   );
 }
 
-function WheelSettingsDialog2({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const { toast } = useToast();
-  const [segments, setSegments] = useState<Array<WheelSegment & { currentWins?: number }>>([]);
-  const [maxSpinsPerUser, setMaxSpinsPerUser] = useState<string>("");
-  const [isVisible, setIsVisible] = useState<boolean>(true);
+// function WheelSettingsDialog2({
+//   open,
+//   onOpenChange,
+// }: {
+//   open: boolean;
+//   onOpenChange: (open: boolean) => void;
+// }) {
+//   const { toast } = useToast();
+//   const [segments, setSegments] = useState<Array<WheelSegment & { currentWins?: number }>>([]);
+//   const [maxSpinsPerUser, setMaxSpinsPerUser] = useState<string>("");
+//   const [isVisible, setIsVisible] = useState<boolean>(true);
 
-  // Auto-refresh every 10 seconds when dialog is open
-  const { data: config, isLoading } = useQuery<{
-    segments: Array<WheelSegment & { currentWins?: number }>;
-    maxSpinsPerUser: number | null;
-    isVisible: boolean;
-  }>({
-    queryKey: ["/api/admin/game-spin-2-config"],
-    enabled: open,
-    refetchInterval: open ? 10000 : false,
-  });
+//   // Auto-refresh every 10 seconds when dialog is open
+//   const { data: config, isLoading } = useQuery<{
+//     segments: Array<WheelSegment & { currentWins?: number }>;
+//     maxSpinsPerUser: number | null;
+//     isVisible: boolean;
+//   }>({
+//     queryKey: ["/api/admin/game-spin-2-config"],
+//     enabled: open,
+//     refetchInterval: open ? 10000 : false,
+//   });
 
-  // Update local state when config loads or dialog opens
-  useEffect(() => {
-    if (config && open) {
-      setSegments(config.segments || []);
-      setMaxSpinsPerUser(config.maxSpinsPerUser?.toString() || "");
-      setIsVisible(config.isVisible ?? true);
-    }
-  }, [config, open]);
+//   // Update local state when config loads or dialog opens
+//   useEffect(() => {
+//     if (config && open) {
+//       setSegments(config.segments || []);
+//       setMaxSpinsPerUser(config.maxSpinsPerUser?.toString() || "");
+//       setIsVisible(config.isVisible ?? true);
+//     }
+//   }, [config, open]);
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      // Remove currentWins from segments before saving
-      const segmentsToSave = segments.map(({ currentWins, ...rest }) => rest);
+//   const saveMutation = useMutation({
+//     mutationFn: async () => {
+//       // Remove currentWins from segments before saving
+//       const segmentsToSave = segments.map(({ currentWins, ...rest }) => rest);
 
-      const res = await apiRequest("/api/admin/game-spin-2-config", "PUT", {
-        segments: segmentsToSave,
-        maxSpinsPerUser: maxSpinsPerUser ? parseInt(maxSpinsPerUser) : null,
-        isVisible,
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/admin/game-spin-2-config"],
-      });
-      toast({ title: "Arcade Spin settings saved successfully" });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to save settings",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+//       const res = await apiRequest("/api/admin/game-spin-2-config", "PUT", {
+//         segments: segmentsToSave,
+//         maxSpinsPerUser: maxSpinsPerUser ? parseInt(maxSpinsPerUser) : null,
+//         isVisible,
+//       });
+//       return res.json();
+//     },
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({
+//         queryKey: ["/api/admin/game-spin-2-config"],
+//       });
+//       toast({ title: "Arcade Spin settings saved successfully" });
+//     },
+//     onError: (error: any) => {
+//       toast({
+//         title: "Failed to save settings",
+//         description: error.message,
+//         variant: "destructive",
+//       });
+//     },
+//   });
 
-  const resetWinsMutation = useMutation({
-  mutationFn: async () => {
-    const res = await apiRequest(
-      "/api/admin/game-spin-2-reset-wins",
-      "POST"
-    );
-    return res.json();
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({
-      queryKey: ["/api/admin/game-spin-2-config"],
-    });
-    toast({ title: "Wheel 2 wins reset successfully" });
-  },
-  onError: () => {
-    toast({
-      title: "Failed to reset wins",
-      variant: "destructive",
-    });
-  },
-});
-
-
-  const totalProbability = segments.reduce(
-    (sum, seg) => sum + seg.probability,
-    0,
-  );
-  const isProbabilityValid = Math.abs(totalProbability - 100) < 0.01;
-
-  const updateSegment = (index: number, updates: Partial<WheelSegment>) => {
-    const newSegments = [...segments];
-    newSegments[index] = { ...newSegments[index], ...updates };
-    setSegments(newSegments);
-  };
-
- const moveSegmentUp = (index: number) => {
-  if (index === 0) return;
-
-  const newSegments = [...segments];
-  [newSegments[index - 1], newSegments[index]] =
-    [newSegments[index], newSegments[index - 1]];
-
-  setSegments(newSegments);
-};
+//   const resetWinsMutation = useMutation({
+//   mutationFn: async () => {
+//     const res = await apiRequest(
+//       "/api/admin/game-spin-2-reset-wins",
+//       "POST"
+//     );
+//     return res.json();
+//   },
+//   onSuccess: () => {
+//     queryClient.invalidateQueries({
+//       queryKey: ["/api/admin/game-spin-2-config"],
+//     });
+//     toast({ title: "Wheel 2 wins reset successfully" });
+//   },
+//   onError: () => {
+//     toast({
+//       title: "Failed to reset wins",
+//       variant: "destructive",
+//     });
+//   },
+// });
 
 
- const moveSegmentDown = (index: number) => {
-  if (index === segments.length - 1) return;
+//   const totalProbability = segments.reduce(
+//     (sum, seg) => sum + seg.probability,
+//     0,
+//   );
+//   const isProbabilityValid = Math.abs(totalProbability - 100) < 0.01;
 
-  const newSegments = [...segments];
-  [newSegments[index], newSegments[index + 1]] =
-    [newSegments[index + 1], newSegments[index]];
+//   const updateSegment = (index: number, updates: Partial<WheelSegment>) => {
+//     const newSegments = [...segments];
+//     newSegments[index] = { ...newSegments[index], ...updates };
+//     setSegments(newSegments);
+//   };
 
-  setSegments(newSegments);
-};
+//  const moveSegmentUp = (index: number) => {
+//   if (index === 0) return;
 
+//   const newSegments = [...segments];
+//   [newSegments[index - 1], newSegments[index]] =
+//     [newSegments[index], newSegments[index - 1]];
 
-const deleteSegment = (index: number) => {
-  if (segments.length <= 12) {
-    toast({
-      title: "Cannot delete segment",
-      description: "Arcade Spin requires exactly 12 segments",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  const newSegments = segments.filter((_, i) => i !== index);
-  setSegments(newSegments);
-};
+//   setSegments(newSegments);
+// };
 
 
-  if (isLoading) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+//  const moveSegmentDown = (index: number) => {
+//   if (index === segments.length - 1) return;
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl max-h-[90vh] bg-gray-700 overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Configure Arcade Spin (Wheel 2)</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            12-segment wheel configuration
-          </p>
-        </DialogHeader>
+//   const newSegments = [...segments];
+//   [newSegments[index], newSegments[index + 1]] =
+//     [newSegments[index + 1], newSegments[index]];
 
-        <div className="space-y-4 py-4">
-          {/* Wheel Visibility Toggle */}
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="space-y-0.5">
-              <Label className="text-sm font-medium">Show Wheel on Frontend</Label>
-              <p className="text-xs text-muted-foreground">
-                Hide the wheel on the frontend while you adjust prizes
-              </p>
-            </div>
-            <Switch
-              checked={isVisible}
-              onCheckedChange={setIsVisible}
-              data-testid="switch-wheel-visible"
-            />
-          </div>
+//   setSegments(newSegments);
+// };
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-lg font-semibold">Arcade Spin Segments</Label>
-              <div
-                className={`px-3 py-1 rounded-md ${isProbabilityValid ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
-              >
-                Total: {totalProbability.toFixed(2)}%{" "}
-                {isProbabilityValid ? "✓" : "(must be 100%)"}
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto pr-2">
-              {segments.map((segment, index) => {
-                const isMaxWinsReached = segment.maxWins && segment.maxWins > 0 && 
-                                         (segment.currentWins || 0) >= segment.maxWins;
-                return (
-                  <div
-                    key={segment.id}
-                    className="border border-border rounded-lg p-4 space-y-3 bg-card"
-                  >
-                    {/* Simplified header */}
-                    <div className="flex items-center justify-between mb-2 pb-2 border-b">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm">Position {index + 1}</span>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveSegmentUp(index)}
-                          disabled={index === 0}
-                          className="h-7 w-7 p-0"
-                        >
-                          ↑
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveSegmentDown(index)}
-                          disabled={index === segments.length - 1}
-                          className="h-7 w-7 p-0"
-                        >
-                          ↓
-                        </Button>
-                      </div>
-                    </div>
+// const deleteSegment = (index: number) => {
+//   if (segments.length <= 12) {
+//     toast({
+//       title: "Cannot delete segment",
+//       description: "Arcade Spin requires exactly 12 segments",
+//       variant: "destructive",
+//     });
+//     return;
+//   }
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs">Label</Label>
-                        <Input
-                          value={segment.label}
-                          onChange={(e) =>
-                            updateSegment(index, { label: e.target.value })
-                          }
-                          data-testid={`input-label-${index}`}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Color (hex)</Label>
-                        <Input
-                          value={segment.color}
-                          onChange={(e) =>
-                            updateSegment(index, { color: e.target.value })
-                          }
-                          data-testid={`input-color-${index}`}
-                        />
-                      </div>
-                    </div>
+//   const newSegments = segments.filter((_, i) => i !== index);
+//   setSegments(newSegments);
+// };
 
-                    <div className="grid grid-cols-5 gap-3">
-                      <div>
-                        <Label className="text-xs">Reward Type</Label>
-                        <select
-                          value={segment.rewardType}
-                          onChange={(e) =>
-                            updateSegment(index, { rewardType: e.target.value as any })
-                          }
-                          className={`
-                            w-full h-10 px-3 rounded-md border 
-                            appearance-none
-                            ${
-                              segment.rewardType === "cash"
-                                ? "bg-green-600 text-white border-green-700"
-                                : segment.rewardType === "points"
-                                ? "bg-yellow-500 text-white border-blue-700"
-                                : segment.rewardType === "lose"
-                                ? "bg-red-600 text-white border-red-700"
-                                : "bg-background text-foreground border-input"
-                            }
-                          `}
-                          data-testid={`select-reward-type-${index}`}
-                        >
-                          <option value="cash" className="bg-white text-black">Cash (£)</option>
-                          <option value="points" className="bg-white text-black">Points</option>
-                          <option value="lose" className="bg-white text-black">No Win</option>
-                        </select>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Reward Value</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={segment.rewardValue}
-                          onChange={(e) =>
-                            updateSegment(index, {
-                              rewardValue: parseFloat(e.target.value) || 0,
-                            })
-                          }
-                          disabled={segment.rewardType === "lose"}
-                          data-testid={`input-reward-value-${index}`}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Probability (%)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          value={segment.probability}
-                          onChange={(e) =>
-                            updateSegment(index, {
-                              probability: parseFloat(e.target.value) || 0,
-                            })
-                          }
-                          placeholder="e.g. 0.5, 1, 2.5"
-                          data-testid={`input-probability-${index}`}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Max Wins</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={segment.maxWins ?? ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            updateSegment(index, {
-                              maxWins: val === "" ? null : parseInt(val, 10),
-                            });
-                          }}
-                          placeholder="Unlimited"
-                          data-testid={`input-max-wins-${index}`}
-                          className={isMaxWinsReached ? "border-red-500" : ""}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Current Wins</Label>
-                        <div className="h-10 px-3 rounded-md border border-input bg-muted flex items-center justify-center">
-                          <span className={`font-medium ${isMaxWinsReached ? "text-red-600" : "text-foreground"}`}>
-                            {segment.currentWins || 0}
-                          </span>
-                          {isMaxWinsReached && (
-                            <span className="ml-2 text-xs text-red-600 font-medium">(Max Reached)</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-<DialogFooter className="flex justify-between">
-  <Button
-    variant="destructive"
-    onClick={() => {
-      if (
-        confirm(
-          "Are you sure? This will permanently reset ALL current wins for Wheel 2."
-        )
-      ) {
-        resetWinsMutation.mutate();
-      }
-    }}
-    disabled={resetWinsMutation.isPending}
-  >
-    {resetWinsMutation.isPending ? "Resetting..." : "Reset Wins"}
-  </Button>
 
-  <div className="flex gap-2">
-    <Button
-      variant="outline"
-      onClick={() => onOpenChange(false)}
-      disabled={saveMutation.isPending}
-    >
-      Cancel
-    </Button>
-    <Button
-      onClick={() => saveMutation.mutate()}
-      disabled={!isProbabilityValid || saveMutation.isPending}
-    >
-      {saveMutation.isPending ? "Saving..." : "Save Settings"}
-    </Button>
-  </div>
-</DialogFooter>
+//   if (isLoading) {
+//     return (
+//       <Dialog open={open} onOpenChange={onOpenChange}>
+//         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+//           <div className="flex items-center justify-center h-64">
+//             <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+//           </div>
+//         </DialogContent>
+//       </Dialog>
+//     );
+//   }
 
-        {/* <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={saveMutation.isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={!isProbabilityValid || saveMutation.isPending}
-            data-testid="button-save-wheel-settings"
-          >
-            {saveMutation.isPending ? "Saving..." : "Save Settings"}
-          </Button>
-        </DialogFooter> */}
-      </DialogContent>
-    </Dialog>
-  );
-}
+//   return (
+//     <Dialog open={open} onOpenChange={onOpenChange}>
+//       <DialogContent className="max-w-7xl max-h-[90vh] bg-gray-700 overflow-y-auto">
+//         <DialogHeader>
+//           <DialogTitle>Configure Arcade Spin (Wheel 2)</DialogTitle>
+//           <p className="text-sm text-muted-foreground">
+//             12-segment wheel configuration
+//           </p>
+//         </DialogHeader>
+
+//         <div className="space-y-4 py-4">
+//           {/* Wheel Visibility Toggle */}
+//           <div className="flex items-center justify-between rounded-lg border p-4">
+//             <div className="space-y-0.5">
+//               <Label className="text-sm font-medium">Show Wheel on Frontend</Label>
+//               <p className="text-xs text-muted-foreground">
+//                 Hide the wheel on the frontend while you adjust prizes
+//               </p>
+//             </div>
+//             <Switch
+//               checked={isVisible}
+//               onCheckedChange={setIsVisible}
+//               data-testid="switch-wheel-visible"
+//             />
+//           </div>
+
+//           <div className="space-y-2">
+//             <div className="flex items-center justify-between">
+//               <Label className="text-lg font-semibold">Arcade Spin Segments</Label>
+//               <div
+//                 className={`px-3 py-1 rounded-md ${isProbabilityValid ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
+//               >
+//                 Total: {totalProbability.toFixed(2)}%{" "}
+//                 {isProbabilityValid ? "✓" : "(must be 100%)"}
+//               </div>
+//             </div>
+
+//             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto pr-2">
+//               {segments.map((segment, index) => {
+//                 const isMaxWinsReached = segment.maxWins && segment.maxWins > 0 && 
+//                                          (segment.currentWins || 0) >= segment.maxWins;
+//                 return (
+//                   <div
+//                     key={segment.id}
+//                     className="border border-border rounded-lg p-4 space-y-3 bg-card"
+//                   >
+//                     {/* Simplified header */}
+//                     <div className="flex items-center justify-between mb-2 pb-2 border-b">
+//                       <div className="flex items-center gap-2">
+//                         <span className="font-semibold text-sm">Position {index + 1}</span>
+//                       </div>
+//                       <div className="flex gap-1">
+//                         <Button
+//                           type="button"
+//                           variant="ghost"
+//                           size="sm"
+//                           onClick={() => moveSegmentUp(index)}
+//                           disabled={index === 0}
+//                           className="h-7 w-7 p-0"
+//                         >
+//                           ↑
+//                         </Button>
+//                         <Button
+//                           type="button"
+//                           variant="ghost"
+//                           size="sm"
+//                           onClick={() => moveSegmentDown(index)}
+//                           disabled={index === segments.length - 1}
+//                           className="h-7 w-7 p-0"
+//                         >
+//                           ↓
+//                         </Button>
+//                       </div>
+//                     </div>
+
+//                     <div className="grid grid-cols-2 gap-3">
+//                       <div>
+//                         <Label className="text-xs">Label</Label>
+//                         <Input
+//                           value={segment.label}
+//                           onChange={(e) =>
+//                             updateSegment(index, { label: e.target.value })
+//                           }
+//                           data-testid={`input-label-${index}`}
+//                         />
+//                       </div>
+//                       <div>
+//                         <Label className="text-xs">Color (hex)</Label>
+//                         <Input
+//                           value={segment.color}
+//                           onChange={(e) =>
+//                             updateSegment(index, { color: e.target.value })
+//                           }
+//                           data-testid={`input-color-${index}`}
+//                         />
+//                       </div>
+//                     </div>
+
+//                     <div className="grid grid-cols-5 gap-3">
+//                       <div>
+//                         <Label className="text-xs">Reward Type</Label>
+//                         <select
+//                           value={segment.rewardType}
+//                           onChange={(e) =>
+//                             updateSegment(index, { rewardType: e.target.value as any })
+//                           }
+//                           className={`
+//                             w-full h-10 px-3 rounded-md border 
+//                             appearance-none
+//                             ${
+//                               segment.rewardType === "cash"
+//                                 ? "bg-green-600 text-white border-green-700"
+//                                 : segment.rewardType === "points"
+//                                 ? "bg-yellow-500 text-white border-blue-700"
+//                                 : segment.rewardType === "lose"
+//                                 ? "bg-red-600 text-white border-red-700"
+//                                 : "bg-background text-foreground border-input"
+//                             }
+//                           `}
+//                           data-testid={`select-reward-type-${index}`}
+//                         >
+//                           <option value="cash" className="bg-white text-black">Cash (£)</option>
+//                           <option value="points" className="bg-white text-black">Points</option>
+//                           <option value="lose" className="bg-white text-black">No Win</option>
+//                         </select>
+//                       </div>
+//                       <div>
+//                         <Label className="text-xs">Reward Value</Label>
+//                         <Input
+//                           type="number"
+//                           step="0.01"
+//                           value={segment.rewardValue}
+//                           onChange={(e) =>
+//                             updateSegment(index, {
+//                               rewardValue: parseFloat(e.target.value) || 0,
+//                             })
+//                           }
+//                           disabled={segment.rewardType === "lose"}
+//                           data-testid={`input-reward-value-${index}`}
+//                         />
+//                       </div>
+//                       <div>
+//                         <Label className="text-xs">Probability (%)</Label>
+//                         <Input
+//                           type="number"
+//                           step="0.01"
+//                           min="0"
+//                           max="100"
+//                           value={segment.probability}
+//                           onChange={(e) =>
+//                             updateSegment(index, {
+//                               probability: parseFloat(e.target.value) || 0,
+//                             })
+//                           }
+//                           placeholder="e.g. 0.5, 1, 2.5"
+//                           data-testid={`input-probability-${index}`}
+//                         />
+//                       </div>
+//                       <div>
+//                         <Label className="text-xs">Max Wins</Label>
+//                         <Input
+//                           type="number"
+//                           min="0"
+//                           value={segment.maxWins ?? ""}
+//                           onChange={(e) => {
+//                             const val = e.target.value;
+//                             updateSegment(index, {
+//                               maxWins: val === "" ? null : parseInt(val, 10),
+//                             });
+//                           }}
+//                           placeholder="Unlimited"
+//                           data-testid={`input-max-wins-${index}`}
+//                           className={isMaxWinsReached ? "border-red-500" : ""}
+//                         />
+//                       </div>
+//                       <div>
+//                         <Label className="text-xs">Current Wins</Label>
+//                         <div className="h-10 px-3 rounded-md border border-input bg-muted flex items-center justify-center">
+//                           <span className={`font-medium ${isMaxWinsReached ? "text-red-600" : "text-foreground"}`}>
+//                             {segment.currentWins || 0}
+//                           </span>
+//                           {isMaxWinsReached && (
+//                             <span className="ml-2 text-xs text-red-600 font-medium">(Max Reached)</span>
+//                           )}
+//                         </div>
+//                       </div>
+//                     </div>
+//                   </div>
+//                 );
+//               })}
+//             </div>
+//           </div>
+//         </div>
+// <DialogFooter className="flex justify-between">
+//   <Button
+//     variant="destructive"
+//     onClick={() => {
+//       if (
+//         confirm(
+//           "Are you sure? This will permanently reset ALL current wins for Wheel 2."
+//         )
+//       ) {
+//         resetWinsMutation.mutate();
+//       }
+//     }}
+//     disabled={resetWinsMutation.isPending}
+//   >
+//     {resetWinsMutation.isPending ? "Resetting..." : "Reset Wins"}
+//   </Button>
+
+//   <div className="flex gap-2">
+//     <Button
+//       variant="outline"
+//       onClick={() => onOpenChange(false)}
+//       disabled={saveMutation.isPending}
+//     >
+//       Cancel
+//     </Button>
+//     <Button
+//       onClick={() => saveMutation.mutate()}
+//       disabled={!isProbabilityValid || saveMutation.isPending}
+//     >
+//       {saveMutation.isPending ? "Saving..." : "Save Settings"}
+//     </Button>
+//   </div>
+// </DialogFooter>
+
+//         {/* <DialogFooter>
+//           <Button
+//             variant="outline"
+//             onClick={() => onOpenChange(false)}
+//             disabled={saveMutation.isPending}
+//           >
+//             Cancel
+//           </Button>
+//           <Button
+//             onClick={() => saveMutation.mutate()}
+//             disabled={!isProbabilityValid || saveMutation.isPending}
+//             data-testid="button-save-wheel-settings"
+//           >
+//             {saveMutation.isPending ? "Saving..." : "Save Settings"}
+//           </Button>
+//         </DialogFooter> */}
+//       </DialogContent>
+//     </Dialog>
+//   );
+// }

@@ -60,6 +60,7 @@ import AdminWellbeing from "./pages/admin/well-being";
 import AdminRingtonePop from "./pages/admin/ringtone-pop";
 import AdminPopBalloon from "./pages/admin/admin-pop-balloon";
 import VerifyEmailPage from "./pages/verify-email";
+import AdminSpinWheelSettings from "./pages/admin/AdminSpinWheelSettings";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -122,6 +123,7 @@ function Router() {
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/spin-wheel" component={AdminSpinWheel} />
+      <Route path="/admin/wheel-2-settings" component={AdminSpinWheelSettings} />
       <Route path="/admin/scratch-card" component={AdminScratchCard} />
       <Route path="/admin/competitions" component={AdminCompetitions} />
       <Route path="/admin/entries" component={AdminEntries} />

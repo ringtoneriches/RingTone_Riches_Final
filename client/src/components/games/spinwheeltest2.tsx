@@ -27,7 +27,7 @@ import prize12 from "../../../../attached_assets/Arcade/dead.svg";
 import background from "../../../../attached_assets/Arcade/arcadeBg.mp4";
 
 import pointer from "../../../../attached_assets/Arcade/arrowdown.svg";
-import middlebtn from "../../../../attached_assets/Arcade/middlebtn.svg";
+import middlebtn from "../../../../attached_assets/Arcade/btn.png";
 import ring from "../../../../attached_assets/Arcade/ring.svg"
 import centerVideo from "../../../../attached_assets/spinweel2video.mp4"
 import congrats from "../../../../attached_assets/sounds/congrats.mp3"
@@ -35,18 +35,18 @@ import { useLocation } from "wouter";
 
 // Icon mapping for admin configuration - uses car PNG images
 export const ARCADE_ICON_MAP: Record<string, any> = {
-  Bomb: prize1,
-  Chemical: prize2,
-  Coin: prize3,
-  Current: prize4,
-  Diamond: prize5,
-  Fire: prize6,
-  Heart: prize7,
-  Key: prize8,
-  Shield: prize9,
-  Star: prize10,
-  Treasure: prize11,
-  Dead: prize12,
+  Bomb: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/bomb.svg",
+  Chemical: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/chemical.svg",
+  Coin: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/coin.svg",
+  Current: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/current.svg",
+  Diamond: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/diamond.svg",
+  Fire: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/fire.svg",
+  Heart: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/heart.svg",
+  Key: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/key.svg",
+  Shield: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/shield.svg",
+  Star: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/star.svg",
+  Treasure: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/treasure.svg",
+  Dead: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/dead.svg",
 };
 
 interface SpinWheelProps {
@@ -414,7 +414,11 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
   
   // INCREASE CANVAS SIZE FOR BIGGER ICONS
   const displaySize = isMobile ? Math.min(window.innerWidth - 10, 450) : 615; // Increased from 450/600
-  const centerRadius = isMobile ? 40 : 50;
+  const screenWidth = window.innerWidth;
+  const centerRadius =  screenWidth <= 376
+    ? 35  
+    :  isMobile ? 40 : 63;
+
   const centerFontSize = isMobile ? 12 : 16;
 
   canvas.width = displaySize * dpr;
@@ -537,7 +541,24 @@ ctx.restore();
 
   // 🎯 Center circle
   
+// 🎯 Center button background
+ctx.beginPath();
+ctx.arc(centerX, centerY, centerRadius, 0, 2 * Math.PI);
+ctx.fillStyle = "#1a1a1a"; // dark center
+ctx.fill();
 
+// 🟣 Center ring (purple glow ring)
+ctx.strokeStyle = "rgba(175, 55, 212, 1)";
+ctx.lineWidth = isMobile ? 4 : 5;
+ctx.shadowColor = "rgba(175, 55, 212, 0.9)";
+ctx.shadowBlur = isMobile ? 15 : 20;
+ctx.stroke();
+
+// Inner sharp white ring (optional but nice)
+ctx.shadowBlur = 0;
+ctx.strokeStyle = "#ffffff";
+ctx.lineWidth = isMobile ? 1.5 : 2;
+ctx.stroke();
   // SPIN text
   ctx.fillStyle = "#D4AF37";
   ctx.font = `bold ${centerFontSize}px Inter`;
@@ -991,16 +1012,16 @@ if (congratsAudioRef.current) {
           }}
         />
 
-        
+      
         <img
           src={middlebtn}
-          className="absolute w-[700px] h-[700px] md:w-[800px] md:h-[800px] z-10"
+          className="absolute w-full  md:w-[800px]  z-10"
           alt="Center Circle"
           />
         <img
         onClick={spinWheel}
           src="/attached_assets/Arcade/spin-cropped.svg"
-          className="absolute w-24 h-24 md:w-[160px] bottom-[36%] sm:bottom-[37%] md:h-[160px] z-10 cursor-pointer"
+          className="absolute spin-name w-[120px] md:w-[170px] bottom-[39%] sm:bottom-[38%] md:h-[160px] z-10 cursor-pointer"
           alt="Center Circle"
           />
         
