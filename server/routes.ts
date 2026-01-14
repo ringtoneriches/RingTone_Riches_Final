@@ -581,152 +581,152 @@ export const isAdmin = (req: any, res: any, next: any) => {
 };
 
 // ✅ Top of the file or after imports
-export async function recheckPendingPayments() {
-  // ⏱️ Time window
-  const minAge = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
-  const maxAge = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+// export async function recheckPendingPayments() {
+//   // ⏱️ Time window
+//   const minAge = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
+//   const maxAge = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
 
-  const pendings = await db.query.pendingPayments.findMany({
-    where: (p, { and, eq, gte, lte }) =>
-      and(
-        eq(p.status, "pending"),
-        gte(p.createdAt, maxAge), // newer than 24h
-        lte(p.createdAt, minAge) // older than 5m
-      ),
-  });
+//   const pendings = await db.query.pendingPayments.findMany({
+//     where: (p, { and, eq, gte, lte }) =>
+//       and(
+//         eq(p.status, "pending"),
+//         gte(p.createdAt, maxAge), // newer than 24h
+//         lte(p.createdAt, minAge) // older than 5m
+//       ),
+//   });
 
-  console.log(`🔎 Rechecking ${pendings.length} eligible pending payments`);
+//   console.log(`🔎 Rechecking ${pendings.length} eligible pending payments`);
 
-  for (const p of pendings) {
-    try {
-      if (!p.paymentReference) {
-        console.log(
-          "⚠️ Skipping pending without paymentReference:",
-          p.paymentJobReference
-        );
-        continue;
-      }
+//   for (const p of pendings) {
+//     try {
+//       if (!p.paymentReference) {
+//         console.log(
+//           "⚠️ Skipping pending without paymentReference:",
+//           p.paymentJobReference
+//         );
+//         continue;
+//       }
 
-      let payment;
-      try {
-        payment = await cashflows.getPaymentStatus(
-          p.paymentJobReference,
-          p.paymentReference
-        );
-      } catch (err) {
-        // Handle 404 - payment might be completed and archived
-        if (err.response?.status === 404) {
-          console.log(
-            `📭 Payment ${p.paymentJobReference} not found (likely completed)`
-          );
+//       let payment;
+//       try {
+//         payment = await cashflows.getPaymentStatus(
+//           p.paymentJobReference,
+//           p.paymentReference
+//         );
+//       } catch (err) {
+//         // Handle 404 - payment might be completed and archived
+//         if (err.response?.status === 404) {
+//           console.log(
+//             `📭 Payment ${p.paymentJobReference} not found (likely completed)`
+//           );
 
-          // Check if we have a transaction for this payment
-          const existingTransaction = await db.query.transactions.findFirst({
-            where: (t, { eq }) => eq(t.paymentRef, p.paymentReference),
-          });
+//           // Check if we have a transaction for this payment
+//           const existingTransaction = await db.query.transactions.findFirst({
+//             where: (t, { eq }) => eq(t.paymentRef, p.paymentReference),
+//           });
 
-          if (existingTransaction) {
-            console.log(
-              `✅ Found existing transaction, marking as completed: ${p.paymentJobReference}`
-            );
-            await db
-              .update(pendingPayments)
-              .set({
-                status: "completed",
-                updatedAt: new Date(),
-              })
-              .where(eq(pendingPayments.id, p.id));
-          } else {
-            console.log(
-              `❓ Payment ${p.paymentJobReference} not found and no transaction exists`
-            );
-          }
-          continue;
-        }
-        throw err;
-      }
+//           if (existingTransaction) {
+//             console.log(
+//               `✅ Found existing transaction, marking as completed: ${p.paymentJobReference}`
+//             );
+//             await db
+//               .update(pendingPayments)
+//               .set({
+//                 status: "completed",
+//                 updatedAt: new Date(),
+//               })
+//               .where(eq(pendingPayments.id, p.id));
+//           } else {
+//             console.log(
+//               `❓ Payment ${p.paymentJobReference} not found and no transaction exists`
+//             );
+//           }
+//           continue;
+//         }
+//         throw err;
+//       }
 
-      const { status, paidAmount } = normalizeCashflowsStatus(payment);
+//       const { status, paidAmount } = normalizeCashflowsStatus(payment);
 
-      if (status !== "PAID") continue;
+//       if (status !== "PAID") continue;
 
-      // 🔒 SAFETY CHECKS
-      if (!paidAmount || paidAmount <= 0) {
-        console.warn("❌ Invalid paid amount (cron)", p.paymentJobReference);
-        continue;
-      }
+//       // 🔒 SAFETY CHECKS
+//       if (!paidAmount || paidAmount <= 0) {
+//         console.warn("❌ Invalid paid amount (cron)", p.paymentJobReference);
+//         continue;
+//       }
 
-      if (paidAmount !== Number(p.amount)) {
-        console.error("❌ Amount mismatch (cron)", {
-          expected: p.amount,
-          paid: paidAmount,
-        });
-        continue;
-      }
+//       if (paidAmount !== Number(p.amount)) {
+//         console.error("❌ Amount mismatch (cron)", {
+//           expected: p.amount,
+//           paid: paidAmount,
+//         });
+//         continue;
+//       }
 
-      await processWalletTopup(p.userId, p.paymentReference, paidAmount);
+//       await processWalletTopup(p.userId, p.paymentReference, paidAmount);
 
-      await db
-        .update(pendingPayments)
-        .set({
-          status: "completed",
-          updatedAt: new Date(),
-        })
-        .where(eq(pendingPayments.id, p.id));
+//       await db
+//         .update(pendingPayments)
+//         .set({
+//           status: "completed",
+//           updatedAt: new Date(),
+//         })
+//         .where(eq(pendingPayments.id, p.id));
 
-      console.log("♻️ Recovered payment:", p.paymentJobReference);
-    } catch (err) {
-      console.error("❌ Recheck error:", p.paymentJobReference, err.message);
-    }
-  }
-}
+//       console.log("♻️ Recovered payment:", p.paymentJobReference);
+//     } catch (err) {
+//       console.error("❌ Recheck error:", p.paymentJobReference, err.message);
+//     }
+//   }
+// }
 
-export async function cleanup404Payments() {
-  // Find payments that are pending but keep getting 404s
-  // Mark them as "archived" after 7 days
-  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+// export async function cleanup404Payments() {
+//   // Find payments that are pending but keep getting 404s
+//   // Mark them as "archived" after 7 days
+//   const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  const oldPending = await db.query.pendingPayments.findMany({
-    where: (p, { and, eq, lte }) =>
-      and(
-        eq(p.status, "pending"),
-        lte(p.createdAt, cutoff),
-        // Optional: only those with paymentReference
-        sql`${p.paymentReference} IS NOT NULL`
-      ),
-  });
+//   const oldPending = await db.query.pendingPayments.findMany({
+//     where: (p, { and, eq, lte }) =>
+//       and(
+//         eq(p.status, "pending"),
+//         lte(p.createdAt, cutoff),
+//         // Optional: only those with paymentReference
+//         sql`${p.paymentReference} IS NOT NULL`
+//       ),
+//   });
 
-  console.log(`🧹 Found ${oldPending.length} old pending payments to cleanup`);
+//   console.log(`🧹 Found ${oldPending.length} old pending payments to cleanup`);
 
-  for (const p of oldPending) {
-    // Check if transaction exists (payment was processed)
-    const transaction = await db.query.transactions.findFirst({
-      where: (t, { eq }) => eq(t.paymentRef, p.paymentReference),
-    });
+//   for (const p of oldPending) {
+//     // Check if transaction exists (payment was processed)
+//     const transaction = await db.query.transactions.findFirst({
+//       where: (t, { eq }) => eq(t.paymentRef, p.paymentReference),
+//     });
 
-    if (transaction) {
-      // Transaction exists, so payment was processed
-      await db
-        .update(pendingPayments)
-        .set({
-          status: "completed",
-          updatedAt: new Date(),
-        })
-        .where(eq(pendingPayments.id, p.id));
-      console.log(`✅ Cleaned up completed payment: ${p.paymentJobReference}`);
-    } else {
-      // No transaction, mark as expired
-      await db
-        .update(pendingPayments)
-        .set({
-          status: "expired",
-          updatedAt: new Date(),
-        })
-        .where(eq(pendingPayments.id, p.id));
-      console.log(`📭 Marked expired payment: ${p.paymentJobReference}`);
-    }
-  }
-}
+//     if (transaction) {
+//       // Transaction exists, so payment was processed
+//       await db
+//         .update(pendingPayments)
+//         .set({
+//           status: "completed",
+//           updatedAt: new Date(),
+//         })
+//         .where(eq(pendingPayments.id, p.id));
+//       console.log(`✅ Cleaned up completed payment: ${p.paymentJobReference}`);
+//     } else {
+//       // No transaction, mark as expired
+//       await db
+//         .update(pendingPayments)
+//         .set({
+//           status: "expired",
+//           updatedAt: new Date(),
+//         })
+//         .where(eq(pendingPayments.id, p.id));
+//       console.log(`📭 Marked expired payment: ${p.paymentJobReference}`);
+//     }
+//   }
+// }
 
 function normalizeCashflowsStatus(payment: any): {
   status: "PAID" | "PENDING" | "FAILED" | "UNKNOWN";
@@ -837,32 +837,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  app.post(
-    "/api/admin/cleanup-payments",
-    isAuthenticated,
-    isAdmin,
-    async (req: any, res) => {
-      try {
-        console.log("🔧 Manual cleanup triggered by admin");
-        await cleanup404Payments();
+  // app.post(
+  //   "/api/admin/cleanup-payments",
+  //   isAuthenticated,
+  //   isAdmin,
+  //   async (req: any, res) => {
+  //     try {
+  //       console.log("🔧 Manual cleanup triggered by admin");
+  //       await cleanup404Payments();
 
-        // Also run recheck to see current state
-        await recheckPendingPayments();
+  //       // Also run recheck to see current state
+  //       await recheckPendingPayments();
 
-        res.json({
-          success: true,
-          message: "Cleanup completed manually",
-        });
-      } catch (err) {
-        console.error("❌ Manual cleanup error:", err);
-        res.status(500).json({
-          success: false,
-          message: "Cleanup failed",
-          error: err.message,
-        });
-      }
-    }
-  );
+  //       res.json({
+  //         success: true,
+  //         message: "Cleanup completed manually",
+  //       });
+  //     } catch (err) {
+  //       console.error("❌ Manual cleanup error:", err);
+  //       res.status(500).json({
+  //         success: false,
+  //         message: "Cleanup failed",
+  //         error: err.message,
+  //       });
+  //     }
+  //   }
+  // );
 
   app.post("/api/admin/verify-all-existing-users", async (req, res) => {
     try {
@@ -5900,176 +5900,234 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post(
-    "/api/wallet/topup-checkout",
-    isAuthenticated,
-    async (req: any, res) => {
-      try {
-        const { amount } = req.body;
-        const userId = req.user.id;
+  "/api/wallet/topup-checkout",
+  isAuthenticated,
+  async (req: any, res) => {
+    try {
+      const { amount } = req.body;
+      const userId = req.user.id;
 
-        if (!amount || Number(amount) <= 0) {
-          return res.status(400).json({ message: "Invalid amount" });
-        }
-
-        // ❌ DO NOT enforce spend limit on deposits
-        // await enforceDailySpendLimit(userId, Number(amount));
-
-        const session = await cashflows.createPaymentSession(amount, userId);
-
-        if (!session?.hostedPageUrl || !session?.paymentJobReference) {
-          return res.status(500).json({ message: "Failed to create payment" });
-        }
-
-        await db.insert(pendingPayments).values({
-          userId,
-          paymentJobReference: session.paymentJobReference,
-          amount: Number(amount).toFixed(2),
-          status: "pending",
-          createdAt: new Date(),
-        });
-
-        res.json({
-          redirectUrl: session.hostedPageUrl,
-          paymentJobRef: session.paymentJobReference,
-        });
-      } catch (err) {
-        console.error("Checkout error:", err);
-        res.status(500).json({ message: "Checkout failed" });
+      if (!amount || Number(amount) <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
       }
+
+      // ✅ ADD DAILY LIMIT CHECK HERE
+      const dailySpend = await getTodaysCashSpend(userId);
+      const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      
+      if (user[0]?.dailySpendLimit) {
+        const limit = Number(user[0].dailySpendLimit);
+        const spent = dailySpend;
+        const requestedAmount = Number(amount);
+        
+        if (spent + requestedAmount > limit) {
+          return res.status(400).json({
+            code: "DAILY_LIMIT_EXCEEDED",
+            message: `Daily spending limit of £${limit.toFixed(2)} exceeded. You've already spent £${spent.toFixed(2)} today.`,
+            spent: spent.toFixed(2),
+            limit: limit.toFixed(2)
+          });
+        }
+      }
+
+      const session = await cashflows.createPaymentSession(amount, userId);
+
+      if (!session?.hostedPageUrl || !session?.paymentJobReference) {
+        return res.status(500).json({ message: "Failed to create payment" });
+      }
+
+      res.json({
+        redirectUrl: session.hostedPageUrl,
+        paymentJobRef: session.paymentJobReference,
+      });
+    } catch (err) {
+      console.error("Checkout error:", err);
+      res.status(500).json({ message: "Checkout failed" });
     }
-  );
+  }
+);
 
   app.post("/api/wallet/confirm-topup", isAuthenticated, async (req, res) => {
-    const { paymentJobRef, paymentRef } = req.body;
+    try {
+      const { paymentJobRef, paymentRef } = req.body;
+      const userId = req.user.id;
+      const payment = await cashflows.getPaymentStatus(
+        paymentJobRef,
+        paymentRef ?? undefined
+      );
 
-    const payment = await cashflows.getPaymentStatus(
-      paymentJobRef,
-      paymentRef ?? undefined
-    );
+      const { status , paidAmount } = normalizeCashflowsStatus(payment);
 
-    const { status } = normalizeCashflowsStatus(payment);
+      // ✅ Save paymentReference for recovery job
+      // if (paymentRef && status === "PAID") {
+      //   await db
+      //     .update(pendingPayments)
+      //     .set({ paymentReference: paymentRef })
+      //     .where(eq(pendingPayments.paymentJobReference, paymentJobRef));
+      // }
 
-    // ✅ Save paymentReference for recovery job
-    if (paymentRef && status === "PAID") {
-      await db
-        .update(pendingPayments)
-        .set({ paymentReference: paymentRef })
-        .where(eq(pendingPayments.paymentJobReference, paymentJobRef));
+      if (status === "PAID") {
+        // ✅ Credit wallet
+        await processWalletTopup(userId, paymentRef, paidAmount);
+        return res.json({
+          status,
+          message: "Payment received. Wallet successfully updated!",
+        });
+      }
+
+      // If payment is still pending or failed
+      return res.json({
+        status,
+        message: "Payment not completed. Please try again manually.",
+      });
+    } catch (err: any) {
+      console.error("Confirm top-up error:", err);
+      return res.status(500).json({ message: "Failed to confirm wallet top-up" });
     }
-
-    res.json({
-      status,
-      message:
-        status === "PAID"
-          ? "Payment received. Wallet updating."
-          : "Payment processing.",
-    });
   });
 
-  // POST endpoint
-  app.post("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
-    const userId = req.user.id;
-    const { limit } = req.body;
 
-    const parsed = Number(limit);
 
-    // If limit is 0, treat it as removing the limit (set to null)
-    if (parsed === 0) {
-      await db
-        .update(users)
-        .set({
-          dailySpendLimit: null, // Set to null instead of "0.00"
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
+// POST endpoint - 24 hour cooldown (PRODUCTION)
+app.post("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const { limit } = req.body;
 
-      // Audit log
-      await db.insert(auditLogs).values({
-        userId,
-        userName: `${req.user.firstName} ${req.user.lastName}`,
-        email: req.user.email,
-        action: "daily_spend",
-        description: "Daily spend limit removed",
-        createdAt: new Date(),
-      });
+  const parsed = Number(limit);
+  
+  // PRODUCTION: 24 hours = 24 * 60 * 60 * 1000 milliseconds
+  const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
-      return res.json({
-        success: true,
-        dailySpendLimit: null,
+  // First, check if user has changed their limit in the last 24 hours
+  const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const userData = user[0];
+  
+  // Check if user has dailyLimitLastUpdatedAt and it's within 24 hours
+  if (userData.dailyLimitLastUpdatedAt) {
+    const lastUpdated = new Date(userData.dailyLimitLastUpdatedAt);
+    const now = new Date();
+    const msSinceUpdate = now.getTime() - lastUpdated.getTime();
+    
+    if (msSinceUpdate < COOLDOWN_MS) {
+      const remainingMs = COOLDOWN_MS - msSinceUpdate;
+      const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
+      const remainingMinutes = Math.ceil(remainingMs / (1000 * 60));
+      const nextUpdateTime = new Date(lastUpdated.getTime() + COOLDOWN_MS);
+      
+      return res.status(400).json({
+        code: "COOLDOWN_ACTIVE",
+        error: `Daily limit can only be changed once every 24 hours. Please wait ${remainingHours} hours.`,
+        nextUpdateAvailable: nextUpdateTime.toISOString(),
+        lastUpdated: userData.dailyLimitLastUpdatedAt,
+        remainingHours: remainingHours,
+        remainingMinutes: remainingMinutes
       });
     }
+  }
 
-    // Existing validation for non-zero values
-    if (isNaN(parsed) || parsed < 0) {
-      return res.status(400).json({ error: "Invalid limit" });
-    }
-
+  // If limit is 0, treat it as removing the limit (set to null)
+  if (parsed === 0) {
     await db
       .update(users)
       .set({
-        dailySpendLimit: parsed.toFixed(2),
+        dailySpendLimit: null,
+        dailyLimitLastUpdatedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId));
 
-    // Audit (important for compliance)
+    // Audit log
     await db.insert(auditLogs).values({
       userId,
       userName: `${req.user.firstName} ${req.user.lastName}`,
       email: req.user.email,
       action: "daily_spend",
-      description: `Daily spend limit set to £${parsed.toFixed(2)}`,
+      description: "Daily spend limit removed",
       createdAt: new Date(),
     });
 
-    res.json({
+    return res.json({
       success: true,
-      dailySpendLimit: parsed.toFixed(2),
+      dailySpendLimit: null,
+      cooldownUntil: new Date(Date.now() + COOLDOWN_MS).toISOString(),
+      message: "Daily spending limit removed. You can set a new limit in 24 hours."
     });
+  }
+
+  // Existing validation for non-zero values
+  if (isNaN(parsed) || parsed < 0) {
+    return res.status(400).json({ error: "Invalid limit" });
+  }
+
+  await db
+    .update(users)
+    .set({
+      dailySpendLimit: parsed.toFixed(2),
+      dailyLimitLastUpdatedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
+
+  // Audit (important for compliance)
+  await db.insert(auditLogs).values({
+    userId,
+    userName: `${req.user.firstName} ${req.user.lastName}`,
+    email: req.user.email,
+    action: "daily_spend",
+    description: `Daily spend limit set to £${parsed.toFixed(2)}`,
+    createdAt: new Date(),
   });
 
-  // PUT endpoint
-  app.put("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
-    const userId = req.user.id;
-    const { limit } = req.body;
+  res.json({
+    success: true,
+    dailySpendLimit: parsed.toFixed(2),
+    cooldownUntil: new Date(Date.now() + COOLDOWN_MS).toISOString(),
+    message: "Daily spending limit updated. You can change it again in 24 hours."
+  });
+});
 
-    const parsed = Number(limit);
 
-    // If limit is 0, treat it as removing the limit
-    if (parsed === 0) {
-      await db
-        .update(users)
-        .set({
-          dailySpendLimit: null, // Set to null
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
+// PUT endpoint - 24 hour cooldown (PRODUCTION)
+app.put("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  const { limit } = req.body;
 
-      // Audit (important for compliance)
-      await db.insert(auditLogs).values({
-        userId,
-        userName: `${req.user.firstName} ${req.user.lastName}`,
-        email: req.user.email,
-        action: "daily_spend_updated",
-        description: "Daily spend limit removed",
-        createdAt: new Date(),
-      });
+  const parsed = Number(limit);
+  
+  // PRODUCTION: 24 hours
+  const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
-      return res.json({
-        success: true,
-        dailySpendLimit: null,
+  // Check cooldown first
+  const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const userData = user[0];
+  
+  if (userData.dailyLimitLastUpdatedAt) {
+    const lastUpdated = new Date(userData.dailyLimitLastUpdatedAt);
+    const now = new Date();
+    const msSinceUpdate = now.getTime() - lastUpdated.getTime();
+    
+    if (msSinceUpdate < COOLDOWN_MS) {
+      const remainingMs = COOLDOWN_MS - msSinceUpdate;
+      const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
+      const nextUpdateTime = new Date(lastUpdated.getTime() + COOLDOWN_MS);
+      
+      return res.status(400).json({
+        code: "COOLDOWN_ACTIVE",
+        error: `Daily limit can only be changed once every 24 hours. Please wait ${remainingHours} hours.`,
+        nextUpdateAvailable: nextUpdateTime.toISOString(),
+        lastUpdated: userData.dailyLimitLastUpdatedAt,
+        remainingHours: remainingHours
       });
     }
+  }
 
-    // Existing validation for non-zero values
-    if (isNaN(parsed) || parsed < 0) {
-      return res.status(400).json({ error: "Invalid limit" });
-    }
-
+  // If limit is 0, treat it as removing the limit
+  if (parsed === 0) {
     await db
       .update(users)
       .set({
-        dailySpendLimit: parsed.toFixed(2),
+        dailySpendLimit: null,
+        dailyLimitLastUpdatedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId));
@@ -6080,60 +6138,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
       userName: `${req.user.firstName} ${req.user.lastName}`,
       email: req.user.email,
       action: "daily_spend_updated",
-      description: `Daily spend limit set to £${parsed.toFixed(2)}`,
+      description: "Daily spend limit removed",
       createdAt: new Date(),
     });
 
-    res.json({
+    return res.json({
       success: true,
-      dailySpendLimit: parsed.toFixed(2),
+      dailySpendLimit: null,
+      cooldownUntil: new Date(Date.now() + COOLDOWN_MS).toISOString(),
+      message: "Daily spending limit removed. You can set a new limit in 24 hours."
     });
-  });
-
-  app.get("/api/wellbeing", isAuthenticated, async (req, res) => {
-    const spentToday = await getTodaysCashSpend(req.user.id);
-    const limit = req.user.dailySpendLimit;
-
-    if (limit === null) {
-      return res.json({
-        dailySpendLimit: null,
-        spentToday: spentToday.toFixed(2),
-        remaining: null,
-      });
-    }
-
-    const limitNum = Number(limit);
-
-    res.json({
-      dailySpendLimit: limit,
-      spentToday: spentToday.toFixed(2),
-      remaining: Math.max(0, limitNum - spentToday).toFixed(2),
-    });
-  });
-
-  async function getTodaysCashSpend(userId: string) {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const result = await db
-      .select({
-        total: sql<number>`COALESCE(SUM(${transactions.amount}), 0)`,
-      })
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.userId, userId),
-          eq(transactions.type, "deposit"),
-          gte(transactions.createdAt, startOfDay),
-          lte(transactions.createdAt, endOfDay)
-        )
-      );
-
-    return Number(result[0]?.total || 0);
   }
+
+  // Existing validation for non-zero values
+  if (isNaN(parsed) || parsed < 0) {
+    return res.status(400).json({ error: "Invalid limit" });
+  }
+
+  await db
+    .update(users)
+    .set({
+      dailySpendLimit: parsed.toFixed(2),
+      dailyLimitLastUpdatedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
+
+  // Audit (important for compliance)
+  await db.insert(auditLogs).values({
+    userId,
+    userName: `${req.user.firstName} ${req.user.lastName}`,
+    email: req.user.email,
+    action: "daily_spend_updated",
+    description: `Daily spend limit updated to £${parsed.toFixed(2)}`,
+    createdAt: new Date(),
+  });
+
+  res.json({
+    success: true,
+    dailySpendLimit: parsed.toFixed(2),
+    cooldownUntil: new Date(Date.now() + COOLDOWN_MS).toISOString(),
+    message: "Daily spending limit updated. You can change it again in 24 hours."
+  });
+});
+
+// Update GET endpoint for testing
+app.get("/api/wellbeing", isAuthenticated, async (req, res) => {
+  const spentToday = await getTodaysCashSpend(req.user.id);
+  const user = await db.select().from(users).where(eq(users.id, req.user.id)).limit(1);
+  const userData = user[0];
+  const limit = userData.dailySpendLimit;
+
+  // PRODUCTION: 24 hours cooldown
+  const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+  
+  // Calculate cooldown info
+  let cooldownInfo = null;
+  if (userData.dailyLimitLastUpdatedAt) {
+    const lastUpdated = new Date(userData.dailyLimitLastUpdatedAt);
+    const now = new Date();
+    const msSinceUpdate = now.getTime() - lastUpdated.getTime();
+    
+    if (msSinceUpdate < COOLDOWN_MS) {
+      const remainingMs = COOLDOWN_MS - msSinceUpdate;
+      
+      // Calculate hours and minutes correctly
+      const totalMinutes = Math.floor(remainingMs / (1000 * 60));
+      const remainingHours = Math.floor(totalMinutes / 60);
+      const remainingMinutes = totalMinutes % 60; // This should be 0-59, not 60!
+      
+      const nextUpdateTime = new Date(lastUpdated.getTime() + COOLDOWN_MS);
+      
+      cooldownInfo = {
+        active: true,
+        remainingHours: remainingHours,
+        remainingMinutes: remainingMinutes,
+        totalRemainingMinutes: totalMinutes, // Add this for frontend countdown
+        nextUpdateAvailable: nextUpdateTime.toISOString(),
+        lastUpdated: userData.dailyLimitLastUpdatedAt
+      };
+    } else {
+      cooldownInfo = {
+        active: false,
+        canUpdate: true
+      };
+    }
+  }
+
+  if (limit === null) {
+    return res.json({
+      dailySpendLimit: null,
+      spentToday: spentToday.toFixed(2),
+      remaining: null,
+      cooldown: cooldownInfo
+    });
+  }
+
+  const limitNum = Number(limit);
+
+  res.json({
+    dailySpendLimit: limit,
+    spentToday: spentToday.toFixed(2),
+    remaining: Math.max(0, limitNum - spentToday).toFixed(2),
+    cooldown: cooldownInfo
+  });
+});
+
+ async function getTodaysCashSpend(userId: string) {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const result = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(${transactions.amount}), 0)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.userId, userId),
+        // ✅ Track both deposits AND top-ups for daily spend limit
+        or(
+          eq(transactions.type, "deposit"), // For competition entries
+          eq(transactions.type, "topup")    // For wallet top-ups
+        ),
+        gte(transactions.createdAt, startOfDay),
+        lte(transactions.createdAt, endOfDay)
+      )
+    );
+
+  return Number(result[0]?.total || 0);
+}
 
   async function enforceDailySpendLimit(
     userId: string,

@@ -26,6 +26,13 @@ interface WellbeingData {
   dailySpendLimit?: string | null;
   spentToday?: string;
   remaining?: string | null;
+  cooldown?: {
+    active: boolean;
+    remainingHours?: string;
+    nextUpdateAvailable?: string;
+    lastUpdated?: string;
+    canUpdate?: boolean;
+  };
 }
 
 
@@ -49,12 +56,16 @@ export default function Wellbeing() {
   const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
   const [isSuspensionOpen, setIsSuspensionOpen] = useState(false);
   const [isProcessingLogout, setIsProcessingLogout] = useState(false);
-
+const [countdown, setCountdown] = useState<number | null>(null);
   // Fetch wellbeing data
   const { data: wellbeingData, isLoading } = useQuery<WellbeingData>({
     queryKey: ["/api/wellbeing"],
     enabled: !!user,
   });
+
+const cooldownActive = wellbeingData?.cooldown?.active;
+const remainingHours = wellbeingData?.cooldown?.remainingHours;
+const nextUpdateTime = wellbeingData?.cooldown?.nextUpdateAvailable;
 
   // Fetch user data for suspension status
   const { data: userData, refetch: refetchUser } = useQuery<User>({
@@ -77,6 +88,50 @@ useEffect(() => {
   }
 }, [wellbeingData]);
 
+
+// Update the countdown useEffect for hours
+useEffect(() => {
+  if (!cooldownActive || !wellbeingData?.cooldown?.remainingHours) {
+    setCountdown(null);
+    return;
+  }
+
+  // For 24-hour cooldown, we'll count down in minutes for better UX
+  const initialHours = Math.ceil(parseFloat(wellbeingData.cooldown.remainingHours));
+  const initialMinutes = Math.ceil(parseFloat(wellbeingData.cooldown.remainingMinutes || "0"));
+  
+  // Convert to total minutes for countdown
+  const totalMinutes = (initialHours * 60) + initialMinutes;
+  setCountdown(totalMinutes);
+
+  // Start countdown timer (update every minute instead of every second)
+  const timer = setInterval(() => {
+    setCountdown(prev => {
+      if (prev === null || prev <= 1) {
+        clearInterval(timer);
+        // Refresh data when countdown ends
+        queryClient.invalidateQueries({ queryKey: ["/api/wellbeing"] });
+        return null;
+      }
+      return prev - 1;
+    });
+  }, 60000); // Every minute
+
+  return () => clearInterval(timer);
+}, [cooldownActive, wellbeingData?.cooldown?.remainingHours, wellbeingData?.cooldown?.remainingMinutes, queryClient]);
+
+// Helper function to format time display
+const formatTimeDisplay = (minutes: number | null) => {
+  if (minutes === null) return "";
+  
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  
+  if (hours > 0) {
+    return `${hours}h ${mins}m`;
+  }
+  return `${mins}m`;
+};
 
   // Mutation for setting daily limit
   const setDailyLimitMutation = useMutation({
@@ -492,21 +547,32 @@ const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
                   </div>
                   
                   <div className="flex flex-wrap gap-3">
-                    <Button
-                      onClick={handleSetDailyLimit}
-                      disabled={setDailyLimitMutation.isPending || updateDailyLimitMutation.isPending}
-                      className="bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400 shadow-lg shadow-blue-500/50 flex-1"
-                    >
-                      {setDailyLimitMutation.isPending || updateDailyLimitMutation.isPending ? (
-                        <>
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                          Updating...
-                        </>
-                      ) : hasDailyLimit 
-                        ? "Update Limit" 
-                        : "Set Limit"}
-                    </Button>
+              
+<Button
+  onClick={handleSetDailyLimit}
+  disabled={
+    setDailyLimitMutation.isPending || 
+    updateDailyLimitMutation.isPending ||
+    cooldownActive
+  }
+  className="bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400 shadow-lg shadow-blue-500/50 flex-1"
+>
+  {setDailyLimitMutation.isPending || updateDailyLimitMutation.isPending ? (
+    <>
+      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+      Updating...
+    </>
+  ) : cooldownActive ? (
+    // Show hours/minutes instead of seconds
+    `Cooling Down ${formatTimeDisplay(countdown)}`
+  ) : hasDailyLimit ? (
+    "Update Limit"
+  ) : (
+    "Set Limit"
+  )}
+</Button>
                     
+           
                     {/* {hasDailyLimit  && (
                       <Button
                         variant="outline"
@@ -521,6 +587,41 @@ const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
                 </div>
               </div>
             </div>
+          </CardContent>
+          <CardContent>
+
+       {cooldownActive && (
+  <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+    <div className="flex items-center gap-2 text-amber-300">
+      <AlertCircle className="h-4 w-4" />
+      <span className="font-medium">Daily Limit Cooldown Active</span>
+    </div>
+    <p className="text-sm text-amber-200/80 mt-1">
+      You can update your daily limit again in{" "}
+      <span className="font-bold text-amber-300">
+       {formatTimeDisplay(countdown)}
+      </span>.
+      {nextUpdateTime && (
+        <span className="block text-xs mt-1">
+          Next update available: {new Date(nextUpdateTime).toLocaleDateString()} at{" "}
+          {new Date(nextUpdateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+        </span>
+      )}
+    </p>
+    <p className="text-xs text-amber-300/60 mt-2">
+      ⏰ For responsible gaming, daily limits can only be changed once every 24 hours
+    </p>
+    {/* Add a refresh button */}
+    {/* <Button
+      variant="outline"
+      size="sm"
+      className="mt-2 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+      onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/wellbeing"] })}
+    >
+      Refresh Status
+    </Button> */}
+  </div>
+)}
           </CardContent>
         </Card>
 

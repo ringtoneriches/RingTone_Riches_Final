@@ -51,6 +51,7 @@ export const users = pgTable("users", {
   emailVerificationOtpExpiresAt: timestamp("email_verification_otp_expires_at"), 
   ringtonePoints: integer("ringtone_points").default(0),
   receiveNewsletter: boolean("receive_newsletter").default(false),
+  dailyLimitLastUpdatedAt: timestamp("daily_limit_last_updated_at"),
   isAdmin: boolean("is_admin").default(false),
   isActive: boolean("is_active").default(true),
   referralCode: varchar("referral_code").unique(),
