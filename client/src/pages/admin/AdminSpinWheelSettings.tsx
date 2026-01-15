@@ -83,7 +83,7 @@
 
     const resetWinsMutation = useMutation({
         mutationFn: async () => {
-        return apiRequest("/api/admin/game-spin-reset-wins", "POST");
+        return apiRequest("/api/admin/game-spin-2-reset-wins", "POST");
         },
         onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["/api/admin/game-spin-2-config"] });
@@ -185,33 +185,37 @@
     const probabilityDiff = totalProbability - 100;
 
     const handleSave = () => {
-        if (!isValid) {
-        if (segments.length !== 12) {
-            toast({
-            title: "Fix Segments First",
-            description: `Spin wheel must have exactly 12 segments. Currently ${segments.length}`,
-            variant: "destructive",
-            });
-        } else {
-            toast({
-            title: "Fix Probability First",
-            description: `Total must be 100%. Currently ${totalProbability.toFixed(2)}%`,
-            variant: "destructive",
-            });
-        }
-        return;
-        }
+  if (!isValid) {
+    if (segments.length !== 12) {
+      toast({
+        title: "Fix Segments First",
+        description: `Spin wheel must have exactly 12 segments. Currently ${segments.length}`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Fix Probability First",
+        description: `Total must be 100%. Currently ${totalProbability.toFixed(2)}%`,
+        variant: "destructive",
+      });
+    }
+    return;
+  }
 
-        const cleanSegments = segments.map(({ currentWins, rewardValue, probability, ...rest }) => ({
-    ...rest,
-    iconKey: rest.iconKey || "Coin", // Default to "Coin" if no iconKey
-    rewardValue: rewardValue === "" ? 0 : parseFloat(rewardValue as string),
-    probability: probability === "" ? 0 : parseFloat(probability as string),
+  const cleanSegments = segments.map((seg) => ({
+    id: seg.id,
+    label: seg.label,
+    rewardType: seg.rewardType,
+    rewardValue: seg.rewardValue === "" ? 0 : parseFloat(seg.rewardValue as string),
+    probability: seg.probability === "" ? 0 : parseFloat(seg.probability as string),
+    maxWins: seg.maxWins,
+    currentWins: seg.currentWins || 0, // ← KEEP THIS!
+    color: seg.color,
+    iconKey: seg.iconKey || "Coin",
   }));
 
-        updateConfigMutation.mutate({ segments: cleanSegments, isVisible, isActive });
-    };
-
+  updateConfigMutation.mutate({ segments: cleanSegments, isVisible, isActive });
+};
     const getTypeIcon = (type: string) => {
         switch (type) {
         case "cash": return <Coins className="w-4 h-4" />;

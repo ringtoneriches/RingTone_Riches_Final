@@ -771,6 +771,50 @@ function normalizeCashflowsStatus(payment: any): {
   return { status: "UNKNOWN", paidAmount: 0 };
 }
 
+async function updateSegmentWinCount(segmentId: string, wheelType: string) {
+  if (wheelType === "wheel2") {
+    const [config] = await db
+      .select()
+      .from(spinWheel2Configs)
+      .where(eq(spinWheel2Configs.id, "active"));
+    
+    if (config && config.segments) {
+      const updatedSegments = config.segments.map((segment: any) => {
+        if (segment.id === segmentId) {
+          return { ...segment, currentWins: (segment.currentWins || 0) + 1 };
+        }
+        return segment;
+      });
+      
+      await db
+        .update(spinWheel2Configs)
+        .set({ segments: updatedSegments, updated_at: new Date() })
+        .where(eq(spinWheel2Configs.id, "active"));
+    }
+  } else {
+    const [config] = await db
+      .select()
+      .from(gameSpinConfig)
+      .where(eq(gameSpinConfig.id, "active"));
+    
+    if (config && config.segments) {
+      const updatedSegments = config.segments.map((segment: any) => {
+        if (segment.id === segmentId) {
+          return { ...segment, currentWins: (segment.currentWins || 0) + 1 };
+        }
+        return segment;
+      });
+      
+      await db
+        .update(gameSpinConfig)
+        .set({ segments: updatedSegments, updated_at: new Date() })
+        .where(eq(gameSpinConfig.id, "active"));
+    }
+  }
+}
+
+
+
 const FROM_EMAIL = "support@ringtoneriches.co.uk";
 
 async function processWalletTopup(
@@ -3168,517 +3212,567 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const SPIN_COOLDOWN_MS = 3000; // 3 seconds minimum between spins
 
   // SERVER-SIDE: Spin wheel play route with probability and max wins enforcement
-  app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const { orderId, competitionId } = req.body; // ← ADD competitionId
+app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, competitionId } = req.body;
 
-      if (!orderId || !competitionId) {
-        // ← UPDATE validation
-        return res.status(400).json({
+    if (!orderId || !competitionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID and Competition ID are required",
+      });
+    }
+
+    // 🛡️ CRITICAL: Prevent rapid-fire spins
+    const cooldownKey = `${userId}-${orderId}`;
+    const lastSpinTime = spinCooldowns.get(cooldownKey) || 0;
+    const now = Date.now();
+    const timeSinceLastSpin = now - lastSpinTime;
+
+    if (timeSinceLastSpin < SPIN_COOLDOWN_MS) {
+      console.warn(
+        `⚠️ Spin blocked for user ${userId}: Too fast (${timeSinceLastSpin}ms)`
+      );
+      return res.status(429).json({
+        success: false,
+        message: "Please wait a moment before spinning again",
+        cooldownRemaining: SPIN_COOLDOWN_MS - timeSinceLastSpin,
+      });
+    }
+
+    spinCooldowns.set(cooldownKey, now);
+
+    // Verify valid completed order
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "No valid spin purchase found",
+      });
+    }
+
+    // Check spins remaining
+    const spinsUsed = await storage.getSpinsUsed(orderId);
+    const spinsRemaining = order.quantity - spinsUsed;
+
+    if (spinsRemaining <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No spins remaining in this purchase",
+      });
+    }
+
+    // Get user
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Get competition to know which wheel type
+    const competition = await storage.getCompetition(competitionId);
+    if (!competition) {
+      return res.status(404).json({ message: "Competition not found" });
+    }
+
+    const wheelType = competition.wheelType || "wheel1";
+
+    // Fetch correct wheel configuration based on wheel type
+    let wheelConfig;
+    if (wheelType === "wheel2") {
+      const [config] = await db
+        .select()
+        .from(spinWheel2Configs)
+        .where(eq(spinWheel2Configs.id, "active"));
+      wheelConfig = config || DEFAULT_SPIN_WHEEL_2_CONFIG;
+      console.log(`🎡 Using Wheel 2 configuration for competition ${competitionId}`);
+    } else {
+      const [config] = await db
+        .select()
+        .from(gameSpinConfig)
+        .where(eq(gameSpinConfig.id, "active"));
+      wheelConfig = config || DEFAULT_SPIN_WHEEL_CONFIG;
+      console.log(`🎡 Using Wheel 1 configuration for competition ${competitionId}`);
+    }
+
+    const segments = wheelConfig.segments as any[];
+
+    // Filter out segments that reached maxWins limit AND have zero probability
+    console.log("🔍 Checking segment eligibility:");
+    const eligibleSegments = [];
+    for (const segment of segments) {
+      console.log(`\nChecking segment ${segment.id} (${segment.label}):`);
+      
+      // Check probability
+      if (!segment.probability || segment.probability <= 0) {
+        console.log(`  ❌ Skipped - probability ${segment.probability} <= 0`);
+        continue;
+      }
+      console.log(`  ✓ Probability: ${segment.probability}`);
+
+      // Check maxWins - Read from config's currentWins
+      if (segment.maxWins !== null && segment.maxWins !== undefined) {
+        const winCount = segment.currentWins || 0;
+        console.log(`  MaxWins: ${segment.maxWins}, Current Wins: ${winCount}`);
+        
+        if (winCount >= segment.maxWins) {
+          console.log(`  ❌ Skipped - reached maxWins (${winCount}/${segment.maxWins})`);
+          continue;
+        }
+        console.log(`  ✓ Under maxWins (${winCount}/${segment.maxWins})`);
+      } else {
+        console.log(`  ✓ No maxWins limit`);
+      }
+
+      eligibleSegments.push(segment);
+      console.log(`  ✅ Added to eligible segments`);
+    }
+
+    console.log(`\n📊 Total eligible segments: ${eligibleSegments.length}`);
+    console.log(`Eligible segments:`, eligibleSegments.map(s => `${s.id}: ${s.label}`));
+
+    if (eligibleSegments.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No prizes available at this time",
+      });
+    }
+
+    // Weighted random selection
+    const totalWeight = eligibleSegments.reduce(
+      (sum, seg) => sum + seg.probability,
+      0
+    );
+
+    if (totalWeight <= 0) {
+      return res.status(500).json({
+        success: false,
+        message: "Invalid wheel configuration - total probability is zero",
+      });
+    }
+
+    let random = Math.random() * totalWeight;
+    let selectedSegment = eligibleSegments[0];
+
+    for (const segment of eligibleSegments) {
+      random -= segment.probability;
+      if (random <= 0) {
+        selectedSegment = segment;
+        break;
+      }
+    }
+
+    // Record spin usage
+    await storage.recordSpinUsage(orderId, userId);
+
+    // Record the win (with wheel type for tracking)
+    await storage.recordSpinWin({
+      userId,
+      segmentId: selectedSegment.id,
+      rewardType: selectedSegment.rewardType,
+      rewardValue: String(selectedSegment.rewardValue),
+      wheelType: wheelType,
+    });
+
+    // ✅ UPDATE: Increment currentWins in config
+    await updateSegmentWinCount(selectedSegment.id, wheelType);
+    console.log(`✅ Updated currentWins for segment ${selectedSegment.id} in ${wheelType} config`);
+
+    // Validate and award prize based on type
+    if (
+      selectedSegment.rewardType === "cash" &&
+      selectedSegment.rewardValue
+    ) {
+      const amount =
+        typeof selectedSegment.rewardValue === "number"
+          ? selectedSegment.rewardValue
+          : parseFloat(String(selectedSegment.rewardValue));
+
+      if (isNaN(amount) || amount < 0) {
+        return res.status(500).json({
           success: false,
-          message: "Order ID and Competition ID are required",
+          message: "Invalid cash prize configuration",
         });
       }
 
-      // 🛡️ CRITICAL: Prevent rapid-fire spins (anti-auto-consumption)
-      const cooldownKey = `${userId}-${orderId}`;
-      const lastSpinTime = spinCooldowns.get(cooldownKey) || 0;
-      const now = Date.now();
-      const timeSinceLastSpin = now - lastSpinTime;
+      const finalBalance = parseFloat(user.balance || "0") + amount;
+      await storage.updateUserBalance(userId, finalBalance.toFixed(2));
 
-      if (timeSinceLastSpin < SPIN_COOLDOWN_MS) {
-        console.warn(
-          `⚠️ Spin blocked for user ${userId}: Too fast (${timeSinceLastSpin}ms)`
-        );
-        return res.status(429).json({
+      await storage.createTransaction({
+        userId,
+        type: "prize",
+        amount: amount.toFixed(2),
+        description: `Spin Wheel ${wheelType} Prize - £${amount}`,
+      });
+
+      await storage.createWinner({
+        userId,
+        competitionId,
+        prizeDescription: selectedSegment.label,
+        prizeValue: `£${amount}`,
+        imageUrl: null,
+        isShowcase: false,
+      });
+    } else if (
+      selectedSegment.rewardType === "points" &&
+      selectedSegment.rewardValue
+    ) {
+      const points =
+        typeof selectedSegment.rewardValue === "number"
+          ? Math.floor(selectedSegment.rewardValue)
+          : parseInt(String(selectedSegment.rewardValue));
+
+      if (isNaN(points) || points < 0) {
+        return res.status(500).json({
           success: false,
-          message: "Please wait a moment before spinning again",
-          cooldownRemaining: SPIN_COOLDOWN_MS - timeSinceLastSpin,
+          message: "Invalid points prize configuration",
         });
       }
 
-      // Record this spin attempt immediately
-      spinCooldowns.set(cooldownKey, now);
+      const newPoints = (user.ringtonePoints || 0) + points;
+      await storage.updateUserRingtonePoints(userId, newPoints);
 
-      // Verify valid completed order
-      const order = await storage.getOrder(orderId);
-      if (!order || order.userId !== userId || order.status !== "completed") {
-        return res.status(400).json({
-          success: false,
-          message: "No valid spin purchase found",
-        });
-      }
+      await storage.createTransaction({
+        userId,
+        type: "prize",
+        amount: points.toString(),
+        description: `Spin Wheel ${wheelType} Prize - ${points} Ringtones`,
+      });
 
-      // Check spins remaining
-      const spinsUsed = await storage.getSpinsUsed(orderId);
-      const spinsRemaining = order.quantity - spinsUsed;
+      await storage.createWinner({
+        userId,
+        competitionId,
+        prizeDescription: selectedSegment.label,
+        prizeValue: `${points} Ringtones`,
+        imageUrl: null,
+        isShowcase: false,
+      });
+    }
 
-      if (spinsRemaining <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: "No spins remaining in this purchase",
-        });
-      }
+    // Return full segment payload for frontend animation
+    res.json({
+      success: true,
+      result: {
+        segmentId: selectedSegment.id,
+        label: selectedSegment.label,
+        type: selectedSegment.rewardType,
+        value: selectedSegment.rewardValue,
+        iconKey: selectedSegment.iconKey,
+        color: selectedSegment.color,
+      },
+      winningSegmentId: selectedSegment.id,
+      prize: {
+        brand: selectedSegment.label,
+        amount:
+          selectedSegment.rewardType === "cash"
+            ? parseFloat(String(selectedSegment.rewardValue))
+            : selectedSegment.rewardType === "points"
+            ? `${selectedSegment.rewardValue} Ringtones`
+            : 0,
+        type:
+          selectedSegment.rewardType === "lose"
+            ? "none"
+            : selectedSegment.rewardType,
+      },
+      spinsRemaining: spinsRemaining - 1,
+      orderId: order.id,
+      wheelType: wheelType,
+    });
+  } catch (error) {
+    console.error("Error playing spin wheel:", error);
+    res.status(500).json({ message: "Failed to play spin wheel" });
+  }
+});
 
-      // Get user
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
+  // Reveal All Spins - Batch process remaining spins
+ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, count, competitionId } = req.body;
 
-      // 🔥 NEW: Get competition to know which wheel type
-      const competition = await storage.getCompetition(competitionId);
-      if (!competition) {
-        return res.status(404).json({ message: "Competition not found" });
-      }
+    if (!orderId || !count || count <= 0 || !competitionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid orderId, count and competitionId are required",
+      });
+    }
 
-      // Get wheel type (default to "wheel1" for backward compatibility)
-      const wheelType = competition.wheelType || "wheel1";
+    const batchSize = count;
 
-      // 🔥 NEW: Fetch correct wheel configuration based on wheel type
+    // Verify order
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "No valid spin purchase found",
+      });
+    }
+
+    // Check spins remaining
+    const spinsUsed = await storage.getSpinsUsed(orderId);
+    const spinsRemaining = order.quantity - spinsUsed;
+    if (spinsRemaining <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No spins remaining in this purchase",
+      });
+    }
+
+    const spinsToProcess = Math.min(batchSize, spinsRemaining);
+
+    // Fetch user
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Fetch competition with wheelType
+    const competition = await storage.getCompetition(competitionId);
+    if (!competition) {
+      return res.status(404).json({ message: "Competition not found" });
+    }
+
+    const wheelType = competition.wheelType || "wheel1";
+
+    const results = [];
+    let totalCash = 0;
+    let totalPoints = 0;
+
+    await db.transaction(async (tx) => {
+      // ✅ LOAD WHEEL CONFIG BASED ON TYPE
       let wheelConfig;
+      let configTable;
+      let configId;
+
       if (wheelType === "wheel2") {
-        // Use Wheel 2 configuration
-        const [config] = await db
+        configTable = spinWheel2Configs;
+        configId = "active";
+        const [cfg] = await tx
           .select()
           .from(spinWheel2Configs)
           .where(eq(spinWheel2Configs.id, "active"));
-        wheelConfig = config || DEFAULT_SPIN_WHEEL_2_CONFIG; // You need to create this default
-        console.log(
-          `🎡 Using Wheel 2 configuration for competition ${competitionId}`
-        );
+        wheelConfig = cfg || DEFAULT_SPIN_WHEEL_2_CONFIG;
       } else {
-        // Use original Wheel 1 configuration (default)
-        const [config] = await db
+        configTable = gameSpinConfig;
+        configId = "active";
+        const [cfg] = await tx
           .select()
           .from(gameSpinConfig)
           .where(eq(gameSpinConfig.id, "active"));
-        wheelConfig = config || DEFAULT_SPIN_WHEEL_CONFIG;
-        console.log(
-          `🎡 Using Wheel 1 configuration for competition ${competitionId}`
-        );
+        wheelConfig = cfg || DEFAULT_SPIN_WHEEL_CONFIG;
       }
 
       const segments = wheelConfig.segments as any[];
 
-      // Filter out segments that reached maxWins limit AND have zero probability
-      const eligibleSegments = [];
-      for (const segment of segments) {
-        // Skip segments with zero or negative probability
-        if (!segment.probability || segment.probability <= 0) {
-          continue;
+      // Keep track of segment win increments for batch update
+      const segmentWinIncrements: Record<string, number> = {};
+
+      // --------------------------------------
+      // 🚀 PROCESS SPINS
+      // --------------------------------------
+      for (let i = 0; i < spinsToProcess; i++) {
+        // Filter eligible segments - READ FROM CONFIG'S currentWins
+        const eligibleSegments = [];
+        for (const segment of segments) {
+          if (!segment.probability || segment.probability <= 0) continue;
+
+          if (segment.maxWins !== null) {
+            const winCount = segment.currentWins || 0;
+            if (winCount >= segment.maxWins) continue;
+          }
+
+          eligibleSegments.push(segment);
         }
 
-        // Skip segments that reached maxWins limit
-        if (segment.maxWins !== null) {
-          const winCount = await storage.getSegmentWinCount(segment.id);
-          if (winCount >= segment.maxWins) {
-            continue;
+        if (eligibleSegments.length === 0) break;
+
+        // Weighted random
+        const totalWeight = eligibleSegments.reduce(
+          (sum, seg) => sum + seg.probability,
+          0
+        );
+        let random = Math.random() * totalWeight;
+        let selectedSegment = eligibleSegments[0];
+
+        for (const seg of eligibleSegments) {
+          random -= seg.probability;
+          if (random <= 0) {
+            selectedSegment = seg;
+            break;
           }
         }
 
-        eligibleSegments.push(segment);
-      }
-
-      if (eligibleSegments.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "No prizes available at this time",
+        // Record spin usage
+        await tx.insert(spinUsage).values({
+          orderId,
+          userId,
+          usedAt: new Date(),
         });
-      }
 
-      // Weighted random selection (mathematically correct)
-      const totalWeight = eligibleSegments.reduce(
-        (sum, seg) => sum + seg.probability,
-        0
-      );
-
-      if (totalWeight <= 0) {
-        return res.status(500).json({
-          success: false,
-          message: "Invalid wheel configuration - total probability is zero",
+        // Record win
+        await tx.insert(spinWins).values({
+          userId,
+          segmentId: selectedSegment.id,
+          rewardType: selectedSegment.rewardType as any,
+          rewardValue: String(selectedSegment.rewardValue),
+          wheelType: wheelType, 
         });
-      }
 
-      let random = Math.random() * totalWeight;
-      let selectedSegment = eligibleSegments[0];
+        // Track segment win increment for batch update
+        segmentWinIncrements[selectedSegment.id] = 
+          (segmentWinIncrements[selectedSegment.id] || 0) + 1;
 
-      for (const segment of eligibleSegments) {
-        random -= segment.probability;
-        if (random <= 0) {
-          selectedSegment = segment;
-          break;
-        }
-      }
+        // Award prize
+        let prizeAmount: number | string = 0;
+        let prizeType = "none";
 
-      // Record spin usage
-      await storage.recordSpinUsage(orderId, userId);
+        if (
+          selectedSegment.rewardType === "cash" &&
+          selectedSegment.rewardValue
+        ) {
+          const amount =
+            typeof selectedSegment.rewardValue === "number"
+              ? selectedSegment.rewardValue
+              : parseFloat(String(selectedSegment.rewardValue));
 
-      // Record the win (with wheel type for tracking)
-      await storage.recordSpinWin({
-        userId,
-        segmentId: selectedSegment.id,
-        rewardType: selectedSegment.rewardType,
-        rewardValue: String(selectedSegment.rewardValue),
-        wheelType: wheelType,
-      });
+          totalCash += amount;
 
-      // Validate and award prize based on type
-      if (
-        selectedSegment.rewardType === "cash" &&
-        selectedSegment.rewardValue
-      ) {
-        const amount =
-          typeof selectedSegment.rewardValue === "number"
-            ? selectedSegment.rewardValue
-            : parseFloat(String(selectedSegment.rewardValue));
+          const currentBalance = parseFloat(user.balance || "0");
+          user.balance = (currentBalance + amount).toFixed(2);
 
-        if (isNaN(amount) || amount < 0) {
-          return res.status(500).json({
-            success: false,
-            message: "Invalid cash prize configuration",
+          await tx.update(users);
+
+          await tx
+            .update(users)
+            .set({ balance: user.balance })
+            .where(eq(users.id, userId));
+
+          await tx.insert(transactions).values({
+            id: crypto.randomUUID(),
+            userId,
+            type: "prize",
+            amount: amount.toFixed(2),
+            description: `Spin Wheel Prize - £${amount}`,
+            createdAt: new Date(),
           });
-        }
 
-        const finalBalance = parseFloat(user.balance || "0") + amount;
-        await storage.updateUserBalance(userId, finalBalance.toFixed(2));
-
-        await storage.createTransaction({
-          userId,
-          type: "prize",
-          amount: amount.toFixed(2),
-          description: `Spin Wheel ${wheelType} Prize - £${amount}`,
-        });
-
-        await storage.createWinner({
-          userId,
-          competitionId,
-          prizeDescription: selectedSegment.label,
-          prizeValue: `£${amount}`,
-          imageUrl: null,
-          isShowcase: false,
-        });
-      } else if (
-        selectedSegment.rewardType === "points" &&
-        selectedSegment.rewardValue
-      ) {
-        const points =
-          typeof selectedSegment.rewardValue === "number"
-            ? Math.floor(selectedSegment.rewardValue)
-            : parseInt(String(selectedSegment.rewardValue));
-
-        if (isNaN(points) || points < 0) {
-          return res.status(500).json({
-            success: false,
-            message: "Invalid points prize configuration",
+          await tx.insert(winners).values({
+            id: crypto.randomUUID(),
+            userId,
+            competitionId,
+            prizeDescription: selectedSegment.label,
+            prizeValue: `£${amount}`,
+            imageUrl: null,
+            isShowcase: false,
+            createdAt: new Date(),
           });
+
+          prizeAmount = amount;
+          prizeType = "cash";
+        } else if (
+          selectedSegment.rewardType === "points" &&
+          selectedSegment.rewardValue
+        ) {
+          const points =
+            typeof selectedSegment.rewardValue === "number"
+              ? Math.floor(selectedSegment.rewardValue)
+              : parseInt(String(selectedSegment.rewardValue));
+          totalPoints += points;
+
+          const currentPoints = user.ringtonePoints || 0;
+          user.ringtonePoints = currentPoints + points;
+
+          await tx.update(users);
+
+          await tx
+            .update(users)
+            .set({ ringtonePoints: user.ringtonePoints })
+            .where(eq(users.id, userId));
+
+          await tx.insert(transactions).values({
+            id: crypto.randomUUID(),
+            userId,
+            type: "prize",
+            amount: points.toString(),
+            description: `Spin Wheel Prize - ${points} Ringtones`,
+            createdAt: new Date(),
+          });
+
+          await tx.insert(winners).values({
+            id: crypto.randomUUID(),
+            userId,
+            competitionId,
+            prizeDescription: selectedSegment.label,
+            prizeValue: `${points} Ringtones`,
+            imageUrl: null,
+            isShowcase: false,
+            createdAt: new Date(),
+          });
+
+          prizeAmount = `${points} Ringtones`;
+          prizeType = "points";
         }
 
-        const newPoints = (user.ringtonePoints || 0) + points;
-        await storage.updateUserRingtonePoints(userId, newPoints);
-
-        await storage.createTransaction({
-          userId,
-          type: "prize",
-          amount: points.toString(),
-          description: `Spin Wheel ${wheelType} Prize - ${points} Ringtones`,
-        });
-
-        await storage.createWinner({
-          userId,
-          competitionId,
-          prizeDescription: selectedSegment.label,
-          prizeValue: `${points} Ringtones`,
-          imageUrl: null,
-          isShowcase: false,
-        });
-      }
-
-      // Return full segment payload for frontend animation
-      res.json({
-        success: true,
-        result: {
+        results.push({
           segmentId: selectedSegment.id,
           label: selectedSegment.label,
-          type: selectedSegment.rewardType,
-          value: selectedSegment.rewardValue,
-          iconKey: selectedSegment.iconKey,
-          color: selectedSegment.color,
-        },
-        winningSegmentId: selectedSegment.id,
-        prize: {
-          brand: selectedSegment.label,
-          amount:
-            selectedSegment.rewardType === "cash"
-              ? parseFloat(String(selectedSegment.rewardValue))
-              : selectedSegment.rewardType === "points"
-              ? `${selectedSegment.rewardValue} Ringtones`
-              : 0,
-          type:
-            selectedSegment.rewardType === "lose"
-              ? "none"
-              : selectedSegment.rewardType,
-        },
-        spinsRemaining: spinsRemaining - 1,
-        orderId: order.id,
-        wheelType: wheelType, // ← Send back which wheel was used
-      });
-    } catch (error) {
-      console.error("Error playing spin wheel:", error);
-      res.status(500).json({ message: "Failed to play spin wheel" });
-    }
-  });
-
-  // Reveal All Spins - Batch process remaining spins
-  app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const { orderId, count, competitionId } = req.body;
-
-      if (!orderId || !count || count <= 0 || !competitionId) {
-        return res.status(400).json({
-          success: false,
-          message: "Valid orderId, count and competitionId are required",
+          prize: {
+            brand: selectedSegment.label,
+            amount: prizeAmount,
+            type: prizeType,
+          },
         });
       }
 
-      const batchSize = count;
-
-      // Verify order
-      const order = await storage.getOrder(orderId);
-      if (!order || order.userId !== userId || order.status !== "completed") {
-        return res.status(400).json({
-          success: false,
-          message: "No valid spin purchase found",
-        });
-      }
-
-      // Check spins remaining
-      const spinsUsed = await storage.getSpinsUsed(orderId);
-      const spinsRemaining = order.quantity - spinsUsed;
-      if (spinsRemaining <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: "No spins remaining in this purchase",
-        });
-      }
-
-      const spinsToProcess = Math.min(batchSize, spinsRemaining);
-
-      // Fetch user
-      const user = await storage.getUser(userId);
-      if (!user) return res.status(404).json({ message: "User not found" });
-
-      // Fetch competition with wheelType
-      const competition = await storage.getCompetition(competitionId);
-      if (!competition) {
-        return res.status(404).json({ message: "Competition not found" });
-      }
-
-      const wheelType = competition.wheelType || "wheel1";
-
-      const results = [];
-      let totalCash = 0;
-      let totalPoints = 0;
-
-      await db.transaction(async (tx) => {
-        // ✅ LOAD WHEEL CONFIG BASED ON TYPE
-        let wheelConfig;
-
-        if (wheelType === "wheel2") {
-          const [cfg] = await tx
-            .select()
-            .from(spinWheel2Configs)
-            .where(eq(spinWheel2Configs.id, "active"));
-          wheelConfig = cfg || DEFAULT_SPIN_WHEEL_2_CONFIG;
-        } else {
-          const [cfg] = await tx
-            .select()
-            .from(gameSpinConfig)
-            .where(eq(gameSpinConfig.id, "active"));
-          wheelConfig = cfg || DEFAULT_SPIN_WHEEL_CONFIG;
-        }
-
-        const segments = wheelConfig.segments as any[];
-
-        // --------------------------------------
-        // 🚀 PROCESS SPINS
-        // --------------------------------------
-        for (let i = 0; i < spinsToProcess; i++) {
-          // Filter eligible segments
-          const eligibleSegments = [];
-          for (const segment of segments) {
-            if (!segment.probability || segment.probability <= 0) continue;
-
-            if (segment.maxWins !== null) {
-              const [winData] = await tx
-                .select({ count: sql<number>`count(*)` })
-                .from(spinWins)
-                .where(eq(spinWins.segmentId, segment.id));
-              const winCount = winData?.count || 0;
-
-              if (winCount >= segment.maxWins) continue;
+      // ✅ BATCH UPDATE: Update currentWins in config for all segments at once
+      if (Object.keys(segmentWinIncrements).length > 0) {
+        // Reload config to get fresh data
+        const [currentConfig] = await tx
+          .select()
+          .from(configTable)
+          .where(eq(configTable.id, configId));
+        
+        if (currentConfig && currentConfig.segments) {
+          const updatedSegments = currentConfig.segments.map((segment: any) => {
+            const increment = segmentWinIncrements[segment.id] || 0;
+            if (increment > 0) {
+              return {
+                ...segment,
+                currentWins: (segment.currentWins || 0) + increment
+              };
             }
-
-            eligibleSegments.push(segment);
-          }
-
-          if (eligibleSegments.length === 0) break;
-
-          // Weighted random
-          const totalWeight = eligibleSegments.reduce(
-            (sum, seg) => sum + seg.probability,
-            0
-          );
-          let random = Math.random() * totalWeight;
-          let selectedSegment = eligibleSegments[0];
-
-          for (const seg of eligibleSegments) {
-            random -= seg.probability;
-            if (random <= 0) {
-              selectedSegment = seg;
-              break;
-            }
-          }
-
-          // Record spin usage
-          await tx.insert(spinUsage).values({
-            orderId,
-            userId,
-            usedAt: new Date(),
+            return segment;
           });
-
-          // Record win
-          await tx.insert(spinWins).values({
-            userId,
-            segmentId: selectedSegment.id,
-            rewardType: selectedSegment.rewardType as any,
-            rewardValue: String(selectedSegment.rewardValue),
-            wheelType: wheelType, 
-          });
-
-          // Award prize
-          let prizeAmount: number | string = 0;
-          let prizeType = "none";
-
-          if (
-            selectedSegment.rewardType === "cash" &&
-            selectedSegment.rewardValue
-          ) {
-            const amount =
-              typeof selectedSegment.rewardValue === "number"
-                ? selectedSegment.rewardValue
-                : parseFloat(String(selectedSegment.rewardValue));
-
-            totalCash += amount;
-
-            const currentBalance = parseFloat(user.balance || "0");
-            user.balance = (currentBalance + amount).toFixed(2);
-
-            await tx.update(users);
-
-            await tx
-              .update(users)
-              .set({ balance: user.balance })
-              .where(eq(users.id, userId));
-
-            await tx.insert(transactions).values({
-              id: crypto.randomUUID(),
-              userId,
-              type: "prize",
-              amount: amount.toFixed(2),
-              description: `Spin Wheel Prize - £${amount}`,
-              createdAt: new Date(),
-            });
-
-            await tx.insert(winners).values({
-              id: crypto.randomUUID(),
-              userId,
-              competitionId: null,
-              prizeDescription: selectedSegment.label,
-              prizeValue: `£${amount}`,
-              imageUrl: null,
-              isShowcase: false,
-              createdAt: new Date(),
-            });
-
-            prizeAmount = amount;
-            prizeType = "cash";
-          } else if (
-            selectedSegment.rewardType === "points" &&
-            selectedSegment.rewardValue
-          ) {
-            const points =
-              typeof selectedSegment.rewardValue === "number"
-                ? Math.floor(selectedSegment.rewardValue)
-                : parseInt(String(selectedSegment.rewardValue));
-            totalPoints += points;
-
-            const currentPoints = user.ringtonePoints || 0;
-            user.ringtonePoints = currentPoints + points;
-
-            await tx.update(users);
-
-            await tx
-              .update(users)
-              .set({ ringtonePoints: user.ringtonePoints })
-              .where(eq(users.id, userId));
-
-            await tx.insert(transactions).values({
-              id: crypto.randomUUID(),
-              userId,
-              type: "prize",
-              amount: points.toString(),
-              description: `Spin Wheel Prize - ${points} Ringtones`,
-              createdAt: new Date(),
-            });
-
-            await tx.insert(winners).values({
-              id: crypto.randomUUID(),
-              userId,
-              competitionId,
-              prizeDescription: selectedSegment.label,
-              prizeValue: `${points} Ringtones`,
-              imageUrl: null,
-              isShowcase: false,
-              createdAt: new Date(),
-            });
-
-            prizeAmount = `${points} Ringtones`;
-            prizeType = "points";
-          }
-
-          results.push({
-            segmentId: selectedSegment.id,
-            label: selectedSegment.label,
-            prize: {
-              brand: selectedSegment.label,
-              amount: prizeAmount,
-              type: prizeType,
-            },
-          });
+          
+          await tx
+            .update(configTable)
+            .set({ 
+              segments: updatedSegments,
+              updated_at: new Date()
+            })
+            .where(eq(configTable.id, configId));
+          
+          console.log(`✅ Batch updated ${Object.keys(segmentWinIncrements).length} segments in ${wheelType} config`);
         }
-      });
+      }
+    });
 
-      // --------------------------------------
-      // DONE
-      // --------------------------------------
-      res.json({
-        success: true,
-        spins: results,
-        summary: {
-          totalCash,
-          totalPoints,
-          spinsProcessed: results.length,
-        },
-        spinsRemaining: spinsRemaining - results.length,
-      });
-    } catch (error) {
-      console.error("Error revealing all spins:", error);
-      res.status(500).json({ message: "Failed to reveal all spins" });
-    }
-  });
+    // --------------------------------------
+    // DONE
+    // --------------------------------------
+    res.json({
+      success: true,
+      spins: results,
+      summary: {
+        totalCash,
+        totalPoints,
+        spinsProcessed: results.length,
+      },
+      spinsRemaining: spinsRemaining - results.length,
+    });
+  } catch (error) {
+    console.error("Error revealing all spins:", error);
+    res.status(500).json({ message: "Failed to reveal all spins" });
+  }
+});
 
   // Get spin order details for billing page
   app.get(
@@ -8133,8 +8227,32 @@ app.post(
   isAdmin,
   async (_req, res) => {
     try {
-      // ✅ Only delete Wheel 2 wins
+      // 1. Delete Wheel 2 win records
       await db.delete(spinWins).where(eq(spinWins.wheelType, "wheel2"));
+      
+      // 2. ALSO reset currentWins in the wheel configuration
+      const [currentConfig] = await db
+        .select()
+        .from(spinWheel2Configs)
+        .where(eq(spinWheel2Configs.id, "active"));
+      
+      if (currentConfig && currentConfig.segments) {
+        // Reset all currentWins to 0
+        const updatedSegments = currentConfig.segments.map(segment => ({
+          ...segment,
+          currentWins: 0
+        }));
+        
+        // Update the configuration
+        await db
+          .update(spinWheel2Configs)
+          .set({ 
+            segments: updatedSegments,
+            updated_at: new Date()
+          })
+          .where(eq(spinWheel2Configs.id, "active"));
+      }
+      
       res.json({ success: true });
     } catch (err) {
       console.error("Reset wheel 2 wins failed:", err);
