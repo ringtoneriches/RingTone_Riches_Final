@@ -32,7 +32,7 @@ interface UnifiedBillingProps {
   wheelType?: string;
 }
 
-export default function UnifiedBilling({ orderId, orderType ,wheelType }: UnifiedBillingProps) {
+export default function UnifiedBilling({ orderId, orderType, wheelType }: UnifiedBillingProps) {
   const [, setLocation] = useLocation();
   const [selectedMethods, setSelectedMethods] = useState({
     walletBalance: false,
@@ -65,8 +65,8 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
     switch (orderType) {
       case "scratch":
         return "The Landmark Loot Purchase";
-        case "pop":
-      return "Ringtone Pop Purchase";
+      case "pop":
+        return "Ringtone Pop Purchase";
       default:
         return "Competition Tickets";
     }
@@ -83,8 +83,8 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
     switch (orderType) {
       case "scratch":
         return "Scratch Cards";
-        case "pop":
-      return "Pop Games";
+      case "pop":
+        return "Pop Games";
       default:
         return "Tickets";
     }
@@ -107,7 +107,12 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
   const user = orderData?.user;
   const competition = orderData?.competition;
 
-  // ✅ FIXED: Add itemCost variable
+  // Check if this is an instant competition (should disable points)
+  const isInstantCompetition = orderType === 'competition' && competition?.type === 'instant';
+  
+  // Determine if points should be disabled
+  const isPointsDisabled = isInstantCompetition;
+
   const itemCost = orderType === 'competition' 
     ? parseFloat(competition?.ticketPrice || '0') 
     : parseFloat(orderData?.scratchCost || orderData?.spinCost || orderData?.popCost || '2');
@@ -118,123 +123,124 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
   const ringtoneBalance = ringtonePoints * 0.01;
 
   const maxWalletUse = Math.min(walletBalance, totalAmount);
-  const maxPointsUse = Math.min(ringtoneBalance, totalAmount);
+  const maxPointsUse = isPointsDisabled ? 0 : Math.min(ringtoneBalance, totalAmount);
   const walletUsed = selectedMethods.walletBalance ? maxWalletUse : 0;
   const pointsUsed = selectedMethods.ringtonePoints ? maxPointsUse : 0;
   const remainingAfterWallet = totalAmount - walletUsed;
-  const actualPointsUsed = Math.min(maxPointsUse, remainingAfterWallet);
+  const actualPointsUsed = isPointsDisabled ? 0 : Math.min(maxPointsUse, remainingAfterWallet);
   const finalPointsUsed = selectedMethods.ringtonePoints ? actualPointsUsed : 0;
   const finalAmount = totalAmount - walletUsed - finalPointsUsed;
   const pointsNeeded = Math.ceil(finalPointsUsed * 100);
   
   const processPaymentMutation = useMutation({
-  mutationFn: async (data: any) => {
-    // Determine which endpoint to use
-    let endpoint = "";
-    
-    switch (orderType) {
-      case "spin":
-        endpoint = "/api/process-spin-payment";
-        break;
-      case "scratch":
-        endpoint = "/api/process-scratch-payment";
-        break;
-      case 'pop': 
-      endpoint =  '/api/process-pop-payment';
-      break;
-      default: // competition
-        endpoint = "/api/purchase-ticket";
-        break;
-    }
+    mutationFn: async (data: any) => {
+      // Determine which endpoint to use
+      let endpoint = "";
+      
+      switch (orderType) {
+        case "spin":
+          endpoint = "/api/process-spin-payment";
+          break;
+        case "scratch":
+          endpoint = "/api/process-scratch-payment";
+          break;
+        case 'pop': 
+          endpoint =  '/api/process-pop-payment';
+          break;
+        default: // competition
+          endpoint = "/api/purchase-ticket";
+          break;
+      }
 
-    const res = await apiRequest(endpoint, "POST", {
-      ...data,
-      orderId,
-      competitionId: order?.competitionId,
-      quantity: order?.quantity || 1,
-    });
-    
-    // Get the response text first
-    const responseText = await res.text();
-    
-    // Try to parse as JSON, but handle non-JSON responses
-    let result;
-    try {
-      result = JSON.parse(responseText);
-    } catch {
-      // If not JSON, create a simple error object
-      throw new Error(`Server error: ${responseText.slice(0, 100)}`);
-    }
-    
-    // Check if it's an error response
-    if (!res.ok) {
-      // Use the result.message if available, or a default
-      const errorMessage = result?.message || result?.error || "Payment failed";
-      throw new Error(errorMessage);
-    }
-    
-    // Check for "insufficient funds" in the success response too
-    if (result.remainingAmount > 0) {
-      throw new Error(`Insufficient funds. You need £${result.remainingAmount.toFixed(2)} more.`);
-    }
-    
-    return result;
-  },
-  onSuccess: (data) => {
-    setIsProcessing(false);
-    localStorage.removeItem('pendingOrderInfo');
-    // ✅ Check if this is actually an error disguised as success
-    if (data.remainingAmount > 0) {
-      setShowTopUpModal(true);
+      const res = await apiRequest(endpoint, "POST", {
+        ...data,
+        orderId,
+        competitionId: order?.competitionId,
+        quantity: order?.quantity || 1,
+      });
+      
+      const responseText = await res.text();
+      
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        throw new Error(`Server error: ${responseText.slice(0, 100)}`);
+      }
+      
+      if (!res.ok) {
+        const errorMessage = result?.message || result?.error || "Payment failed";
+        throw new Error(errorMessage);
+      }
+      
+      if (result.remainingAmount > 0) {
+        throw new Error(`Insufficient funds. You need £${result.remainingAmount.toFixed(2)} more.`);
+      }
+      
+      return result;
+    },
+    onSuccess: (data) => {
+      setIsProcessing(false);
+      localStorage.removeItem('pendingOrderInfo');
+      
+      if (data.remainingAmount > 0) {
+        setShowTopUpModal(true);
+        return;
+      }
+      
+      if (data.success) {
+        toast({
+          title: "Purchase Successful 🎉",
+          description: data.message || `Your purchase is complete!`,
+        });
+
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+        queryClient.invalidateQueries({ queryKey: [getEndpoint(), orderId] });
+
+        const competitionId = data.competitionId || order?.competitionId;
+
+        setTimeout(() => {
+          if (orderType === 'spin') setLocation(`/spin/${competitionId}/${orderId}`);
+          else if (orderType === 'scratch') setLocation(`/scratch/${competitionId}/${orderId}`);
+          else if (orderType === 'pop') setLocation(`/pop/${competitionId}/${orderId}`);
+          else setLocation(`/success/competition?orderId=${orderId}`);
+        }, 1500);
+      }
+    },
+    onError: (error: any) => {
+      setIsProcessing(false);
+      console.error("Payment error:", error);
+      
+      const errorMessage = error?.message || "Payment failed";
+      
+      if (
+        errorMessage.includes("Insufficient") || 
+        errorMessage.includes("insufficient") ||
+        errorMessage.includes("need") ||
+        errorMessage.includes("more")
+      ) {
+        setShowTopUpModal(true);
+      } else {
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    },
+  });
+
+  const handleMethodToggle = (method: 'walletBalance' | 'ringtonePoints') => {
+    // Prevent enabling points for instant competitions
+    if (method === 'ringtonePoints' && isPointsDisabled) {
+      toast({
+        title: "Points Not Available",
+        description: "Ringtone Points cannot be used for competitions.",
+        variant: "destructive",
+      });
       return;
     }
     
-    if (data.success) {
-      toast({
-        title: "Purchase Successful 🎉",
-        description: data.message || `Your purchase is complete!`,
-      });
-
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      queryClient.invalidateQueries({ queryKey: [getEndpoint(), orderId] });
-
-      const competitionId = data.competitionId || order?.competitionId;
-
-      setTimeout(() => {
-        if (orderType === 'spin') setLocation(`/spin/${competitionId}/${orderId}`);
-        else if (orderType === 'scratch') setLocation(`/scratch/${competitionId}/${orderId}`);
-         else if (orderType === 'pop')  setLocation(`/pop/${competitionId}/${orderId}`);
-          
-        else setLocation(`/success/competition?orderId=${orderId}`);
-      }, 1500);
-    }
-  },
-  onError: (error: any) => {
-    setIsProcessing(false);
-    console.error("Payment error:", error); // Debug log
-    
-    // Get the actual error message
-    const errorMessage = error?.message || "Payment failed";
-    
-    // Check if it's a "top up required" error
-    if (
-      errorMessage.includes("Insufficient") || 
-      errorMessage.includes("insufficient") ||
-      errorMessage.includes("need") ||
-      errorMessage.includes("more")
-    ) {
-      setShowTopUpModal(true);
-    } else {
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    }
-  },
-});
-
-  const handleMethodToggle = (method: 'walletBalance' | 'ringtonePoints') => {
     setSelectedMethods(prev => ({ ...prev, [method]: !prev[method] }));
   };
 
@@ -254,6 +260,16 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
       toast({
         title: "Select Payment Method",
         description: "Please select wallet balance or ringtone points to pay.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Additional validation for instant competitions
+    if (isInstantCompetition && selectedMethods.ringtonePoints) {
+      toast({
+        title: "Invalid Payment Method",
+        description: "Ringtone Points cannot be used for competitions.",
         variant: "destructive",
       });
       return;
@@ -293,6 +309,7 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
         <p>Invalid or expired order.</p>
       </div>
     );
+
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -310,6 +327,11 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
                 </div>
                 <p className="text-black/80 font-semibold text-sm sm:text-base">
                   {getTitle()}
+                  {/* {isInstantCompetition && (
+                    <span className="ml-2 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded">
+                      Instant Competition
+                    </span>
+                  )} */}
                 </p>
               </div>
               <div className="hidden sm:flex items-center justify-center w-16 h-16 bg-black/10 rounded-full backdrop-blur-sm">
@@ -331,7 +353,6 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
               </div>
               <div className="flex justify-between items-center py-3 border-b border-yellow-500/10">
                 <span className="text-gray-300 text-sm sm:text-base">Price per item</span>
-              
                 <span className="font-semibold text-white">£{itemCost.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center py-4 bg-yellow-500/5 -mx-6 px-6 rounded-lg mt-3">
@@ -397,54 +418,69 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
 
               {/* Ringtone Points Option */}
               <div
-                className={`relative group cursor-pointer rounded-xl border-2 transition-all duration-300 ${
-                  selectedMethods.ringtonePoints
-                    ? "border-yellow-500 bg-yellow-500/10 shadow-lg shadow-yellow-500/20"
-                    : "border-zinc-700 bg-zinc-800/50 hover:border-yellow-500/50 hover:bg-zinc-800"
+                className={`relative group rounded-xl border-2 transition-all duration-300 ${
+                  isPointsDisabled
+                    ? "border-zinc-700 bg-zinc-800/30 opacity-60 cursor-not-allowed"
+                    : selectedMethods.ringtonePoints
+                      ? "border-yellow-500 bg-yellow-500/10 shadow-lg shadow-yellow-500/20 cursor-pointer"
+                      : "border-zinc-700 bg-zinc-800/50 hover:border-yellow-500/50 hover:bg-zinc-800 cursor-pointer"
                 }`}
-                onClick={() => handleMethodToggle("ringtonePoints")}
+                onClick={isPointsDisabled ? undefined : () => handleMethodToggle("ringtonePoints")}
                 data-testid="checkbox-points"
               >
                 <div className="p-5">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-4 flex-1">
                       <div className={`flex items-center justify-center w-12 h-12 rounded-full ${
-                        selectedMethods.ringtonePoints ? "bg-yellow-500" : "bg-zinc-700"
+                        isPointsDisabled
+                          ? "bg-zinc-800"
+                          : selectedMethods.ringtonePoints
+                            ? "bg-yellow-500"
+                            : "bg-zinc-700"
                       } transition-colors`}>
-                        <Coins className="w-6 h-6 text-black" />
+                        <Coins className={`w-6 h-6 ${isPointsDisabled ? 'text-zinc-600' : 'text-black'}`} />
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-bold text-white text-lg">Ringtone Points</h3>
-                          {selectedMethods.ringtonePoints && (
+                          <h3 className={`font-bold text-lg ${isPointsDisabled ? 'text-gray-500' : 'text-white'}`}>
+                            Ringtone Points
+                            {isPointsDisabled && (
+                              <span className="ml-2 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded">
+                                Not Available
+                              </span>
+                            )}
+                          </h3>
+                          {!isPointsDisabled && selectedMethods.ringtonePoints && (
                             <CheckCircle2 className="w-5 h-5 text-yellow-500" />
                           )}
                         </div>
                         <p className="text-sm text-gray-400 mb-2">
-                          Available: <span className="text-yellow-400 font-semibold">{ringtonePoints.toLocaleString()} pts (£{ringtoneBalance.toFixed(2)})</span>
+                          Available: <span className="text-yellow-400 font-semibold">
+                            {ringtonePoints.toLocaleString()} pts (£{ringtoneBalance.toFixed(2)})
+                          </span>
                         </p>
-                        <p className="text-sm font-semibold text-yellow-400">
-                          Use £{maxPointsUse.toFixed(2)} ({Math.ceil(maxPointsUse * 100)} points)
-                        </p>
+                        {isPointsDisabled ? (
+                          <p className="text-sm font-semibold text-red-400">
+                            Points cannot be used for competitions
+                          </p>
+                        ) : (
+                          <p className="text-sm font-semibold text-yellow-400">
+                            Use £{maxPointsUse.toFixed(2)} ({Math.ceil(maxPointsUse * 100)} points)
+                          </p>
+                        )}
                       </div>
                     </div>
                     <input
                       type="checkbox"
                       checked={selectedMethods.ringtonePoints}
-                      onChange={() => handleMethodToggle("ringtonePoints")}
-                      className="w-5 h-5 text-yellow-500 border-gray-600 rounded focus:ring-yellow-500 focus:ring-offset-0 bg-zinc-700"
+                      onChange={isPointsDisabled ? undefined : () => handleMethodToggle("ringtonePoints")}
+                      disabled={isPointsDisabled}
+                      className={`w-5 h-5 ${isPointsDisabled ? 'text-zinc-600 border-zinc-700 cursor-not-allowed' : 'text-yellow-500 border-gray-600'} rounded focus:ring-yellow-500 focus:ring-offset-0 bg-zinc-700`}
                       onClick={(e) => e.stopPropagation()}
                     />
                   </div>
                 </div>
               </div>
-
-              {/* ❌ REMOVED: Cashflows reference */}
-              {/* <div className="text-center py-4">
-                <p className="text-gray-400 text-sm">
-                  Or pay the full amount with card via Cashflows
-                </p>
-              </div> */}
             </div>
           </div>
 
@@ -501,11 +537,19 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
                     <span className="text-green-400 font-semibold">-£{walletUsed.toFixed(2)}</span>
                   </div>
                 )}
-                {selectedMethods.ringtonePoints && (
+                {selectedMethods.ringtonePoints && !isPointsDisabled && (
                   <div className="flex justify-between items-center py-2 border-b border-zinc-700">
                     <span className="text-gray-300">Ringtone Points</span>
                     <span className="text-yellow-400 font-semibold">
                       -£{finalPointsUsed.toFixed(2)} ({pointsNeeded} pts)
+                    </span>
+                  </div>
+                )}
+                {isPointsDisabled && selectedMethods.ringtonePoints && (
+                  <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+                    <span className="text-gray-300 line-through">Ringtone Points</span>
+                    <span className="text-red-400 font-semibold">
+                      Not Available
                     </span>
                   </div>
                 )}
@@ -562,7 +606,7 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
         </div>
       </div>
 
-      {/* ✅ BEAUTIFUL MODAL FOR TOP UP */}
+      {/* Top Up Modal */}
       <Dialog open={showTopUpModal} onOpenChange={setShowTopUpModal}>
         <DialogContent className="bg-gradient-to-br from-zinc-900 to-zinc-950  border-yellow-500/30 w-[90vw] text-white max-w-md rounded-2xl shadow-2xl">
           <DialogHeader>
@@ -584,7 +628,7 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-300">Available Funds:</span>
-                  <span className="font-bold text-green-400">£{(walletBalance + ringtoneBalance).toFixed(2)}</span>
+                  <span className="font-bold text-green-400">£{(walletBalance + (isPointsDisabled ? 0 : ringtoneBalance)).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t border-yellow-500/20 pt-2">
                   <span className="text-gray-300">Remaining:</span>
@@ -608,19 +652,18 @@ export default function UnifiedBilling({ orderId, orderType ,wheelType }: Unifie
             </Button>
             <Button
               onClick={() => {
-               // Save pending order info before redirecting
-              localStorage.setItem('pendingOrderInfo', JSON.stringify({
-                orderId,
-                orderType,
-                wheelType,
-                totalAmount,
-                finalAmount, // Amount needed
-                topupCompleted: false,
-                timestamp: Date.now()
-              }));
-              
-              setShowTopUpModal(false);
-              setLocation("/wallet?tab=wallet");
+                localStorage.setItem('pendingOrderInfo', JSON.stringify({
+                  orderId,
+                  orderType,
+                  wheelType,
+                  totalAmount,
+                  finalAmount,
+                  topupCompleted: false,
+                  timestamp: Date.now()
+                }));
+                
+                setShowTopUpModal(false);
+                setLocation("/wallet?tab=wallet");
               }}
               className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-bold gap-2"
             >

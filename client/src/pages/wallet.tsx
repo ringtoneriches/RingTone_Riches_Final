@@ -480,7 +480,8 @@ function formatAmount(transaction: Transaction) {
   // ✅ Treat ringtone spin wins as points
   if (
     transaction.type === "ringtone_points" ||
-    transaction.description?.toLowerCase().includes("ringtone")
+    transaction.description?.toLowerCase().includes("ringtone") ||
+    transaction.description?.toLowerCase().includes("points")
   ) {
     return `${amount} pts`;
   }

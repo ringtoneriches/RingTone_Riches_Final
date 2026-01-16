@@ -382,9 +382,7 @@ export default function TermsAndConditions() {
                 <p>• Do not have a cash alternative.</p>
               </div>
               <p>
-                9.4 The Promoter does not provide any warranty or guarantee as
-                to the Prize's future value, performance, or suitability.
-                Entrants should rely on their own judgment.
+                9.4 The Promoter reserves the right to adjust the value of any cash alternative offered if the market price or 'Recommended Retail Price' (RRP) of the main prize fluctuates by more than [e.g., 5-10%] between the competition launch date and the date of the draw. The cash alternative is intended to represent a fair percentage of the prize’s current market value at the time of fulfillment, not necessarily the value at the time of entry.
               </p>
               <p>
                 9.5 Winners are responsible for collecting prizes from the
@@ -471,8 +469,7 @@ export default function TermsAndConditions() {
               <div className="ml-4 space-y-1">
                 <p>• Ringtone Points have a notional value of £0.01 each.</p>
                 <p>
-                  • They may be used only to enter eligible Competitions or
-                  instant-win games on the Website.
+                  • They may be used only to enter instant-win games on the website.
                 </p>
                 <p>
                   • Ringtone Points cannot be withdrawn, exchanged for cash, or
@@ -728,8 +725,7 @@ export default function TermsAndConditions() {
                 promotional credit added to an account is non-withdrawable.
               </p>
               <p>
-                15.2 Bonus credit must be used for gameplay only (Competitions
-                and/or Instant-Win Features as specified).
+                15.2 Bonus credit must be used for gameplay only (instant - features as specified)
               </p>
               <p>
                 15.3 Only real-money winnings generated from gameplay using

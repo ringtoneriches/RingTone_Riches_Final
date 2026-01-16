@@ -9268,68 +9268,94 @@ app.post(
     isAuthenticated,
     isAdmin,
     async (req: any, res) => {
+      const { id } = req.params;
+      const adminId = req.user.id;
+  
+      // 🚫 Prevent admin deleting themselves
+      if (id === adminId) {
+        return res
+          .status(400)
+          .json({ message: "Admin cannot delete their own account" });
+      }
+  
       try {
-        const { id } = req.params;
-        const adminId = req.user.id;
+        await db.transaction(async (tx) => {
+          // 🔍 Check user exists
+          const user = await tx.query.users.findFirst({
+            where: eq(users.id, id),
+          });
+  
+          if (!user) {
+            throw new Error("USER_NOT_FOUND");
+          }
+  
+          // 1️⃣ Get all order IDs for this user
+          const ordersList = await tx
+            .select({ id: orders.id })
+            .from(orders)
+            .where(eq(orders.userId, id));
+  
+          const orderIds = ordersList.map((o) => o.id);
+  
+          // 2️⃣ Delete ALL order-dependent tables FIRST
+          if (orderIds.length > 0) {
+            await tx
+              .delete(spinUsage)
+              .where(inArray(spinUsage.orderId, orderIds));
+  
+            await tx
+              .delete(scratchCardUsage)
+              .where(inArray(scratchCardUsage.orderId, orderIds));
+  
+            await tx
+              .delete(popUsage)
+              .where(inArray(popUsage.orderId, orderIds));
+  
+            await tx
+              .delete(popWins)
+              .where(inArray(popWins.orderId, orderIds));
+  
+            await tx
+              .delete(transactions)
+              .where(inArray(transactions.orderId, orderIds));
+          }
 
-        // Prevent self-deleting admin
-        if (id === adminId) {
-          return res
-            .status(400)
-            .json({ message: "Admin cannot delete their own account" });
-        }
+          
+          // 🔹 Delete all transactions for this user
+          await tx.delete(transactions).where(eq(transactions.userId, id));
 
-        // Check if user exists
-        const user = await db.query.users.findFirst({
-          where: eq(users.id, id),
+          // 3️⃣ Delete tickets (user-owned)
+          await tx.delete(tickets).where(eq(tickets.userId, id));
+  
+          // 4️⃣ Delete orders
+          if (orderIds.length > 0) {
+            await tx.delete(orders).where(inArray(orders.id, orderIds));
+          }
+          // 🔹 Delete winners linked to this user
+          await tx.delete(winners).where(eq(winners.userId, id));
+
+          // 5️⃣ Remove this user as referrer
+          await tx
+            .update(users)
+            .set({ referredBy: null })
+            .where(eq(users.referredBy, id));
+  
+          // 6️⃣ Finally delete user
+          await tx.delete(users).where(eq(users.id, id));
         });
-
-        if (!user) {
+  
+        res.json({ message: "User deleted successfully" });
+      } catch (error: any) {
+        if (error.message === "USER_NOT_FOUND") {
           return res.status(404).json({ message: "User not found" });
         }
-
-        // 1️⃣ Get ALL order IDs for this user
-        const ordersList = await db
-          .select({ id: orders.id })
-          .from(orders)
-          .where(eq(orders.userId, id));
-
-        const orderIds = ordersList.map((o) => o.id);
-
-        // 2️⃣ Delete transactions linked to these orders
-        if (orderIds.length > 0) {
-          await db
-            .delete(transactions)
-            .where(inArray(transactions.orderId, orderIds));
-        }
-
-        // 3️⃣ Delete user's own transactions
-        await db.delete(transactions).where(eq(transactions.userId, id));
-
-        // 4️⃣ Delete tickets belonging to the user
-        await db.delete(tickets).where(eq(tickets.userId, id));
-
-        // 5️⃣ Delete orders
-        if (orderIds.length > 0) {
-          await db.delete(orders).where(inArray(orders.id, orderIds));
-        }
-
-        // 6️⃣ Remove this user from being someone’s referrer
-        await db
-          .update(users)
-          .set({ referredBy: null })
-          .where(eq(users.referredBy, id));
-
-        // 7️⃣ Finally delete user
-        await db.delete(users).where(eq(users.id, id));
-
-        res.json({ message: "User deleted successfully" });
-      } catch (error) {
+  
         console.error("Error deleting user:", error);
         res.status(500).json({ message: "Failed to delete user" });
       }
     }
   );
+  
 
   app.delete(
     "/api/admin/full-reset",
