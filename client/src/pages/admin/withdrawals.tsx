@@ -437,7 +437,7 @@ useEffect(() => {
       </CardTitle>
       
       {/* Cleanup Button - moved inside the flex container */}
-      <Button
+      {/* <Button
         variant="outline"
         onClick={() => setIsCleanupDialogOpen(true)}
         className="border-red-500/30 text-red-400 hover:bg-red-500/10"
@@ -445,7 +445,7 @@ useEffect(() => {
       >
         <Trash2 className="h-4 w-4 mr-2" />
         Cleanup Rejected
-      </Button>
+      </Button> */}
     </div>
   </CardHeader>
   

@@ -957,7 +957,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("🚀 [register] Starting registration...");
       console.log("   Request body:", JSON.stringify(req.body, null, 2));
-
+  
       const result = registerUserSchema.safeParse(req.body);
       if (!result.success) {
         console.error("❌ [register] Validation failed:", result.error);
@@ -966,7 +966,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           errors: result.error.issues,
         });
       }
-
+  
       const {
         email,
         password,
@@ -979,10 +979,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         birthYear,
         referralCode,
       } = req.body;
-
+  
       console.log("   Email to register:", email);
       console.log("   Name:", firstName, lastName);
-
+      console.log("   Referral code provided:", referralCode);
+  
       // Check if user exists
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
@@ -991,23 +992,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .status(400)
           .json({ message: "User already exists with this email" });
       }
-
+  
+      // ⭐⭐ FIX: Validate referral code if provided
+      let referrerId = null;
+      if (referralCode) {
+        const referrer = await storage.getUserByReferralCode(referralCode);
+        if (referrer) {
+          referrerId = referrer.id;
+          console.log("   ✅ Valid referral code found. Referrer:", referrer.email);
+        } else {
+          console.log("   ❌ Invalid referral code:", referralCode);
+          // Optionally: return error or just ignore invalid codes
+          // return res.status(400).json({ message: "Invalid referral code" });
+        }
+      }
+  
       // Hash password
       const hashedPassword = await hashPassword(password || "");
       console.log("   Password hashed");
-
+  
       // Create DOB
       const dobString =
         birthMonth && birthYear
           ? `${birthYear}-${String(birthMonth).padStart(2, "0")}-01`
           : undefined;
-
+  
       // Generate OTP
       const otp = OTPGenerator.generate();
       const expiresAt = OTPGenerator.getExpiryTime(10);
       console.log("   Generated OTP:", otp);
       console.log("   OTP expires at:", expiresAt);
-
+  
       // Create new user
       console.log("   Creating user in database...");
       const user = await storage.createUser({
@@ -1021,11 +1036,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         emailVerificationOtp: otp,
         emailVerificationOtpExpiresAt: expiresAt,
         verificationSentAt: new Date(),
-        referredBy: referralCode || null,
+        referredBy: referrerId, // ⭐ Store the referrer's ID, not the code
       });
-
+  
       console.log("✅ [register] User created:", user.id);
-
+  
       // Send verification email
       console.log("   Sending verification email...");
       const emailResult = await sendVerificationEmail(
@@ -1033,13 +1048,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         otp,
         `${firstName} ${lastName}`.trim() || firstName || "User"
       );
-
+  
       if (!emailResult.success) {
         console.error("❌ [register] Email sending failed but user created");
         console.error("   User ID:", user.id);
         console.error("   Email error:", emailResult.error);
-
-        // Still return success but note email issue
+  
         return res.status(201).json({
           message:
             "Registration successful but we couldn't send the verification email. Please use 'Resend OTP' on the verification page.",
@@ -1050,7 +1064,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           warning: "Email delivery failed - use Resend OTP",
         });
       }
-
+  
       console.log("✅ [register] Registration complete!");
       res.status(201).json({
         message:
@@ -1112,33 +1126,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/verify-email", async (req, res) => {
     try {
       const { email, otp } = req.body;
-
+  
       if (!email || !otp) {
         return res.status(400).json({
           message: "Email and OTP are required",
         });
       }
-
+  
       // Get user
       const user = await storage.getUserByEmail(email);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-
+  
       // Check if already verified
       if (user.emailVerified) {
         return res.status(400).json({
           message: "Email already verified",
         });
       }
-
+  
       // Check if OTP exists and matches
       if (!user.emailVerificationOtp || user.emailVerificationOtp !== otp) {
         return res.status(400).json({
           message: "Invalid OTP",
         });
       }
-
+  
       // Check if OTP is expired
       if (
         !user.emailVerificationOtpExpiresAt ||
@@ -1148,7 +1162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "OTP has expired. Please request a new one.",
         });
       }
-
+  
       // ⭐⭐ 1. First, verify the email in database
       await db
         .update(users)
@@ -1159,21 +1173,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updatedAt: new Date(),
         })
         .where(eq(users.id, user.id));
-
+  
       let bonusCashCredited = 0;
       let bonusPointsCredited = 0;
-
-      // ⭐⭐ 2. Apply normal signup bonus (MOVED from registration)
+  
+      // ⭐⭐ 2. Apply normal signup bonus
       try {
         const settings = await storage.getPlatformSettings();
         if (settings?.signupBonusEnabled) {
           const bonusCash = parseFloat(settings.signupBonusCash || "0");
           const bonusPoints = settings.signupBonusPoints || 0;
-
+  
           if (bonusCash > 0) {
             await storage.updateUserBalance(user.id, bonusCash.toFixed(2));
             bonusCashCredited = bonusCash;
-
+  
             await storage.createTransaction({
               userId: user.id,
               amount: bonusCash.toFixed(2),
@@ -1183,11 +1197,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               paymentMethod: "bonus",
             });
           }
-
+  
           if (bonusPoints > 0) {
             await storage.updateUserRingtonePoints(user.id, bonusPoints);
             bonusPointsCredited = bonusPoints;
-
+  
             await storage.createTransaction({
               userId: user.id,
               amount: "0.00",
@@ -1201,27 +1215,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (bonusError) {
         console.error("Signup bonus error:", bonusError);
       }
-
-      // ⭐⭐ 3. Apply referral system (MOVED from registration)
+  
+      // ⭐⭐ 3. Apply referral system
       try {
         if (user.referredBy) {
-          const referrer = await storage.getUserByReferralCode(user.referredBy);
-
+          const referrer = await storage.getUser(user.referredBy); // ⭐ Get referrer by ID now
+  
           if (referrer && referrer.id !== user.id) {
-            // Save referredBy is already stored in user.referredBy field
-            console.log(
-              `🎉 Referral: ${referrer.email} referred ${user.email}`
-            );
-
+            // ⭐ Save to referral tracking table (like your original code)
+            await storage.saveUserReferral({
+              userId: user.id,
+              referrerId: referrer.id,
+            });
+  
+            console.log(`🎉 Referral: ${referrer.email} referred ${user.email}`);
+  
             // ⭐ GIVE NEW USER 100 POINTS
             const welcomeReferralPoints = 100;
             const existingPoints = await storage.getUserRingtonePoints(user.id);
-
+  
             await storage.updateUserRingtonePoints(
               user.id,
               existingPoints + welcomeReferralPoints
             );
-
+  
             await storage.createTransaction({
               userId: user.id,
               amount: welcomeReferralPoints.toString(),
@@ -1235,16 +1252,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (referralError) {
         console.error("Referral processing error:", referralError);
       }
-
-      // ⭐⭐ 4. Send welcome email (MOVED from registration)
+  
+      // ⭐⭐ 4. Send welcome email
       sendWelcomeEmail(email, {
         userName: `${user.firstName} ${user.lastName}`.trim() || "there",
         email,
       }).catch((err) => console.error("Failed to send welcome email:", err));
-
+  
       // Create session
       (req as any).session.userId = user.id;
-
+  
       res.json({
         message: "Email verified successfully! Welcome bonuses applied.",
         verified: true,
