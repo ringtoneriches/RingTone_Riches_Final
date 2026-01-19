@@ -819,39 +819,45 @@ const FROM_EMAIL = "support@ringtoneriches.co.uk";
 
 async function processWalletTopup(
   userId: string,
+  pendingPaymentId: string,
   paymentRef: string,
   amount: number
 ) {
-  console.log("💰 processWalletTopup", { userId, paymentRef, amount });
+  try {
+    await db.transaction(async (tx) => {
+      const existing = await tx.query.transactions.findFirst({
+        where: (t, { eq }) => eq(t.pendingPaymentId, pendingPaymentId),
+      });
 
-  await db.transaction(async (tx) => {
-    // Prevent duplicates
-    const existing = await tx.query.transactions.findFirst({
-      where: (t, { eq }) => eq(t.paymentRef, paymentRef),
+      if (existing) {
+        console.warn("Duplicate wallet credit blocked:", pendingPaymentId);
+        return;
+      }
+
+      await tx.insert(transactions).values({
+        userId,
+        type: "deposit",
+        amount: Math.round(amount * 100) / 100,
+        paymentRef,
+        pendingPaymentId,
+        description: `Cashflows wallet top-up £${amount}`,
+      });
+
+      await tx.execute(sql`
+        UPDATE users
+        SET balance = balance + ${amount}
+        WHERE id = ${userId}
+      `);
     });
 
-    if (existing) {
-      console.warn("⚠️ Duplicate topup skipped:", paymentRef);
-      return;
-    }
-
-    await tx.insert(transactions).values({
-      userId,
-      type: "deposit",
-      amount: Math.round(amount * 100) / 100,
-      paymentRef,
-      description: `Cashflows wallet top-up £${amount}`,
-    });
-
-    await tx.execute(sql`
-      UPDATE users
-      SET balance = balance + ${amount}
-      WHERE id = ${userId}
-    `);
-
-    console.log("✅ Wallet credited:", userId);
-  });
+    console.log("Wallet credited successfully", { userId, pendingPaymentId, amount });
+  } catch (err) {
+    console.error("processWalletTopup FAILED", err);
+    throw err;
+  }
 }
+
+
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -2496,6 +2502,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Add webhook handler for Cashflows notifications
   app.post("/api/cashflows/webhook", async (req, res) => {
+    console.log("WEBHOOK HIT", req.body);
     const { paymentJobReference, paymentReference } = req.body;
 
     // console.log("🌊 Webhook received", req.body);
@@ -2507,7 +2514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pending = await db.query.pendingPayments.findFirst({
         where: (p, { eq }) => eq(p.paymentJobReference, paymentJobReference),
       });
-
+      console.log("PENDING RECORD", pending);
       if (!pending) {
         console.warn("No pending payment:", paymentJobReference);
         return;
@@ -2548,9 +2555,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await processWalletTopup(
         pending.userId,
+        pending.id,
         paymentReference ?? paymentJobReference,
         finalAmount
       );
+      
 
       await db
         .update(pendingPayments)
@@ -6047,6 +6056,16 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         return res.status(500).json({ message: "Failed to create payment" });
       }
 
+      // 👇 Add this
+      await db.insert(pendingPayments).values({
+        paymentJobReference: session.paymentJobReference,
+        userId,
+        amount: Number(amount),
+        status: "pending",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
       res.json({
         redirectUrl: session.hostedPageUrl,
         paymentJobRef: session.paymentJobReference,
@@ -6078,11 +6097,9 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       // }
 
       if (status === "PAID") {
-        // ✅ Credit wallet
-        await processWalletTopup(userId, paymentRef, paidAmount);
         return res.json({
           status,
-          message: "Payment received. Wallet successfully updated!",
+          message: "Payment received. Wallet will update shortly.",
         });
       }
 

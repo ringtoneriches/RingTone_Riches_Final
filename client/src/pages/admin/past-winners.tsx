@@ -41,6 +41,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import { ChevronsUpDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 
 interface Winner {
@@ -128,7 +142,7 @@ function WinnerForm({
     isShowcase: data?.isShowcase || false,
   });
   const [uploading, setUploading] = useState(false);
-
+  const [openUserSelect, setOpenUserSelect] = useState(false);
   // Fetch users for selection
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["/api/admin/users"],
@@ -175,24 +189,65 @@ function WinnerForm({
 
   return (
     <div className="space-y-4">
-      <div>
-        <Label>User *</Label>
-        <Select
-          value={form.userId}
-          onValueChange={(value) => setForm({ ...form, userId: value })}
-        >
-          <SelectTrigger data-testid="select-user">
-            <SelectValue placeholder="Select a user" />
-          </SelectTrigger>
-          <SelectContent>
-            {users.map((user) => (
-              <SelectItem key={user.id} value={user.id}>
-                {user.firstName} {user.lastName} ({user.email})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+
+
+<div>
+  <Label>User *</Label>
+
+  <Popover open={openUserSelect} onOpenChange={setOpenUserSelect}>
+    <PopoverTrigger asChild>
+      <Button
+        variant="outline"
+        role="combobox"
+        aria-expanded={openUserSelect}
+        className="w-full justify-between"
+      >
+        {form.userId
+          ? users.find((u) => u.id === form.userId)?.firstName +
+            " " +
+            users.find((u) => u.id === form.userId)?.lastName
+          : "Select user"}
+        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+      </Button>
+    </PopoverTrigger>
+
+    <PopoverContent className="min-w-[600px] max-w-[200px]  p-0">
+      <Command>
+        <CommandInput placeholder="Search user by name or email..." />
+        <CommandEmpty>No user found.</CommandEmpty>
+
+        <CommandGroup className="max-h-64 overflow-y-auto">
+          {users.map((user) => (
+            <CommandItem
+              key={user.id}
+              value={`${user.firstName} ${user.lastName} ${user.email}`}
+              onSelect={() => {
+                setForm({ ...form, userId: user.id });
+                setOpenUserSelect(false);
+              }}
+            >
+              <Check
+                className={cn(
+                  "mr-2 h-4 w-4",
+                  form.userId === user.id ? "opacity-100" : "opacity-0"
+                )}
+              />
+              <div className="flex flex-col">
+                <span className="font-medium">
+                  {user.firstName} {user.lastName}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {user.email}
+                </span>
+              </div>
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      </Command>
+    </PopoverContent>
+  </Popover>
+</div>
+
 
       <div>
         <Label>Competition (Optional)</Label>

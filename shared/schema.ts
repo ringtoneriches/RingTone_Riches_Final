@@ -129,6 +129,7 @@ export const transactions = pgTable("transactions", {
   userId: varchar("user_id").notNull().references(() => users.id),
   type: varchar("type", { enum: ["deposit", "withdrawal", "purchase", "prize", "referral" , "referral_bonus"] }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  pendingPaymentId: uuid("pending_payment_id").references(() => pendingPayments.id),
   paymentRef: varchar("payment_ref").unique(), 
   description: text("description"),
   orderId: uuid("order_id").references(() => orders.id),
@@ -138,7 +139,13 @@ export const transactions = pgTable("transactions", {
      uniqueIndex("transactions_payment_ref_idx")
       .on(table.paymentRef)
       .where(sql`${table.paymentRef} IS NOT NULL`),
-  ]
+
+      uniqueIndex("transactions_pending_payment_id_idx")
+    .on(table.pendingPaymentId)
+    .where(sql`${table.pendingPaymentId} IS NOT NULL`),
+]
+  
+  
 );
 
 
