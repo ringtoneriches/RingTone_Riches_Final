@@ -476,17 +476,29 @@ const filteredTransactions =
 
 function formatAmount(transaction: Transaction) {
   const amount = Math.abs(parseFloat(transaction.amount));
-
-  // ✅ Treat ringtone spin wins as points
-  if (
-    transaction.type === "ringtone_points" ||
-    transaction.description?.toLowerCase().includes("ringtone") ||
-    transaction.description?.toLowerCase().includes("points")
-  ) {
+  
+  const desc = transaction.description.toLowerCase();
+  
+  if (desc.includes("pts") || desc.includes("points")) {
     return `${amount} pts`;
   }
-
-  // 💷 Everything else is cash
+  
+  if (desc.includes("£") || desc.includes("cash")) {
+    return `£${amount.toFixed(2)}`;
+  }
+  
+  if (transaction.type === "ringtone_points" || transaction.type === "prize") {
+   
+    const originalAmount = transaction.amount.toString();
+   
+    if (originalAmount.includes('.') && 
+        parseFloat(originalAmount.split('.')[1] || '0') > 0) {
+      return `£${amount.toFixed(2)}`;
+    }
+    
+    return `${amount} pts`;
+  }
+  
   return `£${amount.toFixed(2)}`;
 }
 
