@@ -31,7 +31,7 @@ export default function ScratchGamePage() {
   const [isResultModalOpen, setIsResultModalOpen] = useState(false);
   const [remainingScratches, setRemainingScratches] = useState<number>(0);
   const [commitError, setCommitError] = useState<string | null>(null);
-
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
   // ✅ Parent-controlled mutation for scratch completion
   // Ensures query invalidation happens even if child component unmounts
   const completeScratchMutation = useMutation({
@@ -244,6 +244,23 @@ export default function ScratchGamePage() {
       />
 
       <Footer />
+      {showDisclaimer && (
+  <div className="fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-sm text-xs text-gray-300 p-3 text-center z-50 border-t border-gray-700">
+    <div className="max-w-4xl mx-auto px-4 flex items-center justify-between gap-3">
+      <p className="flex-1 text-left">
+        Please note: All on-screen graphics are for entertainment purposes only. 
+        Prize outcomes are securely pre-selected before any visual gameplay begins 
+        and are not influenced by the animations.
+      </p>
+      <button
+        onClick={() => setShowDisclaimer(false)}
+        className="flex-shrink-0 bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap"
+      >
+        Got it
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 }

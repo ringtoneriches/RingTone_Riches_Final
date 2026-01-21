@@ -606,7 +606,7 @@ const purchaseTicketMutation = useMutation({
                       ) : null}
 
                       {/* Monthly Draw Info for Spin & Scratch Cards */}
-                      {(competition.type === "spin" || competition.type === "scratch") && (
+                      {(competition.type === "spin" || competition.type === "scratch" || competition.type === "pop") && (
                         <div className="mb-4 md:mb-5">
                           <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-lg p-3 md:p-4 border border-green-500/30 shadow-lg">
                             <div className="flex items-start gap-3">

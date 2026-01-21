@@ -31,7 +31,7 @@ export default function SpinGamePage() {
   const [isResultModalOpen, setIsResultModalOpen] = useState(false);
   const [remainingSpins, setRemainingSpins] = useState<number>(0);
   const [isSpinning, setIsSpinning] = useState(false);
-
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
   // Fetch order data
   const { data: orderData, isLoading } = useQuery({
     queryKey: ["/api/spin-order", orderId],
@@ -211,7 +211,15 @@ export default function SpinGamePage() {
       </div>
       <main className="container mx-auto   text-center">
           {getWheelComponent()}
-
+          {/* Disclaimer text */}
+  {/* <div className="my-8 max-w-2xl mx-auto p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+    <p className="text-sm text-gray-400">
+      Please note: All on-screen graphics are for entertainment purposes only. 
+      Prize outcomes are securely pre-selected before any visual gameplay begins 
+      and are not influenced by the animations.
+    </p>
+  </div> */}
+  
       </main>
 
       {/* Modern Prize Modal with Confetti */}
@@ -225,6 +233,24 @@ export default function SpinGamePage() {
       />
 
       <Footer />
+
+      {showDisclaimer && (
+  <div className="fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-sm text-xs text-gray-300 p-3 text-center z-50 border-t border-gray-700">
+    <div className="max-w-4xl mx-auto px-4 flex items-center justify-between gap-3">
+      <p className="flex-1 text-left">
+        Please note: All on-screen graphics are for entertainment purposes only. 
+        Prize outcomes are securely pre-selected before any visual gameplay begins 
+        and are not influenced by the animations.
+      </p>
+      <button
+        onClick={() => setShowDisclaimer(false)}
+        className="flex-shrink-0 bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap"
+      >
+        Got it
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 }

@@ -274,7 +274,7 @@ export default function PopGamePage() {
   const [gameHistory, setGameHistory] = useState<any[]>([]);
   const [showRevealAllDialog, setShowRevealAllDialog] = useState(false);
   const [isRevealingAll, setIsRevealingAll] = useState(false);
-
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
   const { data: popConfig } = useQuery<{ isVisible: boolean; isActive: boolean }>({
     queryKey: ["/api/pop-config"],
   });
@@ -521,6 +521,23 @@ export default function PopGamePage() {
       </AlertDialog>
 
       <Footer />
+      {showDisclaimer && (
+  <div className="fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-sm text-xs text-gray-300 p-3 text-center z-50 border-t border-gray-700">
+    <div className="max-w-4xl mx-auto px-4 flex items-center justify-between gap-3">
+      <p className="flex-1 text-left">
+        Please note: All on-screen graphics are for entertainment purposes only. 
+        Prize outcomes are securely pre-selected before any visual gameplay begins 
+        and are not influenced by the animations.
+      </p>
+      <button
+        onClick={() => setShowDisclaimer(false)}
+        className="flex-shrink-0 bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap"
+      >
+        Got it
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 }

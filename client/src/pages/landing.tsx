@@ -155,9 +155,9 @@ export default function Landing() {
                 {/* Stats Row */}
                 <div className="flex flex-wrap justify-center lg:justify-start gap-6 mt-8 animate-fade-up-delay-4">
                   {[
-                    { value: "10,000+", label: "Winners" },
-                    { value: "£500K+", label: "Won" },
-                    { value: "50+", label: "Daily Prizes" }
+                    { value: "£20K+", label: "Weekly Prizes" },
+                    { value: "1000+", label: "Winners" },
+                    { value: "99p", label: "From Only" }
                   ].map((stat, index) => (
                     <div key={index} className="text-center">
                       <div className="text-xl sm:text-2xl font-black text-white">{stat.value}</div>
