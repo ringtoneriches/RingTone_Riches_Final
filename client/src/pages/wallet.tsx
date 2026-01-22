@@ -1299,29 +1299,29 @@ function getValidBalance(balance: string | null | undefined): number {
                                 </p>
                               </div>
                             </div>
-                           <div
-                            className={`font-bold text-lg whitespace-nowrap ${
-                              (transaction.type === "deposit" ||
-                              transaction.type === "prize" ||
-                              transaction.type === "referral" ||
-                              transaction.type === "referral_bonus" ||
-                              transaction.type === "refund" ||
-                              transaction.type === "ringtone_points") // Add ringtone_points to positive transactions
-                                ? "text-green-400"
-                                : "text-red-400"
-                            }`}
-                          >
-                            {(transaction.type === "deposit" ||
-                              transaction.type === "prize" ||
-                              transaction.type === "referral" ||
-                              transaction.type === "referral_bonus" ||
-                              transaction.type === "refund" ||
-                              transaction.type === "ringtone_points") // Add ringtone_points to positive transactions
-                              ? "+"
-                              : "-"
-                            }
-                            {formatAmount(transaction)}
-                          </div>
+                          <div
+  className={`font-bold text-lg whitespace-nowrap ${
+    (transaction.type === "deposit" ||
+    transaction.type === "prize" ||
+    transaction.type === "referral" ||
+    transaction.type === "referral_bonus" ||
+    transaction.type === "refund" ||
+    (transaction.type === "ringtone_points" && parseFloat(transaction.amount) > 0)) // Only show green for positive ringtone_points
+      ? "text-green-400"
+      : "text-red-400"
+  }`}
+>
+  {(transaction.type === "deposit" ||
+    transaction.type === "prize" ||
+    transaction.type === "referral" ||
+    transaction.type === "referral_bonus" ||
+    transaction.type === "refund" ||
+    (transaction.type === "ringtone_points" && parseFloat(transaction.amount) > 0)) // Only show + for positive ringtone_points
+    ? "+"
+    : "-"
+  }
+  {formatAmount(transaction)}
+</div>
                           </div>
                         ))
                       )}

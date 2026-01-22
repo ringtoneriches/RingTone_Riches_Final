@@ -3037,7 +3037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             await storage.createTransaction({
               userId,
-              type: "purchase",
+              type: "ringtone_points",
               amount: `-${pointsToUse}`,
               description: `Ringtone points payment for ${order.quantity} spin(s) - ${competition.title}`,
               orderId,
@@ -3049,7 +3049,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               method: "ringtone_points",
               amount: pointsAmount,
               pointsUsed: pointsToUse,
-              description: `Wolf Points: £${pointsAmount.toFixed(
+              description: `ringtone Points: £${pointsAmount.toFixed(
                 2
               )} (${pointsToUse} points)`,
             });
@@ -4135,7 +4135,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
             await storage.updateUserRingtonePoints(userId, newPoints);
             await storage.createTransaction({
               userId,
-              type: "purchase",
+              type: "ringtone_points",
               amount: `-${pointsToUse}`,
               description: `Ringtone points payment for ${order.quantity} scratch card(s) - ${competition.title}`,
               orderId,

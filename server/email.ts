@@ -1,22 +1,22 @@
-import { Resend } from 'resend';
+import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-
-const FROM_EMAIL = 'support@ringtoneriches.co.uk';
-const BRAND_NAME = 'Ringtone Riches';
-const BRAND_COLOR = '#FACC15';
+const FROM_EMAIL = "support@ringtoneriches.co.uk";
+const BRAND_NAME = "Ringtone Riches";
+const BRAND_COLOR = "#FACC15";
 
 // Logo URL - Update this with your deployed logo URL
 // For now using a placeholder - replace with actual hosted URL when deployed
 // Example: const LOGO_URL = 'https://yourdomain.com/logo.gif';
-const LOGO_URL = 'https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Logo_1758887059353.gif';
+const LOGO_URL =
+  "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Logo_1758887059353.gif";
 
 // Order confirmation email payload type
 export interface OrderConfirmationPayload {
   orderId: string;
   userName: string;
-  orderType: 'competition' | 'spin' | 'scratch' | 'pop';
+  orderType: "competition" | "spin" | "scratch" | "pop";
   itemName: string;
   quantity: number;
   totalAmount: string;
@@ -30,7 +30,7 @@ export interface OrderConfirmationPayload {
 // Email templates with yellow/gold theme
 export async function sendOrderConfirmationEmail(
   to: string,
-  orderData: OrderConfirmationPayload
+  orderData: OrderConfirmationPayload,
 ) {
   const emailHtml = `
 <!DOCTYPE html>
@@ -104,7 +104,20 @@ export async function sendOrderConfirmationEmail(
                       </tr>
                       <tr>
                         <td class="mobile-label" style="color: #666666; font-size: 15px;">Type:</td>
-                        <td class="mobile-label" style="color: #1a1a1a; font-size: 15px; text-align: right;">${orderData.orderType === 'competition' ? 'Competition Entry' : orderData.orderType === 'spin' ? 'Spin Wheel' : 'Scratch Card'}</td>
+                        <td class="mobile-label" style="color: #1a1a1a; font-size: 15px; text-align: right;">
+  ${
+    orderData.orderType === "competition"
+      ? "Competition Entry"
+      : orderData.orderType === "spin"
+        ? "Spin Wheel"
+        : orderData.orderType === "scratch"
+          ? "Scratch Card"
+          : orderData.orderType === "pop"
+            ? "Pop Balloon"
+            : "Order"
+  }
+</td>
+
                       </tr>
                       <tr>
                         <td class="mobile-label" style="color: #666666; font-size: 15px;">Quantity:</td>
@@ -141,42 +154,56 @@ export async function sendOrderConfirmationEmail(
                      <p class="mobile-text-md" style="margin: 0 0 15px; color: #1a1a1a; font-size: 16px; line-height: 1.5; font-weight: 600;">
                       Answer: 7:30am
                     </p>
-                    ${orderData.skillAnswer ? `
+                    ${
+                      orderData.skillAnswer
+                        ? `
                     <p class="mobile-label" style="margin: 0 0 10px; color: #666666; font-size: 15px; font-weight: 600;">Your Answer:</p>
                     <p class="mobile-text-md" style="margin: 0; color: #1a1a1a; font-size: 16px; font-weight: bold; background-color: #ffffff; padding: 12px; border-radius: 6px; border: 1px solid ${BRAND_COLOR};">
                       ✓ ${orderData.skillAnswer}
                     </p>
-                    ` : ''}
+                    `
+                        : ""
+                    }
                   </td>
                 </tr>
               </table>
               
-              ${orderData.ticketNumbers && orderData.ticketNumbers.length > 0 ? `
+              ${
+                orderData.ticketNumbers && orderData.ticketNumbers.length > 0
+                  ? `
               <!-- Ticket Numbers Box -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f9f9f9; border-radius: 8px; border: 2px solid ${BRAND_COLOR};">
                 <tr>
                   <td class="mobile-padding" style="padding: 20px;">
-                    <h2 class="mobile-h2" style="margin: 0 0 15px; color: #1a1a1a; font-size: 20px; font-weight: bold;">🎫 Your ${orderData.orderType === 'competition' ? 'Entry' : 'Draw'} Ticket${orderData.ticketNumbers.length > 1 ? 's' : ''}</h2>
+                    <h2 class="mobile-h2" style="margin: 0 0 15px; color: #1a1a1a; font-size: 20px; font-weight: bold;">🎫 Your ${orderData.orderType === "competition" ? "Entry" : "Draw"} Ticket${orderData.ticketNumbers.length > 1 ? "s" : ""}</h2>
                     <p class="mobile-label" style="margin: 0 0 15px; color: #333333; font-size: 15px;">
-                      ${orderData.orderType === 'competition' 
-                        ? 'These are your unique competition entry numbers:' 
-                        : orderData.orderType === 'spin'
-                        ? 'These are your unique ticket numbers for the live draw:'
-                        : 'These are your unique ticket numbers for the live draw:'}
+                      ${
+                        orderData.orderType === "competition"
+                          ? "These are your unique competition entry numbers:"
+                          : orderData.orderType === "spin"
+                            ? "These are your unique ticket numbers for the live draw:"
+                            : "These are your unique ticket numbers for the live draw:"
+                      }
                     </p>
                     <table cellpadding="5" cellspacing="5" border="0" style="width: 100%;">
                       <tr class="ticket-row">
-                        ${orderData.ticketNumbers.map(ticket => `
+                        ${orderData.ticketNumbers
+                          .map(
+                            (ticket) => `
                           <td class="ticket-box" style="background-color: #ffffff; border: 2px solid ${BRAND_COLOR}; border-radius: 8px; padding: 12px 20px;">
                             <span class="mobile-text-lg" style="color: #1a1a1a; font-size: 18px; font-weight: bold; font-family: 'Courier New', monospace;">${ticket}</span>
                           </td>
-                        `).join('')}
+                        `,
+                          )
+                          .join("")}
                       </tr>
                     </table>
                   </td>
                 </tr>
               </table>
-              ` : ''}
+              `
+                  : ""
+              }
               
               <p class="mobile-text-md" style="margin: 30px 0 0; font-size: 16px; color: #333333; line-height: 1.6;">
                 Good luck! Visit your account to view your entries and track your progress.
@@ -213,14 +240,14 @@ export async function sendOrderConfirmationEmail(
     });
 
     if (error) {
-      console.error('Error sending order confirmation email:', error);
+      console.error("Error sending order confirmation email:", error);
       return { success: false, error };
     }
 
-    console.log('Order confirmation email sent successfully:', data);
+    console.log("Order confirmation email sent successfully:", data);
     return { success: true, data };
   } catch (error) {
-    console.error('Failed to send order confirmation email:', error);
+    console.error("Failed to send order confirmation email:", error);
     return { success: false, error };
   }
 }
@@ -230,7 +257,7 @@ export async function sendWelcomeEmail(
   userData: {
     userName: string;
     email: string;
-  }
+  },
 ) {
   const emailHtml = `
 <!DOCTYPE html>
@@ -363,14 +390,14 @@ export async function sendWelcomeEmail(
     });
 
     if (error) {
-      console.error('Error sending welcome email:', error);
+      console.error("Error sending welcome email:", error);
       return { success: false, error };
     }
 
-    console.log('Welcome email sent successfully:', data);
+    console.log("Welcome email sent successfully:", data);
     return { success: true, data };
   } catch (error) {
-    console.error('Failed to send welcome email:', error);
+    console.error("Failed to send welcome email:", error);
     return { success: false, error };
   }
 }
@@ -381,7 +408,7 @@ export interface PromotionalCampaign {
   title: string;
   subject: string;
   message: string;
-  offerType: 'discount' | 'bonus' | 'announcement' | 'custom';
+  offerType: "discount" | "bonus" | "announcement" | "custom";
   discountCode?: string | null;
   discountPercentage?: number | null;
   bonusAmount?: string | null;
@@ -392,12 +419,12 @@ export interface PromotionalCampaign {
 // Send promotional campaign email
 export async function sendPromotionalEmail(
   to: string,
-  campaign: PromotionalCampaign
+  campaign: PromotionalCampaign,
 ) {
   // Build offer details section based on campaign type
-  let offerSection = '';
-  
-  if (campaign.offerType === 'discount' && campaign.discountCode) {
+  let offerSection = "";
+
+  if (campaign.offerType === "discount" && campaign.discountCode) {
     offerSection = `
       <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fffbea; border-radius: 8px; border: 2px solid ${BRAND_COLOR}; margin-bottom: 25px;">
         <tr>
@@ -407,21 +434,24 @@ export async function sendPromotionalEmail(
               <p style="margin: 0; font-size: 14px; color: #666666; text-transform: uppercase; letter-spacing: 1px;">Use Code:</p>
               <p style="margin: 5px 0 0; font-size: 28px; color: #1a1a1a; font-weight: bold; font-family: monospace;">${campaign.discountCode}</p>
             </div>
-            ${campaign.discountPercentage ? `<p style="margin: 15px 0 0; font-size: 18px; color: #1a1a1a; font-weight: bold;">Save ${campaign.discountPercentage}% on your next purchase!</p>` : ''}
-            ${campaign.expiryDate ? `<p style="margin: 10px 0 0; font-size: 14px; color: #666666;">Expires: ${new Date(campaign.expiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
+            ${campaign.discountPercentage ? `<p style="margin: 15px 0 0; font-size: 18px; color: #1a1a1a; font-weight: bold;">Save ${campaign.discountPercentage}% on your next purchase!</p>` : ""}
+            ${campaign.expiryDate ? `<p style="margin: 10px 0 0; font-size: 14px; color: #666666;">Expires: ${new Date(campaign.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>` : ""}
           </td>
         </tr>
       </table>
     `;
-  } else if (campaign.offerType === 'bonus' && (campaign.bonusAmount || campaign.bonusPoints)) {
+  } else if (
+    campaign.offerType === "bonus" &&
+    (campaign.bonusAmount || campaign.bonusPoints)
+  ) {
     offerSection = `
       <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fffbea; border-radius: 8px; border: 2px solid ${BRAND_COLOR}; margin-bottom: 25px;">
         <tr>
           <td class="mobile-padding" style="padding: 25px; text-align: center;">
             <h2 class="mobile-h2" style="margin: 0 0 15px; color: #1a1a1a; font-size: 20px; font-weight: bold;">🎉 Bonus Reward!</h2>
-            ${campaign.bonusAmount ? `<p style="margin: 10px 0; font-size: 32px; color: #1a1a1a; font-weight: bold;">£${campaign.bonusAmount} Bonus Cash</p>` : ''}
-            ${campaign.bonusPoints ? `<p style="margin: 10px 0; font-size: 32px; color: #1a1a1a; font-weight: bold;">${campaign.bonusPoints} Bonus Points</p>` : ''}
-            ${campaign.expiryDate ? `<p style="margin: 15px 0 0; font-size: 14px; color: #666666;">Available until: ${new Date(campaign.expiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
+            ${campaign.bonusAmount ? `<p style="margin: 10px 0; font-size: 32px; color: #1a1a1a; font-weight: bold;">£${campaign.bonusAmount} Bonus Cash</p>` : ""}
+            ${campaign.bonusPoints ? `<p style="margin: 10px 0; font-size: 32px; color: #1a1a1a; font-weight: bold;">${campaign.bonusPoints} Bonus Points</p>` : ""}
+            ${campaign.expiryDate ? `<p style="margin: 15px 0 0; font-size: 14px; color: #666666;">Available until: ${new Date(campaign.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>` : ""}
           </td>
         </tr>
       </table>
@@ -520,14 +550,14 @@ export async function sendPromotionalEmail(
     });
 
     if (error) {
-      console.error('Error sending promotional email:', error);
+      console.error("Error sending promotional email:", error);
       return { success: false, error };
     }
 
-    console.log('Promotional email sent successfully:', data);
+    console.log("Promotional email sent successfully:", data);
     return { success: true, data };
   } catch (error) {
-    console.error('Failed to send promotional email:', error);
+    console.error("Failed to send promotional email:", error);
     return { success: false, error };
   }
 }
@@ -535,7 +565,7 @@ export async function sendPromotionalEmail(
 export async function sendPasswordResetEmail(
   to: string,
   resetUrl: string,
-  userName?: string
+  userName?: string,
 ) {
   const emailHtml = `
 <!DOCTYPE html>
@@ -579,7 +609,7 @@ export async function sendPasswordResetEmail(
           <tr>
             <td class="mobile-padding" style="padding: 40px 30px;">
               <p class="mobile-text-lg" style="margin: 0 0 20px; font-size: 16px; color: #333333; line-height: 1.6;">
-                ${userName ? `Hi ${userName},` : 'Hello,'}
+                ${userName ? `Hi ${userName},` : "Hello,"}
               </p>
               
               <p class="mobile-text-md" style="margin: 0 0 20px; font-size: 15px; color: #555555; line-height: 1.6;">
@@ -644,19 +674,19 @@ export async function sendPasswordResetEmail(
     const { data, error } = await resend.emails.send({
       from: `${BRAND_NAME} <${FROM_EMAIL}>`,
       to: [to],
-      subject: 'Reset Your Password',
+      subject: "Reset Your Password",
       html: emailHtml,
     });
 
     if (error) {
-      console.error('Error sending password reset email:', error);
+      console.error("Error sending password reset email:", error);
       return { success: false, error };
     }
 
-    console.log('Password reset email sent successfully:', data);
+    console.log("Password reset email sent successfully:", data);
     return { success: true, data };
   } catch (error) {
-    console.error('Failed to send password reset email:', error);
+    console.error("Failed to send password reset email:", error);
     return { success: false, error };
   }
 }
@@ -674,7 +704,7 @@ export interface TopupConfirmationPayload {
 // Add this function after other email functions
 export async function sendTopupConfirmationEmail(
   to: string,
-  topupData: TopupConfirmationPayload
+  topupData: TopupConfirmationPayload,
 ) {
   const emailHtml = `
 <!DOCTYPE html>
@@ -813,14 +843,14 @@ export async function sendTopupConfirmationEmail(
     });
 
     if (error) {
-      console.error('Error sending top-up confirmation email:', error);
+      console.error("Error sending top-up confirmation email:", error);
       return { success: false, error };
     }
 
-    console.log('Top-up confirmation email sent successfully:', data);
+    console.log("Top-up confirmation email sent successfully:", data);
     return { success: true, data };
   } catch (error) {
-    console.error('Failed to send top-up confirmation email:', error);
+    console.error("Failed to send top-up confirmation email:", error);
     return { success: false, error };
   }
 }
