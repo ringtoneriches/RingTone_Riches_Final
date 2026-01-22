@@ -620,9 +620,13 @@ const purchaseTicketMutation = useMutation({
                                   💷 £100 Cash Draw Every Month
                                 </h4>
                                 <p className="text-gray-300 text-[11px] md:text-xs leading-relaxed">
-                                  All {competition.type === "spin" ? "spin wheel" : "scratch card"} entries automatically enter our monthly £100 cash draw! 
-                                  Winners are selected manually via Facebook or TikTok using your unique entry numbers. 
-                                  The more entries you have, the better your chances!
+                                  All {competition.type === "spin" 
+                                  ? "spin wheel" 
+                                  : competition.type === "scratch" 
+                                  ? "scratch card" 
+                                  : "pop balloon"} entries automatically enter our monthly £100 cash draw! 
+                              Winners are selected manually via Facebook or TikTok using your unique entry numbers. 
+                              The more entries you have, the better your chances!
                                 </p>
                               </div>
                             </div>
