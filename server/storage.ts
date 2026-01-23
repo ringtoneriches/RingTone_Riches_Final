@@ -1000,6 +1000,28 @@ async recordSpinUsage(orderId: string, userId: string): Promise<void> {
     return result[0]?.count || 0;
   }
 
+async getAdminUnreadWithdrawalCount(): Promise<number> {
+  const result = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(withdrawalRequests)
+    .where(
+      and(
+        eq(withdrawalRequests.adminHasUnread, true),
+        notInArray(withdrawalRequests.status, ["approved", "rejected", "processed"])
+      )
+    );
+
+  return result[0]?.count || 0;
+}
+
+
+async markAdminWithdrawalsAsRead(): Promise<void> {
+  await db
+    .update(withdrawalRequests)
+    .set({ adminHasUnread: false })
+    .where(eq(withdrawalRequests.adminHasUnread, true));
+}
+
   async markTicketsAsReadByUser(userId: string): Promise<void> {
     await db
       .update(supportTickets)

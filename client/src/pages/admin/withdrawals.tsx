@@ -47,7 +47,16 @@ const [cleanupLoading, setCleanupLoading] = useState(false);
     queryKey: ["/api/admin/withdrawal-requests"],
   });
 
-
+useEffect(() => {
+  apiRequest("/api/admin/withdrawals/mark-read", "POST")
+    .then(() => {
+      // 🔥 Force unread count to refresh
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/withdrawals/unread-count"],
+      });
+    })
+    .catch(console.error);
+}, []);
   const cleanupMutation = useMutation({
   mutationFn: async () => {
     const response = await apiRequest(

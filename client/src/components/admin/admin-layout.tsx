@@ -39,8 +39,20 @@ const sidebarItems = [
   { name: "Users", path: "/admin/users", icon: Users },
   { name: "Transactions", path: "/admin/transactions", icon: Euro },
   { name: "Orders", path: "/admin/orders", icon: ShoppingCart },
-  { name: "Withdrawals", path: "/admin/withdrawals", icon: ArrowDownCircle },
-  { name: "Support", path: "/admin/support", icon: MessageSquare, hasNotification: true },
+{
+    name: "Withdrawals",
+    path: "/admin/withdrawals",
+    icon: ArrowDownCircle,
+    hasNotification: true,
+    notificationType: "withdrawals",
+  },
+  {
+    name: "Support",
+    path: "/admin/support",
+    icon: MessageSquare,
+    hasNotification: true,
+    notificationType: "support",
+  },
   { name: "Well-being", path: "/admin/well-being", icon: Heart },
   { name: "Marketing", path: "/admin/marketing", icon: Mail },
   { name: "Settings", path: "/admin/settings", icon: Settings },
@@ -68,6 +80,11 @@ export default function AdminLayout({
     queryKey: ["/api/admin/support/unread-count"],
     refetchInterval: 1000,
   });
+
+  const { data: withdrawalUnreadData } = useQuery({
+  queryKey: ["/api/admin/withdrawals/unread-count"],
+  refetchInterval: 1000,
+});
 
   const enableMaintenance = useMutation({
     mutationFn: async () => {
@@ -155,7 +172,16 @@ export default function AdminLayout({
             {sidebarItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.path;
-              const unreadCount = item.hasNotification && supportUnreadData?.count > 0 ? supportUnreadData.count : 0;
+             let unreadCount = 0;
+
+        if (item.notificationType === "support") {
+          unreadCount = supportUnreadData?.count ?? 0;
+        }
+
+        if (item.notificationType === "withdrawals") {
+          unreadCount = withdrawalUnreadData?.count ?? 0;
+        }
+
               return (
                 <Link
                   key={item.path}

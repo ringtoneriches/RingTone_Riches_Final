@@ -6670,6 +6670,7 @@ app.get("/api/wellbeing", isAuthenticated, async (req, res) => {
           accountNumber,
           sortCode,
           status: "pending",
+          adminHasUnread: true,
         });
 
         // Create transaction record
@@ -6693,6 +6694,22 @@ app.get("/api/wellbeing", isAuthenticated, async (req, res) => {
       }
     }
   );
+
+  app.post(
+  "/api/admin/withdrawals/mark-read",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      await storage.markAdminWithdrawalsAsRead();
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Failed to mark withdrawals read:", err);
+      res.status(500).json({ message: "Failed to mark withdrawals read" });
+    }
+  }
+);
+
 
   app.get(
     "/api/withdrawal-requests/me",
@@ -10387,6 +10404,22 @@ app.post(
       }
     }
   );
+
+  app.get(
+  "/api/admin/withdrawals/unread-count",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const count = await storage.getAdminUnreadWithdrawalCount();
+      res.json({ count });
+    } catch (error) {
+      console.error("Error getting withdrawal unread count:", error);
+      res.status(500).json({ message: "Failed to get unread count" });
+    }
+  }
+);
+
 
   // User: Get their support tickets
   app.get("/api/support/tickets", isAuthenticated, async (req: any, res) => {

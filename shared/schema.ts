@@ -181,6 +181,7 @@ export const withdrawalRequests = pgTable("withdrawal_requests", {
   adminNotes: text("admin_notes"),
   processedBy: varchar("processed_by").references(() => users.id),
   processedAt: timestamp("processed_at"),
+  adminHasUnread: boolean("admin_has_unread").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
