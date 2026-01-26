@@ -200,6 +200,23 @@ export const winners = pgTable("winners", {
 });
 
 
+export const savedBankAccounts = pgTable("saved_bank_accounts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  accountName: text("account_name").notNull(),
+  accountNumber: varchar("account_number").notNull(), // Store encrypted in production!
+  sortCode: varchar("sort_code").notNull(), // Store encrypted in production!
+  isDefault: boolean("is_default").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+},
+(table) => [
+  index("saved_bank_accounts_user_id_idx").on(table.userId),
+  index("saved_bank_accounts_is_default_idx").on(table.isDefault),
+]);
+
+
 export const spinUsage = pgTable("spin_usage", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   orderId: uuid("order_id").notNull().references(() => orders.id),
@@ -419,7 +436,16 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
   id: true, 
   createdAt: true 
 });
+export const insertSavedBankAccountSchema = createInsertSchema(savedBankAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+
 // Types
+export type SavedBankAccount = typeof savedBankAccounts.$inferSelect;
+export type InsertSavedBankAccount = z.infer<typeof insertSavedBankAccountSchema>;
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

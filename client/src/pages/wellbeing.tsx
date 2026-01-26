@@ -29,15 +29,15 @@ interface WellbeingData {
   cooldown?: {
     active: boolean;
     remainingHours?: string;
+    remainingMinutes?: string;
     nextUpdateAvailable?: string;
     lastUpdated?: string;
     canUpdate?: boolean;
   };
 }
 
-
 interface User {
-  id: number;
+  id: string;
   dailySpendLimit: string | null;
   selfSuspended: boolean;
   selfSuspensionEndsAt: string | null;
@@ -45,93 +45,99 @@ interface User {
   lastName: string;
   email: string;
   disabled: boolean;
+  isAdmin: boolean;
 }
 
 export default function Wellbeing() {
   const { toast } = useToast();
-  const { user, logout } = useAuth();
+  const { user: authUser, logout } = useAuth();
   const queryClient = useQueryClient();
+  
+  // Check if user is admin
+  const isAdmin = authUser?.isAdmin || false;
+  
   const [dailyLimit, setDailyLimit] = useState("");
   const [suspensionDays, setSuspensionDays] = useState("7");
   const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
   const [isSuspensionOpen, setIsSuspensionOpen] = useState(false);
-  const [isProcessingLogout, setIsProcessingLogout] = useState(false);
-const [countdown, setCountdown] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  
   // Fetch wellbeing data
   const { data: wellbeingData, isLoading } = useQuery<WellbeingData>({
     queryKey: ["/api/wellbeing"],
-    enabled: !!user,
+    enabled: !!authUser,
   });
 
-const cooldownActive = wellbeingData?.cooldown?.active;
-const remainingHours = wellbeingData?.cooldown?.remainingHours;
-const nextUpdateTime = wellbeingData?.cooldown?.nextUpdateAvailable;
+  const cooldownActive = wellbeingData?.cooldown?.active && !isAdmin; // Cooldown only applies to non-admins
+  const remainingHours = wellbeingData?.cooldown?.remainingHours;
+  const remainingMinutes = wellbeingData?.cooldown?.remainingMinutes;
+  const nextUpdateTime = wellbeingData?.cooldown?.nextUpdateAvailable;
 
   // Fetch user data for suspension status
   const { data: userData, refetch: refetchUser } = useQuery<User>({
     queryKey: ["/api/auth/user"],
-    enabled: !!user,
+    enabled: !!authUser,
   });
 
-const hasDailyLimit = wellbeingData?.dailySpendLimit !== null &&
-  wellbeingData?.dailySpendLimit !== undefined &&
-  Number(wellbeingData.dailySpendLimit) > 0;
+  const hasDailyLimit = wellbeingData?.dailySpendLimit !== null &&
+    wellbeingData?.dailySpendLimit !== undefined &&
+    Number(wellbeingData.dailySpendLimit) > 0;
 
   // Set initial daily limit from fetched data
-useEffect(() => {
-  if (!wellbeingData) return;
-  
-  if (wellbeingData.dailySpendLimit === null || wellbeingData.dailySpendLimit === undefined) {
-    setDailyLimit("");
-  } else {
-    setDailyLimit(wellbeingData.dailySpendLimit);
-  }
-}, [wellbeingData]);
+  useEffect(() => {
+    if (!wellbeingData) return;
+    
+    if (wellbeingData.dailySpendLimit === null || wellbeingData.dailySpendLimit === undefined) {
+      setDailyLimit("");
+    } else {
+      setDailyLimit(wellbeingData.dailySpendLimit);
+    }
+  }, [wellbeingData]);
 
+  // Update the countdown useEffect for hours
+  useEffect(() => {
+    // Don't start countdown for admins
+    if (!wellbeingData?.cooldown?.active || isAdmin) {
+      setCountdown(null);
+      return;
+    }
 
-// Update the countdown useEffect for hours
-useEffect(() => {
-  if (!cooldownActive || !wellbeingData?.cooldown?.remainingHours) {
-    setCountdown(null);
-    return;
-  }
+    // For 24-hour cooldown, we'll count down in minutes for better UX
+    const initialHours = parseInt(wellbeingData.cooldown.remainingHours || "0");
+    const initialMinutes = parseInt(wellbeingData.cooldown.remainingMinutes || "0");
+    
+    // Convert to total minutes for countdown
+    const totalMinutes = (initialHours * 60) + initialMinutes;
+    setCountdown(totalMinutes);
 
-  // For 24-hour cooldown, we'll count down in minutes for better UX
-  const initialHours = Math.ceil(parseFloat(wellbeingData.cooldown.remainingHours));
-  const initialMinutes = Math.ceil(parseFloat(wellbeingData.cooldown.remainingMinutes || "0"));
-  
-  // Convert to total minutes for countdown
-  const totalMinutes = (initialHours * 60) + initialMinutes;
-  setCountdown(totalMinutes);
+    // Start countdown timer (update every minute instead of every second)
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          clearInterval(timer);
+          // Refresh data when countdown ends
+          queryClient.invalidateQueries({ queryKey: ["/api/wellbeing"] });
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 60000); // Every minute
 
-  // Start countdown timer (update every minute instead of every second)
-  const timer = setInterval(() => {
-    setCountdown(prev => {
-      if (prev === null || prev <= 1) {
-        clearInterval(timer);
-        // Refresh data when countdown ends
-        queryClient.invalidateQueries({ queryKey: ["/api/wellbeing"] });
-        return null;
-      }
-      return prev - 1;
-    });
-  }, 60000); // Every minute
+    return () => clearInterval(timer);
+  }, [wellbeingData?.cooldown?.active, wellbeingData?.cooldown?.remainingHours, wellbeingData?.cooldown?.remainingMinutes, queryClient, isAdmin]);
 
-  return () => clearInterval(timer);
-}, [cooldownActive, wellbeingData?.cooldown?.remainingHours, wellbeingData?.cooldown?.remainingMinutes, queryClient]);
-
-// Helper function to format time display
-const formatTimeDisplay = (minutes: number | null) => {
-  if (minutes === null) return "";
-  
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  
-  if (hours > 0) {
-    return `${hours}h ${mins}m`;
-  }
-  return `${mins}m`;
-};
+  // Helper function to format time display
+  const formatTimeDisplay = (minutes: number | null) => {
+    if (minutes === null) return "";
+    
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
+    return `${mins}m`;
+  };
 
   // Mutation for setting daily limit
   const setDailyLimitMutation = useMutation({
@@ -144,19 +150,18 @@ const formatTimeDisplay = (minutes: number | null) => {
       return res.json();
     },
     onSuccess: (_, limit) => {
-  queryClient.invalidateQueries({ queryKey: ["/api/wellbeing"] });
-  queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/wellbeing"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
 
-  const parsedLimit = Number(limit);
-  toast({
-    title: "Success",
-    description:
-      parsedLimit === 0
-        ? "Daily spending limit removed"
-        : `Daily spending limit updated to £${parsedLimit.toFixed(2)}`,
-  });
-},
-
+      const parsedLimit = Number(limit);
+      toast({
+        title: "Success",
+        description:
+          parsedLimit === 0
+            ? "Daily spending limit removed"
+            : `Daily spending limit updated to £${parsedLimit.toFixed(2)}`,
+      });
+    },
     onError: (error: any) => {
       toast({
         title: "Error",
@@ -268,11 +273,11 @@ const formatTimeDisplay = (minutes: number | null) => {
   const handleSetDailyLimit = () => {
     const parsed = Number(dailyLimit);
 
-     if (parsed === 0) {
-    updateDailyLimitMutation.mutate("0");
-    setDailyLimit("");
-    return;
-  }
+    if (parsed === 0) {
+      updateDailyLimitMutation.mutate("0");
+      setDailyLimit("");
+      return;
+    }
 
     if (isNaN(parsed) || parsed < 0) {
       toast({
@@ -312,27 +317,26 @@ const formatTimeDisplay = (minutes: number | null) => {
     closeAccountMutation.mutate();
   };
 
-const spentToday = parseFloat(wellbeingData?.spentToday || "0");
- const dailyLimitValue =
-  wellbeingData?.dailySpendLimit !== null && wellbeingData?.dailySpendLimit !== undefined && Number(wellbeingData.dailySpendLimit) > 0
-    ? parseFloat(wellbeingData.dailySpendLimit)
-    : null;
+  const spentToday = parseFloat(wellbeingData?.spentToday || "0");
+  const dailyLimitValue =
+    wellbeingData?.dailySpendLimit !== null && wellbeingData?.dailySpendLimit !== undefined && Number(wellbeingData.dailySpendLimit) > 0
+      ? parseFloat(wellbeingData.dailySpendLimit)
+      : null;
 
-const remaining =
-  wellbeingData?.remaining !== null  && wellbeingData?.remaining !== undefined
-    ? parseFloat(wellbeingData.remaining)
-    : null;
+  const remaining =
+    wellbeingData?.remaining !== null  && wellbeingData?.remaining !== undefined
+      ? parseFloat(wellbeingData.remaining)
+      : null;
 
-const progressPercentage = dailyLimitValue && dailyLimitValue > 0
-  ? (spentToday / dailyLimitValue) * 100
-  : 0;
+  const progressPercentage = dailyLimitValue && dailyLimitValue > 0
+    ? (spentToday / dailyLimitValue) * 100
+    : 0;
 
   const isCurrentlySuspended = userData?.selfSuspended && 
     userData.selfSuspensionEndsAt && 
     new Date(userData.selfSuspensionEndsAt) > new Date();
 
-const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
-
+  const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
 
   // If user is suspended or disabled, show a message and redirect
   if (isCurrentlySuspended || userData?.disabled) {
@@ -398,10 +402,8 @@ const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
 
   return (
     <div className="min-h-screen text-foreground">
-  
+      <Header />
       <div className="w-full px-3 sm:px-4 py-4 sm:py-8">
-       
-
         {/* Suspension Alert */}
         {isCurrentlySuspended && userData?.selfSuspensionEndsAt && (
           <Card className="mb-6 bg-gradient-to-br from-amber-900/30 to-amber-950/20 border-amber-500/50 shadow-xl shadow-amber-500/20">
@@ -453,12 +455,12 @@ const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
               </CardTitle>
             </CardHeader>
             <CardContent>
-             <p className="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent">
-              {dailyLimitValue !== null ? `£${dailyLimitValue.toFixed(2)}` : "No limit"}
-            </p>
-            <p className="text-sm text-gray-400 mt-2">
-              {dailyLimitValue !== null ? "Your maximum daily spend" : "No spending limit set"}
-            </p>
+              <p className="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent">
+                {dailyLimitValue !== null ? `£${dailyLimitValue.toFixed(2)}` : "No limit"}
+              </p>
+              <p className="text-sm text-gray-400 mt-2">
+                {dailyLimitValue !== null ? "Your maximum daily spend" : "No spending limit set"}
+              </p>
             </CardContent>
           </Card>
 
@@ -472,8 +474,8 @@ const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
             <CardContent>
               <p className="text-4xl font-bold bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent">
                 {showProgress && remaining !== null
-    ? `£${remaining.toFixed(2)}`
-    : "—"}
+                  ? `£${remaining.toFixed(2)}`
+                  : "—"}
               </p>
               <p className="text-sm text-gray-400 mt-2">Available to spend today</p>
             </CardContent>
@@ -494,18 +496,18 @@ const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
           
           <CardContent className="space-y-8">
             {/* Progress Bar */}
-            {showProgress  && (
+            {showProgress && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-  <span className="text-sm font-medium text-gray-300">Spending Progress</span>
-  <span className={`text-sm font-bold ${
-    progressPercentage >= 90 ? "text-red-400" :
-    progressPercentage >= 80 ? "text-amber-400" :
-    "text-emerald-400"
-  }`}>
-    {progressPercentage.toFixed(1)}%
-  </span>
-</div>
+                  <span className="text-sm font-medium text-gray-300">Spending Progress</span>
+                  <span className={`text-sm font-bold ${
+                    progressPercentage >= 90 ? "text-red-400" :
+                    progressPercentage >= 80 ? "text-amber-400" :
+                    "text-emerald-400"
+                  }`}>
+                    {progressPercentage.toFixed(1)}%
+                  </span>
+                </div>
                 <div className="relative">
                   <Progress 
                     value={progressPercentage} 
@@ -517,7 +519,7 @@ const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
                   />
                   <div className="flex justify-between text-xs text-gray-500 mt-1">
                     <span>£0.00</span>
-                    <span>£{dailyLimitValue.toFixed(2)}</span>
+                    <span>£{dailyLimitValue?.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -547,81 +549,73 @@ const showProgress = dailyLimitValue !== null && dailyLimitValue > 0;
                   </div>
                   
                   <div className="flex flex-wrap gap-3">
-              
-<Button
-  onClick={handleSetDailyLimit}
-  disabled={
-    setDailyLimitMutation.isPending || 
-    updateDailyLimitMutation.isPending ||
-    cooldownActive
-  }
-  className="bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400 shadow-lg shadow-blue-500/50 flex-1"
->
-  {setDailyLimitMutation.isPending || updateDailyLimitMutation.isPending ? (
-    <>
-      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-      Updating...
-    </>
-  ) : cooldownActive ? (
-    // Show hours/minutes instead of seconds
-    `Cooling Down ${formatTimeDisplay(countdown)}`
-  ) : hasDailyLimit ? (
-    "Update Limit"
-  ) : (
-    "Set Limit"
-  )}
-</Button>
-                    
-           
-                    {/* {hasDailyLimit  && (
-                      <Button
-                        variant="outline"
-                        onClick={handleRemoveDailyLimit}
-                        disabled={setDailyLimitMutation.isPending}
-                        className="border-zinc-700 text-gray-400 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/50 flex-1"
-                      >
-                        Remove Limit
-                      </Button>
-                    )} */}
+                    <Button
+                      onClick={handleSetDailyLimit}
+                      disabled={
+                        setDailyLimitMutation.isPending || 
+                        updateDailyLimitMutation.isPending ||
+                        (cooldownActive && !isAdmin) // Only disable for non-admins during cooldown
+                      }
+                      className="bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400 shadow-lg shadow-blue-500/50 flex-1"
+                    >
+                      {setDailyLimitMutation.isPending || updateDailyLimitMutation.isPending ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                          Updating...
+                        </>
+                      ) : (cooldownActive && !isAdmin) ? (
+                        // Show cooldown only for non-admins
+                        `Cooling Down ${formatTimeDisplay(countdown)}`
+                      ) : hasDailyLimit ? (
+                        "Update Limit"
+                      ) : (
+                        "Set Limit"
+                      )}
+                    </Button>
                   </div>
                 </div>
               </div>
             </div>
           </CardContent>
+          
           <CardContent>
+            {/* Cooldown message (only for non-admins) */}
+            {cooldownActive && !isAdmin && (
+              <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <div className="flex items-center gap-2 text-amber-300">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="font-medium">Daily Limit Cooldown Active</span>
+                </div>
+                <p className="text-sm text-amber-200/80 mt-1">
+                  You can update your daily limit again in{" "}
+                  <span className="font-bold text-amber-300">
+                    {formatTimeDisplay(countdown)}
+                  </span>.
+                  {nextUpdateTime && (
+                    <span className="block text-xs mt-1">
+                      Next update available: {new Date(nextUpdateTime).toLocaleDateString()} at{" "}
+                      {new Date(nextUpdateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-amber-300/60 mt-2">
+                  ⏰ For responsible gaming, daily limits can only be changed once every 24 hours
+                </p>
+              </div>
+            )}
 
-       {cooldownActive && (
-  <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-    <div className="flex items-center gap-2 text-amber-300">
-      <AlertCircle className="h-4 w-4" />
-      <span className="font-medium">Daily Limit Cooldown Active</span>
-    </div>
-    <p className="text-sm text-amber-200/80 mt-1">
-      You can update your daily limit again in{" "}
-      <span className="font-bold text-amber-300">
-       {formatTimeDisplay(countdown)}
-      </span>.
-      {nextUpdateTime && (
-        <span className="block text-xs mt-1">
-          Next update available: {new Date(nextUpdateTime).toLocaleDateString()} at{" "}
-          {new Date(nextUpdateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-        </span>
-      )}
-    </p>
-    <p className="text-xs text-amber-300/60 mt-2">
-      ⏰ For responsible gaming, daily limits can only be changed once every 24 hours
-    </p>
-    {/* Add a refresh button */}
-    {/* <Button
-      variant="outline"
-      size="sm"
-      className="mt-2 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
-      onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/wellbeing"] })}
-    >
-      Refresh Status
-    </Button> */}
-  </div>
-)}
+            {/* Admin indicator message */}
+            {isAdmin && (
+              <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <div className="flex items-center gap-2 text-blue-300">
+                  <Shield className="h-4 w-4" />
+                  <span className="font-medium">Admin Mode Active</span>
+                </div>
+                <p className="text-sm text-blue-200/80 mt-1">
+                  As an administrator, you can modify your daily limit without the 24-hour cooldown restriction.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

@@ -381,6 +381,9 @@ const isAuthenticated = !!user;
     accountName: "",
     accountNumber: "",
     sortCode: "",
+    saveDetails: true,
+    selectedAccountId: "", // For selecting saved account
+    useSavedAccount: false,
   });
 
   const [errors, setErrors] = useState({
@@ -443,6 +446,16 @@ const isAuthenticated = !!user;
     enabled: isAuthenticated,
   });
 
+   // Fetch saved bank accounts
+  const { data: savedAccounts = [], refetch } = useQuery({
+    queryKey: ['/api/saved-bank-accounts'],
+    queryFn: async () => {
+      const response = await apiRequest('/api/saved-bank-accounts', 'GET');
+      return response.json();
+    },
+  });
+
+
    const { data: supportUnreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/support/unread-count"],
     enabled: isAuthenticated,
@@ -454,6 +467,7 @@ const isAuthenticated = !!user;
     new Date(b.createdAt!).getTime() -
     new Date(a.createdAt!).getTime()
 );
+
 
 
 const filteredTransactions =
@@ -474,33 +488,23 @@ const filteredTransactions =
         new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime(),
     );
 
-    function formatAmount(transaction: Transaction) {
-      const amount = Math.abs(parseFloat(transaction.amount));
-      
-      const desc = transaction.description.toLowerCase();
-      
-      if (desc.includes("pts") || desc.includes("points")) {
-        return `${amount} pts`;
-      }
-      
-      if (desc.includes("£") || desc.includes("cash")) {
-        return `£${amount.toFixed(2)}`;
-      }
-      
-      if (transaction.type === "ringtone_points" || transaction.type === "prize") {
-       
-        const originalAmount = transaction.amount.toString();
-       
-        if (originalAmount.includes('.') && 
-            parseFloat(originalAmount.split('.')[1] || '0') > 0) {
-          return `£${amount.toFixed(2)}`;
-        }
-        
-        return `${amount} pts`;
-      }
-      
-      return `£${amount.toFixed(2)}`;
-    }
+function formatAmount(transaction: Transaction) {
+  const amount = Math.abs(parseFloat(transaction.amount));
+  
+  // Check transaction type first
+  if (transaction.type === "ringtone_points") {
+    // For ringtone_points type, always show as points
+    return `${amount} pts`;
+  }
+  
+  // For prize type, always show as cash
+  if (transaction.type === "prize") {
+    return `£${amount.toFixed(2)}`;
+  }
+  
+  // For all other types, show as cash
+  return `£${amount.toFixed(2)}`;
+}
 
   const ringtonePoints = user?.ringtonePoints || 0;
 
@@ -631,62 +635,138 @@ const completedOrders = orders.filter(
 
  
 
-  const withdrawalRequestMutation = useMutation({
-    mutationFn: async (data: {
-      amount: string;
-      accountName: string;
-      accountNumber: string;
-      sortCode: string;
-    }) => {
-      const response = await apiRequest(
-        "/api/withdrawal-requests",
-        "POST",
-        data,
-      );
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success!",
-        description:
-          "Withdrawal request submitted. We'll process it manually within 2-3 business days.",
-      });
-      setWithdrawalDialogOpen(false);
-      setWithdrawalForm({
-        amount: "",
-        accountName: "",
-        accountNumber: "",
-        sortCode: "",
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/withdrawal-requests/me"],
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-    },
-   onError: async (error: any) => {
-  let friendlyMessage = "Failed to submit withdrawal request";
+const withdrawalRequestMutation = useMutation({
+  mutationFn: async (data: {
+    amount: string;
+    accountName?: string;
+    accountNumber?: string;
+    sortCode?: string;
+    savedAccountId?: string;
+  }) => {
+    const response = await apiRequest(
+      "/api/withdrawal-requests",
+      "POST",
+      data,
+    );
+    return response.json();
+  },
+  onSuccess: () => {
+    toast({
+      title: "Success!",
+      description:
+        "Withdrawal request submitted. We'll process it manually within 2-3 business days.",
+    });
+    setWithdrawalDialogOpen(false);
+    setWithdrawalForm({
+      amount: "",
+      accountName: "",
+      accountNumber: "",
+      sortCode: "",
+      saveDetails: true,
+      selectedAccountId: "",
+      useSavedAccount: false,
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["/api/withdrawal-requests/me"],
+    });
+    queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+  },
+  onError: async (error: any) => {
+    let friendlyMessage = "Failed to submit withdrawal request";
 
-  try {
-    const err = await error.response.json();
+    try {
+      const err = await error.response.json();
 
-    if (err?.errors?.length > 0) {
-      // Use the Zod message from backend
-      friendlyMessage = err.errors[0].message;
-    } else if (err?.message) {
-      friendlyMessage = err.message;
+      if (err?.errors?.length > 0) {
+        // Use the Zod message from backend
+        friendlyMessage = err.errors[0].message;
+      } else if (err?.message) {
+        friendlyMessage = err.message;
+      }
+    } catch {
+      // ignore JSON parsing errors
     }
-  } catch {
-    // ignore JSON parsing errors
+
+    toast({
+      title: "Error",
+      description: friendlyMessage,
+      variant: "destructive",
+    });
+  },
+});
+
+// Add a mutation for saving bank accounts
+const saveBankAccountMutation = useMutation({
+  mutationFn: async (data: {
+    accountName: string;
+    accountNumber: string;
+    sortCode: string;
+    isDefault?: boolean;
+  }) => {
+    const response = await apiRequest(
+      "/api/saved-bank-accounts",
+      "POST",
+      data,
+    );
+    return response.json();
+  },
+  onSuccess: () => {
+    toast({
+      title: "Success!",
+      description: "Bank account saved successfully.",
+    });
+    refetch(); // Refresh the saved accounts list
+  },
+  onError: async (error: any) => {
+    toast({
+      title: "Error",
+      description: error.message || "Failed to save bank account",
+      variant: "destructive",
+    });
+  },
+});
+
+
+// Add these handlers to your component
+
+// Handle saved account selection
+const handleSelectSavedAccount = (accountId: string) => {
+  const selectedAccount = savedAccounts.find(acc => acc.id === accountId);
+  if (selectedAccount) {
+    setWithdrawalForm(prev => ({
+      ...prev,
+      selectedAccountId: accountId,
+      useSavedAccount: true,
+      // Clear manual fields when using saved account
+      accountName: "",
+      accountNumber: "",
+      sortCode: "",
+    }));
   }
+};
 
-  toast({
-    title: "Error",
-    description: friendlyMessage,
-    variant: "destructive",
-  });
-},
+// Handle "Enter new details" button
+const handleUseNewDetails = () => {
+  setWithdrawalForm(prev => ({
+    ...prev,
+    selectedAccountId: "",
+    useSavedAccount: false,
+    accountName: "",
+    accountNumber: "",
+    sortCode: "",
+    saveDetails: true,
+  }));
+};
 
-  });
+// Handle input changes
+const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const { name, value, type, checked } = e.target;
+  setWithdrawalForm(prev => ({
+    ...prev,
+    [name]: type === 'checkbox' ? checked : value
+  }));
+};
+  
 
    // Real-time validation on change
 const handleAccountNumberChange = (e) => {
@@ -949,8 +1029,120 @@ function getValidBalance(balance: string | null | undefined): number {
   return Math.max(0, parsed);
 }
 
+// Replace your form submit logic with this
+const handleWithdrawalSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  const amount = Number(withdrawalForm.amount);
+  if (isNaN(amount) || amount < 5) {
+    toast({
+      title: "Error",
+      description: "Minimum withdrawal amount is £5",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  const payload: any = {
+    amount: withdrawalForm.amount,
+  };
+
+  if (withdrawalForm.useSavedAccount && withdrawalForm.selectedAccountId) {
+    payload.savedAccountId = withdrawalForm.selectedAccountId;
+  } else {
+    const cleanAccountNumber = withdrawalForm.accountNumber.replace(/\D/g, "");
+    const cleanSortCode = withdrawalForm.sortCode.replace(/\D/g, "");
+
+    if (
+      !withdrawalForm.accountName ||
+      cleanAccountNumber.length !== 8 ||
+      cleanSortCode.length !== 6
+    ) {
+      toast({
+        title: "Error",
+        description: "Please enter valid bank account details",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    payload.accountName = withdrawalForm.accountName;
+    payload.accountNumber = cleanAccountNumber;
+    payload.sortCode = cleanSortCode;
+
+    if (withdrawalForm.saveDetails) {
+      try {
+        await saveBankAccountMutation.mutateAsync({
+          accountName: withdrawalForm.accountName,
+          accountNumber: cleanAccountNumber,
+          sortCode: cleanSortCode,
+          isDefault: savedAccounts.length === 0,
+        });
+      } catch {
+        console.warn("Failed to save bank account, continuing withdrawal");
+      }
+    }
+  }
+
+  await withdrawalRequestMutation.mutateAsync(payload);
+};
 
   
+const deleteBankAccountMutation = useMutation({
+  mutationFn: async (accountId: string) => {
+    const response = await apiRequest(
+      `/api/saved-bank-accounts/${accountId}`,
+      "DELETE"
+    );
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.message || "Failed to delete bank account");
+    }
+
+    return response.json();
+  },
+  onSuccess: (_, accountId) => {
+    toast({
+      title: "Deleted",
+      description: "Bank account removed successfully",
+    });
+
+    // Clear selection if deleted account was selected
+    if (withdrawalForm.selectedAccountId === accountId) {
+      setWithdrawalForm((prev) => ({
+        ...prev,
+        selectedAccountId: "",
+        useSavedAccount: false,
+      }));
+    }
+
+    queryClient.invalidateQueries({
+      queryKey: ["/api/saved-bank-accounts"],
+    });
+  },
+  onError: (error: any) => {
+    toast({
+      title: "Error",
+      description: error.message,
+      variant: "destructive",
+    });
+  },
+});
+
+const handleDeleteBankAccount = (
+  e: React.MouseEvent,
+  accountId: string
+) => {
+  e.stopPropagation(); // ⛔ prevent selecting account
+
+  if (!confirm("Are you sure you want to delete this bank account?")) {
+    return;
+  }
+
+  deleteBankAccountMutation.mutate(accountId);
+};
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black flex items-center justify-center">
@@ -1299,27 +1491,19 @@ function getValidBalance(balance: string | null | undefined): number {
                                 </p>
                               </div>
                             </div>
-                          <div
+   <div
   className={`font-bold text-lg whitespace-nowrap ${
     (transaction.type === "deposit" ||
     transaction.type === "prize" ||
     transaction.type === "referral" ||
     transaction.type === "referral_bonus" ||
     transaction.type === "refund" ||
-    (transaction.type === "ringtone_points" && parseFloat(transaction.amount) > 0)) // Only show green for positive ringtone_points
+    (transaction.type === "ringtone_points" && parseFloat(transaction.amount) > 0))
       ? "text-green-400"
       : "text-red-400"
   }`}
 >
-  {(transaction.type === "deposit" ||
-    transaction.type === "prize" ||
-    transaction.type === "referral" ||
-    transaction.type === "referral_bonus" ||
-    transaction.type === "refund" ||
-    (transaction.type === "ringtone_points" && parseFloat(transaction.amount) > 0)) // Only show + for positive ringtone_points
-    ? "+"
-    : "-"
-  }
+  {parseFloat(transaction.amount) > 0 ? "+" : "-"}
   {formatAmount(transaction)}
 </div>
                           </div>
@@ -2436,123 +2620,189 @@ function getValidBalance(balance: string | null | undefined): number {
       />
 
       {/* Withdrawal Request Dialog */}
-      <Dialog
-        open={withdrawalDialogOpen}
-        onOpenChange={setWithdrawalDialogOpen}
-      >
-        <DialogContent
-          className="bg-zinc-900 border-yellow-500/30"
-          data-testid="dialog-withdrawal"
-        >
-          <DialogHeader>
-            <DialogTitle className="text-yellow-400">
-              Request Withdrawal
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Amount (£)</Label>
-              <Input
-                type="number"
-                min="5"
-                step="0.01"
-                placeholder="Min £5"
-                value={withdrawalForm.amount}
-                onChange={(e) =>
-                  setWithdrawalForm({
-                    ...withdrawalForm,
-                    amount: e.target.value,
-                  })
-                }
-                className="bg-black/50 border-yellow-500/30 text-white"
-                data-testid="input-withdrawal-amount"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Account Name</Label>
-              <Input
-                placeholder="John Smith"
-                value={withdrawalForm.accountName}
-                onChange={(e) =>
-                  setWithdrawalForm({
-                    ...withdrawalForm,
-                    accountName: e.target.value,
-                  })
-                }
-                className="bg-black/50 border-yellow-500/30 text-white"
-                data-testid="input-account-name"
-              />
-            </div>
-           <div className="space-y-2">
-              <Label>Account Number (8 digits)</Label>
-              <Input
-                placeholder="12345678"
-                maxLength={8}
-                value={withdrawalForm.accountNumber}
-                onChange={handleAccountNumberChange}
-                className={`bg-black/50 border-yellow-500/30 text-white ${
-                  errors.accountNumber ? "border-red-500" : ""
-                }`}
-                data-testid="input-account-number"
-              />
-              {errors.accountNumber && (
-                <p className="text-red-500 text-sm">{errors.accountNumber}</p>
-              )}
-            </div>
+      <Dialog open={withdrawalDialogOpen} onOpenChange={setWithdrawalDialogOpen}>
+  <DialogContent className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 text-white max-w-md">
+    <DialogHeader>
+      <DialogTitle className="text-2xl text-yellow-400">
+        Request Withdrawal
+      </DialogTitle>
+      <DialogDescription className="text-gray-400">
+        Minimum withdrawal amount is £5. Processing takes 2-3 business days.
+      </DialogDescription>
+    </DialogHeader>
 
-            <div className="space-y-2">
-              <Label>Sort Code (6 digits)</Label>
-              <Input
-                placeholder="123456"
-                maxLength={6}
-                value={withdrawalForm.sortCode}
-                onChange={handleSortCodeChange}
-                className={`bg-black/50 border-yellow-500/30 text-white ${
-                  errors.sortCode ? "border-red-500" : ""
-                }`}
-                data-testid="input-sort-code"
-              />
-              {errors.sortCode && (
-                <p className="text-red-500 text-sm">{errors.sortCode}</p>
-              )}
-            </div>
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-gray-300">
-              <p className="font-semibold text-yellow-400 mb-1">
-                Processing Time
-              </p>
-              <p>
-                Withdrawal requests are processed manually within 24 hours. You’ll receive your funds via bank transfer.
-              </p>
-            </div>
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-gray-300">
-              <p className="font-semibold text-yellow-400 mb-1">
-                Important
-              </p>
-              <p>
-               Joining bonus credit or promotional site credit cannot be withdrawn. These credits are for gameplay only — only winnings generated through gameplay are eligible for withdrawal.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              onClick={() => withdrawalRequestMutation.mutate(withdrawalForm)}
-              disabled={
-                withdrawalRequestMutation.isPending ||
-                !withdrawalForm.amount ||
-                !withdrawalForm.accountName ||
-                !withdrawalForm.accountNumber ||
-                !withdrawalForm.sortCode
-              }
-              className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black hover:from-yellow-500 hover:to-yellow-400"
-              data-testid="button-submit-withdrawal"
+    <form onSubmit={handleWithdrawalSubmit} className="space-y-4">
+      {/* Amount field */}
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-1">
+          Amount (£)
+        </label>
+        <input
+          type="number"
+          name="amount"
+          value={withdrawalForm.amount}
+          onChange={handleInputChange}
+          step="0.01"
+          min="5"
+          className="w-full px-4 py-2 bg-zinc-800 border border-yellow-500/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+          placeholder="Enter amount (minimum £5)"
+          required
+        />
+        <p className="text-xs text-gray-400 mt-1">Available: £{user?.balance || "0.00"}</p>
+      </div>
+
+      {/* Saved Accounts Section */}
+    {savedAccounts.map((account: any) => (
+  <div
+    key={account.id}
+    className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+      withdrawalForm.selectedAccountId === account.id
+        ? "border-yellow-500 bg-yellow-500/10"
+        : "border-gray-700 hover:border-gray-500"
+    }`}
+    onClick={() => handleSelectSavedAccount(account.id)}
+  >
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="font-medium text-white">{account.accountName}</p>
+        <p className="text-sm text-gray-400">
+          Account ending in {account.accountNumber}
+          {account.isDefault && (
+            <span className="ml-2 text-xs text-yellow-500">(Default)</span>
+          )}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-3">
+        {/* Selected indicator */}
+        {withdrawalForm.selectedAccountId === account.id && (
+          <div className="h-5 w-5 rounded-full bg-yellow-500 flex items-center justify-center">
+            <svg
+              className="h-3 w-3 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
             >
-              {withdrawalRequestMutation.isPending
-                ? "Submitting..."
-                : "Submit Request"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="3"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </div>
+        )}
+
+        {/* Delete button */}
+        {!account.isDefault && (
+          <button
+            type="button"
+            onClick={(e) => handleDeleteBankAccount(e, account.id)}
+            className="text-red-400 hover:text-red-300 text-sm"
+            title="Delete bank account"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+))}
+
+
+      {/* Manual Account Details (only show if not using saved account OR no saved accounts) */}
+      {(!withdrawalForm.useSavedAccount || savedAccounts.length === 0) && (
+        <>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Account Name
+            </label>
+            <input
+              type="text"
+              name="accountName"
+              value={withdrawalForm.accountName}
+              onChange={handleInputChange}
+              className="w-full px-4 py-2 bg-zinc-800 border border-yellow-500/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+              placeholder="John Doe"
+              required={!withdrawalForm.useSavedAccount}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Account Number
+            </label>
+            <input
+              type="text"
+              name="accountNumber"
+              value={withdrawalForm.accountNumber}
+              onChange={handleAccountNumberChange}
+              className={`w-full px-4 py-2 bg-zinc-800 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent ${
+                errors.accountNumber ? 'border-red-500' : 'border-yellow-500/30'
+              }`}
+              placeholder="12345678"
+              maxLength={8}
+              required={!withdrawalForm.useSavedAccount}
+            />
+            {errors.accountNumber && (
+              <p className="text-red-400 text-xs mt-1">{errors.accountNumber}</p>
+            )}
+            <p className="text-xs text-gray-400 mt-1">8 digits, no spaces</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Sort Code
+            </label>
+            <input
+              type="text"
+              name="sortCode"
+              value={withdrawalForm.sortCode}
+              onChange={handleSortCodeChange}
+              className={`w-full px-4 py-2 bg-zinc-800 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent ${
+                errors.sortCode ? 'border-red-500' : 'border-yellow-500/30'
+              }`}
+              placeholder="123456"
+              maxLength={6}
+              required={!withdrawalForm.useSavedAccount}
+            />
+            {errors.sortCode && (
+              <p className="text-red-400 text-xs mt-1">{errors.sortCode}</p>
+            )}
+            <p className="text-xs text-gray-400 mt-1">6 digits, no dashes</p>
+          </div>
+
+          {/* Save Details Checkbox (only show when entering new details) */}
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="saveDetails"
+              name="saveDetails"
+              checked={withdrawalForm.saveDetails}
+              onChange={handleInputChange}
+              className="h-4 w-4 text-yellow-500 focus:ring-yellow-500 border-gray-600 rounded bg-zinc-800"
+            />
+            <label htmlFor="saveDetails" className="ml-2 text-sm text-gray-300">
+              Save these bank details for future withdrawals
+            </label>
+          </div>
+        </>
+      )}
+
+      {/* Submit Button */}
+      <button
+        type="submit"
+        disabled={withdrawalRequestMutation.isPending || saveBankAccountMutation.isPending}
+        className="w-full py-3 px-4 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {withdrawalRequestMutation.isPending || saveBankAccountMutation.isPending 
+          ? "Processing..." 
+          : "Submit Withdrawal Request"
+        }
+      </button>
+    </form>
+  </DialogContent>
+</Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
   <DialogContent>

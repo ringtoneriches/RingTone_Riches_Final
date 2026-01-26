@@ -50,6 +50,7 @@ import {
   popPrizes,
   popUsage,
   popWins,
+  savedBankAccounts,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -3023,38 +3024,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        // Process ringtone points if selected
-        if (useRingtonePoints && remainingAmount > 0) {
-          const availablePoints = user?.ringtonePoints || 0;
-          // Convert points to currency (1 point = £0.01)
-          const pointsValue = availablePoints * 0.01;
-          const pointsAmount = Math.min(pointsValue, remainingAmount);
+      // Process ringtone points if selected
+if (useRingtonePoints && remainingAmount > 0) {
+  const availablePoints = user?.ringtonePoints || 0;
+  // Convert points to currency (1 point = £0.01)
+  const pointsValue = availablePoints * 0.01;
+  const pointsAmount = Math.min(pointsValue, remainingAmount);
 
-          if (pointsAmount > 0) {
-            const pointsToUse = Math.floor(pointsAmount * 100); // Multiply by 100 (1/0.01)
-            const newPoints = availablePoints - pointsToUse;
-            await storage.updateUserRingtonePoints(userId, newPoints);
+  if (pointsAmount > 0) {
+    const pointsToUse = Math.floor(pointsAmount * 100); // Multiply by 100 (1/0.01)
+    const newPoints = availablePoints - pointsToUse;
+    await storage.updateUserRingtonePoints(userId, newPoints);
 
-            await storage.createTransaction({
-              userId,
-              type: "ringtone_points",
-              amount: `-${pointsToUse}`,
-              description: `Ringtone points payment for ${order.quantity} spin(s) - ${competition.title}`,
-              orderId,
-            });
+    // FIX: Store as CASH amount, not points
+    await storage.createTransaction({
+      userId,
+      type: "purchase", // Use "purchase" type like POP
+      amount: `-${pointsAmount.toFixed(2)}`, // Cash amount with 2 decimals
+      description: `Ringtone points payment for ${order.quantity} spin(s) - ${competition.title} (Used ${pointsToUse} points)`,
+      orderId,
+    });
 
-            pointsUsed = pointsToUse;
-            remainingAmount -= pointsAmount;
-            paymentBreakdown.push({
-              method: "ringtone_points",
-              amount: pointsAmount,
-              pointsUsed: pointsToUse,
-              description: `ringtone Points: £${pointsAmount.toFixed(
-                2
-              )} (${pointsToUse} points)`,
-            });
-          }
-        }
+    pointsUsed = pointsToUse;
+    remainingAmount -= pointsAmount;
+    paymentBreakdown.push({
+      method: "ringtone_points",
+      amount: pointsAmount,
+      pointsUsed: pointsToUse,
+      description: `ringtone Points: £${pointsAmount.toFixed(2)} (${pointsToUse} points)`,
+    });
+  }
+}
 
         // Process remaining amount through Cashflows
         if (remainingAmount > 0) {
@@ -3439,41 +3439,43 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         imageUrl: null,
         isShowcase: false,
       });
-    } else if (
-      selectedSegment.rewardType === "points" &&
-      selectedSegment.rewardValue
-    ) {
-      const points =
-        typeof selectedSegment.rewardValue === "number"
-          ? Math.floor(selectedSegment.rewardValue)
-          : parseInt(String(selectedSegment.rewardValue));
+   // In the points prize section of /api/play-spin-wheel:
+} else if (
+  selectedSegment.rewardType === "points" &&
+  selectedSegment.rewardValue
+) {
+  const points =
+    typeof selectedSegment.rewardValue === "number"
+      ? Math.floor(selectedSegment.rewardValue)
+      : parseInt(String(selectedSegment.rewardValue));
 
-      if (isNaN(points) || points < 0) {
-        return res.status(500).json({
-          success: false,
-          message: "Invalid points prize configuration",
-        });
-      }
+  if (isNaN(points) || points < 0) {
+    return res.status(500).json({
+      success: false,
+      message: "Invalid points prize configuration",
+    });
+  }
 
-      const newPoints = (user.ringtonePoints || 0) + points;
-      await storage.updateUserRingtonePoints(userId, newPoints);
+  const newPoints = (user.ringtonePoints || 0) + points;
+  await storage.updateUserRingtonePoints(userId, newPoints);
 
-      await storage.createTransaction({
-        userId,
-        type: "prize",
-        amount: points.toString(),
-        description: `Spin Wheel ${wheelType} Prize - ${points} Ringtones`,
-      });
+  // FIX: Use "ringtone_points" type for points prizes, not "prize"
+  await storage.createTransaction({
+    userId,
+    type: "ringtone_points", // Changed from "prize" to "ringtone_points"
+    amount: points.toString(), // This is points amount (no decimal)
+    description: `Spin Wheel ${wheelType} Prize - ${points} Ringtones`,
+  });
 
-      await storage.createWinner({
-        userId,
-        competitionId,
-        prizeDescription: selectedSegment.label,
-        prizeValue: `${points} Ringtones`,
-        imageUrl: null,
-        isShowcase: false,
-      });
-    }
+  await storage.createWinner({
+    userId,
+    competitionId,
+    prizeDescription: selectedSegment.label,
+    prizeValue: `${points} Ringtones`,
+    imageUrl: null,
+    isShowcase: false,
+  });
+}
 
     // Return full segment payload for frontend animation
     res.json({
@@ -3693,49 +3695,49 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
 
           prizeAmount = amount;
           prizeType = "cash";
-        } else if (
-          selectedSegment.rewardType === "points" &&
-          selectedSegment.rewardValue
-        ) {
-          const points =
-            typeof selectedSegment.rewardValue === "number"
-              ? Math.floor(selectedSegment.rewardValue)
-              : parseInt(String(selectedSegment.rewardValue));
-          totalPoints += points;
+       // In the points prize section of /api/reveal-all-spins:
+} else if (
+  selectedSegment.rewardType === "points" &&
+  selectedSegment.rewardValue
+) {
+  const points =
+    typeof selectedSegment.rewardValue === "number"
+      ? Math.floor(selectedSegment.rewardValue)
+      : parseInt(String(selectedSegment.rewardValue));
+  totalPoints += points;
 
-          const currentPoints = user.ringtonePoints || 0;
-          user.ringtonePoints = currentPoints + points;
+  const currentPoints = user.ringtonePoints || 0;
+  user.ringtonePoints = currentPoints + points;
 
-          await tx.update(users);
+  await tx
+    .update(users)
+    .set({ ringtonePoints: user.ringtonePoints })
+    .where(eq(users.id, userId));
 
-          await tx
-            .update(users)
-            .set({ ringtonePoints: user.ringtonePoints })
-            .where(eq(users.id, userId));
+  // FIX: Use "ringtone_points" type instead of "prize"
+  await tx.insert(transactions).values({
+    id: crypto.randomUUID(),
+    userId,
+    type: "ringtone_points", // Changed from "prize" to "ringtone_points"
+    amount: points.toString(),
+    description: `Spin Wheel Prize - ${points} Ringtones`,
+    createdAt: new Date(),
+  });
 
-          await tx.insert(transactions).values({
-            id: crypto.randomUUID(),
-            userId,
-            type: "prize",
-            amount: points.toString(),
-            description: `Spin Wheel Prize - ${points} Ringtones`,
-            createdAt: new Date(),
-          });
+  await tx.insert(winners).values({
+    id: crypto.randomUUID(),
+    userId,
+    competitionId,
+    prizeDescription: selectedSegment.label,
+    prizeValue: `${points} Ringtones`,
+    imageUrl: null,
+    isShowcase: false,
+    createdAt: new Date(),
+  });
 
-          await tx.insert(winners).values({
-            id: crypto.randomUUID(),
-            userId,
-            competitionId,
-            prizeDescription: selectedSegment.label,
-            prizeValue: `${points} Ringtones`,
-            imageUrl: null,
-            isShowcase: false,
-            createdAt: new Date(),
-          });
-
-          prizeAmount = `${points} Ringtones`;
-          prizeType = "points";
-        }
+  prizeAmount = `${points} Ringtones`;
+  prizeType = "points";
+}
 
         results.push({
           segmentId: selectedSegment.id,
@@ -6119,6 +6121,8 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
 // POST endpoint - 24 hour cooldown (PRODUCTION)
 app.post("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
   const userId = req.user.id;
+  const isAdmin = req.user.isAdmin === true;
+
   const { limit } = req.body;
 
   const parsed = Number(limit);
@@ -6131,27 +6135,26 @@ app.post("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
   const userData = user[0];
   
   // Check if user has dailyLimitLastUpdatedAt and it's within 24 hours
-  if (userData.dailyLimitLastUpdatedAt) {
-    const lastUpdated = new Date(userData.dailyLimitLastUpdatedAt);
-    const now = new Date();
-    const msSinceUpdate = now.getTime() - lastUpdated.getTime();
-    
-    if (msSinceUpdate < COOLDOWN_MS) {
-      const remainingMs = COOLDOWN_MS - msSinceUpdate;
-      const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
-      const remainingMinutes = Math.ceil(remainingMs / (1000 * 60));
-      const nextUpdateTime = new Date(lastUpdated.getTime() + COOLDOWN_MS);
-      
-      return res.status(400).json({
-        code: "COOLDOWN_ACTIVE",
-        error: `Daily limit can only be changed once every 24 hours. Please wait ${remainingHours} hours.`,
-        nextUpdateAvailable: nextUpdateTime.toISOString(),
-        lastUpdated: userData.dailyLimitLastUpdatedAt,
-        remainingHours: remainingHours,
-        remainingMinutes: remainingMinutes
-      });
-    }
+ if (!isAdmin && userData.dailyLimitLastUpdatedAt) {
+  const lastUpdated = new Date(userData.dailyLimitLastUpdatedAt);
+  const now = new Date();
+  const msSinceUpdate = now.getTime() - lastUpdated.getTime();
+
+  if (msSinceUpdate < COOLDOWN_MS) {
+    const remainingMs = COOLDOWN_MS - msSinceUpdate;
+    const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
+    const remainingMinutes = Math.ceil(remainingMs / (1000 * 60));
+    const nextUpdateTime = new Date(lastUpdated.getTime() + COOLDOWN_MS);
+
+    return res.status(400).json({
+      code: "COOLDOWN_ACTIVE",
+      error: `Daily limit can only be changed once every 24 hours.`,
+      nextUpdateAvailable: nextUpdateTime.toISOString(),
+      remainingHours,
+      remainingMinutes,
+    });
   }
+}
 
   // If limit is 0, treat it as removing the limit (set to null)
   if (parsed === 0) {
@@ -6216,8 +6219,10 @@ app.post("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
 
 
 // PUT endpoint - 24 hour cooldown (PRODUCTION)
+// PUT endpoint - with admin bypass
 app.put("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
   const userId = req.user.id;
+  const isAdmin = req.user.isAdmin === true;
   const { limit } = req.body;
 
   const parsed = Number(limit);
@@ -6225,27 +6230,32 @@ app.put("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
   // PRODUCTION: 24 hours
   const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
-  // Check cooldown first
-  const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  const userData = user[0];
-  
-  if (userData.dailyLimitLastUpdatedAt) {
-    const lastUpdated = new Date(userData.dailyLimitLastUpdatedAt);
-    const now = new Date();
-    const msSinceUpdate = now.getTime() - lastUpdated.getTime();
+  // Skip cooldown check for admins
+  if (!isAdmin) {
+    // Check cooldown first for regular users
+    const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const userData = user[0];
     
-    if (msSinceUpdate < COOLDOWN_MS) {
-      const remainingMs = COOLDOWN_MS - msSinceUpdate;
-      const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
-      const nextUpdateTime = new Date(lastUpdated.getTime() + COOLDOWN_MS);
+    if (userData.dailyLimitLastUpdatedAt) {
+      const lastUpdated = new Date(userData.dailyLimitLastUpdatedAt);
+      const now = new Date();
+      const msSinceUpdate = now.getTime() - lastUpdated.getTime();
       
-      return res.status(400).json({
-        code: "COOLDOWN_ACTIVE",
-        error: `Daily limit can only be changed once every 24 hours. Please wait ${remainingHours} hours.`,
-        nextUpdateAvailable: nextUpdateTime.toISOString(),
-        lastUpdated: userData.dailyLimitLastUpdatedAt,
-        remainingHours: remainingHours
-      });
+      if (msSinceUpdate < COOLDOWN_MS) {
+        const remainingMs = COOLDOWN_MS - msSinceUpdate;
+        const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
+        const remainingMinutes = Math.ceil(remainingMs / (1000 * 60));
+        const nextUpdateTime = new Date(lastUpdated.getTime() + COOLDOWN_MS);
+        
+        return res.status(400).json({
+          code: "COOLDOWN_ACTIVE",
+          error: `Daily limit can only be changed once every 24 hours.`,
+          nextUpdateAvailable: nextUpdateTime.toISOString(),
+          lastUpdated: userData.dailyLimitLastUpdatedAt,
+          remainingHours: remainingHours,
+          remainingMinutes: remainingMinutes
+        });
+      }
     }
   }
 
@@ -6255,26 +6265,27 @@ app.put("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
       .update(users)
       .set({
         dailySpendLimit: null,
-        dailyLimitLastUpdatedAt: new Date(),
+        dailyLimitLastUpdatedAt: isAdmin ? null : new Date(), // Don't set cooldown for admins
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId));
 
     // Audit (important for compliance)
+    const actionType = isAdmin ? "admin_daily_spend_updated" : "daily_spend_updated";
     await db.insert(auditLogs).values({
       userId,
       userName: `${req.user.firstName} ${req.user.lastName}`,
       email: req.user.email,
-      action: "daily_spend_updated",
-      description: "Daily spend limit removed",
+      action: actionType,
+      description: isAdmin ? "Admin removed daily spend limit" : "Daily spend limit removed",
       createdAt: new Date(),
     });
 
     return res.json({
       success: true,
       dailySpendLimit: null,
-      cooldownUntil: new Date(Date.now() + COOLDOWN_MS).toISOString(),
-      message: "Daily spending limit removed. You can set a new limit in 24 hours."
+      cooldownUntil: isAdmin ? null : new Date(Date.now() + COOLDOWN_MS).toISOString(),
+      message: "Daily spending limit removed." + (isAdmin ? "" : " You can set a new limit in 24 hours.")
     });
   }
 
@@ -6287,26 +6298,27 @@ app.put("/api/wellbeing/daily-limit", isAuthenticated, async (req, res) => {
     .update(users)
     .set({
       dailySpendLimit: parsed.toFixed(2),
-      dailyLimitLastUpdatedAt: new Date(),
+      dailyLimitLastUpdatedAt: isAdmin ? null : new Date(), // Don't set cooldown for admins
       updatedAt: new Date(),
     })
     .where(eq(users.id, userId));
 
   // Audit (important for compliance)
+  const actionType = isAdmin ? "admin_daily_spend_updated" : "daily_spend_updated";
   await db.insert(auditLogs).values({
     userId,
     userName: `${req.user.firstName} ${req.user.lastName}`,
     email: req.user.email,
-    action: "daily_spend_updated",
-    description: `Daily spend limit updated to £${parsed.toFixed(2)}`,
+    action: actionType,
+    description: `${isAdmin ? 'Admin ' : ''}Daily spend limit updated to £${parsed.toFixed(2)}`,
     createdAt: new Date(),
   });
 
   res.json({
     success: true,
     dailySpendLimit: parsed.toFixed(2),
-    cooldownUntil: new Date(Date.now() + COOLDOWN_MS).toISOString(),
-    message: "Daily spending limit updated. You can change it again in 24 hours."
+    cooldownUntil: isAdmin ? null : new Date(Date.now() + COOLDOWN_MS).toISOString(),
+    message: "Daily spending limit updated." + (isAdmin ? "" : " You can change it again in 24 hours.")
   });
 });
 
@@ -6322,36 +6334,29 @@ app.get("/api/wellbeing", isAuthenticated, async (req, res) => {
   
   // Calculate cooldown info
   let cooldownInfo = null;
-  if (userData.dailyLimitLastUpdatedAt) {
-    const lastUpdated = new Date(userData.dailyLimitLastUpdatedAt);
-    const now = new Date();
-    const msSinceUpdate = now.getTime() - lastUpdated.getTime();
-    
-    if (msSinceUpdate < COOLDOWN_MS) {
-      const remainingMs = COOLDOWN_MS - msSinceUpdate;
-      
-      // Calculate hours and minutes correctly
-      const totalMinutes = Math.floor(remainingMs / (1000 * 60));
-      const remainingHours = Math.floor(totalMinutes / 60);
-      const remainingMinutes = totalMinutes % 60; // This should be 0-59, not 60!
-      
-      const nextUpdateTime = new Date(lastUpdated.getTime() + COOLDOWN_MS);
-      
-      cooldownInfo = {
-        active: true,
-        remainingHours: remainingHours,
-        remainingMinutes: remainingMinutes,
-        totalRemainingMinutes: totalMinutes, // Add this for frontend countdown
-        nextUpdateAvailable: nextUpdateTime.toISOString(),
-        lastUpdated: userData.dailyLimitLastUpdatedAt
-      };
-    } else {
-      cooldownInfo = {
-        active: false,
-        canUpdate: true
-      };
-    }
+  const isAdmin =  req.user.isAdmin === true;
+
+
+if (!isAdmin && userData.dailyLimitLastUpdatedAt) {
+  const lastUpdated = new Date(userData.dailyLimitLastUpdatedAt);
+  const now = new Date();
+  const msSinceUpdate = now.getTime() - lastUpdated.getTime();
+
+  if (msSinceUpdate < COOLDOWN_MS) {
+    const remainingMs = COOLDOWN_MS - msSinceUpdate;
+    const totalMinutes = Math.floor(remainingMs / (1000 * 60));
+
+    cooldownInfo = {
+      active: true,
+      remainingHours: Math.floor(totalMinutes / 60),
+      remainingMinutes: totalMinutes % 60,
+      nextUpdateAvailable: new Date(lastUpdated.getTime() + COOLDOWN_MS).toISOString(),
+    };
+  } else {
+    cooldownInfo = { active: false, canUpdate: true };
   }
+}
+
 
   if (limit === null) {
     return res.json({
@@ -6602,98 +6607,157 @@ app.get("/api/wellbeing", isAuthenticated, async (req, res) => {
     }
   });
 
-  // Withdrawal Request Routes - Collect details for manual processing
-  const withdrawalRequestInputSchema = insertWithdrawalRequestSchema.extend({
-    amount: z.string().refine((val) => parseFloat(val) >= 5, {
-      message: "Minimum withdrawal amount is £5",
-    }),
-    accountName: z.string().trim().min(1, "Account name is required"),
+ // Update your withdrawal request schema
+
+
+const withdrawalRequestInputSchema = z
+  .object({
+    amount: z
+      .string()
+      .refine((val) => !isNaN(Number(val)), "Amount must be a number")
+      .refine((val) => Number(val) >= 5, {
+        message: "Minimum withdrawal amount is £5",
+      }),
+
+    // Manual details (optional)
+    accountName: z.string().trim().min(1).optional(),
     accountNumber: z
       .string()
       .trim()
-      .regex(/^\d{8}$/, "Account number must be 8 digits"),
+      .regex(/^\d{8}$/, "Account number must be 8 digits")
+      .optional(),
     sortCode: z
       .string()
       .trim()
-      .regex(/^\d{6}$/, "Sort code must be 6 digits"),
-  });
+      .regex(/^\d{6}$/, "Sort code must be 6 digits")
+      .optional(),
 
-  app.post(
-    "/api/withdrawal-requests",
-    isAuthenticated,
-    async (req: any, res) => {
-      try {
-        const userId = req.user.id;
+    // Saved account option
+    savedAccountId: z.string().uuid().optional(),
+  })
+  .refine(
+    (data) => {
+      const hasSaved = !!data.savedAccountId;
+      const hasManual =
+        !!data.accountName && !!data.accountNumber && !!data.sortCode;
 
-        // Validate input with Zod
-        const result = withdrawalRequestInputSchema.safeParse({
-          ...req.body,
-          userId,
-          status: "pending",
-        });
-
-        if (!result.success) {
-          return res.status(400).json({
-            message: "Invalid withdrawal request data",
-            errors: result.error.issues,
-          });
-        }
-
-        const { amount, accountName, accountNumber, sortCode } = result.data;
-
-        // Check user has sufficient balance
-        const user = await storage.getUser(userId);
-        if (!user) {
-          return res.status(404).json({ message: "User not found" });
-        }
-
-        const currentBalance = parseFloat(user.balance);
-        const withdrawalAmount = parseFloat(amount);
-
-        if (currentBalance < withdrawalAmount) {
-          return res
-            .status(400)
-            .json({
-              message: "Insufficient balance for this withdrawal request",
-            });
-        }
-
-        // Deduct the amount from user's balance immediately
-        const newBalance = (currentBalance - withdrawalAmount).toFixed(2);
-        await storage.updateUserBalance(userId, newBalance);
-
-        // Create withdrawal request
-        await storage.createWithdrawalRequest({
-          userId,
-          amount,
-          accountName,
-          accountNumber,
-          sortCode,
-          status: "pending",
-          adminHasUnread: true,
-        });
-
-        // Create transaction record
-        await storage.createTransaction({
-          userId,
-          type: "withdrawal",
-          amount: `-${amount}`,
-          description: `Withdrawal request to ${accountName}`,
-        });
-
-        res.status(201).json({
-          message:
-            "Withdrawal request submitted successfully. The amount has been deducted from your account balance.",
-          newBalance,
-        });
-      } catch (error: any) {
-        console.error("Error creating withdrawal request:", error);
-        res.status(500).json({
-          message: error.message || "Failed to create withdrawal request",
-        });
-      }
+      return (hasSaved && !hasManual) || (!hasSaved && hasManual);
+    },
+    {
+      message: "Either provide a saved account ID OR all account details",
+      path: ["savedAccountId"],
     }
   );
+
+
+
+// Update the withdrawal endpoint - COMPLETE VERSION
+app.post("/api/withdrawal-requests", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 1️⃣ VALIDATE RAW REQUEST
+    const parsed = withdrawalRequestInputSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Invalid withdrawal request data",
+        errors: parsed.error.issues,
+      });
+    }
+
+    const {
+      amount,
+      savedAccountId,
+      accountName,
+      accountNumber,
+      sortCode,
+    } = parsed.data;
+
+    // 2️⃣ RESOLVE ACCOUNT DETAILS
+    let finalAccountName: string;
+    let finalAccountNumber: string;
+    let finalSortCode: string;
+
+    if (savedAccountId) {
+      const [savedAccount] = await db
+        .select()
+        .from(savedBankAccounts)
+        .where(
+          and(
+            eq(savedBankAccounts.id, savedAccountId),
+            eq(savedBankAccounts.userId, userId),
+            eq(savedBankAccounts.isActive, true)
+          )
+        );
+
+      if (!savedAccount) {
+        return res
+          .status(404)
+          .json({ message: "Saved bank account not found" });
+      }
+
+      finalAccountName = savedAccount.accountName;
+      finalAccountNumber = savedAccount.accountNumber;
+      finalSortCode = savedAccount.sortCode;
+    } else {
+      finalAccountName = accountName!;
+      finalAccountNumber = accountNumber!;
+      finalSortCode = sortCode!;
+    }
+
+    // 3️⃣ CHECK USER & BALANCE
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const currentBalance = Number(user.balance);
+    const withdrawalAmount = Number(amount);
+
+    if (currentBalance < withdrawalAmount) {
+      return res.status(400).json({
+        message: "Insufficient balance for this withdrawal request",
+      });
+    }
+
+    // 4️⃣ DEDUCT BALANCE
+    const newBalance = (currentBalance - withdrawalAmount).toFixed(2);
+    await storage.updateUserBalance(userId, newBalance);
+
+    // 5️⃣ CREATE WITHDRAWAL REQUEST
+    await storage.createWithdrawalRequest({
+      userId,
+      amount,
+      accountName: finalAccountName,
+      accountNumber: finalAccountNumber,
+      sortCode: finalSortCode,
+      status: "pending",
+      adminHasUnread: true,
+    });
+
+    // 6️⃣ CREATE TRANSACTION
+    await storage.createTransaction({
+      userId,
+      type: "withdrawal",
+      amount: `-${withdrawalAmount}`,
+      description: `Withdrawal request to ${finalAccountName}`,
+    });
+
+    // 7️⃣ RESPONSE
+    res.status(201).json({
+      message:
+        "Withdrawal request submitted successfully. The amount has been deducted from your balance.",
+      newBalance,
+    });
+  } catch (error: any) {
+    console.error("Withdrawal error:", error);
+    res.status(500).json({
+      message: error.message || "Failed to create withdrawal request",
+    });
+  }
+});
+
 
   app.post(
   "/api/admin/withdrawals/mark-read",
@@ -6844,6 +6908,144 @@ app.get("/api/wellbeing", isAuthenticated, async (req, res) => {
       }
     }
   );
+
+// bank details user
+
+
+// Get user's saved bank accounts
+app.get("/api/saved-bank-accounts", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const accounts = await db
+      .select()
+      .from(savedBankAccounts)
+      .where(and(
+        eq(savedBankAccounts.userId, userId),
+        eq(savedBankAccounts.isActive, true)
+      ))
+      .orderBy(desc(savedBankAccounts.isDefault), desc(savedBankAccounts.createdAt));
+    
+    // Mask account number for security
+    const maskedAccounts = accounts.map(account => ({
+      ...account,
+      accountNumber: `****${account.accountNumber.slice(-4)}`,
+      sortCode: account.sortCode // You might want to mask this too
+    }));
+    
+    res.json(maskedAccounts);
+  } catch (error) {
+    console.error("Error fetching saved bank accounts:", error);
+    res.status(500).json({ message: "Failed to fetch saved bank accounts" });
+  }
+});
+
+// Save a new bank account
+app.post("/api/saved-bank-accounts", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { accountName, accountNumber, sortCode, isDefault = false } = req.body;
+    
+    // Validate input
+    if (!accountName || !accountNumber || !sortCode) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+    
+    // Validate account number (8 digits)
+    if (!/^\d{8}$/.test(accountNumber.replace(/\s/g, ''))) {
+      return res.status(400).json({ message: "Account number must be 8 digits" });
+    }
+    
+    // Validate sort code (6 digits)
+    if (!/^\d{6}$/.test(sortCode.replace(/-/g, ''))) {
+      return res.status(400).json({ message: "Sort code must be 6 digits" });
+    }
+    
+    // Clean the inputs
+    const cleanAccountNumber = accountNumber.replace(/\s/g, '');
+    const cleanSortCode = sortCode.replace(/-/g, '');
+    
+    // Check if this account already exists
+    const existing = await db
+      .select()
+      .from(savedBankAccounts)
+      .where(and(
+        eq(savedBankAccounts.userId, userId),
+        eq(savedBankAccounts.accountNumber, cleanAccountNumber),
+        eq(savedBankAccounts.sortCode, cleanSortCode),
+        eq(savedBankAccounts.isActive, true)
+      ));
+    
+    if (existing.length > 0) {
+      return res.status(400).json({ message: "This bank account is already saved" });
+    }
+    
+    // If this is set as default, unset any existing default
+    if (isDefault) {
+      await db
+        .update(savedBankAccounts)
+        .set({ isDefault: false })
+        .where(and(
+          eq(savedBankAccounts.userId, userId),
+          eq(savedBankAccounts.isActive, true)
+        ));
+    }
+    
+    // Save the new account
+    const [savedAccount] = await db
+      .insert(savedBankAccounts)
+      .values({
+        userId,
+        accountName,
+        accountNumber: cleanAccountNumber,
+        sortCode: cleanSortCode,
+        isDefault
+      })
+      .returning();
+    
+    // Return masked version
+    res.json({
+      ...savedAccount,
+      accountNumber: `****${cleanAccountNumber.slice(-4)}`
+    });
+  } catch (error) {
+    console.error("Error saving bank account:", error);
+    res.status(500).json({ message: "Failed to save bank account" });
+  }
+});
+
+// Delete a saved bank account (soft delete)
+app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    
+    // Verify the account belongs to the user
+    const account = await db
+      .select()
+      .from(savedBankAccounts)
+      .where(and(
+        eq(savedBankAccounts.id, id),
+        eq(savedBankAccounts.userId, userId),
+        eq(savedBankAccounts.isActive, true)
+      ));
+    
+    if (account.length === 0) {
+      return res.status(404).json({ message: "Bank account not found" });
+    }
+    
+    // Soft delete
+    await db
+      .update(savedBankAccounts)
+      .set({ isActive: false })
+      .where(eq(savedBankAccounts.id, id));
+    
+    res.json({ success: true, message: "Bank account removed" });
+  } catch (error) {
+    console.error("Error deleting bank account:", error);
+    res.status(500).json({ message: "Failed to delete bank account" });
+  }
+});
 
   // ====== ENTRIES ADMIN ENDPOINTS ======
   app.get("/api/admin/entries", isAuthenticated, isAdmin, async (req, res) => {
