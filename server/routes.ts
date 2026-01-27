@@ -2507,73 +2507,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/cashflows/webhook", async (req, res) => {
     console.log("WEBHOOK HIT", req.body);
     const { paymentJobReference, paymentReference } = req.body;
-
-    // console.log("🌊 Webhook received", req.body);
-
-    // Reply immediately
+  
     res.status(200).json({ received: true });
-
+  
     try {
       const pending = await db.query.pendingPayments.findFirst({
         where: (p, { eq }) => eq(p.paymentJobReference, paymentJobReference),
       });
-      console.log("PENDING RECORD", pending);
-      if (!pending) {
-        console.warn("No pending payment:", paymentJobReference);
+  
+      if (!pending) return;
+  
+      // 🚫 BLOCK expired/failed/cancelled etc.
+      if (pending.status !== "pending") {
+        console.log("Not pending:", pending.status, paymentJobReference);
         return;
       }
-
+  
       if (!pending.paymentReference && paymentReference) {
-        await db
-          .update(pendingPayments)
+        await db.update(pendingPayments)
           .set({ paymentReference })
           .where(eq(pendingPayments.id, pending.id));
       }
-
-      if (pending.status === "completed") {
-        console.log("Already completed:", paymentJobReference);
-        return;
-      }
-
+  
       const payment = await cashflows.getPaymentStatus(
         paymentJobReference,
         paymentReference ?? undefined
       );
-
+  
       const { status, paidAmount } = normalizeCashflowsStatus(payment);
-
-      console.log("💳 Normalized", { status, paidAmount });
-
+  
       if (status === "PENDING") return;
-
-      if (status === "FAILED") {
-        await db
-          .update(pendingPayments)
-          .set({ status: "failed", updatedAt: new Date() })
+  
+      if (status === "FAILED" || status === "EXPIRED") {
+        await db.update(pendingPayments)
+          .set({ status: status.toLowerCase(), updatedAt: new Date() })
           .where(eq(pendingPayments.id, pending.id));
         return;
       }
-
+  
       const finalAmount = paidAmount > 0 ? paidAmount : Number(pending.amount);
-
+  
       await processWalletTopup(
         pending.userId,
         pending.id,
         paymentReference ?? paymentJobReference,
         finalAmount
       );
-      
-
-      await db
-        .update(pendingPayments)
+  
+      await db.update(pendingPayments)
         .set({ status: "completed", updatedAt: new Date() })
         .where(eq(pendingPayments.id, pending.id));
-
+  
       console.log("✅ Wallet credited:", paymentJobReference);
     } catch (err) {
       console.error("Webhook error:", err);
     }
   });
+  
 
   // Ticket purchase route
   app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
