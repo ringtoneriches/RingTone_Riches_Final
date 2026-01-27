@@ -1,6 +1,8 @@
 import logoImage from "@assets/Logo_1758887059353.gif";
-import { Facebook } from "lucide-react";
+import { Facebook, Headphones } from "lucide-react";
 import facebook from "../../../../attached_assets/facebook.png";
+import { Link } from "wouter";
+import { Button } from "../ui/button";
 export default function Footer() {
   return (
     <footer className="bg-background border-t border-border py-8 sm:py-12">
@@ -198,13 +200,25 @@ export default function Footer() {
 
           {/* Contact */}
           <div className="space-y-4">
-            <h4 className="text-primary font-bold">CONTACT</h4>
-            <div className="space-y-2">
-              <p className="text-muted-foreground" data-testid="text-email">
-                support@ringtoneriches.co.uk
-              </p>
-            </div>
+          <h4 className="text-primary font-bold">CONTACT</h4>
+          <div className="space-y-3">
+            <p className="text-muted-foreground mb-3" data-testid="text-email">
+              support@ringtoneriches.co.uk
+            </p>
+            
+            {/* Support Button - Compact */}
+            <Link href="/wallet?tab=support">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="gap-2 px-3 py-1.5 h-auto bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/20"
+              >
+                <Headphones className="w-4 h-4 text-amber-400" />
+                <span className="text-sm font-medium text-white">Support</span>
+              </Button>
+            </Link>
           </div>
+        </div>
         </div>
 
        <div className="border-t border-border mt-8 pt-6 flex flex-col items-center gap-4 text-muted-foreground">

@@ -22,6 +22,7 @@ type RegisterForm = {
   receiveNewsletter: boolean;
   phoneNumber: string;
   referralCode?: string;
+  howDidYouFindUs: string;
 };
 
 type RegisterResponse = {
@@ -45,9 +46,18 @@ export default function Register() {
     birthYear: "",
     receiveNewsletter: false,
     phoneNumber: "",
-    referralCode: ""
+    referralCode: "",
+    howDidYouFindUs: "",
   });
   const { toast } = useToast();
+
+  const discoveryOptions = [
+    "Word of Mouth",
+    "Advertising Screens",
+    "Social Media",
+    "Street Promotions",
+    "Ringtone Riches Vehicles",
+  ];
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterForm) => {
@@ -103,6 +113,15 @@ export default function Register() {
         variant: "destructive",
         title: "Weak Password",
         description: "Password must be at least 6 characters long",
+      });
+      return;
+    }
+
+    if (!formData.howDidYouFindUs) {
+      toast({
+        variant: "destructive",
+        title: "Missing Information",
+        description: "Please tell us how you found out about Ringtone Riches",
       });
       return;
     }
@@ -234,6 +253,32 @@ export default function Register() {
                   required
                 />
               </div>
+
+            <div>
+              <Label className="text-white">
+                How did you find out about Ringtone Riches?
+              </Label>
+
+              <Select
+                value={formData.howDidYouFindUs}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, howDidYouFindUs: value }))
+                }
+              >
+                <SelectTrigger className="bg-white text-black mt-2">
+                  <SelectValue placeholder="Select an option" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  {discoveryOptions.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
 
               {/* Newsletter Checkbox */}
               <div className="flex items-center space-x-2">

@@ -288,7 +288,7 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
                         <div className="flex flex-wrap justify-center gap-3 sm:gap-6 text-white/40 text-[10px] sm:text-xs">
                           {[
                             { dot: "bg-emerald-400", text: "Quick Payout" },
-                            { dot: "bg-amber-400", text: "UK Licensed" },
+                            
                             { dot: "bg-purple-400", text: "24/7 Support" }
                           ].map((item, i) => (
                             <div key={i} className="flex items-center gap-1.5">

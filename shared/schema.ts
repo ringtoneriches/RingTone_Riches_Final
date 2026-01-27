@@ -52,6 +52,7 @@ export const users = pgTable("users", {
   ringtonePoints: integer("ringtone_points").default(0),
   receiveNewsletter: boolean("receive_newsletter").default(false),
   dailyLimitLastUpdatedAt: timestamp("daily_limit_last_updated_at"),
+  howDidYouFindUs: varchar("how_did_you_find_us"),
   isAdmin: boolean("is_admin").default(false),
   isActive: boolean("is_active").default(true),
   referralCode: varchar("referral_code").unique(),

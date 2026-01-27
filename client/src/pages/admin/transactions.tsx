@@ -49,6 +49,7 @@ interface CashflowTx {
   userName?: string;
   userEmail?: string;
   description: string;
+  paymentRef: string;
   type: string;
   amount: number;
   source: string;
@@ -416,6 +417,7 @@ export default function AdminTransactions() {
                     <TableHead>Type</TableHead>
                     <TableHead>Source</TableHead>
                     <TableHead>Description</TableHead>
+                    <TableHead>Reference</TableHead>
                     <TableHead>Amount</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -454,6 +456,7 @@ export default function AdminTransactions() {
                           </Badge>
                         </TableCell>
                         <TableCell className="max-w-xs truncate">{tx.description || 'N/A'}</TableCell>
+                        <TableCell className="max-w-xs truncate">{tx.paymentRef || 'N/A'}</TableCell>
                         <TableCell className="font-bold">
                           <span className={tx.type === 'deposit' ? 'text-green-400' : 'text-blue-400'}>
                            £{Number(tx.amount || 0).toFixed(2)}

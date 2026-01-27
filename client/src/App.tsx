@@ -61,6 +61,7 @@ import AdminRingtonePop from "./pages/admin/ringtone-pop";
 import AdminPopBalloon from "./pages/admin/admin-pop-balloon";
 import VerifyEmailPage from "./pages/verify-email";
 import AdminSpinWheelSettings from "./pages/admin/AdminSpinWheelSettings";
+import Intelligence from "./pages/admin/intelligence";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -140,6 +141,7 @@ function Router() {
             <Route path="/admin/ringtone-pop/settings" component={AdminRingtonePop} />
             <Route path="/admin/add-ringtone-pop" component={AdminPopBalloon} />
       <Route path="/admin/users/:id" component={UserAuditPage} />
+      <Route path="/admin/intelligence" component={Intelligence} />
 
       <Route component={NotFound} />
     </Switch>

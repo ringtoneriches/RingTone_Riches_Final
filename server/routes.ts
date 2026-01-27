@@ -985,6 +985,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         birthMonth,
         birthYear,
         referralCode,
+        howDidYouFindUs,
       } = req.body;
   
       console.log("   Email to register:", email);
@@ -1039,6 +1040,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastName,
         dateOfBirth: dobString,
         phoneNumber,
+        howDidYouFindUs,
         receiveNewsletter: receiveNewsletter || false,
         emailVerificationOtp: otp,
         emailVerificationOtpExpiresAt: expiresAt,
@@ -5765,6 +5767,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
             description: transactions.description,
             createdAt: transactions.createdAt,
             source: sql`'transaction'`,
+            paymentRef: transactions.paymentRef,
           })
           .from(transactions)
           .leftJoin(users, eq(transactions.userId, users.id))
@@ -7544,6 +7547,20 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
       }
     }
   );
+
+  app.get("/api/admin/intelligence/registration-source",isAuthenticated, isAdmin, async (req, res) => {
+    const result = await db.execute(sql`
+      SELECT 
+        how_did_you_find_us AS source,
+        COUNT(*)::int AS total
+      FROM users
+      WHERE how_did_you_find_us IS NOT NULL
+      GROUP BY how_did_you_find_us
+      ORDER BY total DESC
+    `);
+  
+    res.json(result.rows);
+  });
 
   app.get(
     "/api/admin/wellbeing/daily-top-users",

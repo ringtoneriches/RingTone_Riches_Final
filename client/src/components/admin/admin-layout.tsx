@@ -19,6 +19,7 @@ import {
   MessageSquare,
   Heart,
   Sparkles,
+  Brain,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ const sidebarItems = [
     hasNotification: true,
     notificationType: "support",
   },
+  { name: "Intelligence", path: "/admin/intelligence", icon: Brain },
   { name: "Well-being", path: "/admin/well-being", icon: Heart },
   { name: "Marketing", path: "/admin/marketing", icon: Mail },
   { name: "Settings", path: "/admin/settings", icon: Settings },
