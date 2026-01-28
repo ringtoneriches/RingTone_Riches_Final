@@ -120,6 +120,10 @@ export const orders = pgTable("orders", {
   paymentBreakdown: text("payment_breakdown"),
   skillAnswer: text("skill_answer"), // User's answer to the skill question
   remainingPlays: integer("remaining_plays"),
+  discountCodeId: uuid("discount_code_id").references(() => discountCodes.id),
+  discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }),
+  discountType: varchar("discount_type", { enum: ["cash", "points"] }),
+  pointsDiscountAmount: decimal("points_discount_amount", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -160,6 +164,31 @@ export const pendingPayments = pgTable("pending_payments", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+export const discountCodes = pgTable("discount_codes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code").unique().notNull(), // the actual code string
+  type: varchar("type", { enum: ["cash", "points"] }).notNull(),
+  value: decimal("value", { precision: 10, scale: 2 }).notNull(), // cash amount or points
+  maxUses: integer("max_uses").default(1), // max times the code can be used
+  usesCount: integer("uses_count").default(0), // track how many times it's been used
+  expiresAt: timestamp("expires_at"), // auto-expiry
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+
+export const discountCodeUsages = pgTable("discount_code_usages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  discountCodeId: uuid("discount_code_id").notNull().references(() => discountCodes.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  orderId: uuid("order_id").references(() => orders.id), // optional, if used at checkout
+  usedAt: timestamp("used_at").defaultNow(),
+});
+
+
+
 
 export const wellbeingRequests = pgTable("wellbeing_requests", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),

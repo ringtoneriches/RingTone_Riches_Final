@@ -20,6 +20,7 @@ import {
   Heart,
   Sparkles,
   Brain,
+  TicketIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ const sidebarItems = [
     notificationType: "support",
   },
   { name: "Intelligence", path: "/admin/intelligence", icon: Brain },
+  // { name: "Discount", path: "/admin/discount", icon: TicketIcon },
   { name: "Well-being", path: "/admin/well-being", icon: Heart },
   { name: "Marketing", path: "/admin/marketing", icon: Mail },
   { name: "Settings", path: "/admin/settings", icon: Settings },

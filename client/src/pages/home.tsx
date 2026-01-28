@@ -7,7 +7,7 @@ import StatsBanner from "@/components/stats-banner";
 import { Competition, User } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import FeaturedCompetitions from "./featuredCompetitions";
-import { Sparkles, Trophy, Zap, Gift, Mail, CheckCircle2, Shield, Award, Star, ChevronRight, Crown, Wallet, RotateCw, Ticket, Coins, Play, TrendingUp, Flame } from "lucide-react";
+import { Sparkles, Trophy, Zap, Gift, Mail, CheckCircle2, Shield, Award, Star, ChevronRight, Crown, Wallet, RotateCw, Ticket, Coins, Play, TrendingUp, Flame, PartyPopper } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -266,6 +266,19 @@ export default function Home() {
                     {/* Game Cards - Responsive */}
                     <div className="relative space-y-2.5 sm:space-y-4">
           {[
+            // {
+            //   Icon: PartyPopper,
+            //   title: "Pop Balloons",
+            //   tagline: "Pop balloons to win",
+            //   stars: 5,
+            //   badge: "NEW",
+            //   badgeColor: "bg-rose-500",
+            //   gradient: "from-rose-600 via-pink-500 to-orange-500",
+            //   borderColor: "border-rose-400/50",
+            //   glowColor: "shadow-rose-500/50",
+            //   filter: "instant",
+            //   winChance: "HOT"
+            // },
             { Icon: RotateCw, title: "Spin & Win", tagline: "Spin to Win Big",  stars: 5, badge: "HOT", badgeColor: "bg-red-500", gradient: "from-purple-600 via-purple-500 to-violet-600", borderColor: "border-purple-400/50", glowColor: "shadow-purple-500/50", filter: "spin" },
             { Icon: Ticket, title: "Scratch Cards", tagline: "Reveal Your Fortune",  stars: 5, badge: "POPULAR", badgeColor: "bg-emerald-500", gradient: "from-emerald-600 via-emerald-500 to-teal-600", borderColor: "border-emerald-400/50", glowColor: "shadow-emerald-500/50", filter: "scratch" },
             { Icon: Zap, title: "Competition", tagline: "Win Big Prizes",  stars: 5,  badge: "MEGA", badgeColor: "bg-amber-500", gradient: "from-amber-500 via-yellow-500 to-orange-500", borderColor: "border-amber-400/50", glowColor: "shadow-amber-500/50", filter: "instant" }
@@ -333,7 +346,7 @@ export default function Home() {
       </div>
     </button>
   ))}
-</div>
+                  </div>
                     
                     {/* Bottom - Winning Message */}
                     <div className="mt-3 sm:mt-5 pt-3 sm:pt-4 border-t border-white/10">

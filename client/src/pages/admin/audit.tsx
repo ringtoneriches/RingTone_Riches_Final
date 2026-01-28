@@ -109,7 +109,7 @@ export default function UserAuditPage() {
   const { data: auditData, isLoading: loadingAudit } = useQuery({
     queryKey: ["auditLogs", id],
     queryFn: async () => {
-      const res = await apiRequest(`https://ringtoneriches.co.uk/api/admin/users/audit/${id}`, "GET"); // Fixed endpoint
+      const res = await apiRequest(`https://ringtoneriches.co.uk/api/admin/users/audit/${id}`, "GET"); 
       return res.json() as Promise<ApiResponse>;
     },
     enabled: !!id,

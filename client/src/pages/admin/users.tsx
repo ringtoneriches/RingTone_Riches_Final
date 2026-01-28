@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown, ArrowBigLeft, ArrowBigRight, CheckCircle,  XCircle, Users, Badge, Shield } from "lucide-react";
+import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown, ArrowBigLeft, ArrowBigRight, CheckCircle,  XCircle, Users, Badge, Shield, AlertTriangleIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -53,6 +53,9 @@ interface User {
    disabled: boolean;
   disabledAt: string | null;
   disabledUntil: string | null;
+
+  dailySpendLimit: string | null;
+  dailyLimitLastUpdatedAt: string | null;
 }
 
 type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
@@ -90,7 +93,8 @@ const [sortFieldCashflow, setSortFieldCashflow] = useState<SortFieldCashflow>(nu
 const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false);
 const [userToDisable, setUserToDisable] = useState<User | null>(null);
 const [disableDays, setDisableDays] = useState("7");
-
+const [dailyLimitDialogOpen, setDailyLimitDialogOpen] = useState(false);
+const [userForDailyLimitReset, setUserForDailyLimitReset] = useState<User | null>(null);
 const [roleFilter, setRoleFilter] = useState<string>("all");
 
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
@@ -424,6 +428,36 @@ const enableUserMutation = useMutation({
   },
 });
 
+// Add this with your other mutations
+const resetDailyLimitMutation = useMutation({
+  mutationFn: async (targetUserId: string) => {
+    const res = await apiRequest(
+      "/api/admin/wellbeing/daily-limit-reset", 
+      "POST", 
+      { targetUserId }
+    );
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error?.message || "Failed to reset daily limit");
+    }
+    return res.json();
+  },
+  onSuccess: (data) => {
+    toast({
+      title: "Success",
+      description: data.message || "Daily limit reset successfully",
+    });
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+  },
+  onError: (error: any) => {
+    toast({
+      title: "Error",
+      description: error.message || "Failed to reset daily limit",
+      variant: "destructive",
+    });
+  },
+});
+
 const handleSortCashflow = (field: SortFieldCashflow) => {
   if (sortFieldCashflow === field) {
     // Cycle: asc → desc → none
@@ -704,7 +738,7 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
           />
         </div>
 
-  <div className="flex items-center gap-3">
+  {/* <div className="flex items-center gap-3">
   <Label className="text-sm font-medium text-gray-400">Role Filter:</Label>
   
   <div className="flex items-center bg-black/30 border border-blue-500/30 rounded-lg p-1">
@@ -748,7 +782,7 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
     </button>
   </div>
   
-</div>
+</div> */}
          {/* Sort info */}
         {/* {sortField && sortOrder && (
           <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded-md">
@@ -909,6 +943,7 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
           : "text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-950"
       }`}
       data-testid={`button-disable-user-${user.id}`}
+      title="Disable User"
     >
       {user.disabled ? (
         <CheckCircle className="w-4 h-4" />
@@ -916,7 +951,20 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
         <XCircle className="w-4 h-4" />
       )}
     </Button>
-    
+    <Button
+  variant="outline"
+  size="sm"
+  onClick={() => {
+    setUserForDailyLimitReset(user);
+    setDailyLimitDialogOpen(true);
+  }}
+  className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950"
+  data-testid={`button-reset-daily-limit-${user.id}`}
+  title="Reset Daily Limit"
+>
+
+  <AlertTriangleIcon className="w-4 h-4" />
+</Button>
     <Button
       variant="outline"
       size="sm"
@@ -1327,6 +1375,87 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+  {/* Daily Limit Reset Dialog */}
+<Dialog open={dailyLimitDialogOpen} onOpenChange={setDailyLimitDialogOpen}>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>Reset Daily Spending Limit</DialogTitle>
+      <DialogDescription>
+        This will reset the user's daily spending limit to "No Limit"
+      </DialogDescription>
+    </DialogHeader>
+    
+    <div className="space-y-4">
+      <div className="bg-muted/50 p-4 rounded-lg">
+        <div className="space-y-2">
+          <p className="font-medium">User Details:</p>
+          <p className="text-sm">
+            <span className="font-medium">Name:</span> {userForDailyLimitReset?.firstName} {userForDailyLimitReset?.lastName}
+          </p>
+          <p className="text-sm">
+            <span className="font-medium">Email:</span> {userForDailyLimitReset?.email}
+          </p>
+          <p className="text-sm">
+            <span className="font-medium">Current Daily Limit:</span>{" "}
+            {userForDailyLimitReset?.dailySpendLimit ? (
+              <span className="font-medium text-primary">
+                £{parseFloat(userForDailyLimitReset.dailySpendLimit).toFixed(2)}
+              </span>
+            ) : (
+              <span className="text-muted-foreground italic">Not set</span>
+            )}
+          </p>
+          {userForDailyLimitReset?.dailyLimitLastUpdatedAt && (
+            <p className="text-sm">
+              <span className="font-medium">Last Updated:</span>{" "}
+              {new Date(userForDailyLimitReset.dailyLimitLastUpdatedAt).toLocaleString()}
+            </p>
+          )}
+        </div>
+      </div>
+      
+      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-amber-500">What happens after reset:</p>
+            <ul className="list-disc list-inside mt-1 text-amber-500/80">
+              <li>Daily spending limit will be removed</li>
+              <li>User can set a new limit immediately</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() => {
+          setDailyLimitDialogOpen(false);
+          setUserForDailyLimitReset(null);
+        }}
+        disabled={resetDailyLimitMutation.isPending}
+      >
+        Cancel
+      </Button>
+      <Button
+        variant="destructive"
+        onClick={() => {
+          if (userForDailyLimitReset) {
+            resetDailyLimitMutation.mutate(userForDailyLimitReset.id);
+            setDailyLimitDialogOpen(false);
+          }
+        }}
+        disabled={resetDailyLimitMutation.isPending}
+      >
+        {resetDailyLimitMutation.isPending ? "Resetting..." : "Reset Limit"}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
       </div>
     </AdminLayout>
   );

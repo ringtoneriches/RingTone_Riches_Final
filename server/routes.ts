@@ -51,6 +51,8 @@ import {
   popUsage,
   popWins,
   savedBankAccounts,
+  discountCodes,
+  discountCodeUsages,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -744,11 +746,12 @@ function normalizeCashflowsStatus(payment: any): {
 
   const paidAmount = Number(
     payment?.data?.paidAmount ||
-      payment?.data?.amountCollected ||
-      payment?.data?.payments?.[0]?.paidAmount ||
-      0
+    payment?.data?.amountCollected ||
+    payment?.data?.payments?.[0]?.paidAmount ||
+    0
   );
 
+  // ✅ Paid
   if (
     status.includes("PAID") ||
     status.includes("SUCCESS") ||
@@ -757,10 +760,16 @@ function normalizeCashflowsStatus(payment: any): {
     return { status: "PAID", paidAmount };
   }
 
-  if (status.includes("FAIL") || status.includes("CANCEL")) {
+  // ❌ Expired / Failed / Cancelled
+  if (
+    status.includes("FAIL") ||
+    status.includes("CANCEL") ||
+    status.includes("EXPIRE")
+  ) {
     return { status: "FAILED", paidAmount: 0 };
   }
 
+  // ⏳ Still pending
   if (
     status.includes("PENDING") ||
     status.includes("PROCESS") ||
@@ -769,8 +778,10 @@ function normalizeCashflowsStatus(payment: any): {
     return { status: "PENDING", paidAmount: 0 };
   }
 
+  // ❓ Unknown = NEVER PAY
   return { status: "UNKNOWN", paidAmount: 0 };
 }
+
 
 async function updateSegmentWinCount(segmentId: string, wheelType: string) {
   if (wheelType === "wheel2") {
@@ -824,8 +835,13 @@ async function processWalletTopup(
   paymentRef: string,
   amount: number
 ) {
+  if (amount <= 0) {
+    throw new Error("Invalid wallet credit amount");
+  }
+
   try {
     await db.transaction(async (tx) => {
+      // 🛑 Idempotency guard
       const existing = await tx.query.transactions.findFirst({
         where: (t, { eq }) => eq(t.pendingPaymentId, pendingPaymentId),
       });
@@ -851,12 +867,17 @@ async function processWalletTopup(
       `);
     });
 
-    console.log("Wallet credited successfully", { userId, pendingPaymentId, amount });
+    console.log("Wallet credited successfully", {
+      userId,
+      pendingPaymentId,
+      amount,
+    });
   } catch (err) {
     console.error("processWalletTopup FAILED", err);
     throw err;
   }
 }
+
 
 
 
@@ -1838,6 +1859,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Backend route to update registration source
+app.post("/api/user/update-registration-source", isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { source } = req.body;
+
+    if (!source || source.trim().length === 0) {
+      return res.status(400).json({ error: "Source is required" });
+    }
+
+    // Update the user's registration source
+    await db.update(users)
+      .set({
+        howDidYouFindUs: source.trim(),
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId));
+
+    // Log this action
+    await db.insert(auditLogs).values({
+      userId,
+      userName: `${req.user.firstName} ${req.user.lastName}`,
+      email: req.user.email,
+      action: "update_registration_source",
+      description: `Updated registration source to: ${source}`,
+      createdAt: new Date()
+    });
+
+    res.json({
+      success: true,
+      message: "Registration source updated successfully"
+    });
+
+  } catch (error) {
+    console.error("Error updating registration source:", error);
+    res.status(500).json({ error: "Failed to update registration source" });
+  }
+});
+
+
+// Backend route to check if user needs to provide source
+app.get("/api/user/registration-source-status", isAuthenticated, async (req, res) => {
+  const userId = req.user.id;
+  
+  const user = await db.select({
+    howDidYouFindUs: users.howDidYouFindUs,
+    createdAt: users.createdAt
+  })
+  .from(users)
+  .where(eq(users.id, userId))
+  .limit(1);
+
+  const userData = user[0];
+  
+  // If user registered more than 7 days ago and hasn't provided source, ask them
+  const needsToProvide = !userData.howDidYouFindUs && 
+  new Date(userData.createdAt) < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+res.json({
+  needsToProvide, // true only for old users without source
+  hasProvided: !!userData.howDidYouFindUs,
+  source: userData.howDidYouFindUs,
+  createdAt: userData.createdAt
+});
+});
+
   app.get("/api/competitions/:id", async (req, res) => {
     try {
       const competition = await db
@@ -2506,8 +2593,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add webhook handler for Cashflows notifications
   app.post("/api/cashflows/webhook", async (req, res) => {
     console.log("WEBHOOK HIT", req.body);
+  
     const { paymentJobReference, paymentReference } = req.body;
   
+    // Always reply immediately
     res.status(200).json({ received: true });
   
     try {
@@ -2515,20 +2604,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where: (p, { eq }) => eq(p.paymentJobReference, paymentJobReference),
       });
   
-      if (!pending) return;
-  
-      // 🚫 BLOCK expired/failed/cancelled etc.
-      if (pending.status !== "pending") {
-        console.log("Not pending:", pending.status, paymentJobReference);
+      if (!pending) {
+        console.warn("No pending payment found:", paymentJobReference);
         return;
       }
   
+      // 🚫 Hard stop if not pending
+      if (pending.status !== "pending") {
+        console.log("Blocked non-pending payment:", pending.status);
+        return;
+      }
+  
+      // Save payment reference once
       if (!pending.paymentReference && paymentReference) {
         await db.update(pendingPayments)
           .set({ paymentReference })
           .where(eq(pendingPayments.id, pending.id));
       }
   
+      // 🔍 Ask Cashflows for truth
       const payment = await cashflows.getPaymentStatus(
         paymentJobReference,
         paymentReference ?? undefined
@@ -2536,33 +2630,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
       const { status, paidAmount } = normalizeCashflowsStatus(payment);
   
+      console.log("Normalized status:", { status, paidAmount });
+  
+      // ⏳ Still waiting
       if (status === "PENDING") return;
   
-      if (status === "FAILED" || status === "EXPIRED") {
+      // ❌ Any non-paid = fail forever
+      if (status !== "PAID" || paidAmount <= 0) {
         await db.update(pendingPayments)
-          .set({ status: status.toLowerCase(), updatedAt: new Date() })
+          .set({
+            status: "failed",
+            updatedAt: new Date(),
+          })
           .where(eq(pendingPayments.id, pending.id));
+  
+        console.warn("Wallet credit blocked", {
+          paymentJobReference,
+          status,
+          paidAmount,
+        });
         return;
       }
   
-      const finalAmount = paidAmount > 0 ? paidAmount : Number(pending.amount);
-  
+      // ✅ ONLY HERE money is allowed
       await processWalletTopup(
         pending.userId,
         pending.id,
         paymentReference ?? paymentJobReference,
-        finalAmount
+        paidAmount
       );
   
       await db.update(pendingPayments)
-        .set({ status: "completed", updatedAt: new Date() })
+        .set({
+          status: "completed",
+          updatedAt: new Date(),
+        })
         .where(eq(pendingPayments.id, pending.id));
   
-      console.log("✅ Wallet credited:", paymentJobReference);
+      console.log("✅ Wallet credited safely:", paymentJobReference);
     } catch (err) {
       console.error("Webhook error:", err);
     }
   });
+  
   
 
   // Ticket purchase route
@@ -5678,6 +5788,291 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
     }
   );
 
+
+
+  // discount routes
+  // CREATE DISCOUNT CODE
+  app.post(
+    "/discount-codes",
+    isAuthenticated,
+    isAdmin,
+    async (req, res) => {
+      try {
+        const { code, type, value, maxUses, expiresAt } = req.body;
+  
+        if (!["cash", "points"].includes(type))
+          return res.status(400).json({ error: "Invalid type" });
+        if (!code || typeof code !== "string")
+          return res.status(400).json({ error: "Code is required" });
+        if (value <= 0) return res.status(400).json({ error: "Value must be > 0" });
+        if (maxUses <= 0) return res.status(400).json({ error: "Max uses >= 1" });
+  
+        const formattedCode = code.trim().toUpperCase();
+  
+        const [newCode] = await db.insert(discountCodes).values({
+          code: formattedCode,
+          type,
+          value,
+          maxUses,
+          expiresAt: expiresAt ? new Date(expiresAt) : null,
+          usesCount: 0,
+          isActive: true,
+        }).returning();
+  
+        res.json(newCode);
+      } catch (err) {
+        console.error("Error creating discount code:", err);
+        res.status(500).json({ error: "Failed to create discount code" });
+      }
+    }
+  );
+  
+  // GET ALL DISCOUNT CODES
+  app.get(
+    "/discount-codes",
+    isAuthenticated,
+    isAdmin,
+    async (req, res) => {
+      try {
+        const codes = await db
+          .select()
+          .from(discountCodes)
+          .orderBy(desc(discountCodes.createdAt)); 
+  
+        res.json(codes);
+      } catch (err) {
+        console.error("Error fetching discount codes:", err);
+        res.status(500).json({ error: "Failed to fetch discount codes" });
+      }
+    }
+  );
+  
+  // UPDATE DISCOUNT CODE
+  app.patch(
+    "/discount-codes/:id",
+    isAuthenticated,
+    isAdmin,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { isActive, value, maxUses, expiresAt } = req.body;
+  
+        const [updated] = await db
+          .update(discountCodes)
+          .set({
+            isActive,
+            value,
+            maxUses,
+            expiresAt: expiresAt ? new Date(expiresAt) : null,
+          })
+          .where(eq(discountCodes.id, id)) // use eq() helper
+          .returning();
+  
+        res.json(updated);
+      } catch (err) {
+        console.error("Error updating discount code:", err);
+        res.status(500).json({ error: "Failed to update discount code" });
+      }
+    }
+  );
+  
+
+  
+
+
+
+// POST /api/checkout/apply-discount
+app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
+  try {
+    const { orderId, code } = req.body;
+    const userId = req.user.id; // Get from authentication middleware
+
+    if (!code || !orderId) {
+      return res.status(400).json({ error: "Code and order ID are required" });
+    }
+
+    // Get discount code
+    const [discount] = await db
+      .select()
+      .from(discountCodes)
+      .where(
+        and(
+          eq(discountCodes.code, code.toUpperCase()),
+          eq(discountCodes.isActive, true),
+          sql`(discount_codes.expires_at IS NULL OR discount_codes.expires_at > NOW())`
+        )
+      );
+
+    if (!discount) {
+      return res.status(400).json({ error: "Invalid or expired code" });
+    }
+
+    // Check if user already used this code
+    const usage = await db
+      .select()
+      .from(discountCodeUsages)
+      .where(
+        and(
+          eq(discountCodeUsages.discountCodeId, discount.id),
+          eq(discountCodeUsages.userId, userId)
+        )
+      );
+
+    if (usage.length > 0) {
+      return res.status(400).json({ error: "Code already used by this user" });
+    }
+
+    if (discount.usesCount >= discount.maxUses) {
+      return res.status(400).json({ error: "Code usage limit reached" });
+    }
+
+    // Get current order
+    const [order] = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.id, orderId));
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    // Check if order already has a discount
+    if (order.discountCodeId) {
+      return res.status(400).json({ error: "Order already has a discount applied" });
+    }
+
+    let discountAmount = Number(discount.value);
+    let newTotalAmount = Number(order.totalAmount);
+    let pointsDiscountAmount = 0;
+
+    if (discount.type === "cash") {
+      // Cash discount directly reduces total amount
+      newTotalAmount -= discountAmount;
+      if (newTotalAmount < 0) newTotalAmount = 0;
+    } else if (discount.type === "points") {
+      // Points discount reduces the points portion of the payment
+      pointsDiscountAmount = discountAmount;
+      // Note: We'll handle the actual points reduction in the frontend
+    }
+
+    // Apply discount using transaction
+    await db.transaction(async (tx) => {
+      // Update discount code usage count
+      await tx.update(discountCodes)
+        .set({
+          usesCount: discount.usesCount + 1,
+          isActive: discount.usesCount + 1 >= discount.maxUses ? false : discount.isActive,
+        })
+        .where(eq(discountCodes.id, discount.id));
+
+      // Update order with discount
+      await tx.update(orders)
+        .set({ 
+          totalAmount: newTotalAmount, 
+          discountCodeId: discount.id, 
+          discountAmount: discountAmount,
+          discountType: discount.type,
+          pointsDiscountAmount: pointsDiscountAmount || null
+        })
+        .where(eq(orders.id, orderId));
+
+      // Record usage
+      await tx.insert(discountCodeUsages).values({
+        discountCodeId: discount.id,
+        userId,
+        orderId,
+      });
+    });
+
+    // Get updated order
+    const [updatedOrder] = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.id, orderId));
+
+    res.json({ 
+      success: true, 
+      newTotalAmount: Number(updatedOrder.totalAmount), 
+      discountAmount,
+      discountType: discount.type,
+      pointsDiscountAmount,
+      message: `Discount applied successfully! ${discount.type === 'cash' ? `£${discountAmount.toFixed(2)} off` : `${discountAmount} points discount`}`
+    });
+  } catch (err) {
+    console.error("Error applying discount code:", err);
+    res.status(500).json({ error: "Failed to apply discount code" });
+  }
+});
+
+// Add endpoint to remove discount
+app.post("/api/checkout/remove-discount", isAuthenticated, async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    const userId = req.user.id;
+
+    const [order] = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.id, orderId));
+
+    if (!order || !order.discountCodeId) {
+      return res.status(400).json({ error: "No discount applied to this order" });
+    }
+
+    // Get the discount to restore usage count
+    const [discount] = await db
+      .select()
+      .from(discountCodes)
+      .where(eq(discountCodes.id, order.discountCodeId));
+
+    // Calculate original amount (add discount back)
+    const originalAmount = Number(order.totalAmount) + Number(order.discountAmount || 0);
+
+    await db.transaction(async (tx) => {
+      // Restore discount usage count
+      if (discount) {
+        await tx.update(discountCodes)
+          .set({
+            usesCount: Math.max(0, discount.usesCount - 1),
+            isActive: true // Reactivate if it was deactivated due to max uses
+          })
+          .where(eq(discountCodes.id, discount.id));
+      }
+
+      // Remove discount from order
+      await tx.update(orders)
+        .set({
+          totalAmount: originalAmount,
+          discountCodeId: null,
+          discountAmount: null,
+          discountType: null,
+          pointsDiscountAmount: null
+        })
+        .where(eq(orders.id, orderId));
+
+      // Remove usage record
+      await tx.delete(discountCodeUsages)
+        .where(
+          and(
+            eq(discountCodeUsages.discountCodeId, order.discountCodeId),
+            eq(discountCodeUsages.orderId, orderId)
+          )
+        );
+    });
+
+    res.json({ 
+      success: true, 
+      newTotalAmount: originalAmount,
+      message: "Discount removed successfully"
+    });
+  } catch (err) {
+    console.error("Error removing discount:", err);
+    res.status(500).json({ error: "Failed to remove discount" });
+  }
+});
+
+
+
   // app.get("/api/admin/cashflow-transactions", isAuthenticated, isAdmin, async (req, res) => {
   //   try {
   //     //
@@ -6109,6 +6504,8 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
     }
   });
 
+
+  
 
 
 // POST endpoint - 24 hour cooldown (PRODUCTION)
@@ -7550,6 +7947,70 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
     `);
   
     res.json(result.rows);
+  });
+
+
+  app.post("/api/admin/wellbeing/daily-limit-reset", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { targetUserId } = req.body;
+      const adminUserId = req.user.id; // Get admin's ID for audit log
+  
+      if (!targetUserId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "targetUserId is required" 
+        });
+      }
+  
+      // Check if target user exists - NEED AWAIT
+      const targetUser = await db.select().from(users).where(eq(users.id, targetUserId)).limit(1);
+  
+      if (!targetUser || targetUser.length === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "User not found" 
+        });
+      }
+  
+      const userData = targetUser[0];
+  
+      // Reset the target user's daily limit and clear cooldown
+      await db.update(users).set({
+        dailySpendLimit: null,
+        dailyLimitLastUpdatedAt: null, // Clear cooldown so user can set new limit immediately
+        updatedAt: new Date(),
+      }).where(eq(users.id, targetUserId));
+  
+      // Create audit log - IMPORTANT for compliance
+      await db.insert(auditLogs).values({
+        userId: adminUserId, // Admin who performed the action
+        userName: `${req.user.firstName} ${req.user.lastName}`,
+        email: req.user.email,
+        action: "admin_daily_limit_reset",
+        description: `Admin ${req.user.email} reset daily spend limit for user ${userData.email}`,
+        createdAt: new Date(),
+      });
+  
+      return res.status(200).json({
+        success: true,
+        message: "Daily limit reset successfully",
+        resetUser: {
+          id: userData.id,
+          email: userData.email,
+          name: `${userData.firstName} ${userData.lastName}`,
+          dailySpendLimit: null,
+          dailyLimitLastUpdatedAt: null
+        }
+      });
+  
+    } catch (error) {
+      console.error("Error resetting daily limit:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Failed to reset daily limit",
+        error: error.message 
+      });
+    }
   });
 
   app.get(
@@ -9818,11 +10279,11 @@ app.post(
             addressPostcode: user.addressPostcode,
             addressCountry: user.addressCountry,
             notes: user.notes,
-
-            // ADD THESE DISABLE FIELDS:
-            disabled: user.disabled, // Add this line
-            disabledAt: user.disabledAt, // Add this line
-            disabledUntil: user.disabledUntil, // Add this line
+            disabled: user.disabled, 
+            disabledAt: user.disabledAt, 
+            disabledUntil: user.disabledUntil, 
+            dailySpendLimit: user.dailySpendLimit,     
+            dailyLimitLastUpdatedAt: user.dailyLimitLastUpdatedAt
           }))
         );
       } catch (error) {

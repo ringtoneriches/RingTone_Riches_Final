@@ -25,7 +25,7 @@ import PaymentCancelled from "./pages/cancelled";
 import PaymentFailed from "./pages/failed";
 import CheckoutFailed from "./pages/competition-failed";
 import CheckoutCancelled from "./pages/competition-cancelled";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import TermsAndConditions from "./pages/terms-and-conditions";
 import PlayResponsibly from "./pages/play-responsible";
 import PrivacyPolicy from "./pages/privacy-policy";
@@ -62,6 +62,8 @@ import AdminPopBalloon from "./pages/admin/admin-pop-balloon";
 import VerifyEmailPage from "./pages/verify-email";
 import AdminSpinWheelSettings from "./pages/admin/AdminSpinWheelSettings";
 import Intelligence from "./pages/admin/intelligence";
+import RegistrationSourceModal from "./components/RegistrationSourceModal";
+import AdminDiscountCodes from "./pages/admin/discount";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -142,6 +144,7 @@ function Router() {
             <Route path="/admin/add-ringtone-pop" component={AdminPopBalloon} />
       <Route path="/admin/users/:id" component={UserAuditPage} />
       <Route path="/admin/intelligence" component={Intelligence} />
+      <Route path="/admin/discount" component={AdminDiscountCodes} />
 
       <Route component={NotFound} />
     </Switch>
@@ -158,12 +161,62 @@ function App() {
 
 function AppWithMaintenance() {
   const [location] = useLocation();
-  const { user } = useAuth(); // don't block on authLoading
+  const { user, isLoading: authLoading } = useAuth();
+  const [showSourceModal, setShowSourceModal] = useState(false);
+  const [hasCheckedSource, setHasCheckedSource] = useState(false);
+  
 
   const { data: maintenanceData, isLoading: maintenanceLoading } = useQuery({
     queryKey: ["/api/maintenance"],
     queryFn: () => fetch("/api/maintenance").then((res) => res.json()),
   });
+
+  // Check if user needs to provide registration source
+  const { data: sourceStatus, isLoading: sourceLoading } = useQuery({
+    queryKey: ["/api/user/registration-source-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/user/registration-source-status", {
+        credentials: "include"
+      });
+      if (!res.ok) throw new Error("Failed to fetch source status");
+      return res.json();
+    },
+    enabled: !!user && !hasCheckedSource,
+    staleTime: 0
+  });
+
+  // Show modal when user logs in and needs to provide source
+  useEffect(() => {
+    if (sourceStatus?.needsToProvide && !hasCheckedSource && !sourceLoading) {
+
+      const lastAsked = localStorage.getItem(`registration_source_asked_${user.id}`);
+    
+    // If we never asked OR it's been more than 7 days since last ask
+    const shouldShow = !lastAsked || 
+      (Date.now() - parseInt(lastAsked) > 7 * 24 * 60 * 60 * 1000);
+
+      // Don't show on admin pages or certain routes
+      const excludedRoutes = [
+        "/admin",
+        "/login",
+        "/register",
+        "/verify-email",
+        "/forgot-password",
+        "/reset-password"
+      ];
+      
+      const isExcludedRoute = excludedRoutes.some(route => location.startsWith(route));
+    
+    if (shouldShow && !isExcludedRoute) {
+      // Small delay to ensure page is loaded
+      const timer = setTimeout(() => {
+        setShowSourceModal(true);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+    }
+  }, [sourceStatus, location, sourceLoading, hasCheckedSource]);
 
   if (maintenanceLoading) return null;
 
@@ -175,15 +228,29 @@ function AppWithMaintenance() {
     return <MaintenancePage />;
   }
 
- return (
-  <TooltipProvider>
-    <Toaster />
-    <ScrollToTop />
-    <div className="pt-20 lg:pt-24"/> 
+  return (
+    <TooltipProvider>
+      <Toaster />
+      <ScrollToTop />
+      <div className="pt-20 lg:pt-24"/> 
       <Router />
+      
     
-  </TooltipProvider>
-);
+      {user && (
+        <RegistrationSourceModal
+          isOpen={showSourceModal}
+          onClose={() => {
+            setShowSourceModal(false);
+            setHasCheckedSource(true);
+          }}
+          onComplete={() => {
+            setShowSourceModal(false);
+            setHasCheckedSource(true);
+          }}
+        />
+      )}
+    </TooltipProvider>
+  );
 }
 
 
