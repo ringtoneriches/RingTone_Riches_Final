@@ -167,12 +167,12 @@ export const pendingPayments = pgTable("pending_payments", {
 
 export const discountCodes = pgTable("discount_codes", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  code: varchar("code").unique().notNull(), // the actual code string
+  code: varchar("code").unique().notNull(), 
   type: varchar("type", { enum: ["cash", "points"] }).notNull(),
-  value: decimal("value", { precision: 10, scale: 2 }).notNull(), // cash amount or points
-  maxUses: integer("max_uses").default(1), // max times the code can be used
-  usesCount: integer("uses_count").default(0), // track how many times it's been used
-  expiresAt: timestamp("expires_at"), // auto-expiry
+  value: decimal("value", { precision: 10, scale: 2 }).notNull(), 
+  maxUses: integer("max_uses").default(1), 
+  usesCount: integer("uses_count").default(0), 
+  expiresAt: timestamp("expires_at"), 
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -183,7 +183,7 @@ export const discountCodeUsages = pgTable("discount_code_usages", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   discountCodeId: uuid("discount_code_id").notNull().references(() => discountCodes.id),
   userId: varchar("user_id").notNull().references(() => users.id),
-  orderId: uuid("order_id").references(() => orders.id), // optional, if used at checkout
+  orderId: uuid("order_id").references(() => orders.id), 
   usedAt: timestamp("used_at").defaultNow(),
 });
 

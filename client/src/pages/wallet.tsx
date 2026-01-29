@@ -490,10 +490,14 @@ const filteredTransactions =
 
 function formatAmount(transaction: Transaction) {
   const amount = Math.abs(parseFloat(transaction.amount));
-  
+  const desc = (transaction.description || "").toLowerCase();
   // Check transaction type first
   if (transaction.type === "ringtone_points") {
     // For ringtone_points type, always show as points
+    return `${amount} pts`;
+  }
+
+  if (transaction.type === "prize" && desc.includes("ringtone")) {
     return `${amount} pts`;
   }
   

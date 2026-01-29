@@ -516,12 +516,12 @@ export default function Home() {
           </div>
 
           {/* Decorative elements */}
-          <div className="absolute left-5 top-1/2 -translate-y-1/2 text-amber-500/15 pointer-events-none">
+          {/* <div className="absolute left-5 top-1/2 -translate-y-1/2 text-amber-500/15 pointer-events-none">
             <Gift className="w-40 h-40" />
           </div>
           <div className="absolute right-5 top-1/2 -translate-y-1/2 text-yellow-500/15 pointer-events-none">
             <Sparkles className="w-40 h-40" />
-          </div>
+          </div> */}
 
           <div className="container mx-auto px-4 relative z-10">
             <div className="max-w-2xl mx-auto relative">
@@ -531,12 +531,12 @@ export default function Home() {
               <div className="relative bg-gradient-to-br from-slate-800/95 to-slate-900/95 backdrop-blur-sm rounded-2xl p-8 md:p-12 border border-white/10 shadow-2xl">
                 <div className="text-center mb-8">
                   <div className="relative inline-block mb-4">
-                    <div className="w-24 h-24 bg-gradient-to-br from-amber-500 to-yellow-600 rounded-full flex items-center justify-center shadow-2xl shadow-amber-500/40">
+                    {/* <div className="w-24 h-24 bg-gradient-to-br from-amber-500 to-yellow-600 rounded-full flex items-center justify-center shadow-2xl shadow-amber-500/40">
                       <Gift className="w-12 h-12 text-slate-900" />
-                    </div>
-                    <div className="absolute -top-2 -right-2">
+                    </div> */}
+                    {/* <div className="absolute -top-2 -right-2">
                       <Star className="w-8 h-8 text-yellow-400 animate-pulse" />
-                    </div>
+                    </div> */}
                   </div>
                   
                   <h3 className="text-2xl md:text-4xl font-black mb-3">
@@ -545,11 +545,11 @@ export default function Home() {
                     </span>
                   </h3>
                   <p className="text-slate-300 text-sm md:text-lg leading-relaxed flex items-center justify-center gap-2 flex-wrap">
-                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    {/* <Sparkles className="w-4 h-4 text-amber-400" /> */}
                     {user?.receiveNewsletter 
                       ? "Get ready for exclusive deals and amazing surprises!"
                       : "Subscribe for exclusive deals and New Year prizes!"}
-                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    {/* <Sparkles className="w-4 h-4 text-amber-400" /> */}
                   </p>
                 </div>
 
@@ -608,17 +608,17 @@ export default function Home() {
                         </div>
                       ) : (
                         <div className="flex items-center gap-3">
-                          <Gift className="w-6 h-6" />
+                          {/* <Gift className="w-6 h-6" /> */}
                           Get VIP Deals
-                          <Star className="w-5 h-5" />
+                          {/* <Star className="w-5 h-5" /> */}
                         </div>
                       )}
                     </Button>
 
                     <p className="text-sm text-slate-400 text-center mt-4 flex items-center justify-center gap-2">
-                      <Star className="w-4 h-4 text-yellow-400" />
+                      {/* <Star className="w-4 h-4 text-yellow-400" /> */}
                       Join thousands on the Nice List!
-                      <Star className="w-4 h-4 text-yellow-400" />
+                      {/* <Star className="w-4 h-4 text-yellow-400" /> */}
                     </p>
                   </form>
                 )}

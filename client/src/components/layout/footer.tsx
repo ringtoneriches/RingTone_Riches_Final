@@ -202,21 +202,18 @@ export default function Footer() {
           <div className="space-y-4">
           <h4 className="text-primary font-bold">CONTACT</h4>
           <div className="space-y-3">
+
+          <Link href="/wallet?tab=support">
+            <p className="text-muted-foreground mb-3">
+              Support
+            </p>
+            </Link>
             <p className="text-muted-foreground mb-3" data-testid="text-email">
               support@ringtoneriches.co.uk
             </p>
             
             {/* Support Button - Compact */}
-            <Link href="/wallet?tab=support">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="gap-2 px-3 py-1.5 h-auto bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/20"
-              >
-                <Headphones className="w-4 h-4 text-amber-400" />
-                <span className="text-sm font-medium text-white">Support</span>
-              </Button>
-            </Link>
+            
           </div>
         </div>
         </div>

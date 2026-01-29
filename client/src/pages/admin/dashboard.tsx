@@ -8,7 +8,7 @@ interface DashboardStats {
   stats: {
     totalUsers: number;
     totalCompetitions: number;
-    totalRevenue: number;
+    dailyRevenue: number; 
     totalSiteCredit: number;           // ⭐ NEW
     totalApprovedWithdrawals: number;  // ⭐ NEW
 
@@ -124,14 +124,14 @@ export default function AdminDashboard() {
             gradient="from-yellow-500 to-yellow-700"
             delay={200}
           />
-          <StatCard
-            title="Total Revenue"
-            value={`£${parseFloat(data?.stats.totalRevenue?.toString() || "0").toFixed(2)}`}
-            icon={PoundSterling }
-            color="bg-green-600"
-            gradient="from-green-500 to-green-700"
-            delay={300}
-          />
+         <StatCard
+          title="Today's Revenue"
+          value={`£${parseFloat(data?.stats.dailyRevenue?.toString() || "0").toFixed(2)}`}
+          icon={PoundSterling}
+          color="bg-green-600"
+          gradient="from-green-500 to-green-700"
+          delay={300}
+        />
           <StatCard
             title="Total Site Credit"
             value={`£${parseFloat(data?.stats.totalSiteCredit?.toString() || "0").toFixed(2)}`}
