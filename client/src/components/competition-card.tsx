@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { Competition } from "@shared/schema";
-import { TrendingUp, Trophy, Sparkles, Gift, Zap, Users, Clock, Shield } from "lucide-react";
+import { TrendingUp, Trophy, Sparkles, Gift, Zap, Users, Clock, Shield, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface CompetitionCardProps {
@@ -58,7 +58,14 @@ export default function CompetitionCard({ competition, authenticated = false }: 
           gradient: "from-pink-500 to-pink-600",
           glow: "rgba(236,72,153,0.5)"
         };
-      default:
+        case "plinko":
+          return { 
+            icon: Target, 
+            label: "Plinko",
+            gradient: "from-purple-500 to-amber-500",
+            glow: "rgba(147,51,234,0.5)"
+          };
+        default:
         return { 
           icon: Trophy, 
           label: "Competition",

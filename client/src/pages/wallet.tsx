@@ -497,6 +497,14 @@ function formatAmount(transaction: Transaction) {
     return `${amount} pts`;
   }
 
+  if (
+    transaction.type === "prize" &&
+    desc.includes("ringtone pop") &&
+    (desc.includes("£") || desc.includes("cash"))
+  ) {
+    return `£${amount.toFixed(2)}`;
+  }
+
   if (transaction.type === "prize" && desc.includes("ringtone")) {
     return `${amount} pts`;
   }
@@ -1495,21 +1503,24 @@ const handleDeleteBankAccount = (
                                 </p>
                               </div>
                             </div>
-   <div
-  className={`font-bold text-lg whitespace-nowrap ${
-    (transaction.type === "deposit" ||
-    transaction.type === "prize" ||
-    transaction.type === "referral" ||
-    transaction.type === "referral_bonus" ||
-    transaction.type === "refund" ||
-    (transaction.type === "ringtone_points" && parseFloat(transaction.amount) > 0))
-      ? "text-green-400"
-      : "text-red-400"
-  }`}
->
-  {parseFloat(transaction.amount) > 0 ? "+" : "-"}
-  {formatAmount(transaction)}
-</div>
+                                      <div
+            className={`font-bold text-lg whitespace-nowrap ${
+              (transaction.type === "deposit" ||
+              transaction.type === "prize" ||
+              transaction.type === "referral" ||
+              transaction.type === "referral_bonus" ||
+              transaction.type === "refund" ||
+              (transaction.type === "ringtone_points" && parseFloat(transaction.amount) > 0))
+                ? "text-green-400"
+                : "text-red-400"
+            }`}
+          >
+            {(() => {
+              if (transaction.type === "pop_purchase") return "-";
+              return parseFloat(transaction.amount) > 0 ? "+" : "-";
+            })()}
+            {formatAmount(transaction)}
+          </div>
                           </div>
                         ))
                       )}

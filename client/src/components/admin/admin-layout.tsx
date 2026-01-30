@@ -21,6 +21,7 @@ import {
   Brain,
   TicketIcon,
   ArrowDown,
+  Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -33,11 +34,12 @@ import { User } from "@shared/schema";
 const sidebarGroups = [
   {
     name: "Games",
-    icon: null, // optional group icon
+    icon: null, 
     items: [
       { name: "Spin Wheel", path: "/admin/spin-wheel", icon: CircleDot },
       { name: "Scratch Card", path: "/admin/scratch-card", icon: CreditCard },
       { name: "Ringtone Pop", path: "/admin/add-ringtone-pop", icon: Sparkles },
+      { name: "Ringtone Plinko", path: "/admin/plinko", icon: Target },
     ],
   },
   {
@@ -69,9 +71,12 @@ const sidebarGroups = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth() as { user: User | null; isLoading: boolean };
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [openGroups, setOpenGroups] = useState<{ [key: string]: boolean }>({});
+  const [openGroups, setOpenGroups] = useState<{ [key: string]: boolean }>(() => {
+    const saved = localStorage.getItem("adminSidebarGroups");
+    return saved ? JSON.parse(saved) : {};
+  });
   const { toast } = useToast();
 
   const { data: supportUnreadData } = useQuery({
@@ -83,21 +88,78 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     refetchInterval: 1000,
   });
 
+  const { data: maintenanceData, refetch: refetchMaintenance } = useQuery({
+    queryKey: ["/api/maintenance"],
+    queryFn: () => fetch("/api/maintenance").then((res) => res.json()),
+  });
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/auth/logout", "POST");
+      return res.json();
+    },
+    onSuccess: () => {
+      window.location.href = "/";
+    },
+  });
+
   useEffect(() => {
     if (!isLoading && (!user || !user.isAdmin)) {
-      window.location.href = "/admin/login";
+      setLocation("/admin/login");
     }
-  }, [user, isLoading]);
+  }, [user, isLoading, setLocation]);
+
+  useEffect(() => {
+    localStorage.setItem("adminSidebarGroups", JSON.stringify(openGroups));
+  }, [openGroups]);
 
   // Auto-open group if active item is inside
   useEffect(() => {
-    const newOpenGroups: { [key: string]: boolean } = {};
-    sidebarGroups.forEach(group => {
-      const active = group.items.some(item => location === item.path);
-      newOpenGroups[group.name] = active;
+    setOpenGroups(prev => {
+      const newState = { ...prev };
+  
+      sidebarGroups.forEach(group => {
+        const active = group.items.some(item => location === item.path);
+  
+        // Auto open if active page inside group
+        if (active) newState[group.name] = true;
+      });
+  
+      return newState;
     });
-    setOpenGroups(newOpenGroups);
   }, [location]);
+  
+
+  const enableMaintenance = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/admin/maintenance/on", "POST");
+      const data = await res.json();
+      return data;
+    },
+    onSuccess: async () => {
+      toast({
+        title: "Maintenance Enabled",
+        description: "The site is now in maintenance mode.",
+      });
+      await refetchMaintenance();
+    },
+  });
+
+  const disableMaintenance = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/admin/maintenance/off", "POST");
+      const data = await res.json();   // <-- only once
+
+    return data;
+    },
+    onSuccess: async () => {
+      toast({
+        title: "Maintenance Disabled",
+        description: "The site is live again.",
+      });
+      await refetchMaintenance();
+    },
+  });
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   if (!user || !user.isAdmin) return null;
@@ -163,7 +225,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="p-4 border-t border-border">
             <p className="text-xs text-muted-foreground">Logged in as</p>
             <p className="text-sm font-medium text-foreground truncate">{user.email}</p>
-            <Button className="w-full mt-2" variant="outline" onClick={() => window.location.href = "/admin/logout"}>Logout</Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => logoutMutation.mutate()}
+              data-testid="button-logout"
+            >
+              Logout
+            </Button>
           </div>
         </div>
       </aside>
@@ -171,6 +240,53 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       <div className="flex-1 flex flex-col min-h-screen">
+      <header className="bg-card border-b border-border p-4 lg:px-8">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden text-muted-foreground hover:text-foreground"
+              data-testid="button-menu"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+
+            <div className="flex items-center justify-between flex-1 gap-4">
+              <Link href="/">
+                <Button variant="outline" size="sm">
+                  View Site
+                </Button>
+              </Link>
+
+              {/* 🔥 Compact Maintenance Toggle */}
+              <div className="flex items-center gap-3 bg-muted px-4 py-2 rounded-xl border border-border shadow-sm">
+                {maintenanceData?.maintenanceMode ? (
+                  <span className="text-red-500 font-bold text-sm">
+                    Maintenance
+                  </span>
+                ) : (
+                  <span className="text-green-500 font-bold text-sm">Live</span>
+                )}
+
+                {maintenanceData?.maintenanceMode ? (
+                  <button
+                    onClick={() => disableMaintenance.mutate()}
+                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all"
+                  >
+                    Disable
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => enableMaintenance.mutate()}
+                    disabled={enableMaintenance.isPending}
+                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all"
+                  >
+                    {enableMaintenance.isPending ? "Enabling..." : "Enable"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </header>
         <main className="flex-1 p-4 lg:p-8">{children}</main>
       </div>
     </div>

@@ -53,6 +53,10 @@ import {
   savedBankAccounts,
   discountCodes,
   discountCodeUsages,
+  gamePlinkoConfig,
+  plinkoPrizes,
+  plinkoUsage,
+  plinkoWins,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -534,6 +538,104 @@ const DEFAULT_POP_CONFIG = {
   isActive: true,
   isVisible: true,
 };
+
+
+const DEFAULT_PLINKO_CONFIG = {
+  id: "active",
+  rows: 12,
+  freeReplayProbability: "5.00",
+  isActive: true,
+  isVisible: true,
+  prizes: [
+    {
+      slotIndex: 0,
+      prizeName: "£500 JACKPOT",
+      prizeValue: 500.00,
+      rewardType: "cash" as const,
+      probability: 2.00,
+      color: "#FFD700",
+      maxWins: 5,
+      currentWins: 0,
+    },
+    {
+      slotIndex: 1,
+      prizeName: "£100 CASH",
+      prizeValue: 100.00,
+      rewardType: "cash" as const,
+      probability: 5.00,
+      color: "#FF9800",
+      maxWins: 10,
+      currentWins: 0,
+    },
+    {
+      slotIndex: 2,
+      prizeName: "£50 CASH",
+      prizeValue: 50.00,
+      rewardType: "cash" as const,
+      probability: 8.00,
+      color: "#4CAF50",
+      maxWins: 15,
+      currentWins: 0,
+    },
+    {
+      slotIndex: 3,
+      prizeName: "£20 CASH",
+      prizeValue: 20.00,
+      rewardType: "cash" as const,
+      probability: 10.00,
+      color: "#2196F3",
+      maxWins: 20,
+      currentWins: 0,
+    },
+    {
+      slotIndex: 4,
+      prizeName: "TRY AGAIN",
+      prizeValue: 0.00,
+      rewardType: "try_again" as const,
+      probability: 30.00,
+      color: "#9E9E9E",
+      maxWins: null,
+      currentWins: 0,
+    },
+    {
+      slotIndex: 5,
+      prizeName: "100 POINTS",
+      prizeValue: 100.00,
+      rewardType: "points" as const,
+      probability: 15.00,
+      color: "#9C27B0",
+      maxWins: 25,
+      currentWins: 0,
+    },
+    {
+      slotIndex: 6,
+      prizeName: "50 POINTS",
+      prizeValue: 50.00,
+      rewardType: "points" as const,
+      probability: 20.00,
+      color: "#00BCD4",
+      maxWins: 30,
+      currentWins: 0,
+    },
+    {
+      slotIndex: 7,
+      prizeName: "10 POINTS",
+      prizeValue: 10.00,
+      rewardType: "points" as const,
+      probability: 10.00,
+      color: "#E91E63",
+      maxWins: 40,
+      currentWins: 0,
+    },
+  ],
+};
+
+// Verify total probability = 100%
+const totalProbability = DEFAULT_PLINKO_CONFIG.prizes.reduce(
+  (sum, p) => sum + p.probability,
+  0
+);
+console.log(`Plinko Total Probability: ${totalProbability}%`); // Should be 100%
 
 // const uploadDir = path.join(process.cwd(), "attached_assets", "competitions");
 // if (!fs.existsSync(uploadDir)) {
@@ -7166,6 +7268,892 @@ if (!isAdmin && userData.dailyLimitLastUpdatedAt) {
     }
   });
 
+  // ================================================================================
+// RINGTONE PLINKO GAME ROUTES - MAIN GAME ENDPOINTS
+// ================================================================================
+// This section contains all the gameplay endpoints for the Plinko game.
+// Developers should copy this entire section to implement Plinko functionality.
+// 
+// ENDPOINTS IN THIS SECTION:
+// 1. POST /api/create-plinko-order      - Creates a pending order for Plinko games
+// 2. POST /api/play-plinko              - Plays a single Plinko drop (with physics result)
+// 3. GET  /api/plinko-order/:orderId    - Gets order info and play history
+// 4. POST /api/process-plinko-payment   - Processes payment for Plinko order
+// 5. GET  /api/plinko-config            - Gets public Plinko config (prizes, settings)
+// 6. POST /api/reveal-all-plinko        - Batch reveals all remaining plays at once
+//
+// REQUIRED TABLES (from schema.ts):
+// - gamePlinkoConfig: Global settings (isActive, rows, freeReplayProbability)
+// - plinkoPrizes: 8 prize slots with probability, maxWins, rewardType, rewardValue
+// - plinkoUsage: Tracks how many plays used per order
+// - plinkoWins: Records each play result (win/loss, prize, slot index)
+// ================================================================================
+
+// Plinko cooldown tracking - prevents rapid-fire plays (spam protection)
+const plinkoCooldowns = new Map<string, number>();
+const PLINKO_COOLDOWN_MS = 2000; // 2 second cooldown between plays
+
+// ----------------------------------------
+// ENDPOINT 1: Create Plinko Order
+// ----------------------------------------
+// POST /api/create-plinko-order
+// Creates a pending order for the specified quantity of Plinko games.
+// User must complete payment separately via /api/process-plinko-payment.
+// Request body: { competitionId: string, quantity: number }
+// Returns: { success: true, orderId: string, totalAmount: string, quantity: number }
+app.post("/api/create-plinko-order", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { competitionId, quantity } = req.body;
+
+    if (!competitionId || !quantity || quantity < 1) {
+      return res.status(400).json({ message: "Competition ID and quantity are required" });
+    }
+
+    // Get competition
+    const competition = await storage.getCompetition(competitionId);
+    if (!competition || competition.type !== "plinko") {
+      return res.status(404).json({ message: "Plinko competition not found" });
+    }
+
+    // Calculate total
+    const ticketPrice = parseFloat(competition.ticketPrice);
+    const totalAmount = ticketPrice * quantity;
+
+    // Create pending order
+    const order = await storage.createOrder({
+      userId,
+      competitionId,
+      quantity,
+      totalAmount: totalAmount.toFixed(2),
+      paymentMethod: "pending",
+      status: "pending",
+    });
+
+    res.json({
+      success: true,
+      orderId: order.id,
+      totalAmount: totalAmount.toFixed(2),
+      quantity,
+    });
+  } catch (error) {
+    console.error("Error creating Plinko order:", error);
+    res.status(500).json({ message: "Failed to create Plinko order" });
+  }
+});
+
+// ----------------------------------------
+// ENDPOINT 2: Play Plinko (Single Drop)
+// ----------------------------------------
+// POST /api/play-plinko
+// Executes a single Plinko ball drop. Server-side determines the winning slot
+// based on prize probabilities and maxWins limits. Credits prizes to user wallet.
+// Includes cooldown protection (2 seconds between plays).
+// Request body: { orderId: string, competitionId: string }
+// Returns: { success: true, slotIndex: number, prizeName: string, rewardType: string,
+//           rewardValue: string, isWin: boolean, freeReplayGranted: boolean, ... }
+app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
+  try {
+    console.log("🔵 [Plinko Play] Starting play request");
+    console.log("🔵 [Plinko Play] Request body:", req.body);
+    
+    const userId = req.user.id;
+    const { orderId, competitionId } = req.body;
+
+    if (!orderId || !competitionId) {
+      console.log("🔴 [Plinko Play] Missing orderId or competitionId");
+      return res.status(400).json({
+        success: false,
+        message: "Order ID and Competition ID are required",
+      });
+    }
+
+    // Cooldown check
+    const cooldownKey = `${userId}-${orderId}`;
+    const lastPlayTime = plinkoCooldowns.get(cooldownKey) || 0;
+    const now = Date.now();
+    
+    if (now - lastPlayTime < PLINKO_COOLDOWN_MS) {
+      console.log("🔴 [Plinko Play] Cooldown active for user:", userId);
+      return res.status(429).json({
+        success: false,
+        message: "Please wait a moment before playing again",
+      });
+    }
+    
+    plinkoCooldowns.set(cooldownKey, now);
+    console.log("🟢 [Plinko Play] Cooldown check passed");
+
+    // Verify valid completed order
+    const order = await storage.getOrder(orderId);
+    console.log("🔵 [Plinko Play] Retrieved order:", order ? {
+      id: order.id,
+      userId: order.userId,
+      status: order.status,
+      quantity: order.quantity
+    } : "Order not found");
+    
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      console.log("🔴 [Plinko Play] Invalid order:", {
+        orderExists: !!order,
+        userIdMatches: order?.userId === userId,
+        statusIsCompleted: order?.status === "completed"
+      });
+      return res.status(400).json({
+        success: false,
+        message: "No valid Plinko game purchase found",
+      });
+    }
+
+    // Check plays remaining
+    const playsUsed = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(plinkoUsage)
+      .where(eq(plinkoUsage.orderId, orderId));
+    
+    const usedCount = Number(playsUsed[0]?.count || 0);
+    const playsRemaining = order.quantity - usedCount;
+    
+    console.log("🔵 [Plinko Play] Plays check:", {
+      orderQuantity: order.quantity,
+      usedCount,
+      playsRemaining
+    });
+
+    if (playsRemaining <= 0) {
+      console.log("🔴 [Plinko Play] No plays remaining");
+      return res.status(400).json({
+        success: false,
+        message: "No plays remaining in this purchase",
+      });
+    }
+
+    // Get user
+    const user = await storage.getUser(userId);
+    console.log("🔵 [Plinko Play] User found:", user ? "Yes" : "No");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Get Plinko config
+    const [config] = await db.select().from(gamePlinkoConfig).where(eq(gamePlinkoConfig.id, "active"));
+    const plinkoConfig = config || { rows: 12, freeReplayProbability: "5.00", isActive: true };
+    
+    console.log("🔵 [Plinko Play] Config:", {
+      configExists: !!config,
+      isActive: plinkoConfig.isActive,
+      rows: plinkoConfig.rows,
+      freeReplayProbability: plinkoConfig.freeReplayProbability
+    });
+    
+    if (!plinkoConfig.isActive) {
+      console.log("🔴 [Plinko Play] Game is not active");
+      return res.status(400).json({
+        success: false,
+        message: "Ringtone Plinko is currently unavailable",
+      });
+    }
+
+    // Get all prizes
+    const allPrizes = await db
+      .select()
+      .from(plinkoPrizes)
+      .where(eq(plinkoPrizes.isActive, true))
+      .orderBy(asc(plinkoPrizes.slotIndex));
+
+    console.log("🔵 [Plinko Play] All prizes from DB:", {
+      totalPrizes: allPrizes.length,
+      prizes: allPrizes.map(p => ({
+        slotIndex: p.slotIndex,
+        prizeName: p.prizeName,
+        rewardType: p.rewardType,
+        probability: p.probability,
+        maxWins: p.maxWins,
+        quantityWon: p.quantityWon,
+        isActive: p.isActive
+      }))
+    });
+
+    if (!allPrizes || allPrizes.length === 0) {
+      console.log("🔴 [Plinko Play] No active prizes found in database");
+      return res.status(400).json({
+        success: false,
+        message: "No prizes available",
+      });
+    }
+
+    // Filter eligible prizes (check maxWins)
+    const eligiblePrizes = allPrizes.filter(prize => {
+      if (prize.maxWins !== null && prize.quantityWon !== null && prize.quantityWon >= prize.maxWins) {
+        console.log(`❌ Prize ${prize.prizeName} excluded - max wins reached: ${prize.quantityWon}/${prize.maxWins}`);
+        return false;
+      }
+      return true;
+    });
+
+    console.log("🔵 [Plinko Play] Eligible prizes after maxWins filter:", {
+      eligibleCount: eligiblePrizes.length,
+      eligiblePrizes: eligiblePrizes.map(p => ({
+        slotIndex: p.slotIndex,
+        prizeName: p.prizeName,
+        probability: p.probability,
+        quantityWon: p.quantityWon,
+        maxWins: p.maxWins
+      }))
+    });
+
+    if (eligiblePrizes.length === 0) {
+      console.log("🔴 [Plinko Play] No eligible prizes after maxWins filter");
+      return res.status(400).json({
+        success: false,
+        message: "No prizes available at this time",
+      });
+    }
+
+    // Weighted random selection based on probability
+    const totalProbability = eligiblePrizes.reduce((sum, prize) => sum + parseFloat(prize.probability || "0"), 0);
+    console.log("🔵 [Plinko Play] Total probability of eligible prizes:", totalProbability);
+    
+    let random = Math.random() * totalProbability;
+    let selectedPrize = eligiblePrizes[0];
+    console.log("🔵 [Plinko Play] Random number generated:", random, "out of", totalProbability);
+
+    for (const prize of eligiblePrizes) {
+      const prizeProb = parseFloat(prize.probability || "0");
+      console.log(`🔵 [Plinko Play] Checking prize ${prize.prizeName} (prob: ${prizeProb}) - random before: ${random}`);
+      random -= prizeProb;
+      console.log(`🔵 [Plinko Play] Random after subtracting: ${random}`);
+      
+      if (random <= 0) {
+        selectedPrize = prize;
+        console.log(`🟢 [Plinko Play] Selected prize: ${prize.prizeName}`);
+        break;
+      }
+    }
+
+    console.log("🔵 [Plinko Play] Final selected prize:", {
+      slotIndex: selectedPrize.slotIndex,
+      prizeName: selectedPrize.prizeName,
+      rewardType: selectedPrize.rewardType,
+      prizeValue: selectedPrize.prizeValue,
+      probability: selectedPrize.probability
+    });
+
+    const slotIndex = selectedPrize.slotIndex;
+    const rewardType = selectedPrize.rewardType;
+    const prizeValue = parseFloat(selectedPrize.prizeValue || "0");
+    const isWin = rewardType === "cash" || rewardType === "points";
+    const isFreePlay = rewardType === "free_play";
+    let rewardValue = "0";
+    let segmentFreePlay = false;
+
+    console.log("🔵 [Plinko Play] Prize processing:", {
+      isWin,
+      isFreePlay,
+      rewardType,
+      prizeValue
+    });
+
+    // Record usage
+    await db.insert(plinkoUsage).values({
+      orderId,
+      userId,
+    });
+    console.log("🟢 [Plinko Play] Usage recorded");
+
+    // Process prize
+    if (isWin) {
+      rewardValue = prizeValue.toString();
+      console.log(`🟢 [Plinko Play] Processing win: ${rewardType} - ${rewardValue}`);
+
+      if (rewardType === "cash") {
+        // Award cash prize
+        const finalBalance = parseFloat(user.balance || "0") + prizeValue;
+        console.log(`💰 [Plinko Play] Awarding cash: £${prizeValue}. Old balance: ${user.balance}, New balance: ${finalBalance}`);
+        
+        await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+
+        await storage.createTransaction({
+          userId,
+          type: "prize",
+          amount: prizeValue.toFixed(2),
+          description: `Ringtone Plinko Win - £${prizeValue}`,
+          status: "completed",
+        });
+      } else if (rewardType === "points") {
+        // Award points
+        const currentPoints = user.ringtonePoints || 0;
+        const newPoints = currentPoints + prizeValue;
+        console.log(`🎯 [Plinko Play] Awarding points: ${prizeValue}. Old points: ${currentPoints}, New points: ${newPoints}`);
+        
+        await db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
+
+        await storage.createTransaction({
+          userId,
+          type: "prize",
+          amount: `${prizeValue}.00`, // Store points as amount
+          description: `Ringtone Plinko Win - ${prizeValue} Points`,
+          status: "completed",
+        });
+      }
+
+      // Increment quantityWon for the prize
+      await db
+        .update(plinkoPrizes)
+        .set({ quantityWon: (selectedPrize.quantityWon || 0) + 1 })
+        .where(eq(plinkoPrizes.id, selectedPrize.id));
+      console.log(`📈 [Plinko Play] Incremented quantityWon for prize: ${selectedPrize.prizeName}`);
+      
+    } else if (isFreePlay) {
+      // Grant free play from segment win
+      segmentFreePlay = true;
+      rewardValue = "1";
+      console.log(`🎁 [Plinko Play] Processing free play prize`);
+      
+      // Increase order quantity for free play
+      await db
+        .update(orders)
+        .set({ quantity: order.quantity + 1 })
+        .where(eq(orders.id, orderId));
+      
+      // Increment quantityWon for free play segment
+      await db
+        .update(plinkoPrizes)
+        .set({ quantityWon: (selectedPrize.quantityWon || 0) + 1 })
+        .where(eq(plinkoPrizes.id, selectedPrize.id));
+      console.log(`📈 [Plinko Play] Incremented quantityWon for free play prize`);
+    } else {
+      console.log(`🔵 [Plinko Play] Processing other prize type: ${rewardType}`);
+      rewardValue = "0";
+      // Still increment quantityWon for tracking
+      await db
+        .update(plinkoPrizes)
+        .set({ quantityWon: (selectedPrize.quantityWon || 0) + 1 })
+        .where(eq(plinkoPrizes.id, selectedPrize.id));
+    }
+
+    // Record win/loss
+    await db.insert(plinkoWins).values({
+      orderId,
+      userId,
+      prizeId: selectedPrize.id,
+      slotIndex,
+      rewardType,
+      rewardValue,
+      isWin,
+    });
+    console.log("📝 [Plinko Play] Win/loss recorded in plinkoWins table");
+
+    // Record win in main winners table for admin visibility
+    if (isWin && rewardType !== "try_again") {
+      await db.insert(winners).values({
+        userId,
+        competitionId,
+        prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
+        prizeValue: rewardValue,
+      });
+      console.log("🏆 [Plinko Play] Added to winners table");
+    }
+
+    // Check for Random Free Replay (independent of prize outcome)
+    const freeReplayChance = parseFloat(plinkoConfig.freeReplayProbability || "5.00") / 100;
+    const gotFreeReplay = Math.random() < freeReplayChance;
+    
+    console.log("🎲 [Plinko Play] Free replay check:", {
+      freeReplayChance,
+      gotFreeReplay,
+      randomNumber: Math.random()
+    });
+
+    if (gotFreeReplay) {
+      // Grant free replay by increasing order quantity
+      await db
+        .update(orders)
+        .set({ quantity: order.quantity + 1 })
+        .where(eq(orders.id, orderId));
+      console.log("🎁 [Plinko Play] Granted random free replay!");
+    }
+
+    // Get updated balance
+    const updatedUser = await storage.getUser(userId);
+
+    // Calculate total free plays gained
+    const totalFreePlays = (gotFreeReplay ? 1 : 0) + (segmentFreePlay ? 1 : 0);
+    
+    console.log("✅ [Plinko Play] Success! Returning result:", {
+      slotIndex,
+      prizeName: selectedPrize.prizeName,
+      isWin,
+      isFreePlay,
+      freeReplay: gotFreeReplay,
+      segmentFreePlay,
+      playsRemaining: playsRemaining - 1 + totalFreePlays,
+      totalFreePlays
+    });
+    
+
+    console.log("✅ [Plinko Play] Success! Returning result:", {
+      slotIndex,
+      prizeName: selectedPrize.prizeName,
+      isWin,
+      isFreePlay,
+      freeReplay: gotFreeReplay,
+      segmentFreePlay,
+      playsRemaining: playsRemaining - 1 + totalFreePlays,
+      totalFreePlays,
+      // Add these:
+      userBalance: updatedUser?.balance,
+      userPoints: updatedUser?.ringtonePoints,
+      oldBalance: user.balance,
+      oldPoints: user.ringtonePoints
+    });
+    res.json({
+      success: true,
+      slotIndex,
+      prizeName: selectedPrize.prizeName,
+      prizeValue: rewardValue,
+      rewardType,
+      isWin: isWin || isFreePlay,
+      color: selectedPrize.color,
+      freeReplay: gotFreeReplay,
+      segmentFreePlay,
+      playsRemaining: playsRemaining - 1 + totalFreePlays,
+      newBalance: updatedUser?.balance || user.balance,
+      newPoints: updatedUser?.ringtonePoints || user.ringtonePoints,
+    });
+  } catch (error) {
+    console.error("🔴 [Plinko Play] Error playing Plinko:", error);
+    console.error("🔴 [Plinko Play] Error stack:", error.stack);
+    res.status(500).json({ message: "Failed to play Plinko" });
+  }
+});
+
+// ----------------------------------------
+// ENDPOINT 3: Get Plinko Order Info
+// ----------------------------------------
+// GET /api/plinko-order/:orderId
+// Retrieves order details including total plays purchased, plays used,
+// plays remaining, play history with results, and total winnings.
+// Used by frontend to display game state and progress.
+// Returns: { order, totalPlays, playsUsed, playsRemaining, playHistory, totalCashWon, totalPointsWon }
+app.get("/api/plinko-order/:orderId", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId } = req.params;
+
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const user = await storage.getUser(userId);
+    const competition = await storage.getCompetition(order.competitionId);
+    const plinkoCost = parseFloat(competition?.ticketPrice || "2");
+
+    // Get plays used
+    const playsUsed = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(plinkoUsage)
+      .where(eq(plinkoUsage.orderId, orderId));
+    
+    const usedCount = Number(playsUsed[0]?.count || 0);
+
+    // Get play history
+    const history = await db
+      .select()
+      .from(plinkoWins)
+      .where(eq(plinkoWins.orderId, orderId))
+      .orderBy(desc(plinkoWins.wonAt));
+
+    res.json({
+      success: true,
+      order: {
+        id: order.id,
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        totalAmount: order.totalAmount,
+        status: order.status,
+      },
+      user: {
+        balance: user?.balance || "0",
+        ringtonePoints: user?.ringtonePoints || 0,
+      },
+      competition: competition,
+      plinkoCost: plinkoCost,
+      playsUsed: usedCount,
+      playsRemaining: order.quantity - usedCount,
+      history,
+    });
+  } catch (error) {
+    console.error("Error fetching Plinko order:", error);
+    res.status(500).json({ message: "Failed to fetch Plinko order" });
+  }
+});
+
+// ----------------------------------------
+// ENDPOINT 4: Process Plinko Payment
+// ----------------------------------------
+// POST /api/process-plinko-payment
+// Completes payment for a pending Plinko order using wallet balance and/or points.
+// Deducts from user wallet/points, marks order as completed, creates transaction
+// records, and generates ticket entries for the order.
+// Request body: { orderId: string, useWalletBalance?: boolean, useRingtonePoints?: boolean }
+// Returns: { success: true, message: string, competitionId, orderId }
+app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, useWalletBalance = false, useRingtonePoints = false } = req.body;
+
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (order.status !== "pending") {
+      return res.status(400).json({ message: "Order already processed" });
+    }
+
+    const competition = await storage.getCompetition(order.competitionId);
+    if (!competition || competition.type !== "plinko") {
+      return res.status(400).json({ message: "Invalid competition type" });
+    }
+
+    const user = await storage.getUser(userId);
+    const totalAmount = parseFloat(order.totalAmount);
+    let remainingAmount = totalAmount;
+    let walletUsed = 0;
+    let pointsUsed = 0;
+
+    const paymentBreakdown = [];
+
+    // Wallet
+    if (useWalletBalance) {
+      const walletBalance = parseFloat(user?.balance || "0");
+      walletUsed = Math.min(walletBalance, remainingAmount);
+      remainingAmount -= walletUsed;
+      if (walletUsed > 0) {
+        paymentBreakdown.push({ method: "wallet", amount: walletUsed });
+      }
+    }
+
+    // Points
+    if (useRingtonePoints && remainingAmount > 0) {
+      const userPoints = user?.ringtonePoints || 0;
+      const pointsValue = userPoints * 0.01;
+      const pointsToUse = Math.min(pointsValue, remainingAmount);
+      pointsUsed = Math.ceil(pointsToUse * 100);
+      remainingAmount -= pointsToUse;
+      if (pointsUsed > 0) {
+        paymentBreakdown.push({ method: "points", amount: pointsToUse, pointsUsed });
+      }
+    }
+
+    // If remaining, need Cashflows
+    if (remainingAmount > 0.01) {
+      return res.json({
+        success: false,
+        message: "Card payment required for remaining balance",
+        remainingAmount,
+        requiresCashflows: true,
+      });
+    }
+
+    // Complete payment with wallet/points only
+    if (walletUsed > 0) {
+      const newBalance = parseFloat(user?.balance || "0") - walletUsed;
+      await storage.updateUserBalance(userId, newBalance.toFixed(2));
+    }
+
+    if (pointsUsed > 0) {
+      const newPoints = (user?.ringtonePoints || 0) - pointsUsed;
+      await storage.updateUserRingtonePoints(userId, newPoints);
+    }
+
+    // Update order status and payment info
+    await storage.updateOrderStatus(orderId, "completed");
+    await storage.updateOrderPaymentInfo(orderId, {
+      paymentMethod: paymentBreakdown.map(p => p.method).join("+") || "free",
+    });
+
+    // Create transaction record
+    await storage.createTransaction({
+      userId,
+      type: "plinko_purchase",
+      amount: totalAmount.toFixed(2),
+      description: `Plinko Game Purchase - ${order.quantity} games`,
+      orderId: orderId,
+    });
+
+    // 🔥 CRITICAL FIX: Increment soldTickets for the competition
+    const newSoldTickets = (competition.soldTickets || 0) + order.quantity;
+    
+    await db.update(competitions)
+      .set({ 
+        soldTickets: newSoldTickets,
+        updatedAt: new Date()
+      })
+      .where(eq(competitions.id, competition.id));
+    
+    console.log(`📈 Updated soldTickets for competition ${competition.id}: ${competition.soldTickets || 0} → ${newSoldTickets}`);
+
+    // Create tickets for plinko game entries (so they show in entries tab)
+    for (let i = 0; i < order.quantity; i++) {
+      await storage.createTicket({
+        competitionId: order.competitionId,
+        orderId: orderId,
+        userId,
+        ticketNumber: `PLINKO-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, '0')}`,
+        isWinner: false,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Plinko game purchase complete!",
+      competitionId: order.competitionId,
+      orderId: order.id,
+      soldTickets: newSoldTickets, // Return updated count for debugging
+    });
+  } catch (error) {
+    console.error("Error processing Plinko payment:", error);
+    res.status(500).json({ message: "Failed to process Plinko payment" });
+  }
+});
+
+// ----------------------------------------
+// ENDPOINT 5: Get Plinko Config (Public)
+// ----------------------------------------
+// GET /api/plinko-config
+// Public endpoint - returns Plinko game configuration for the frontend.
+// Used to display prize slots, probabilities, and game settings.
+// No authentication required.
+// Returns: { config: { isActive, rows, freeReplayProbability }, prizes: [...] }
+app.get("/api/plinko-config", async (req, res) => {
+  try {
+    const [config] = await db.select().from(gamePlinkoConfig).where(eq(gamePlinkoConfig.id, "active"));
+    const prizes = await db
+      .select()
+      .from(plinkoPrizes)
+      .where(eq(plinkoPrizes.isActive, true))
+      .orderBy(asc(plinkoPrizes.slotIndex));
+    
+    res.json({
+      isVisible: config?.isVisible ?? true,
+      isActive: config?.isActive ?? true,
+      rows: config?.rows ?? 12,
+      prizes: prizes.map(p => ({
+        slotIndex: p.slotIndex,
+        prizeName: p.prizeName,
+        prizeValue: p.prizeValue,
+        rewardType: p.rewardType,
+        color: p.color,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching Plinko config:", error);
+    res.status(500).json({ message: "Failed to fetch Plinko configuration" });
+  }
+});
+
+// ----------------------------------------
+// ENDPOINT 6: Reveal All Remaining Plinko Plays
+// ----------------------------------------
+// POST /api/reveal-all-plinko
+// Batch processes all remaining plays for an order at once.
+// Determines results for each play, credits winnings, checks for free replays,
+// and returns a summary of all results.
+// Request body: { orderId: string, competitionId: string }
+// Returns: { success: true, results: [...], totalCashWon, totalPointsWon, freeReplaysGranted }
+app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, competitionId } = req.body;
+
+    if (!orderId || !competitionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID and Competition ID are required",
+      });
+    }
+
+    // Verify valid completed order
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "No valid Plinko game purchase found",
+      });
+    }
+
+    // Get user
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Get plays remaining
+    const playsUsed = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(plinkoUsage)
+      .where(eq(plinkoUsage.orderId, orderId));
+    
+    const usedCount = Number(playsUsed[0]?.count || 0);
+    let playsRemaining = order.quantity - usedCount;
+
+    if (playsRemaining <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No plays remaining",
+      });
+    }
+
+    // Get Plinko config
+    const [config] = await db.select().from(gamePlinkoConfig).where(eq(gamePlinkoConfig.id, "active"));
+    const freeReplayChance = parseFloat(config?.freeReplayProbability || "5.00") / 100;
+
+    // Get all prizes
+    const allPrizes = await db
+      .select()
+      .from(plinkoPrizes)
+      .where(eq(plinkoPrizes.isActive, true))
+      .orderBy(asc(plinkoPrizes.slotIndex));
+
+    const results: any[] = [];
+    let totalCashWon = 0;
+    let totalPointsWon = 0;
+    let freeReplaysGranted = 0;
+
+    // Process all remaining plays
+    while (playsRemaining > 0) {
+      // Filter eligible prizes
+      const eligiblePrizes = allPrizes.filter(prize => {
+        if (prize.maxWins !== null && prize.quantityWon !== null && prize.quantityWon >= prize.maxWins) {
+          return false;
+        }
+        return true;
+      });
+
+      if (eligiblePrizes.length === 0) break;
+
+      // Weighted random selection
+      const totalProbability = eligiblePrizes.reduce((sum, prize) => sum + parseFloat(prize.probability || "0"), 0);
+      let random = Math.random() * totalProbability;
+      let selectedPrize = eligiblePrizes[0];
+
+      for (const prize of eligiblePrizes) {
+        random -= parseFloat(prize.probability || "0");
+        if (random <= 0) {
+          selectedPrize = prize;
+          break;
+        }
+      }
+
+      const prizeValue = parseFloat(selectedPrize.prizeValue || "0");
+      const isWin = selectedPrize.rewardType === "cash" || selectedPrize.rewardType === "points";
+
+      // Record usage
+      await db.insert(plinkoUsage).values({ orderId, userId });
+
+      // Process prize
+      if (isWin) {
+        if (selectedPrize.rewardType === "cash") {
+          totalCashWon += prizeValue;
+        } else if (selectedPrize.rewardType === "points") {
+          totalPointsWon += prizeValue;
+        }
+
+        // Increment quantityWon
+        selectedPrize.quantityWon = (selectedPrize.quantityWon || 0) + 1;
+        await db
+          .update(plinkoPrizes)
+          .set({ quantityWon: selectedPrize.quantityWon })
+          .where(eq(plinkoPrizes.id, selectedPrize.id));
+      }
+
+      // Record win/loss
+      await db.insert(plinkoWins).values({
+        orderId,
+        userId,
+        prizeId: selectedPrize.id,
+        slotIndex: selectedPrize.slotIndex,
+        rewardType: selectedPrize.rewardType,
+        rewardValue: prizeValue.toString(),
+        isWin,
+      });
+
+      // Record win in main winners table for admin visibility
+      if (isWin && selectedPrize.rewardType !== "try_again") {
+        await db.insert(winners).values({
+          userId,
+          competitionId,
+          prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
+          prizeValue: prizeValue.toString(),
+        });
+      }
+
+      // Check for free replay
+      if (Math.random() < freeReplayChance) {
+        freeReplaysGranted++;
+        playsRemaining++; // Add the free replay
+      }
+
+      results.push({
+        slotIndex: selectedPrize.slotIndex,
+        prizeName: selectedPrize.prizeName,
+        prizeValue: prizeValue.toString(),
+        rewardType: selectedPrize.rewardType,
+        isWin,
+        color: selectedPrize.color,
+      });
+
+      playsRemaining--;
+    }
+
+    // Award accumulated prizes
+    if (totalCashWon > 0) {
+      const finalBalance = parseFloat(user.balance || "0") + totalCashWon;
+      await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+      await storage.createTransaction({
+        userId,
+        type: "prize",
+        amount: totalCashWon.toFixed(2),
+        description: `Ringtone Plinko Reveal All - £${totalCashWon}`,
+        status: "completed",
+      });
+    }
+
+    if (totalPointsWon > 0) {
+      const currentPoints = user.ringtonePoints || 0;
+      await db.update(users).set({ ringtonePoints: currentPoints + totalPointsWon }).where(eq(users.id, userId));
+      await storage.createTransaction({
+        userId,
+        type: "prize",
+        amount: "0.00",
+        description: `Ringtone Plinko Reveal All - ${totalPointsWon} Points`,
+        status: "completed",
+      });
+    }
+
+    // Get updated user
+    const updatedUser = await storage.getUser(userId);
+
+    res.json({
+      success: true,
+      results,
+      totalCashWon,
+      totalPointsWon,
+      freeReplaysGranted,
+      newBalance: updatedUser?.balance || user.balance,
+      newPoints: updatedUser?.ringtonePoints || user.ringtonePoints,
+    });
+  } catch (error) {
+    console.error("Error revealing all Plinko:", error);
+    res.status(500).json({ message: "Failed to reveal all Plinko plays" });
+  }
+});
+
+
+
  // Update your withdrawal request schema
 
 
@@ -8044,17 +9032,18 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
         today.setUTCHours(0, 0, 0, 0);
         
         // Daily revenue (today)
-        const dailyRevenueResult = await db
-          .select({
-            total: sql<number>`coalesce(sum(${orders.totalAmount}), 0)`,
-          })
-          .from(orders)
-          .where(
-            and(
-              eq(orders.status, "completed"),
-              gte(orders.createdAt, today)
-            )
-          );
+        const dailyRevenueResult  = await db
+        .select({
+          total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
+        })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.type, "deposit"),
+            gte(transactions.createdAt, today)
+          )
+        );
+      
 
         // 👉 NEW: Total site credit across all users
         const totalSiteCreditResult = await db
@@ -10161,6 +11150,132 @@ app.post(
       }
     }
   );
+
+  app.get("/api/admin/plinko-config", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const [config] = await db.select().from(gamePlinkoConfig).where(eq(gamePlinkoConfig.id, "active"));
+    let prizes = await db
+      .select()
+      .from(plinkoPrizes)
+      .where(eq(plinkoPrizes.isActive, true))
+      .orderBy(asc(plinkoPrizes.slotIndex));
+    
+    // If no prizes in DB, return default configuration
+    if (prizes.length === 0) {
+      return res.json({
+        id: config?.id || "active",
+        isVisible: config?.isVisible ?? true,
+        isActive: config?.isActive ?? true,
+        rows: config?.rows ?? 12,
+        freeReplayProbability: config?.freeReplayProbability || "5.00",
+        prizes: DEFAULT_PLINKO_CONFIG.prizes
+      });
+    }
+    
+    // Use quantityWon directly from prizes table for accurate tracking
+    const prizesWithStats = prizes.map(prize => ({
+      ...prize,
+      currentWins: prize.quantityWon || 0
+    }));
+    
+    res.json({
+      id: config?.id || "active",
+      isVisible: config?.isVisible ?? true,
+      isActive: config?.isActive ?? true,
+      rows: config?.rows ?? 12,
+      freeReplayProbability: config?.freeReplayProbability || "5.00",
+      prizes: prizesWithStats
+    });
+  } catch (error) {
+    console.error("Error fetching plinko config:", error);
+    res.status(500).json({ message: "Failed to fetch plinko configuration" });
+  }
+});
+  
+  // PUT /api/admin/plinko-config
+  // Updates Plinko game settings (visibility, active status, free replay probability).
+  // Also updates all 8 prize slot configurations (prize name, type, value, probability, maxWins).
+  // Validates that total probability equals 100% before saving.
+  app.put("/api/admin/plinko-config", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { prizes, isVisible, isActive, freeReplayProbability } = req.body;
+      
+      // Validate probability totals to 100%
+      if (prizes) {
+        const totalProbability = prizes.reduce((sum: number, p: any) => sum + (Number(p.probability) || 0), 0);
+        if (Math.abs(totalProbability - 100) > 0.01) {
+          return res.status(400).json({ message: `Total probability must equal 100%. Current: ${totalProbability.toFixed(2)}%` });
+        }
+      }
+      
+      // Update config
+      const [existing] = await db.select().from(gamePlinkoConfig).where(eq(gamePlinkoConfig.id, "active"));
+      
+      if (existing) {
+        await db
+          .update(gamePlinkoConfig)
+          .set({
+            isVisible: isVisible ?? existing.isVisible,
+            isActive: isActive ?? existing.isActive,
+            freeReplayProbability: freeReplayProbability ?? existing.freeReplayProbability,
+            updatedAt: new Date(),
+          })
+          .where(eq(gamePlinkoConfig.id, "active"));
+      } else {
+        await db.insert(gamePlinkoConfig).values({
+          id: "active",
+          isVisible: isVisible ?? true,
+          isActive: isActive ?? true,
+          freeReplayProbability: freeReplayProbability ?? "5.00",
+        });
+      }
+      
+      // Update or INSERT prizes
+      if (prizes) {
+        for (const prize of prizes) {
+          // Check if prize exists for this slotIndex
+          const [existingPrize] = await db
+            .select()
+            .from(plinkoPrizes)
+            .where(eq(plinkoPrizes.slotIndex, prize.slotIndex));
+          
+          if (existingPrize) {
+            // Update existing prize
+            await db
+              .update(plinkoPrizes)
+              .set({
+                prizeName: prize.prizeName,
+                prizeValue: prize.prizeValue,
+                probability: prize.probability.toString(),
+                maxWins: prize.maxWins,
+                quantityWon: prize.currentWins ?? 0,
+                updatedAt: new Date(),
+              })
+              .where(eq(plinkoPrizes.slotIndex, prize.slotIndex));
+          } else {
+            // INSERT new prize
+            await db.insert(plinkoPrizes).values({
+              slotIndex: prize.slotIndex,
+              prizeName: prize.prizeName,
+              prizeValue: prize.prizeValue,
+              rewardType: prize.rewardType,
+              probability: prize.probability.toString(),
+              color: prize.color || "#FFD700",
+              maxWins: prize.maxWins,
+              quantityWon: prize.currentWins ?? 0,
+              isActive: true,
+              displayOrder: prize.slotIndex,
+            });
+          }
+        }
+      }
+      
+      res.json({ success: true, message: "Plinko configuration updated" });
+    } catch (error) {
+      console.error("Error updating plinko config:", error);
+      res.status(500).json({ message: "Failed to update plinko configuration" });
+    }
+  });
 
   app.delete(
     "/api/admin/users/:id",

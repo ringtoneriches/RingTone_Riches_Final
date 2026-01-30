@@ -120,6 +120,10 @@ const purchaseTicketMutation = useMutation({
       const response = await apiRequest("/api/create-pop-order", "POST", data);
       return response.json();
     }
+    else if (competition?.type === "plinko") {
+      const response = await apiRequest("/api/create-plinko-order", "POST", data);
+      return response.json();
+    }
     else {
       // 🎟️ Regular competition - create order for billing page
       const response = await apiRequest("/api/create-competition-order", "POST", data);
@@ -145,6 +149,12 @@ const purchaseTicketMutation = useMutation({
     if (competitionType === "pop") {
       // ✅ Redirect to pop billing
       setLocation(`/pop-billing/${data.orderId}`);
+      return;
+    }
+
+    if (competitionType === "plinko") {
+      // ✅ Redirect to plinko billing
+      setLocation(`/plinko-billing/${data.orderId}`);
       return;
     }
 
@@ -205,7 +215,7 @@ const purchaseTicketMutation = useMutation({
   const type = competition.type?.toLowerCase();
 
   // ✅ Only check ticket limits for regular COMPETITIONS (not spin/scratch)
-  if (type !== "spin" && type !== "scratch"  && type !== "pop") {
+  if (type !== "spin" && type !== "scratch"  && type !== "pop" && type !== "plinko") {
     const competitionRemainingTickets =
       (competition.maxTickets ?? 0) - (competition.soldTickets ?? 0);
 
@@ -472,8 +482,10 @@ const purchaseTicketMutation = useMutation({
                             ? "🎡 Spin Wheel"
                             : competition.type === "scratch"
                             ? "🎫 Scratch Card"
-                            : competition.type === "pop"  // 🎈 Add this
+                            : competition.type === "pop"  
                             ? "🎈 Pop Balloon"
+                            : competition.type === "plinko"  
+                            ? "🎯 Plinko"
                             : "🏆 Competition"}
                         </span>
                       </div>
@@ -606,7 +618,7 @@ const purchaseTicketMutation = useMutation({
                       ) : null}
 
                       {/* Monthly Draw Info for Spin & Scratch Cards */}
-                      {(competition.type === "spin" || competition.type === "scratch" || competition.type === "pop") && (
+                      {(competition.type === "spin" || competition.type === "scratch" || competition.type === "pop" || competition.type === "plinko") && (
                         <div className="mb-4 md:mb-5">
                           <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-lg p-3 md:p-4 border border-green-500/30 shadow-lg">
                             <div className="flex items-start gap-3">
@@ -624,6 +636,8 @@ const purchaseTicketMutation = useMutation({
                                   ? "spin wheel" 
                                   : competition.type === "scratch" 
                                   ? "scratch card" 
+                                  : competition.type === "plinko" 
+                                  ? "Plinko" 
                                   : "pop balloon"} entries automatically enter our monthly £100 cash draw! 
                               Winners are selected manually via Facebook or TikTok using your unique entry numbers. 
                               The more entries you have, the better your chances!
@@ -660,7 +674,7 @@ const purchaseTicketMutation = useMutation({
                         </p>
                       </div>
 
-                      {availableTickets.length > 0 && competition.type !== "spin" && competition.type !== "scratch" && competition.type !== "pop" ? (
+                      {availableTickets.length > 0 && competition.type !== "spin" && competition.type !== "scratch" && competition.type !== "pop" && competition.type !== "plinko" ? (
                         <div className="space-y-2.5 md:space-y-3">
                           {/* Existing Tickets Badge - GOLD THEME */}
                           <div className="bg-gradient-to-r from-[#facc15]/20 to-[#f59e0b]/20 border border-[#facc15]/30 rounded-lg p-2.5 md:p-3 text-center">
@@ -925,8 +939,10 @@ const purchaseTicketMutation = useMutation({
             ? "🎡 BUY SPINS NOW"
             : competition.type === "scratch"
             ? "🎫 BUY SCRATCHES NOW"
-             : competition.type === "pop"  // 🎈 Add this
+             : competition.type === "pop"  
     ? "🎈 BUY POP GAMES NOW"
+             : competition.type === "plinko"  
+    ? "🎯 BUY PLINKO GAMES NOW"
             : "🚀 ENTER NOW"}
         </span>
         {/* Shimmer effect on button */}

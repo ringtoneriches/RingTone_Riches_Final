@@ -76,7 +76,7 @@ export const competitions = pgTable("competitions", {
   title: text("title").notNull(),
   description: text("description"),
   imageUrl: text("image_url"),
-  type: varchar("type", { enum: ["spin", "scratch", "instant", "pop"] }).notNull(),
+  type: varchar("type", { enum: ["spin", "scratch", "instant", "pop", "plinko"] }).notNull(),
   ticketPrice: decimal("ticket_price", { precision: 10, scale: 2 }).notNull(),
   maxTickets: integer("max_tickets"),
   soldTickets: integer("sold_tickets").default(0),
@@ -385,6 +385,57 @@ export const popWins = pgTable("pop_wins", {
 
 
 
+// TABLE 1: Plinko global configuration - single "active" record stores game settings
+export const gamePlinkoConfig = pgTable("game_plinko_config", {
+  id: varchar("id").primaryKey().default("active"),
+  rows: integer("rows").default(12), // Number of peg rows in the game board
+  freeReplayProbability: decimal("free_replay_probability", { precision: 5, scale: 2 }).default("5.00"), // 5% chance for random free replay
+  isActive: boolean("is_active").default(true), // Whether game is playable
+  isVisible: boolean("is_visible").default(true), // Whether game appears on homepage
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// TABLE 2: Plinko prize slot configurations - 8 slots at the bottom of the board
+export const plinkoPrizes = pgTable("plinko_prizes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  slotIndex: integer("slot_index").notNull(), // 0-7 for 8 prize slots
+  prizeName: varchar("prize_name").notNull(), // Display name e.g., "£1,000 JACKPOT", "100 Points"
+  prizeValue: decimal("prize_value", { precision: 10, scale: 2 }).notNull(), // Numeric value of prize
+  rewardType: varchar("reward_type", { enum: ["cash", "points", "try_again", "free_play"] }).notNull(), // Prize type
+  probability: decimal("probability", { precision: 6, scale: 3 }).notNull(), // Percentage e.g., 45.000 for 45%
+  color: varchar("color").default("#FFD700"), // Slot background color for display
+  maxWins: integer("max_wins"), // Win limit - null means unlimited
+  quantityWon: integer("quantity_won").default(0), // Current win count for this prize
+  fallbackPrizeId: uuid("fallback_prize_id"), // What to award when maxWins reached
+  isActive: boolean("is_active").default(true), // Whether this prize is active
+  displayOrder: integer("display_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// TABLE 3: Plinko usage tracking - one record per play to count plays used
+export const plinkoUsage = pgTable("plinko_usage", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").notNull().references(() => orders.id), // Links to order
+  userId: varchar("user_id").notNull().references(() => users.id), // Player who used play
+  usedAt: timestamp("used_at").defaultNow(),
+});
+
+// TABLE 4: Plinko win/loss records - stores each play result for history and maxWins tracking
+export const plinkoWins = pgTable("plinko_wins", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id), // Links to order
+  userId: varchar("user_id").notNull().references(() => users.id), // Player
+  prizeId: uuid("prize_id").notNull().references(() => plinkoPrizes.id), // Prize slot that was hit
+  slotIndex: integer("slot_index").notNull(), // Which slot (0-7) the ball landed in
+  rewardType: varchar("reward_type", { enum: ["cash", "points", "try_again"] }).notNull(),
+  rewardValue: text("reward_value").notNull(), // Amount won as string
+  isWin: boolean("is_win").default(false), // True if won cash or points
+  wonAt: timestamp("won_at").defaultNow(),
+});
+
+
 // Platform settings - single record for platform-wide configuration
 export const platformSettings = pgTable("platform_settings", {
   id: varchar("id").primaryKey().default("active"),
@@ -455,6 +506,9 @@ export const insertGameScratchConfigSchema = createInsertSchema(gameScratchConfi
 export const insertGamePopConfigSchema = createInsertSchema(gamePopConfig);
 export const insertPopPrizeSchema = createInsertSchema(popPrizes).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPopWinSchema = createInsertSchema(popWins).omit({ id: true, wonAt: true });
+export const insertGamePlinkoConfigSchema = createInsertSchema(gamePlinkoConfig);
+export const insertPlinkoPrizeSchema = createInsertSchema(plinkoPrizes).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPlinkoWinSchema = createInsertSchema(plinkoWins).omit({ id: true, wonAt: true });
 export const insertScratchCardImageSchema = createInsertSchema(scratchCardImages).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPlatformSettingsSchema = createInsertSchema(platformSettings);
 export const insertSpinWinSchema = createInsertSchema(spinWins).omit({ id: true, wonAt: true });
@@ -508,7 +562,13 @@ export type PopPrize = typeof popPrizes.$inferSelect;
 export type InsertPopPrize = z.infer<typeof insertPopPrizeSchema>;
 export type PopUsage = typeof popUsage.$inferInsert;
 export type PopWin = typeof popWins.$inferSelect;
-export type InsertPopWin = z.infer<typeof insertPopWinSchema>;
+export type GamePlinkoConfig = typeof gamePlinkoConfig.$inferSelect;
+export type InsertGamePlinkoConfig = z.infer<typeof insertGamePlinkoConfigSchema>;
+export type PlinkoPrize = typeof plinkoPrizes.$inferSelect;
+export type InsertPlinkoPrize = z.infer<typeof insertPlinkoPrizeSchema>;
+export type PlinkoUsage = typeof plinkoUsage.$inferInsert;
+export type PlinkoWin = typeof plinkoWins.$inferSelect;
+export type InsertPlinkoWin = z.infer<typeof insertPlinkoWinSchema>;
 export type PlatformSettings = typeof platformSettings.$inferSelect;
 export type InsertPlatformSettings = z.infer<typeof insertPlatformSettingsSchema>;
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect;

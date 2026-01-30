@@ -64,6 +64,10 @@ import AdminSpinWheelSettings from "./pages/admin/AdminSpinWheelSettings";
 import Intelligence from "./pages/admin/intelligence";
 import RegistrationSourceModal from "./components/RegistrationSourceModal";
 import AdminDiscountCodes from "./pages/admin/discount";
+import PlinkoBilling from "./pages/plinkoBilling";
+import AdminPlinko from "./pages/admin/plinko";
+import AdminPlinkoBalloon from "./pages/admin/admin-plinko";
+import PlinkoGamePage from "./pages/plinkoGamePage";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -98,6 +102,7 @@ function Router() {
       />
       <Route path="/spin/:competitionId/:orderId" component={SpinGamePage} />
         <Route path="/pop/:competitionId/:orderId" component={PopGamePage} />
+        <Route path="/plinko/:competitionId/:orderId" component={PlinkoGamePage} />
 
       {/* Authenticated routes - always registered, auth checked in component */}
       <Route path="/instant" component={instant} />
@@ -120,6 +125,7 @@ function Router() {
 
       <Route path="/scratch-billing/:orderId" component={ScratchBilling} />
           <Route path="/pop-billing/:orderId" component={PopBilling} />
+      <Route path="/plinko-billing/:orderId" component={PlinkoBilling} />
       {/* <Route path="/support" component={Support} /> */}
 
       {/* Admin routes - always registered, auth checked in component */}
@@ -145,6 +151,8 @@ function Router() {
       <Route path="/admin/users/:id" component={UserAuditPage} />
       <Route path="/admin/intelligence" component={Intelligence} />
       <Route path="/admin/discount" component={AdminDiscountCodes} />
+      <Route path="/admin/plinko" component={AdminPlinkoBalloon} />
+      <Route path="/admin/ringtone-plinko/settings" component={AdminPlinko} />
 
       <Route component={NotFound} />
     </Switch>

@@ -28,7 +28,7 @@ import {
 
 interface UnifiedBillingProps {
   orderId: string;
-  orderType: 'competition' | 'spin' | 'scratch' | 'pop';
+  orderType: 'competition' | 'spin' | 'scratch' | 'pop' | 'plinko';
   wheelType?: string;
 }
 
@@ -50,6 +50,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
       case 'spin': return '/api/spin-order';
       case 'scratch': return '/api/scratch-order';
       case 'pop': return '/api/pop-order';
+      case 'plinko': return '/api/plinko-order';
       default: return '/api/order';
     }
   };
@@ -67,6 +68,8 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
         return "The Landmark Loot Purchase";
       case "pop":
         return "Ringtone Pop Purchase";
+      case "plinko":
+        return " Ringtone Plinko Purchase";
       default:
         return "Competition Tickets";
     }
@@ -85,6 +88,8 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
         return "Scratch Cards";
       case "pop":
         return "Pop Games";
+      case "plinko":
+        return "Plinko Games";
       default:
         return "Tickets";
     }
@@ -115,7 +120,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
 
   const itemCost = orderType === 'competition' 
     ? parseFloat(competition?.ticketPrice || '0') 
-    : parseFloat(orderData?.scratchCost || orderData?.spinCost || orderData?.popCost || '2');
+    : parseFloat(orderData?.scratchCost || orderData?.spinCost || orderData?.popCost || orderData?.plinkoCost || '2');
 
   const totalAmount = Number(order?.totalAmount) || 0;
   const walletBalance = Number(user?.balance) || 0;
@@ -147,6 +152,9 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
         case 'pop': 
           endpoint =  '/api/process-pop-payment';
           break;
+        case 'plinko': 
+          endpoint =  '/api/process-plinko-payment';
+          break
         default: // competition
           endpoint = "/api/purchase-ticket";
           break;
@@ -203,6 +211,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
           if (orderType === 'spin') setLocation(`/spin/${competitionId}/${orderId}`);
           else if (orderType === 'scratch') setLocation(`/scratch/${competitionId}/${orderId}`);
           else if (orderType === 'pop') setLocation(`/pop/${competitionId}/${orderId}`);
+          else if (orderType === 'plinko') setLocation(`/plinko/${competitionId}/${orderId}`);
           else setLocation(`/success/competition?orderId=${orderId}`);
         }, 1500);
       }
