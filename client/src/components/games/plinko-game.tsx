@@ -82,6 +82,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
   const [balls, setBalls] = useState<Ball[]>([]);
   const [isDropping, setIsDropping] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [showFreePlayNotification, setShowFreePlayNotification] = useState(false);
   // Ball drops automatically from pre-calculated position - no user control
   
   // Sound refs
@@ -737,13 +738,13 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     
     setBalls([]);
     setShowResultPopup(false);
-    setCurrentResult(null); // Clear immediately - will set AFTER ball lands
+    setCurrentResult(null);
     setIsDropping(true);
     resultShownRef.current = false;
     pendingResultRef.current = null;
     pendingBallIdRef.current = null;
-    resetPegHitCounts(); // Clear peg hit counts for new drop
-    onDropStart?.(); // Notify parent that ball is dropping (hide history until landed)
+    resetPegHitCounts();
+    onDropStart?.();
     
     try {
       const response = await apiRequest("/api/play-plinko", "POST", {
@@ -755,6 +756,31 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
       
       if (!result.success) {
         throw new Error(result.message || "Failed to play");
+      }
+  
+      // 🎯 ADD THIS CHECK FOR FREE REPLAY
+      if (result.freeReplay) {
+        // Show free play notification
+        toast({
+          title: "🎉 FREE REPLAY!",
+          description: "You got a free replay! Your play count wasn't deducted.",
+          variant: "default",
+          duration: 3000,
+        });
+      }
+      
+      // // Debug logging
+      // console.log("📊 DEBUG - Server response:", {
+      //   freeReplay: result.freeReplay,
+      //   playsRemaining: result.playsRemaining,
+      //   localPlaysRemaining: localPlaysRemaining,
+      //   playCountSame: result.playsRemaining === localPlaysRemaining,
+      //   prizeName: result.prizeName,
+      //   isWin: result.isWin
+      // });
+      
+      if (result.freeReplay) {
+        console.log("🎉 FREE REPLAY DETECTED!");
       }
       
       // DON'T set currentResult here - wait until ball lands
@@ -788,18 +814,18 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
         landedSlot: null,
         targetSlot: targetSlot,
         seed: dropResult.seed,
-        currentSeed: dropResult.seed, // Initialize to same as seed for deterministic physics
+        currentSeed: dropResult.seed,
         frame: 0,
         hitPegId: null,
       };
       
       setBalls([newBall]);
       
-    } catch (error: any) {
+    } catch (error) {  // ← The error was here - missing closing brace before this line
       console.error("Error playing Plinko:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to play. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to play. Please try again.",
         variant: "destructive",
       });
       setIsDropping(false);
@@ -815,7 +841,19 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
 
   const getResultType = () => {
     if (!currentResult) return "lose";
-    if (currentResult.rewardType === "free_play") return "freeplay";
+    
+    // Check for free replay first - IMPORTANT!
+    if (currentResult.freeReplay === true) {
+      return "freeplay";
+    }
+    
+    // Check for free play from prize segment
+    if (currentResult.segmentFreePlay === true || 
+        currentResult.rewardType === "free_play" ||
+        currentResult.prizeName?.includes("FREE PLAY")) {
+      return "freeplay";
+    }
+    
     if (currentResult.isWin) return "win";
     return "lose";
   };
@@ -834,7 +872,19 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
             </h3>
             <p className="text-purple-300/80 text-sm">Drop the ball & win big!</p>
           </div>
-          
+          {showFreePlayNotification && (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center">
+    <div className="absolute inset-0 bg-black/60" />
+    <div className="relative bg-gradient-to-r from-cyan-500 to-purple-500 p-8 rounded-2xl animate-bounce">
+      <div className="text-4xl font-bold text-white text-center">
+        🎉 FREE PLAY! 🎉
+      </div>
+      <div className="text-white text-center mt-2">
+        Your play count wasn't deducted!
+      </div>
+    </div>
+  </div>
+)}
           <canvas
             ref={canvasRef}
             width={boardWidth}

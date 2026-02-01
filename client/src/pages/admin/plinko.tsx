@@ -29,7 +29,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Save, Eye, EyeOff, Target, AlertCircle, RotateCcw, Settings, Gift, Coins, Ban, Repeat } from "lucide-react";
+import { Save, Eye, EyeOff, Target, AlertCircle, RotateCcw, Settings, Gift, Coins, Ban, Repeat, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
@@ -57,6 +57,7 @@ interface PlinkoPrize {
   probability: number;
   maxWins: number | null;
   currentWins: number;
+  displayOrder: number;
   color: string;
   isActive: boolean;
 }
@@ -135,6 +136,23 @@ export default function AdminPlinko() {
     setPrizes(prizes.map(p =>
       p.slotIndex === slotIndex ? { ...p, [field]: value } : p
     ));
+    setHasChanges(true);
+  };
+
+  const movePrize = (currentIndex: number, direction: "up" | "down") => {
+    const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= prizes.length) return;
+    
+    const newPrizes = [...prizes];
+    // Swap the prizes in the array
+    [newPrizes[currentIndex], newPrizes[newIndex]] = [newPrizes[newIndex], newPrizes[currentIndex]];
+    
+    // Update displayOrder to match new positions
+    newPrizes.forEach((prize, index) => {
+      prize.displayOrder = index;
+    });
+    
+    setPrizes(newPrizes);
     setHasChanges(true);
   };
 
@@ -242,7 +260,7 @@ export default function AdminPlinko() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {prizes.sort((a, b) => a.slotIndex - b.slotIndex).map((prize) => (
+                {prizes.sort((a, b) => a.displayOrder - b.displayOrder).map((prize, index) => (
                     <Card key={prize.slotIndex} className="bg-zinc-800/50 border-zinc-700 hover:border-purple-500/30 transition-colors">
                       <CardContent className="p-4 space-y-3">
                         <div className="flex items-center justify-between">
@@ -255,6 +273,28 @@ export default function AdminPlinko() {
                           </div>
                           {getRewardBadge(prize.rewardType)}
                         </div>
+
+                        {/* <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            onClick={() => movePrize(index, "up")}
+            disabled={index === 0}
+          >
+            <ArrowUp className="w-4 h-4" />
+          </Button>
+
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            onClick={() => movePrize(index, "down")}
+            disabled={index === prizes.length - 1}
+          >
+            <ArrowDown className="w-4 h-4" />
+          </Button>
+        </div> */}
 
                         <div className="space-y-2">
                           <Label className="text-xs text-gray-400">Prize Name</Label>

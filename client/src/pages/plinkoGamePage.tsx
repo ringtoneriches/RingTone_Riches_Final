@@ -49,12 +49,23 @@ const { competitionId, orderId } = params;
     },
   });
 
+  const { data: userData, refetch: refetchUser } = useQuery({
+    queryKey: ["/api/me"],
+    queryFn: async () => {
+      const res = await fetch("/api/me", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch user data");
+      return res.json();
+    },
+    refetchInterval: 3000, // Refetch every 3 seconds during gameplay
+  });
+
   const handlePlayComplete = () => {
     setIsBallDropping(false);
     // Update confirmed count to include the new result
     confirmedHistoryCountRef.current = (orderData?.history?.length || 0) + 1;
     refetchOrder();
-    queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+    refetchUser();
+    queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     setCurrentPage(1); // Show latest result on first page
   };
   
@@ -144,7 +155,7 @@ const { competitionId, orderId } = params;
           </p>
         </div>
         
-        <div className="grid lg:grid-cols-12 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
           {/* Left Panel - Spectacular Jackpot & Features */}
           <div className="lg:col-span-3 space-y-4 lg:space-y-5">
             {/* GRAND JACKPOT - Premium Showcase */}

@@ -33,6 +33,7 @@ import {
   AlertCircle,
   Heart,
   Star,
+  Target,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -66,7 +67,7 @@ import Support from "./support";
 import { navigate } from "wouter/use-browser-location";
 import { useNavigation } from "react-day-picker";
 import Wellbeing from "./wellbeing";
-
+// Update getTransactionIcon function:
 const getTransactionIcon = (type: string) => {
   switch (type) {
     case "deposit":
@@ -75,12 +76,14 @@ const getTransactionIcon = (type: string) => {
       return <ArrowDownCircle className="h-4 w-4 text-red-500" />;
     case "purchase":
       return <ShoppingCart className="h-4 w-4 text-blue-500" />;
+    case "plinko_purchase": // 🎯 Add this for Plinko purchases
+      return <Target className="h-4 w-4 text-cyan-500" />; // Using Target icon for Plinko
     case "prize":
       return <Gift className="h-4 w-4 text-yellow-500" />;
-    case "pop_purchase": // 🎈 Add this case
-      return <Gift className="w-4 h-4 text-pink-400" />; // or Balloon icon
-    case "ringtone_points": // Add this case
-      return <Star className="h-4 w-4 text-purple-500" />; // Using Star icon for points
+    case "pop_purchase":
+      return <Gift className="w-4 h-4 text-pink-400" />;
+    case "ringtone_points":
+      return <Star className="h-4 w-4 text-purple-500" />;
     case "referral":
       return <Users className="h-4 w-4 text-purple-500" />;
     case "referral_bonus":
@@ -92,14 +95,16 @@ const getTransactionIcon = (type: string) => {
   }
 };
 
+// Update getTransactionTypeBadge function:
 const getTransactionTypeBadge = (type: string) => {
   const colors: Record<string, string> = {
     deposit: "bg-green-500/10 text-green-500 border-green-500/20",
     withdrawal: "bg-red-500/10 text-red-500 border-red-500/20",
     purchase: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+    plinko_purchase: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20", // Add this
     prize: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
     pop_purchase: "bg-pink-500/20 text-pink-400 border-pink-500/30",
-    ringtone_points: "bg-purple-500/10 text-purple-500 border-purple-500/20", // Add this
+    ringtone_points: "bg-purple-500/10 text-purple-500 border-purple-500/20",
     referral: "bg-purple-500/10 text-purple-500 border-purple-500/20",
     referral_bonus: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
     refund: "bg-orange-500/10 text-orange-500 border-orange-500/20",
@@ -111,6 +116,7 @@ const getTransactionTypeBadge = (type: string) => {
       deposit: "Deposit",
       withdrawal: "Withdrawal",
       purchase: "Purchase",
+      plinko_purchase: "Plinko Purchase",
       prize: "Prize",
       pop_purchase: "Pop Purchase",
       ringtone_points: "Ringtones", 
@@ -488,35 +494,51 @@ const filteredTransactions =
         new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime(),
     );
 
-function formatAmount(transaction: Transaction) {
-  const amount = Math.abs(parseFloat(transaction.amount));
-  const desc = (transaction.description || "").toLowerCase();
-  // Check transaction type first
-  if (transaction.type === "ringtone_points") {
-    // For ringtone_points type, always show as points
-    return `${amount} pts`;
-  }
-
-  if (
-    transaction.type === "prize" &&
-    desc.includes("ringtone pop") &&
-    (desc.includes("£") || desc.includes("cash"))
-  ) {
-    return `£${amount.toFixed(2)}`;
-  }
-
-  if (transaction.type === "prize" && desc.includes("ringtone")) {
-    return `${amount} pts`;
-  }
-  
-  // For prize type, always show as cash
-  if (transaction.type === "prize") {
-    return `£${amount.toFixed(2)}`;
-  }
-  
-  // For all other types, show as cash
-  return `£${amount.toFixed(2)}`;
-}
+    function formatAmount(transaction: Transaction) {
+      const amount = Math.abs(parseFloat(transaction.amount));
+      const desc = (transaction.description || "").toLowerCase();
+      
+      // Check transaction type first
+      if (transaction.type === "ringtone_points") {
+        return `${amount} pts`;
+      }
+    
+      if (transaction.type === "pop_purchase" || transaction.type === "plinko_purchase") {
+        return `£${amount.toFixed(2)}`;
+      }
+    
+      // For Plinko prizes - improved detection
+      if (transaction.type === "prize" && desc.includes("ringtone plinko")) {
+        // Check if it's points by looking for "points" or "pts" in description
+        const isPointsPrize = desc.includes("points") || desc.includes("pts");
+        // Check if it's cash by looking for "£" or currency pattern
+        const isCashPrize = desc.includes("£") || /cash.*\d+/.test(desc);
+        
+        if (isPointsPrize) {
+          return `${amount} pts`;
+        } else if (isCashPrize || transaction.amount.includes(".")) {
+          return `£${amount.toFixed(2)}`;
+        }
+        // Default to cash for Plinko if uncertain
+        return `£${amount.toFixed(2)}`;
+      }
+    
+      // For other ringtone prizes
+      if (transaction.type === "prize" && desc.includes("ringtone")) {
+        if (desc.includes("spin") || desc.includes("points") || desc.includes("pts")) {
+          return `${amount} pts`;
+        }
+        return `£${amount.toFixed(2)}`;
+      }
+      
+      // For all other prize types, show as cash
+      if (transaction.type === "prize") {
+        return `£${amount.toFixed(2)}`;
+      }
+      
+      // For all other types, show as cash
+      return `£${amount.toFixed(2)}`;
+    }
 
   const ringtonePoints = user?.ringtonePoints || 0;
 
@@ -564,16 +586,20 @@ const excludedCompetitionIds = [
  
 ];
 
-const incompleteGames = orders.filter(
-  (order) =>
-    (order.competitions?.type === "spin" ||
-      order.competitions?.type === "scratch" ||
-      order.competitions?.type === "pop") &&
-    order.orders.status === "completed" &&
-    (order.remainingPlays || 0) > 0 &&
-    // Check if competition ID is NOT in excluded list
+
+const incompleteGames = orders.filter((order) => {
+  const type = (order.competitions?.type || "").toLowerCase();
+  const remaining = Number(order.remainingPlays || 0);
+  const status = order.orders.status;
+
+  return (
+    ["spin", "scratch", "plinko", "pop"].includes(type) &&
+    ["paid", "completed"].includes(status) &&
+    remaining > 0 &&
     !excludedCompetitionIds.includes(order.orders.competitionId)
-);
+  );
+});
+
 
 // Orders that are fully completed
 const completedOrders = orders.filter(
@@ -980,11 +1006,11 @@ const handleSortCodeChange = (e) => {
 const handleResumeOrder = () => {
   if (!pendingOrder) return;
   
-  console.log('🎯 RESUMING ORDER FROM WALLET:', {
-    pendingOrder,
-    wheelType: pendingOrder.wheelType,
-    hasWheelType: !!pendingOrder.wheelType
-  });
+  // console.log('🎯 RESUMING ORDER FROM WALLET:', {
+  //   pendingOrder,
+  //   wheelType: pendingOrder.wheelType,
+  //   hasWheelType: !!pendingOrder.wheelType
+  // });
   
   // Determine the correct route based on order type
   let route = '';
@@ -1009,7 +1035,7 @@ const handleResumeOrder = () => {
       break;
   }
   
-  console.log('📍 Navigating to:', route);
+  // console.log('📍 Navigating to:', route);
   clearPendingOrder();
   setLocation(route);
 };
@@ -1460,6 +1486,7 @@ const handleDeleteBankAccount = (
                             <SelectItem value="ringtone_points">RingTone Points</SelectItem> 
                             <SelectItem value="referral_bonus">Referrals Bonus</SelectItem>
                             <SelectItem value="refund">Refund</SelectItem>
+                            <SelectItem value="plinko_purchase">Plinko Purchases</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1516,7 +1543,7 @@ const handleDeleteBankAccount = (
             }`}
           >
             {(() => {
-              if (transaction.type === "pop_purchase") return "-";
+              if (transaction.type === "pop_purchase" || transaction.type === "plinko_purchase") return "-";
               return parseFloat(transaction.amount) > 0 ? "+" : "-";
             })()}
             {formatAmount(transaction)}
@@ -1633,6 +1660,8 @@ const handleDeleteBankAccount = (
                                   ? "Spin Wheel"
                                   : order.competitions?.type === "pop"
                                   ? "Ringtone Pop"
+                                  : order.competitions?.type === "plinko"
+                                  ? "Ringtone Plinko"
                                   : "Scratch Card"}
                               </p>
                             </div>
@@ -1663,6 +1692,8 @@ const handleDeleteBankAccount = (
                                 ? `/spin/${order.orders.competitionId}/${order.orders.id}`
                                 : order.competitions?.type === "pop"
                                 ? `/pop/${order.orders.competitionId}/${order.orders.id}`
+                                : order.competitions?.type === "plinko"
+                                ? `/plinko/${order.orders.competitionId}/${order.orders.id}`
                                 : `/scratch/${order.orders.competitionId}/${order.orders.id}`
                             }
                             className="block"

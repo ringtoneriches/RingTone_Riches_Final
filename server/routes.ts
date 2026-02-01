@@ -7646,13 +7646,33 @@ app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
 
     // Record win in main winners table for admin visibility
     if (isWin && rewardType !== "try_again") {
+      // Determine how to format the prize value for display
+      let displayPrizeValue;
+      let prizeTypeForWinner;
+      
+      if (rewardType === "cash") {
+        displayPrizeValue = `£${prizeValue}`;
+        prizeTypeForWinner = "cash";
+      } else if (rewardType === "points") {
+        displayPrizeValue = `${prizeValue} Points`;
+        prizeTypeForWinner = "points";
+      } else {
+        displayPrizeValue = rewardValue;
+        prizeTypeForWinner = "other";
+      }
+      
       await db.insert(winners).values({
         userId,
         competitionId,
         prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
-        prizeValue: rewardValue,
+        prizeValue: displayPrizeValue, // Store as "£500" or "750 Points"
+        prizeType: prizeTypeForWinner, // Add this field to track type
       });
-      console.log("🏆 [Plinko Play] Added to winners table");
+      console.log("🏆 [Plinko Play] Added to winners table:", {
+        description: `Plinko: ${selectedPrize.prizeName}`,
+        value: displayPrizeValue,
+        type: prizeTypeForWinner
+      });
     }
 
     // Check for Random Free Replay (independent of prize outcome)
@@ -11158,7 +11178,7 @@ app.post(
       .select()
       .from(plinkoPrizes)
       .where(eq(plinkoPrizes.isActive, true))
-      .orderBy(asc(plinkoPrizes.slotIndex));
+      .orderBy(asc(plinkoPrizes.displayOrder));
     
     // If no prizes in DB, return default configuration
     if (prizes.length === 0) {
@@ -11237,7 +11257,7 @@ app.post(
           const [existingPrize] = await db
             .select()
             .from(plinkoPrizes)
-            .where(eq(plinkoPrizes.slotIndex, prize.slotIndex));
+            .where(eq(plinkoPrizes.id, prize.id));
           
           if (existingPrize) {
             // Update existing prize
@@ -11249,9 +11269,10 @@ app.post(
                 probability: prize.probability.toString(),
                 maxWins: prize.maxWins,
                 quantityWon: prize.currentWins ?? 0,
+                displayOrder: prize.displayOrder,
                 updatedAt: new Date(),
               })
-              .where(eq(plinkoPrizes.slotIndex, prize.slotIndex));
+              .where(eq(plinkoPrizes.id, prize.id));
           } else {
             // INSERT new prize
             await db.insert(plinkoPrizes).values({
@@ -11264,7 +11285,8 @@ app.post(
               maxWins: prize.maxWins,
               quantityWon: prize.currentWins ?? 0,
               isActive: true,
-              displayOrder: prize.slotIndex,
+              displayOrder: prize.displayOrder ?? prize.slotIndex,
+
             });
           }
         }
