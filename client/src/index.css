@@ -24,6 +24,34 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
 }
 
+/* Canvas Container */
+.canvas-container {
+  position: relative;
+  width: 100%;
+  max-width: 600px; /* Adjust based on your design */
+  margin: 0 auto;
+}
+
+/* Canvas Element */
+canvas {
+  display: block;
+  width: 100% !important;
+  height: auto !important;
+  image-rendering: -webkit-optimize-contrast; /* Safari/Chrome */
+  image-rendering: crisp-edges; /* Firefox */
+  image-rendering: pixelated; /* Chrome/Opera */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  touch-action: none; /* Prevent default touch behaviors */
+}
+
+/* Media query for high-DPI displays (mobile) */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  canvas {
+    image-rendering: optimizeQuality;
+  }
+}
+
 :root {
   /* Royal Theme - Luxurious Dark Navy with Gold Accents */
   --background: hsl(222 47% 4%);

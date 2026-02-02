@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Edit, Trash2, Trophy, Upload, Settings, RefreshCw, Archive, ArchiveRestore } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast"; 
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -550,7 +550,7 @@ export default function AdminSpinWheel() {
               </Button>
             )}
             
-            <div className="flex gap-2">
+            <div className="flex justify-center gap-2">
               <Button
                 onClick={() => setWheelSettingsOpen(true)}
                 variant="outline"
@@ -602,17 +602,17 @@ export default function AdminSpinWheel() {
                   key={competition.id}
                   className="bg-card border border-border rounded-lg p-6 hover:shadow-lg transition-shadow"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex gap-4 flex-1">
+                  <div className="flex items-start flex-col sm:flex-row justify-between ">
+                    <div className="flex gap-4 flex-1 flex-col sm:flex-row">
                       {competition.imageUrl && (
                         <img
                           src={competition.imageUrl}
                           alt={competition.title}
-                          className="w-24 h-24 object-cover rounded-lg"
+                          className="w-full h-98 sm:w-24 sm:h-24 object-cover rounded-lg"
                         />
                       )}
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center flex-col sm:flex-row  gap-2 mb-2">
                           <h3 className="text-xl font-bold text-foreground">
                             {competition.title}
                           </h3>
@@ -730,7 +730,7 @@ export default function AdminSpinWheel() {
 
         {/* Archived Games Modal */}
         <Dialog open={showArchivedModal} onOpenChange={setShowArchivedModal}>
-          <DialogContent className="max-w-7xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="w-[95vw] max-w-sm sm:max-w-md mx-auto overflow-x-hidden sm:overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Archive className="w-5 h-5" />
@@ -750,17 +750,17 @@ export default function AdminSpinWheel() {
                     key={competition.id}
                     className="bg-card border border-border rounded-lg p-6 opacity-90"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex gap-4 flex-1">
+                    <div className="flex items-start flex-col sm:flex-row  justify-between">
+                      <div className="flex gap-4 flex-col  sm:flex-row  flex-1">
                         {competition.imageUrl && (
                           <img
                             src={competition.imageUrl}
                             alt={competition.title}
-                            className="w-20 h-20 object-cover rounded-lg"
+                            className="w-72 h-72 sm:w-20 sm:h-20 object-cover rounded-lg"
                           />
                         )}
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center flex-col sm:flex-row gap-2 mb-2">
                             <h3 className="text-lg font-bold text-foreground">
                               {competition.title}
                             </h3>
@@ -875,7 +875,7 @@ export default function AdminSpinWheel() {
           open={!!archiveConfirm}
           onOpenChange={(open) => !open && setArchiveConfirm(null)}
         >
-          <DialogContent>
+          <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
             <DialogHeader>
               <DialogTitle>Archive Spin Wheel Competition</DialogTitle>
             </DialogHeader>
@@ -908,7 +908,7 @@ export default function AdminSpinWheel() {
           open={!!unarchiveConfirm}
           onOpenChange={(open) => !open && setUnarchiveConfirm(null)}
         >
-          <DialogContent>
+          <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
             <DialogHeader>
               <DialogTitle>Unarchive Spin Wheel Competition</DialogTitle>
             </DialogHeader>
@@ -1332,7 +1332,7 @@ function WheelSettingsDialog({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                      <div>
                   <Label className="text-xs">Reward Type</Label>
 
@@ -1435,6 +1435,7 @@ function WheelSettingsDialog({
 
         <DialogFooter>
           <Button
+          className="mt-3 sm:mt-0"
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saveMutation.isPending}

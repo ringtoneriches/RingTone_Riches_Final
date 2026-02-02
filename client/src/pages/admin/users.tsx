@@ -25,6 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLocation } from "wouter";
@@ -635,27 +636,29 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
 
   return (
     <AdminLayout>
-      <div className="space-y-4 md:space-y-6">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground" data-testid="heading-users">
-              Users
-            </h1>
-            <p className="text-sm md:text-base text-muted-foreground mt-1">Manage platform users</p>
-          </div>
+  <div className="space-y-4 md:space-y-6 p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
+    <div className="flex flex-col gap-2 sm:gap-4">
+      <div>
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground" data-testid="heading-users">
+          Users
+        </h1>
+        <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-1">Manage platform users</p>
+      </div>
+    </div>
+
+    {/* Date Filters */}
+    <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
+          <span className="text-xs sm:text-sm font-medium text-foreground">Date Range:</span>
         </div>
-
-        {/* Date Filters */}
-        <div className="flex  justify-between">
-
-        
-        <div className="flex flex-wrap gap-2 items-center">
-          <Calendar className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground mr-2">Date Range:</span>
+        <div className="flex flex-wrap gap-1 sm:gap-2">
           <Button
             variant={dateFilter === "all" ? "default" : "outline"}
             size="sm"
             onClick={() => setDateFilter("all")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
             data-testid="button-filter-all"
           >
             All Time
@@ -664,799 +667,937 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
             variant={dateFilter === "24h" ? "default" : "outline"}
             size="sm"
             onClick={() => setDateFilter("24h")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
             data-testid="button-filter-24h"
           >
-            Last 24 Hours
+            24H
           </Button>
           <Button
             variant={dateFilter === "7d" ? "default" : "outline"}
             size="sm"
             onClick={() => setDateFilter("7d")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
             data-testid="button-filter-7d"
           >
-            Last 7 Days
+            7D
           </Button>
           <Button
             variant={dateFilter === "30d" ? "default" : "outline"}
             size="sm"
             onClick={() => setDateFilter("30d")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
             data-testid="button-filter-30d"
           >
-            Last 30 Days
+            30D
           </Button>
           <Button
             variant={dateFilter === "custom" ? "default" : "outline"}
             size="sm"
             onClick={() => setDateFilter("custom")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
             data-testid="button-filter-custom"
           >
-            Custom Range
+            Custom
           </Button>
         </div>
-        <div>
-          {/* <button 
+      </div>
+      {/* <div>
+        <button 
           onClick={handleResetAll}
-          className="bg-yellow-400 text-black px-3 py-1 rounded-sm">
-            Reset All
-            </button> */}
-        </div>
-</div>
-        {/* Custom Date Range Inputs */}
-        {dateFilter === "custom" && (
-          <div className="flex gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-foreground">From:</label>
-              <Input
-                type="date"
-                value={customDateFrom}
-                onChange={(e) => setCustomDateFrom(e.target.value)}
-                className="w-auto"
-                data-testid="input-date-from"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-foreground">To:</label>
-              <Input
-                type="date"
-                value={customDateTo}
-                onChange={(e) => setCustomDateTo(e.target.value)}
-                className="w-auto"
-                data-testid="input-date-to"
-              />
-            </div>
-          </div>
-        )}
+          className="bg-yellow-400 text-black px-2 py-1 sm:px-3 sm:py-1 rounded-sm text-xs sm:text-sm">
+          Reset All
+        </button>
+      </div> */}
+    </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
+    {/* Custom Date Range Inputs */}
+    {dateFilter === "custom" && (
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-start sm:items-center bg-card border border-border rounded-lg p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+          <label className="text-xs sm:text-sm font-medium text-foreground">From:</label>
           <Input
-            placeholder="Search users by email or name..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="pl-10"
-            data-testid="input-search-users"
+            type="date"
+            value={customDateFrom}
+            onChange={(e) => setCustomDateFrom(e.target.value)}
+            className="w-full sm:w-auto text-sm"
+            data-testid="input-date-from"
           />
         </div>
-
-  {/* <div className="flex items-center gap-3">
-  <Label className="text-sm font-medium text-gray-400">Role Filter:</Label>
-  
-  <div className="flex items-center bg-black/30 border border-blue-500/30 rounded-lg p-1">
-    <button
-      onClick={() => setRoleFilter("all")}
-      className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-        roleFilter === "all"
-          ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20"
-          : "text-gray-400 hover:text-gray-300 hover:bg-white/5"
-      }`}
-    >
-      All Users
-    </button>
-    
-    <button
-      onClick={() => setRoleFilter("admin")}
-      className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-        roleFilter === "admin"
-          ? "bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-lg shadow-purple-500/20"
-          : "text-gray-400 hover:text-gray-300 hover:bg-white/5"
-      }`}
-    >
-      <div className="flex items-center gap-2">
-        <Shield className="h-4 w-4" />
-        Admins
-      </div>
-    </button>
-    
-    <button
-      onClick={() => setRoleFilter("user")}
-      className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-        roleFilter === "user"
-          ? "bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-          : "text-gray-400 hover:text-gray-300 hover:bg-white/5"
-      }`}
-    >
-      <div className="flex items-center gap-2">
-        <Users className="h-4 w-4" />
-        Users
-      </div>
-    </button>
-  </div>
-  
-</div> */}
-         {/* Sort info */}
-        {/* {sortField && sortOrder && (
-          <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded-md">
-            Sorted by <span className="font-medium">{sortField}</span> in 
-            <span className="font-medium"> {sortOrder === "asc" ? "ascending" : "descending"}</span> order
-          </div>
-        )} */}
-
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  <th 
-                  className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
-                  onClick={() => handleSort("email")}
-                >
-                  <div className="flex items-center">
-                    Email
-                    {getSortIcon("email")}
-                  </div>
-                </th>
-                <th 
-                  className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
-                  onClick={() => handleSort("firstName")}
-                >
-                  <div className="flex items-center">
-                    Name
-                    {getSortIcon("firstName")}
-                  </div>
-                </th>
-                <th 
-                  className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
-                  onClick={() => handleSort("phoneNumber")}
-                >
-                  <div className="flex items-center">
-                    Phone
-                    {getSortIcon("phoneNumber")}
-                  </div>
-                </th>
-                  <th 
-                  className="text-left py-3 px-4 text-sm font-medium text-muted-foreground flex cursor-pointer hover:bg-muted transition-colors"
-                    onClick={() => handleSortCashflow("cashflowBalance")}>
-                      <div>
-                       Cashflow Balance 
-                      </div>
-                      <div>
-                      {getSortIconCashflow("cashflowBalance")}
-                      </div>
-                   
-                  
-                    
-                  </th>
-                  <th 
-                    className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
-                    onClick={() => handleSort("balance")}
-                  >
-                    <div className="flex items-center">
-                      Balance
-                      {getSortIcon("balance")}
-                    </div>
-                  </th>
-                  <th 
-                    className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
-                    onClick={() => handleSort("ringtonePoints")}
-                  >
-                    <div className="flex items-center">
-                      Points
-                      {getSortIcon("ringtonePoints")}
-                    </div>
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                    Role
-                  </th>
-                  <th 
-                    className="text-left py-3 px-4 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
-                    onClick={() => handleSort("createdAt")}
-                  >
-                    <div className="flex items-center">
-                      Joined
-                      {getSortIcon("createdAt")}
-                    </div>
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                    Actions
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-  Status
-</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedUsers?.map((user) => (
-                  <tr key={user.id} className="border-b border-border hover:bg-muted/50">
-                    <td className="py-3 px-4 text-sm text-foreground">{user.email}</td>
-                    <td className="py-3 px-4 text-sm text-foreground">
-                      {user.firstName} {user.lastName || ""}
-                    </td>
-                     <td className="py-3 px-4 text-sm text-foreground">
-                      {user.phoneNumber} 
-                    </td>
-                     <td className="py-3 px-4 text-sm text-foreground">
-                      £{getCashflowTotal(user.id)}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-primary font-medium">
-                      £{parseFloat(user.balance).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-foreground">
-                      {user.ringtonePoints}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          user.isAdmin
-                            ? "bg-primary/20 text-primary"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {user.isAdmin ? "Admin" : "User"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">
-                      {new Date(user.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="py-3 px-4">
-                      {/* In the table row actions section */}
-<td className="py-3 px-4">
-  <div className="flex gap-2">
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => user?.id && setLocation(`/admin/users/${user.id}`)}
-      className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950"
-      data-testid={`button-audit-user-${user.id}`}
-    >
-      <FileText className="w-4 h-4" />
-    </Button>
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => handleEdit(user)}
-      data-testid={`button-edit-user-${user.id}`}
-    >
-      <Edit className="w-4 h-4" />
-    </Button>
-    
-    {/* Add Disable Button */}
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => {
-        setUserToDisable(user);
-        setIsDisableDialogOpen(true);
-      }}
-      className={`${
-        user.disabled 
-          ? "text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-950"
-          : "text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-950"
-      }`}
-      data-testid={`button-disable-user-${user.id}`}
-      title="Disable User"
-    >
-      {user.disabled ? (
-        <CheckCircle className="w-4 h-4" />
-      ) : (
-        <XCircle className="w-4 h-4" />
-      )}
-    </Button>
-    <Button
-  variant="outline"
-  size="sm"
-  onClick={() => {
-    setUserForDailyLimitReset(user);
-    setDailyLimitDialogOpen(true);
-  }}
-  className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950"
-  data-testid={`button-reset-daily-limit-${user.id}`}
-  title="Reset Daily Limit"
->
-
-  <AlertTriangleIcon className="w-4 h-4" />
-</Button>
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => handleDeleteUser(user)}
-      className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
-      data-testid={`button-delete-user-${user.id}`}
-    >
-      <Trash2 className="w-4 h-4" />
-    </Button>
-  </div>
-</td>
-                    </td>
-                    <td className="py-3 px-4">
-  <span
-    className={`px-2 py-1 rounded-full text-xs font-medium ${
-      user.disabled
-        ? "bg-red-500/20 text-red-500"
-        : "bg-green-500/20 text-green-500"
-    }`}
-  >
-    {user.disabled ? "Disabled" : "Active"}
-  </span>
-</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+          <label className="text-xs sm:text-sm font-medium text-foreground">To:</label>
+          <Input
+            type="date"
+            value={customDateTo}
+            onChange={(e) => setCustomDateTo(e.target.value)}
+            className="w-full sm:w-auto text-sm"
+            data-testid="input-date-to"
+          />
         </div>
-         {/* PAGINATION */}
-                <div className="flex justify-center items-center gap-4 my-6">
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrentPage((p) => p - 1)}
-                    disabled={currentPage === 1}
-                  >
-                    <ArrowBigLeft />
-                  </Button>
-        
-                  <span className="font-medium">
-                    Page {currentPage} of {totalPages}
-                  </span>
-        
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrentPage((p) => p + 1)}
-                    disabled={currentPage === totalPages}
-                  >
-                      <ArrowBigRight />
-                  </Button>
-                </div>
-        
-                {/* ENTRY COUNT */}
-              <p className="text-center text-sm text-muted-foreground">
-                Showing {paginatedUsers?.length || 0} of {allUsers?.length || 0} filtered entries
-              </p>
-        {/* Edit User Dialog */}
-        <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit User</DialogTitle>
-              <DialogDescription>
-                Update user details, credentials, and permissions
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={editForm.email}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, email: e.target.value })
-                  }
-                  data-testid="input-edit-email"
-                />
-              </div>
-              <div>
-                  <Label>Phone Number</Label>
-                  <Input
-                    value={editForm.phoneNumber}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, phoneNumber: e.target.value })
-                    }
-                  />
-                </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>First Name</Label>
-                  <Input
-                    value={editForm.firstName}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, firstName: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Last Name</Label>
-                  <Input
-                    value={editForm.lastName}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, lastName: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Balance (£)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={editForm.balance}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, balance: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Ringtone Points</Label>
-                  <Input
-                    type="number"
-                    value={editForm.ringtonePoints}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, ringtonePoints: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-              <div>
+      </div>
+    )}
 
-              <Label>Notes</Label>
-              <Textarea
-              value={editForm.notes || ""}
-              onChange={(e) =>
-                      setEditForm({ ...editForm, notes: e.target.value })
-                    }
-              placeholder="Add notes about this user..."
-              className="border p-2 rounded w-full"
-            />
-              </div>
-              {/* Address Information */}
-              {(editingUser?.addressStreet || editingUser?.addressCity || editingUser?.addressPostcode) && (
-                <div className="space-y-3 border-t pt-4">
-                  <Label className="text-base font-semibold">Delivery Address</Label>
-                  <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-                    {editingUser?.addressStreet && (
-                      <p className="text-sm"><span className="font-medium">Street:</span> {editingUser.addressStreet}</p>
-                    )}
-                    {editingUser?.addressCity && (
-                      <p className="text-sm"><span className="font-medium">City:</span> {editingUser.addressCity}</p>
-                    )}
-                    {editingUser?.addressPostcode && (
-                      <p className="text-sm"><span className="font-medium">Postcode:</span> {editingUser.addressPostcode}</p>
-                    )}
-                    {editingUser?.addressCountry && (
-                      <p className="text-sm"><span className="font-medium">Country:</span> {editingUser.addressCountry}</p>
-                    )}
+    <div className="relative">
+      <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 sm:w-5 sm:h-5" />
+      <Input
+        placeholder="Search users by email or name..."
+        value={searchInput}
+        onChange={(e) => setSearchInput(e.target.value)}
+        className="pl-8 sm:pl-10 text-sm sm:text-base"
+        data-testid="input-search-users"
+      />
+    </div>
+
+    {/* Mobile Cards View */}
+    <div className="block md:hidden space-y-3">
+      {paginatedUsers?.map((user) => (
+        <Card key={user.id} className="p-4">
+          <div className="space-y-4">
+            {/* User Info */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-sm font-medium text-foreground">{user.email}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {user.firstName} {user.lastName || ""}
                   </div>
                 </div>
-              )}
-              
-              <div className="space-y-3 border-t pt-4">
-                <Label className="text-base font-semibold">Role & Permissions</Label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="isAdmin"
-                    checked={editForm.isAdmin}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, isAdmin: e.target.checked })
-                    }
-                    disabled={editingUser?.id === currentUser?.id}
-                    className="w-4 h-4"
-                    data-testid="checkbox-is-admin"
-                  />
-                  <Label htmlFor="isAdmin">Admin User</Label>
-                  {editingUser?.id === currentUser?.id && (
-                    <span className="text-xs text-muted-foreground">(Cannot change own role)</span>
-                  )}
-                </div>
-              
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    user.isAdmin
+                      ? "bg-primary/20 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {user.isAdmin ? "Admin" : "User"}
+                </span>
               </div>
-              {/* In the edit dialog, add this section */}
-              <div className="space-y-3 border-t pt-4">
-                <Label className="text-base font-semibold">Account Status</Label>
-                <div className="flex items-center gap-2">
-                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    editingUser?.disabled
+              
+              <div className="flex items-center gap-2">
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    user.disabled
                       ? "bg-red-500/20 text-red-500"
                       : "bg-green-500/20 text-green-500"
-                  }`}>
-                    {editingUser?.disabled ? "Disabled" : "Active"}
-                  </div>
-                  {editingUser?.disabledAt && (
-                    <p className="text-sm text-muted-foreground">
-                      Disabled on: {new Date(editingUser.disabledAt).toLocaleDateString()}
-                    </p>
-                  )}
-                   {editingUser?.disabledUntil && (
-                    <p className="text-sm text-muted-foreground">
-                      Disabled until:{" "}
-                      {new Date(editingUser.disabledUntil).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
+                  }`}
+                >
+                  {user.disabled ? "Disabled" : "Active"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {new Date(user.createdAt).toLocaleDateString()}
+                </span>
               </div>
-              <div className="space-y-3 border-t pt-4">
-                <Label className="text-base font-semibold">Password Reset</Label>
-                <p className="text-sm text-muted-foreground">
-                  Set a new password for this user (minimum 6 characters)
-                </p>
-                {!passwordResetConfirm ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => setPasswordResetConfirm(true)}
-                    className="w-full"
-                    data-testid="button-reset-password"
-                  >
-                    Reset Password
-                  </Button>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Phone</div>
+                <div className="font-medium">{user.phoneNumber || "-"}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Cashflow</div>
+                <div className="font-medium">£{getCashflowTotal(user.id)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Balance</div>
+                <div className="font-medium text-primary">£{parseFloat(user.balance).toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Points</div>
+                <div className="font-medium">{user.ringtonePoints}</div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => user?.id && setLocation(`/admin/users/${user.id}`)}
+                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 text-xs px-2"
+              >
+                <FileText className="w-3 h-3 mr-1" />
+                Audit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleEdit(user)}
+                className="text-xs px-2"
+              >
+                <Edit className="w-3 h-3 mr-1" />
+                Edit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setUserToDisable(user);
+                  setIsDisableDialogOpen(true);
+                }}
+                className={`text-xs px-2 ${
+                  user.disabled 
+                    ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                    : "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+                }`}
+              >
+                {user.disabled ? (
+                  <>
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Enable
+                  </>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-amber-500 bg-amber-500/10 p-3 rounded-lg">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span className="text-sm font-medium">This will immediately change the user's password</span>
-                    </div>
-                    <Input
-                      type="password"
-                      placeholder="New password (min 6 characters)"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      data-testid="input-new-password"
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setPasswordResetConfirm(false);
-                          setNewPassword("");
-                        }}
-                        className="flex-1"
-                        data-testid="button-cancel-password"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handlePasswordReset}
-                        disabled={resetPasswordMutation.isPending || newPassword.length < 6}
-                        className="flex-1 bg-red-500 hover:bg-red-600"
-                        data-testid="button-confirm-password"
-                      >
-                        {resetPasswordMutation.isPending ? "Resetting..." : "Confirm Reset"}
-                      </Button>
-                    </div>
+                  <>
+                    <XCircle className="w-3 h-3 mr-1" />
+                    Disable
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setUserForDailyLimitReset(user);
+                  setDailyLimitDialogOpen(true);
+                }}
+                className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 text-xs px-2"
+              >
+                <AlertTriangleIcon className="w-3 h-3 mr-1" />
+                Limit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDeleteUser(user)}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs px-2"
+              >
+                <Trash2 className="w-3 h-3 mr-1" />
+                Delete
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ))}
+      
+      {paginatedUsers?.length === 0 && (
+        <Card className="p-8 text-center">
+          <div className="flex flex-col items-center justify-center">
+            <div className="text-base sm:text-lg font-medium">No users found</div>
+            <div className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Try adjusting your search or filters
+            </div>
+          </div>
+        </Card>
+      )}
+    </div>
+
+    {/* Desktop Table View */}
+    <div className="hidden md:block bg-card border border-border rounded-lg overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px]">
+          <thead>
+            <tr className="border-b border-border bg-muted/50">
+              <th 
+                className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                onClick={() => handleSort("email")}
+              >
+                <div className="flex items-center">
+                  Email
+                  {getSortIcon("email")}
+                </div>
+              </th>
+              <th 
+                className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                onClick={() => handleSort("firstName")}
+              >
+                <div className="flex items-center">
+                  Name
+                  {getSortIcon("firstName")}
+                </div>
+              </th>
+              <th 
+                className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                onClick={() => handleSort("phoneNumber")}
+              >
+                <div className="flex items-center">
+                  Phone
+                  {getSortIcon("phoneNumber")}
+                </div>
+              </th>
+              <th 
+                className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground flex cursor-pointer hover:bg-muted transition-colors"
+                onClick={() => handleSortCashflow("cashflowBalance")}
+              >
+                <div>
+                  Cashflow
+                </div>
+                <div>
+                  {getSortIconCashflow("cashflowBalance")}
+                </div>
+              </th>
+              <th 
+                className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                onClick={() => handleSort("balance")}
+              >
+                <div className="flex items-center">
+                  Balance
+                  {getSortIcon("balance")}
+                </div>
+              </th>
+              <th 
+                className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                onClick={() => handleSort("ringtonePoints")}
+              >
+                <div className="flex items-center">
+                  Points
+                  {getSortIcon("ringtonePoints")}
+                </div>
+              </th>
+              <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                Role
+              </th>
+              <th 
+                className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
+                onClick={() => handleSort("createdAt")}
+              >
+                <div className="flex items-center">
+                  Joined
+                  {getSortIcon("createdAt")}
+                </div>
+              </th>
+              <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                Status
+              </th>
+              <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {paginatedUsers?.map((user) => (
+              <tr key={user.id} className="border-b border-border hover:bg-muted/50">
+                <td className="py-3 px-4 text-sm text-foreground">{user.email}</td>
+                <td className="py-3 px-4 text-sm text-foreground">
+                  {user.firstName} {user.lastName || ""}
+                </td>
+                <td className="py-3 px-4 text-sm text-foreground">
+                  {user.phoneNumber || "-"} 
+                </td>
+                <td className="py-3 px-4 text-sm text-foreground">
+                  £{getCashflowTotal(user.id)}
+                </td>
+                <td className="py-3 px-4 text-sm text-primary font-medium">
+                  £{parseFloat(user.balance).toFixed(2)}
+                </td>
+                <td className="py-3 px-4 text-sm text-foreground">
+                  {user.ringtonePoints}
+                </td>
+                <td className="py-3 px-4">
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      user.isAdmin
+                        ? "bg-primary/20 text-primary"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {user.isAdmin ? "Admin" : "User"}
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-sm text-muted-foreground">
+                  {new Date(user.createdAt).toLocaleDateString()}
+                </td>
+                <td className="py-3 px-4">
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      user.disabled
+                        ? "bg-red-500/20 text-red-500"
+                        : "bg-green-500/20 text-green-500"
+                    }`}
+                  >
+                    {user.disabled ? "Disabled" : "Active"}
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => user?.id && setLocation(`/admin/users/${user.id}`)}
+                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-8 w-8 p-0"
+                      title="Audit"
+                    >
+                      <FileText className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(user)}
+                      className="h-8 w-8 p-0"
+                      title="Edit"
+                    >
+                      <Edit className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setUserToDisable(user);
+                        setIsDisableDialogOpen(true);
+                      }}
+                      className={`h-8 w-8 p-0 ${
+                        user.disabled 
+                          ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                          : "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+                      }`}
+                      title={user.disabled ? "Enable User" : "Disable User"}
+                    >
+                      {user.disabled ? (
+                        <CheckCircle className="w-3 h-3" />
+                      ) : (
+                        <XCircle className="w-3 h-3" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setUserForDailyLimitReset(user);
+                        setDailyLimitDialogOpen(true);
+                      }}
+                      className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 h-8 w-8 p-0"
+                      title="Reset Daily Limit"
+                    >
+                      <AlertTriangleIcon className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteUser(user)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
                   </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {/* PAGINATION */}
+    {paginatedUsers?.length > 0 && (
+      <>
+        <div className="flex flex-row justify-center items-center gap-3 sm:gap-4 my-4 sm:my-6">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => p - 1)}
+            disabled={currentPage === 1}
+            className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4 text-xs sm:text-sm"
+          >
+            <ArrowBigLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline ml-1">Previous</span>
+          </Button>
+
+          <div className="flex items-center gap-1 sm:gap-2">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+              
+              if (pageNum > totalPages) return null;
+              
+              return (
+                <Button
+                  key={pageNum}
+                  variant={currentPage === pageNum ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentPage(pageNum)}
+                  className="w-8 h-8 sm:w-10 sm:h-10 text-xs"
+                >
+                  {pageNum}
+                </Button>
+              );
+            })}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => p + 1)}
+            disabled={currentPage === totalPages}
+            className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4 text-xs sm:text-sm"
+          >
+            <span className="hidden sm:inline mr-1">Next</span>
+            <ArrowBigRight className="w-3 h-3 sm:w-4 sm:h-4" />
+          </Button>
+        </div>
+
+        <p className="text-center text-xs sm:text-sm text-muted-foreground">
+          Showing {paginatedUsers?.length || 0} of {allUsers?.length || 0} filtered entries
+        </p>
+      </>
+    )}
+
+    {/* Edit User Dialog */}
+    <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto max-w-full sm:max-w-2xl p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="text-lg sm:text-xl">Edit User</DialogTitle>
+          <DialogDescription className="text-sm">
+            Update user details, credentials, and permissions
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label className="text-sm sm:text-base">Email</Label>
+            <Input
+              type="email"
+              value={editForm.email}
+              onChange={(e) =>
+                setEditForm({ ...editForm, email: e.target.value })
+              }
+              className="text-sm sm:text-base"
+              data-testid="input-edit-email"
+            />
+          </div>
+          <div>
+            <Label className="text-sm sm:text-base">Phone Number</Label>
+            <Input
+              value={editForm.phoneNumber}
+              onChange={(e) =>
+                setEditForm({ ...editForm, phoneNumber: e.target.value })
+              }
+              className="text-sm sm:text-base"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>
+              <Label className="text-sm sm:text-base">First Name</Label>
+              <Input
+                value={editForm.firstName}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, firstName: e.target.value })
+                }
+                className="text-sm sm:text-base"
+              />
+            </div>
+            <div>
+              <Label className="text-sm sm:text-base">Last Name</Label>
+              <Input
+                value={editForm.lastName}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, lastName: e.target.value })
+                }
+                className="text-sm sm:text-base"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>
+              <Label className="text-sm sm:text-base">Balance (£)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={editForm.balance}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, balance: e.target.value })
+                }
+                className="text-sm sm:text-base"
+              />
+            </div>
+            <div>
+              <Label className="text-sm sm:text-base">Ringtone Points</Label>
+              <Input
+                type="number"
+                value={editForm.ringtonePoints}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, ringtonePoints: e.target.value })
+                }
+                className="text-sm sm:text-base"
+              />
+            </div>
+          </div>
+          <div>
+            <Label className="text-sm sm:text-base">Notes</Label>
+            <Textarea
+              value={editForm.notes || ""}
+              onChange={(e) =>
+                setEditForm({ ...editForm, notes: e.target.value })
+              }
+              placeholder="Add notes about this user..."
+              className="text-sm sm:text-base min-h-[80px]"
+            />
+          </div>
+          {/* Address Information */}
+          {(editingUser?.addressStreet || editingUser?.addressCity || editingUser?.addressPostcode) && (
+            <div className="space-y-3 border-t pt-4">
+              <Label className="text-base font-semibold">Delivery Address</Label>
+              <div className="bg-muted/50 p-3 sm:p-4 rounded-lg space-y-2 text-sm">
+                {editingUser?.addressStreet && (
+                  <p><span className="font-medium">Street:</span> {editingUser.addressStreet}</p>
+                )}
+                {editingUser?.addressCity && (
+                  <p><span className="font-medium">City:</span> {editingUser.addressCity}</p>
+                )}
+                {editingUser?.addressPostcode && (
+                  <p><span className="font-medium">Postcode:</span> {editingUser.addressPostcode}</p>
+                )}
+                {editingUser?.addressCountry && (
+                  <p><span className="font-medium">Country:</span> {editingUser.addressCountry}</p>
                 )}
               </div>
             </div>
-            <DialogFooter>
+          )}
+          
+          <div className="space-y-3 border-t pt-4">
+            <Label className="text-base font-semibold">Role & Permissions</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isAdmin"
+                checked={editForm.isAdmin}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, isAdmin: e.target.checked })
+                }
+                disabled={editingUser?.id === currentUser?.id}
+                className="w-4 h-4"
+                data-testid="checkbox-is-admin"
+              />
+              <Label htmlFor="isAdmin" className="text-sm sm:text-base">Admin User</Label>
+              {editingUser?.id === currentUser?.id && (
+                <span className="text-xs text-muted-foreground">(Cannot change own role)</span>
+              )}
+            </div>
+          </div>
+          
+          <div className="space-y-3 border-t pt-4">
+            <Label className="text-base font-semibold">Account Status</Label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                editingUser?.disabled
+                  ? "bg-red-500/20 text-red-500"
+                  : "bg-green-500/20 text-green-500"
+              }`}>
+                {editingUser?.disabled ? "Disabled" : "Active"}
+              </div>
+              {editingUser?.disabledAt && (
+                <p className="text-sm text-muted-foreground">
+                  Disabled on: {new Date(editingUser.disabledAt).toLocaleDateString()}
+                </p>
+              )}
+              {editingUser?.disabledUntil && (
+                <p className="text-sm text-muted-foreground">
+                  Disabled until: {new Date(editingUser.disabledUntil).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          </div>
+          
+          <div className="space-y-3 border-t pt-4">
+            <Label className="text-base font-semibold">Password Reset</Label>
+            <p className="text-sm text-muted-foreground">
+              Set a new password for this user (minimum 6 characters)
+            </p>
+            {!passwordResetConfirm ? (
               <Button
                 variant="outline"
-                onClick={() => setEditingUser(null)}
-                disabled={updateMutation.isPending}
+                onClick={() => setPasswordResetConfirm(true)}
+                className="w-full text-sm sm:text-base"
+                data-testid="button-reset-password"
               >
-                Cancel
+                Reset Password
               </Button>
-              <Button onClick={handleUpdate} disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? "Saving..." : "Save Changes"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-
-{/* Disable User Dialog */}
-<Dialog open={isDisableDialogOpen} onOpenChange={setIsDisableDialogOpen}>
-  <DialogContent className="max-w-md">
-    <DialogHeader>
-      <DialogTitle>
-        {userToDisable?.disabled ? "Enable User" : "Disable User"}
-      </DialogTitle>
-      <DialogDescription>
-        {userToDisable?.disabled 
-          ? "This will enable the user account and restore access."
-          : "Temporarily disable this user account."
-        }
-      </DialogDescription>
-    </DialogHeader>
-    
-    {!userToDisable?.disabled && (
-      <div className="space-y-4">
-        <div>
-          <Label htmlFor="disableDays">Duration (days)</Label>
-          <Input
-            id="disableDays"
-            type="number"
-            min="0"
-            placeholder="Enter days (0 for indefinite)"
-            value={disableDays}
-            onChange={(e) => setDisableDays(e.target.value)}
-            className="mt-1"
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Enter 0 to disable indefinitely
-          </p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-amber-500 bg-amber-500/10 p-3 rounded-lg">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="text-sm font-medium">This will immediately change the user's password</span>
+                </div>
+                <Input
+                  type="password"
+                  placeholder="New password (min 6 characters)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="text-sm sm:text-base"
+                  data-testid="input-new-password"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setPasswordResetConfirm(false);
+                      setNewPassword("");
+                    }}
+                    className="flex-1 text-sm sm:text-base"
+                    data-testid="button-cancel-password"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handlePasswordReset}
+                    disabled={resetPasswordMutation.isPending || newPassword.length < 6}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-sm sm:text-base"
+                    data-testid="button-confirm-password"
+                  >
+                    {resetPasswordMutation.isPending ? "Resetting..." : "Confirm Reset"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+        <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
+          <Button
+            variant="outline"
+            onClick={() => setEditingUser(null)}
+            disabled={updateMutation.isPending}
+            className="w-full sm:w-auto text-sm sm:text-base"
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleUpdate} 
+            disabled={updateMutation.isPending}
+            className="w-full sm:w-auto text-sm sm:text-base"
+          >
+            {updateMutation.isPending ? "Saving..." : "Save Changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Disable User Dialog */}
+    <Dialog open={isDisableDialogOpen} onOpenChange={setIsDisableDialogOpen}>
+      <DialogContent className="max-w-full sm:max-w-md p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="text-lg sm:text-xl">
+            {userToDisable?.disabled ? "Enable User" : "Disable User"}
+          </DialogTitle>
+          <DialogDescription className="text-sm">
+            {userToDisable?.disabled 
+              ? "This will enable the user account and restore access."
+              : "Temporarily disable this user account."
+            }
+          </DialogDescription>
+        </DialogHeader>
         
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
-            <div className="text-sm">
-              <p className="font-medium text-amber-500">User will not be able to:</p>
-              <ul className="list-disc list-inside mt-1 text-amber-500/80">
-                <li>Log into their account</li>
-                <li>Make purchases</li>
-                <li>Enter competitions</li>
-              </ul>
+        {!userToDisable?.disabled && (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="disableDays" className="text-sm sm:text-base">Duration (days)</Label>
+              <Input
+                id="disableDays"
+                type="number"
+                min="0"
+                placeholder="Enter days (0 for indefinite)"
+                value={disableDays}
+                onChange={(e) => setDisableDays(e.target.value)}
+                className="mt-1 text-sm sm:text-base"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Enter 0 to disable indefinitely
+              </p>
+            </div>
+            
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-500">User will not be able to:</p>
+                  <ul className="list-disc list-inside mt-1 text-amber-500/80">
+                    <li>Log into their account</li>
+                    <li>Make purchases</li>
+                    <li>Enter competitions</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {userToDisable?.disabled && (
+          <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-green-500">User will be able to:</p>
+                <ul className="list-disc list-inside mt-1 text-green-500/80">
+                  <li>Access their account normally</li>
+                  <li>Make purchases and entries</li>
+                  <li>Use all platform features</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setIsDisableDialogOpen(false);
+              setUserToDisable(null);
+            }}
+            className="w-full sm:w-auto text-sm sm:text-base"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant={userToDisable?.disabled ? "default" : "destructive"}
+            onClick={() => {
+              if (userToDisable) {
+                if (userToDisable.disabled) {
+                  enableUserMutation.mutate(userToDisable.id);
+                } else {
+                  const days = parseInt(disableDays);
+                  if (isNaN(days) || days < 0) {
+                    toast({
+                      title: "Invalid duration",
+                      description: "Please enter a valid number of days",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  disableUserMutation.mutate({ 
+                    userId: userToDisable.id, 
+                    days 
+                  });
+                }
+              }
+            }}
+            disabled={disableUserMutation.isPending || enableUserMutation.isPending}
+            className="w-full sm:w-auto text-sm sm:text-base"
+          >
+            {disableUserMutation.isPending || enableUserMutation.isPending
+              ? "Processing..." 
+              : userToDisable?.disabled 
+                ? "Enable User" 
+                : "Disable User"
+            }
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Delete Confirmation Dialog */}
+    <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialogContent className="max-w-full sm:max-w-md p-4 sm:p-6">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-lg sm:text-xl">Delete User</AlertDialogTitle>
+          <AlertDialogDescription className="text-sm">
+            Are you sure you want to delete <strong>{userToDelete?.email}</strong>? 
+            This action cannot be undone and will remove all user data.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
+          <AlertDialogCancel className="w-full sm:w-auto text-sm sm:text-base" data-testid="button-cancel-delete">
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={confirmDelete}
+            className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto text-sm sm:text-base"
+            disabled={deleteMutation.isPending}
+            data-testid="button-confirm-delete"
+          >
+            {deleteMutation.isPending ? "Deleting..." : "Delete"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Daily Limit Reset Dialog */}
+    <Dialog open={dailyLimitDialogOpen} onOpenChange={setDailyLimitDialogOpen}>
+      <DialogContent className="max-w-full sm:max-w-md p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="text-lg sm:text-xl">Reset Daily Spending Limit</DialogTitle>
+          <DialogDescription className="text-sm">
+            This will reset the user's daily spending limit to "No Limit"
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="bg-muted/50 p-4 rounded-lg">
+            <div className="space-y-2">
+              <p className="font-medium">User Details:</p>
+              <p className="text-sm">
+                <span className="font-medium">Name:</span> {userForDailyLimitReset?.firstName} {userForDailyLimitReset?.lastName}
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">Email:</span> {userForDailyLimitReset?.email}
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">Current Daily Limit:</span>{" "}
+                {userForDailyLimitReset?.dailySpendLimit ? (
+                  <span className="font-medium text-primary">
+                    £{parseFloat(userForDailyLimitReset.dailySpendLimit).toFixed(2)}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground italic">Not set</span>
+                )}
+              </p>
+              {userForDailyLimitReset?.dailyLimitLastUpdatedAt && (
+                <p className="text-sm">
+                  <span className="font-medium">Last Updated:</span>{" "}
+                  {new Date(userForDailyLimitReset.dailyLimitLastUpdatedAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+          </div>
+          
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-amber-500">What happens after reset:</p>
+                <ul className="list-disc list-inside mt-1 text-amber-500/80">
+                  <li>Daily spending limit will be removed</li>
+                  <li>User can set a new limit immediately</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    )}
-    
-    {userToDisable?.disabled && (
-      <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-        <div className="flex items-start gap-2">
-          <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-medium text-green-500">User will be able to:</p>
-            <ul className="list-disc list-inside mt-1 text-green-500/80">
-              <li>Access their account normally</li>
-              <li>Make purchases and entries</li>
-              <li>Use all platform features</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    )}
-    
-    <DialogFooter>
-      <Button
-        variant="outline"
-        onClick={() => {
-          setIsDisableDialogOpen(false);
-          setUserToDisable(null);
-        }}
-      >
-        Cancel
-      </Button>
-   <Button
-  variant={userToDisable?.disabled ? "default" : "destructive"}
-  onClick={() => {
-    if (userToDisable) {
-      if (userToDisable.disabled) {
-        // Enable user - FIXED: Call the enable mutation
-        enableUserMutation.mutate(userToDisable.id);
-      } else {
-        // Disable user
-        const days = parseInt(disableDays);
-        if (isNaN(days) || days < 0) {
-          toast({
-            title: "Invalid duration",
-            description: "Please enter a valid number of days",
-            variant: "destructive",
-          });
-          return;
-        }
-        disableUserMutation.mutate({ 
-          userId: userToDisable.id, 
-          days 
-        });
-      }
-    }
-  }}
-  disabled={disableUserMutation.isPending || enableUserMutation.isPending} // Added enableUserMutation.isPending
->
-  {disableUserMutation.isPending || enableUserMutation.isPending // Updated condition
-    ? "Processing..." 
-    : userToDisable?.disabled 
-      ? "Enable User" 
-      : "Disable User"
-  }
-</Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete User</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete <strong>{userToDelete?.email}</strong>? 
-                This action cannot be undone and will remove all user data.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={confirmDelete}
-                className="bg-red-600 hover:bg-red-700 text-white"
-                disabled={deleteMutation.isPending}
-                data-testid="button-confirm-delete"
-              >
-                {deleteMutation.isPending ? "Deleting..." : "Delete"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-  {/* Daily Limit Reset Dialog */}
-<Dialog open={dailyLimitDialogOpen} onOpenChange={setDailyLimitDialogOpen}>
-  <DialogContent className="max-w-md">
-    <DialogHeader>
-      <DialogTitle>Reset Daily Spending Limit</DialogTitle>
-      <DialogDescription>
-        This will reset the user's daily spending limit to "No Limit"
-      </DialogDescription>
-    </DialogHeader>
-    
-    <div className="space-y-4">
-      <div className="bg-muted/50 p-4 rounded-lg">
-        <div className="space-y-2">
-          <p className="font-medium">User Details:</p>
-          <p className="text-sm">
-            <span className="font-medium">Name:</span> {userForDailyLimitReset?.firstName} {userForDailyLimitReset?.lastName}
-          </p>
-          <p className="text-sm">
-            <span className="font-medium">Email:</span> {userForDailyLimitReset?.email}
-          </p>
-          <p className="text-sm">
-            <span className="font-medium">Current Daily Limit:</span>{" "}
-            {userForDailyLimitReset?.dailySpendLimit ? (
-              <span className="font-medium text-primary">
-                £{parseFloat(userForDailyLimitReset.dailySpendLimit).toFixed(2)}
-              </span>
-            ) : (
-              <span className="text-muted-foreground italic">Not set</span>
-            )}
-          </p>
-          {userForDailyLimitReset?.dailyLimitLastUpdatedAt && (
-            <p className="text-sm">
-              <span className="font-medium">Last Updated:</span>{" "}
-              {new Date(userForDailyLimitReset.dailyLimitLastUpdatedAt).toLocaleString()}
-            </p>
-          )}
-        </div>
-      </div>
-      
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
-        <div className="flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-medium text-amber-500">What happens after reset:</p>
-            <ul className="list-disc list-inside mt-1 text-amber-500/80">
-              <li>Daily spending limit will be removed</li>
-              <li>User can set a new limit immediately</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <DialogFooter>
-      <Button
-        variant="outline"
-        onClick={() => {
-          setDailyLimitDialogOpen(false);
-          setUserForDailyLimitReset(null);
-        }}
-        disabled={resetDailyLimitMutation.isPending}
-      >
-        Cancel
-      </Button>
-      <Button
-        variant="destructive"
-        onClick={() => {
-          if (userForDailyLimitReset) {
-            resetDailyLimitMutation.mutate(userForDailyLimitReset.id);
-            setDailyLimitDialogOpen(false);
-          }
-        }}
-        disabled={resetDailyLimitMutation.isPending}
-      >
-        {resetDailyLimitMutation.isPending ? "Resetting..." : "Reset Limit"}
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-
-      </div>
-    </AdminLayout>
+        
+        <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setDailyLimitDialogOpen(false);
+              setUserForDailyLimitReset(null);
+            }}
+            disabled={resetDailyLimitMutation.isPending}
+            className="w-full sm:w-auto text-sm sm:text-base"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              if (userForDailyLimitReset) {
+                resetDailyLimitMutation.mutate(userForDailyLimitReset.id);
+                setDailyLimitDialogOpen(false);
+              }
+            }}
+            disabled={resetDailyLimitMutation.isPending}
+            className="w-full sm:w-auto text-sm sm:text-base"
+          >
+            {resetDailyLimitMutation.isPending ? "Resetting..." : "Reset Limit"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </div>
+</AdminLayout>
   );
 }

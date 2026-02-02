@@ -32,6 +32,7 @@ import {
 import AdminLayout from "@/components/admin/admin-layout";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Card } from "@/components/ui/card";
 
 interface Entry {
   id: string;
@@ -244,121 +245,131 @@ const paginatedEntries = filteredEntries.slice(startIndex, startIndex + itemsPer
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <Ticket className="w-8 h-8 text-primary" />
+    <div className="space-y-4 md:space-y-6 p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
+      <div className="flex flex-col gap-2 sm:gap-4">
+        <div className="flex items-center gap-2">
+          <Ticket className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-primary" />
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">
             Competition Entries
           </h1>
-          <p className="text-muted-foreground mt-1">
-            View all competition entries and download data
-          </p>
+        </div>
+        <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
+          View all competition entries and download data
+        </p>
+      </div>
+  
+      {/* Date Filters */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
+          <span className="text-xs sm:text-sm font-medium text-foreground">Date Range:</span>
+        </div>
+        <div className="flex flex-wrap gap-1 sm:gap-2">
+          <Button
+            variant={dateFilter === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("all")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
+            data-testid="button-filter-all"
+          >
+            All
+          </Button>
+          <Button
+            variant={dateFilter === "1h" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("1h")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
+            data-testid="button-filter-1h"
+          >
+            1H
+          </Button>
+          <Button
+            variant={dateFilter === "24h" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("24h")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
+            data-testid="button-filter-24h"
+          >
+            24H
+          </Button>
+          <Button
+            variant={dateFilter === "7d" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("7d")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
+            data-testid="button-filter-7d"
+          >
+            7D
+          </Button>
+          <Button
+            variant={dateFilter === "30d" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("30d")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
+            data-testid="button-filter-30d"
+          >
+            30D
+          </Button>
+          <Button
+            variant={dateFilter === "custom" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateFilter("custom")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
+            data-testid="button-filter-custom"
+          >
+            Custom
+          </Button>
         </div>
       </div>
-
-      {/* Date Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <Calendar className="w-4 h-4 text-muted-foreground" />
-        <span className="text-sm font-medium text-foreground mr-2">Date Range:</span>
-        <Button
-          variant={dateFilter === "all" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setDateFilter("all")}
-          data-testid="button-filter-all"
-        >
-          All Time
-        </Button>
-        <Button
-          variant={dateFilter === "1h" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setDateFilter("1h")}
-          data-testid="button-filter-1h"
-        >
-          Last 1 Hour
-        </Button>
-        <Button
-          variant={dateFilter === "24h" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setDateFilter("24h")}
-          data-testid="button-filter-24h"
-        >
-          Last 24 Hours
-        </Button>
-        <Button
-          variant={dateFilter === "7d" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setDateFilter("7d")}
-          data-testid="button-filter-7d"
-        >
-          Last 7 Days
-        </Button>
-        <Button
-          variant={dateFilter === "30d" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setDateFilter("30d")}
-          data-testid="button-filter-30d"
-        >
-          Last 30 Days
-        </Button>
-        <Button
-          variant={dateFilter === "custom" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setDateFilter("custom")}
-          data-testid="button-filter-custom"
-        >
-          Custom Range
-        </Button>
-      </div>
-
+  
       {/* Custom Date Range Inputs */}
       {dateFilter === "custom" && (
-        <div className="flex gap-4 items-center">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-foreground">From:</label>
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-start sm:items-center bg-card border border-border rounded-lg p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs sm:text-sm font-medium text-foreground">From:</label>
             <Input
               type="date"
               value={customDateFrom}
               onChange={(e) => setCustomDateFrom(e.target.value)}
-              className="w-auto"
+              className="w-full sm:w-auto text-sm"
               data-testid="input-date-from"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-foreground">To:</label>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs sm:text-sm font-medium text-foreground">To:</label>
             <Input
               type="date"
               value={customDateTo}
               onChange={(e) => setCustomDateTo(e.target.value)}
-              className="w-auto"
+              className="w-full sm:w-auto text-sm"
               data-testid="input-date-to"
             />
           </div>
         </div>
       )}
-
+  
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
             placeholder="Search by ticket number, user name, or email..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="pl-10"
+            className="pl-8 sm:pl-10 text-sm sm:text-base"
             data-testid="input-search-entries"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <Select value={competitionFilter} onValueChange={setCompetitionFilter}>
-            <SelectTrigger className="w-[250px]" data-testid="select-competition-filter">
-              <Filter className="w-4 h-4 mr-2" />
+            <SelectTrigger className="w-full sm:w-[250px] text-sm sm:text-base" data-testid="select-competition-filter">
+              <Filter className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
               <SelectValue placeholder="Filter by competition" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Competitions</SelectItem>
+              <SelectItem value="all" className="text-sm">All Competitions</SelectItem>
               {competitions.map((comp) => (
-                <SelectItem key={comp.id} value={comp.id}>
+                <SelectItem key={comp.id} value={comp.id} className="text-xs w-80">
                   {comp.title}
                 </SelectItem>
               ))}
@@ -368,166 +379,279 @@ const paginatedEntries = filteredEntries.slice(startIndex, startIndex + itemsPer
             <Button
               onClick={() => handleDownloadCSV(competitionFilter)}
               variant="outline"
+              className="text-xs sm:text-sm py-2"
               data-testid="button-download-csv"
             >
-              <Download className="w-4 h-4 mr-2" />
-              Download CSV
+              <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              CSV
             </Button>
           )}
         </div>
       </div>
-
+  
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-sm text-muted-foreground">Total Entries</p>
-          <p className="text-2xl font-bold text-foreground" data-testid="text-total-entries">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="bg-card border border-border rounded-lg p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-muted-foreground">Total Entries</p>
+          <p className="text-lg sm:text-xl md:text-2xl font-bold text-foreground" data-testid="text-total-entries">
             {filteredEntries.length}
           </p>
         </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-sm text-muted-foreground">Winning Entries</p>
-          <p className="text-2xl font-bold text-green-600" data-testid="text-winning-entries">
+        <div className="bg-card border border-border rounded-lg p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-muted-foreground">Winning Entries</p>
+          <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-600" data-testid="text-winning-entries">
             {filteredEntries.filter((e) => e.isWinner).length}
           </p>
         </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-sm text-muted-foreground">Unique Users</p>
-          <p className="text-2xl font-bold text-foreground" data-testid="text-unique-users">
+        <div className="bg-card border border-border rounded-lg p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-muted-foreground">Unique Users</p>
+          <p className="text-lg sm:text-xl md:text-2xl font-bold text-foreground" data-testid="text-unique-users">
             {new Set(filteredEntries.filter(e => e.user).map((e) => e.user!.id)).size}
           </p>
         </div>
       </div>
-
-      {/* Entries Table */}
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Ticket Number</TableHead>
-              <TableHead>Competition</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>User</TableHead>
-              <TableHead>Email</TableHead>
-              {/* <TableHead>Winner</TableHead>
-              <TableHead>Prize</TableHead> */}
-              <TableHead>Entry Date</TableHead>
-              <TableHead className="text-center">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {paginatedEntries.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                  No entries found
-                </TableCell>
-              </TableRow>
-            ) : (
-              paginatedEntries.map((entry) => (
-                <TableRow key={entry.id} data-testid={`row-entry-${entry.id}`}>
-                  <TableCell className="font-mono font-bold text-primary">
-                    {entry.ticketNumber}
-                  </TableCell>
-                  <TableCell>{entry.competition?.title || 'N/A'}</TableCell>
-                  <TableCell>
-                    {entry.competition ? (
-                      <span className="capitalize px-2 py-1 text-xs rounded-full bg-primary/10 text-primary">
-                        {entry.competition.type === "instant" ? "Competition" : entry.competition.type}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {entry.user ? `${entry.user.firstName || ''} ${entry.user.lastName || ''}`.trim() || 'N/A' : 'N/A'}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {entry.user?.email || 'N/A'}
-                  </TableCell>
-                  {/* <TableCell>
-                    {entry.isWinner ? (
-                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 font-medium">
-                        ✓ Winner
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {entry.prizeAmount ? `£${entry.prizeAmount}` : "-"}
-                  </TableCell> */}
-                  <TableCell className="text-muted-foreground text-sm">
-                    {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : 'N/A'}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteEntry(entry.id)}
-                      className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
-                      data-testid={`button-delete-${entry.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+  
+      {/* Mobile Cards View */}
+      <div className="block md:hidden space-y-3">
+        {paginatedEntries.length === 0 ? (
+          <Card className="p-8 text-center">
+            <div className="flex flex-col items-center justify-center">
+              <div className="text-base sm:text-lg font-medium">No entries found</div>
+              <div className="text-xs sm:text-sm text-muted-foreground mt-1">
+                Try adjusting your search or filters
+              </div>
+            </div>
+          </Card>
+        ) : (
+          paginatedEntries.map((entry) => (
+            <Card key={entry.id} className="p-4">
+              <div className="space-y-4">
+                {/* Entry Header */}
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-mono font-bold text-primary text-sm">
+                      Ticket: {entry.ticketNumber}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {entry.competition?.title || 'N/A'}
+                    </div>
+                  </div>
+                  {entry.competition && (
+                    <span className="capitalize px-2 py-1 text-xs rounded-full bg-primary/10 text-primary">
+                      {entry.competition.type === "instant" ? "Comp" : entry.competition.type}
+                    </span>
+                  )}
+                </div>
+  
+                {/* User Info */}
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">User:</span>
+                    <span className="font-medium">
+                      {entry.user ? `${entry.user.firstName || ''} ${entry.user.lastName || ''}`.trim() || 'N/A' : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Email:</span>
+                    <span className="text-muted-foreground truncate max-w-[150px]">
+                      {entry.user?.email || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date:</span>
+                    <span className="text-xs text-muted-foreground">
+                      {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+  
+                {/* Action Button */}
+                <div className="pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteEntry(entry.id)}
+                    className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
+                    data-testid={`button-delete-${entry.id}`}
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" />
+                    Delete Entry
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
       </div>
-
-         {/* PAGINATION */}
-        <div className="flex justify-center items-center gap-4 my-6">
-          <Button
-            variant="outline"
-            onClick={() => setCurrentPage((p) => p - 1)}
-            disabled={currentPage === 1}
-          >
-            <ArrowBigLeft />
-          </Button>
-
-          <span className="font-medium">
-            Page {currentPage} of {totalPages}
-          </span>
-
-          <Button
-            variant="outline"
-            onClick={() => setCurrentPage((p) => p + 1)}
-            disabled={currentPage === totalPages}
-          >
-             <ArrowBigRight />
-          </Button>
+  
+      {/* Desktop Table View */}
+      <div className="hidden md:block bg-card border border-border rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[800px]">
+            <thead>
+              <tr className="border-b border-border bg-muted/50">
+                <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                  Ticket Number
+                </th>
+                <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                  Competition
+                </th>
+                <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                  Type
+                </th>
+                <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                  User
+                </th>
+                <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                  Email
+                </th>
+                <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                  Entry Date
+                </th>
+                <th className="text-center py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedEntries.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
+                    No entries found
+                  </td>
+                </tr>
+              ) : (
+                paginatedEntries.map((entry) => (
+                  <tr key={entry.id} className="border-b border-border hover:bg-muted/50" data-testid={`row-entry-${entry.id}`}>
+                    <td className="py-3 px-4 font-mono font-bold text-primary text-sm">
+                      {entry.ticketNumber}
+                    </td>
+                    <td className="py-3 px-4 text-sm">{entry.competition?.title || 'N/A'}</td>
+                    <td className="py-3 px-4">
+                      {entry.competition ? (
+                        <span className="capitalize px-2 py-1 text-xs rounded-full bg-primary/10 text-primary">
+                          {entry.competition.type === "instant" ? "Competition" : entry.competition.type}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-sm">
+                      {entry.user ? `${entry.user.firstName || ''} ${entry.user.lastName || ''}`.trim() || 'N/A' : 'N/A'}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">
+                      {entry.user?.email || 'N/A'}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">
+                      {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : 'N/A'}
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteEntry(entry.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
+                        data-testid={`button-delete-${entry.id}`}
+                        title="Delete Entry"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-
-      {/* Results count */}
-      <div className="text-sm text-muted-foreground text-center">
-  Showing {paginatedEntries.length} of {filteredEntries.length} entries
-</div>
+      </div>
+  
+      {/* PAGINATION */}
+      {paginatedEntries.length > 0 && (
+        <>
+          <div className="flex flex-row justify-center items-center gap-3 sm:gap-4 my-4 sm:my-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => p - 1)}
+              disabled={currentPage === 1}
+              className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4 text-xs sm:text-sm"
+            >
+              <ArrowBigLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline ml-1">Previous</span>
+            </Button>
+  
+            <div className="flex items-center gap-1 sm:gap-2">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                if (pageNum > totalPages) return null;
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className="w-8 h-8 sm:w-10 sm:h-10 text-xs"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+  
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => p + 1)}
+              disabled={currentPage === totalPages}
+              className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4 text-xs sm:text-sm"
+            >
+              <span className="hidden sm:inline mr-1">Next</span>
+              <ArrowBigRight className="w-3 h-3 sm:w-4 sm:h-4" />
+            </Button>
+          </div>
+  
+          <div className="text-xs sm:text-sm text-muted-foreground text-center">
+            Showing {paginatedEntries.length} of {filteredEntries.length} entries
+          </div>
+        </>
+      )}
+  
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="max-w-full sm:max-w-md p-4 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg sm:text-xl">Delete Entry</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm">
+              Are you sure you want to delete this entry? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
+            <AlertDialogCancel className="w-full sm:w-auto text-sm sm:text-base" data-testid="button-cancel-delete">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto text-sm sm:text-base"
+              disabled={deleteMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
-
-    {/* Delete Confirmation Dialog */}
-    <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete Entry</AlertDialogTitle>
-          <AlertDialogDescription>
-            Are you sure you want to delete this entry? This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={confirmDelete}
-            className="bg-red-600 hover:bg-red-700 text-white"
-            disabled={deleteMutation.isPending}
-            data-testid="button-confirm-delete"
-          >
-            {deleteMutation.isPending ? "Deleting..." : "Delete"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-    </AdminLayout>
+  </AdminLayout>
   );
 }

@@ -191,7 +191,7 @@ export default function AdminPlinko() {
     <AdminLayout>
       <div className="space-y-6 p-6 pb-28">
         {/* Sticky header with controls */}
-        <div className="sticky top-0 z-50 bg-zinc-950/95 backdrop-blur-sm -mx-6 px-6 py-4 border-b border-zinc-800 shadow-lg">
+        <div className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-sm -mx-6 px-6 py-4 border-b border-zinc-800 shadow-lg">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-amber-400 bg-clip-text text-transparent flex items-center gap-3">
@@ -201,7 +201,7 @@ export default function AdminPlinko() {
               <p className="text-gray-400 mt-1">Configure the Plinko game prizes and settings</p>
             </div>
             
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap sm:flex-row flex-col items-center gap-3">
               {/* Probability status - always visible */}
               <div className="flex items-center gap-2">
                 {!probabilityValid && (
@@ -214,7 +214,8 @@ export default function AdminPlinko() {
                   Total: {totalProbability.toFixed(2)}%
                 </Badge>
               </div>
-              
+                  <div className="flex gap-2">
+
               <Button
                 variant="outline"
                 onClick={() => setResetConfirmOpen(true)}
@@ -234,12 +235,13 @@ export default function AdminPlinko() {
                 <Save className="w-4 h-4 mr-2" />
                 Save Changes
               </Button>
+                  </div>
             </div>
           </div>
         </div>
 
         <Tabs defaultValue="prizes" className="space-y-6">
-          <TabsList className="bg-zinc-900/50 border border-zinc-800">
+          <TabsList className="bg-zinc-900/50 border border-zinc-800 flex w-full sm:block sm:w-fit ">
             <TabsTrigger value="prizes" className="data-[state=active]:bg-purple-500/20">
               <Gift className="w-4 h-4 mr-2" />
               Prize Slots

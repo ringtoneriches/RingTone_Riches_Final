@@ -240,264 +240,297 @@ export default function AdminTransactions() {
   }
 
   return (
-    <AdminLayout>
-      <div className="space-y-6">
-        {/* HEADER */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Wallet className="w-8 h-8 text-primary" />
-              Cashflow Transactions
-            </h1>
-            <p className="text-muted-foreground">Wallet top-ups & cashflow usage analytics</p>
+<AdminLayout>
+  <div className="space-y-4 md:space-y-6">
+    {/* HEADER - Stack on mobile, row on desktop */}
+    <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+          <Wallet className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
+          Cashflow Transactions
+        </h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
+          Wallet top-ups & cashflow usage analytics
+        </p>
+      </div>
+      <Button 
+        onClick={handleExportCSV} 
+        disabled={!transactions.length}
+        className="w-full sm:w-auto"
+      >
+        <Download className="w-4 h-4 mr-2" />
+        Export CSV
+      </Button>
+    </div>
+
+    {/* FILTERS & SEARCH */}
+    <Card>
+      <CardContent className="pt-4 sm:pt-6 space-y-4">
+        {/* DATE FILTERS - Wrap on mobile */}
+        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 items-start sm:items-center">
+          <div className="flex items-center gap-2 mb-2 sm:mb-0">
+            <Calendar className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <span className="text-sm font-medium whitespace-nowrap">Date Range:</span>
           </div>
-          <Button onClick={handleExportCSV} disabled={!transactions.length}>
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
+          
+          <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto">
+            {["all", "1h", "24h", "7d", "30d", "custom"].map((d) => (
+              <Button
+                key={d}
+                size="sm"
+                variant={dateFilter === d ? "default" : "outline"}
+                onClick={() => setDateFilter(d as DateFilter)}
+                className="text-xs sm:text-sm"
+              >
+                {d === "all" && "All"}
+                {d === "1h" && "1H"}
+                {d === "24h" && "24H"}
+                {d === "7d" && "7D"}
+                {d === "30d" && "30D"}
+                {d === "custom" && "Custom"}
+              </Button>
+            ))}
+          </div>
         </div>
 
+        {/* CUSTOM FILTERS - Stack on mobile */}
+        {dateFilter === "custom" && (
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+            <Input 
+              type="date" 
+              value={customDateFrom} 
+              onChange={(e) => setCustomDateFrom(e.target.value)}
+              className="w-full sm:w-auto"
+            />
+            <Input 
+              type="date" 
+              value={customDateTo} 
+              onChange={(e) => setCustomDateTo(e.target.value)}
+              className="w-full sm:w-auto"
+            />
+          </div>
+        )}
 
-
-
-      
-
-        {/* FILTERS & SEARCH */}
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            {/* DATE FILTERS */}
-            <div className="flex flex-wrap gap-2 items-center">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm font-medium mr-2">Date Range:</span>
-
-              {["all", "1h", "24h", "7d", "30d", "custom"].map((d) => (
-                <Button
-                  key={d}
-                  size="sm"
-                  variant={dateFilter === d ? "default" : "outline"}
-                  onClick={() => setDateFilter(d as DateFilter)}
-                >
-                  {d === "all" && "All Time"}
-                  {d === "1h" && "1 Hour"}
-                  {d === "24h" && "24 Hours"}
-                  {d === "7d" && "7 Days"}
-                  {d === "30d" && "30 Days"}
-                  {d === "custom" && "Custom"}
-                </Button>
-              ))}
-            </div>
-
-            {/* CUSTOM FILTERS */}
-            {dateFilter === "custom" && (
-              <div className="flex gap-4">
-                <Input type="date" value={customDateFrom} onChange={(e) => setCustomDateFrom(e.target.value)} />
-                <Input type="date" value={customDateTo} onChange={(e) => setCustomDateTo(e.target.value)} />
-              </div>
-            )}
-
-            {/* SEARCH */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                placeholder="Search by user, transaction, amount..."
-                className="pl-10"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-       {/* SUMMARY CARDS */}
-<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-  {/* Card 1: Total Revenue */}
-  <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
-    <CardHeader className="pb-2">
-      <CardTitle className="text-lg flex items-center justify-between">
-        <span className="text-blue-400">Total Revenue</span>
-        <TrendingUp className="w-5 h-5 text-blue-400" />
-      </CardTitle>
-      <CardDescription>All cashflow transactions</CardDescription>
-    </CardHeader>
-    <CardContent>
-      <div className="text-3xl font-bold text-white">
-        £{analytics ? Number(analytics.totalAmount || 0).toFixed(2) : '0.00'}
-      </div>
-      <div className="flex items-center gap-2 mt-2 text-sm">
-        <div className="flex items-center text-green-500">
-          <ArrowUpRight className="w-3 h-3 mr-1" />
-          <span>From {analytics ? analytics.transactionCount : 0} transactions</span>
+        {/* SEARCH */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            placeholder="Search by user, transaction, amount..."
+            className="pl-10 w-full"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-      </div>
-      {/* <Progress 
-        value={100} 
-        className="mt-4 h-2 bg-blue-900/30 [&>div]:bg-gradient-to-r [&>div]:from-blue-500 [&>div]:to-blue-600"
-      /> */}
-    </CardContent>
-  </Card>
+      </CardContent>
+    </Card>
 
-  {/* Card 2: Top-Ups */}
-  <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
-    <CardHeader className="pb-2">
-      <CardTitle className="text-lg flex items-center justify-between">
-        <span className="text-emerald-400">Top-Ups</span>
-        <CreditCard className="w-5 h-5 text-emerald-400" />
-      </CardTitle>
-      <CardDescription>User deposits only</CardDescription>
-    </CardHeader>
-    <CardContent>
-      <div className="text-3xl font-bold text-white">
-        £{analytics ? Number(analytics.depositTotal || 0).toFixed(2) : '0.00'}
-      </div>
-      <div className="flex items-center gap-2 mt-2">
-        <Badge variant="outline" className="border-emerald-500/30 text-emerald-400">
-          {analytics && analytics.totalAmount > 0 
-            ? `${((analytics.depositTotal / analytics.totalAmount) * 100).toFixed(1)}% of total`
-            : '0%'}
-        </Badge>
-        <span className="text-sm text-muted-foreground">
-          {transactions.filter(tx => tx.type === "deposit").length} deposits
-        </span>
-      </div>
-      {/* <Progress 
-        value={analytics && analytics.totalAmount > 0 
-          ? (analytics.depositTotal / analytics.totalAmount) * 100 
-          : 0} 
-        className="mt-4 h-2 bg-emerald-900/30 [&>div]:bg-gradient-to-r [&>div]:from-emerald-500 [&>div]:to-emerald-600"
-      /> */}
-    </CardContent>
-  </Card>
+    {/* SUMMARY CARDS - 1 column on mobile, 3 on desktop */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+      {/* Card 1: Total Revenue */}
+      <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-sm font-medium text-blue-400">Total Revenue</p>
+              <p className="text-xs text-muted-foreground">All cashflow transactions</p>
+            </div>
+            <TrendingUp className="w-5 h-5 text-blue-400 flex-shrink-0" />
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
+            £{analytics ? Number(analytics.totalAmount || 0).toFixed(2) : '0.00'}
+          </div>
+          <div className="flex items-center gap-2 text-xs sm:text-sm">
+            <div className="flex items-center text-green-500">
+              <ArrowUpRight className="w-3 h-3 mr-1" />
+              <span>From {analytics ? analytics.transactionCount : 0} txs</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-  {/* Card 3: Active Users */}
-  <Card className="bg-gradient-to-br from-violet-500/10 to-violet-600/5 border-violet-500/20">
-    <CardHeader className="pb-2">
-      <CardTitle className="text-lg flex items-center justify-between">
-        <span className="text-violet-400">Active Users</span>
-        <Users className="w-5 h-5 text-violet-400" />
-      </CardTitle>
-      <CardDescription>Unique users with transactions</CardDescription>
-    </CardHeader>
-    <CardContent>
-      <div className="text-3xl font-bold text-white">
-        {analytics ? analytics.uniqueUsers : 0}
-      </div>
-      <div className="flex items-center gap-2 mt-2 text-sm">
-        <span className="text-muted-foreground">
-          Avg £{analytics && analytics.uniqueUsers > 0 
-            ? (analytics.totalAmount / analytics.uniqueUsers).toFixed(2) 
-            : '0.00'} per user
-        </span>
-      </div>
-      {/* <Progress 
-        value={analytics && transactions.length > 0 
-          ? Math.min(100, (analytics.uniqueUsers / transactions.length) * 100) 
-          : 0} 
-        className="mt-4 h-2 bg-violet-900/30 [&>div]:bg-gradient-to-r [&>div]:from-violet-500 [&>div]:to-violet-600"
-      /> */}
-    </CardContent>
-  </Card>
-</div>
+      {/* Card 2: Top-Ups */}
+      <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-sm font-medium text-emerald-400">Top-Ups</p>
+              <p className="text-xs text-muted-foreground">User deposits only</p>
+            </div>
+            <CreditCard className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
+            £{analytics ? Number(analytics.depositTotal || 0).toFixed(2) : '0.00'}
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+            <Badge 
+              variant="outline" 
+              className="w-fit border-emerald-500/30 text-emerald-400 text-xs"
+            >
+              {analytics && analytics.totalAmount > 0 
+                ? `${((analytics.depositTotal / analytics.totalAmount) * 100).toFixed(1)}% of total`
+                : '0%'}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              {transactions.filter(tx => tx.type === "deposit").length} deposits
+            </span>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* TRANSACTIONS TABLE */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Transaction Details</CardTitle>
-            <CardDescription>
-              Showing {paginated.length} of {filtered.length} filtered transactions
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
+      {/* Card 3: Active Users */}
+      <Card className="bg-gradient-to-br from-violet-500/10 to-violet-600/5 border-violet-500/20 sm:col-span-2 lg:col-span-1">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-sm font-medium text-violet-400">Active Users</p>
+              <p className="text-xs text-muted-foreground">Unique users with transactions</p>
+            </div>
+            <Users className="w-5 h-5 text-violet-400 flex-shrink-0" />
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
+            {analytics ? analytics.uniqueUsers : 0}
+          </div>
+          <div className="text-xs sm:text-sm text-muted-foreground">
+            Avg £{analytics && analytics.uniqueUsers > 0 
+              ? (analytics.totalAmount / analytics.uniqueUsers).toFixed(2) 
+              : '0.00'} per user
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* TRANSACTIONS TABLE - Scrollable on mobile */}
+    <Card>
+      <CardHeader className="p-4 sm:p-6">
+        <CardTitle className="text-lg sm:text-xl">Transaction Details</CardTitle>
+        <CardDescription className="text-sm">
+          Showing {paginated.length} of {filtered.length} filtered transactions
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-0 sm:p-6">
+        <div className="border rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="whitespace-nowrap">Date</TableHead>
+                  <TableHead className="whitespace-nowrap">User</TableHead>
+                  <TableHead className="hidden sm:table-cell">Email</TableHead>
+                  <TableHead className="whitespace-nowrap">Type</TableHead>
+                  <TableHead className="hidden md:table-cell">Source</TableHead>
+                  <TableHead className="hidden lg:table-cell">Description</TableHead>
+                  <TableHead className="hidden xl:table-cell">Reference</TableHead>
+                  <TableHead className="whitespace-nowrap">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {paginated.length === 0 ? (
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Reference</TableHead>
-                    <TableHead>Amount</TableHead>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      No transactions found for selected filters
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-
-                <TableBody>
-                  {paginated.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        No transactions found for selected filters
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginated.map((tx) => (
-                      <TableRow key={tx.id} className="hover:bg-muted/50">
-                        <TableCell className="font-medium">
-                          {new Date(tx.createdAt).toLocaleString('en-GB', {
+                ) : (
+                  paginated.map((tx) => (
+                    <TableRow key={tx.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium whitespace-nowrap">
+                        <div className="text-sm">
+                          {new Date(tx.createdAt).toLocaleDateString('en-GB', {
                             day: '2-digit',
-                            month: 'short',
+                            month: 'short'
+                          })}
+                        </div>
+                        <div className="text-xs text-muted-foreground sm:hidden">
+                          {new Date(tx.createdAt).toLocaleTimeString('en-GB', {
                             hour: '2-digit',
                             minute: '2-digit'
                           })}
-                        </TableCell>
-                        <TableCell>{tx.userName || 'N/A'}</TableCell>
-                        <TableCell>{tx.userEmail || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={tx.type === 'deposit' ? 'default' : 'secondary'}
-                            className={tx.type === 'deposit' ? 'bg-green-500/20 text-green-400 border-green-500/30' : ''}
-                          >
-                            {tx.type === 'deposit' ? 'Top-Up' : tx.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">
-                            {tx.source || 'Unknown'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate">{tx.description || 'N/A'}</TableCell>
-                        <TableCell className="max-w-xs truncate">{tx.paymentRef || 'N/A'}</TableCell>
-                        <TableCell className="font-bold">
-                          <span className={tx.type === 'deposit' ? 'text-green-400' : 'text-blue-400'}>
-                           £{Number(tx.amount || 0).toFixed(2)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[100px] truncate">
+                        <div className="font-medium">{tx.userName || 'N/A'}</div>
+                        <div className="text-xs text-muted-foreground sm:hidden truncate">
+                          {tx.userEmail || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell max-w-[150px] truncate">
+                        {tx.userEmail || 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={tx.type === 'deposit' ? 'default' : 'secondary'}
+                          className={`
+                            text-xs ${tx.type === 'deposit' 
+                              ? 'bg-green-500/20 text-green-400 border-green-500/30' 
+                              : ''
+                            }
+                          `}
+                        >
+                          {tx.type === 'deposit' ? 'Top-Up' : tx.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Badge variant="outline" className="text-xs">
+                          {tx.source || 'Unknown'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell max-w-[200px] truncate">
+                        {tx.description || 'N/A'}
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell max-w-[150px] truncate">
+                        {tx.paymentRef || 'N/A'}
+                      </TableCell>
+                      <TableCell className="font-bold whitespace-nowrap">
+                        <span className={tx.type === 'deposit' ? 'text-green-400' : 'text-blue-400'}>
+                          £{Number(tx.amount || 0).toFixed(2)}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
 
+        {/* PAGINATION - Compact on mobile */}
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-3 mt-4 sm:mt-6">
+            <div className="flex items-center gap-2 order-2 sm:order-1">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setCurrentPage((p) => p - 1)} 
+                disabled={currentPage === 1}
+                className="h-8 w-8 p-0"
+              >
+                <ArrowBigLeft className="w-4 h-4" />
+              </Button>
 
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <span className="text-sm min-w-[100px] text-center">
+                Page <span className="font-bold">{currentPage}</span> of <span className="font-bold">{totalPages}</span>
+              </span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => p + 1)}
+                disabled={currentPage === totalPages}
+                className="h-8 w-8 p-0"
+              >
+                <ArrowBigRight className="w-4 h-4" />
+              </Button>
             </div>
-
-            {/* PAGINATION */}
-            {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-4 mt-6">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setCurrentPage((p) => p - 1)} 
-                  disabled={currentPage === 1}
-                >
-                  <ArrowBigLeft />
-                </Button>
-
-                <span className="text-sm">
-                  Page <span className="font-bold">{currentPage}</span> of <span className="font-bold">{totalPages}</span>
-                </span>
-
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                  disabled={currentPage === totalPages}
-                >
-                  <ArrowBigRight />
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </AdminLayout>
+            
+            <div className="order-1 sm:order-2 text-xs text-muted-foreground sm:hidden">
+              {filtered.length} total transactions
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </div>
+</AdminLayout>
   );
 }

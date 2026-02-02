@@ -548,7 +548,7 @@ export default function Home() {
                     {/* <Sparkles className="w-4 h-4 text-amber-400" /> */}
                     {user?.receiveNewsletter 
                       ? "Get ready for exclusive deals and amazing surprises!"
-                      : "Subscribe for exclusive deals and New Year prizes!"}
+                      : "Subscribe for exclusive deals and prizes!"}
                     {/* <Sparkles className="w-4 h-4 text-amber-400" /> */}
                   </p>
                 </div>
@@ -617,7 +617,7 @@ export default function Home() {
 
                     <p className="text-sm text-slate-400 text-center mt-4 flex items-center justify-center gap-2">
                       {/* <Star className="w-4 h-4 text-yellow-400" /> */}
-                      Join thousands on the Nice List!
+                      Join thousands on the List!
                       {/* <Star className="w-4 h-4 text-yellow-400" /> */}
                     </p>
                   </form>

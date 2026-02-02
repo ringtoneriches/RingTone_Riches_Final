@@ -2126,10 +2126,18 @@ const handleDeleteBankAccount = (
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {pointsTransactions.map((transaction, index) => {
+                    {pointsTransactions
+                      .filter(transaction => {
+                        // Only show Ringtone Plinko transactions that are for POINTS (not cash)
+                        const description = transaction.description || '';
+                        // Include only transactions with "Points" in description and NOT "£"
+                        return !description.includes('£');
+                      })
+                      .slice(0, 20)
+                      .map((transaction, index) => {
                         const pointsChange = parseFloat(transaction.amount);
                         const isPositive = pointsChange > 0;
-
+                  
                         return (
                           <div
                             key={transaction.id}
@@ -2157,7 +2165,7 @@ const handleDeleteBankAccount = (
                           </div>
                         );
                       })}
-                    </div>
+                  </div>
                   )}
                 </CardContent>
               </Card>

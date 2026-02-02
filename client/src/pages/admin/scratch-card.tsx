@@ -662,26 +662,29 @@ export default function AdminScratchCard() {
                   key={competition.id}
                   className="bg-card border border-border rounded-lg p-6 hover:shadow-lg transition-shadow"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex gap-4 flex-1">
+                  <div className="flex items-start flex-col sm:flex-row justify-between">
+                    <div className="flex gap-4 flex-col sm:flex-row flex-1">
                       {competition.imageUrl && (
                         <img
                           src={competition.imageUrl}
                           alt={competition.title}
-                          className="w-24 h-24 object-cover rounded-lg"
+                          className="w-full h-98 sm:w-24 sm:h-24 object-cover rounded-lg"
                         />
                       )}
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center flex-col gap-2 mb-2">
                           <h3 className="text-xl font-bold text-foreground">
                             {competition.title}
                           </h3>
+                          <div>
+
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-500">
                             SCRATCH CARD
                           </span>
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-500">
                             ACTIVE
                           </span>
+                          </div>
                         </div>
                         <p className="text-sm text-muted-foreground mb-4">
                           {competition.description}
@@ -814,26 +817,29 @@ export default function AdminScratchCard() {
                     key={competition.id}
                     className="bg-card border border-border rounded-lg p-6 opacity-90"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex gap-4 flex-1">
+                    <div className="flex items-start flex-col sm:flex-row justify-between">
+                      <div className="flex gap-4  flex-col sm:flex-row flex-1">
                         {competition.imageUrl && (
                           <img
                             src={competition.imageUrl}
                             alt={competition.title}
-                            className="w-20 h-20 object-cover rounded-lg"
+                            className="w-98 h-98 sm:w-20 sm:h-20 object-cover rounded-lg"
                           />
                         )}
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center flex-col sm:flex-row gap-2 mb-2">
                             <h3 className="text-lg font-bold text-foreground">
                               {competition.title}
                             </h3>
+                            <div>
+
                             <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-500">
                               SCRATCH CARD
                             </span>
                             <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-500">
                               ARCHIVED
                             </span>
+                            </div>
                           </div>
                           <p className="text-sm text-muted-foreground mb-3">
                             {competition.description}
@@ -939,14 +945,14 @@ export default function AdminScratchCard() {
           open={!!archiveConfirm}
           onOpenChange={(open) => !open && setArchiveConfirm(null)}
         >
-          <DialogContent>
+          <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
             <DialogHeader>
               <DialogTitle>Archive Scratch Card Competition</DialogTitle>
             </DialogHeader>
             <p className="text-muted-foreground">
               Are you sure you want to archive this scratch card competition? Archived games will become inactive and won't be shown on the frontend.
             </p>
-            <DialogFooter>
+            <DialogFooter className="flex flex-col gap-2 sm:flex-row">
               <Button
                 variant="outline"
                 onClick={() => setArchiveConfirm(null)}
@@ -972,14 +978,14 @@ export default function AdminScratchCard() {
           open={!!unarchiveConfirm}
           onOpenChange={(open) => !open && setUnarchiveConfirm(null)}
         >
-          <DialogContent>
+          <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
             <DialogHeader>
               <DialogTitle>Unarchive Scratch Card Competition</DialogTitle>
             </DialogHeader>
             <p className="text-muted-foreground">
               Are you sure you want to unarchive this scratch card competition? The game will become active and will be shown on the frontend.
             </p>
-            <DialogFooter>
+            <DialogFooter className="flex flex-col gap-2 sm:flex-row">
               <Button
                 variant="outline"
                 onClick={() => setUnarchiveConfirm(null)}

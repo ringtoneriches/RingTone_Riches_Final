@@ -1,30 +1,3 @@
-// ================================================================================
-// PLINKO GAME COMPONENT - Frontend Game UI
-// ================================================================================
-// This component renders the Plinko game board with physics-based ball animation.
-// It handles single-drop gameplay, reveal-all functionality, and prize popups.
-//
-// FEATURES:
-// - Canvas-based rendering with deterministic seeded physics
-// - Server-side result determination (slotIndex from API)
-// - Ball finds optimal drop position to naturally land on target slot
-// - Premium prize popup with confetti effects
-// - Sound effects for peg hits and wins
-// - Muted gray popup for losses, vibrant popups for wins
-//
-// REQUIRED PROPS:
-// - orderId: string - The order ID for this game session
-// - competitionId: string - The Plinko competition ID
-// - playsRemaining: number - Number of plays left in this order
-// - onPlayComplete?: () => void - Callback after each play completes
-// - onDropStart?: () => void - Callback when ball drop starts
-// - prizes: Prize[] - Array of 8 prize slot configurations
-//
-// API ENDPOINTS USED:
-// - POST /api/play-plinko - Single drop play
-// - POST /api/reveal-all-plinko - Batch reveal all remaining plays
-// ================================================================================
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -141,7 +114,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     
     // Initial big burst from center
     confetti({
-      particleCount: 150,
+      particleCount: 100,
       spread: 100,
       origin: { x: 0.5, y: 0.4 },
       colors: goldColors,
@@ -153,7 +126,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     // Sparkle burst
     setTimeout(() => {
       confetti({
-        particleCount: 80,
+        particleCount: 60,
         spread: 360,
         origin: { x: 0.5, y: 0.5 },
         colors: sparkleColors,
@@ -273,6 +246,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
   }, [numSlots, slotWidth]);
 
   const drawBoard = useCallback((ctx: CanvasRenderingContext2D, currentBalls: Ball[]) => {
+    
     ctx.clearRect(0, 0, boardWidth, boardHeight);
     
     const gradient = ctx.createLinearGradient(0, 0, 0, boardHeight);
@@ -319,45 +293,74 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     const slotY = boardHeight - SLOT_HEIGHT;
     prizes.forEach((prize, i) => {
       const slotX = i * slotWidth;
-      
-      const slotGradient = ctx.createLinearGradient(slotX, slotY, slotX, boardHeight);
-      slotGradient.addColorStop(0, prize.color + "40");
-      slotGradient.addColorStop(0.5, prize.color + "60");
-      slotGradient.addColorStop(1, prize.color + "80");
-      ctx.fillStyle = slotGradient;
-      ctx.fillRect(slotX + 1, slotY, slotWidth - 2, SLOT_HEIGHT);
-      
+      const radius = 8;
+    
+      // ---- SLOT BACKGROUND (GLASS STYLE) ----
+      const gradient = ctx.createLinearGradient(slotX, slotY, slotX, slotY + SLOT_HEIGHT);
+      gradient.addColorStop(0, prize.color + "25");
+      gradient.addColorStop(0.5, prize.color + "55");
+      gradient.addColorStop(1, prize.color + "90");
+    
+      // Rounded slot
+      ctx.beginPath();
+      ctx.roundRect(slotX + 2, slotY + 2, slotWidth - 4, SLOT_HEIGHT - 4, radius);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    
+      // ---- INNER GLOSS HIGHLIGHT ----
+      const gloss = ctx.createLinearGradient(slotX, slotY, slotX, slotY + SLOT_HEIGHT / 2);
+      gloss.addColorStop(0, "rgba(255,255,255,0.25)");
+      gloss.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = gloss;
+      ctx.roundRect(slotX + 2, slotY + 2, slotWidth - 4, SLOT_HEIGHT / 2, radius);
+      ctx.fill();
+    
+      // ---- NEON BORDER ----
       ctx.strokeStyle = prize.color;
       ctx.lineWidth = 2;
-      ctx.strokeRect(slotX + 1, slotY, slotWidth - 2, SLOT_HEIGHT);
-      
-      ctx.save();
-      ctx.shadowColor = "rgba(0,0,0,0.9)";
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetX = 1;
-      ctx.shadowOffsetY = 1;
-      
-      ctx.fillStyle = "#ffffff";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      
+      ctx.shadowColor = prize.color;
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+    
+      ctx.shadowBlur = 0; // IMPORTANT: remove blur for text
+    
+      // ---- FORMAT TEXT ----
       let displayName = prize.prizeName;
       if (displayName.includes("JACKPOT")) {
         displayName = "£1K";
       } else if (displayName.includes("Points")) {
-        displayName = displayName.replace(" Points", "").replace("Points", "") + "P";
+        displayName = displayName.replace(/ Points|Points/g, "") + "P";
       } else if (displayName === "NO WIN") {
-        displayName = "X";
+        displayName = "✕";
       } else if (displayName === "FREE PLAY") {
         displayName = "FREE";
       }
-      
-      const fontSize = displayName.length > 4 ? 8 : displayName.length > 3 ? 9 : 11;
-      ctx.font = `bold ${fontSize}px Inter, sans-serif`;
-      
-      ctx.fillText(displayName, slotX + slotWidth / 2, slotY + 20);
-      ctx.restore();
+    
+      // ---- TEXT STYLE (CRISP CASINO) ----
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+    
+      const fontSize = slotWidth < 60 ? 12 : 14;
+      ctx.font = `900 ${fontSize}px Inter, Arial, sans-serif`;
+    
+      // Gold gradient for jackpot
+      if (displayName.includes("£")) {
+        // const gold = ctx.createLinearGradient(slotX, slotY, slotX, slotY + 30);
+        // gold.addColorStop(0, "#fff7c2");
+        // gold.addColorStop(0.4, "#facc15");
+        // gold.addColorStop(1, "#b45309");
+        ctx.fillStyle = "#ffffff";
+      } else {
+        ctx.fillStyle = "#ffffff";
+      }
+    
+      // Outline text (sharp on mobile)
+      ctx.strokeStyle = "rgba(0,0,0,0.8)";
+      ctx.lineWidth = 3;
+      ctx.strokeText(displayName, slotX + slotWidth / 2, slotY + SLOT_HEIGHT / 2);
+      ctx.fillText(displayName, slotX + slotWidth / 2, slotY + SLOT_HEIGHT / 2);
     });
+    
     
     // Draw all balls including landed ones (ball stays visible in segment)
     currentBalls.forEach(ball => {
@@ -475,7 +478,10 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
         }
         
         // Seeded random deflection for deterministic unpredictability
-        newBall.vx += (seededRandom() - 0.5) * 0.8;
+        if (newBall.y < boardHeight - SLOT_HEIGHT - 50) {
+          newBall.vx += (seededRandom() - 0.5) * 0.8;
+        }
+        
         
         // Trigger hit sound
         newBall.hitPegId = pegIdx;
@@ -494,11 +500,17 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     
     // Check if ball reached slot area - 100% REAL PHYSICS, no correction
     const slotY = boardHeight - SLOT_HEIGHT;
+    if (newBall.y > slotY - 40) {
+      const targetSlot = newBall.targetSlot ?? Math.floor(newBall.x / slotWidth);
+      const slotCenter = targetSlot * slotWidth + slotWidth / 2;
+      newBall.x += (slotCenter - newBall.x) * 0.02; // magnetic pull
+    }
+    
     if (newBall.y >= slotY) {
       const slotBottom = boardHeight - BALL_RADIUS - 4;
       
       // Natural slowdown from friction in slot area
-      newBall.vx *= 0.92;
+      newBall.vx *= 0.95;
       
       // Floor bounce - real physics
       if (newBall.y >= slotBottom) {
@@ -506,17 +518,26 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
         newBall.vy = -Math.abs(newBall.vy) * 0.25;
         
         // Only mark as landed when ball is FULLY SETTLED (real position)
-        if (Math.abs(newBall.vy) < 0.3 && Math.abs(newBall.vx) < 0.3) {
-          // Determine slot based on actual physics position
-          const actualSlot = Math.floor(newBall.x / slotWidth);
-          const clampedSlot = Math.max(0, Math.min(numSlots - 1, actualSlot));
+        if (Math.abs(newBall.vy) < 0.3) {
+
+          // Force slot based on pre-calculated target
+          const targetSlot = newBall.targetSlot ?? Math.floor(newBall.x / slotWidth);
+          const clampedSlot = Math.max(0, Math.min(numSlots - 1, targetSlot));
           const slotCenter = clampedSlot * slotWidth + slotWidth / 2;
-          
-          newBall.x = slotCenter;
-          newBall.landed = true;
-          newBall.landedSlot = clampedSlot; // Actual physics landing
-          newBall.isAnimating = false;
+        
+          // Snap ball perfectly to center (no sideways slide)
+          newBall.x += (slotCenter - newBall.x) * 0.5; // smooth magnet snap
+          newBall.vx = 0;
+          newBall.vy = 0;
+        
+          if (Math.abs(newBall.x - slotCenter) < 0.5) {
+            newBall.x = slotCenter;
+            newBall.landed = true;
+            newBall.landedSlot = clampedSlot;
+            newBall.isAnimating = false;
+          }
         }
+        
       }
     }
     
@@ -837,6 +858,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     pendingResultRef.current = null;
     pendingBallIdRef.current = null;
     resultShownRef.current = false;
+    resetPegHitCounts();
   };
 
   const getResultType = () => {
@@ -1081,8 +1103,8 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
                         filter: 'drop-shadow(0 4px 12px rgba(251,191,36,0.4))',
                       }}>
                         {currentResult.rewardType === "cash" 
-                          ? `£${currentResult.prizeValue}` 
-                          : `${currentResult.prizeValue}`}
+                          ? `£${parseFloat(currentResult.prizeValue).toFixed(2)}`
+                          : parseInt(currentResult.prizeValue).toLocaleString()}
                       </div>
                       {currentResult.rewardType !== "cash" && (
                         <div className="text-lg sm:text-xl font-bold text-amber-400 mt-1">POINTS WON</div>
@@ -1147,6 +1169,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
                     <Button
                       onClick={() => {
                         closeResultPopup();
+                        resetPegHitCounts();
                         setTimeout(() => dropBall(), 100);
                       }}
                       className={`w-full h-12 sm:h-14 text-base sm:text-lg font-black rounded-xl sm:rounded-2xl border-0 shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] ${

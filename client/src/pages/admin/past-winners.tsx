@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/command";
 import { ChevronsUpDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
 
 
 interface Winner {
@@ -755,608 +756,638 @@ const winners = useMemo(() => {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Past Winners Management</h1>
-          <Button
-            onClick={() => {
-              setEditingWinner(undefined);
-              setDialogOpen(true);
-            }}
-            data-testid="button-add-winner"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Winner
-          </Button>
+    <div className="space-y-4 md:space-y-6 p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
+        <div>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Past Winners Management</h1>
         </div>
-
-        {/* Date Filters */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <Calendar className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground mr-2">Date Range:</span>
+        <Button
+          onClick={() => {
+            setEditingWinner(undefined);
+            setDialogOpen(true);
+          }}
+          className="w-full sm:w-auto text-sm sm:text-base py-2 sm:py-2.5"
+          data-testid="button-add-winner"
+        >
+          <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+          Add Winner
+        </Button>
+      </div>
+  
+      {/* Date Filters */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
+          <span className="text-xs sm:text-sm font-medium text-foreground">Date Range:</span>
+        </div>
+        <div className="flex flex-wrap gap-1 sm:gap-2">
           <Button
             variant={dateFilter === "all" ? "default" : "outline"}
             size="sm"
             onClick={() => setDateFilter("all")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
             data-testid="button-filter-all"
           >
-            All Time
+            All
           </Button>
-          
           <Button
             variant={dateFilter === "1h" ? "default" : "outline"}
             size="sm"
             onClick={() => setDateFilter("1h")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
             data-testid="button-filter-1h"
           >
-            Last 1 Hour
+            1H
           </Button>
           <Button
             variant={dateFilter === "24h" ? "default" : "outline"}
             size="sm"
             onClick={() => setDateFilter("24h")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
             data-testid="button-filter-24h"
           >
-            Last 24 Hours
+            24H
           </Button>
           <Button
             variant={dateFilter === "7d" ? "default" : "outline"}
             size="sm"
             onClick={() => setDateFilter("7d")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
             data-testid="button-filter-7d"
           >
-            Last 7 Days
+            7D
           </Button>
           <Button
             variant={dateFilter === "30d" ? "default" : "outline"}
             size="sm"
             onClick={() => setDateFilter("30d")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
             data-testid="button-filter-30d"
           >
-            Last 30 Days
+            30D
           </Button>
           <Button
             variant={dateFilter === "custom" ? "default" : "outline"}
             size="sm"
             onClick={() => setDateFilter("custom")}
+            className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
             data-testid="button-filter-custom"
           >
-            Custom Range
+            Custom
           </Button>
         </div>
-
-        {/* Custom Date Range Inputs */}
-        {dateFilter === "custom" && (
-          <div className="flex gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-foreground">From:</label>
-              <Input
-                type="date"
-                value={customDateFrom}
-                onChange={(e) => setCustomDateFrom(e.target.value)}
-                className="w-auto"
-                data-testid="input-date-from"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-foreground">To:</label>
-              <Input
-                type="date"
-                value={customDateTo}
-                onChange={(e) => setCustomDateTo(e.target.value)}
-                className="w-auto"
-                data-testid="input-date-to"
-              />
-            </div>
-          </div>
-        )}
-
-        
-
-        {/* Search and Sort Controls */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
+      </div>
+  
+      {/* Custom Date Range Inputs */}
+      {dateFilter === "custom" && (
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-start sm:items-center bg-card border border-border rounded-lg p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs sm:text-sm font-medium text-foreground">From:</label>
             <Input
-              placeholder="Search winners by user, competition, prize..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="pl-10"
-              data-testid="input-search-winners"
+              type="date"
+              value={customDateFrom}
+              onChange={(e) => setCustomDateFrom(e.target.value)}
+              className="w-full sm:w-auto text-sm"
+              data-testid="input-date-from"
             />
           </div>
-
-<Button
-  onClick={() => {
-    const showcaseWinners = winners.filter(w => w.winners.isShowcase);
-    
-    if (showcaseWinners.length === 0) {
-      toast({
-        title: "No showcase winners",
-        description: "There are no winners in the showcase to remove.",
-      });
-      return;
-    }
-    setShowBulkRemoveDialog(true);
-  }}
-  variant="outline"
-  className=""
-  disabled={winners.filter(w => w.winners.isShowcase).length === 0}
->
-  <EyeOff className="h-4 w-4 mr-2" />
-  Remove All from Showcase
-</Button>
-
-          {/* Sort Dropdown */}
-          {/* <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <ArrowUpDown className="h-4 w-4" />
-                Sort by Showcase
-                {sortByShowcase && (
-                  <span className="ml-2 text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">
-                    {sortByShowcase === "showcase-first" ? "Showcase" : "Not Showcase"}
-                  </span>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={handleSortShowcaseFirst}>
-                <Eye className="h-4 w-4 mr-2 text-green-600" />
-                Showcase Winners
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleSortNotShowcaseFirst}>
-                <EyeOff className="h-4 w-4 mr-2 text-gray-600" />
-                Non-Showcase Winners
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleClearSort} disabled={!sortByShowcase}>
-                <ArrowUpDown className="h-4 w-4 mr-2" />
-                Clear Sorting
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu> */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs sm:text-sm font-medium text-foreground">To:</label>
+            <Input
+              type="date"
+              value={customDateTo}
+              onChange={(e) => setCustomDateTo(e.target.value)}
+              className="w-full sm:w-auto text-sm"
+              data-testid="input-date-to"
+            />
+          </div>
         </div>
-
-        {/* Sort Indicator */}
-        {/* {sortByShowcase && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Sorted by:</span>
-            <span className="font-medium">
-              {sortByShowcase === "showcase-first" ? "Showcase Winners First" : "Non-Showcase Winners First"}
-            </span>
-            <Button variant="ghost" size="sm" onClick={handleClearSort} className="h-6 px-2">
-              Clear
-            </Button>
-          </div>
-        )} */}
-
-
-
-        {/* Showcase Statistics */}
-        {/* <div className="flex gap-4 text-sm">
-          <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-md">
-            <span className="font-medium text-green-700">Showcase Winners:</span>
-            <span className="ml-2 text-green-900">
-              {winners.filter(w => w.winners.isShowcase).length}
-            </span>
-          </div>
-          <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
-            <span className="font-medium text-gray-700">Non-Showcase Winners:</span>
-            <span className="ml-2 text-gray-900">
-              {winners.filter(w => !w.winners.isShowcase).length}
-            </span>
-          </div>
-        </div> */}
-
-{/* Add this near your other controls if you want a clear button */}
-{/* {sortField && (
-  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-    <span>Sorted by: 
-      <span className="font-medium ml-1 capitalize">
-        {sortField.replace(/([A-Z])/g, ' $1')} 
-        ({sortOrder === 'asc' ? 'ascending' : 'descending'})
-      </span>
-    </span>
-    <Button 
-      variant="ghost" 
-      size="sm" 
-      onClick={() => {
-        setSortField(null);
-        setSortOrder(null);
-      }}
-      className="h-6 px-2"
-    >
-      Clear
-    </Button>
-  </div>
-)} */}
-
+      )}
+  
+      {/* Search and Sort Controls */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 sm:w-5 sm:h-5" />
+          <Input
+            placeholder="Search winners..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-8 sm:pl-10 text-sm sm:text-base"
+            data-testid="input-search-winners"
+          />
+        </div>
+  
+        <Button
+          onClick={() => {
+            const showcaseWinners = winners.filter(w => w.winners.isShowcase);
+            if (showcaseWinners.length === 0) {
+              toast({
+                title: "No showcase winners",
+                description: "There are no winners in the showcase to remove.",
+              });
+              return;
+            }
+            setShowBulkRemoveDialog(true);
+          }}
+          variant="outline"
+          className="text-xs sm:text-sm py-2"
+          disabled={winners.filter(w => w.winners.isShowcase).length === 0}
+        >
+          <EyeOff className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+          <span className="hidden sm:inline">Remove All</span>
+          <span className="sm:hidden">Remove</span>
+        </Button>
+      </div>
+  
+      {/* Mobile Cards View */}
+      <div className="block md:hidden space-y-3">
         {isLoading ? (
-          <div className="text-center py-8">Loading winners...</div>
+          <div className="text-center py-8 text-sm">Loading winners...</div>
         ) : paginatedWinners.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No winners found. Add your first winner to get started.
-          </div>
+          <Card className="p-8 text-center">
+            <div className="flex flex-col items-center justify-center">
+              <div className="text-base sm:text-lg font-medium">No winners found</div>
+              <div className="text-xs sm:text-sm text-muted-foreground mt-1">
+                Try adjusting your search or filters
+              </div>
+            </div>
+          </Card>
         ) : (
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-  <TableHeader>
-    <TableRow>
-      <TableHead 
-        className="cursor-pointer hover:bg-muted transition-colors"
-        onClick={() => handleSort('winner')}
-      >
-        <div className="flex items-center">
-          Winner
-          {getSortIcon('winner')}
+          paginatedWinners.map((item) => (
+            <Card key={item.winners.id} className="p-4">
+              <div className="space-y-4">
+                {/* Winner Info */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="text-sm font-medium">
+                        {item.users?.firstName} {item.users?.lastName}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {item.users?.email}
+                      </div>
+                    </div>
+                    {item.winners.isShowcase ? (
+                      <div className="flex items-center gap-1">
+                        <Eye className="h-3 w-3 text-green-600" />
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-600 text-white">
+                          Showed
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <EyeOff className="h-3 w-3 text-red-600" />
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-600 text-white">
+                          Hidden
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground">
+                    Competition: {item.competitions?.title || "No competition"}
+                  </div>
+                </div>
+  
+                {/* Prize Details */}
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Prize:</span>
+                    <span className="font-medium truncate max-w-[150px]">
+                      {item.winners.prizeDescription}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Value:</span>
+                    <span className="font-medium text-primary">
+                      {item.winners.prizeValue}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date:</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(item.winners.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+  
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(item)}
+                    className="flex-1 text-xs"
+                    data-testid={`button-edit-${item.winners.id}`}
+                  >
+                    <Edit className="h-3 w-3 mr-1" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDelete(item)}
+                    className="flex-1 text-xs"
+                    data-testid={`button-delete-${item.winners.id}`}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+  
+      {/* Desktop Table View */}
+      <div className="hidden md:block border rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => handleSort('winner')}
+                >
+                  <div className="flex items-center text-xs sm:text-sm">
+                    Winner
+                    {getSortIcon('winner')}
+                  </div>
+                </TableHead>
+                
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => handleSort('competition')}
+                >
+                  <div className="flex items-center text-xs sm:text-sm">
+                    Competition
+                    {getSortIcon('competition')}
+                  </div>
+                </TableHead>
+                
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => handleSort('prizeDescription')}
+                >
+                  <div className="flex items-center text-xs sm:text-sm">
+                    Prize Description
+                    {getSortIcon('prizeDescription')}
+                  </div>
+                </TableHead>
+                
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => handleSort('prizeValue')}
+                >
+                  <div className="flex items-center text-xs sm:text-sm">
+                    Prize Value
+                    {getSortIcon('prizeValue')}
+                  </div>
+                </TableHead>
+                
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => handleSort('showcase')}
+                >
+                  <div className="flex items-center text-xs sm:text-sm">
+                    <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Showcase
+                    {getSortIcon('showcase')}
+                  </div>
+                </TableHead>
+                
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => handleSort('dateAdded')}
+                >
+                  <div className="flex items-center text-xs sm:text-sm">
+                    Date Added
+                    {getSortIcon('dateAdded')}
+                  </div>
+                </TableHead>
+                
+                <TableHead className="text-right text-xs sm:text-sm">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-sm">
+                    Loading winners...
+                  </TableCell>
+                </TableRow>
+              ) : paginatedWinners.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
+                    No winners found. Add your first winner to get started.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedWinners.map((item) => (
+                  <TableRow key={item.winners.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium text-sm">
+                          {item.users?.firstName} {item.users?.lastName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {item.users?.email}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {item.competitions?.title || (
+                        <span className="text-muted-foreground">No competition</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate text-sm">
+                      {item.winners.prizeDescription}
+                    </TableCell>
+                    <TableCell className="font-semibold text-primary text-sm">
+                      {item.winners.prizeValue}
+                    </TableCell>
+                    <TableCell>
+                      {item.winners.isShowcase ? (
+                        <div className="flex items-center gap-1">
+                          <Eye className="h-4 w-4 text-green-600" />
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-600 text-white">
+                            Showed
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <EyeOff className="h-4 w-4 text-red-600" />
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-600 text-white">
+                            Hidden
+                          </span>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {new Date(item.winners.createdAt).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(item)}
+                          className="h-8 w-8 p-0"
+                          data-testid={`button-edit-${item.winners.id}`}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(item)}
+                          className="h-8 w-8 p-0"
+                          data-testid={`button-delete-${item.winners.id}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </table>
         </div>
-      </TableHead>
-      
-      <TableHead 
-        className="cursor-pointer hover:bg-muted transition-colors"
-        onClick={() => handleSort('competition')}
-      >
-        <div className="flex items-center">
-          Competition
-          {getSortIcon('competition')}
-        </div>
-      </TableHead>
-      
-      <TableHead 
-        className="cursor-pointer hover:bg-muted transition-colors"
-        onClick={() => handleSort('prizeDescription')}
-      >
-        <div className="flex items-center">
-          Prize Description
-          {getSortIcon('prizeDescription')}
-        </div>
-      </TableHead>
-      
-      <TableHead 
-        className="cursor-pointer hover:bg-muted transition-colors"
-        onClick={() => handleSort('prizeValue')}
-      >
-        <div className="flex items-center">
-          Prize Value
-          {getSortIcon('prizeValue')}
-        </div>
-      </TableHead>
-      
-      <TableHead 
-        className="cursor-pointer hover:bg-muted transition-colors"
-        onClick={() => handleSort('showcase')}
-      >
-        <div className="flex items-center">
-          <Eye className="h-4 w-4 mr-1" />
-          Showcase
-          {getSortIcon('showcase')}
-        </div>
-      </TableHead>
-      
-      <TableHead 
-        className="cursor-pointer hover:bg-muted transition-colors"
-        onClick={() => handleSort('dateAdded')}
-      >
-        <div className="flex items-center">
-          Date Added
-          {getSortIcon('dateAdded')}
-        </div>
-      </TableHead>
-      
-      <TableHead className="text-right">Actions</TableHead>
-    </TableRow>
-  </TableHeader>
-  <TableBody>
-    {/* Table body remains the same */}
-    {paginatedWinners.map((item) => (
-      <TableRow key={item.winners.id}>
-        <TableCell>
-          <div>
-            <div className="font-medium">
-              {item.users?.firstName} {item.users?.lastName}
-            </div>
-            <div className="text-sm text-muted-foreground">
-              {item.users?.email}
-            </div>
-          </div>
-        </TableCell>
-        <TableCell>
-          {item.competitions?.title || (
-            <span className="text-muted-foreground">No competition</span>
-          )}
-        </TableCell>
-        <TableCell className="max-w-xs truncate">
-          {item.winners.prizeDescription}
-        </TableCell>
-        <TableCell className="font-semibold text-primary">
-  {item.winners.prizeValue}
-</TableCell>
-        <TableCell>
-          {item.winners.isShowcase ? (
-            <div className="flex items-center gap-1">
-              <Eye className="h-4 w-4 text-green-600" />
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-light bg-green-600 text-white">
-                Showed
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1">
-              <EyeOff className="h-4 w-4 text-gray-600" />
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-light bg-red-600 text-white">
-                Hidden
-              </span>
-            </div>
-          )}
-        </TableCell>
-        <TableCell>
-          {new Date(item.winners.createdAt).toLocaleString()}
-        </TableCell>
-        <TableCell className="text-right">
-          <div className="flex justify-end gap-2">
+      </div>
+  
+      {/* PAGINATION */}
+      {paginatedWinners.length > 0 && (
+        <>
+          <div className="flex flex-row justify-center items-center gap-3 sm:gap-4 my-4 sm:my-6">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleEdit(item)}
-              data-testid={`button-edit-${item.winners.id}`}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4 text-xs sm:text-sm"
             >
-              <Edit className="h-4 w-4" />
+              <ArrowBigLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline ml-1">Previous</span>
+            </Button>
+  
+            <div className="flex items-center gap-1 sm:gap-2">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                if (pageNum > totalPages) return null;
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className="w-8 h-8 sm:w-10 sm:h-10 text-xs"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+  
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4 text-xs sm:text-sm"
+            >
+              <span className="hidden sm:inline mr-1">Next</span>
+              <ArrowBigRight className="w-3 h-3 sm:w-4 sm:h-4" />
+            </Button>
+          </div>
+  
+          <p className="text-center text-xs sm:text-sm text-muted-foreground">
+            Showing {paginatedWinners.length} of {winners.length} filtered entries
+          </p>
+        </>
+      )}
+  
+      {/* Add/Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg sm:text-xl">
+              {editingWinner ? "Edit Winner" : "Add New Winner"}
+            </DialogTitle>
+          </DialogHeader>
+          <WinnerForm
+            data={editingWinner}
+            onSubmit={handleSubmit}
+            onCancel={() => {
+              setDialogOpen(false);
+              setEditingWinner(undefined);
+            }}
+            isLoading={createMutation.isPending || updateMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
+  
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!deletingWinner}
+        onOpenChange={(open) => !open && setDeletingWinner(undefined)}
+      >
+        <AlertDialogContent className="max-w-full sm:max-w-md p-4 sm:p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg sm:text-xl">Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm">
+              This will permanently delete this winner from the showcase. This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
+            <AlertDialogCancel className="w-full sm:w-auto text-sm sm:text-base" data-testid="button-cancel-delete">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletingWinner && deleteMutation.mutate(deletingWinner.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto text-sm sm:text-base"
+              data-testid="button-confirm-delete"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+  
+      {/* Bulk Remove Dialog */}
+      <Dialog open={showBulkRemoveDialog} onOpenChange={setShowBulkRemoveDialog}>
+        <DialogContent className="max-w-full sm:max-w-[500px] p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <EyeOff className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
+              Remove Winners from Showcase
+            </DialogTitle>
+            <DialogDescription className="text-sm">
+              This action will remove {winners.filter(w => w.winners.isShowcase).length} winners from the public showcase
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="mb-4 p-4 border border-amber-200 bg-amber-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium text-amber-800">Winners to be removed:</h4>
+                  <p className="text-sm text-amber-600 mt-1">
+                    {winners.filter(w => w.winners.isShowcase).length} winner(s) will be set to non-showcase
+                  </p>
+                </div>
+                <div className="text-2xl sm:text-3xl font-bold text-amber-700">
+                  {winners.filter(w => w.winners.isShowcase).length}
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 p-4 border border-blue-200 rounded-lg">
+              <h4 className="font-medium text-blue-800 mb-2 text-sm sm:text-base">What will happen:</h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li className="flex items-start gap-2">
+                  <div className="w-5 h-5 flex items-center justify-center rounded-full mt-0.5">
+                    <EyeOff className="h-3 w-3 text-blue-600" />
+                  </div>
+                  <span>Winners will no longer appear on Past Winners</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <div className="w-5 h-5 flex items-center justify-center rounded-full mt-0.5">
+                    <span className="text-xs">📋</span>
+                  </div>
+                  <span>Winners will still be visible in the admin panel</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <div className="w-5 h-5 flex items-center justify-center rounded-full mt-0.5">
+                    <span className="text-xs">🔄</span>
+                  </div>
+                  <span>You can add them back to showcase individually anytime</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowBulkRemoveDialog(false)}
+              className="w-full sm:w-auto text-sm sm:text-base"
+              disabled={isBulkRemoving}
+            >
+              Cancel
             </Button>
             <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => handleDelete(item)}
-              data-testid={`button-delete-${item.winners.id}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </TableCell>
-      </TableRow>
-    ))}
-  </TableBody>
-</Table>
-          </div>
-        )}
-
-        {/* PAGINATION */}
-        <div className="flex justify-center items-center gap-4 my-6">
-          <Button
-            variant="outline"
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-          >
-            <ArrowBigLeft />
-          </Button>
-
-          <span className="font-medium">
-            Page {currentPage} of {totalPages}
-          </span>
-
-          <Button
-            variant="outline"
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-          >
-            <ArrowBigRight />
-          </Button>
-        </div>
-
-        {/* ENTRY COUNT */}
-        <p className="text-center text-sm text-muted-foreground">
-          Showing {paginatedWinners.length} of {winners.length} filtered entries
-          {sortByShowcase && (
-            <span className="ml-2 text-primary">
-              • Sorted by {sortByShowcase === "showcase-first" ? "Showcase First" : "Non-Showcase First"}
-            </span>
-          )}
-        </p>
-
-        {/* Add/Edit Dialog */}
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {editingWinner ? "Edit Winner" : "Add New Winner"}
-              </DialogTitle>
-            </DialogHeader>
-            <WinnerForm
-              data={editingWinner}
-              onSubmit={handleSubmit}
-              onCancel={() => {
-                setDialogOpen(false);
-                setEditingWinner(undefined);
-              }}
-              isLoading={createMutation.isPending || updateMutation.isPending}
-            />
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog
-          open={!!deletingWinner}
-          onOpenChange={(open) => !open && setDeletingWinner(undefined)}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete this winner from the showcase. This
-                action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel data-testid="button-cancel-delete">
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => deletingWinner && deleteMutation.mutate(deletingWinner.id)}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                data-testid="button-confirm-delete"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-<Dialog open={showBulkRemoveDialog} onOpenChange={setShowBulkRemoveDialog}>
-  <DialogContent className="sm:max-w-[500px]">
-    <DialogHeader>
-      <DialogTitle className="flex items-center gap-2">
-        <EyeOff className="h-5 w-5 text-amber-600" />
-        Remove Winners from Showcase
-      </DialogTitle>
-      <DialogDescription>
-        This action will remove {winners.filter(w => w.winners.isShowcase).length} winners from the public showcase
-      </DialogDescription>
-    </DialogHeader>
-    
-    <div className="py-4">
-      <div className="mb-4 p-4 border border-white  text-white rounded-lg">
-        <div className="flex items-center justify-between">
-          <div>
-            <h4 className="font-medium ">Winners to be removed:</h4>
-            <p className="text-sm  mt-1">
-              {winners.filter(w => w.winners.isShowcase).length} winner(s) will be set to non-showcase
-            </p>
-          </div>
-          <div className="text-3xl font-bold ">
-            {winners.filter(w => w.winners.isShowcase).length}
-          </div>
-        </div>
-        
-        {/* List of affected winners */}
-        {/* <div className="mt-4 max-h-60 overflow-y-auto border-t border-amber-200 pt-3">
-          <h5 className="text-sm font-medium text-amber-700 mb-2">Affected Winners:</h5>
-          <div className="space-y-2">
-            {winners
-              .filter(w => w.winners.isShowcase)
-              .slice(0, 10) // Show first 10 only
-              .map((winner, index) => (
-                <div 
-                  key={winner.winners.id} 
-                  className="flex items-center gap-3 p-2 bg-white rounded border border-amber-100 hover:bg-amber-50"
-                >
-                  <div className="w-6 h-6 flex items-center justify-center bg-amber-100 text-amber-800 rounded-full text-xs font-medium">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">
-                      {winner.users?.firstName} {winner.users?.lastName}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {winner.winners.prizeDescription}
-                    </p>
-                  </div>
-                  <div className="text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded">
-                    Showcase
-                  </div>
-                </div>
-              ))}
-            
-            {winners.filter(w => w.winners.isShowcase).length > 10 && (
-              <div className="text-center py-2 text-sm text-gray-500 border-t border-amber-100">
-                ... and {winners.filter(w => w.winners.isShowcase).length - 10} more winners
-              </div>
-            )}
-          </div>
-        </div> */}
-      </div>
-      
-      <div className=" p-4 border border-white text-white rounded-lg">
-        <h4 className="font-medium  mb-2">What will happen:</h4>
-        <ul className="text-sm  space-y-1">
-          <li className="flex items-start gap-2">
-            <div className="w-5 h-5 flex items-center justify-center rounded-full mt-0.5">
-              <EyeOff className="h-3 w-3 " />
-            </div>
-            <span>Winners will no longer appear on Past Winners</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <div className="w-5 h-5 flex items-center justify-center rounded-full mt-0.5">
-              <span className="text-xs">📋</span>
-            </div>
-            <span>Winners will still be visible in the admin panel</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <div className="w-5 h-5 flex items-center justify-center rounded-full mt-0.5">
-              <span className="text-xs">🔄</span>
-            </div>
-            <span>You can add them back to showcase individually anytime</span>
-          </li>
-        </ul>
-      </div>
-    </div>
-    
-    <DialogFooter className="flex-col sm:flex-row gap-2">
-      <Button
-        variant="outline"
-        onClick={() => setShowBulkRemoveDialog(false)}
-        className="w-full sm:w-auto"
-        disabled={isBulkRemoving}
-      >
-        Cancel
-      </Button>
-      <Button
-        onClick={async () => {
-          setIsBulkRemoving(true);
-          const showcaseWinners = winners.filter(w => w.winners.isShowcase);
-          
-          try {
-            // Create array of promises to update all showcase winners
-            const updatePromises = showcaseWinners.map(winner =>
-              updateMutation.mutateAsync({
-                id: winner.winners.id,
-                data: {
-                  userId: winner.winners.userId,
-                  competitionId: winner.winners.competitionId,
-                  prizeDescription: winner.winners.prizeDescription,
-                  prizeValue: winner.winners.prizeValue,
-                  imageUrl: winner.winners.imageUrl,
-                  isShowcase: false
+              onClick={async () => {
+                setIsBulkRemoving(true);
+                const showcaseWinners = winners.filter(w => w.winners.isShowcase);
+                
+                try {
+                  // Create array of promises to update all showcase winners
+                  const updatePromises = showcaseWinners.map(winner =>
+                    updateMutation.mutateAsync({
+                      id: winner.winners.id,
+                      data: {
+                        userId: winner.winners.userId,
+                        competitionId: winner.winners.competitionId,
+                        prizeDescription: winner.winners.prizeDescription,
+                        prizeValue: winner.winners.prizeValue,
+                        imageUrl: winner.winners.imageUrl,
+                        isShowcase: false
+                      }
+                    })
+                  );
+  
+                  // Execute all updates
+                  await Promise.all(updatePromises);
+                  
+                  toast({
+                    title: "Success",
+                    description: `Removed ${showcaseWinners.length} winners from showcase`,
+                  });
+                  setShowBulkRemoveDialog(false);
+                } catch (error) {
+                  toast({
+                    variant: "destructive",
+                    title: "Error",
+                    description: "Failed to remove some winners from showcase",
+                  });
+                } finally {
+                  setIsBulkRemoving(false);
                 }
-              })
-            );
-
-            // Execute all updates
-            await Promise.all(updatePromises);
-            
-            toast({
-              title: "Success",
-              description: `Removed ${showcaseWinners.length} winners from showcase`,
-            });
-            setShowBulkRemoveDialog(false);
-          } catch (error) {
-            toast({
-              variant: "destructive",
-              title: "Error",
-              description: "Failed to remove some winners from showcase",
-            });
-          } finally {
-            setIsBulkRemoving(false);
-          }
-        }}
-        variant="destructive"
-        className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700"
-        disabled={isBulkRemoving}
-      >
-        {isBulkRemoving ? (
-          <>
-            <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
-            Removing...
-          </>
-        ) : (
-          <>
-            <EyeOff className="h-4 w-4 mr-2" />
-            Remove All ({winners.filter(w => w.winners.isShowcase).length})
-          </>
-        )}
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-        
-      </div>
-    </AdminLayout>
+              }}
+              variant="destructive"
+              className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-sm sm:text-base"
+              disabled={isBulkRemoving}
+            >
+              {isBulkRemoving ? (
+                <>
+                  <div className="h-3 w-3 sm:h-4 sm:w-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Removing...
+                </>
+              ) : (
+                <>
+                  <EyeOff className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  Remove All ({winners.filter(w => w.winners.isShowcase).length})
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  </AdminLayout>
   );
 }
