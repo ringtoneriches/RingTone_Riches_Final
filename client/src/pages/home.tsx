@@ -7,7 +7,7 @@ import StatsBanner from "@/components/stats-banner";
 import { Competition, User } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import FeaturedCompetitions from "./featuredCompetitions";
-import { Sparkles, Trophy, Zap, Gift, Mail, CheckCircle2, Shield, Award, Star, ChevronRight, Crown, Wallet, RotateCw, Ticket, Coins, Play, TrendingUp, Flame, PartyPopper } from "lucide-react";
+import { Sparkles, Trophy, Zap, Gift, Mail, CheckCircle2, Shield, Award, Star, ChevronRight, Crown, Wallet, RotateCw, Ticket, Coins, Play, TrendingUp, Flame, PartyPopper, Circle, Target } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -281,8 +281,8 @@ export default function Home() {
             //   filter: "instant",
             //   winChance: "HOT"
             // },
-            { Icon: RotateCw, title: "Spin & Win", tagline: "Spin to Win Big",  stars: 5, badge: "HOT", badgeColor: "bg-red-500", gradient: "from-purple-600 via-purple-500 to-violet-600", borderColor: "border-purple-400/50", glowColor: "shadow-purple-500/50", filter: "spin" },
-            { Icon: Ticket, title: "Scratch Cards", tagline: "Reveal Your Fortune",  stars: 5, badge: "POPULAR", badgeColor: "bg-emerald-500", gradient: "from-emerald-600 via-emerald-500 to-teal-600", borderColor: "border-emerald-400/50", glowColor: "shadow-emerald-500/50", filter: "scratch" },
+            { Icon: Circle, title: "Ringtone Plinko", tagline: "Drop in to win",  stars: 5, badge: "HOT", badgeColor: "bg-red-500", gradient: "from-purple-600 via-purple-500 to-violet-600", borderColor: "border-purple-400/50", glowColor: "shadow-purple-500/50", filter: "all" },
+            { Icon: Target, title: "Ringtone Pop Balloon", tagline: "Pop to win",  stars: 5, badge: "POPULAR", badgeColor: "bg-emerald-500", gradient: "from-emerald-600 via-emerald-500 to-teal-600", borderColor: "border-emerald-400/50", glowColor: "shadow-emerald-500/50", filter: "all" },
             { Icon: Zap, title: "Competition", tagline: "Win Big Prizes",  stars: 5,  badge: "MEGA", badgeColor: "bg-amber-500", gradient: "from-amber-500 via-yellow-500 to-orange-500", borderColor: "border-amber-400/50", glowColor: "shadow-amber-500/50", filter: "instant" }
           ].map((game, index) => (
             <button
