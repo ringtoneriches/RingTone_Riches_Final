@@ -730,7 +730,7 @@ export default function AdminSpinWheel() {
 
         {/* Archived Games Modal */}
         <Dialog open={showArchivedModal} onOpenChange={setShowArchivedModal}>
-          <DialogContent className="w-[95vw] max-w-sm sm:max-w-md mx-auto overflow-x-hidden sm:overflow-y-auto">
+          <DialogContent className="w-[95vw] max-w-sm sm:max-w-7xl mx-auto overflow-x-hidden sm:overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Archive className="w-5 h-5" />

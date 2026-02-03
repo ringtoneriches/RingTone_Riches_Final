@@ -672,7 +672,7 @@ export default function AdminScratchCard() {
                         />
                       )}
                       <div className="flex-1">
-                        <div className="flex items-center flex-col gap-2 mb-2">
+                        <div className="flex items-center flex-col sm:flex-row gap-2 mb-2">
                           <h3 className="text-xl font-bold text-foreground">
                             {competition.title}
                           </h3>

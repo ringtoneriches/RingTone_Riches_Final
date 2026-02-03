@@ -559,7 +559,24 @@ useEffect(() => {
     
     {/* Right column for badges */}
     <div className="flex flex-col items-start sm:items-end gap-2">
-      {/* Same badges as before */}
+    <div className="flex flex-wrap gap-2">
+      <Badge className={`${getStatusBadgeColor(ticket.status)} border text-xs`}>
+        {getStatusIcon(ticket.status)}
+        <span className="ml-1 hidden sm:inline capitalize">{ticket.status.replace("_", " ")}</span>
+        <span className="ml-1 sm:hidden capitalize">
+          {ticket.status === "in_progress" ? "Progress" : ticket.status.charAt(0)}
+        </span>
+      </Badge>
+      <Badge className={`${getPriorityBadgeColor(ticket.priority)} border text-xs`}>
+        <span className="capitalize">{ticket.priority}</span>
+      </Badge>
+    </div>
+    {ticket.imageUrls && ticket.imageUrls.length > 0 && (
+      <span className="text-xs text-gray-400 flex items-center gap-1">
+        <Image className="h-3 w-3" />
+        {ticket.imageUrls.length}
+      </span>
+    )}
     </div>
   </div>
 </CardContent>

@@ -22,6 +22,67 @@ app.use(express.urlencoded({ extended: false }));
 
 // Serve uploaded files from attached_assets directory
 app.use("/attached_assets", express.static("attached_assets"));
+
+app.get('/api/facebook-members', async (req, res) => {
+  try {
+    const { data } = await axios.get('https://www.facebook.com/groups/1358608295902979', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0'
+      }
+    });
+
+    // Try to find the member count in the HTML using regex
+    const regex = /(\d+\.?\d*[KkM]?)\s*(?:<!-- -->)?\s*members/i;
+    const match = data.match(regex);
+    
+    let totalMembers = 0;
+    
+    if (match && match[1]) {
+      const countStr = match[1];
+      if (countStr.includes('K') || countStr.includes('k')) {
+        totalMembers = parseFloat(countStr) * 1000;
+      } else if (countStr.includes('M') || countStr.includes('m')) {
+        totalMembers = parseFloat(countStr) * 1000000;
+      } else {
+        totalMembers = parseInt(countStr.replace(/,/g, ''));
+      }
+    } else {
+      // Try another common pattern
+      const regex2 = /"(\d+\.?\d*[KkM]?) members"/i;
+      const match2 = data.match(regex2);
+      if (match2 && match2[1]) {
+        const countStr = match2[1];
+        if (countStr.includes('K') || countStr.includes('k')) {
+          totalMembers = parseFloat(countStr) * 1000;
+        }
+      }
+    }
+
+    res.json({ 
+      totalMembers: Math.round(totalMembers) || 6600,
+      success: totalMembers > 0
+    });
+
+  } catch (err) {
+    console.error('Error:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch members count',
+      totalMembers: 6600, // Return fallback value
+      success: false
+    });
+  }
+});
 app.get('/api/trustpilot-reviews', async (req, res) => {
   try {
     const { data } = await axios.get('https://www.trustpilot.com/review/ringtoneriches.co.uk');

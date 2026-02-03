@@ -239,7 +239,7 @@ export default function AdminIntelligence() {
 
                   <Tooltip
                     formatter={(value, name, props) => [
-                      <div key="value" className="font-bold text-sm">
+                      <div key="value" className="font-bold text-sm text-white">
                         {value} users
                       </div>,
                       <div key="name" className="text-xs text-muted-foreground">
@@ -253,6 +253,7 @@ export default function AdminIntelligence() {
                       borderRadius: '8px',
                       padding: '8px 12px',
                       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                      backdropFilter:"blur(5px)",
                       fontSize: '12px',
                     }}
                   />

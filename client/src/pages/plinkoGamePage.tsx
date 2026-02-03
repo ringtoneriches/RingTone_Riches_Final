@@ -21,7 +21,7 @@ const { competitionId, orderId } = params;
   const itemsPerPage = 5;
   const [isBallDropping, setIsBallDropping] = useState(false);
   const confirmedHistoryCountRef = useRef<number>(0); // Track how many results were confirmed before current drop
-  
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
   const winnerCongratsRef = useRef<HTMLAudioElement | null>(null);
   
   useEffect(() => {
@@ -480,7 +480,30 @@ const { competitionId, orderId } = params;
           </div>
         </div>
       </main>
-      
+      {showDisclaimer && (
+  <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:justify-center px-4">
+    {/* Backdrop */}
+    <div 
+      className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
+      onClick={() => setShowDisclaimer(false)}
+    ></div>
+
+    {/* Disclaimer Card */}
+    <div className="relative w-full mb-2 max-w-md bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 rounded-2xl p-5 sm:p-6 shadow-2xl border border-gray-700 transform transition-all duration-300 scale-95 animate-slide-up">
+      <div className="flex flex-col items-start gap-4 ">
+        <p className="text-white text-sm sm:text-base font-medium leading-snug">
+          ⚠️ <span className="font-semibold">Disclaimer:</span> All on-screen graphics are for entertainment purposes only. Prize outcomes are securely pre-selected before gameplay and are not influenced by animations.
+        </p>
+        <button
+          onClick={() => setShowDisclaimer(false)}
+          className="self-end bg-indigo-500 hover:bg-indigo-400 text-white px-6 py-2 rounded-full font-semibold text-sm sm:text-base shadow-lg transition-transform duration-200 hover:scale-105"
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  </div>
+)}
       <Footer />
       
       <style>{`

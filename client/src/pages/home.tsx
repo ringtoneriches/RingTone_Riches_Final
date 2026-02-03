@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import PremiumFacebookEngagement from "@/components/PremiumFacebookEngagement";
+import CompactFacebookCTA from "@/components/PremiumFacebookEngagement";
 
 
 
@@ -505,6 +507,9 @@ export default function Home() {
         `}</style>
       </section>
 
+
+   
+
       {/* Newsletter Section */}
       {isAuthenticated && (
         <section className="py-12 md:py-20 relative overflow-hidden">
@@ -615,11 +620,7 @@ export default function Home() {
                       )}
                     </Button>
 
-                    <p className="text-sm text-slate-400 text-center mt-4 flex items-center justify-center gap-2">
-                      {/* <Star className="w-4 h-4 text-yellow-400" /> */}
-                      Join thousands on the List!
-                      {/* <Star className="w-4 h-4 text-yellow-400" /> */}
-                    </p>
+                   
                   </form>
                 )}
               </div>
@@ -628,6 +629,7 @@ export default function Home() {
         </section>
       )}
 
+<CompactFacebookCTA/>
       <Footer />
     </div>
   );

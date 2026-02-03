@@ -17,10 +17,11 @@ interface PrizeModalProps {
     description?: string;
   };
   gameType: 'scratch' | 'spin';
+  spinWheelType:string
   congratsAudioRef: React.RefObject<HTMLAudioElement>;
 }
 
-export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType ,congratsAudioRef }: PrizeModalProps) {
+export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType ,congratsAudioRef, spinWheelType }: PrizeModalProps) {
   //  const congratsAudioRef = useRef<HTMLAudioElement | null>(null);
 //    useEffect(() => {
 //   if (isOpen && isWinner) {
@@ -241,6 +242,9 @@ const handleClose = () => {
                 <p className="text-center text-gray-400 text-sm sm:text-base">
                   {gameType === "scratch" ?
                      `Better luck next time! Keep playing for more chances to win amazing prizes.` :
+                     spinWheelType === "wheel2" ?
+                      `You didn't win this time but the next retro ringtone spin could be your moment.`
+                     :
                      `You didn't win this time but the next luxury car spin could be your moment.`
                   }
                   

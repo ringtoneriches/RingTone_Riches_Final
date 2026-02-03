@@ -69,7 +69,7 @@ export default function AdminUsers() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth() as { user: User | null };
   const [searchInput, setSearchInput] = useState("");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("24h");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);

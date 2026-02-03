@@ -59,7 +59,7 @@ export default function AdminEntriesPage() {
   const { toast } = useToast();
   const [searchInput, setSearchInput] = useState("");
   const [competitionFilter, setCompetitionFilter] = useState<string>("all");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("1h");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -369,7 +369,7 @@ const paginatedEntries = filteredEntries.slice(startIndex, startIndex + itemsPer
             <SelectContent>
               <SelectItem value="all" className="text-sm">All Competitions</SelectItem>
               {competitions.map((comp) => (
-                <SelectItem key={comp.id} value={comp.id} className="text-xs w-80">
+                <SelectItem key={comp.id} value={comp.id} className="text-xs w-80 sm:w-full">
                   {comp.title}
                 </SelectItem>
               ))}

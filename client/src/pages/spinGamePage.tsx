@@ -230,11 +230,12 @@ export default function SpinGamePage() {
         prize={gameResult?.prize}
         gameType="spin"
         congratsAudioRef={congratsAudioRef}
+        spinWheelType={wheelType}
       />
 
       <Footer />
 
-          {showDisclaimer && (
+  {showDisclaimer && (
   <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:justify-center px-4">
     {/* Backdrop */}
     <div 

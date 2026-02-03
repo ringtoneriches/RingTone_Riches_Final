@@ -985,7 +985,7 @@ if (congratsAudioRef.current) {
       absolute 
       -top-[44%]
       sm:-top-[33%]
-      md:-top-[42%] 
+      md:-top-[45%] 
       left-1/2 
       -translate-x-1/2 
       -translate-y-2 
@@ -998,7 +998,7 @@ if (congratsAudioRef.current) {
          <img
           src={ring}
           alt="Wheel Ring"
-         className="absolute -left-0.5 -top-4 sm:top-16 sm:left-16 md:-left-1 md:-top-4 inset-0 w-[108%] h-[108%] sm:w-[80%] sm:h-[80%] md:w-[105%] md:h-[105%] object-cover z-20 pointer-events-none"
+         className="absolute -left-0.5 -top-4 sm:top-16 sm:left-16 md:-left-1 md:-top-12 inset-0 w-[108%] h-[108%] sm:w-[80%] sm:h-[80%] md:w-[115%] md:h-[115%] object-cover z-20 pointer-events-none"
         />
 
         <canvas

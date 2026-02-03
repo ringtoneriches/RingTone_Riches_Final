@@ -60,7 +60,7 @@ type DateFilter = "all" | "1h" | "24h" | "7d" | "30d" | "custom";
 
 export default function AdminTransactions() {
   const [search, setSearch] = useState("");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("1h");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
