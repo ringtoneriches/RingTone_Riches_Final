@@ -27,7 +27,7 @@ export default function Testimonials() {
   const [direction, setDirection] = useState(0);
 
   useEffect(() => {
-    fetch("http://localhost:6500/api/trustpilot-reviews")
+    fetch("https://ringtoneriches.co.uk/api/trustpilot-reviews")
       .then((res) => res.json())
       .then((data: ApiResponse) => {
         const fetchedReviews = data.reviews || [];

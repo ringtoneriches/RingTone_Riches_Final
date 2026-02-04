@@ -283,7 +283,7 @@ export default function Home() {
             //   winChance: "HOT"
             // },
             { Icon: Circle, title: "Ringtone Plinko", tagline: "Drop in to win",  stars: 5, badge: "HOT", badgeColor: "bg-red-500", gradient: "from-purple-600 via-purple-500 to-violet-600", borderColor: "border-purple-400/50", glowColor: "shadow-purple-500/50", filter: "all" },
-            { Icon: Target, title: "Ringtone Pop Balloon", tagline: "Pop to win",  stars: 5, badge: "POPULAR", badgeColor: "bg-emerald-500", gradient: "from-emerald-600 via-emerald-500 to-teal-600", borderColor: "border-emerald-400/50", glowColor: "shadow-emerald-500/50", filter: "all" },
+            { Icon: Target, title: "Ringtone Pop", tagline: "Pop to win",  stars: 5, badge: "POPULAR", badgeColor: "bg-emerald-500", gradient: "from-emerald-600 via-emerald-500 to-teal-600", borderColor: "border-emerald-400/50", glowColor: "shadow-emerald-500/50", filter: "all" },
             { Icon: Zap, title: "Competition", tagline: "Win Big Prizes",  stars: 5,  badge: "MEGA", badgeColor: "bg-amber-500", gradient: "from-amber-500 via-yellow-500 to-orange-500", borderColor: "border-amber-400/50", glowColor: "shadow-amber-500/50", filter: "instant" }
           ].map((game, index) => (
             <button
