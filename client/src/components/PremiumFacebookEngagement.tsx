@@ -58,7 +58,7 @@ const CompactFacebookCTA = () => {
 
   return (
     <CardContent className="flex justify-center items-center p-6 py-10 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
-    <div className="relative w-[100%] md:w-[37%]">
+    <div className="relative w-[100%] sm:w-[80%] md:w-[60%] lg:w-[37%]">
         
       {/* Premium Gold Glowing border effect */}
       <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 rounded-xl blur opacity-60" />
@@ -81,9 +81,13 @@ const CompactFacebookCTA = () => {
                 </div>
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white group-hover:text-yellow-50 transition-colors">
-                  Join {displayCount}+ Members
-                </h3>
+              <h3 className="text-xl font-bold text-white group-hover:text-yellow-50 transition-colors">
+              {loading ? (
+                <span className="inline-block w-12 h-6 bg-gray-700 rounded animate-pulse" />
+              ) : (
+                `Join ${displayCount}+ Members`
+              )}
+            </h3>
                 <p className="text-yellow-400 text-sm group-hover:text-yellow-300 transition-colors">
                   Facebook Community
                 </p>
@@ -93,8 +97,12 @@ const CompactFacebookCTA = () => {
             <div className="flex items-center gap-2 px-3 py-1 bg-gray-800/50 rounded-full border border-yellow-500/20 group-hover:border-yellow-500/40 transition-all">
               <Users className="w-4 h-4 text-yellow-400" />
               <span className="text-white font-semibold">
-              {memberCount}
-              </span>
+              {loading ? (
+                <span className="inline-block w-8 h-4 bg-gray-700 rounded animate-pulse" />
+              ) : (
+                memberCount
+              )}
+            </span>
             </div>
           </div>
   

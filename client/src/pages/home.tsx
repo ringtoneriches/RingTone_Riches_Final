@@ -16,6 +16,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import PremiumFacebookEngagement from "@/components/PremiumFacebookEngagement";
 import CompactFacebookCTA from "@/components/PremiumFacebookEngagement";
+import Testimonials from "@/components/testimonials";
 
 
 
@@ -630,6 +631,7 @@ export default function Home() {
       )}
 
 <CompactFacebookCTA/>
+<Testimonials/>
       <Footer />
     </div>
   );
