@@ -3430,19 +3430,19 @@ res.json({
           .where(eq(orders.id, orderId));
   
         // Create spin entries
-        const spins = [];
+        const spinEntries  = [];
         for (let i = 0; i < order.quantity; i++) {
-          const spinId = nanoid(8).toUpperCase();
-          const [spin] = await db.insert(spins).values({
+          const ticketNumber = `SPIN-${nanoid(8).toUpperCase()}`;
+          const [ticket] = await db.insert(tickets).values({
             userId,
             competitionId: order.competitionId,
             orderId: order.id,
-            spinNumber: spinId,
+            ticketNumber,
             isUsed: false,
             result: null,
             createdAt: new Date(),
           }).returning();
-          spins.push(spin);
+          spinEntries .push(ticket);
         }
   
         // Update competition sold tickets count
@@ -3480,7 +3480,7 @@ res.json({
   
         // Send confirmation email
         if (user?.email) {
-          const spinNumbers = spins.map((s) => s.spinNumber);
+          const spinNumbers = spinEntries.map((s) => s.spinNumber);
           
           sendOrderConfirmationEmail(user.email, {
             orderId: order.id,
@@ -3510,7 +3510,8 @@ res.json({
           competitionId: order.competitionId,
           message: "Payment completed successfully",
           orderId: order.id,
-          spins: spins.map((s) => ({ spinNumber: s.spinNumber })),
+          spins: spinEntries.map((s) => ({ ticketNumber: s.ticketNumber })),
+
           spinsPurchased: order.quantity,
           paymentMethod: paymentMethodText,
           paymentBreakdown,
@@ -4572,19 +4573,19 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           .where(eq(orders.id, orderId));
   
         // Create scratch card entries
-        const tickets = [];
-        for (let i = 0; i < order.quantity; i++) {
-          const ticketNumber = nanoid(8).toUpperCase();
-          const [ticket] = await db.insert(tickets).values({
-            userId,
-            competitionId: order.competitionId,
-            orderId: order.id,
-            ticketNumber,
-            isWinner: false,
-            createdAt: new Date(),
-          }).returning();
-          tickets.push(ticket);
-        }
+        const scratchTickets = []; // <-- renamed from tickets
+          for (let i = 0; i < order.quantity; i++) {
+            const ticketNumber = `SCRATCH-${nanoid(8).toUpperCase()}`;
+            const [ticket] = await db.insert(tickets).values({ // <-- tickets table
+              userId,
+              competitionId: order.competitionId,
+              orderId: order.id,
+              ticketNumber,
+              isWinner: false,
+              createdAt: new Date(),
+            }).returning();
+            scratchTickets.push(ticket);
+          }
   
         // Update competition sold tickets count
         await db.update(competitions)
@@ -4621,7 +4622,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   
         // Send confirmation email
         if (user?.email) {
-          const ticketNumbers = tickets.map((t) => t.ticketNumber);
+          const ticketNumbers = scratchTickets.map((t) => t.ticketNumber);
           
           sendOrderConfirmationEmail(user.email, {
             orderId: order.id,
@@ -4651,7 +4652,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           competitionId: order.competitionId,
           message: "Scratch card purchase completed",
           orderId: order.id,
-          tickets: tickets.map((t) => ({ ticketNumber: t.ticketNumber })),
+          tickets: scratchTickets.map((t) => ({ ticketNumber: t.ticketNumber })),
           cardsPurchased: order.quantity,
           paymentMethod: paymentMethodText,
           paymentBreakdown,
