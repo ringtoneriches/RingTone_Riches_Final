@@ -764,7 +764,7 @@ export default function AdminDiscountCodes() {
               className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4"
             >
               <ArrowBigLeft className="w-4 h-4" />
-              <span className="hidden sm:inline ml-1">Previous</span>
+            
             </Button>
 
             <div className="flex items-center gap-1 sm:gap-2">
@@ -803,7 +803,7 @@ export default function AdminDiscountCodes() {
               disabled={currentPage === totalPages}
               className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4"
             >
-              <span className="hidden sm:inline mr-1">Next</span>
+           
               <ArrowBigRight className="w-4 h-4" />
             </Button>
           </div>

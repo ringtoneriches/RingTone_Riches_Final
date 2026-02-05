@@ -188,6 +188,7 @@ function UpdateProfileModal({ user }: { user: any }) {
     email: user?.email || "",
     firstName: user?.firstName || "",
     lastName: user?.lastName || "",
+    phoneNumber: user?.phoneNumber || "",
     dateOfBirth: user?.dateOfBirth || "",
   });
 
@@ -249,6 +250,14 @@ function UpdateProfileModal({ user }: { user: any }) {
               <Input
                 value={form.lastName}
                 onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                className="bg-black/50 border-yellow-500/20"
+              />
+            </div>
+            <div>
+              <Label>Phone Number</Label>
+              <Input
+                value={form.phoneNumber}
+                onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
                 className="bg-black/50 border-yellow-500/20"
               />
             </div>
@@ -363,6 +372,7 @@ export default function Wallet() {
   staleTime: 0,
 });
 
+// console.log(user)
 const isAuthenticated = !!user;
   const queryClient = useQueryClient();
   const [topUpAmount, setTopUpAmount] = useState<string>("10");
@@ -2407,6 +2417,17 @@ const handleDeleteBankAccount = (
                             {user?.firstName || user?.lastName
                               ? `${user?.firstName || ""} ${user?.lastName || ""}`.trim()
                               : "Not provided"}
+                          </p>
+                        </div>
+                        <div>
+                        <label className="text-gray-400 text-sm font-medium">
+                            Phone Number
+                          </label>
+                          <p
+                            className="text-white text-lg mt-1"
+                            data-testid="text-member-since"
+                          >
+                            {user?.phoneNumber}
                           </p>
                         </div>
                         <div>

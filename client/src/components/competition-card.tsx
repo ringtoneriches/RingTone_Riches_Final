@@ -2,6 +2,8 @@ import { useLocation } from "wouter";
 import { Competition } from "@shared/schema";
 import { TrendingUp, Trophy, Sparkles, Gift, Zap, Users, Clock, Shield, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface CompetitionCardProps {
   competition: Competition;
@@ -10,6 +12,29 @@ interface CompetitionCardProps {
 
 export default function CompetitionCard({ competition, authenticated = false }: CompetitionCardProps) {
   const [, setLocation] = useLocation();
+
+  const { data: plinkoConfig } = useQuery({
+    queryKey: ["/api/plinko-config"],
+    queryFn: async () => {
+      const res = await apiRequest("/api/plinko-config", "GET");
+      return res.json();
+    },
+  });
+  const { data: spinConfig } = useQuery({
+    queryKey: ["/api/admin/game-spin-2-config"],
+    queryFn: async () => {
+      const res = await apiRequest("/api/admin/game-spin-2-config", "GET");
+      return res.json();
+    },
+  });
+
+  // Hide Plinko competition if Plinko is not visible
+  if (competition.type === "plinko" && plinkoConfig?.isVisible === false) {
+    return null;
+  }
+  if (competition.wheelType === "wheel2" && spinConfig?.isVisible === false) {
+    return null;
+  }
 
    const hiddenCompetitionIds = [
   "d54eee36-2280-4372-84f6-93d07343a970", 

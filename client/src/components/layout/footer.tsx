@@ -204,15 +204,27 @@ export default function Footer() {
           <div className="space-y-3">
 
           <Link href="/wallet?tab=support">
-            <p className="text-muted-foreground mb-3">
+          <p className="text-white mb-3 border-2 border-yellow-500/30 rounded-lg px-4 py-2.5 w-fit font-semibold
+                        bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-600 bg-size-200
+                        hover:animate-none cursor-pointer
+                        transition-all duration-500
+                        hover:bg-right hover:from-amber-700 hover:via-yellow-700 hover:to-amber-700
+                        hover:border-yellow-400 hover:shadow-2xl hover:shadow-yellow-500/20
+                        shadow-lg shadow-amber-900/20">
+            <span className="flex items-center gap-2">
+              <Headphones className="w-4 h-4 animate-pulse" />
               Support
-            </p>
-            </Link>
-            <p className="text-muted-foreground mb-3" data-testid="text-email">
-              support@ringtoneriches.co.uk
-            </p>
-            
-            {/* Support Button - Compact */}
+            </span>
+            <style>{`
+              .bg-size-200 {
+                background-size: 200% 100%;
+              }
+              .bg-right {
+                background-position: right center;
+              }
+            `}</style>
+          </p>
+        </Link>
             
           </div>
         </div>

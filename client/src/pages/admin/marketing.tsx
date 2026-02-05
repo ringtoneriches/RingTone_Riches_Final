@@ -477,7 +477,7 @@ export default function AdminMarketing() {
               className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4 text-xs sm:text-sm"
             >
               <ArrowBigLeft className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline ml-1">Previous</span>
+             
             </Button>
   
             <div className="flex items-center gap-1 sm:gap-2">
@@ -516,7 +516,7 @@ export default function AdminMarketing() {
               disabled={currentPage === totalPages}
               className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4 text-xs sm:text-sm"
             >
-              <span className="hidden sm:inline mr-1">Next</span>
+              
               <ArrowBigRight className="w-3 h-3 sm:w-4 sm:h-4" />
             </Button>
           </div>

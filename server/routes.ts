@@ -1802,6 +1802,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password,
         firstName,
         lastName,
+        phoneNumber,
         dateOfBirth,
         birthMonth,
         birthYear,
@@ -1820,6 +1821,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email,
         firstName,
         lastName,
+        phoneNumber,
         dateOfBirth: dobString,
         birthMonth,
         birthYear,
@@ -1850,6 +1852,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: updatedUser.email,
         firstName: updatedUser.firstName,
         lastName: updatedUser.lastName,
+        phoneNumber: updatedUser.phoneNumber,
         dateOfBirth: updatedUser.dateOfBirth,
         addressStreet: updatedUser.addressStreet,
         addressCity: updatedUser.addressCity,
@@ -2788,40 +2791,42 @@ res.json({
         useWalletBalance = false,
         useRingtonePoints = false,
       } = req.body;
-
+  
       // -------------------------
       // 1️⃣ VALIDATE ORDER
       // -------------------------
-      const order = await storage.getOrder(orderId);
-
+      const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+  
       if (!order || order.userId !== userId) {
         return res.status(404).json({ message: "Order not found" });
       }
-
+  
       if (order.status !== "pending") {
         return res.status(400).json({ message: "Order already processed" });
       }
-
+  
       // Load the competition
-      const competition = await storage.getCompetition(competitionId);
+      const [competition] = await db.select().from(competitions).where(eq(competitions.id, competitionId));
       if (!competition) {
         return res.status(404).json({ message: "Competition not found" });
       }
-
+  
       const compType = competition.type;
-      const totalAmount = parseFloat(order.totalAmount);
-
+      
+      // Total already includes discount if applied
+      const totalAmount = Number(order.totalAmount);
+  
       // -------------------------
       // 2️⃣ SOLD-OUT LOGIC (INSTANT ONLY)
       // -------------------------
       if (compType === "instant") {
         const soldTickets = Number(competition.soldTickets || 0);
         const maxTickets = Number(competition.maxTickets || 0);
-
+  
         if (maxTickets > 0 && soldTickets >= maxTickets) {
           return res.status(400).json({ message: "Competition sold out" });
         }
-
+  
         const remainingTickets = maxTickets - soldTickets;
         if (quantity > remainingTickets) {
           return res.status(400).json({
@@ -2829,79 +2834,112 @@ res.json({
           });
         }
       }
-
+  
       // -------------------------
       // 3️⃣ USER BALANCE + POINTS
       // -------------------------
-      const user = await storage.getUser(userId);
-      const walletBalance = parseFloat(user?.balance || "0");
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+      const walletBalance = Number(user?.balance || "0");
       const ringtonePoints = user?.ringtonePoints || 0;
-      const pointsValue = ringtonePoints * 0.01;
-
+  
       let remainingAmount = totalAmount;
       let walletUsed = 0;
       let pointsUsed = 0;
-
+      let cashflowsUsed = 0;
+  
       const paymentBreakdown = [];
-
+  
       // -------------------------
       // 4️⃣ APPLY WALLET
       // -------------------------
       if (useWalletBalance) {
         walletUsed = Math.min(walletBalance, remainingAmount);
         if (walletUsed > 0) {
-          const newBalance = (walletBalance - walletUsed).toFixed(2);
-          await storage.updateUserBalance(userId, newBalance);
-
-          await storage.createTransaction({
+          const newBalance = walletBalance - walletUsed;
+          
+          await db.update(users)
+            .set({ balance: newBalance.toString() })
+            .where(eq(users.id, userId));
+  
+          await db.insert(transactions).values({
             userId,
             type: "purchase",
-            amount: `-${walletUsed}`,
+            amount: `-${walletUsed.toFixed(2)}`,
             description: `Wallet payment for ${competition.title}`,
             orderId,
+            createdAt: new Date(),
           });
-
+  
           remainingAmount -= walletUsed;
           paymentBreakdown.push({
             method: "wallet",
             amount: walletUsed,
+            description: `Wallet: £${walletUsed.toFixed(2)}`,
           });
         }
       }
-
+  
       // -------------------------
-      // 5️⃣ APPLY POINTS
+      // 5️⃣ APPLY POINTS - SIMPLE, NO DISCOUNT LOGIC
       // -------------------------
       if (useRingtonePoints && remainingAmount > 0) {
-        const pointsToMoney = Math.min(pointsValue, remainingAmount);
-        pointsUsed = Math.floor(pointsToMoney * 100); // convert to points (1p)
-
-        if (pointsUsed > 0) {
-          const newPoints = ringtonePoints - pointsUsed;
-
-          await storage.updateUserRingtonePoints(userId, newPoints);
-
-          await storage.createTransaction({
-            userId,
-            type: "purchase",
-            amount: `-${pointsUsed}`,
-            description: `Ringtone Points payment for ${competition.title}`,
-            orderId,
-          });
-
-          remainingAmount -= pointsToMoney;
-          paymentBreakdown.push({
-            method: "points",
-            amount: pointsToMoney,
-            pointsUsed,
+        const availablePoints = ringtonePoints;
+        
+        // Calculate points needed for remaining amount (100 points = £1.00)
+        const pointsNeeded = Math.ceil(remainingAmount * 100);
+        
+        // Check if user has enough points
+        if (availablePoints < pointsNeeded) {
+          // Refund wallet if used
+          if (walletUsed > 0) {
+            const currentBalance = Number(user?.balance || "0");
+            await db.update(users)
+              .set({ balance: (currentBalance + walletUsed).toString() })
+              .where(eq(users.id, userId));
+          }
+          
+          return res.status(400).json({ 
+            message: `Insufficient points. You need ${pointsNeeded} points. You have ${availablePoints} points.`,
+            remainingAmount,
+            pointsNeeded
           });
         }
+        
+        // Calculate cash value of points used
+        const pointsAmount = pointsNeeded * 0.01;
+        
+        // Update user points
+        const newPoints = availablePoints - pointsNeeded;
+        await db.update(users)
+          .set({ ringtonePoints: newPoints })
+          .where(eq(users.id, userId));
+  
+        await db.insert(transactions).values({
+          userId,
+          type: "purchase",
+          amount: `-${pointsNeeded}`,
+          description: `Ringtone Points payment for ${competition.title}`,
+          orderId,
+          createdAt: new Date(),
+        });
+  
+        pointsUsed = pointsNeeded;
+        remainingAmount -= pointsAmount;
+        
+        paymentBreakdown.push({
+          method: "ringtone_points",
+          amount: pointsAmount,
+          pointsUsed: pointsNeeded,
+          description: `Ringtone Points: £${pointsAmount.toFixed(2)} (${pointsNeeded} points)`,
+        });
       }
-
+  
       // -------------------------
       // 6️⃣ CASHFLOWS NEEDED?
       // -------------------------
       if (remainingAmount > 0) {
+        cashflowsUsed = remainingAmount;
+  
         const session = await cashflows.createCompetitionPaymentSession(
           remainingAmount,
           {
@@ -2912,25 +2950,25 @@ res.json({
             paymentBreakdown: JSON.stringify(paymentBreakdown),
           }
         );
-
+  
         // In case Cashflows fails: refund wallet + points
         if (!session || !session.hostedPageUrl) {
-          if (walletUsed > 0)
-            await storage.updateUserBalance(
-              userId,
-              (walletBalance + walletUsed).toFixed(2)
-            );
-          if (pointsUsed > 0)
-            await storage.updateUserRingtonePoints(
-              userId,
-              ringtonePoints + pointsUsed
-            );
-
+          if (walletUsed > 0) {
+            await db.update(users)
+              .set({ balance: (walletBalance + walletUsed).toString() })
+              .where(eq(users.id, userId));
+          }
+          if (pointsUsed > 0) {
+            await db.update(users)
+              .set({ ringtonePoints: ringtonePoints + pointsUsed })
+              .where(eq(users.id, userId));
+          }
+  
           return res
             .status(500)
             .json({ message: "Failed to create payment session" });
         }
-
+  
         // Determine payment method text for mixed payment
         let paymentMethodText = "Cashflow";
         if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
@@ -2940,29 +2978,31 @@ res.json({
         } else if (pointsUsed > 0 && remainingAmount > 0) {
           paymentMethodText = "Points+Cashflow";
         }
-
-        // Save partial payment info with descriptive payment method
-        await storage.updateOrderPaymentInfo(orderId, {
-          paymentMethod: paymentMethodText,
-          walletAmount: walletUsed.toString(),
-          pointsAmount: pointsUsed.toString(),
-          cashflowsAmount: remainingAmount.toString(),
-          paymentBreakdown: JSON.stringify(paymentBreakdown),
-        });
-
+  
+        // Save partial payment info
+        await db.update(orders)
+          .set({ 
+            status: "processing",
+            paymentMethod: paymentMethodText,
+            walletAmount: walletUsed.toString(),
+            pointsAmount: pointsUsed.toString(),
+            cashflowsAmount: remainingAmount.toString(),
+            paymentBreakdown: JSON.stringify(paymentBreakdown),
+            updatedAt: new Date()
+          })
+          .where(eq(orders.id, orderId));
+  
         return res.json({
           success: true,
           redirectUrl: session.hostedPageUrl,
           sessionId: session.paymentJobReference,
         });
       }
-
+  
       // -------------------------
       // 7️⃣ FULLY PAID — COMPLETE ORDER
       // -------------------------
-
-      // Determine payment method for wallet/points only
-      let paymentMethodText = "pending";
+      let paymentMethodText = "Discount";
       if (walletUsed > 0 && pointsUsed > 0) {
         paymentMethodText = "Wallet+Points";
       } else if (walletUsed > 0) {
@@ -2970,97 +3010,106 @@ res.json({
       } else if (pointsUsed > 0) {
         paymentMethodText = "Points";
       }
-
+  
       // Update order with correct payment method
-      await storage.updateOrderPaymentInfo(orderId, {
-        paymentMethod: paymentMethodText,
-        walletAmount: walletUsed.toString(),
-        pointsAmount: pointsUsed.toString(),
-        cashflowsAmount: "0",
-        paymentBreakdown: JSON.stringify(paymentBreakdown),
-      });
-
-      await storage.updateOrderStatus(orderId, "completed");
-
+      await db.update(orders)
+        .set({ 
+          status: "completed",
+          paymentMethod: paymentMethodText,
+          walletAmount: walletUsed.toString(),
+          pointsAmount: pointsUsed.toString(),
+          cashflowsAmount: "0",
+          paymentBreakdown: JSON.stringify(paymentBreakdown),
+          updatedAt: new Date()
+        })
+        .where(eq(orders.id, orderId));
+  
       // Create tickets
-      const tickets = [];
+      const createdTickets = [];
+
       for (let i = 0; i < quantity; i++) {
         const ticketNumber = nanoid(8).toUpperCase();
-        const ticket = await storage.createTicket({
+      
+        const [ticket] = await db.insert(tickets).values({
           userId,
           competitionId,
-          orderId,
+          orderId: order.id,
           ticketNumber,
           isWinner: false,
-        });
-        tickets.push(ticket);
+          createdAt: new Date(),
+        }).returning();
+      
+        createdTickets.push(ticket);
       }
-
+      
+  
+      // Update sold tickets for instant competitions
       if (compType === "instant") {
-        await storage.updateCompetitionSoldTickets(competitionId, quantity);
+        await db.update(competitions)
+          .set({ 
+            soldTickets: (competition.soldTickets || 0) + quantity,
+            updatedAt: new Date()
+          })
+          .where(eq(competitions.id, competition.id));
       }
-
-      try {
-        if (user?.email) {
-          const ticketNumbers = tickets.map((t) => t.ticketNumber);
-
-          await sendOrderConfirmationEmail(user.email, {
-            orderId: order.id,
-            userName:
-              `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
-              "Customer",
-            orderType: "competition",
-            itemName: competition.title,
-            quantity: quantity,
-            totalAmount: order.totalAmount,
-            orderDate: new Date().toLocaleDateString("en-GB", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-            paymentMethod: paymentMethodText,
-            ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
-          });
-        }
-      } catch (err) {
-        console.error(
-          "Failed to send order confirmation email for competition:",
-          err
-        );
+  
+      // Send confirmation email
+      if (user?.email) {
+        const ticketNumbers = createdTickets.map((t) => t.ticketNumber);
+  
+        await sendOrderConfirmationEmail(user.email, {
+          orderId: order.id,
+          userName: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Customer",
+          orderType: "competition",
+          itemName: competition.title,
+          quantity: quantity,
+          totalAmount: order.totalAmount,
+          orderDate: new Date().toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          paymentMethod: paymentMethodText,
+          ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
+        }).catch(err => {
+          console.error("Failed to send order confirmation email for competition:", err);
+        });
       }
-
+  
       // -------------------------
       // 8️⃣ APPLY REFERRAL BONUS (FIRST PURCHASE ONLY)
       // -------------------------
       try {
         const buyer = user;
         const referrerId = buyer?.referredBy;
-
+  
         if (referrerId) {
-          const userOrders = await storage.getUserOrders(userId);
-          const completedOrders = userOrders.filter(
-            (o) => o.orders.status === "completed"
+          const userOrders = await db.select().from(orders).where(
+            and(
+              eq(orders.userId, userId),
+              eq(orders.status, "completed")
+            )
           );
-
-          if (completedOrders.length === 1) {
+  
+          if (userOrders.length === 1) {
             const bonus = 2;
-            const referrer = await storage.getUser(referrerId);
-
+            const [referrer] = await db.select().from(users).where(eq(users.id, referrerId));
+  
             if (referrer) {
-              const newBalance = parseFloat(referrer.balance || "0") + bonus;
-
-              await storage.updateUserBalance(
-                referrer.id,
-                newBalance.toFixed(2)
-              );
-
-              await storage.createTransaction({
+              const newBalance = Number(referrer.balance || "0") + bonus;
+  
+              await db.update(users)
+                .set({ balance: newBalance.toString() })
+                .where(eq(users.id, referrer.id));
+  
+              await db.insert(transactions).values({
                 userId: referrer.id,
                 type: "referral",
                 amount: bonus.toFixed(2),
                 description: `Referral reward: ${buyer.email} made their first competition entry`,
+                createdAt: new Date(),
               });
             }
           }
@@ -3068,49 +3117,51 @@ res.json({
       } catch (err) {
         console.error("Referral error:", err);
       }
-
-      // Refresh user after all deductions
-      const updatedUser = await storage.getUser(userId);
-
-      // BALANCE TRACKING
-      const startBalance = Number(updatedUser.balance) + Number(totalAmount);
-      const endBalance = Number(updatedUser.balance);
-
-      // AUDIT LOG
-      await db
-        .insert(auditLogs)
-        .values({
-          userId,
-          userName: `${updatedUser.firstName} ${updatedUser.lastName}`,
-          email: updatedUser.email,
-          action: "buy_competition",
-          competitionId: competition.id,
-          description: `Bought ${quantity} ticket(s) for ${competition.title}`,
-          startBalance,
-          endBalance,
-          createdAt: new Date(),
-        })
-        .execute();
-
-      console.log("✅ AUDIT LOG SAVED");
-
+  
       // -------------------------
-      // 9️⃣ RESPONSE
+      // 9️⃣ AUDIT LOG
+      // -------------------------
+      const startBalance = Number(user.balance) + Number(totalAmount);
+      const endBalance = Number(user.balance);
+  
+      // Get discount info for audit log
+      let discountInfo = '';
+      if (order.discountCodeId) {
+        const [discount] = await db.select().from(discountCodes).where(eq(discountCodes.id, order.discountCodeId));
+        if (discount) {
+          discountInfo = ` with discount code ${discount.code} (${discount.type === 'cash' ? `£${discount.value} off` : `${discount.value} points`})`;
+        }
+      }
+  
+      await db.insert(auditLogs).values({
+        userId,
+        userName: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        action: "buy_competition",
+        competitionId: competition.id,
+        description: `Bought ${quantity} ticket(s) for ${competition.title}${discountInfo}`,
+        startBalance,
+        endBalance,
+        createdAt: new Date(),
+      });
+  
+      // -------------------------
+      // 🔟 RESPONSE
       // -------------------------
       return res.json({
         success: true,
         message: "Competition entry purchased successfully",
         orderId,
         competitionId,
-        tickets,
+        tickets: createdTickets.map(t => ({ ticketNumber: t.ticketNumber })),
         paymentMethod: paymentMethodText,
+        paymentBreakdown,
       });
     } catch (error) {
       console.error("Error purchasing ticket:", error);
       res.status(500).json({ message: "Failed to complete purchase" });
     }
   });
-
   // NEW: Create spin wheel order (shows billing page)
   app.post("/api/create-spin-order", isAuthenticated, async (req: any, res) => {
     try {
@@ -3170,7 +3221,9 @@ res.json({
       const userId = req.user.id;
       const { orderId, useWalletBalance = false, useRingtonePoints = false } = req.body;
   
-      const order = await storage.getOrder(orderId);
+      // Fetch order from database
+      const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+      
       if (!order || order.userId !== userId) {
         return res.status(404).json({ message: "Order not found" });
       }
@@ -3180,27 +3233,16 @@ res.json({
       }
   
       // Get competition
-      const competition = await storage.getCompetition(order.competitionId);
+      const [competition] = await db.select().from(competitions).where(eq(competitions.id, order.competitionId));
+      
       if (!competition || competition.type !== "spin") {
         return res.status(400).json({ message: "Invalid competition type" });
       }
   
-      // Get discount info if applied
-      let pointsDiscount = 0;
-      if (order.discountCodeId) {
-        const discount = await db
-          .select()
-          .from(discountCodes)
-          .where(eq(discountCodes.id, order.discountCodeId))
-          .then(rows => rows[0]);
-        
-        if (discount && discount.type === "points" && discount.isActive) {
-          pointsDiscount = discount.value || 0;
-        }
-      }
+      // Get user
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
   
-      const user = await storage.getUser(userId);
-      const totalAmount = parseFloat(order.totalAmount);
+      const totalAmount = Number(order.totalAmount); // This already includes discount if applied!
       let remainingAmount = totalAmount;
       let walletUsed = 0;
       let pointsUsed = 0;
@@ -3210,19 +3252,25 @@ res.json({
   
       // Process wallet balance if selected
       if (useWalletBalance) {
-        const walletBalance = parseFloat(user?.balance || "0");
+        const walletBalance = Number(user?.balance) || 0;
         const walletAmount = Math.min(walletBalance, remainingAmount);
   
         if (walletAmount > 0) {
           const newBalance = walletBalance - walletAmount;
-          await storage.updateUserBalance(userId, newBalance.toString());
+          
+          // Update user balance
+          await db.update(users)
+            .set({ balance: newBalance.toString() })
+            .where(eq(users.id, userId));
   
-          await storage.createTransaction({
+          // Create transaction
+          await db.insert(transactions).values({
             userId,
             type: "purchase",
-            amount: `-${walletAmount}`,
+            amount: `-${walletAmount.toFixed(2)}`,
             description: `Wallet payment for ${order.quantity} spin(s) - ${competition.title}`,
             orderId,
+            createdAt: new Date(),
           });
   
           walletUsed = walletAmount;
@@ -3235,54 +3283,57 @@ res.json({
         }
       }
   
-      // Process ringtone points if selected WITH DISCOUNT
+      // Process ringtone points if selected - SIMPLE, NO DISCOUNT LOGIC HERE
       if (useRingtonePoints && remainingAmount > 0) {
         const availablePoints = user?.ringtonePoints || 0;
         
         // Calculate points needed for remaining amount (100 points = £1.00)
-        const pointsNeededForRemaining = Math.ceil(remainingAmount * 100);
-        
-        // Apply points discount
-        const pointsNeededAfterDiscount = Math.max(0, pointsNeededForRemaining - pointsDiscount);
+        const pointsNeeded = Math.ceil(remainingAmount * 100);
         
         // Check if user has enough points
-        if (availablePoints < pointsNeededAfterDiscount) {
+        if (availablePoints < pointsNeeded) {
           // Refund wallet if used
           if (walletUsed > 0) {
-            const currentBalance = parseFloat(user?.balance || "0");
-            await storage.updateUserBalance(userId, (currentBalance + walletUsed).toString());
+            const currentBalance = Number(user?.balance) || 0;
+            await db.update(users)
+              .set({ balance: (currentBalance + walletUsed).toString() })
+              .where(eq(users.id, userId));
           }
           
           return res.status(400).json({ 
-            message: `Insufficient points. You need ${pointsNeededAfterDiscount} points (${pointsNeededForRemaining} - ${pointsDiscount} discount). You have ${availablePoints} points.` 
+            message: `Insufficient points. You need ${pointsNeeded} points. You have ${availablePoints} points.`,
+            remainingAmount,
+            pointsNeeded
           });
         }
         
         // Calculate cash value of points used
-        const pointsAmount = pointsNeededAfterDiscount * 0.01;
+        const pointsAmount = pointsNeeded * 0.01;
         
         // Update user points
-        const newPoints = availablePoints - pointsNeededAfterDiscount;
-        await storage.updateUserRingtonePoints(userId, newPoints);
+        const newPoints = availablePoints - pointsNeeded;
+        await db.update(users)
+          .set({ ringtonePoints: newPoints })
+          .where(eq(users.id, userId));
   
         // Create transaction
-        await storage.createTransaction({
+        await db.insert(transactions).values({
           userId,
           type: "purchase",
           amount: `-${pointsAmount.toFixed(2)}`,
-          description: `Ringtone points payment for ${order.quantity} spin(s) - ${competition.title} (Used ${pointsNeededAfterDiscount} points${pointsDiscount > 0 ? `, ${pointsDiscount} points discount applied` : ''})`,
+          description: `Ringtone points payment for ${order.quantity} spin(s) - ${competition.title} (Used ${pointsNeeded} points)`,
           orderId,
+          createdAt: new Date(),
         });
   
-        pointsUsed = pointsNeededAfterDiscount;
+        pointsUsed = pointsNeeded;
         remainingAmount -= pointsAmount;
         
         paymentBreakdown.push({
           method: "ringtone_points",
           amount: pointsAmount,
-          pointsUsed: pointsNeededAfterDiscount,
-          discountPoints: pointsDiscount,
-          description: `Ringtone Points: £${pointsAmount.toFixed(2)} (${pointsNeededAfterDiscount} points${pointsDiscount > 0 ? ` - ${pointsDiscount} discount points` : ''})`,
+          pointsUsed: pointsNeeded,
+          description: `Ringtone Points: £${pointsAmount.toFixed(2)} (${pointsNeeded} points)`,
         });
       }
   
@@ -3304,19 +3355,23 @@ res.json({
         if (!session.hostedPageUrl) {
           // Refund wallet and points if Cashflows fails
           if (walletUsed > 0) {
-            const currentBalance = parseFloat(user?.balance || "0");
-            await storage.updateUserBalance(userId, (currentBalance + walletUsed).toString());
+            const currentBalance = Number(user?.balance) || 0;
+            await db.update(users)
+              .set({ balance: (currentBalance + walletUsed).toString() })
+              .where(eq(users.id, userId));
           }
           if (pointsUsed > 0) {
             const currentPoints = user?.ringtonePoints || 0;
-            await storage.updateUserRingtonePoints(userId, currentPoints + pointsUsed);
+            await db.update(users)
+              .set({ ringtonePoints: currentPoints + pointsUsed })
+              .where(eq(users.id, userId));
           }
   
           return res.status(500).json({ message: "Failed to create Cashflows session" });
         }
   
         // Determine payment method text for mixed payment
-        let paymentMethodText = "Cashflow";
+        let paymentMethodText = "Discount";
         if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
           paymentMethodText = "Wallet+Points+Cashflow";
         } else if (walletUsed > 0 && remainingAmount > 0) {
@@ -3326,13 +3381,17 @@ res.json({
         }
   
         // Update order with payment info
-        await storage.updateOrderPaymentInfo(orderId, {
-          paymentMethod: paymentMethodText,
-          walletAmount: walletUsed.toString(),
-          pointsAmount: pointsUsed.toString(),
-          cashflowsAmount: cashflowsUsed.toString(),
-          paymentBreakdown: JSON.stringify(paymentBreakdown),
-        });
+        await db.update(orders)
+          .set({ 
+            status: "processing",
+            paymentMethod: paymentMethodText,
+            walletAmount: walletUsed.toString(),
+            pointsAmount: pointsUsed.toString(),
+            cashflowsAmount: cashflowsUsed.toString(),
+            paymentBreakdown: JSON.stringify(paymentBreakdown),
+            updatedAt: new Date()
+          })
+          .where(eq(orders.id, orderId));
   
         return res.json({
           success: true,
@@ -3343,12 +3402,12 @@ res.json({
             pointsUsed,
             cashflowsUsed,
             remainingAmount,
-            pointsDiscount,
           },
+          remainingAmount,
         });
       } else {
         // Full payment completed with wallet/points only
-        let paymentMethodText = "pending";
+        let paymentMethodText = "Discount";
         if (walletUsed > 0 && pointsUsed > 0) {
           paymentMethodText = "Wallet+Points";
         } else if (walletUsed > 0) {
@@ -3357,32 +3416,51 @@ res.json({
           paymentMethodText = "Points";
         }
   
-        // Update order with payment info
-        await storage.updateOrderPaymentInfo(orderId, {
-          paymentMethod: paymentMethodText,
-          walletAmount: walletUsed.toString(),
-          pointsAmount: pointsUsed.toString(),
-          cashflowsAmount: "0",
-          paymentBreakdown: JSON.stringify(paymentBreakdown),
-        });
+        // Update order with payment info and mark as completed
+        await db.update(orders)
+          .set({ 
+            status: "completed",
+            paymentMethod: paymentMethodText,
+            walletAmount: walletUsed.toString(),
+            pointsAmount: pointsUsed.toString(),
+            cashflowsAmount: "0",
+            paymentBreakdown: JSON.stringify(paymentBreakdown),
+            updatedAt: new Date()
+          })
+          .where(eq(orders.id, orderId));
   
-        await storage.updateOrderStatus(orderId, "completed");
-  
-        // Create tickets
-        const tickets = [];
+        // Create spin entries
+        const spins = [];
         for (let i = 0; i < order.quantity; i++) {
-          const ticketNumber = nanoid(8).toUpperCase();
-          const ticket = await storage.createTicket({
+          const spinId = nanoid(8).toUpperCase();
+          const [spin] = await db.insert(spins).values({
             userId,
             competitionId: order.competitionId,
             orderId: order.id,
-            ticketNumber,
-            isWinner: false,
-          });
-          tickets.push(ticket);
+            spinNumber: spinId,
+            isUsed: false,
+            result: null,
+            createdAt: new Date(),
+          }).returning();
+          spins.push(spin);
         }
   
-        await storage.incrementCompetitionSoldTickets(order.competitionId, order.quantity);
+        // Update competition sold tickets count
+        await db.update(competitions)
+          .set({ 
+            soldTickets: (competition.soldTickets || 0) + order.quantity,
+            updatedAt: new Date()
+          })
+          .where(eq(competitions.id, competition.id));
+  
+        // Get discount info for audit log
+        let discountInfo = '';
+        if (order.discountCodeId) {
+          const [discount] = await db.select().from(discountCodes).where(eq(discountCodes.id, order.discountCodeId));
+          if (discount) {
+            discountInfo = ` with discount code ${discount.code} (${discount.type === 'cash' ? `£${discount.value} off` : `${discount.value} points`})`;
+          }
+        }
   
         // Audit log
         const startBalance = Number(user.balance) + totalAmount;
@@ -3394,7 +3472,7 @@ res.json({
           email: user.email,
           action: "buy_spin",
           competitionId: competition.id,
-          description: `Bought ${order.quantity} spin(s) for ${competition.title}`,
+          description: `Bought ${order.quantity} spin(s) for ${competition.title}${discountInfo}`,
           startBalance,
           endBalance,
           createdAt: new Date(),
@@ -3402,7 +3480,7 @@ res.json({
   
         // Send confirmation email
         if (user?.email) {
-          const ticketNumbers = tickets.map((t) => t.ticketNumber);
+          const spinNumbers = spins.map((s) => s.spinNumber);
           
           sendOrderConfirmationEmail(user.email, {
             orderId: order.id,
@@ -3421,7 +3499,7 @@ res.json({
             paymentMethod: paymentMethodText,
             skillQuestion: competition.skillQuestion || undefined,
             skillAnswer: order.skillAnswer || undefined,
-            ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
+            spinNumbers: spinNumbers.length > 0 ? spinNumbers : undefined,
           }).catch((err) =>
             console.error("Failed to send order confirmation email:", err)
           );
@@ -3432,11 +3510,10 @@ res.json({
           competitionId: order.competitionId,
           message: "Payment completed successfully",
           orderId: order.id,
-          tickets: tickets.map((t) => ({ ticketNumber: t.ticketNumber })),
+          spins: spins.map((s) => ({ spinNumber: s.spinNumber })),
           spinsPurchased: order.quantity,
           paymentMethod: paymentMethodText,
           paymentBreakdown,
-          pointsDiscount,
         });
       }
     } catch (error) {
@@ -4040,6 +4117,8 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
             status: order.status,
             remainingPlays: remaining,
             used: used,
+            discountAmount: order.discountAmount || 0,
+            discountType: order.discountType || null,
           },
           user: {
             balance: user?.balance || "0",
@@ -4089,6 +4168,8 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           quantity: order.quantity,
           totalAmount: order.totalAmount,
           status: order.status,
+          discountAmount: order.discountAmount || 0,
+    discountType: order.discountType || null,
         },
         user: {
           balance: user?.balance || "0",
@@ -4281,7 +4362,9 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       const userId = req.user.id;
       const { orderId, useWalletBalance = false, useRingtonePoints = false } = req.body;
   
-      const order = await storage.getOrder(orderId);
+      // Fetch order from database
+      const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+      
       if (!order || order.userId !== userId) {
         return res.status(404).json({ message: "Order not found" });
       }
@@ -4290,27 +4373,18 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         return res.status(400).json({ message: "Order already processed" });
       }
   
-      const competition = await storage.getCompetition(order.competitionId);
+      // Get competition
+      const [competition] = await db.select().from(competitions).where(eq(competitions.id, order.competitionId));
+      
       if (!competition || competition.type !== "scratch") {
         return res.status(400).json({ message: "Invalid competition type" });
       }
   
-      // Get discount info if applied
-      let pointsDiscount = 0;
-      if (order.discountCodeId) {
-        const discount = await db
-          .select()
-          .from(discountCodes)
-          .where(eq(discountCodes.id, order.discountCodeId))
-          .then(rows => rows[0]);
-        
-        if (discount && discount.type === "points" && discount.isActive) {
-          pointsDiscount = discount.value || 0;
-        }
-      }
+      // Get user
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
   
-      const user = await storage.getUser(userId);
-      const totalAmount = parseFloat(order.totalAmount);
+      // Total already includes discount if applied (handled by apply-discount endpoint)
+      const totalAmount = Number(order.totalAmount);
       let remainingAmount = totalAmount;
       let walletUsed = 0;
       let pointsUsed = 0;
@@ -4318,20 +4392,27 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   
       const paymentBreakdown = [];
   
-      // Wallet
+      // Process wallet balance if selected
       if (useWalletBalance) {
-        const walletBalance = parseFloat(user?.balance || "0");
+        const walletBalance = Number(user?.balance) || 0;
         const walletAmount = Math.min(walletBalance, remainingAmount);
   
         if (walletAmount > 0) {
           const newBalance = walletBalance - walletAmount;
-          await storage.updateUserBalance(userId, newBalance.toString());
-          await storage.createTransaction({
+          
+          // Update user balance
+          await db.update(users)
+            .set({ balance: newBalance.toString() })
+            .where(eq(users.id, userId));
+  
+          // Create transaction
+          await db.insert(transactions).values({
             userId,
             type: "purchase",
-            amount: `-${walletAmount}`,
+            amount: `-${walletAmount.toFixed(2)}`,
             description: `Wallet payment for ${order.quantity} scratch card(s) - ${competition.title}`,
             orderId,
+            createdAt: new Date(),
           });
   
           walletUsed = walletAmount;
@@ -4344,56 +4425,61 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         }
       }
   
-      // Ringtone Points WITH DISCOUNT
+      // Process ringtone points if selected - SIMPLE, NO DISCOUNT LOGIC
       if (useRingtonePoints && remainingAmount > 0) {
         const availablePoints = user?.ringtonePoints || 0;
         
-        // Calculate points needed for remaining amount
-        const pointsNeededForRemaining = Math.ceil(remainingAmount * 100);
-        
-        // Apply points discount
-        const pointsNeededAfterDiscount = Math.max(0, pointsNeededForRemaining - pointsDiscount);
+        // Calculate points needed for remaining amount (100 points = £1.00)
+        const pointsNeeded = Math.ceil(remainingAmount * 100);
         
         // Check if user has enough points
-        if (availablePoints < pointsNeededAfterDiscount) {
+        if (availablePoints < pointsNeeded) {
           // Refund wallet if used
           if (walletUsed > 0) {
-            const currentBalance = parseFloat(user?.balance || "0");
-            await storage.updateUserBalance(userId, (currentBalance + walletUsed).toString());
+            const currentBalance = Number(user?.balance) || 0;
+            await db.update(users)
+              .set({ balance: (currentBalance + walletUsed).toString() })
+              .where(eq(users.id, userId));
           }
           
           return res.status(400).json({ 
-            message: `Insufficient points. You need ${pointsNeededAfterDiscount} points (${pointsNeededForRemaining} - ${pointsDiscount} discount). You have ${availablePoints} points.` 
+            message: `Insufficient points. You need ${pointsNeeded} points. You have ${availablePoints} points.`,
+            remainingAmount,
+            pointsNeeded
           });
         }
         
         // Calculate cash value of points used
-        const pointsAmount = pointsNeededAfterDiscount * 0.01;
+        const pointsAmount = pointsNeeded * 0.01;
         
         // Update user points
-        const newPoints = availablePoints - pointsNeededAfterDiscount;
-        await storage.updateUserRingtonePoints(userId, newPoints);
-        
-        await storage.createTransaction({
+        const newPoints = availablePoints - pointsNeeded;
+        await db.update(users)
+          .set({ ringtonePoints: newPoints })
+          .where(eq(users.id, userId));
+  
+        // Create transaction
+        await db.insert(transactions).values({
           userId,
           type: "ringtone_points",
-          amount: `-${pointsNeededAfterDiscount}`,
-          description: `Ringtone points payment for ${order.quantity} scratch card(s) - ${competition.title}${pointsDiscount > 0 ? ` (${pointsDiscount} points discount applied)` : ''}`,
+          amount: `-${pointsNeeded}`,
+          description: `Ringtone points payment for ${order.quantity} scratch card(s) - ${competition.title}`,
           orderId,
+          createdAt: new Date(),
         });
   
-        pointsUsed = pointsNeededAfterDiscount;
+        pointsUsed = pointsNeeded;
         remainingAmount -= pointsAmount;
+        
         paymentBreakdown.push({
           method: "ringtone_points",
           amount: pointsAmount,
-          pointsUsed: pointsNeededAfterDiscount,
-          discountPoints: pointsDiscount,
-          description: `Ringtone Points: £${pointsAmount.toFixed(2)} (${pointsNeededAfterDiscount} points${pointsDiscount > 0 ? ` - ${pointsDiscount} discount points` : ''})`,
+          pointsUsed: pointsNeeded,
+          description: `Ringtone Points: £${pointsAmount.toFixed(2)} (${pointsNeeded} points)`,
         });
       }
   
-      // Cashflows (for remaining)
+      // Process remaining amount through Cashflows
       if (remainingAmount > 0) {
         cashflowsUsed = remainingAmount;
   
@@ -4409,21 +4495,25 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         );
   
         if (!session.hostedPageUrl) {
-          // Refund wallet + points if Cashflows fails
+          // Refund wallet and points if Cashflows fails
           if (walletUsed > 0) {
-            const currentBalance = parseFloat(user?.balance || "0");
-            await storage.updateUserBalance(userId, (currentBalance + walletUsed).toString());
+            const currentBalance = Number(user?.balance) || 0;
+            await db.update(users)
+              .set({ balance: (currentBalance + walletUsed).toString() })
+              .where(eq(users.id, userId));
           }
           if (pointsUsed > 0) {
             const currentPoints = user?.ringtonePoints || 0;
-            await storage.updateUserRingtonePoints(userId, currentPoints + pointsUsed);
+            await db.update(users)
+              .set({ ringtonePoints: currentPoints + pointsUsed })
+              .where(eq(users.id, userId));
           }
   
           return res.status(500).json({ message: "Failed to create Cashflows session" });
         }
   
         // Determine payment method text for mixed payment
-        let paymentMethodText = "Cashflow";
+        let paymentMethodText = "Discount";
         if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
           paymentMethodText = "Wallet+Points+Cashflow";
         } else if (walletUsed > 0 && remainingAmount > 0) {
@@ -4432,23 +4522,34 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           paymentMethodText = "Points+Cashflow";
         }
   
-        await storage.updateOrderPaymentInfo(orderId, {
-          paymentMethod: paymentMethodText,
-          walletAmount: walletUsed.toString(),
-          pointsAmount: pointsUsed.toString(),
-          cashflowsAmount: cashflowsUsed.toString(),
-          paymentBreakdown: JSON.stringify(paymentBreakdown),
-        });
+        // Update order with payment info
+        await db.update(orders)
+          .set({ 
+            status: "processing",
+            paymentMethod: paymentMethodText,
+            walletAmount: walletUsed.toString(),
+            pointsAmount: pointsUsed.toString(),
+            cashflowsAmount: cashflowsUsed.toString(),
+            paymentBreakdown: JSON.stringify(paymentBreakdown),
+            updatedAt: new Date()
+          })
+          .where(eq(orders.id, orderId));
   
         return res.json({
           success: true,
           redirectUrl: session.hostedPageUrl,
           sessionId: session.paymentJobReference,
-          paymentBreakdown,
+          paymentBreakdown: {
+            walletUsed,
+            pointsUsed,
+            cashflowsUsed,
+            remainingAmount,
+          },
+          remainingAmount,
         });
       } else {
-        // Fully covered by wallet/points
-        let paymentMethodText = "pending";
+        // Full payment completed with wallet/points only
+        let paymentMethodText = "Discount";
         if (walletUsed > 0 && pointsUsed > 0) {
           paymentMethodText = "Wallet+Points";
         } else if (walletUsed > 0) {
@@ -4457,29 +4558,49 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           paymentMethodText = "Points";
         }
   
-        // Update order with correct payment method
-        await storage.updateOrderPaymentInfo(orderId, {
-          paymentMethod: paymentMethodText,
-          walletAmount: walletUsed.toString(),
-          pointsAmount: pointsUsed.toString(),
-          cashflowsAmount: "0",
-          paymentBreakdown: JSON.stringify(paymentBreakdown),
-        });
+        // Update order with payment info and mark as completed
+        await db.update(orders)
+          .set({ 
+            status: "completed",
+            paymentMethod: paymentMethodText,
+            walletAmount: walletUsed.toString(),
+            pointsAmount: pointsUsed.toString(),
+            cashflowsAmount: "0",
+            paymentBreakdown: JSON.stringify(paymentBreakdown),
+            updatedAt: new Date()
+          })
+          .where(eq(orders.id, orderId));
   
-        await storage.updateOrderStatus(orderId, "completed");
-  
-        // Create tickets
+        // Create scratch card entries
         const tickets = [];
         for (let i = 0; i < order.quantity; i++) {
           const ticketNumber = nanoid(8).toUpperCase();
-          const ticket = await storage.createTicket({
+          const [ticket] = await db.insert(tickets).values({
             userId,
             competitionId: order.competitionId,
             orderId: order.id,
             ticketNumber,
             isWinner: false,
-          });
+            createdAt: new Date(),
+          }).returning();
           tickets.push(ticket);
+        }
+  
+        // Update competition sold tickets count
+        await db.update(competitions)
+          .set({ 
+            soldTickets: (competition.soldTickets || 0) + order.quantity,
+            updatedAt: new Date()
+          })
+          .where(eq(competitions.id, competition.id));
+  
+        // Get discount info for audit log
+        let discountInfo = '';
+        if (order.discountCodeId) {
+          const [discount] = await db.select().from(discountCodes).where(eq(discountCodes.id, order.discountCodeId));
+          if (discount) {
+            discountInfo = ` with discount code ${discount.code} (${discount.type === 'cash' ? `£${discount.value} off` : `${discount.value} points`})`;
+          }
         }
   
         // Audit log
@@ -4492,7 +4613,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           email: user.email,
           action: "buy_scratch",
           competitionId: competition.id,
-          description: `Bought ${order.quantity} scratch(s) for ${competition.title}`,
+          description: `Bought ${order.quantity} scratch card(s) for ${competition.title}${discountInfo}`,
           startBalance,
           endBalance,
           createdAt: new Date(),
@@ -4501,7 +4622,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         // Send confirmation email
         if (user?.email) {
           const ticketNumbers = tickets.map((t) => t.ticketNumber);
-  
+          
           sendOrderConfirmationEmail(user.email, {
             orderId: order.id,
             userName: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Customer",
@@ -5519,6 +5640,8 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
             status: order.status,
             remainingPlays: remaining,
             used: used,
+            discountAmount: order.discountAmount || 0,
+    discountType: order.discountType || null,
           },
           user: {
             balance: user?.balance || "0",
@@ -5560,6 +5683,8 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           quantity: order.quantity,
           totalAmount: order.totalAmount,
           status: order.status,
+          discountAmount: order.discountAmount || 0,
+    discountType: order.discountType || null,
         },
         user: {
           balance: user?.balance || "0",
@@ -5582,7 +5707,9 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       const userId = req.user.id;
       const { orderId, useWalletBalance = false, useRingtonePoints = false } = req.body;
   
-      const order = await storage.getOrder(orderId);
+      // Fetch order from database
+      const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+      
       if (!order || order.userId !== userId) {
         return res.status(404).json({ message: "Order not found" });
       }
@@ -5591,39 +5718,33 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         return res.status(400).json({ message: "Order already processed" });
       }
   
-      const competition = await storage.getCompetition(order.competitionId);
+      // Get competition
+      const [competition] = await db.select().from(competitions).where(eq(competitions.id, order.competitionId));
+      
       if (!competition || competition.type !== "pop") {
         return res.status(400).json({ message: "Invalid competition type" });
       }
   
-      // Get discount info if applied
-      let pointsDiscount = 0;
-      if (order.discountCodeId) {
-        const discount = await db
-          .select()
-          .from(discountCodes)
-          .where(eq(discountCodes.id, order.discountCodeId))
-          .then(rows => rows[0]);
-        
-        if (discount && discount.type === "points" && discount.isActive) {
-          pointsDiscount = discount.value || 0;
-        }
-      }
+      // Get user
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
   
-      const user = await storage.getUser(userId);
-      const totalAmount = parseFloat(order.totalAmount);
+      // Total already includes discount if applied
+      const totalAmount = Number(order.totalAmount);
       let remainingAmount = totalAmount;
       let walletUsed = 0;
       let pointsUsed = 0;
   
       const paymentBreakdown = [];
   
-      // Wallet
+      // Process wallet balance if selected
       if (useWalletBalance) {
-        const walletBalance = parseFloat(user?.balance || "0");
-        walletUsed = Math.min(walletBalance, remainingAmount);
-        remainingAmount -= walletUsed;
-        if (walletUsed > 0) {
+        const walletBalance = Number(user?.balance) || 0;
+        const walletAmount = Math.min(walletBalance, remainingAmount);
+  
+        if (walletAmount > 0) {
+          walletUsed = walletAmount;
+          remainingAmount -= walletUsed;
+          
           paymentBreakdown.push({ 
             method: "wallet", 
             amount: walletUsed,
@@ -5632,42 +5753,42 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         }
       }
   
-      // Points WITH DISCOUNT
+      // Process ringtone points if selected - SIMPLE, NO DISCOUNT LOGIC
       if (useRingtonePoints && remainingAmount > 0) {
         const availablePoints = user?.ringtonePoints || 0;
         
-        // Calculate points needed for remaining amount
-        const pointsNeededForRemaining = Math.ceil(remainingAmount * 100);
-        
-        // Apply points discount
-        const pointsNeededAfterDiscount = Math.max(0, pointsNeededForRemaining - pointsDiscount);
+        // Calculate points needed for remaining amount (100 points = £1.00)
+        const pointsNeeded = Math.ceil(remainingAmount * 100);
         
         // Check if user has enough points
-        if (availablePoints < pointsNeededAfterDiscount) {
+        if (availablePoints < pointsNeeded) {
           // Refund wallet if used
           if (walletUsed > 0) {
-            const currentBalance = parseFloat(user?.balance || "0");
-            await storage.updateUserBalance(userId, (currentBalance + walletUsed).toString());
+            const currentBalance = Number(user?.balance) || 0;
+            await db.update(users)
+              .set({ balance: (currentBalance + walletUsed).toString() })
+              .where(eq(users.id, userId));
           }
           
           return res.status(400).json({ 
-            message: `Insufficient points. You need ${pointsNeededAfterDiscount} points (${pointsNeededForRemaining} - ${pointsDiscount} discount). You have ${availablePoints} points.` 
+            message: `Insufficient points. You need ${pointsNeeded} points. You have ${availablePoints} points.`,
+            remainingAmount,
+            pointsNeeded
           });
         }
         
         // Calculate cash value of points used
-        const pointsAmount = pointsNeededAfterDiscount * 0.01;
+        const pointsAmount = pointsNeeded * 0.01;
         
-        pointsUsed = pointsNeededAfterDiscount;
+        pointsUsed = pointsNeeded;
         remainingAmount -= pointsAmount;
         
         if (pointsUsed > 0) {
           paymentBreakdown.push({
-            method: "points",
+            method: "ringtone_points",
             amount: pointsAmount,
-            pointsUsed: pointsNeededAfterDiscount,
-            discountPoints: pointsDiscount,
-            description: `Points: £${pointsAmount.toFixed(2)} (${pointsNeededAfterDiscount} points${pointsDiscount > 0 ? ` - ${pointsDiscount} discount points` : ''})`,
+            pointsUsed: pointsNeeded,
+            description: `Ringtone Points: £${pointsAmount.toFixed(2)} (${pointsNeeded} points)`,
           });
         }
       }
@@ -5684,91 +5805,97 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   
       // Complete payment with wallet/points only
       if (walletUsed > 0) {
-        const newBalance = parseFloat(user?.balance || "0") - walletUsed;
-        await storage.updateUserBalance(userId, newBalance.toFixed(2));
+        const newBalance = Number(user?.balance || "0") - walletUsed;
+        await db.update(users)
+          .set({ balance: newBalance.toString() })
+          .where(eq(users.id, userId));
       }
   
       if (pointsUsed > 0) {
         const newPoints = (user?.ringtonePoints || 0) - pointsUsed;
-        await storage.updateUserRingtonePoints(userId, newPoints);
+        await db.update(users)
+          .set({ ringtonePoints: newPoints })
+          .where(eq(users.id, userId));
       }
   
       // Update order status and payment info
-      await storage.updateOrderStatus(orderId, "completed");
-      
-      // Create payment method text
-      let paymentMethodText = "pending";
-      const methods = paymentBreakdown.map(p => p.method);
-      if (methods.includes("wallet") && methods.includes("points")) {
+      let paymentMethodText = "Discount";
+      if (walletUsed > 0 && pointsUsed > 0) {
         paymentMethodText = "Wallet+Points";
-      } else if (methods.includes("wallet")) {
+      } else if (walletUsed > 0) {
         paymentMethodText = "Wallet";
-      } else if (methods.includes("points")) {
+      } else if (pointsUsed > 0) {
         paymentMethodText = "Points";
       }
       
-      await storage.updateOrderPaymentInfo(orderId, {
-        paymentMethod: paymentMethodText,
-        walletAmount: walletUsed.toString(),
-        pointsAmount: pointsUsed.toString(),
-        cashflowsAmount: "0",
-        paymentBreakdown: JSON.stringify(paymentBreakdown),
-      });
+      await db.update(orders)
+        .set({ 
+          status: "completed",
+          paymentMethod: paymentMethodText,
+          walletAmount: walletUsed.toString(),
+          pointsAmount: pointsUsed.toString(),
+          cashflowsAmount: "0",
+          paymentBreakdown: JSON.stringify(paymentBreakdown),
+          updatedAt: new Date()
+        })
+        .where(eq(orders.id, orderId));
   
-      // Increment soldTickets
-      if (competition) {
-        const newSoldTickets = (competition.soldTickets || 0) + order.quantity;
-        await db
-          .update(competitions)
-          .set({ soldTickets: newSoldTickets })
-          .where(eq(competitions.id, competition.id));
-      }
+      // Update competition sold tickets count
+      await db.update(competitions)
+        .set({ 
+          soldTickets: (competition.soldTickets || 0) + order.quantity,
+          updatedAt: new Date()
+        })
+        .where(eq(competitions.id, competition.id));
   
       // Create transaction record
-      await storage.createTransaction({
+      await db.insert(transactions).values({
         userId,
         type: "pop_purchase",
         amount: totalAmount.toFixed(2),
-        description: `Pop Game Purchase - ${order.quantity} games${pointsDiscount > 0 ? ` (${pointsDiscount} points discount applied)` : ''}`,
+        description: `Pop Game Purchase - ${order.quantity} games`,
         orderId: orderId,
+        createdAt: new Date(),
       });
   
       // Create tickets for pop game entries
+      const popTickets = [];
       for (let i = 0; i < order.quantity; i++) {
-        await storage.createTicket({
-          competitionId: order.competitionId,
-          orderId: orderId,
+        const ticketNumber = `POP-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`;
+        const [ticket] = await db.insert(tickets).values({
           userId,
-          ticketNumber: `POP-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`,
+          competitionId: order.competitionId,
+          orderId: order.id,
+          ticketNumber,
           isWinner: false,
-        });
+          createdAt: new Date(),
+        }).returning();
+        popTickets.push(ticket);
       }
   
+      // Send confirmation email
       if (user?.email) {
-        try {
-          const tickets = await storage.getTicketsByOrderId(order.id);
-          const ticketNumbers = tickets.map((t) => t.ticketNumber);
-  
-          await sendOrderConfirmationEmail(user.email, {
-            orderId: order.id,
-            userName: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Customer",
-            orderType: "pop",
-            itemName: competition.title,
-            quantity: order.quantity,
-            totalAmount: order.totalAmount,
-            orderDate: new Date().toLocaleDateString("en-GB", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-            paymentMethod: paymentMethodText,
-            ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
-          });
-        } catch (err) {
-          console.error("❌ Failed to send POP confirmation email:", err);
-        }
+        const ticketNumbers = popTickets.map((t) => t.ticketNumber);
+        
+        sendOrderConfirmationEmail(user.email, {
+          orderId: order.id,
+          userName: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Customer",
+          orderType: "pop",
+          itemName: competition.title,
+          quantity: order.quantity,
+          totalAmount: order.totalAmount,
+          orderDate: new Date().toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          paymentMethod: paymentMethodText,
+          ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
+        }).catch((err) =>
+          console.error("Failed to send POP confirmation email:", err)
+        );
       }
   
       res.json({
@@ -5778,7 +5905,6 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         orderId: order.id,
         quantity: order.quantity,
         paymentBreakdown,
-        pointsDiscount,
       });
     } catch (error) {
       console.error("Error processing pop payment:", error);
@@ -6115,6 +6241,7 @@ app.delete(
 
 
 
+// In your apply-discount endpoint, update the discount logic:
 app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
   try {
     const { orderId, code } = req.body;
@@ -6157,16 +6284,20 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
     if (!order) return res.status(404).json({ error: "Order not found" });
     if (order.discountCodeId) return res.status(400).json({ error: "Discount already applied" });
 
-    // Prepare discount values
+    // Prepare discount values - SIMPLE LOGIC!
     let discountAmount = Number(discount.value);
     let newTotalAmount = Number(order.totalAmount);
-    let pointsDiscountAmount = 0;
+    let pointsDiscountCashValue = 0;
 
     if (discount.type === "cash") {
+      // Cash discount: just subtract the cash amount
       newTotalAmount -= discountAmount;
       if (newTotalAmount < 0) newTotalAmount = 0;
     } else if (discount.type === "points") {
-      pointsDiscountAmount = discountAmount; // Just store points, no change to cash total
+      // Points discount: convert points to cash (100 points = £1)
+      pointsDiscountCashValue = discountAmount * 0.01; // Convert points to pounds
+      newTotalAmount -= pointsDiscountCashValue;
+      if (newTotalAmount < 0) newTotalAmount = 0;
     }
 
     // Apply discount in a transaction
@@ -6182,11 +6313,11 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
       // Update order
       await tx.update(orders)
         .set({ 
-          totalAmount: discount.type === "cash" ? newTotalAmount : order.totalAmount,
+          totalAmount: newTotalAmount,
           discountCodeId: discount.id,
           discountAmount: discountAmount,
           discountType: discount.type,
-          pointsDiscountAmount: discount.type === "points" ? pointsDiscountAmount : null
+          pointsDiscountAmount: discount.type === "points" ? discountAmount : null
         })
         .where(eq(orders.id, orderId));
 
@@ -6200,13 +6331,13 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
 
     res.json({ 
       success: true,
-      newTotalAmount: Number(order.totalAmount),
-      discountAmount,
+      newTotalAmount: newTotalAmount,
+      discountAmount: discountAmount,
       discountType: discount.type,
-      pointsDiscountAmount: discount.type === "points" ? pointsDiscountAmount : 0,
+      pointsDiscountCashValue: discount.type === "points" ? pointsDiscountCashValue : 0,
       message: discount.type === "cash"
         ? `Discount applied: £${discountAmount.toFixed(2)} off`
-        : `Discount applied: ${discountAmount} points discount available`,
+        : `Discount applied: ${discountAmount} points (worth £${pointsDiscountCashValue.toFixed(2)})`,
       discountCode: discount.code,
     });
   } catch (err) {
@@ -7793,6 +7924,8 @@ app.get("/api/plinko-order/:orderId", isAuthenticated, async (req: any, res) => 
         quantity: order.quantity,
         totalAmount: order.totalAmount,
         status: order.status,
+        discountAmount: order.discountAmount || 0,
+    discountType: order.discountType || null,
       },
       user: {
         balance: user?.balance || "0",
@@ -7824,7 +7957,9 @@ app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) =
     const userId = req.user.id;
     const { orderId, useWalletBalance = false, useRingtonePoints = false } = req.body;
 
-    const order = await storage.getOrder(orderId);
+    // Fetch order from database
+    const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+    
     if (!order || order.userId !== userId) {
       return res.status(404).json({ message: "Order not found" });
     }
@@ -7833,38 +7968,77 @@ app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) =
       return res.status(400).json({ message: "Order already processed" });
     }
 
-    const competition = await storage.getCompetition(order.competitionId);
+    // Get competition
+    const [competition] = await db.select().from(competitions).where(eq(competitions.id, order.competitionId));
+    
     if (!competition || competition.type !== "plinko") {
       return res.status(400).json({ message: "Invalid competition type" });
     }
 
-    const user = await storage.getUser(userId);
-    const totalAmount = parseFloat(order.totalAmount);
+    // Get user
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+
+    // Total already includes discount if applied
+    const totalAmount = Number(order.totalAmount);
     let remainingAmount = totalAmount;
     let walletUsed = 0;
     let pointsUsed = 0;
 
     const paymentBreakdown = [];
 
-    // Wallet
+    // Process wallet balance if selected
     if (useWalletBalance) {
-      const walletBalance = parseFloat(user?.balance || "0");
-      walletUsed = Math.min(walletBalance, remainingAmount);
-      remainingAmount -= walletUsed;
-      if (walletUsed > 0) {
-        paymentBreakdown.push({ method: "wallet", amount: walletUsed });
+      const walletBalance = Number(user?.balance) || 0;
+      const walletAmount = Math.min(walletBalance, remainingAmount);
+
+      if (walletAmount > 0) {
+        walletUsed = walletAmount;
+        remainingAmount -= walletUsed;
+        paymentBreakdown.push({ 
+          method: "wallet", 
+          amount: walletAmount,
+          description: `Wallet: £${walletAmount.toFixed(2)}`
+        });
       }
     }
 
-    // Points
+    // Process ringtone points if selected - SIMPLE, NO DISCOUNT LOGIC
     if (useRingtonePoints && remainingAmount > 0) {
-      const userPoints = user?.ringtonePoints || 0;
-      const pointsValue = userPoints * 0.01;
-      const pointsToUse = Math.min(pointsValue, remainingAmount);
-      pointsUsed = Math.ceil(pointsToUse * 100);
-      remainingAmount -= pointsToUse;
+      const availablePoints = user?.ringtonePoints || 0;
+      
+      // Calculate points needed for remaining amount (100 points = £1.00)
+      const pointsNeeded = Math.ceil(remainingAmount * 100);
+      
+      // Check if user has enough points
+      if (availablePoints < pointsNeeded) {
+        // Refund wallet if used
+        if (walletUsed > 0) {
+          const currentBalance = Number(user?.balance) || 0;
+          await db.update(users)
+            .set({ balance: (currentBalance + walletUsed).toString() })
+            .where(eq(users.id, userId));
+        }
+        
+        return res.status(400).json({ 
+          message: `Insufficient points. You need ${pointsNeeded} points. You have ${availablePoints} points.`,
+          remainingAmount,
+          pointsNeeded
+        });
+      }
+      
+      // Calculate cash value of points used
+      const pointsAmount = pointsNeeded * 0.01;
+      
+      pointsUsed = pointsNeeded;
+      remainingAmount -= pointsAmount;
+      
       if (pointsUsed > 0) {
-        paymentBreakdown.push({ method: "points", amount: pointsToUse, pointsUsed });
+        paymentBreakdown.push({
+          method: "ringtone_points",
+          amount: pointsAmount,
+          pointsUsed: pointsNeeded,
+          description: `Ringtone Points: £${pointsAmount.toFixed(2)} (${pointsNeeded} points)`,
+        });
       }
     }
 
@@ -7880,31 +8054,52 @@ app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) =
 
     // Complete payment with wallet/points only
     if (walletUsed > 0) {
-      const newBalance = parseFloat(user?.balance || "0") - walletUsed;
-      await storage.updateUserBalance(userId, newBalance.toFixed(2));
+      const newBalance = Number(user?.balance || "0") - walletUsed;
+      await db.update(users)
+        .set({ balance: newBalance.toString() })
+        .where(eq(users.id, userId));
     }
 
     if (pointsUsed > 0) {
       const newPoints = (user?.ringtonePoints || 0) - pointsUsed;
-      await storage.updateUserRingtonePoints(userId, newPoints);
+      await db.update(users)
+        .set({ ringtonePoints: newPoints })
+        .where(eq(users.id, userId));
     }
 
     // Update order status and payment info
-    await storage.updateOrderStatus(orderId, "completed");
-    await storage.updateOrderPaymentInfo(orderId, {
-      paymentMethod: paymentBreakdown.map(p => p.method).join("+") || "free",
-    });
+    let paymentMethodText = "Discount";
+    if (walletUsed > 0 && pointsUsed > 0) {
+      paymentMethodText = "Wallet+Points";
+    } else if (walletUsed > 0) {
+      paymentMethodText = "Wallet";
+    } else if (pointsUsed > 0) {
+      paymentMethodText = "Points";
+    }
+    
+    await db.update(orders)
+      .set({ 
+        status: "completed",
+        paymentMethod: paymentMethodText,
+        walletAmount: walletUsed.toString(),
+        pointsAmount: pointsUsed.toString(),
+        cashflowsAmount: "0",
+        paymentBreakdown: JSON.stringify(paymentBreakdown),
+        updatedAt: new Date()
+      })
+      .where(eq(orders.id, orderId));
 
     // Create transaction record
-    await storage.createTransaction({
+    await db.insert(transactions).values({
       userId,
       type: "plinko_purchase",
       amount: totalAmount.toFixed(2),
       description: `Plinko Game Purchase - ${order.quantity} games`,
       orderId: orderId,
+      createdAt: new Date(),
     });
 
-    // 🔥 CRITICAL FIX: Increment soldTickets for the competition
+    // Update competition sold tickets count
     const newSoldTickets = (competition.soldTickets || 0) + order.quantity;
     
     await db.update(competitions)
@@ -7913,18 +8108,20 @@ app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) =
         updatedAt: new Date()
       })
       .where(eq(competitions.id, competition.id));
-    
-    console.log(`📈 Updated soldTickets for competition ${competition.id}: ${competition.soldTickets || 0} → ${newSoldTickets}`);
 
-    // Create tickets for plinko game entries (so they show in entries tab)
+    // Create tickets for plinko game entries
+    const plinkoTickets = [];
     for (let i = 0; i < order.quantity; i++) {
-      await storage.createTicket({
-        competitionId: order.competitionId,
-        orderId: orderId,
+      const ticketNumber = `PLINKO-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, '0')}`;
+      const [ticket] = await db.insert(tickets).values({
         userId,
-        ticketNumber: `PLINKO-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, '0')}`,
+        competitionId: order.competitionId,
+        orderId: order.id,
+        ticketNumber,
         isWinner: false,
-      });
+        createdAt: new Date(),
+      }).returning();
+      plinkoTickets.push(ticket);
     }
 
     res.json({
@@ -7932,7 +8129,9 @@ app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) =
       message: "Plinko game purchase complete!",
       competitionId: order.competitionId,
       orderId: order.id,
-      soldTickets: newSoldTickets, // Return updated count for debugging
+      quantity: order.quantity,
+      soldTickets: newSoldTickets,
+      paymentBreakdown,
     });
   } catch (error) {
     console.error("Error processing Plinko payment:", error);
@@ -10043,6 +10242,7 @@ app.get(
 
       res.json({
         ...config,
+        isVisible: config?.isVisible ?? true,
         segments: segmentsWithWins,
       });
     } catch (error) {

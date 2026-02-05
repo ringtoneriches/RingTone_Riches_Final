@@ -15,7 +15,9 @@ import {
   Ticket,
   Sparkles,
   X,
-  ArrowUpRight
+  ArrowUpRight,
+  Tag,
+  Percent
 } from "lucide-react";
 import {
   Dialog,
@@ -25,6 +27,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 interface UnifiedBillingProps {
   orderId: string;
@@ -39,6 +43,9 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
     ringtonePoints: false,
   });
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [showDiscountDialog, setShowDiscountDialog] = useState(false);
+  const [discountCode, setDiscountCode] = useState("");
+  const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -69,7 +76,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
       case "pop":
         return "Ringtone Pop Purchase";
       case "plinko":
-        return " Ringtone Plinko Purchase";
+        return "Ringtone Plinko Purchase";
       default:
         return "Competition Tickets";
     }
@@ -98,6 +105,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
   const {
     data: orderData,
     isLoading,
+    refetch: refetchOrder,
   } = useQuery({
     queryKey: [getEndpoint(), orderId],
     enabled: !!orderId,
@@ -119,24 +127,131 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
   const isPointsDisabled = isInstantCompetition;
 
   const itemCost = orderType === 'competition' 
-    ? parseFloat(competition?.ticketPrice || '0') 
-    : parseFloat(orderData?.scratchCost || orderData?.spinCost || orderData?.popCost || orderData?.plinkoCost || '2');
+  ? parseFloat(competition?.ticketPrice || '0') 
+  : parseFloat(orderData?.scratchCost || orderData?.spinCost || orderData?.popCost || orderData?.plinkoCost || '2');
 
-  const totalAmount = Number(order?.totalAmount) || 0;
-  const walletBalance = Number(user?.balance) || 0;
-  const ringtonePoints = user?.ringtonePoints || 0;
-  const ringtoneBalance = ringtonePoints * 0.01;
-
-  const maxWalletUse = Math.min(walletBalance, totalAmount);
-  const maxPointsUse = isPointsDisabled ? 0 : Math.min(ringtoneBalance, totalAmount);
-  const walletUsed = selectedMethods.walletBalance ? maxWalletUse : 0;
-  const pointsUsed = selectedMethods.ringtonePoints ? maxPointsUse : 0;
-  const remainingAfterWallet = totalAmount - walletUsed;
-  const actualPointsUsed = isPointsDisabled ? 0 : Math.min(maxPointsUse, remainingAfterWallet);
-  const finalPointsUsed = selectedMethods.ringtonePoints ? actualPointsUsed : 0;
-  const finalAmount = totalAmount - walletUsed - finalPointsUsed;
-  const pointsNeeded = Math.ceil(finalPointsUsed * 100);
+  const appliedDiscount = Number(order?.discountAmount || 0);
+  const discountType = order?.discountType || null;
   
+  const pointsDiscountCashValue =
+    discountType === "points" ? appliedDiscount * 0.01 : 0;
+  
+  // backend already applied discount
+  const totalAmount = Number(order?.totalAmount);
+  
+  // reconstruct original total ONLY for UI strike-through
+  const originalTotalAmount =
+    appliedDiscount > 0
+      ? totalAmount + (discountType === "cash" ? appliedDiscount : pointsDiscountCashValue)
+      : totalAmount;
+  
+     
+
+const walletBalance = Number(user?.balance) || 0;
+const ringtonePoints = user?.ringtonePoints || 0;
+const ringtoneBalance = ringtonePoints * 0.01;
+
+// Simple calculations
+const maxWalletUse = Math.min(walletBalance, totalAmount);
+const maxPointsUse = isPointsDisabled ? 0 : Math.min(ringtoneBalance, totalAmount);
+const walletUsed = selectedMethods.walletBalance ? maxWalletUse : 0;
+const pointsUsed = selectedMethods.ringtonePoints ? maxPointsUse : 0;
+const remainingAfterWallet = totalAmount - walletUsed;
+const actualPointsUsed = isPointsDisabled ? 0 : Math.min(maxPointsUse, remainingAfterWallet);
+const finalPointsUsed = selectedMethods.ringtonePoints ? actualPointsUsed : 0;
+const finalAmount = totalAmount - walletUsed - finalPointsUsed;
+const pointsNeeded = Math.ceil(finalPointsUsed * 100);
+  
+  // Apply discount mutation
+  const applyDiscountMutation = useMutation({
+    mutationFn: async (code: string) => {
+      
+    const res = await fetch("/api/checkout/apply-discount", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, code }),
+      });
+  
+      const data = await res.json();
+      
+      
+  
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to apply discount");
+      }
+  
+      return data;
+    },
+  
+    onSuccess: (data) => {
+      setIsApplyingDiscount(false);
+  
+      toast({
+        title: "Discount Applied 🎉",
+        description: data.message,
+      });
+  
+      setShowDiscountDialog(false);
+      setDiscountCode("");
+      refetchOrder();
+    },
+  
+    onError: (error: any) => {
+      setIsApplyingDiscount(false);
+  
+      toast({
+        title: "Discount Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  
+
+  // Remove discount mutation
+  const removeDiscountMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/checkout/remove-discount", "POST", {
+        orderId,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.success) {
+        toast({
+          title: "Discount Removed",
+          description: "Discount has been removed from your order",
+          variant: "default",
+        });
+        refetchOrder();
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove discount",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleApplyDiscount = () => {
+    if (!discountCode.trim()) {
+      toast({
+        title: "Code Required",
+        description: "Please enter a discount code",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsApplyingDiscount(true);
+    applyDiscountMutation.mutate(discountCode.trim().toUpperCase());
+  };
+
+  const handleRemoveDiscount = () => {
+    removeDiscountMutation.mutate();
+  };
+
   const processPaymentMutation = useMutation({
     mutationFn: async (data: any) => {
       // Determine which endpoint to use
@@ -154,7 +269,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
           break;
         case 'plinko': 
           endpoint =  '/api/process-plinko-payment';
-          break
+          break;
         default: // competition
           endpoint = "/api/purchase-ticket";
           break;
@@ -323,7 +438,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Payment Section */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-2 sm:space-y-6">
           {/* Header Card */}
           <div className="bg-gradient-to-br from-yellow-500 via-yellow-600 to-amber-600 rounded-2xl p-6 sm:p-8 shadow-2xl">
             <div className="flex items-center justify-between">
@@ -336,11 +451,6 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                 </div>
                 <p className="text-black/80 font-semibold text-sm sm:text-base">
                   {getTitle()}
-                  {/* {isInstantCompetition && (
-                    <span className="ml-2 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded">
-                      Instant Competition
-                    </span>
-                  )} */}
                 </p>
               </div>
               <div className="hidden sm:flex items-center justify-center w-16 h-16 bg-black/10 rounded-full backdrop-blur-sm">
@@ -351,10 +461,45 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
 
           {/* Order Summary */}
           <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-yellow-500/20 shadow-xl">
-            <h2 className="text-xl font-bold text-yellow-400 mb-4 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5" />
-              Order Summary
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-yellow-400 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5" />
+                Order Summary
+              </h2>
+              
+              {/* Discount Section */}
+           {/* Discount Section */}
+        <div className="flex items-center gap-2">
+          {appliedDiscount > 0 ? (
+            <div className="flex items-center gap-2">
+              <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                <Tag className="w-3 h-3 mr-1" />
+                {discountType === 'cash' ? `£${appliedDiscount} OFF` : `${appliedDiscount} Points`}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRemoveDiscount}
+                className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 px-2"
+                disabled={removeDiscountMutation.isPending}
+              >
+                {removeDiscountMutation.isPending ? "Removing..." : <X className="w-4 h-4" />}
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDiscountDialog(true)}
+              className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
+            >
+              <Tag className="w-4 h-4 mr-2" />
+              Apply Discount
+            </Button>
+          )}
+        </div>
+            </div>
+            
             <div className="space-y-3">
               <div className="flex justify-between items-center py-3 border-b border-yellow-500/10">
                 <span className="text-gray-300 text-sm sm:text-base">{getItemName()}</span>
@@ -364,15 +509,48 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                 <span className="text-gray-300 text-sm sm:text-base">Price per item</span>
                 <span className="font-semibold text-white">£{itemCost.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between items-center py-4 bg-yellow-500/5 -mx-6 px-6 rounded-lg mt-3">
-                <span className="font-bold text-yellow-400 text-base sm:text-lg">Total Amount</span>
-                <span className="font-black text-yellow-400 text-2xl sm:text-3xl">
-                  £{totalAmount.toFixed(2)}
-                </span>
-              </div>
+              
+              {/* Discount Display */}
+             {/* In the Order Summary section - fix the condition */}
+{appliedDiscount > 0 && discountType === 'cash' && (
+  <div className="flex justify-between items-center py-2 border-b border-green-500/20">
+    <span className="text-gray-300 text-sm sm:text-base flex items-center gap-1">
+      <Tag className="w-4 h-4 text-green-400" />
+      Cash Discount Applied
+    </span>
+    <span className="font-bold text-green-400 text-lg">-£{appliedDiscount.toFixed(2)}</span>
+  </div>
+)}
+
+{appliedDiscount > 0 && discountType === 'points' && (
+  <div className="flex justify-between items-center py-2 border-b border-green-500/20">
+    <span className="text-gray-300 text-sm sm:text-base flex items-center gap-1">
+      <Tag className="w-4 h-4 text-green-400" />
+      Points Discount Applied
+    </span>
+    <span className="font-bold text-green-400 text-lg">
+      -£{pointsDiscountCashValue.toFixed(2)} ({appliedDiscount.toLocaleString()} pts)
+    </span>
+  </div>
+)}
+
+{/* Also fix the total amount display */}
+<div className="flex justify-between items-center py-4 bg-yellow-500/5 -mx-6 px-6 rounded-lg mt-3">
+  <span className="font-bold text-yellow-400 text-base sm:text-lg">Total Amount</span>
+  <div className="text-right">
+    {appliedDiscount > 0 && discountType === 'cash' && (
+      <div className="text-sm text-gray-400 line-through mb-1">
+        £{originalTotalAmount.toFixed(2)}
+      </div>
+    )}
+    <span className="font-black text-yellow-400 text-2xl sm:text-3xl">
+      £{totalAmount.toFixed(2)}
+    </span>
+  </div>
+</div>
             </div>
           </div>
-
+     
           {/* Payment Methods */}
           <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-yellow-500/20 shadow-xl">
             <h2 className="text-xl font-bold text-yellow-400 mb-4 flex items-center gap-2">
@@ -533,91 +711,166 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
           </Button>
         </div>
 
-        {/* Sidebar - Payment Breakdown & Security */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Payment Breakdown */}
-          {(selectedMethods.walletBalance || selectedMethods.ringtonePoints) && (
-            <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-yellow-500/20 shadow-xl">
-              <h3 className="font-bold text-yellow-400 mb-4 text-lg">Payment Breakdown</h3>
-              <div className="space-y-3 text-sm">
-                {selectedMethods.walletBalance && (
-                  <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                    <span className="text-gray-300">Wallet Balance</span>
-                    <span className="text-green-400 font-semibold">-£{walletUsed.toFixed(2)}</span>
-                  </div>
-                )}
-                {selectedMethods.ringtonePoints && !isPointsDisabled && (
-                  <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                    <span className="text-gray-300">Ringtone Points</span>
-                    <span className="text-yellow-400 font-semibold">
-                      -£{finalPointsUsed.toFixed(2)} ({pointsNeeded} pts)
-                    </span>
-                  </div>
-                )}
-                {isPointsDisabled && selectedMethods.ringtonePoints && (
-                  <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                    <span className="text-gray-300 line-through">Ringtone Points</span>
-                    <span className="text-red-400 font-semibold">
-                      Not Available
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center pt-3 mt-3 bg-yellow-500/10 -mx-6 px-6 py-3 rounded-lg">
-                  <span className="font-bold text-white">Final Total</span>
-                  <span className="font-black text-yellow-400 text-xl">
-                    {finalAmount > 0 ? `£${finalAmount.toFixed(2)} NEEDED` : 'FULLY COVERED'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
+      {/* Sidebar - Payment Breakdown & Security */}
+<div className="lg:col-span-1 space-y-6">
+  {/* Payment Breakdown */}
+  {(selectedMethods.walletBalance || selectedMethods.ringtonePoints) && (
+    <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-yellow-500/20 shadow-xl">
+      <h3 className="font-bold text-yellow-400 mb-4 text-lg">Payment Breakdown</h3>
+      <div className="space-y-3 text-sm">
+        <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+          <span className="text-gray-300">Order Total</span>
+          <span className="text-white font-semibold">£{originalTotalAmount.toFixed(2)}</span>
+        </div>
+        
+     {/* Cash Discount in Payment Breakdown */}
+{appliedDiscount > 0 && discountType === 'cash' && (
+  <div className="flex justify-between items-center py-2 border-b border-green-500/20">
+    <span className="text-gray-300">Cash Discount</span>
+    <span className="text-green-400 font-semibold">-£{appliedDiscount.toFixed(2)}</span>
+  </div>
+)}
 
-          {/* Security & Trust Signals */}
-          <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-yellow-500/20 shadow-xl">
-            <h3 className="font-bold text-yellow-400 mb-4 text-lg flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5" />
-              Secure Payment
-            </h3>
-            <div className="space-y-3 text-sm text-gray-300">
-              <div className="flex items-center gap-3">
-                <Lock className="w-5 h-5 text-green-500" />
-                <span>256-bit SSL Encryption</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                <span>PCI DSS Compliant</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-green-500" />
-                <span>Secure Payment Gateway</span>
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-zinc-700">
-              <p className="text-xs text-gray-400 leading-relaxed">
-                Your payment information is encrypted and secure. We never store your card details.
-              </p>
-            </div>
+{/* Points Discount in Payment Breakdown */}
+{appliedDiscount > 0 && discountType === 'points' && (
+  <div className="flex justify-between items-center py-2 border-b border-green-500/20">
+    <span className="text-gray-300">Points Discount</span>
+    <span className="text-green-400 font-semibold">
+      -£{pointsDiscountCashValue.toFixed(2)} ({appliedDiscount.toLocaleString()} pts)
+    </span>
+  </div>
+)}
+        
+        {/* Wallet Payment */}
+        {selectedMethods.walletBalance && (
+          <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+            <span className="text-gray-300">Wallet Balance</span>
+            <span className="text-green-400 font-semibold">-£{walletUsed.toFixed(2)}</span>
           </div>
-
-          {/* Need Help */}
-          <div className="bg-gradient-to-br from-blue-950/20 to-blue-900/20 rounded-2xl p-6 border border-blue-500/20 shadow-xl">
-            <h3 className="font-bold text-blue-400 mb-3 text-lg">Need Help?</h3>
-            <p className="text-sm text-gray-300 mb-3">
-              Our support team is here to assist you with any questions.
-            </p>
-            <a 
-              href="mailto:support@ringtoneriches.co.uk"
-              className="text-sm text-yellow-400 hover:text-yellow-300 underline"
-            >
-              support@ringtoneriches.co.uk
-            </a>
+        )}
+        
+        {/* Points Payment */}
+        {selectedMethods.ringtonePoints && !isPointsDisabled && (
+          <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+            <span className="text-gray-300">Ringtone Points</span>
+            <span className="text-yellow-400 font-semibold">
+              -£{finalPointsUsed.toFixed(2)} ({pointsNeeded} pts)
+            </span>
           </div>
+        )}
+        
+        {/* Show discounted total before payment methods */}
+        <div className="flex justify-between items-center py-2 border-b border-yellow-500/20 bg-yellow-500/5 -mx-2 px-2 rounded">
+          <span className="text-gray-300 font-semibold">Discounted Total</span>
+          <span className="text-yellow-400 font-bold">£{totalAmount.toFixed(2)}</span>
+        </div>
+        
+        {/* Final remaining amount */}
+        <div className="flex justify-between items-center pt-3 mt-3 bg-yellow-500/10 -mx-6 px-6 py-3 rounded-lg">
+          <span className="font-bold text-white">Remaining to Pay</span>
+          <span className="font-black text-yellow-400 text-xl">
+            {finalAmount > 0 ? `£${finalAmount.toFixed(2)}` : 'PAID IN FULL'}
+          </span>
         </div>
       </div>
+    </div>
+  )}
+
+  {/* Security & Trust Signals */}
+  <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-yellow-500/20 shadow-xl">
+    <h3 className="font-bold text-yellow-400 mb-4 text-lg flex items-center gap-2">
+      <ShieldCheck className="w-5 h-5" />
+      Secure Payment
+    </h3>
+    <div className="space-y-3 text-sm text-gray-300">
+      <div className="flex items-center gap-3">
+        <Lock className="w-5 h-5 text-green-500" />
+        <span>256-bit SSL Encryption</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <CheckCircle2 className="w-5 h-5 text-green-500" />
+        <span>PCI DSS Compliant</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <ShieldCheck className="w-5 h-5 text-green-500" />
+        <span>Secure Payment Gateway</span>
+      </div>
+    </div>
+    <div className="mt-4 pt-4 border-t border-zinc-700">
+      <p className="text-xs text-gray-400 leading-relaxed">
+        Your payment information is encrypted and secure. We never store your card details.
+      </p>
+    </div>
+  </div>
+
+  {/* Need Help */}
+  <div className="bg-gradient-to-br from-blue-950/20 to-blue-900/20 rounded-2xl p-6 border border-blue-500/20 shadow-xl">
+    <h3 className="font-bold text-blue-400 mb-3 text-lg">Need Help?</h3>
+    <p className="text-sm text-gray-300 mb-3">
+      Our support team is here to assist you with any questions.
+    </p>
+    <a 
+      href="mailto:support@ringtoneriches.co.uk"
+      className="text-sm text-yellow-400 hover:text-yellow-300 underline"
+    >
+      support@ringtoneriches.co.uk
+    </a>
+  </div>
+</div>
+      </div>
+
+      {/* Discount Dialog */}
+      <Dialog open={showDiscountDialog} onOpenChange={setShowDiscountDialog}>
+        <DialogContent className="bg-gradient-to-br from-zinc-900 to-zinc-950 border-yellow-500/30 text-white max-w-md rounded-2xl shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-yellow-400 flex items-center gap-2">
+              <Tag className="w-6 h-6" />
+              Apply Discount Code
+            </DialogTitle>
+            <DialogDescription className="text-gray-300 pt-2">
+              Enter your discount code to save on your purchase.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            <Input
+              type="text"
+              placeholder="Enter discount code"
+              value={discountCode}
+              onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
+              className="bg-zinc-800 border-yellow-500/30 text-white placeholder:text-gray-400"
+              onKeyDown={(e) => e.key === 'Enter' && handleApplyDiscount()}
+            />
+           <p className="text-sm text-gray-400">
+            Cash discounts reduce the total amount. Points discounts are converted to cash (100 points = £1 off).
+          </p>
+          </div>
+          
+          <DialogFooter className="gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDiscountDialog(false);
+                setDiscountCode("");
+              }}
+              className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleApplyDiscount}
+              disabled={isApplyingDiscount || !discountCode.trim()}
+              className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-bold"
+            >
+              {isApplyingDiscount ? "Applying..." : "Apply Discount"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Top Up Modal */}
       <Dialog open={showTopUpModal} onOpenChange={setShowTopUpModal}>
-        <DialogContent className="bg-gradient-to-br from-zinc-900 to-zinc-950  border-yellow-500/30 w-[90vw] text-white max-w-md rounded-2xl shadow-2xl">
+        <DialogContent className="bg-gradient-to-br from-zinc-900 to-zinc-950 border-yellow-500/30 w-[90vw] text-white max-w-md rounded-2xl shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl text-yellow-400 flex items-center gap-2">
               <AlertCircle className="w-6 h-6" />
@@ -637,7 +890,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-300">Available Funds:</span>
-                  <span className="font-bold text-green-400">£{(walletBalance + (isPointsDisabled ? 0 : ringtoneBalance)).toFixed(2)}</span>
+                  £{(walletBalance + (isPointsDisabled ? 0 : ringtoneBalance)).toFixed(2)}
                 </div>
                 <div className="flex justify-between border-t border-yellow-500/20 pt-2">
                   <span className="text-gray-300">Remaining:</span>

@@ -379,19 +379,28 @@ export default function AdminPlinko() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex items-center justify-between p-4 rounded-lg bg-zinc-800/50 border border-zinc-700">
-                    <div className="flex items-center gap-3">
-                      {isVisible ? <Eye className="w-5 h-5 text-green-400" /> : <EyeOff className="w-5 h-5 text-red-400" />}
-                      <div>
-                        <p className="font-medium text-white">Visibility</p>
-                        <p className="text-sm text-gray-400">Show Plinko game to users</p>
-                      </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full ${isVisible ? "bg-green-500/20" : "bg-muted"}`}>
+                      {isVisible ? (
+                        <Eye className="w-5 h-5 text-green-400" />
+                      ) : (
+                        <EyeOff className="w-5 h-5 text-muted-foreground" />
+                      )}
                     </div>
-                    <Switch
-                      checked={isVisible}
-                      onCheckedChange={(checked) => { setIsVisible(checked); setHasChanges(true); }}
-                    />
+                    <div>
+                      <p className="font-medium">Show on Site</p>
+                      <p className="text-sm text-muted-foreground">
+                        {isVisible ? "Game appears on the website" : "Hidden from users"}
+                      </p>
+                    </div>
                   </div>
+                  <Switch
+                    checked={isVisible}
+                    onCheckedChange={(val) => { setIsVisible(val); setHasChanges(true); }}
+                    data-testid="switch-visible"
+                  />
+                </div>
 
                   <div className="flex items-center justify-between p-4 rounded-lg bg-zinc-800/50 border border-zinc-700">
                     <div className="flex items-center gap-3">

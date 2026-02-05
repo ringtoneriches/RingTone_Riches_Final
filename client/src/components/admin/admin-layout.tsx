@@ -223,8 +223,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
 
           <div className="p-4 border-t border-border">
-            <p className="text-xs text-muted-foreground">Logged in as</p>
-            <p className="text-sm font-medium text-foreground truncate">{user.email}</p>
+            {/* <p className="text-xs text-muted-foreground">Logged in as</p> */}
+            {/* <p className="text-sm font-medium text-foreground truncate">{user.email}</p> */}
             <Button
               variant="outline"
               className="w-full"
