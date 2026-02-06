@@ -29,20 +29,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend
-} from 'recharts';
 
 interface CashflowTx {
   id: string;
@@ -113,66 +99,7 @@ export default function AdminTransactions() {
     staleTime: 5000,
   });
 
-  // CALCULATE ANALYTICS
-  const analytics = useMemo(() => {
-  if (!transactions.length) return null;
-
-  // Convert all amounts to numbers
-  const txAmounts = transactions.map(tx => ({
-    ...tx,
-    amount: Number(tx.amount || 0)
-  }));
-
-  const totalAmount = txAmounts.reduce((sum, tx) => sum + tx.amount, 0);
-
-  const depositTotal = txAmounts
-    .filter(tx => tx.type === "deposit")
-    .reduce((sum, tx) => sum + tx.amount, 0);
-
-  const competitionTotal = txAmounts
-    .filter(tx => tx.type !== "deposit")
-    .reduce((sum, tx) => sum + tx.amount, 0);
-
-  const uniqueUsers = new Set(txAmounts.map(tx => tx.userEmail).filter(Boolean));
-
-  // Daily breakdown
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    return date.toISOString().split('T')[0];
-  }).reverse();
-
-  const dailyData = last7Days.map(date => {
-    const dayTransactions = txAmounts.filter(tx => tx.createdAt.startsWith(date));
-    const dayTotal = dayTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-    return {
-      date: new Date(date).toLocaleDateString('en-GB', { weekday: 'short' }),
-      amount: dayTotal,
-      count: dayTransactions.length
-    };
-  });
-
-  const sourceData = Object.entries(
-    txAmounts.reduce((acc, tx) => {
-      const source = tx.source || 'unknown';
-      acc[source] = (acc[source] || 0) + tx.amount;
-      return acc;
-    }, {} as Record<string, number>)
-  ).map(([name, value]) => ({ name, value }));
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
-
-  return {
-    totalAmount,
-    depositTotal,
-    competitionTotal,
-    uniqueUsers: uniqueUsers.size,
-    transactionCount: txAmounts.length,
-    dailyData,
-    sourceData,
-    COLORS
-  };
-}, [transactions]);
+ 
 
 
   // FILTERING
@@ -202,6 +129,68 @@ export default function AdminTransactions() {
     currentPage * itemsPerPage
   );
 
+
+   // CALCULATE ANALYTICS
+   const analytics = useMemo(() => {
+    if (!filtered.length) return null;
+  
+    // Convert all amounts to numbers
+    const txAmounts = filtered.map(tx => ({
+      ...tx,
+      amount: Number(tx.amount || 0)
+    }));
+  
+    const totalAmount = txAmounts.reduce((sum, tx) => sum + tx.amount, 0);
+  
+    const depositTotal = txAmounts
+      .filter(tx => tx.type === "deposit")
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  
+    const competitionTotal = txAmounts
+      .filter(tx => tx.type !== "deposit")
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  
+    const uniqueUsers = new Set(txAmounts.map(tx => tx.userEmail).filter(Boolean));
+  
+    // Daily breakdown
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      return date.toISOString().split('T')[0];
+    }).reverse();
+  
+    const dailyData = last7Days.map(date => {
+      const dayTransactions = txAmounts.filter(tx => tx.createdAt.startsWith(date));
+      const dayTotal = dayTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+      return {
+        date: new Date(date).toLocaleDateString('en-GB', { weekday: 'short' }),
+        amount: dayTotal,
+        count: dayTransactions.length
+      };
+    });
+  
+    const sourceData = Object.entries(
+      txAmounts.reduce((acc, tx) => {
+        const source = tx.source || 'unknown';
+        acc[source] = (acc[source] || 0) + tx.amount;
+        return acc;
+      }, {} as Record<string, number>)
+    ).map(([name, value]) => ({ name, value }));
+  
+    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+  
+    return {
+      totalAmount,
+      depositTotal,
+      competitionTotal,
+      uniqueUsers: uniqueUsers.size,
+      transactionCount: txAmounts.length,
+      dailyData,
+      sourceData,
+      COLORS
+    };
+  }, [filtered]);
+
   // Export function
   const handleExportCSV = () => {
     if (!transactions.length) return;
@@ -230,6 +219,8 @@ export default function AdminTransactions() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+
+
 
   if (isLoading) {
     return (
@@ -371,7 +362,7 @@ export default function AdminTransactions() {
                 : '0%'}
             </Badge>
             <span className="text-xs text-muted-foreground">
-              {transactions.filter(tx => tx.type === "deposit").length} deposits
+              {filtered.filter(tx => tx.type === "deposit").length} deposits
             </span>
           </div>
         </CardContent>
@@ -434,20 +425,22 @@ export default function AdminTransactions() {
                 ) : (
                   paginated.map((tx) => (
                     <TableRow key={tx.id} className="hover:bg-muted/50">
-                      <TableCell className="font-medium whitespace-nowrap">
-                        <div className="text-sm">
-                          {new Date(tx.createdAt).toLocaleDateString('en-GB', {
-                            day: '2-digit',
-                            month: 'short'
-                          })}
-                        </div>
-                        <div className="text-xs text-muted-foreground sm:hidden">
-                          {new Date(tx.createdAt).toLocaleTimeString('en-GB', {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </div>
-                      </TableCell>
+                    <TableCell className="font-medium whitespace-nowrap">
+                    <div className="text-sm">
+                      {new Date(tx.createdAt).toLocaleDateString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                      })}
+                    </div>
+
+                    <div className="text-xs text-muted-foreground">
+                      {/* {new Date(tx.createdAt).toLocaleTimeString("en-GB", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })} */}
+                    </div>
+                  </TableCell>
+
                       <TableCell className="max-w-[100px] truncate">
                         <div className="font-medium">{tx.userName || 'N/A'}</div>
                         <div className="text-xs text-muted-foreground sm:hidden truncate">
