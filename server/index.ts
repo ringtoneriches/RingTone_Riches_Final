@@ -79,8 +79,8 @@ let browser;
     } else {
       // Fallback
       res.json({
-        totalMembers: 6700,
-        formattedCount: '6.7K',
+        totalMembers: 6900,
+        formattedCount: '6.9K',
         isFallback: true,
         success: true
       });
