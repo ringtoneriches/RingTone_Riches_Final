@@ -57,6 +57,7 @@ import {
   plinkoPrizes,
   plinkoUsage,
   plinkoWins,
+  userVerifications
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -95,6 +96,7 @@ import { sendVerificationEmail } from "./emails/verification-email";
 
 const supportUpload = createS3Uploader("support");
 const competitionUpload = createS3Uploader("competitions");
+const verificationUpload = createS3Uploader("Verifications");
 // Default spin wheel configuration - 26 segments with 6 evenly-distributed black segments
 // Color palette: Black #000000, Red #FE0000, White #FFFFFF, Blue #1E54FF, Yellow #FEED00, Green #00A223
 // 6 Black segments evenly distributed: X icons at positions 1, 5, 10, 15, 20 + R_Prize at position 26 (mystery prize)
@@ -4120,6 +4122,8 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
             used: used,
             discountAmount: order.discountAmount || 0,
             discountType: order.discountType || null,
+            percentageDiscount: order.percentageDiscount || 0, 
+
           },
           user: {
             balance: user?.balance || "0",
@@ -4171,6 +4175,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           status: order.status,
           discountAmount: order.discountAmount || 0,
     discountType: order.discountType || null,
+    percentageDiscount: order.percentageDiscount || 0, 
         },
         user: {
           balance: user?.balance || "0",
@@ -5643,6 +5648,8 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
             used: used,
             discountAmount: order.discountAmount || 0,
     discountType: order.discountType || null,
+    percentageDiscount: order.percentageDiscount || 0, 
+
           },
           user: {
             balance: user?.balance || "0",
@@ -5686,6 +5693,8 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           status: order.status,
           discountAmount: order.discountAmount || 0,
     discountType: order.discountType || null,
+    percentageDiscount: order.percentageDiscount || 0, 
+
         },
         user: {
           balance: user?.balance || "0",
@@ -6084,11 +6093,13 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       try {
         const { code, type, value, maxUses, expiresAt } = req.body;
   
-        if (!["cash", "points"].includes(type))
+        if (!["cash", "points", "percentage"].includes(type))
           return res.status(400).json({ error: "Invalid type" });
         if (!code || typeof code !== "string")
           return res.status(400).json({ error: "Code is required" });
         if (value <= 0) return res.status(400).json({ error: "Value must be > 0" });
+        if (type === "percentage" && value > 100) 
+          return res.status(400).json({ error: "Percentage cannot exceed 100" });
         if (maxUses <= 0) return res.status(400).json({ error: "Max uses >= 1" });
   
         const formattedCode = code.trim().toUpperCase();
@@ -6285,20 +6296,61 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
     if (!order) return res.status(404).json({ error: "Order not found" });
     if (order.discountCodeId) return res.status(400).json({ error: "Discount already applied" });
 
-    // Prepare discount values - SIMPLE LOGIC!
+    // Get competition details for original price calculation
+    const [competition] = await db
+      .select()
+      .from(competitions)
+      .where(eq(competitions.id, order.competitionId));
+
+    if (!competition) return res.status(404).json({ error: "Competition not found" });
+
+    // Calculate original amount
+    const originalAmount = Number(competition.ticketPrice) * order.quantity;
+    
+    // Prepare discount values
     let discountAmount = Number(discount.value);
     let newTotalAmount = Number(order.totalAmount);
+    let discountValue = discountAmount; // Store the actual discount value
     let pointsDiscountCashValue = 0;
+    let percentageDiscount = 0;
 
-    if (discount.type === "cash") {
-      // Cash discount: just subtract the cash amount
-      newTotalAmount -= discountAmount;
-      if (newTotalAmount < 0) newTotalAmount = 0;
-    } else if (discount.type === "points") {
-      // Points discount: convert points to cash (100 points = £1)
-      pointsDiscountCashValue = discountAmount * 0.01; // Convert points to pounds
-      newTotalAmount -= pointsDiscountCashValue;
-      if (newTotalAmount < 0) newTotalAmount = 0;
+    switch (discount.type) {
+      case "cash":
+        // Cash discount: subtract fixed amount
+        newTotalAmount -= discountAmount;
+        if (newTotalAmount < 0) newTotalAmount = 0;
+        break;
+        
+      case "points":
+        // Points discount: convert points to cash (100 points = £1)
+        pointsDiscountCashValue = discountAmount * 0.01;
+        discountValue = pointsDiscountCashValue;
+        newTotalAmount -= pointsDiscountCashValue;
+        if (newTotalAmount < 0) newTotalAmount = 0;
+        break;
+        
+      case "percentage":
+        // Percentage discount: calculate percentage of original amount
+        // Ensure percentage is between 0 and 100
+        if (discountAmount < 0 || discountAmount > 100) {
+          return res.status(400).json({ error: "Invalid percentage value" });
+        }
+        
+        percentageDiscount = discountAmount;
+        // FIX: Use a different variable name or don't redeclare
+        const calculatedDiscount = (originalAmount * discountAmount) / 100;
+        
+        // Apply minimum cash flow requirement (e.g., £1.50 for 2 spins)
+        const minimumAmount = 1.50; // Minimum amount after discount
+        newTotalAmount = originalAmount - calculatedDiscount;
+        
+        if (newTotalAmount < minimumAmount) {
+          newTotalAmount = minimumAmount;
+        }
+        
+        // Store the actual discount applied
+        discountValue = originalAmount - newTotalAmount;
+        break;
     }
 
     // Apply discount in a transaction
@@ -6316,9 +6368,10 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
         .set({ 
           totalAmount: newTotalAmount,
           discountCodeId: discount.id,
-          discountAmount: discountAmount,
+          discountAmount: discountValue,
           discountType: discount.type,
-          pointsDiscountAmount: discount.type === "points" ? discountAmount : null
+          pointsDiscountAmount: discount.type === "points" ? discountAmount : null,
+          percentageDiscount: discount.type === "percentage" ? discountAmount : null
         })
         .where(eq(orders.id, orderId));
 
@@ -6330,15 +6383,27 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
       });
     });
 
+    let message = "";
+    switch (discount.type) {
+      case "cash":
+        message = `Discount applied: £${discountValue.toFixed(2)} off`;
+        break;
+      case "points":
+        message = `Discount applied: ${discountAmount} points (worth £${discountValue.toFixed(2)})`;
+        break;
+      case "percentage":
+        message = `Discount applied: ${discountAmount}% off (saved £${discountValue.toFixed(2)})`;
+        break;
+    }
+
     res.json({ 
       success: true,
       newTotalAmount: newTotalAmount,
-      discountAmount: discountAmount,
+      discountAmount: discountValue,
       discountType: discount.type,
-      pointsDiscountCashValue: discount.type === "points" ? pointsDiscountCashValue : 0,
-      message: discount.type === "cash"
-        ? `Discount applied: £${discountAmount.toFixed(2)} off`
-        : `Discount applied: ${discountAmount} points (worth £${pointsDiscountCashValue.toFixed(2)})`,
+      pointsDiscountCashValue: discount.type === "points" ? discountValue : 0,
+      percentageDiscount: discount.type === "percentage" ? discountAmount : 0,
+      message: message,
       discountCode: discount.code,
     });
   } catch (err) {
@@ -6414,7 +6479,8 @@ app.post(
             discountCodeId: null, 
             discountAmount: null,
             discountType: null,
-            pointsDiscountAmount: null
+            pointsDiscountAmount: null,
+            percentageDiscount: null
           })
           .where(eq(orders.id, orderId));
 
@@ -6474,6 +6540,326 @@ app.get(
     }
   }
 );
+
+
+
+// USER VERIFICATION ROUTES
+ // Get verification status for current user
+app.get("/api/verification/status", isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const [verification] = await db
+      .select()
+      .from(userVerifications)
+      .where(eq(userVerifications.userId, userId))
+      .orderBy(desc(userVerifications.createdAt))
+      .limit(1);
+    
+    const user = await db
+      .select({ isVerified: users.isVerified })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    
+    res.json({
+      verification,
+      isVerified: user[0]?.isVerified || false,
+    });
+  } catch (error) {
+    console.error("Error fetching verification status:", error);
+    res.status(500).json({ error: "Failed to fetch verification status" });
+  }
+});
+
+// Submit verification document with file upload
+app.post(
+  "/api/verification/submit",
+  isAuthenticated,
+  verificationUpload.single("documentImage"),
+  async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { documentType } = req.body;
+      
+      // Check if file was uploaded
+      if (!req.file) {
+        return res.status(400).json({ 
+          error: "Document image is required" 
+        });
+      }
+      
+      // Construct the document image URL
+      const documentImageUrl = `${process.env.R2_PUBLIC_URL}/${req.file.key}`;
+      
+      // Check if user already has a pending verification
+      const existing = await db
+        .select()
+        .from(userVerifications)
+        .where(
+          and(
+            eq(userVerifications.userId, userId),
+            eq(userVerifications.status, "pending")
+          )
+        );
+      
+      if (existing.length > 0) {
+        // Delete the uploaded file if verification already exists
+        await deleteR2Object(req.file.key);
+        
+        return res.status(400).json({ 
+          error: "You already have a pending verification request" 
+        });
+      }
+      
+      // Create verification request
+      const [verification] = await db
+        .insert(userVerifications)
+        .values({
+          userId,
+          documentType,
+          documentImageUrl,
+          status: "pending",
+          adminHasUnread: true, 
+        })
+        .returning();
+      
+      res.json({ 
+        success: true, 
+        message: "Verification submitted successfully",
+        verification 
+      });
+    } catch (error) {
+      console.error("Error submitting verification:", error);
+      
+      // Cleanup: Delete uploaded file if error occurs
+      if (req.file) {
+        await deleteR2Object(req.file.key);
+      }
+      
+      res.status(500).json({ error: "Failed to submit verification" });
+    }
+  }
+);
+
+
+// Admin: Get all pending verifications
+app.get("/api/admin/verifications", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { status = "all" } = req.query;
+    
+    let query = db
+    .select({
+      id: userVerifications.id,
+      status: userVerifications.status,
+      documentType: userVerifications.documentType,
+      documentImageUrl: userVerifications.documentImageUrl,
+      adminNotes: userVerifications.adminNotes,
+      createdAt: userVerifications.createdAt,
+      reviewedAt: userVerifications.reviewedAt,
+      userId: userVerifications.userId,
+      userEmail: users.email,
+      userFirstName: users.firstName,
+      userLastName: users.lastName,
+      userDateOfBirth: users.dateOfBirth,
+    })
+    .from(userVerifications)
+    .innerJoin(users, eq(userVerifications.userId, users.id));
+  
+    
+    // Apply status filter if not "all"
+    if (status !== "all") {
+      query = query.where(eq(userVerifications.status, status));
+    }
+    
+    // Execute query
+    const results = await query.orderBy(desc(userVerifications.createdAt));
+    
+    const formattedResults = results.map(result => ({
+      id: result.id,
+      status: result.status,
+      documentType: result.documentType,
+      documentImageUrl: result.documentImageUrl,
+      adminNotes: result.adminNotes,
+      createdAt: result.createdAt,
+      reviewedAt: result.reviewedAt,
+      user: {
+        id: result.userId,
+        email: result.userEmail,
+        name: `${result.userFirstName || ""} ${result.userLastName || ""}`.trim(),
+        dateOfBirth: result.userDateOfBirth,
+      },
+    }));
+    
+    
+    res.json(formattedResults);
+  } catch (error) {
+    console.error("Error fetching verifications:", error);
+    res.status(500).json({ error: "Failed to fetch verifications" });
+  }
+});
+
+// Admin: Delete a user's verification
+app.delete(
+  "/api/admin/verifications/:id",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const verificationId = req.params.id;
+
+      // Fetch the verification first (to delete R2 object if needed)
+      const [verification] = await db
+        .select()
+        .from(userVerifications)
+        .where(eq(userVerifications.id, verificationId));
+
+      if (!verification) {
+        return res.status(404).json({ error: "Verification not found" });
+      }
+
+      // Delete the document from R2 (if you store the file in R2)
+      if (verification.documentImageUrl) {
+        const key = verification.documentImageUrl.split("/").pop(); // extract key
+        if (key) await deleteR2Object(key);
+      }
+
+      // Delete verification from database
+      await db
+        .delete(userVerifications)
+        .where(eq(userVerifications.id, verificationId));
+
+      res.json({ success: true, message: "Verification deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting verification:", error);
+      res.status(500).json({ error: "Failed to delete verification" });
+    }
+  }
+);
+
+
+// Admin: Get single verification
+app.get("/api/admin/verifications/:id", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const [verification] = await db
+      .select({
+        id: userVerifications.id,
+        status: userVerifications.status,
+        documentType: userVerifications.documentType,
+        documentImageUrl: userVerifications.documentImageUrl,
+        adminNotes: userVerifications.adminNotes,
+        createdAt: userVerifications.createdAt,
+        reviewedAt: userVerifications.reviewedAt,
+        user: {
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          dateOfBirth: users.dateOfBirth,
+          phoneNumber: users.phoneNumber,
+          address: users.address,
+        },
+      })
+      .from(userVerifications)
+      .innerJoin(users, eq(userVerifications.userId, users.id))
+      .where(eq(userVerifications.id, id));
+    
+    if (!verification) {
+      return res.status(404).json({ error: "Verification not found" });
+    }
+    
+    res.json(verification);
+  } catch (error) {
+    console.error("Error fetching verification:", error);
+    res.status(500).json({ error: "Failed to fetch verification" });
+  }
+});
+
+// Admin: Update verification status
+app.post("/api/admin/verifications/:id/review", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, adminNotes } = req.body;
+    const adminId = req.user.id;
+    
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+    
+    // Start transaction
+    await db.transaction(async (tx) => {
+      // Update verification
+      const [verification] = await tx
+        .update(userVerifications)
+        .set({
+          status,
+          adminNotes,
+          reviewedBy: adminId,
+          reviewedAt: new Date(),
+        })
+        .where(eq(userVerifications.id, id))
+        .returning();
+      
+      if (!verification) {
+        throw new Error("Verification not found");
+      }
+      
+      // If approved, update user verification status
+      if (status === "approved") {
+        await tx
+          .update(users)
+          .set({ isVerified: true })
+          .where(eq(users.id, verification.userId));
+      } else if (status === "rejected") {
+        // If rejected, ensure user is not verified
+        await tx
+          .update(users)
+          .set({ isVerified: false })
+          .where(eq(users.id, verification.userId));
+      }
+    });
+    
+    res.json({ 
+      success: true, 
+      message: `Verification ${status}` 
+    });
+  } catch (error) {
+    console.error("Error reviewing verification:", error);
+    res.status(500).json({ error: "Failed to review verification" });
+  }
+});
+
+// Check if user can withdraw
+app.get("/api/verification/can-withdraw", isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const [user] = await db
+      .select({ isVerified: users.isVerified })
+      .from(users)
+      .where(eq(users.id, userId));
+    
+    // Check if user has any withdrawal requests
+    const UserithdrawalRequests = await db
+      .select()
+      .from(withdrawalRequests)
+      .where(eq(withdrawalRequests.userId, userId))
+      .limit(1);
+    
+    const canWithdraw = user?.isVerified === true;
+    
+    res.json({
+      canWithdraw,
+      isVerified: user?.isVerified || false,
+      hasPreviousWithdrawals: UserithdrawalRequests.length > 0,
+    });
+  } catch (error) {
+    console.error("Error checking withdrawal eligibility:", error);
+    res.status(500).json({ error: "Failed to check withdrawal eligibility" });
+  }
+});
+
 
 
   // app.get("/api/admin/cashflow-transactions", isAuthenticated, isAdmin, async (req, res) => {
@@ -7927,6 +8313,8 @@ app.get("/api/plinko-order/:orderId", isAuthenticated, async (req: any, res) => 
         status: order.status,
         discountAmount: order.discountAmount || 0,
     discountType: order.discountType || null,
+    percentageDiscount: order.percentageDiscount || 0, 
+
       },
       user: {
         balance: user?.balance || "0",
@@ -8432,6 +8820,19 @@ app.post("/api/withdrawal-requests", isAuthenticated, async (req: any, res) => {
         errors: parsed.error.issues,
       });
     }
+    
+    const [verifiedUser] = await db
+      .select({ isVerified: users.isVerified, balance: users.balance })
+      .from(users)
+      .where(eq(users.id, userId));
+
+    if (!verifiedUser?.isVerified) {
+      return res.status(400).json({
+        error: "Account verification required",
+        message: "Please complete ID verification before withdrawing funds. Visit the Verification tab.",
+        code: "VERIFICATION_REQUIRED"
+      });
+    }
 
     const {
       amount,
@@ -8537,6 +8938,20 @@ app.post("/api/withdrawal-requests", isAuthenticated, async (req: any, res) => {
     } catch (err) {
       console.error("Failed to mark withdrawals read:", err);
       res.status(500).json({ message: "Failed to mark withdrawals read" });
+    }
+  }
+);
+  app.post(
+  "/api/admin/verification/mark-read",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      await storage.markAdminVerificationAsRead();
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Failed to mark verification read:", err);
+      res.status(500).json({ message: "Failed to mark verification read" });
     }
   }
 );
@@ -12601,6 +13016,20 @@ app.post(
       res.json({ count });
     } catch (error) {
       console.error("Error getting withdrawal unread count:", error);
+      res.status(500).json({ message: "Failed to get unread count" });
+    }
+  }
+);
+  app.get(
+  "/api/admin/verification/unread-count",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const count = await storage.getAdminUnreadVerificationCount();
+      res.json({ count });
+    } catch (error) {
+      console.error("Error getting verification unread count:", error);
       res.status(500).json({ message: "Failed to get unread count" });
     }
   }

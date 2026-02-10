@@ -34,6 +34,7 @@ import {
   Heart,
   Star,
   Target,
+  Check,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -67,6 +68,8 @@ import Support from "./support";
 import { navigate } from "wouter/use-browser-location";
 import { useNavigation } from "react-day-picker";
 import Wellbeing from "./wellbeing";
+import { VerificationForm } from "./verification-form";
+import VerificationTab from "./verification";
 // Update getTransactionIcon function:
 const getTransactionIcon = (type: string) => {
   switch (type) {
@@ -401,7 +404,7 @@ const isAuthenticated = !!user;
     selectedAccountId: "", // For selecting saved account
     useSavedAccount: false,
   });
-
+  const [showWithdrawalForm, setShowWithdrawalForm] = useState(false);
   const [errors, setErrors] = useState({
   accountNumber: "",
   sortCode: ""
@@ -471,6 +474,14 @@ const isAuthenticated = !!user;
     },
   });
 
+
+  const { data: verificationData, isLoading: verificationLoading } = useQuery({
+    queryKey: ["/api/verification/can-withdraw"],
+    queryFn: async () => {
+      const res = await fetch("/api/verification/can-withdraw", { credentials: "include" });
+      return res.json();
+    },
+  });
 
    const { data: supportUnreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/support/unread-count"],
@@ -1295,7 +1306,7 @@ const handleDeleteBankAccount = (
             className="w-full"
           >
             <TabsList
-              className="grid w-full h-full grid-cols-4 md:grid-cols-9 gap-2 bg-zinc-900/50 border border-yellow-500/20 p-2 rounded-xl mb-12 relative z-10"
+              className="grid w-full h-full grid-cols-5 md:grid-cols-10 gap-2 bg-zinc-900/50 border border-yellow-500/20 p-2 rounded-xl mb-12 relative z-10"
               data-testid="tabs-account"
             >
               <TabsTrigger
@@ -1345,6 +1356,14 @@ const handleDeleteBankAccount = (
               >
                 <UserCircle className="h-4 w-4" />
                 <span>Account</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="verification"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3"
+                data-testid="tab-verification"
+              >
+                <Check className="h-4 w-4" />
+                <span>Verification</span>
               </TabsTrigger>
               <TabsTrigger
                 value="wellbeing"
@@ -1454,12 +1473,40 @@ const handleDeleteBankAccount = (
                           : "TOP UP NOW"}
                       </button>
                       <button
-                        onClick={() => setWithdrawalDialogOpen(true)}
-                        className="w-full bg-zinc-800 text-yellow-500 border border-yellow-500/30 font-bold py-4 rounded-lg hover:bg-zinc-700 hover:border-yellow-500/50 transition-all transform hover:scale-105"
-                        data-testid="button-request-withdrawal"
-                      >
-                        REQUEST WITHDRAWAL
-                      </button>
+  onClick={() => {
+    // Check verification before opening withdrawal dialog
+    if (!verificationData?.canWithdraw) {
+      toast({
+        title: "Verification Required",
+        description: "Please complete ID verification before withdrawing funds. Visit the Verification tab.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setWithdrawalDialogOpen(true);
+  }}
+  disabled={verificationLoading}
+  className={`w-full font-bold py-4 rounded-lg transition-all transform hover:scale-105 ${
+    verificationData?.canWithdraw 
+      ? "bg-zinc-800 text-yellow-500 border border-yellow-500/30 hover:bg-zinc-700 hover:border-yellow-500/50"
+      : "bg-zinc-800 text-yellow-500 border border-yellow-500/30 hover:bg-zinc-700 hover:border-yellow-500/50"
+  } ${verificationLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+  data-testid="button-request-withdrawal"
+>
+  {verificationLoading ? (
+    <span className="flex items-center justify-center gap-2">
+      <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"></div>
+      Checking...
+    </span>
+  ) : verificationData?.canWithdraw ? (
+    "REQUEST WITHDRAWAL"
+  ) : (
+    <span className="flex items-center justify-center gap-2">
+      <AlertCircle className="w-4 h-4" />
+      VERIFICATION REQUIRED
+    </span>
+  )}
+</button>
                     </div>
                   </div>
                 </CardContent>
@@ -2523,7 +2570,14 @@ const handleDeleteBankAccount = (
                 </div>
               </div>
             </TabsContent>
-
+              
+            <TabsContent
+              value="verification"
+              className="space-y-6 pt-1 relative z-0"
+              data-testid="content-verification"
+            >
+            <VerificationTab/>
+            </TabsContent>
             {/* ADDRESS TAB */}
             <TabsContent
               value="address"

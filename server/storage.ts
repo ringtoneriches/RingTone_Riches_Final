@@ -49,6 +49,7 @@ import {
   type SupportMessage,
   type InsertSupportMessage,
   plinkoUsage,
+  userVerifications,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sum, sql, notInArray, lt } from "drizzle-orm";
@@ -1028,6 +1029,19 @@ async getAdminUnreadWithdrawalCount(): Promise<number> {
 
   return result[0]?.count || 0;
 }
+async getAdminUnreadVerificationCount(): Promise<number> {
+  const result = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(userVerifications)
+    .where(
+      and(
+        eq(userVerifications.adminHasUnread, true),
+        eq(userVerifications.status, "pending")
+      )
+    );
+
+  return result[0]?.count || 0;
+}
 
 
 async markAdminWithdrawalsAsRead(): Promise<void> {
@@ -1035,6 +1049,13 @@ async markAdminWithdrawalsAsRead(): Promise<void> {
     .update(withdrawalRequests)
     .set({ adminHasUnread: false })
     .where(eq(withdrawalRequests.adminHasUnread, true));
+}
+
+async markAdminVerificationAsRead(): Promise<void> {
+  await db
+    .update(userVerifications)
+    .set({ adminHasUnread: false })
+    .where(eq(userVerifications.adminHasUnread, true));
 }
 
   async markTicketsAsReadByUser(userId: string): Promise<void> {

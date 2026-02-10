@@ -68,6 +68,7 @@ import PlinkoBilling from "./pages/plinkoBilling";
 import AdminPlinko from "./pages/admin/plinko";
 import AdminPlinkoBalloon from "./pages/admin/admin-plinko";
 import PlinkoGamePage from "./pages/plinkoGamePage";
+import AdminVerifications from "./pages/admin/admin-verification";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -153,6 +154,7 @@ function Router() {
       <Route path="/admin/discount" component={AdminDiscountCodes} />
       <Route path="/admin/plinko" component={AdminPlinkoBalloon} />
       <Route path="/admin/ringtone-plinko/settings" component={AdminPlinko} />
+      <Route path="/admin/verification" component={AdminVerifications} />
 
       <Route component={NotFound} />
     </Switch>

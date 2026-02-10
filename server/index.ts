@@ -80,7 +80,7 @@ let browser;
       // Fallback
       res.json({
         totalMembers: 6900,
-        formattedCount: '6.9K',
+        formattedCount: '7.3K',
         isFallback: true,
         success: true
       });

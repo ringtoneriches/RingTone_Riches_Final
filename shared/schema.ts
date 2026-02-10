@@ -55,6 +55,7 @@ export const users = pgTable("users", {
   howDidYouFindUs: varchar("how_did_you_find_us"),
   isAdmin: boolean("is_admin").default(false),
   isActive: boolean("is_active").default(true),
+  isVerified: boolean("is_verified").default(false),
   referralCode: varchar("referral_code").unique(),
   phoneNumber: varchar("phone_number"),
   referredBy: varchar("referred_by"),
@@ -65,6 +66,21 @@ export const users = pgTable("users", {
   notes: text("notes"),
   isRestricted: boolean("is_restricted").default(false),
   restrictedAt: timestamp("restricted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+
+export const userVerifications = pgTable("user_verifications", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: varchar("status", { enum: ["pending", "approved", "rejected"] }).default("pending").notNull(),
+  documentType: varchar("document_type", { enum: ["passport", "driving_license", "id_card", "other"] }).notNull(),
+  documentImageUrl: text("document_image_url").notNull(),
+  adminNotes: text("admin_notes"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  adminHasUnread: boolean("admin_has_unread").default(true),
+  reviewedAt: timestamp("reviewed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -122,8 +138,9 @@ export const orders = pgTable("orders", {
   remainingPlays: integer("remaining_plays"),
   discountCodeId: uuid("discount_code_id").references(() => discountCodes.id),
   discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }),
-  discountType: varchar("discount_type", { enum: ["cash", "points"] }),
+  discountType: varchar("discount_type", { enum: ["cash", "points" , "percentage"] }),
   pointsDiscountAmount: decimal("points_discount_amount", { precision: 10, scale: 2 }),
+  percentageDiscount: decimal("percentage_discount", { precision: 5, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -168,7 +185,7 @@ export const pendingPayments = pgTable("pending_payments", {
 export const discountCodes = pgTable("discount_codes", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   code: varchar("code").unique().notNull(), 
-  type: varchar("type", { enum: ["cash", "points"] }).notNull(),
+  type: varchar("type", { enum: ["cash", "points" , "percentage"] }).notNull(),
   value: decimal("value", { precision: 10, scale: 2 }).notNull(), 
   maxUses: integer("max_uses").default(1), 
   usesCount: integer("uses_count").default(0), 

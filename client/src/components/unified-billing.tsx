@@ -120,32 +120,45 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
   const user = orderData?.user;
   const competition = orderData?.competition;
 
-  // Check if this is an instant competition (should disable points)
-  const isInstantCompetition = orderType === 'competition' && competition?.type === 'instant';
+ // Check if this is an instant competition (should disable points)
+const isInstantCompetition = orderType === 'competition' && competition?.type === 'instant';
   
-  // Determine if points should be disabled
-  const isPointsDisabled = isInstantCompetition;
+// Determine if points should be disabled
+const isPointsDisabled = isInstantCompetition;
 
-  const itemCost = orderType === 'competition' 
+const itemCost = orderType === 'competition' 
   ? parseFloat(competition?.ticketPrice || '0') 
   : parseFloat(orderData?.scratchCost || orderData?.spinCost || orderData?.popCost || orderData?.plinkoCost || '2');
 
-  const appliedDiscount = Number(order?.discountAmount || 0);
-  const discountType = order?.discountType || null;
-  
-  const pointsDiscountCashValue =
-    discountType === "points" ? appliedDiscount * 0.01 : 0;
-  
-  // backend already applied discount
-  const totalAmount = Number(order?.totalAmount);
-  
-  // reconstruct original total ONLY for UI strike-through
-  const originalTotalAmount =
-    appliedDiscount > 0
-      ? totalAmount + (discountType === "cash" ? appliedDiscount : pointsDiscountCashValue)
-      : totalAmount;
-  
-     
+const appliedDiscount = Number(order?.discountAmount || 0);
+const discountType = order?.discountType || null;
+const percentageDiscount = Number(order?.percentageDiscount || 0);
+
+// backend already applied discount
+const totalAmount = Number(order?.totalAmount);
+
+// First calculate the discount values based on what we know
+let percentageDiscountCashValue = 0;
+let pointsDiscountCashValue = 0;
+let originalTotalAmount = totalAmount;
+
+if (discountType === 'percentage' && percentageDiscount > 0) {
+  // For percentage discounts, we need to reverse calculate
+  // Original = Discounted / (1 - percentage/100)
+  // Example: If discounted = £8.50 after 15% discount
+  // Original = £8.50 / (1 - 0.15) = £8.50 / 0.85 = £10.00
+  originalTotalAmount = totalAmount / (1 - percentageDiscount / 100);
+  percentageDiscountCashValue = originalTotalAmount * (percentageDiscount / 100);
+} else if (discountType === 'cash' && appliedDiscount > 0) {
+  // For cash discounts
+  originalTotalAmount = totalAmount + appliedDiscount;
+} else if (discountType === 'points' && appliedDiscount > 0) {
+  // For points discounts
+  pointsDiscountCashValue = appliedDiscount * 0.01;
+  originalTotalAmount = totalAmount + pointsDiscountCashValue;
+}
+
+const discountedTotal = totalAmount;
 
 const walletBalance = Number(user?.balance) || 0;
 const ringtonePoints = user?.ringtonePoints || 0;
@@ -467,37 +480,51 @@ const pointsNeeded = Math.ceil(finalPointsUsed * 100);
                 Order Summary
               </h2>
               
-              {/* Discount Section */}
            {/* Discount Section */}
-        <div className="flex items-center gap-2">
-          {appliedDiscount > 0 ? (
-            <div className="flex items-center gap-2">
-              <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                <Tag className="w-3 h-3 mr-1" />
-                {discountType === 'cash' ? `£${appliedDiscount} OFF` : `${appliedDiscount} Points`}
-              </Badge>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRemoveDiscount}
-                className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 px-2"
-                disabled={removeDiscountMutation.isPending}
-              >
-                {removeDiscountMutation.isPending ? "Removing..." : <X className="w-4 h-4" />}
-              </Button>
-            </div>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowDiscountDialog(true)}
-              className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
-            >
-              <Tag className="w-4 h-4 mr-2" />
-              Apply Discount
-            </Button>
-          )}
-        </div>
+    {/* Discount Section in the header */}
+<div className="flex items-center gap-2">
+  {appliedDiscount > 0 || percentageDiscount > 0 ? (
+    <div className="flex items-center gap-2">
+      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+        {discountType === 'cash' ? (
+          <>
+            <Tag className="w-3 h-3 mr-1" />
+            £{appliedDiscount} OFF
+          </>
+        ) : discountType === 'points' ? (
+          <>
+            <Coins className="w-3 h-3 mr-1" />
+            {appliedDiscount} Points
+          </>
+        ) : (
+          <>
+            <Percent className="w-3 h-3 mr-1" />
+            {percentageDiscount}% OFF
+          </>
+        )}
+      </Badge>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleRemoveDiscount}
+        className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 px-2"
+        disabled={removeDiscountMutation.isPending}
+      >
+        {removeDiscountMutation.isPending ? "Removing..." : <X className="w-4 h-4" />}
+      </Button>
+    </div>
+  ) : (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => setShowDiscountDialog(true)}
+      className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
+    >
+      <Tag className="w-4 h-4 mr-2" />
+      Apply Discount
+    </Button>
+  )}
+</div>
             </div>
             
             <div className="space-y-3">
@@ -534,11 +561,23 @@ const pointsNeeded = Math.ceil(finalPointsUsed * 100);
   </div>
 )}
 
+{appliedDiscount > 0 && discountType === 'percentage' && percentageDiscount > 0 && (
+  <div className="flex justify-between items-center py-2 border-b border-green-500/20">
+    <span className="text-gray-300 text-sm sm:text-base flex items-center gap-1">
+      <Percent className="w-4 h-4 text-green-400" />
+      Percentage Discount
+    </span>
+    <span className="font-bold text-green-400 text-lg">
+      -{percentageDiscount}% (-£{percentageDiscountCashValue.toFixed(2)})
+    </span>
+  </div>
+)}
+
 {/* Also fix the total amount display */}
 <div className="flex justify-between items-center py-4 bg-yellow-500/5 -mx-6 px-6 rounded-lg mt-3">
   <span className="font-bold text-yellow-400 text-base sm:text-lg">Total Amount</span>
   <div className="text-right">
-    {appliedDiscount > 0 && discountType === 'cash' && (
+  {(appliedDiscount > 0 || percentageDiscount > 0) && (
       <div className="text-sm text-gray-400 line-through mb-1">
         £{originalTotalAmount.toFixed(2)}
       </div>
@@ -714,67 +753,81 @@ const pointsNeeded = Math.ceil(finalPointsUsed * 100);
       {/* Sidebar - Payment Breakdown & Security */}
 <div className="lg:col-span-1 space-y-6">
   {/* Payment Breakdown */}
-  {(selectedMethods.walletBalance || selectedMethods.ringtonePoints) && (
-    <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-yellow-500/20 shadow-xl">
-      <h3 className="font-bold text-yellow-400 mb-4 text-lg">Payment Breakdown</h3>
-      <div className="space-y-3 text-sm">
-        <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-          <span className="text-gray-300">Order Total</span>
-          <span className="text-white font-semibold">£{originalTotalAmount.toFixed(2)}</span>
+  {/* Payment Breakdown */}
+{(selectedMethods.walletBalance || selectedMethods.ringtonePoints || appliedDiscount > 0 || percentageDiscount > 0) && (
+  <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-yellow-500/20 shadow-xl">
+    <h3 className="font-bold text-yellow-400 mb-4 text-lg">Payment Breakdown</h3>
+    <div className="space-y-3 text-sm">
+      {/* Original Price */}
+      <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+        <span className="text-gray-300">Original Price</span>
+        <span className="text-white font-semibold">
+          £{originalTotalAmount.toFixed(2)}
+        </span>
+      </div>
+      
+      {/* Cash Discount */}
+      {appliedDiscount > 0 && discountType === 'cash' && (
+        <div className="flex justify-between items-center py-2 border-b border-green-500/20">
+          <span className="text-gray-300">Cash Discount</span>
+          <span className="text-green-400 font-semibold">-£{appliedDiscount.toFixed(2)}</span>
         </div>
-        
-     {/* Cash Discount in Payment Breakdown */}
-{appliedDiscount > 0 && discountType === 'cash' && (
-  <div className="flex justify-between items-center py-2 border-b border-green-500/20">
-    <span className="text-gray-300">Cash Discount</span>
-    <span className="text-green-400 font-semibold">-£{appliedDiscount.toFixed(2)}</span>
-  </div>
-)}
-
-{/* Points Discount in Payment Breakdown */}
-{appliedDiscount > 0 && discountType === 'points' && (
-  <div className="flex justify-between items-center py-2 border-b border-green-500/20">
-    <span className="text-gray-300">Points Discount</span>
-    <span className="text-green-400 font-semibold">
-      -£{pointsDiscountCashValue.toFixed(2)} ({appliedDiscount.toLocaleString()} pts)
-    </span>
-  </div>
-)}
-        
-        {/* Wallet Payment */}
-        {selectedMethods.walletBalance && (
-          <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-            <span className="text-gray-300">Wallet Balance</span>
-            <span className="text-green-400 font-semibold">-£{walletUsed.toFixed(2)}</span>
-          </div>
-        )}
-        
-        {/* Points Payment */}
-        {selectedMethods.ringtonePoints && !isPointsDisabled && (
-          <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-            <span className="text-gray-300">Ringtone Points</span>
-            <span className="text-yellow-400 font-semibold">
-              -£{finalPointsUsed.toFixed(2)} ({pointsNeeded} pts)
-            </span>
-          </div>
-        )}
-        
-        {/* Show discounted total before payment methods */}
-        <div className="flex justify-between items-center py-2 border-b border-yellow-500/20 bg-yellow-500/5 -mx-2 px-2 rounded">
-          <span className="text-gray-300 font-semibold">Discounted Total</span>
-          <span className="text-yellow-400 font-bold">£{totalAmount.toFixed(2)}</span>
-        </div>
-        
-        {/* Final remaining amount */}
-        <div className="flex justify-between items-center pt-3 mt-3 bg-yellow-500/10 -mx-6 px-6 py-3 rounded-lg">
-          <span className="font-bold text-white">Remaining to Pay</span>
-          <span className="font-black text-yellow-400 text-xl">
-            {finalAmount > 0 ? `£${finalAmount.toFixed(2)}` : 'PAID IN FULL'}
+      )}
+      
+      {/* Points Discount */}
+      {appliedDiscount > 0 && discountType === 'points' && (
+        <div className="flex justify-between items-center py-2 border-b border-green-500/20">
+          <span className="text-gray-300">Points Discount</span>
+          <span className="text-green-400 font-semibold">
+            -£{pointsDiscountCashValue.toFixed(2)} ({appliedDiscount.toLocaleString()} pts)
           </span>
         </div>
+      )}
+      
+      {/* Percentage Discount */}
+      {discountType === 'percentage' && percentageDiscount > 0 && (
+        <div className="flex justify-between items-center py-2 border-b border-green-500/20">
+          <span className="text-gray-300">Percentage Discount</span>
+          <span className="text-green-400 font-semibold">
+            -{percentageDiscount}% (-£{percentageDiscountCashValue.toFixed(2)})
+          </span>
+        </div>
+      )}
+      
+      {/* Discounted Total (before payment methods) */}
+      <div className="flex justify-between items-center py-2 border-b border-yellow-500/20 bg-yellow-500/5 -mx-2 px-2 rounded">
+        <span className="text-gray-300 font-semibold">Discounted Total</span>
+        <span className="text-yellow-400 font-bold">£{discountedTotal.toFixed(2)}</span>
+      </div>
+      
+      {/* Wallet Payment */}
+      {selectedMethods.walletBalance && (
+        <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+          <span className="text-gray-300">Wallet Balance</span>
+          <span className="text-green-400 font-semibold">-£{walletUsed.toFixed(2)}</span>
+        </div>
+      )}
+      
+      {/* Points Payment */}
+      {selectedMethods.ringtonePoints && !isPointsDisabled && (
+        <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+          <span className="text-gray-300">Ringtone Points</span>
+          <span className="text-yellow-400 font-semibold">
+            -£{finalPointsUsed.toFixed(2)} ({pointsNeeded} pts)
+          </span>
+        </div>
+      )}
+      
+      {/* Final remaining amount */}
+      <div className="flex justify-between items-center pt-3 mt-3 bg-yellow-500/10 -mx-6 px-6 py-3 rounded-lg">
+        <span className="font-bold text-white">Remaining to Pay</span>
+        <span className="font-black text-yellow-400 text-xl">
+          {finalAmount > 0 ? `£${finalAmount.toFixed(2)}` : 'PAID IN FULL'}
+        </span>
       </div>
     </div>
-  )}
+  </div>
+)}
 
   {/* Security & Trust Signals */}
   <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-yellow-500/20 shadow-xl">
@@ -841,9 +894,10 @@ const pointsNeeded = Math.ceil(finalPointsUsed * 100);
               className="bg-zinc-800 border-yellow-500/30 text-white placeholder:text-gray-400"
               onKeyDown={(e) => e.key === 'Enter' && handleApplyDiscount()}
             />
-           <p className="text-sm text-gray-400">
-            Cash discounts reduce the total amount. Points discounts are converted to cash (100 points = £1 off).
-          </p>
+          <p className="text-sm text-gray-400">
+  Cash discounts reduce the total amount. Points discounts are converted to cash (100 points = £1 off).
+  Percentage discounts are applied to the original total with a minimum spend requirement.
+</p>
           </div>
           
           <DialogFooter className="gap-3">

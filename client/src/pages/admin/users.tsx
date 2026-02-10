@@ -69,7 +69,7 @@ export default function AdminUsers() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth() as { user: User | null };
   const [searchInput, setSearchInput] = useState("");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("24h");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -741,6 +741,7 @@ const handleSortCashflow = (field: SortFieldCashflow) => {
       <Input
         placeholder="Search users by email or name..."
         value={searchInput}
+        autoComplete="off"
         onChange={(e) => setSearchInput(e.target.value)}
         className="pl-8 sm:pl-10 text-sm sm:text-base"
         data-testid="input-search-users"

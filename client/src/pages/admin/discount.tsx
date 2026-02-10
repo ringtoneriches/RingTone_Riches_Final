@@ -34,7 +34,7 @@ import { format } from "date-fns";
 interface DiscountCode {
   id: string;
   code: string;
-  type: "cash" | "points";
+  type: "cash" | "points" | "precentage";
   value: number;
   maxUses: number;
   usesCount: number;
@@ -61,7 +61,7 @@ export default function AdminDiscountCodes() {
   // Form state
   const [form, setForm] = useState({
     code: "",
-    type: "cash" as "cash" | "points",
+    type: "cash" as "cash" | "points" | "percentage",
     value: 0,
     maxUses: 1,
     expiresAt: "",
@@ -318,7 +318,7 @@ export default function AdminDiscountCodes() {
               <Label htmlFor="type" className="text-sm sm:text-base">Type *</Label>
               <Select
                 value={form.type}
-                onValueChange={(value: "cash" | "points") => 
+                onValueChange={(value: "cash" | "points" | "percentage")  => 
                   setForm({ ...form, type: value })
                 }
               >
@@ -326,21 +326,27 @@ export default function AdminDiscountCodes() {
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cash" className="text-sm sm:text-base">Cash Discount (£)</SelectItem>
-                  <SelectItem value="points" className="text-sm sm:text-base">Points</SelectItem>
+                <SelectItem value="cash" className="text-sm sm:text-base">Cash Discount (£)</SelectItem>
+                <SelectItem value="points" className="text-sm sm:text-base">Points</SelectItem>
+                <SelectItem value="percentage" className="text-sm sm:text-base">Percentage (%)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-1.5 sm:space-y-2">
               <Label htmlFor="value" className="text-sm sm:text-base">
-                Value * {form.type === "cash" ? "(£)" : "(Points)"}
+              Value * {
+    form.type === "cash" ? "(£)" : 
+    form.type === "points" ? "(Points)" : 
+    "(%)"
+  }
               </Label>
               <Input
                 id="value"
                 name="value"
                 type="number"
                 min="1"
+                max={form.type === "percentage" ? "100" : undefined}
                 value={form.value}
                 onChange={(e) => setForm({ ...form, value: Number(e.target.value) })}
                 required
@@ -525,7 +531,7 @@ export default function AdminDiscountCodes() {
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Value</div>
                   <div className="font-medium">
-                    {code.type === "cash" ? `£${code.value}` : `${code.value} pts`}
+                    {code.type === "cash" ? `£${code.value}` : code.type === "points" ? `${code.value} pts`: `${code.value} %`}
                   </div>
                 </div>
                 <div>
@@ -656,7 +662,7 @@ export default function AdminDiscountCodes() {
                     </Badge>
                   </td>
                   <td className="py-3 px-4 text-sm text-foreground">
-                    {code.type === "cash" ? `£${code.value}` : `${code.value} pts`}
+                    {code.type === "cash" ? `£${code.value}` : code.type === "points" ? `${code.value} pts` : `${code.value} %`}
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center">
