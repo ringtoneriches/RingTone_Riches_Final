@@ -106,6 +106,8 @@ function formatCount(count) {
   }
   return count.toString();
 }
+
+
 // app.get('/api/trustpilot-reviews', async (req, res) => {
 //   try {
 //     const { data } = await axios.get('https://www.trustpilot.com/review/ringtoneriches.co.uk');
