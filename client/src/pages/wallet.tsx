@@ -1473,40 +1473,40 @@ const handleDeleteBankAccount = (
                           : "TOP UP NOW"}
                       </button>
                       <button
-  onClick={() => {
-    // Check verification before opening withdrawal dialog
-    if (!verificationData?.canWithdraw) {
-      toast({
-        title: "Verification Required",
-        description: "Please complete ID verification before withdrawing funds. Visit the Verification tab.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setWithdrawalDialogOpen(true);
-  }}
-  disabled={verificationLoading}
-  className={`w-full font-bold py-4 rounded-lg transition-all transform hover:scale-105 ${
-    verificationData?.canWithdraw 
-      ? "bg-zinc-800 text-yellow-500 border border-yellow-500/30 hover:bg-zinc-700 hover:border-yellow-500/50"
-      : "bg-zinc-800 text-yellow-500 border border-yellow-500/30 hover:bg-zinc-700 hover:border-yellow-500/50"
-  } ${verificationLoading ? "opacity-50 cursor-not-allowed" : ""}`}
-  data-testid="button-request-withdrawal"
->
-  {verificationLoading ? (
-    <span className="flex items-center justify-center gap-2">
-      <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"></div>
-      Checking...
-    </span>
-  ) : verificationData?.canWithdraw ? (
-    "REQUEST WITHDRAWAL"
-  ) : (
-    <span className="flex items-center justify-center gap-2">
-      <AlertCircle className="w-4 h-4" />
-      VERIFICATION REQUIRED
-    </span>
-  )}
-</button>
+                      onClick={() => {
+                        // Check verification before opening withdrawal dialog
+                        if (!verificationData?.canWithdraw) {
+                          toast({
+                            title: "Verification Required",
+                            description: "Please complete ID verification before withdrawing funds. Visit the Verification tab.",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        setWithdrawalDialogOpen(true);
+                      }}
+                      disabled={verificationLoading}
+                      className={`w-full font-bold py-4 rounded-lg transition-all transform hover:scale-105 ${
+                        verificationData?.canWithdraw 
+                          ? "bg-zinc-800 text-yellow-500 border border-yellow-500/30 hover:bg-zinc-700 hover:border-yellow-500/50"
+                          : "bg-zinc-800 text-yellow-500 border border-yellow-500/30 hover:bg-zinc-700 hover:border-yellow-500/50"
+                      } ${verificationLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+                      data-testid="button-request-withdrawal"
+                    >
+                      {verificationLoading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"></div>
+                          Checking...
+                        </span>
+                      ) : verificationData?.canWithdraw ? (
+                        "REQUEST WITHDRAWAL"
+                      ) : (
+                        <span className="flex items-center justify-center gap-2">
+                          <AlertCircle className="w-4 h-4" />
+                          VERIFICATION REQUIRED
+                        </span>
+                      )}
+                    </button>
                     </div>
                   </div>
                 </CardContent>

@@ -354,6 +354,21 @@ export default function Home() {
                         //   winChance: "HOT"
                         // },
                         {
+                          Icon: Target,
+                          title: "Ringtone Pop",
+                          tagline: "Pop to win",
+                          stars: 5,
+                          badge: "POPULAR",
+                          badgeColor: "bg-emerald-500",
+                          gradient:
+                            "from-pink-600 via-pink-500 to-rose-600",
+                          borderColor: "border-pink-400/50",
+                          glowColor: "shadow-pink-500/50",
+                          filter: "all",
+                          winChance: "HIGH",
+                          prize: "£5,000",
+                        },
+                        {
                           Icon: Circle,
                           title: "Ringtone Plinko",
                           tagline: "Drop in to win",
@@ -368,21 +383,7 @@ export default function Home() {
                           winChance: "HOT",
                           prize: "£1,000",
                         },
-                        {
-                          Icon: Target,
-                          title: "Ringtone Pop",
-                          tagline: "Pop to win",
-                          stars: 5,
-                          badge: "POPULAR",
-                          badgeColor: "bg-emerald-500",
-                          gradient:
-                            "from-pink-600 via-pink-500 to-rose-600",
-                          borderColor: "border-pink-400/50",
-                          glowColor: "shadow-pink-500/50",
-                          filter: "all",
-                          winChance: "HIGH",
-                          prize: "£500",
-                        },
+                        
                         {
                           Icon: Zap,
                           title: "Competition",
@@ -396,7 +397,7 @@ export default function Home() {
                           glowColor: "shadow-red-500/50",
                           filter: "instant",
                           winChance: "MEGA",
-                          prize: "£5,000",
+                          prize: "£1,000",
                         },
                       ].map((game, index) => (
                         <button

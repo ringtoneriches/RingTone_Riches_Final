@@ -9695,6 +9695,19 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
           .from(withdrawalRequests)
           .where(inArray(withdrawalRequests.status, ["approved", "processed"]));
 
+           // 👉 NEW: Daily approved withdrawals (today)
+      const dailyApprovedWithdrawalsResult = await db
+      .select({
+        total: sql<number>`coalesce(sum(${withdrawalRequests.amount}), 0)`,
+      })
+      .from(withdrawalRequests)
+      .where(
+        and(
+          inArray(withdrawalRequests.status, ["approved", "processed"]),
+          gte(withdrawalRequests.updatedAt, today)
+        )
+      );
+
         // Get recent orders
         const recentOrders = await db
           .select()
@@ -9714,7 +9727,8 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
             // ⭐ Added fields
             totalSiteCredit: totalSiteCreditResult[0]?.total || 0,
             totalApprovedWithdrawals:
-              totalApprovedWithdrawalsResult[0]?.total || 0,
+            totalApprovedWithdrawalsResult[0]?.total || 0,
+            dailyApprovedWithdrawals: dailyApprovedWithdrawalsResult[0]?.total || 0,
           },
 
           recentOrders: recentOrders.map((order) => ({

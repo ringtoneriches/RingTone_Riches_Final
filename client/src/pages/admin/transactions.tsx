@@ -434,10 +434,10 @@ export default function AdminTransactions() {
                     </div>
 
                     <div className="text-xs text-muted-foreground">
-                      {/* {new Date(tx.createdAt).toLocaleTimeString("en-GB", {
+                      {new Date(tx.createdAt).toLocaleTimeString("en-GB", {
                         hour: "2-digit",
                         minute: "2-digit",
-                      })} */}
+                      })}
                     </div>
                   </TableCell>
 
