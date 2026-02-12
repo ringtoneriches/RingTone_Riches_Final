@@ -2343,15 +2343,13 @@ const handleDeleteBankAccount = (
                       <li className="flex items-start gap-2">
                         <span className="text-yellow-500">•</span>
                         <span>
-                          They sign up using your link and make their first
-                          entry
+                          They sign up using your link and make their first wallet top-up
                         </span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-yellow-500">•</span>
                         <span>
-                          You earn £2 bonus credit when they complete their
-                          first competition entry
+                          They sign up using your link and make their first wallet top-up
                         </span>
                       </li>
                       <li className="flex items-start gap-2">

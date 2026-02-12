@@ -40,6 +40,7 @@ import { useToast } from "@/hooks/use-toast";
 import Testimonials from "@/components/testimonials";
 import CompactFacebookCTA from "@/components/PremiumFacebookEngagement";
 import ValentineFacebookCTA from "@/components/PremiumFacebookEngagement";
+import PremiumBalloonPop from "@/components/PremiumBalloonPop";
 
 export default function Home() {
   const { isAuthenticated, user } = useAuth() as {
@@ -157,7 +158,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#0a0008] text-foreground relative overflow-x-hidden">
       <Header />
-
       {/* RINGTONE RICHES PORTAL - Cinematic Gamified Experience */}
       <section className="relative min-h-screen overflow-hidden bg-[#0a0008]">
         {/* Immersive Background with Spotlight Effect */}

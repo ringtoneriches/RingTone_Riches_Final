@@ -69,7 +69,7 @@ import AdminPlinko from "./pages/admin/plinko";
 import AdminPlinkoBalloon from "./pages/admin/admin-plinko";
 import PlinkoGamePage from "./pages/plinkoGamePage";
 import AdminVerifications from "./pages/admin/admin-verification";
-
+import PremiumBalloonPop from "./components/PremiumBalloonPop";
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading || !isAuthenticated) return <Landing />;
@@ -175,6 +175,8 @@ function AppWithMaintenance() {
   const [showSourceModal, setShowSourceModal] = useState(false);
   const [hasCheckedSource, setHasCheckedSource] = useState(false);
   
+ const [showBalloonPop, setShowBalloonPop] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const { data: maintenanceData, isLoading: maintenanceLoading } = useQuery({
     queryKey: ["/api/maintenance"],
@@ -194,6 +196,29 @@ function AppWithMaintenance() {
     enabled: !!user && !hasCheckedSource,
     staleTime: 0
   });
+
+   useEffect(() => {
+    // Check if user has seen the balloon before
+    const hasSeenBalloon = localStorage.getItem('hasSeenBalloonPop');
+    
+    // Don't show on admin routes
+    const isAdminRoute = location.startsWith("/admin");
+    const isAuthRoute = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password"]
+      .some(route => location.startsWith(route));
+    
+    if (!hasSeenBalloon && !isAdminRoute && !isAuthRoute && !maintenanceLoading) {
+      // Small delay to ensure everything is loaded
+      const timer = setTimeout(() => {
+        setShowBalloonPop(true);
+        setIsLoading(false);
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    } else {
+      setIsLoading(false);
+    }
+  }, [location, maintenanceLoading]);
+
 
   // Show modal when user logs in and needs to provide source
   useEffect(() => {
@@ -238,11 +263,22 @@ function AppWithMaintenance() {
     return <MaintenancePage />;
   }
 
+ const handleBalloonComplete = () => {
+    setShowBalloonPop(false);
+    // Set localStorage so it never shows again on this browser
+    localStorage.setItem('hasSeenBalloonPop', 'true');
+  };
+
   return (
     <TooltipProvider>
       <Toaster />
       <ScrollToTop />
       <div className="pt-20 lg:pt-24"/> 
+     <PremiumBalloonPop
+        isOpen={showBalloonPop}
+        onComplete={handleBalloonComplete}
+      />
+
       <Router />
       
     

@@ -3080,45 +3080,7 @@ res.json({
         });
       }
   
-      // -------------------------
-      // 8️⃣ APPLY REFERRAL BONUS (FIRST PURCHASE ONLY)
-      // -------------------------
-      try {
-        const buyer = user;
-        const referrerId = buyer?.referredBy;
-  
-        if (referrerId) {
-          const userOrders = await db.select().from(orders).where(
-            and(
-              eq(orders.userId, userId),
-              eq(orders.status, "completed")
-            )
-          );
-  
-          if (userOrders.length === 1) {
-            const bonus = 2;
-            const [referrer] = await db.select().from(users).where(eq(users.id, referrerId));
-  
-            if (referrer) {
-              const newBalance = Number(referrer.balance || "0") + bonus;
-  
-              await db.update(users)
-                .set({ balance: newBalance.toString() })
-                .where(eq(users.id, referrer.id));
-  
-              await db.insert(transactions).values({
-                userId: referrer.id,
-                type: "referral",
-                amount: bonus.toFixed(2),
-                description: `Referral reward: ${buyer.email} made their first competition entry`,
-                createdAt: new Date(),
-              });
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Referral error:", err);
-      }
+    
   
       // -------------------------
       // 9️⃣ AUDIT LOG
@@ -7256,42 +7218,74 @@ app.get("/api/verification/can-withdraw", isAuthenticated, async (req, res) => {
   }
 );
 
-  app.post("/api/wallet/confirm-topup", isAuthenticated, async (req, res) => {
-    try {
-      const { paymentJobRef, paymentRef } = req.body;
-      const userId = req.user.id;
-      const payment = await cashflows.getPaymentStatus(
-        paymentJobRef,
-        paymentRef ?? undefined
-      );
+  app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => {
+  try {
+    const { paymentJobRef, paymentRef } = req.body;
+    const userId = req.user.id;
+    const payment = await cashflows.getPaymentStatus(
+      paymentJobRef,
+      paymentRef ?? undefined
+    );
 
-      const { status , paidAmount } = normalizeCashflowsStatus(payment);
+    const { status, paidAmount } = normalizeCashflowsStatus(payment);
 
-      // ✅ Save paymentReference for recovery job
-      // if (paymentRef && status === "PAID") {
-      //   await db
-      //     .update(pendingPayments)
-      //     .set({ paymentReference: paymentRef })
-      //     .where(eq(pendingPayments.paymentJobReference, paymentJobRef));
-      // }
-
-      if (status === "PAID") {
-        return res.json({
-          status,
-          message: "Payment received. Wallet will update shortly.",
-        });
+    if (status === "PAID") {
+      // ⭐⭐ ADD REFERRAL BONUS FOR FIRST TOP-UP
+      try {
+        const user = await storage.getUser(userId);
+        
+        if (user && user.referredBy) {
+          // Check if this is the user's FIRST EVER top-up
+          const userTransactions = await storage.getUserTransactions(userId);
+          const completedTopups = userTransactions.filter(
+            (tx) => tx.type === "deposit" && tx.status === "completed"
+          );
+          
+          // If this is their first completed top-up
+          if (completedTopups.length === 1) {
+            const referrer = await storage.getUser(user.referredBy);
+            
+            if (referrer) {
+              const bonusAmount = 2.00;
+              
+              // Add £2 to referrer's balance
+              const newBalance = parseFloat(referrer.balance || "0") + bonusAmount;
+              await storage.updateUserBalance(referrer.id, newBalance.toFixed(2));
+              
+              // Create transaction record for referrer
+              await storage.createTransaction({
+                userId: referrer.id,
+                amount: bonusAmount.toFixed(2),
+                type: "referral",
+                status: "completed",
+                description: `Referral reward: ${user.email} made their first wallet top-up`,
+                paymentMethod: "bonus",
+              });
+              
+              console.log(`🎉 Referral bonus awarded: £${bonusAmount} to ${referrer.email} for ${user.email}'s first top-up`);
+            }
+          }
+        }
+      } catch (referralError) {
+        console.error("Referral bonus error during top-up:", referralError);
       }
 
-      // If payment is still pending or failed
       return res.json({
         status,
-        message: "Payment not completed. Please try again manually.",
+        message: "Payment received. Wallet will update shortly.",
       });
-    } catch (err: any) {
-      console.error("Confirm top-up error:", err);
-      return res.status(500).json({ message: "Failed to confirm wallet top-up" });
     }
-  });
+
+    // If payment is still pending or failed
+    return res.json({
+      status,
+      message: "Payment not completed. Please try again manually.",
+    });
+  } catch (err: any) {
+    console.error("Confirm top-up error:", err);
+    return res.status(500).json({ message: "Failed to confirm wallet top-up" });
+  }
+});
 
 
   
