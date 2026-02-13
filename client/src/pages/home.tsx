@@ -30,6 +30,7 @@ import {
   Circle,
   Target,
   Heart,
+  TicketIcon,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -333,26 +334,29 @@ export default function Home() {
                         Win Your Heart
                       </h3>
                       <p className="text-white/50 text-xs sm:text-sm">
-                        3 ways to win big today
+                        4 ways to win big today
                       </p>
                     </div>
 
                     {/* Game Cards - Responsive */}
                     <div className="relative space-y-2.5 sm:space-y-4">
                       {[
-                        // {
-                        //   Icon: PartyPopper,
-                        //   title: "Pop Balloons",
-                        //   tagline: "Pop balloons to win",
-                        //   stars: 5,
-                        //   badge: "NEW",
-                        //   badgeColor: "bg-rose-500",
-                        //   gradient: "from-rose-600 via-pink-500 to-orange-500",
-                        //   borderColor: "border-rose-400/50",
-                        //   glowColor: "shadow-rose-500/50",
-                        //   filter: "instant",
-                        //   winChance: "HOT"
-                        // },
+                        
+                        {
+                          Icon: TicketIcon,
+                          title: "Scratch Card",
+                          tagline: "Scratch to win",
+                          stars: 5,
+                          badge: "JACKPOT",
+                          badgeColor: "bg-yellow-500",
+                          gradient:
+                            "from-pink-600 via-pink-500 to-rose-600",
+                          borderColor: "border-pink-400/50",
+                          glowColor: "shadow-pink-500/50",
+                          filter: "scratch",
+                          winChance: "FAST",
+                          prize: "£10,000",
+                        },
                         {
                           Icon: Target,
                           title: "Ringtone Pop",

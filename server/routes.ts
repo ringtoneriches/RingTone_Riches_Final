@@ -6748,6 +6748,14 @@ app.post("/api/admin/verifications/:id/review", isAuthenticated, isAdmin, async 
     if (!["approved", "rejected"].includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
     }
+
+    if (status === "approved") {
+      if (!ageVerified || !idDobMatch || !idNameMatch || !minimumAgeMet) {
+        return res.status(400).json({ 
+          error: "Age verification checks are required for approval" 
+        });
+      }
+    }
     
     // Start transaction
     await db.transaction(async (tx) => {
@@ -6759,6 +6767,12 @@ app.post("/api/admin/verifications/:id/review", isAuthenticated, isAdmin, async 
           adminNotes,
           reviewedBy: adminId,
           reviewedAt: new Date(),
+          ageVerified: status === "approved" ? true : false,
+          idDobMatch: status === "approved" ? true : false,
+          idNameMatch: status === "approved" ? true : false,
+          minimumAgeMet: status === "approved" ? true : false,
+          // extractedDob: extractedDob || null,
+          ageVerifiedAt: status === "approved" ? new Date() : null,
         })
         .where(eq(userVerifications.id, id))
         .returning();
@@ -6771,7 +6785,10 @@ app.post("/api/admin/verifications/:id/review", isAuthenticated, isAdmin, async 
       if (status === "approved") {
         await tx
           .update(users)
-          .set({ isVerified: true })
+          .set({ 
+            isVerified: true,
+            // ...(extractedDob && !req.user.dateOfBirth ? { dateOfBirth: extractedDob } : {})
+           })
           .where(eq(users.id, verification.userId));
       } else if (status === "rejected") {
         // If rejected, ensure user is not verified
@@ -6784,7 +6801,7 @@ app.post("/api/admin/verifications/:id/review", isAuthenticated, isAdmin, async 
     
     res.json({ 
       success: true, 
-      message: `Verification ${status}` 
+      message: `Verification ${status} with age verification`  
     });
   } catch (error) {
     console.error("Error reviewing verification:", error);

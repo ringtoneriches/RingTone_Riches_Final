@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertCircle, CheckCircle, Clock, Upload, Shield, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { apiRequest } from "@/lib/queryClient";
+import { format } from "date-fns";
 
 export default function VerificationTab() {
   const { toast } = useToast();
@@ -15,6 +17,17 @@ export default function VerificationTab() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showResubmitForm, setShowResubmitForm] = useState(false);
+
+  const { data: userData, isLoading, isError } = useQuery({
+    queryKey: ["/api/auth/user"],
+    queryFn: async () => {
+      const res = await apiRequest("/api/auth/user", "GET");
+      return res.json();
+    },
+    refetchInterval: 4000,        // 🔥 auto refresh every 4 seconds
+    refetchOnWindowFocus: true,   // 🔥 refresh when page is focused
+    staleTime: 0,
+  });
 
   // Fetch verification status
   const { data: verificationData, refetch } = useQuery({
@@ -135,6 +148,20 @@ export default function VerificationTab() {
   const verification = verificationData?.verification;
   const isVerified = verificationData?.isVerified;
   const canWithdraw = canWithdrawData?.canWithdraw;
+
+  
+const calculateAge = (birthDate: string | Date | null): number | null => {
+  if (!birthDate) return null;
+  const birth = new Date(birthDate);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+};
 
   const getStatusBadge = () => {
     if (!verification) return null;
@@ -274,8 +301,8 @@ export default function VerificationTab() {
                 <SelectContent>
                   <SelectItem value="passport">Passport</SelectItem>
                   <SelectItem value="driving_license">Driving License</SelectItem>
-                  <SelectItem value="id_card">National ID Card</SelectItem>
-                  <SelectItem value="other">Other Government ID</SelectItem>
+                  <SelectItem value="travel_pass">Travel Pass</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -325,6 +352,12 @@ export default function VerificationTab() {
                 <li>Name and date of birth must match your account</li>
               </ul>
             </div>
+            <Alert className="bg-blue-500/10 border-blue-500/30">
+            <AlertCircle className="w-4 h-4 text-blue-400" />
+            <AlertDescription className="text-blue-300 text-sm">
+              If you cannot provide ID for verification, please contact Support to discuss alternative verification methods.
+            </AlertDescription>
+          </Alert>
 
             <div className="flex gap-2">
               <Button
@@ -369,6 +402,28 @@ export default function VerificationTab() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+           {/* Show account DOB and age */}
+      <div className="bg-black/30 p-4 rounded-lg">
+        <h4 className="font-semibold text-white mb-2">Your Account Details:</h4>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-400">Date of Birth:</span>
+            <span className="text-white">
+              {userData?.dateOfBirth 
+                ? format(new Date(userData.dateOfBirth), "dd MMM yyyy")
+                : "Not provided"}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-400">Age:</span>
+            <span className="text-white">
+              {userData?.dateOfBirth 
+                ? `${calculateAge(userData.dateOfBirth)} years`
+                : "Unknown"}
+            </span>
+          </div>
+        </div>
+      </div>
           <div className="flex items-center justify-between">
             {getStatusBadge()}
             <span className="text-sm text-gray-400">
@@ -440,8 +495,8 @@ export default function VerificationTab() {
               <SelectContent>
                 <SelectItem value="passport">Passport</SelectItem>
                 <SelectItem value="driving_license">Driving License</SelectItem>
-                <SelectItem value="id_card">National ID Card</SelectItem>
-                <SelectItem value="other">Other Government ID</SelectItem>
+                <SelectItem value="travel_pass">Travel Pass</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -491,6 +546,12 @@ export default function VerificationTab() {
               <li>Name and date of birth must match your account</li>
             </ul>
           </div>
+          <Alert className="bg-blue-500/10 border-blue-500/30">
+          <AlertCircle className="w-4 h-4 text-blue-400" />
+          <AlertDescription className="text-blue-300 text-sm">
+            If you cannot provide ID for verification, please contact Support to discuss alternative verification methods.
+          </AlertDescription>
+        </Alert>
 
           <Button
             onClick={handleSubmit}
