@@ -6742,7 +6742,15 @@ app.get("/api/admin/verifications/:id", isAuthenticated, isAdmin, async (req, re
 app.post("/api/admin/verifications/:id/review", isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, adminNotes } = req.body;
+    const { 
+       status, 
+        adminNotes,
+        ageVerified,
+        idDobMatch,
+        idNameMatch,
+        minimumAgeMet
+
+     } = req.body;
     const adminId = req.user.id;
     
     if (!["approved", "rejected"].includes(status)) {
