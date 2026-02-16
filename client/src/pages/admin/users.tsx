@@ -57,6 +57,7 @@ interface User {
 
   dailySpendLimit: string | null;
   dailyLimitLastUpdatedAt: string | null;
+  lastIpAddress?: string | null;
 }
 
 type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
@@ -101,8 +102,8 @@ const exportToCSV = (users: User[], cashflowTransactions: Transaction[]) => {
     user.firstName || "",
     user.lastName || "",
     user.phoneNumber || "",
-    parseFloat(user.balance).toFixed(2),
-    user.ringtonePoints.toString(),
+    user.balance ? parseFloat(user.balance).toFixed(2) : "0.00",
+    user.ringtonePoints?.toString() || "0",
     getCashflowTotal(user.id),
     user.isAdmin ? "Admin" : "User",
     user.disabled ? "Disabled" : "Active",
@@ -859,6 +860,12 @@ export default function AdminUsers() {
                     <div className="text-xs text-muted-foreground mb-1">Points</div>
                     <div className="font-medium">{user.ringtonePoints}</div>
                   </div>
+                  <div className="col-span-2 mt-1 pt-1 border-t border-border/50">
+    <div className="text-xs text-muted-foreground mb-1">IP Address</div>
+    <div className="font-mono text-xs">
+      {user.lastIpAddress || <span className="text-muted-foreground italic">Not recorded</span>}
+    </div>
+  </div>
                 </div>
 
                 {/* Action Buttons */}
@@ -1007,8 +1014,10 @@ export default function AdminUsers() {
                     </div>
                   </th>
                   <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
-                    Role
-                  </th>
+  <div className="flex items-center">
+    <span>IP Address</span>
+  </div>
+</th>
                   <th 
                     className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
                     onClick={() => handleSort("createdAt")}
@@ -1045,17 +1054,17 @@ export default function AdminUsers() {
                     <td className="py-3 px-4 text-sm text-foreground">
                       {user.ringtonePoints}
                     </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          user.isAdmin
-                            ? "bg-primary/20 text-primary"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {user.isAdmin ? "Admin" : "User"}
-                      </span>
-                    </td>
+                    <td className="py-3 px-4 text-sm text-foreground font-mono text-xs">
+  {user.lastIpAddress ? (
+    <span title={user.lastIpAddress}>
+      {user.lastIpAddress.length > 15 
+        ? `${user.lastIpAddress.substring(0, 15)}...` 
+        : user.lastIpAddress}
+    </span>
+  ) : (
+    <span className="text-muted-foreground italic">No IP</span>
+  )}
+</td>
                     <td className="py-3 px-4 text-sm text-muted-foreground">
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>

@@ -544,6 +544,18 @@ const filteredTransactions =
         return `£${amount.toFixed(2)}`;
       }
     
+      // For Scratch Card prizes - NEW DETECTION
+      if (transaction.type === "prize" && desc.includes("scratch card")) {
+        // Check if it's points by looking for "ringtones" in description
+        const isPointsPrize = desc.includes("ringtones") || desc.includes("points") || desc.includes("pts");
+        
+        if (isPointsPrize) {
+          return `${amount} pts`;
+        }
+        // Default to cash for Scratch Card if not points
+        return `£${amount.toFixed(2)}`;
+      }
+    
       // For other ringtone prizes
       if (transaction.type === "prize" && desc.includes("ringtone")) {
         if (desc.includes("spin") || desc.includes("points") || desc.includes("pts")) {
@@ -2158,8 +2170,7 @@ const handleDeleteBankAccount = (
                       </span>
                     </div>
                     <p className="text-gray-400 max-w-2xl mx-auto">
-                      100 points = £1.00 • Use your points to enter competitions
-                      or save them up for bigger prizes
+                      100 points = £1.00 • Use your points to enter instant competitions to win bigger prizes
                     </p>
                   </div>
                 </CardContent>
@@ -2338,12 +2349,6 @@ const handleDeleteBankAccount = (
                         <span className="text-yellow-500">•</span>
                         <span>
                           Share your unique referral link with friends
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500">•</span>
-                        <span>
-                          They sign up using your link and make their first wallet top-up
                         </span>
                       </li>
                       <li className="flex items-start gap-2">

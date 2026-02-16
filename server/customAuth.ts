@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { applySelfSuspensionExpiry } from "./restriction";
+import { logUserIpIfNeeded } from "./logUserIpIfNeeded";
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -90,6 +91,7 @@ export const isAuthenticated: RequestHandler = async (req: any, res, next) => {
     }
 
     req.user = freshUser;
+    await  logUserIpIfNeeded(req);
     next();
   } catch (error) {
     console.error("Authentication error:", error);

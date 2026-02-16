@@ -70,6 +70,16 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const userIpLogs = pgTable("user_ip_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  ipAddress: varchar("ip_address").notNull(),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 
 export const userVerifications = pgTable("user_verifications", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),

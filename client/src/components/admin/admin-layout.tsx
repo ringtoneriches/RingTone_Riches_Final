@@ -67,7 +67,7 @@ const sidebarGroups = [
       { name: "Users", path: "/admin/users", icon: Users, protected: true }, // Users sub-tab protected
       { name: "Transactions", path: "/admin/transactions", icon: Euro },
       { name: "Orders", path: "/admin/orders", icon: ShoppingCart },
-      { name: "Withdrawals", path: "/admin/withdrawals", icon: ArrowDownCircle, hasNotification: true, notificationType: "withdrawals" },
+      
     ],
   },
   {
@@ -77,14 +77,14 @@ const sidebarGroups = [
       { name: "Support", path: "/admin/support", icon: MessageSquare, hasNotification: true, notificationType: "support" },
       { name: "Intelligence", path: "/admin/intelligence", icon: Brain },
       { name: "Discounts", path: "/admin/discount", icon: TicketIcon },
-      { name: "Verification", path: "/admin/verification", icon: Check ,  hasNotification: true, notificationType: "verification"},
+      { name: "Withdrawals", path: "/admin/withdrawals", icon: ArrowDownCircle, hasNotification: true, notificationType: "withdrawals" },
+      { name: "Verification", path: "/admin/verification", icon: Check, hasNotification: true, notificationType: "verification" },
       { name: "Well-being", path: "/admin/well-being", icon: Heart },
       { name: "Marketing", path: "/admin/marketing", icon: Mail },
       { name: "Settings", path: "/admin/settings", icon: Settings },
     ],
   },
 ];
-
 
 // Define PIN codes
 const PROTECTED_PINS = {
@@ -412,6 +412,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   };
 
+  // Calculate if Tools tab should be illuminated
+  const hasToolsNotifications = () => {
+    const supportCount = supportUnreadData?.count ?? 0;
+    const withdrawalCount = withdrawalUnreadData?.count ?? 0;
+    const verificationCount = verificationUnreadData?.count ?? 0;
+    return supportCount > 0 || withdrawalCount > 0 || verificationCount > 0;
+  };
+
   if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   if (!user || !user.isAdmin) return null;
 
@@ -441,11 +449,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {sidebarGroups.map(group => {
               const isGroupUnlocked = unlockedGroups.includes(group.name);
               const isGroupProtected = group.protected;
+              const showToolsNotification = group.name === "Tools" && hasToolsNotifications();
               
               return (
                 <div key={group.name}>
                   <button
-                    className="flex items-center justify-between w-full px-4 py-2 text-lg font-medium text-muted-foreground hover:bg-muted rounded-lg"
+                    className={`flex items-center justify-between w-full px-4 py-2 text-lg font-medium text-muted-foreground hover:bg-muted rounded-lg ${
+                      showToolsNotification ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse' : ''
+                    }`}
                     onClick={() => handleGroupClick(group.name)}
                   >
                     <div className="flex items-center gap-2">
@@ -456,6 +467,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         <Unlock className="w-3 h-3 text-green-500" />
                       )}
                       {group.name}
+                      {showToolsNotification && (
+                        <span className="ml-2 inline-flex items-center justify-center w-2 h-2">
+                          <span className="absolute inline-flex h-3 w-3 rounded-full bg-red-600 opacity-75 animate-ping"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600"></span>
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       {isGroupProtected && isGroupUnlocked && (
@@ -597,28 +614,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </Button>
               </Link>
 
-              {/* Unlocked status indicator */}
-              {/* {(unlockedGroups.length > 0 || unlockedItems.length > 0) && (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">Unlocked:</span>
-                  {unlockedGroups.map(group => (
-                    <span key={group} className="px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs">
-                      {group}
-                    </span>
-                  ))}
-                  {unlockedItems.map(item => {
-                    const itemName = sidebarGroups
-                      .flatMap(g => g.items)
-                      .find(i => i.path === item)?.name;
-                    return (
-                      <span key={item} className="px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs">
-                        {itemName}
-                      </span>
-                    );
-                  })}
-                </div>
-              )} */}
-
               {/* Compact Maintenance Toggle */}
               <div className="flex items-center gap-3 bg-muted px-4 py-2 rounded-xl border border-border shadow-sm">
                 {maintenanceData?.maintenanceMode ? (
@@ -701,73 +696,61 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <Dialog open={showPinDialog} onOpenChange={handlePinDialogOpenChange}>
         <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
           <form autoComplete="off">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Lock className="w-6 h-6 text-yellow-600" />
+                {unlockingItem?.type === 'group' ? 'Unlock Games Tab' : 'Unlock Users Access'}
+              </DialogTitle>
+              <DialogDescription className="pt-2">
+                {unlockingItem?.type === 'group' 
+                  ? 'Enter PIN to access Games management section'
+                  : 'Enter PIN to access User management section'}
+              </DialogDescription>
+            </DialogHeader>
 
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="pin">Enter 4-digit PIN</Label>
+                <Input
+                  id="pin"
+                  type="text"             
+                  inputMode="numeric"         
+                  pattern="[0-9]*"
+                  name="admin-pin-code"
+                  autoComplete="one-time-code"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  onKeyDown={handleKeyPress}
+                  placeholder="0000"
+                  className="text-center text-2xl tracking-widest font-mono h-12"
+                  maxLength={4}
+                  autoFocus
+                />
+                <input type="text" name="username" autoComplete="username" style={{ display: "none" }} />
+                <input type="password" name="password" autoComplete="current-password" style={{ display: "none" }} />
 
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Lock className="w-6 h-6 text-yellow-600" />
-              {unlockingItem?.type === 'group' ? 'Unlock Games Tab' : 'Unlock Users Access'}
-            </DialogTitle>
-            <DialogDescription className="pt-2">
-              {unlockingItem?.type === 'group' 
-                ? 'Enter PIN to access Games management section'
-                : 'Enter PIN to access User management section'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="pin">Enter 4-digit PIN</Label>
-              <Input
-              id="pin"
-              type="text"             
-              inputMode="numeric"         
-              pattern="[0-9]*"
-              name="admin-pin-code"
-              autoComplete="one-time-code"
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              onKeyDown={handleKeyPress}
-              placeholder="0000"
-              className="text-center text-2xl tracking-widest font-mono h-12"
-              maxLength={4}
-              autoFocus
-            />
-        <input type="text" name="username" autoComplete="username" style={{ display: "none" }} />
-      <input type="password" name="password" autoComplete="current-password" style={{ display: "none" }} />
-
-              {pinError && (
-                <p className="text-sm text-destructive">{pinError}</p>
-              )}
-            </div>
-            
-            {/* <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-yellow-700">
-                  <p className="font-medium">Security Notice</p>
-                  <p>Access will be automatically locked after 30 minutes of inactivity.</p>
-                </div>
+                {pinError && (
+                  <p className="text-sm text-destructive">{pinError}</p>
+                )}
               </div>
-            </div> */}
-          </div>
+            </div>
 
-          <DialogFooter className="gap-3">
-            <Button
-              variant="outline"
-              onClick={() => handlePinDialogOpenChange(false)}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={verifyPin}
-              disabled={pinInput.length !== 4}
-              className="flex-1 bg-yellow-600 hover:bg-yellow-700"
-            >
-              Verify PIN
-            </Button>
-          </DialogFooter>
+            <DialogFooter className="gap-3">
+              <Button
+                variant="outline"
+                onClick={() => handlePinDialogOpenChange(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={verifyPin}
+                disabled={pinInput.length !== 4}
+                className="flex-1 bg-yellow-600 hover:bg-yellow-700"
+              >
+                Verify PIN
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

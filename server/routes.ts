@@ -57,7 +57,8 @@ import {
   plinkoPrizes,
   plinkoUsage,
   plinkoWins,
-  userVerifications
+  userVerifications,
+  userIpLogs
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -835,6 +836,16 @@ export const isAdmin = (req: any, res: any, next: any) => {
 //   }
 // }
 
+export function getClientIp(req: any) {
+  return (
+    req.headers["cf-connecting-ip"] || // Cloudflare
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.socket?.remoteAddress ||
+    req.ip ||
+    "unknown"
+  );
+}
+
 function normalizeCashflowsStatus(payment: any): {
   status: "PAID" | "PENDING" | "FAILED" | "UNKNOWN";
   paidAmount: number;
@@ -1174,7 +1185,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
   
       console.log("✅ [register] User created:", user.id);
-  
+
+      // ⭐ LOG USER IP (NEW)
+      try {
+        const ip = getClientIp(req);
+        const ua = req.headers["user-agent"] || "";
+
+        await db.insert(userIpLogs).values({
+          userId: user.id,
+          ipAddress: ip,
+          userAgent: ua,
+        });
+      } catch (e) {
+        console.error("IP log failed on register:", e);
+      }
+
+
       // Send verification email
       console.log("   Sending verification email...");
       const emailResult = await sendVerificationEmail(
@@ -1584,6 +1610,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Store user ID in session
       (req as any).session.userId = freshUser.id;
+      // ⭐ LOG USER IP ON LOGIN WITH DETAILED DEBUGGING
+    try {
+      console.log("=== IP LOGGING DEBUG ===");
+      console.log("Headers:", {
+        'cf-connecting-ip': req.headers['cf-connecting-ip'],
+        'x-forwarded-for': req.headers['x-forwarded-for'],
+        'x-real-ip': req.headers['x-real-ip'],
+      });
+      console.log("Socket remoteAddress:", req.socket?.remoteAddress);
+      console.log("req.ip:", req.ip);
+      
+      const ip = getClientIp(req);
+      console.log("Extracted IP:", ip);
+      
+      const ua = req.headers["user-agent"] || "";
+      console.log("User Agent:", ua.substring(0, 50) + "...");
+      
+      console.log("User ID:", freshUser.id);
+      console.log("User Email:", freshUser.email);
+
+      // Check if table exists and insert
+      const result = await db.insert(userIpLogs).values({
+        userId: freshUser.id,
+        ipAddress: ip,
+        userAgent: ua,
+      }).returning();
+      
+      console.log("IP Log inserted successfully, ID:", result[0]?.id);
+      console.log("=== END IP LOGGING DEBUG ===");
+      
+    } catch (e) {
+      console.error("❌ IP log failed on login:", e);
+      if (e instanceof Error) {
+        console.error("Error details:", e.message);
+        console.error("Error stack:", e.stack);
+      }
+    }
+
 
       res.json({
         message: "Login successful",
@@ -1603,6 +1667,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to log in" });
     }
   });
+
 
   app.get("/api/auth/verification-status/:email", async (req, res) => {
     try {
@@ -2743,22 +2808,43 @@ res.json({
       if (status === "PENDING") return;
   
       // ❌ Any non-paid = fail forever
-      if (status !== "PAID" || paidAmount <= 0) {
-        await db.update(pendingPayments)
-          .set({
-            status: "failed",
-            updatedAt: new Date(),
-          })
-          .where(eq(pendingPayments.id, pending.id));
+      // if (status !== "PAID" || paidAmount <= 0) {
+      //   await db.update(pendingPayments)
+      //     .set({
+      //       status: "failed",
+      //       updatedAt: new Date(),
+      //     })
+      //     .where(eq(pendingPayments.id, pending.id));
   
-        console.warn("Wallet credit blocked", {
-          paymentJobReference,
-          status,
-          paidAmount,
-        });
-        return;
-      }
-  
+      //   console.warn("Wallet credit blocked", {
+      //     paymentJobReference,
+      //     status,
+      //     paidAmount,
+      //   });
+      //   return;
+      // }
+  // ❌ Only mark failed when truly failed
+if (status === "FAILED") {
+  await db.update(pendingPayments)
+    .set({
+      status: "failed",
+      updatedAt: new Date(),
+    })
+    .where(eq(pendingPayments.id, pending.id));
+
+  console.warn("Wallet credit blocked", {
+    paymentJobReference,
+    status,
+    paidAmount,
+  });
+  return;
+}
+
+// ⏳ still waiting
+if (status !== "PAID" || paidAmount <= 0) {
+  return;
+}
+
       // ✅ ONLY HERE money is allowed
       await processWalletTopup(
         pending.userId,
@@ -7243,10 +7329,11 @@ app.get("/api/verification/can-withdraw", isAuthenticated, async (req, res) => {
   }
 );
 
-  app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => {
+app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => {
   try {
     const { paymentJobRef, paymentRef } = req.body;
     const userId = req.user.id;
+
     const payment = await cashflows.getPaymentStatus(
       paymentJobRef,
       paymentRef ?? undefined
@@ -7254,63 +7341,104 @@ app.get("/api/verification/can-withdraw", isAuthenticated, async (req, res) => {
 
     const { status, paidAmount } = normalizeCashflowsStatus(payment);
 
-    if (status === "PAID") {
-      // ⭐⭐ ADD REFERRAL BONUS FOR FIRST TOP-UP
-      try {
-        const user = await storage.getUser(userId);
-        
-        if (user && user.referredBy) {
-          // Check if this is the user's FIRST EVER top-up
-          const userTransactions = await storage.getUserTransactions(userId);
-          const completedTopups = userTransactions.filter(
-            (tx) => tx.type === "deposit" && tx.status === "completed"
-          );
-          
-          // If this is their first completed top-up
-          if (completedTopups.length === 1) {
-            const referrer = await storage.getUser(user.referredBy);
-            
-            if (referrer) {
-              const bonusAmount = 2.00;
-              
-              // Add £2 to referrer's balance
-              const newBalance = parseFloat(referrer.balance || "0") + bonusAmount;
-              await storage.updateUserBalance(referrer.id, newBalance.toFixed(2));
-              
-              // Create transaction record for referrer
-              await storage.createTransaction({
-                userId: referrer.id,
-                amount: bonusAmount.toFixed(2),
-                type: "referral",
-                status: "completed",
-                description: `Referral reward: ${user.email} made their first wallet top-up`,
-                paymentMethod: "bonus",
-              });
-              
-              console.log(`🎉 Referral bonus awarded: £${bonusAmount} to ${referrer.email} for ${user.email}'s first top-up`);
+    // ✅ Only proceed for real paid payments
+    if (status === "PAID" && paidAmount > 0) {
+      let didProcessTopup = false;
+
+      // 🔍 Find pending payment
+      const pending = await db.query.pendingPayments.findFirst({
+        where: (p, { eq }) => eq(p.paymentJobReference, paymentJobRef),
+      });
+
+      // ✅ Fallback wallet credit (idempotent)
+      if (pending && pending.status === "pending") {
+        await processWalletTopup(
+          pending.userId,
+          pending.id,
+          paymentRef ?? paymentJobRef,
+          paidAmount
+        );
+
+        await db.update(pendingPayments)
+          .set({
+            status: "completed",
+            updatedAt: new Date(),
+          })
+          .where(eq(pendingPayments.id, pending.id));
+
+        didProcessTopup = true;
+      }
+
+      // ⭐⭐ Referral bonus — ONLY when we actually processed first top-up
+      if (didProcessTopup) {
+        try {
+          const user = await storage.getUser(userId);
+
+          if (user && user.referredBy) {
+            // Check if this is the user's FIRST EVER completed deposit
+            const userTransactions = await storage.getUserTransactions(userId);
+            const completedTopups = userTransactions.filter(
+              (tx) => tx.type === "deposit" && tx.status === "completed"
+            );
+
+            if (completedTopups.length === 1) {
+              const referrer = await storage.getUser(user.referredBy);
+
+              if (referrer) {
+                const bonusAmount = 2.0;
+
+                // Add £2 to referrer balance
+                const newBalance =
+                  parseFloat(referrer.balance || "0") + bonusAmount;
+
+                await storage.updateUserBalance(
+                  referrer.id,
+                  newBalance.toFixed(2)
+                );
+
+                // Create referral transaction
+                await storage.createTransaction({
+                  userId: referrer.id,
+                  amount: bonusAmount.toFixed(2),
+                  type: "referral",
+                  status: "completed",
+                  description: `Referral reward: ${user.email} made their first wallet top-up`,
+                  paymentMethod: "bonus",
+                });
+
+                console.log(
+                  `🎉 Referral bonus awarded: £${bonusAmount} to ${referrer.email} for ${user.email}'s first top-up`
+                );
+              }
             }
           }
+        } catch (referralError) {
+          console.error(
+            "Referral bonus error during top-up:",
+            referralError
+          );
         }
-      } catch (referralError) {
-        console.error("Referral bonus error during top-up:", referralError);
       }
 
       return res.json({
-        status,
-        message: "Payment received. Wallet will update shortly.",
+        status: "PAID",
+        message: "Payment received. Wallet updated.",
       });
     }
 
-    // If payment is still pending or failed
+    // ❌ Not paid yet
     return res.json({
       status,
       message: "Payment not completed. Please try again manually.",
     });
   } catch (err: any) {
     console.error("Confirm top-up error:", err);
-    return res.status(500).json({ message: "Failed to confirm wallet top-up" });
+    return res.status(500).json({
+      message: "Failed to confirm wallet top-up",
+    });
   }
 });
+
 
 
   
@@ -12228,28 +12356,42 @@ app.post(
         const allUsers = await query.orderBy(desc(users.createdAt));
 
         res.json(
-          allUsers.map((user) => ({
-            id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            balance: user.balance,
-            phoneNumber: user.phoneNumber,
-            ringtonePoints: user.ringtonePoints,
-            isAdmin: user.isAdmin,
-            createdAt: user.createdAt,
-            addressStreet: user.addressStreet,
-            addressCity: user.addressCity,
-            addressPostcode: user.addressPostcode,
-            addressCountry: user.addressCountry,
-            notes: user.notes,
-            disabled: user.disabled, 
-            disabledAt: user.disabledAt, 
-            disabledUntil: user.disabledUntil, 
-            dailySpendLimit: user.dailySpendLimit,     
-            dailyLimitLastUpdatedAt: user.dailyLimitLastUpdatedAt
-          }))
+          await Promise.all(
+            allUsers.map(async (user) => {
+              // ⭐ Get latest IP
+              const latestIp = await db.query.userIpLogs.findFirst({
+                where: (l, { eq }) => eq(l.userId, user.id),
+                orderBy: (l, { desc }) => desc(l.createdAt),
+              });
+        
+              return {
+                id: user.id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                balance: user.balance,
+                phoneNumber: user.phoneNumber,
+                ringtonePoints: user.ringtonePoints,
+                isAdmin: user.isAdmin,
+                createdAt: user.createdAt,
+                addressStreet: user.addressStreet,
+                addressCity: user.addressCity,
+                addressPostcode: user.addressPostcode,
+                addressCountry: user.addressCountry,
+                notes: user.notes,
+                disabled: user.disabled,
+                disabledAt: user.disabledAt,
+                disabledUntil: user.disabledUntil,
+                dailySpendLimit: user.dailySpendLimit,
+                dailyLimitLastUpdatedAt: user.dailyLimitLastUpdatedAt,
+        
+                // ⭐ NEW FIELD
+                lastIpAddress: latestIp?.ipAddress || null,
+              };
+            })
+          )
         );
+        
       } catch (error) {
         console.error("Error fetching users:", error);
         res.status(500).json({ message: "Failed to fetch users" });
