@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown, ArrowBigLeft, ArrowBigRight, CheckCircle,  XCircle, Users, Badge, Shield, AlertTriangleIcon, Download } from "lucide-react";
+import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown, ArrowBigLeft, ArrowBigRight, CheckCircle,  XCircle, Users, Badge, Shield, AlertTriangleIcon, Download, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -169,7 +169,8 @@ export default function AdminUsers() {
   const [dailyLimitDialogOpen, setDailyLimitDialogOpen] = useState(false);
   const [userForDailyLimitReset, setUserForDailyLimitReset] = useState<User | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>("all");
-
+  const [selectedIpUser, setSelectedIpUser] = useState<User | null>(null);
+  const [ipDialogOpen, setIpDialogOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
   const [currentPage , setCurrentPage] = useState(1);
   const itemsPerPage = 50;
@@ -860,12 +861,31 @@ export default function AdminUsers() {
                     <div className="text-xs text-muted-foreground mb-1">Points</div>
                     <div className="font-medium">{user.ringtonePoints}</div>
                   </div>
-                  <div className="col-span-2 mt-1 pt-1 border-t border-border/50">
-    <div className="text-xs text-muted-foreground mb-1">IP Address</div>
-    <div className="font-mono text-xs">
-      {user.lastIpAddress || <span className="text-muted-foreground italic">Not recorded</span>}
-    </div>
-  </div>
+                  <td className="py-3 px-4 text-sm text-foreground font-mono text-xs">
+                  {user.lastIpAddress ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">
+                        {user.lastIpAddress.length > 12 
+                          ? `${user.lastIpAddress.substring(0, 12)}...` 
+                          : user.lastIpAddress}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedIpUser(user);
+                          setIpDialogOpen(true);
+                        }}
+                        className="h-6 w-6 p-0 hover:bg-muted"
+                        title="View full IP"
+                      >
+                        <Eye className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground italic">No IP</span>
+                  )}
+                </td>
                 </div>
 
                 {/* Action Buttons */}
@@ -1055,16 +1075,30 @@ export default function AdminUsers() {
                       {user.ringtonePoints}
                     </td>
                     <td className="py-3 px-4 text-sm text-foreground font-mono text-xs">
-  {user.lastIpAddress ? (
-    <span title={user.lastIpAddress}>
-      {user.lastIpAddress.length > 15 
-        ? `${user.lastIpAddress.substring(0, 15)}...` 
-        : user.lastIpAddress}
-    </span>
-  ) : (
-    <span className="text-muted-foreground italic">No IP</span>
-  )}
-</td>
+                    {user.lastIpAddress ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs">
+                          {user.lastIpAddress.length > 12 
+                            ? `${user.lastIpAddress.substring(0, 12)}...` 
+                            : user.lastIpAddress}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedIpUser(user);
+                            setIpDialogOpen(true);
+                          }}
+                          className="h-6 w-6 p-0 hover:bg-muted"
+                          title="View full IP"
+                        >
+                          <Eye className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground italic">No IP</span>
+                    )}
+                  </td>
                     <td className="py-3 px-4 text-sm text-muted-foreground">
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>
@@ -1208,6 +1242,75 @@ export default function AdminUsers() {
             </p>
           </>
         )}
+
+        {/* IP Address Details Dialog */}
+        <Dialog open={ipDialogOpen} onOpenChange={setIpDialogOpen}>
+          <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
+            <DialogHeader>
+              <DialogTitle>IP Address Details</DialogTitle>
+              <DialogDescription>
+                {selectedIpUser?.firstName 
+                  ? `IP information for ${selectedIpUser.firstName} ${selectedIpUser.lastName || ''}`
+                  : 'User IP information'}
+              </DialogDescription>
+            </DialogHeader>
+            
+            {selectedIpUser && (
+              <div className="space-y-4">
+                <div className="bg-muted/50 p-4 rounded-lg space-y-3">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">User Information:</p>
+                    <p className="text-sm">
+                      <span className="font-medium">Name:</span> {selectedIpUser.firstName} {selectedIpUser.lastName || ''}
+                    </p>
+                    <p className="text-sm">
+                      <span className="font-medium">Email:</span> {selectedIpUser.email}
+                    </p>
+                  </div>
+                  
+                  <div className="border-t pt-3">
+                    <p className="text-sm font-medium text-muted-foreground mb-2">IP Address:</p>
+                    <div className="bg-black/20 p-3 rounded-lg">
+                      <p className="text-sm font-mono break-all">{selectedIpUser.lastIpAddress}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      This is the last known IP address used by this user
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIpDialogOpen(false);
+                  setSelectedIpUser(null);
+                }}
+                className="mt-3 sm:mt-0"
+              >
+                Close
+              </Button>
+              <Button
+                variant="default"
+                className=""
+                onClick={() => {
+                  // Copy to clipboard functionality
+                  if (selectedIpUser?.lastIpAddress) {
+                    navigator.clipboard.writeText(selectedIpUser.lastIpAddress);
+                    toast({
+                      title: "Copied!",
+                      description: "IP address copied to clipboard",
+                    });
+                  }
+                }}
+              >
+                Copy IP
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Edit User Dialog */}
         <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>

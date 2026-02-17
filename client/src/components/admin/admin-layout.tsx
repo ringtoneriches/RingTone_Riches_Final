@@ -63,10 +63,7 @@ const sidebarGroups = [
     items: [
       { name: "Competitions", path: "/admin/competitions", icon: Trophy },
       { name: "Entries", path: "/admin/entries", icon: Ticket },
-      { name: "Past Winners", path: "/admin/past-winners", icon: Award },
-      { name: "Users", path: "/admin/users", icon: Users, protected: true }, // Users sub-tab protected
-      { name: "Transactions", path: "/admin/transactions", icon: Euro },
-      { name: "Orders", path: "/admin/orders", icon: ShoppingCart },
+     
       
     ],
   },
@@ -74,6 +71,10 @@ const sidebarGroups = [
     name: "Tools",
     icon: null,
     items: [
+      { name: "Past Winners", path: "/admin/past-winners", icon: Award },
+      { name: "Users", path: "/admin/users", icon: Users, protected: true }, // Users sub-tab protected
+      { name: "Transactions", path: "/admin/transactions", icon: Euro },
+      { name: "Orders", path: "/admin/orders", icon: ShoppingCart },
       { name: "Support", path: "/admin/support", icon: MessageSquare, hasNotification: true, notificationType: "support" },
       { name: "Intelligence", path: "/admin/intelligence", icon: Brain },
       { name: "Discounts", path: "/admin/discount", icon: TicketIcon },

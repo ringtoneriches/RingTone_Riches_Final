@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -52,6 +52,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
+import { Search } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -409,6 +411,12 @@ const isAuthenticated = !!user;
   accountNumber: "",
   sortCode: ""
 });
+
+// Add these state variables at the top of your component
+const [searchTicketNumber, setSearchTicketNumber] = useState('');
+const [searchResult, setSearchResult] = useState(null);
+const [visibleIncompleteGames, setVisibleIncompleteGames] = useState(6);
+
   // Load user's existing address when user data is available
   useEffect(() => {
     if (user) {
@@ -620,6 +628,30 @@ const excludedCompetitionIds = [
 ];
 
 
+// Add this useEffect to handle search
+useEffect(() => {
+  if (searchTicketNumber) {
+    // Search through all tickets
+    let found = null;
+    for (const entry of groupedEntries) {
+      const matchingTicket = entry.tickets.find(
+        ticket => ticket.ticketNumber.toString() === searchTicketNumber
+      );
+      if (matchingTicket) {
+        found = {
+          competition: entry.competition,
+          ticket: matchingTicket,
+          isWinner: matchingTicket.isWinner
+        };
+        break;
+      }
+    }
+    setSearchResult(found);
+  } else {
+    setSearchResult(null);
+  }
+}, [searchTicketNumber, groupedEntries]);
+
 const incompleteGames = orders.filter((order) => {
   const type = (order.competitions?.type || "").toLowerCase();
   const remaining = Number(order.remainingPlays || 0);
@@ -632,7 +664,21 @@ const incompleteGames = orders.filter((order) => {
     !excludedCompetitionIds.includes(order.orders.competitionId)
   );
 });
+const incompleteGamesRef = useRef(null);
+const handleShowLess = () => {
+  setVisibleIncompleteGames(6);
+  // Scroll smoothly to the top of the incomplete games section
+  if (incompleteGamesRef.current) {
+    incompleteGamesRef.current.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'start' 
+    });
+  }
+};
 
+useEffect(() => {
+  setVisibleIncompleteGames(6);
+}, [incompleteGames.length]);
 
 // Orders that are fully completed
 const completedOrders = orders.filter(
@@ -1698,15 +1744,21 @@ const handleDeleteBankAccount = (
             >
               {/* Incomplete Games */}
               {incompleteGames.length > 0 && (
+                <div ref={incompleteGamesRef}>
                 <Card className="bg-gradient-to-br from-yellow-900/20 via-zinc-900 to-zinc-900 border-yellow-500/40 shadow-xl shadow-yellow-500/20">
                   <CardHeader className="border-b border-yellow-500/30">
                     <CardTitle className="text-2xl text-yellow-400 flex items-center gap-2">
                       <span>🎮</span> GAMES IN PROGRESS
+                      {incompleteGames.length > 0 && (
+                        <span className="text-sm font-normal text-gray-400 ml-2">
+                          ({incompleteGames.length} {incompleteGames.length === 1 ? 'game' : 'games'})
+                        </span>
+                      )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {incompleteGames.map((order) => (
+                      {incompleteGames.slice(0, visibleIncompleteGames).map((order) => (
                         <div
                           key={order.orders.id}
                           className="bg-black/50 rounded-lg border border-yellow-500/20 p-4 hover:border-yellow-500/40 transition-all transform hover:scale-105"
@@ -1777,8 +1829,47 @@ const handleDeleteBankAccount = (
                         </div>
                       ))}
                     </div>
+
+                    {/* See More Button for Incomplete Games */}
+                    {incompleteGames.length > 6 && visibleIncompleteGames < incompleteGames.length && (
+                      <div className="flex justify-center mt-6">
+                        <button
+                          onClick={() => setVisibleIncompleteGames(prev => Math.min(prev + 6, incompleteGames.length))}
+                          className="group relative px-8 py-3 bg-gradient-to-r from-yellow-600/20 to-yellow-500/20 hover:from-yellow-600 hover:to-yellow-500 border border-yellow-500/30 hover:border-transparent text-yellow-400 hover:text-black rounded-lg font-bold transition-all transform hover:scale-105 shadow-lg hover:shadow-yellow-500/50 overflow-hidden"
+                        >
+                          <span className="relative z-10  flex justify-center items-center gap-2">
+                            See More Games
+                            <svg 
+                              className="w-4 h-4 -mt-1  transition-transform" 
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7-7-7" />
+                            </svg>
+                          </span>
+                          <div className="absolute inset-0 bg-gradient-to-r from-yellow-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Show Less Button (optional) */}
+                    {visibleIncompleteGames > 6 && (
+                      <div className="flex justify-center mt-3">
+                        <button
+                          onClick={handleShowLess}
+                          className="text-sm text-gray-400 hover:text-yellow-400 transition-colors flex items-center gap-1"
+                        >
+                          <svg className="w-4 h-4 mt-2 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7-7-7" />
+                          </svg>
+                          Show Less
+                        </button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
+                </div>
               )}
 
               {/* Past Orders */}
@@ -1978,8 +2069,21 @@ const handleDeleteBankAccount = (
                               </span>
                               <button
                                 onClick={() => {
-                                  setSelectedOrder(order);
-                                  setDialogOpen(true);
+                                  if (order.orders.status === "pending") {
+                                    // Check competition type for proper routing
+                                    if (order.competitions?.type === "spin") {
+                                      setLocation(`/spin-billing/${order.orders.id}/${order.orders.competitionId}`);
+                                    } else if (order.competitions?.type === "scratch") {
+                                      setLocation(`/scratch-billing/${order.orders.id}`);
+                                    } else {
+                                      // Normal competition → go to checkout
+                                      setLocation(`/checkout/${order.orders.id}`);
+                                    }
+                                  } else {
+                                    // Completed order → open details modal
+                                    setSelectedOrder(order);
+                                    setOrderDialogOpen(true); 
+                                  }
                                 }}
                                 className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-bold hover:from-yellow-500 hover:to-yellow-400 transition-all flex-shrink-0"
                                 data-testid={`button-view-order-${order.orders.id}`}
@@ -2055,6 +2159,61 @@ const handleDeleteBankAccount = (
                 </CardContent>
               </Card>
 
+              {tickets.length > 100 && (
+                <Card className="bg-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
+                  <CardContent className="p-6">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <Search className="w-5 h-5 text-yellow-400" />
+                        <h3 className="text-lg font-semibold text-yellow-400">
+                          Find Your Entry
+                        </h3>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Enter your ticket number..."
+                          value={searchTicketNumber}
+                          onChange={(e) => setSearchTicketNumber(e.target.value)}
+                          className="w-full px-4 py-3 bg-black/50 border border-yellow-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400/50 transition-all"
+                        />
+                        {searchTicketNumber && (
+                          <button
+                            onClick={() => setSearchTicketNumber('')}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-yellow-400 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      
+                      {/* Search Results */}
+                      {searchTicketNumber && searchResult && (
+                        <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                          <p className="text-gray-300">
+                            Ticket <span className="text-yellow-400 font-bold">{searchTicketNumber}</span> found in:{' '}
+                            <span className="text-white font-semibold">{searchResult.competition.title}</span>
+                          </p>
+                          <p className="text-sm text-gray-400 mt-1">
+                            {searchResult.isWinner && (
+                              <span className="text-green-400">🎉 This is a winning entry! </span>
+                            )}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {searchTicketNumber && !searchResult && (
+                        <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                          <p className="text-gray-300">
+                            No entry found with ticket number: <span className="text-red-400 font-bold">{searchTicketNumber}</span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               <div className="space-y-6">
                 {groupedEntries.length === 0 ? (
                   <Card className="bg-zinc-900 border-yellow-500/30">
@@ -2075,8 +2234,13 @@ const handleDeleteBankAccount = (
                 ) : (
                   groupedEntries.map((entry, groupIndex) => (
                     <Card
-    key={entry.competition.id}
-    className="bg-zinc-900 border-yellow-500/30 overflow-hidden shadow-xl shadow-yellow-500/10">
+                      key={entry.competition.id}
+                      className={`bg-zinc-900 border-yellow-500/30 overflow-hidden shadow-xl shadow-yellow-500/10 transition-all ${
+                        searchResult?.competition.id === entry.competition.id && searchTicketNumber
+                          ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-zinc-900'
+                          : ''
+                      }`}
+                    >
                       <div className="bg-gradient-to-r from-yellow-900/20 to-zinc-900 p-4 border-b border-yellow-500/30">
                         <div className="flex items-start gap-4">
                           {entry.competition.imageUrl && (
@@ -2088,21 +2252,23 @@ const handleDeleteBankAccount = (
                           )}
                           <div className="flex-1">
                             <h3 className="text-xl font-bold text-yellow-400 mb-2">
-                              {entry.competition.title}
+                              {entry.competition.wheelType === "wheel2" ? "Ringtone Retro Spin" : 
+                              entry.competition.title}
                             </h3>
                             <div className="flex flex-wrap gap-3 text-sm">
                               <span className="flex items-center gap-1">
                                 <span className="text-gray-400">Type:</span>
                                 <span className={`capitalize px-2 py-0.5 rounded border ${
-                      !entry.competition.isActive
-                        ? 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-                        : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                    }`}>
-                      {entry.competition.type === "instant" && "Competition"}
-                      {entry.competition.type === "spin" && "Spin Wheel"}
-                      {entry.competition.type === "scratch" && "Scratch Card"}
-                      {entry.competition.type === "pop" && "Pop Balloon"}
-                    </span>
+                                  !entry.competition.isActive
+                                    ? 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                                    : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                                }`}>
+                                  {entry.competition.type === "instant" && "Competition"}
+                                  {entry.competition.type === "spin" && "Spin Wheel"}
+                                  {entry.competition.type === "plinko" && "Ringtone Plinko"}
+                                  {entry.competition.type === "scratch" && "Scratch Card"}
+                                  {entry.competition.type === "pop" && "Pop Balloon"}
+                                </span>
                               </span>
                               <span className="flex items-center gap-1">
                                 <span className="text-gray-400">Entries:</span>
@@ -2125,7 +2291,9 @@ const handleDeleteBankAccount = (
                               className={`px-3 py-2 rounded-lg border text-center font-mono text-sm transition-all hover:scale-105 ${
                                 ticket.isWinner
                                   ? "bg-green-500/20 border-green-500 text-green-400 font-bold shadow-lg shadow-green-500/50"
-                                  : "bg-black/50 border-yellow-500/20 text-white hover:border-yellow-500/50"
+                                  : searchTicketNumber && ticket.ticketNumber.toString() === searchTicketNumber
+                                    ? "bg-yellow-500/30 border-yellow-400 text-yellow-400 font-bold shadow-lg shadow-yellow-500/50"
+                                    : "bg-black/50 border-yellow-500/20 text-white hover:border-yellow-500/50"
                               }`}
                             >
                               {ticket.ticketNumber}
@@ -2140,7 +2308,7 @@ const handleDeleteBankAccount = (
                   ))
                 )}
               </div>
-            </TabsContent>
+           </TabsContent>
 
             {/* RINGTONE POINTS TAB */}
             <TabsContent
