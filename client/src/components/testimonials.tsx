@@ -201,7 +201,7 @@ export default function Testimonials() {
   <div className="col-span-1 relative group">
     <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-xl md:rounded-2xl blur opacity-20 group-hover:opacity-30 transition-opacity"></div>
     <div className="relative bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl md:rounded-2xl p-4 md:p-6 border border-yellow-500/20 group-hover:border-yellow-400/40 transition-all duration-300">
-      <div className="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1 md:mb-2">98%</div>
+      <div className="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1 md:mb-2">99%</div>
       <div className="flex items-center justify-center gap-1 md:gap-2 mb-2 md:mb-3">
         <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-yellow-400" />
         <span className="text-xs md:text-sm text-yellow-300">Positive</span>

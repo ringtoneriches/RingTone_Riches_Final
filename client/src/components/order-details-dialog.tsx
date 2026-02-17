@@ -51,7 +51,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto rounded-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">ORDER DETAILS</DialogTitle>
         </DialogHeader>

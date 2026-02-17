@@ -99,8 +99,6 @@ export default function AdminTransactions() {
     staleTime: 5000,
   });
 
- 
-
 
   // FILTERING
   const filtered = useMemo(() => {
@@ -113,7 +111,8 @@ export default function AdminTransactions() {
         tx.amount.toString().includes(searchLower) ||
         tx.description.toString().includes(searchLower) ||
         tx.type.toString().includes(searchLower) ||
-        tx.source?.toLowerCase().includes(searchLower);
+        tx.source?.toLowerCase().includes(searchLower) ||
+        tx.paymentRef?.toString().toLowerCase().includes(searchLower);
 
       let matchDate = true;
       if (dateFrom) matchDate = new Date(tx.createdAt) >= new Date(dateFrom);
@@ -306,7 +305,7 @@ export default function AdminTransactions() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
-            placeholder="Search by user, transaction, amount..."
+            placeholder="Search by user, transaction, amount, reference..."
             className="pl-10 w-full"
             value={search}
             onChange={(e) => setSearch(e.target.value)}

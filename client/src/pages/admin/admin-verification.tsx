@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -54,6 +54,8 @@ import {
   Cake,
   IdCard,
   CheckCheck,
+  Search,
+  X,
 } from "lucide-react";
 import { format, differenceInYears } from "date-fns";
 import AdminLayout from "@/components/admin/admin-layout";
@@ -89,6 +91,9 @@ export default function AdminVerifications() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [reviewStatus, setReviewStatus] = useState<"approved" | "rejected">("approved");
   const [adminNotes, setAdminNotes] = useState("");
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
   
   // New state for age verification
   const [ageVerified, setAgeVerified] = useState(false);
@@ -325,15 +330,50 @@ export default function AdminVerifications() {
     }
   };
 
-  const pendingVerifications = Array.isArray(verifications)
-    ? verifications.filter((v: any) => v.status === "pending")
-    : [];
-  const approvedVerifications = Array.isArray(verifications)
-    ? verifications.filter((v: any) => v.status === "approved")
-    : [];
-  const rejectedVerifications = Array.isArray(verifications)
-    ? verifications.filter((v: any) => v.status === "rejected")
-    : [];
+  // Filter verifications based on search query
+  const filterVerifications = (verifications: any[]) => {
+    if (!searchQuery.trim()) return verifications;
+    
+    const query = searchQuery.toLowerCase().trim();
+    return verifications.filter((v: any) => {
+      const name = v.user?.name?.toLowerCase() || "";
+      const email = v.user?.email?.toLowerCase() || "";
+      return name.includes(query) || email.includes(query);
+    });
+  };
+
+  // Get filtered lists
+  const pendingVerifications = useMemo(() => {
+    const all = Array.isArray(verifications)
+      ? verifications.filter((v: any) => v.status === "pending")
+      : [];
+    return filterVerifications(all);
+  }, [verifications, searchQuery]);
+
+  const approvedVerifications = useMemo(() => {
+    const all = Array.isArray(verifications)
+      ? verifications.filter((v: any) => v.status === "approved")
+      : [];
+    return filterVerifications(all);
+  }, [verifications, searchQuery]);
+
+  const rejectedVerifications = useMemo(() => {
+    const all = Array.isArray(verifications)
+      ? verifications.filter((v: any) => v.status === "rejected")
+      : [];
+    return filterVerifications(all);
+  }, [verifications, searchQuery]);
+
+  // Calculate original counts for the header cards (unfiltered)
+  const originalPendingCount = Array.isArray(verifications)
+    ? verifications.filter((v: any) => v.status === "pending").length
+    : 0;
+  const originalApprovedCount = Array.isArray(verifications)
+    ? verifications.filter((v: any) => v.status === "approved").length
+    : 0;
+  const originalRejectedCount = Array.isArray(verifications)
+    ? verifications.filter((v: any) => v.status === "rejected").length
+    : 0;
 
   if (isLoading) {
     return (
@@ -630,14 +670,14 @@ export default function AdminVerifications() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-yellow-500/20 rounded-full mb-3">
                   <Clock className="w-6 h-6 text-yellow-500" />
                 </div>
-                <p className="text-2xl font-bold">{pendingVerifications.length}</p>
+                <p className="text-2xl font-bold">{originalPendingCount}</p>
                 <p className="text-sm text-muted-foreground">Pending Review</p>
               </div>
             </CardContent>
@@ -649,7 +689,7 @@ export default function AdminVerifications() {
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500/20 rounded-full mb-3">
                   <CheckCircle className="w-6 h-6 text-green-500" />
                 </div>
-                <p className="text-2xl font-bold">{approvedVerifications.length}</p>
+                <p className="text-2xl font-bold">{originalApprovedCount}</p>
                 <p className="text-sm text-muted-foreground">Approved</p>
               </div>
             </CardContent>
@@ -661,7 +701,7 @@ export default function AdminVerifications() {
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-red-500/20 rounded-full mb-3">
                   <XCircle className="w-6 h-6 text-red-500" />
                 </div>
-                <p className="text-2xl font-bold">{rejectedVerifications.length}</p>
+                <p className="text-2xl font-bold">{originalRejectedCount}</p>
                 <p className="text-sm text-muted-foreground">Rejected</p>
               </div>
             </CardContent>
@@ -680,29 +720,73 @@ export default function AdminVerifications() {
           </Card>
         </div>
 
+        {/* Search Bar */}
+        <Card className="bg-black/50">
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row gap-4 items-center">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 bg-black/50 "
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              {searchQuery && (
+                <div className="text-sm text-muted-foreground whitespace-nowrap">
+                  Found: {pendingVerifications.length + approvedVerifications.length + rejectedVerifications.length} results
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         <Tabs defaultValue="pending" className="w-full">
           <TabsList>
             <TabsTrigger value="pending" className="relative">
               Pending
-              {pendingVerifications.length > 0 && (
-                <span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-yellow-500 rounded-full">
-                  {pendingVerifications.length}
-                </span>
-              )}
+             
             </TabsTrigger>
-            <TabsTrigger value="approved">Approved</TabsTrigger>
-            <TabsTrigger value="rejected">Rejected</TabsTrigger>
+            <TabsTrigger value="approved">
+              Approved
+              
+            </TabsTrigger>
+            <TabsTrigger value="rejected">
+              Rejected
+              
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="pending" className="space-y-4">
             {pendingVerifications.length === 0 ? (
               <Card>
                 <CardContent className="pt-6 text-center">
-                  <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-lg font-medium">No pending verifications</p>
-                  <p className="text-sm text-muted-foreground">
-                    All verification requests have been processed
-                  </p>
+                  {searchQuery ? (
+                    <>
+                      <Search className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-lg font-medium">No matching pending verifications</p>
+                      <p className="text-sm text-muted-foreground">
+                        Try adjusting your search query
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-lg font-medium">No pending verifications</p>
+                      <p className="text-sm text-muted-foreground">
+                        All verification requests have been processed
+                      </p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             ) : (
@@ -723,11 +807,23 @@ export default function AdminVerifications() {
             {approvedVerifications.length === 0 ? (
               <Card>
                 <CardContent className="pt-6 text-center">
-                  <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                  <p className="text-lg font-medium">No approved verifications</p>
-                  <p className="text-sm text-muted-foreground">
-                    No verifications have been approved yet
-                  </p>
+                  {searchQuery ? (
+                    <>
+                      <Search className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-lg font-medium">No matching approved verifications</p>
+                      <p className="text-sm text-muted-foreground">
+                        Try adjusting your search query
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
+                      <p className="text-lg font-medium">No approved verifications</p>
+                      <p className="text-sm text-muted-foreground">
+                        No verifications have been approved yet
+                      </p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             ) : (
@@ -748,11 +844,23 @@ export default function AdminVerifications() {
             {rejectedVerifications.length === 0 ? (
               <Card>
                 <CardContent className="pt-6 text-center">
-                  <XCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-                  <p className="text-lg font-medium">No rejected verifications</p>
-                  <p className="text-sm text-muted-foreground">
-                    No verifications have been rejected
-                  </p>
+                  {searchQuery ? (
+                    <>
+                      <Search className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-lg font-medium">No matching rejected verifications</p>
+                      <p className="text-sm text-muted-foreground">
+                        Try adjusting your search query
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+                      <p className="text-lg font-medium">No rejected verifications</p>
+                      <p className="text-sm text-muted-foreground">
+                        No verifications have been rejected
+                      </p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             ) : (
@@ -928,30 +1036,10 @@ export default function AdminVerifications() {
                                 User meets the minimum age requirement ({MINIMUM_AGE}+ years)
                               </Label>
                             </div>
-    
-                            {/* Optional: Extracted DOB field for future OCR integration */}
-                            {/* <div className="mt-4">
-                              <Label htmlFor="extractedDob" className="text-sm">
-                                Extracted DOB from ID (Optional - for OCR)
-                              </Label>
-                              <Input
-                                id="extractedDob"
-                                type="date"
-                                value={extractedDob}
-                                onChange={(e) => setExtractedDob(e.target.value)}
-                                className="mt-1 bg-zinc-800"
-                                placeholder="YYYY-MM-DD"
-                              />
-                              <p className="text-xs text-muted-foreground mt-1">
-                                If using OCR, enter the extracted date of birth from the ID
-                              </p>
-                            </div> */}
                           </div>
                         )
                           
                         }
-                      {/* Age Verification Checklist */}
-                    
                     </div>
                   </div>
 
@@ -978,8 +1066,6 @@ export default function AdminVerifications() {
                       </p>
                     )}
                   </div>
-
-                 
                 </>
               )}
             </div>
