@@ -53,6 +53,12 @@ export default function CheckoutSuccess() {
               } else if (data.competitionType === "scratch") {
                 redirectUrl = `/scratch/${data.competitionId}/${data.orderId}`;
               }
+               else if (data.competitionType === "pop") {
+                redirectUrl = `/pop/${data.competitionId}/${data.orderId}`;
+              }
+               else if (data.competitionType === "plinko") {
+                redirectUrl = `/plinko/${data.competitionId}/${data.orderId}`;
+              }
 
 
             setTimeout(() => setLocation(redirectUrl), 2000);

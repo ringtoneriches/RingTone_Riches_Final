@@ -993,7 +993,48 @@ async function processWalletTopup(
   }
 }
 
+// In your order creation endpoint
+async function createInstantPlayOrder(userId: string, competitionId: string, quantity: number) {
+  return await db.transaction(async (tx) => {
+    // Get competition details
+    const competition = await tx.query.competitions.findFirst({
+      where: (c, { eq }) => eq(c.id, competitionId),
+    });
 
+    if (!competition) {
+      throw new Error("Competition not found");
+    }
+
+    const totalAmount = competition.ticketPrice * quantity;
+
+    // Create order
+    const [order] = await tx.insert(orders).values({
+      userId,
+      competitionId,
+      quantity,
+      totalAmount,
+      paymentMethod: "card_instant",
+      status: "pending",
+      remainingPlays: quantity,
+    }).returning();
+
+    // Create pending payment record
+    await tx.insert(pendingPayments).values({
+      userId,
+      orderId: order.id,
+      paymentType: "instant_play",
+      amount: totalAmount,
+      metadata: {
+        competitionId,
+        competitionTitle: competition.title,
+        competitionType: competition.type,
+        quantity,
+      },
+    });
+
+    return order;
+  });
+}
 
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -2347,364 +2388,200 @@ res.json({
       try {
         const { paymentJobRef, paymentRef, orderId } = req.body;
         const userId = req.user.id;
-
+  
         if (!paymentJobRef || !paymentRef || !orderId) {
           return res
             .status(400)
             .json({ message: "Missing paymentJobRef, paymentRef or orderId" });
         }
-
+  
         console.log("🔍 Confirming Cashflows payment:", {
           paymentJobRef,
           paymentRef,
           orderId,
         });
-
-        // Fetch specific payment
+  
+        // Verify payment with Cashflows
         const payment = await cashflows.getPaymentStatus(
           paymentJobRef,
           paymentRef
         );
-
+  
         const paymentStatus =
           payment?.status ||
           payment?.data?.status ||
           payment?.data?.paymentStatus ||
           payment?.paymentStatus;
-
+  
         console.log("📊 Payment Status:", paymentStatus);
-
+  
         const successStatuses = ["SUCCESS", "COMPLETED", "PAID", "Paid"];
-
-        // AUDIT LOG: Payment attempt (before checking status)
+  
         const user = await storage.getUser(userId);
         const balance = parseFloat(user?.balance || "0");
-
+  
+        // ❌ Payment failed
         if (!successStatuses.includes(paymentStatus)) {
-          await db
-            .insert(auditLogs)
-            .values({
-              userId,
-              userName:
-                `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-                "Customer",
-              email: user?.email || "",
-              action: "payment_failed",
-              description: `Payment failed for order ${orderId}. Status: ${paymentStatus}`,
-              startBalance: balance,
-              endBalance: balance,
-              createdAt: new Date(),
-            })
-            .execute();
-
-          return res
-            .status(400)
-            .json({
-              message: `Payment not completed. Status: ${paymentStatus}`,
-            });
+          await db.insert(auditLogs).values({
+            userId,
+            userName:
+              `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+              "Customer",
+            email: user?.email || "",
+            action: "payment_failed",
+            description: `Payment failed for order ${orderId}. Status: ${paymentStatus}`,
+            startBalance: balance,
+            endBalance: balance,
+            createdAt: new Date(),
+          });
+  
+          return res.status(400).json({
+            message: `Payment not completed. Status: ${paymentStatus}`,
+          });
         }
-
-        // Retrieve order
+  
+        // Get order
         const order = await storage.getOrder(orderId);
         if (!order || order.userId !== userId) {
-          await db
-            .insert(auditLogs)
-            .values({
-              userId,
-              userName:
-                `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-                "Customer",
-              email: user?.email || "",
-              action: "order_not_found",
-              description: `Order ${orderId} not found or belongs to wrong user`,
-              startBalance: balance,
-              endBalance: balance,
-              createdAt: new Date(),
-            })
-            .execute();
-
+          await db.insert(auditLogs).values({
+            userId,
+            userName:
+              `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+              "Customer",
+            email: user?.email || "",
+            action: "order_not_found",
+            description: `Order ${orderId} not found or belongs to wrong user`,
+            startBalance: balance,
+            endBalance: balance,
+            createdAt: new Date(),
+          });
+  
           return res
             .status(404)
             .json({ message: "Order not found or belongs to wrong user" });
         }
-
-        // Get competition type
-        const competition = await storage.getCompetition(order.competitionId);
-        if (!competition) {
-          await db
-            .insert(auditLogs)
-            .values({
-              userId,
-              userName:
-                `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-                "Customer",
-              email: user?.email || "",
-              action: "competition_not_found",
-              description: `Competition not found for order ${orderId}`,
-              startBalance: balance,
-              endBalance: balance,
-              createdAt: new Date(),
-            })
-            .Execute();
-
-          return res.status(404).json({ message: "Competition not found" });
-        }
-
-        const competitionType = competition.type || "competition";
-        const competitionId = order.competitionId;
-
-        // Idempotency: avoid duplicates
+  
+        // Check if order is already completed
         if (order.status === "completed") {
-          await db
-            .insert(auditLogs)
-            .values({
-              userId,
-              userName:
-                `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-                "Customer",
-              email: user?.email || "",
-              action: "order_already_processed",
-              description: `Order ${orderId} was already processed`,
-              startBalance: balance,
-              endBalance: balance,
-              createdAt: new Date(),
-            })
-            .execute();
-
+          console.log("⚠️ Order already completed");
+          
+          // Get the tickets for this order
+          const orderTickets = await db
+            .select()
+            .from(tickets)
+            .where(eq(tickets.orderId, orderId));
+  
           return res.json({
             success: true,
             orderId,
             competitionId: order.competitionId,
-            competitionType,
-            alreadyProcessed: true,
+            competitionType: "competition",
+            tickets: orderTickets.map(t => ({ ticketNumber: t.ticketNumber })),
+            cardsPurchased: order.quantity,
           });
         }
-
-        const ticketCount = order.quantity;
-        const totalAmount = parseFloat(order.totalAmount || "0");
-
-        // AUDIT LOG: Start of competition purchase processing
-        const startBalance = parseFloat(user?.balance || "0");
-
-        // Log before creating tickets
-        await db
-          .insert(auditLogs)
-          .values({
-            userId,
-            userName:
-              `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-              "Customer",
-            email: user?.email || "",
-            action: "competition_payment_started",
-            competitionId,
-            description: `Processing payment for ${ticketCount} ticket(s) in ${competition.title}`,
-            startBalance: startBalance,
-            endBalance: startBalance,
-            createdAt: new Date(),
-          })
-          .execute();
-
-        // Create tickets
-        const ticketsCreated = [];
-        for (let i = 0; i < ticketCount; i++) {
-          const ticket = await storage.createTicket({
-            userId,
-            competitionId,
-            orderId,
-            ticketNumber: nanoid(8).toUpperCase(),
+  
+        // Get competition
+        const competition = await storage.getCompetition(order.competitionId);
+  
+        // If this is an instant play payment, we need to wait for or trigger the processing
+        if (order.paymentMethod === "instaplay") {
+          // Check if there's a pending payment record
+          const pending = await db.query.pendingPayments.findFirst({
+            where: (p, { eq, and }) => and(
+              eq(p.paymentJobReference, paymentJobRef),
+              eq(p.status, "pending")
+            ),
           });
-
-          ticketsCreated.push(ticket);
-        }
-
-        // Update competition sold number
-        await storage.updateCompetitionSoldTickets(competitionId, ticketCount);
-
-        // Mark order complete
-        await storage.updateOrderStatus(orderId, "completed");
-
-        // Default action for normal competitions
-        let auditAction = "competition_purchase";
-        let auditDescription = `Purchased ${ticketCount} ticket(s) for ${competition.title}`;
-
-        // Override based on type
-        if (competitionType === "spin") {
-          auditAction = "spin_purchase";
-          auditDescription = `Purchased ${ticketCount} spin(s) for ${competition.title}`;
-        } else if (competitionType === "scratch") {
-          auditAction = "scratch_purchase";
-          auditDescription = `Purchased ${ticketCount} scratch card(s) for ${competition.title}`;
-        } else if (competitionType === "instant") {
-          // you can keep this or remove since default already matches
-          auditAction = "competition_purchase";
-          auditDescription = `Purchased ${ticketCount} competition ticket(s) for ${competition.title}`;
-        }
-
-        // Calculate end balance (if payment was from wallet)
-        let endBalance = startBalance;
-        if (order.walletAmount && parseFloat(order.walletAmount) > 0) {
-          endBalance = startBalance - parseFloat(order.walletAmount);
-        }
-
-        // AUDIT LOG: Successful competition purchase
-        await db
-          .insert(auditLogs)
-          .values({
-            userId,
-            userName:
-              `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-              "Customer",
-            email: user?.email || "",
-            action: auditAction,
-            competitionId,
-            description: auditDescription,
-            startBalance: startBalance,
-            endBalance: endBalance,
-            createdAt: new Date(),
-          })
-          .execute();
-
-        console.log(
-          `✅ AUDIT LOG: ${auditAction} recorded for order ${orderId}`
-        );
-
-        // -------------------------
-        // SEND ORDER CONFIRMATION EMAIL
-        // -------------------------
-        try {
-          const tickets = await storage.getTicketsByOrderId(order.id);
-          const ticketNumbers = tickets.map((t) => t.ticketNumber);
-
-          if (user?.email && tickets.length > 0) {
-            const orderType =
-              competition.type === "spin"
-                ? "spin"
-                : competition.type === "scratch"
-                ? "scratch"
-                : "competition";
-
-            await sendOrderConfirmationEmail(user.email, {
-              orderId: order.id,
-              userName:
-                `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
-                "Customer",
-              orderType,
-              itemName: competition.title,
-              quantity: tickets.length,
-              totalAmount: order.totalAmount,
-              orderDate: new Date().toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-              paymentMethod: "Card Payment (Cashflows)",
-              skillQuestion: competition.skillQuestion || undefined,
-              skillAnswer: order.skillAnswer || undefined,
-              ticketNumbers:
-                ticketNumbers.length > 0 ? ticketNumbers : undefined,
+  
+          if (pending) {
+            // Process the instant play purchase immediately instead of waiting for webhook
+            // This ensures the user gets their tickets right away
+            await processInstantPlayPurchase(
+              userId,
+              orderId,
+              pending.id,
+              paymentRef,
+              parseFloat(order.totalAmount),
+              competition?.type || 'scratch'
+            );
+  
+            // Get the newly created tickets
+            const orderTickets = await db
+              .select()
+              .from(tickets)
+              .where(eq(tickets.orderId, orderId));
+  
+            // Update pending payment status
+            await db.update(pendingPayments)
+              .set({ status: "completed" })
+              .where(eq(pendingPayments.id, pending.id));
+  
+            return res.json({
+              success: true,
+              orderId,
+              competitionId: order.competitionId,
+              competitionType: competition?.type || "competition",
+              tickets: orderTickets.map(t => ({ ticketNumber: t.ticketNumber })),
+              cardsPurchased: order.quantity,
             });
           }
-        } catch (err) {
-          console.error(
-            "Failed to send order confirmation email for Cashflows payment:",
-            err
-          );
-
-          // AUDIT LOG: Email failure
-          await db
-            .insert(auditLogs)
-            .values({
-              userId,
-              userName:
-                `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-                "Customer",
-              email: user?.email || "",
-              action: "email_failed",
-              competitionId,
-              description: `Failed to send confirmation email for order ${orderId}`,
-              startBalance: endBalance,
-              endBalance: endBalance,
-              createdAt: new Date(),
-            })
-            .execute();
         }
-
-        // Log transaction (cash or points)
-        const amount =
-          order.pointsAmount > 0
-            ? `-${order.pointsAmount}`
-            : `-${order.totalAmount}`;
-
-        await storage.createTransaction({
+  
+        // If we get here, just wait for webhook
+        await db.insert(auditLogs).values({
           userId,
-          type: "purchase",
-          amount,
-          description: `Purchased ${ticketCount} ticket(s)`,
-          orderId,
+          userName:
+            `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+            "Customer",
+          email: user?.email || "",
+          action: "payment_verified_waiting_webhook",
+          competitionId: order.competitionId,
+          description: `Payment verified for order ${orderId}, waiting for webhook processing`,
+          startBalance: balance,
+          endBalance: balance,
+          createdAt: new Date(),
         });
-
-        console.log("✅ Competition payment processed successfully!");
-
-        // AUDIT LOG: Final success log
-        await db
-          .insert(auditLogs)
-          .values({
-            userId,
-            userName:
-              `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-              "Customer",
-            email: user?.email || "",
-            action: "payment_complete",
-            competitionId,
-            description: `Payment completed successfully for ${ticketCount} ${competitionType} entries`,
-            startBalance: startBalance,
-            endBalance: endBalance,
-            createdAt: new Date(),
-          })
-          .execute();
-
+  
+        console.log("✅ Payment verified — webhook will process order");
+  
         return res.json({
           success: true,
-          ticketsCreated,
-          competitionId,
           orderId,
-          competitionType,
+          competitionId: order.competitionId,
+          competitionType: competition?.type || "competition",
+          waitingForWebhook: true,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error("❌ Error confirming competition payment:", error);
-
-        // AUDIT LOG: General error
+  
         try {
           const user = await storage.getUser(req.user.id);
           const balance = parseFloat(user?.balance || "0");
-
-          await db
-            .insert(auditLogs)
-            .values({
-              userId: req.user.id,
-              userName:
-                `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-                "Customer",
-              email: user?.email || "",
-              action: "payment_error",
-              description: `Error processing payment: ${error.message}`,
-              startBalance: balance,
-              endBalance: balance,
-              createdAt: new Date(),
-            })
-            .execute();
+  
+          await db.insert(auditLogs).values({
+            userId: req.user.id,
+            userName:
+              `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+              "Customer",
+            email: user?.email || "",
+            action: "payment_error",
+            description: `Error processing payment: ${error.message}`,
+            startBalance: balance,
+            endBalance: balance,
+            createdAt: new Date(),
+          });
         } catch (auditError) {
           console.error("Failed to log audit error:", auditError);
         }
-
+  
         return res
           .status(500)
           .json({ message: "Failed to confirm competition payment" });
       }
     }
   );
+  
 
   app.get(
     "/api/admin/users/audit/:id",
@@ -2762,7 +2639,6 @@ res.json({
     }
   );
 
-  // Add webhook handler for Cashflows notifications
   app.post("/api/cashflows/webhook", async (req, res) => {
     console.log("WEBHOOK HIT", req.body);
   
@@ -2802,57 +2678,79 @@ res.json({
   
       const { status, paidAmount } = normalizeCashflowsStatus(payment);
   
-      console.log("Normalized status:", { status, paidAmount });
+      console.log("Normalized status:", { 
+        status, 
+        paidAmount, 
+        paymentType: pending.paymentType,
+        metadata: pending.metadata 
+      });
   
       // ⏳ Still waiting
       if (status === "PENDING") return;
   
-      // ❌ Any non-paid = fail forever
-      // if (status !== "PAID" || paidAmount <= 0) {
-      //   await db.update(pendingPayments)
-      //     .set({
-      //       status: "failed",
-      //       updatedAt: new Date(),
-      //     })
-      //     .where(eq(pendingPayments.id, pending.id));
+      // ❌ Handle failures
+      if (status === "FAILED") {
+        await db.update(pendingPayments)
+          .set({
+            status: "failed",
+            updatedAt: new Date(),
+          })
+          .where(eq(pendingPayments.id, pending.id));
   
-      //   console.warn("Wallet credit blocked", {
-      //     paymentJobReference,
-      //     status,
-      //     paidAmount,
-      //   });
-      //   return;
-      // }
-  // ❌ Only mark failed when truly failed
-if (status === "FAILED") {
-  await db.update(pendingPayments)
-    .set({
-      status: "failed",
-      updatedAt: new Date(),
-    })
-    .where(eq(pendingPayments.id, pending.id));
-
-  console.warn("Wallet credit blocked", {
-    paymentJobReference,
-    status,
-    paidAmount,
-  });
-  return;
-}
-
-// ⏳ still waiting
-if (status !== "PAID" || paidAmount <= 0) {
-  return;
-}
-
-      // ✅ ONLY HERE money is allowed
-      await processWalletTopup(
-        pending.userId,
-        pending.id,
-        paymentReference ?? paymentJobReference,
-        paidAmount
-      );
+        // If this was an instant play order, mark it as failed
+        if (pending.orderId && pending.paymentType === 'instant_play') {
+          await db.update(orders)
+            .set({
+              status: "failed",
+              updatedAt: new Date(),
+            })
+            .where(eq(orders.id, pending.orderId));
+        }
   
+        console.warn("Payment failed", {
+          paymentJobReference,
+          status,
+          paidAmount,
+          paymentType: pending.paymentType,
+        });
+        return;
+      }
+  
+      // ⏳ Still waiting for PAID status
+      if (status !== "PAID" || paidAmount <= 0) {
+        return;
+      }
+  
+      // ✅ Payment is successful - handle based on payment type
+      if (pending.paymentType === 'wallet_topup') {
+        await processWalletTopup(
+          pending.userId,
+          pending.id,
+          paymentReference ?? paymentJobReference,
+          paidAmount
+        );
+      } else if (pending.paymentType === 'instant_play') {
+        // Get game type from metadata
+        const gameType = pending.metadata?.gameType || 
+                         pending.metadata?.competitionType || 
+                         'unknown';
+      const quantity = pending.metadata?.quantity || 1;
+        
+        await processInstantPlayPurchase(
+          pending.userId,
+          pending.orderId!,
+          pending.id,
+          pending.quantity,
+          paymentReference ?? paymentJobReference,
+          paidAmount,
+          gameType
+        );
+      } else {
+        console.warn("Unknown payment type:", pending.paymentType);
+        return;
+      }
+  
+      // Mark pending payment as completed
       await db.update(pendingPayments)
         .set({
           status: "completed",
@@ -2860,12 +2758,250 @@ if (status !== "PAID" || paidAmount <= 0) {
         })
         .where(eq(pendingPayments.id, pending.id));
   
-      console.log("✅ Wallet credited safely:", paymentJobReference);
+      console.log(`✅ ${pending.paymentType} processed successfully:`, paymentJobReference);
     } catch (err) {
       console.error("Webhook error:", err);
     }
   });
   
+  // Updated function to handle all game types
+
+  async function processInstantPlayPurchase(
+    userId: string,
+    orderId: string,
+    pendingPaymentId: string,
+    paymentRef: string,
+    quantity: number,
+    amount: number,
+    gameType: string
+  ) {
+    if (amount <= 0) {
+      throw new Error("Invalid payment amount");
+    }
+  
+    try {
+      await db.transaction(async (tx) => {
+        // 🛑 Idempotency guard
+        const [existing] = await tx
+          .select()
+          .from(transactions)
+          .where(eq(transactions.pendingPaymentId, pendingPaymentId))
+          .limit(1);
+  
+        if (existing) {
+          console.warn("Duplicate instant play transaction blocked:", pendingPaymentId);
+          return;
+        }
+  
+        // Get the order details
+        const [order] = await tx
+          .select()
+          .from(orders)
+          .where(eq(orders.id, orderId));
+  
+        if (!order) {
+          throw new Error(`Order not found: ${orderId}`);
+        }
+  
+        // Get competition
+        const [competition] = await tx
+          .select()
+          .from(competitions)
+          .where(eq(competitions.id, order.competitionId));
+  
+        // Create transaction record
+        await tx.insert(transactions).values({
+          userId,
+          type: "purchase",
+          amount: Math.round(amount * 100) / 100,
+          paymentRef,
+          pendingPaymentId,
+          orderId,
+          description: `Instant play purchase: ${competition?.title || gameType} - £${amount}`,
+          createdAt: new Date(),
+        });
+  
+        // Update order status
+        await tx.update(orders)
+          .set({
+            status: "completed",
+            updatedAt: new Date(),
+            paymentMethod: "instaplay",
+          })
+          .where(eq(orders.id, orderId));
+  
+        // Update competition sold tickets count
+        if (competition) {
+          await tx.update(competitions)
+            .set({ 
+              soldTickets: (competition.soldTickets || 0) + order.quantity,
+              updatedAt: new Date()
+            })
+            .where(eq(competitions.id, order.competitionId));
+        }
+  
+        // Generate tickets for the game (these are the entries/plays)
+        const generatedTickets = [];
+        for (let i = 0; i < order.quantity; i++) {
+          // Generate appropriate ticket number format based on game type
+          let ticketNumber;
+          switch (gameType) {
+            case 'scratch':
+              ticketNumber = `SCRATCH-${nanoid(8).toUpperCase()}`;
+              break;
+            case 'spin':
+              ticketNumber = `SPIN-${nanoid(8).toUpperCase()}`;
+              break;
+            case 'pop':
+              ticketNumber = `POP-${nanoid(8).toUpperCase()}`;
+              break;
+            case 'plinko':
+              ticketNumber = `PLINKO-${nanoid(8).toUpperCase()}`;
+              break;
+            default:
+              ticketNumber = `GAME-${nanoid(8).toUpperCase()}`;
+          }
+          
+          const [ticket] = await tx.insert(tickets).values({
+            userId,
+            competitionId: order.competitionId,
+            orderId: orderId,
+            ticketNumber,
+            isWinner: false,
+            createdAt: new Date(),
+          }).returning();
+          
+          generatedTickets.push(ticket);
+        }
+  
+        // Create game usage records based on game type
+        // These track that the user has used their plays
+        for (let i = 0; i < order.quantity; i++) {
+          switch (gameType) {
+            case 'scratch':
+              await tx.insert(scratchCardUsage).values({
+                orderId: orderId,
+                userId,
+                usedAt: new Date(),
+              });
+              break;
+            case 'spin':
+              await tx.insert(spinUsage).values({
+                orderId: orderId,
+                userId,
+                usedAt: new Date(),
+              });
+              break;
+            case 'pop':
+              await tx.insert(popUsage).values({
+                orderId: orderId,
+                userId,
+                usedAt: new Date(),
+              });
+              break;
+            case 'plinko':
+              await tx.insert(plinkoUsage).values({
+                orderId: orderId,
+                userId,
+                usedAt: new Date(),
+              });
+              break;
+          }
+        }
+  
+        // Get user for email
+        const [user] = await tx
+          .select()
+          .from(users)
+          .where(eq(users.id, userId));
+  
+        // Send confirmation email (non-blocking)
+        if (user?.email) {
+          const ticketNumbers = generatedTickets.map(t => t.ticketNumber);
+          
+          sendOrderConfirmationEmail(user.email, {
+            orderId: order.id,
+            userName: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Customer",
+            orderType: gameType,
+            itemName: competition?.title || `${gameType} Game`,
+            quantity: order.quantity,
+            totalAmount: order.totalAmount,
+            orderDate: new Date().toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            paymentMethod: "Instant Play (Card)",
+            ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
+          }).catch((err) =>
+            console.error(`Failed to send ${gameType} confirmation email:`, err)
+          );
+        }
+      });
+  
+      console.log("Instant play purchase processed successfully", {
+        userId,
+        orderId,
+        gameType,
+        quantity,
+        amount,
+      });
+    } catch (err) {
+      console.error("processInstantPlayPurchase FAILED", err);
+      throw err;
+    }
+  }
+  
+  // Updated helper to handle all game types
+  async function createGameUsageRecord(
+    tx: any,
+    { userId, orderId, gameType, quantity }: any
+  ) {
+    const usageRecords = [];
+    
+    for (let i = 0; i < quantity; i++) {
+      switch (gameType) {
+        case 'pop':
+          await tx.insert(popUsage).values({
+            orderId,
+            userId,
+            usedAt: new Date(),
+          });
+          break;
+        case 'plinko':
+          await tx.insert(plinkoUsage).values({
+            orderId,
+            userId,
+            usedAt: new Date(),
+          });
+          break;
+        case 'scratch':
+          await tx.insert(scratchCardUsage).values({
+            orderId,
+            userId,
+            usedAt: new Date(),
+          });
+          break;
+        case 'spin':
+          await tx.insert(spinUsage).values({
+            orderId,
+            userId,
+            usedAt: new Date(),
+          });
+          break;
+      }
+    }
+  }
+  
+  // Helper to generate ticket numbers
+  function generateTicketNumber(orderId: string, index: number, gameType: string): string {
+    const prefix = gameType.toUpperCase().substring(0, 3);
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+    return `${prefix}-${timestamp}-${random}-${index + 1}`;
+  }
   
 
   // Ticket purchase route
@@ -3269,7 +3405,7 @@ if (status !== "PAID" || paidAmount <= 0) {
   app.post("/api/process-spin-payment", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const { orderId, useWalletBalance = false, useRingtonePoints = false } = req.body;
+      const { orderId, useWalletBalance = false, useRingtonePoints = false,  useInstaplay = false } = req.body;
   
       // Fetch order from database
       const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
@@ -3291,6 +3427,62 @@ if (status !== "PAID" || paidAmount <= 0) {
   
       // Get user
       const [user] = await db.select().from(users).where(eq(users.id, userId));
+
+      // Handle Instaplay - direct card payment without wallet
+    if (useInstaplay) {
+      const totalAmount = Number(order.totalAmount);
+      
+      // Create Cashflows session for instant play
+      const session = await cashflows.createCompetitionPaymentSession(
+        totalAmount,
+        {
+          orderId,
+          competitionId: order.competitionId,
+          userId,
+          quantity: order.quantity.toString(),
+          paymentType: 'instant_play', // Mark as instant play
+          gameType: 'spin'
+        }
+      );
+
+      if (!session.hostedPageUrl) {
+        return res.status(500).json({ message: "Failed to create payment session" });
+      }
+
+      // Create pending payment record for instant play
+      await db.insert(pendingPayments).values({
+        userId,
+        orderId: order.id,
+        paymentJobReference: session.paymentJobReference,
+        paymentType: 'instant_play',
+        amount: totalAmount.toString(),
+        metadata: {
+          competitionId: competition.id,
+          competitionTitle: competition.title,
+          gameType: 'spin',
+          quantity: order.quantity
+        },
+        status: 'pending',
+        createdAt: new Date()
+      });
+
+      // Update order with payment info
+      await db.update(orders)
+        .set({ 
+          paymentMethod: "instaplay",
+          cashflowsAmount: totalAmount.toString(),
+          updatedAt: new Date()
+        })
+        .where(eq(orders.id, orderId));
+
+      return res.json({
+        success: true,
+        redirectUrl: session.hostedPageUrl,
+        sessionId: session.paymentJobReference,
+        paymentType: 'instaplay',
+        message: "Redirecting to payment..."
+      });
+    }
   
       const totalAmount = Number(order.totalAmount); // This already includes discount if applied!
       let remainingAmount = totalAmount;
@@ -4414,7 +4606,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   app.post("/api/process-scratch-payment", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const { orderId, useWalletBalance = false, useRingtonePoints = false } = req.body;
+      const { orderId, useWalletBalance = false, useRingtonePoints = false ,  useInstaplay = false} = req.body;
   
       // Fetch order from database
       const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
@@ -4436,6 +4628,62 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   
       // Get user
       const [user] = await db.select().from(users).where(eq(users.id, userId));
+
+      // Handle Instaplay - direct card payment without wallet
+    if (useInstaplay) {
+      const totalAmount = Number(order.totalAmount);
+      
+      // Create Cashflows session for instant play
+      const session = await cashflows.createCompetitionPaymentSession(
+        totalAmount,
+        {
+          orderId,
+          competitionId: order.competitionId,
+          userId,
+          quantity: order.quantity.toString(),
+          paymentType: 'instant_play', // Mark as instant play
+          gameType: 'scratch'
+        }
+      );
+
+      if (!session.hostedPageUrl) {
+        return res.status(500).json({ message: "Failed to create payment session" });
+      }
+
+      // Create pending payment record for instant play
+      await db.insert(pendingPayments).values({
+        userId,
+        orderId: order.id,
+        paymentJobReference: session.paymentJobReference,
+        paymentType: 'instant_play',
+        amount: totalAmount.toString(),
+        metadata: {
+          competitionId: competition.id,
+          competitionTitle: competition.title,
+          gameType: 'scratch',
+          quantity: order.quantity
+        },
+        status: 'pending',
+        createdAt: new Date()
+      });
+
+      // Update order with payment info
+      await db.update(orders)
+        .set({ 
+          paymentMethod: "instaplay",
+          cashflowsAmount: totalAmount.toString(),
+          updatedAt: new Date()
+        })
+        .where(eq(orders.id, orderId));
+
+      return res.json({
+        success: true,
+        redirectUrl: session.hostedPageUrl,
+        sessionId: session.paymentJobReference,
+        paymentType: 'instaplay',
+        message: "Redirecting to payment..."
+      });
+    }
   
       // Total already includes discount if applied (handled by apply-discount endpoint)
       const totalAmount = Number(order.totalAmount);
@@ -5763,7 +6011,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   app.post("/api/process-pop-payment", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const { orderId, useWalletBalance = false, useRingtonePoints = false } = req.body;
+      const { orderId, useWalletBalance = false, useRingtonePoints = false, useInstaplay = false } = req.body;
   
       // Fetch order from database
       const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
@@ -5785,6 +6033,61 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   
       // Get user
       const [user] = await db.select().from(users).where(eq(users.id, userId));
+      // Handle Instaplay - direct card payment without wallet
+    if (useInstaplay) {
+      const totalAmount = Number(order.totalAmount);
+      
+      // Create Cashflows session for instant play
+      const session = await cashflows.createCompetitionPaymentSession(
+        totalAmount,
+        {
+          orderId,
+          competitionId: order.competitionId,
+          userId,
+          quantity: order.quantity.toString(),
+          paymentType: 'instant_play', // Mark as instant play
+          gameType: 'pop'
+        }
+      );
+
+      if (!session.hostedPageUrl) {
+        return res.status(500).json({ message: "Failed to create payment session" });
+      }
+
+      // Create pending payment record for instant play
+      await db.insert(pendingPayments).values({
+        userId,
+        orderId: order.id,
+        paymentJobReference: session.paymentJobReference,
+        paymentType: 'instant_play',
+        amount: totalAmount.toString(),
+        metadata: {
+          competitionId: competition.id,
+          competitionTitle: competition.title,
+          gameType: 'pop',
+          quantity: order.quantity
+        },
+        status: 'pending',
+        createdAt: new Date()
+      });
+
+      // Update order with payment info
+      await db.update(orders)
+        .set({ 
+          paymentMethod: "instaplay",
+          cashflowsAmount: totalAmount.toString(),
+          updatedAt: new Date()
+        })
+        .where(eq(orders.id, orderId));
+
+      return res.json({
+        success: true,
+        redirectUrl: session.hostedPageUrl,
+        sessionId: session.paymentJobReference,
+        paymentType: 'instaplay',
+        message: "Redirecting to payment..."
+      });
+    }
   
       // Total already includes discount if applied
       const totalAmount = Number(order.totalAmount);
@@ -8491,7 +8794,7 @@ app.get("/api/plinko-order/:orderId", isAuthenticated, async (req: any, res) => 
 app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
-    const { orderId, useWalletBalance = false, useRingtonePoints = false } = req.body;
+    const { orderId, useWalletBalance = false, useRingtonePoints = false, useInstaplay = false } = req.body;
 
     // Fetch order from database
     const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
@@ -8513,6 +8816,62 @@ app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) =
 
     // Get user
     const [user] = await db.select().from(users).where(eq(users.id, userId));
+
+    // Handle Instaplay - direct card payment without wallet
+    if (useInstaplay) {
+      const totalAmount = Number(order.totalAmount);
+      
+      // Create Cashflows session for instant play
+      const session = await cashflows.createCompetitionPaymentSession(
+        totalAmount,
+        {
+          orderId,
+          competitionId: order.competitionId,
+          userId,
+          quantity: order.quantity.toString(),
+          paymentType: 'instant_play', // Mark as instant play
+          gameType: 'plinko'
+        }
+      );
+
+      if (!session.hostedPageUrl) {
+        return res.status(500).json({ message: "Failed to create payment session" });
+      }
+
+      // Create pending payment record for instant play
+      await db.insert(pendingPayments).values({
+        userId,
+        orderId: order.id,
+        paymentJobReference: session.paymentJobReference,
+        paymentType: 'instant_play',
+        amount: totalAmount.toString(),
+        metadata: {
+          competitionId: competition.id,
+          competitionTitle: competition.title,
+          gameType: 'plinko',
+          quantity: order.quantity
+        },
+        status: 'pending',
+        createdAt: new Date()
+      });
+
+      // Update order with payment info
+      await db.update(orders)
+        .set({ 
+          paymentMethod: "instaplay",
+          cashflowsAmount: totalAmount.toString(),
+          updatedAt: new Date()
+        })
+        .where(eq(orders.id, orderId));
+
+      return res.json({
+        success: true,
+        redirectUrl: session.hostedPageUrl,
+        sessionId: session.paymentJobReference,
+        paymentType: 'instaplay',
+        message: "Redirecting to payment..."
+      });
+    }
 
     // Total already includes discount if applied
     const totalAmount = Number(order.totalAmount);

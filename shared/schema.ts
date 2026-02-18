@@ -191,8 +191,11 @@ export const pendingPayments = pgTable("pending_payments", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   paymentJobReference: text("payment_job_reference").notNull().unique(),
   paymentReference: varchar("payment_reference"),
-  userId: varchar("user_id").notNull().references(() => users.id), // <- varchar to match users.id
+  userId: varchar("user_id").notNull().references(() => users.id),
+  orderId: uuid("order_id").references(() => orders.id), // New: Link to order for instant play
+  paymentType: varchar("payment_type", { enum: ["wallet_topup", "instant_play"] }).default("wallet_topup"), // New
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  metadata: jsonb("metadata"), // New: Store additional data like competition info
   status: text("status").default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
