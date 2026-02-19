@@ -283,6 +283,7 @@ export const savedBankAccounts = pgTable("saved_bank_accounts", {
 ]);
 
 
+
 export const spinUsage = pgTable("spin_usage", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   orderId: uuid("order_id").notNull().references(() => orders.id),
