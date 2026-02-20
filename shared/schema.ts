@@ -124,6 +124,22 @@ export const competitions = pgTable("competitions", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const gamePrizes = pgTable("game_prizes", {
+  id: serial("id").primaryKey(),
+
+  gameId: uuid("game_id")
+    .references(() => competitions.id)
+    .notNull(),
+
+  title: text("title").notNull(), // £1000, iPhone etc
+  value: integer("value"), // optional
+
+  totalQty: integer("total_qty").notNull(),
+  remainingQty: integer("remaining_qty").notNull(),
+
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // User tickets/entries
 export const tickets = pgTable("tickets", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),

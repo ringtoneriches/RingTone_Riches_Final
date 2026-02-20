@@ -58,7 +58,8 @@ import {
   plinkoUsage,
   plinkoWins,
   userVerifications,
-  userIpLogs
+  userIpLogs,
+  gamePrizes
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -94,6 +95,7 @@ import {
 } from "./cloudeflare/cloudeflareHelper";
 import { OTPGenerator } from "./otp";
 import { sendVerificationEmail } from "./emails/verification-email";
+import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 
 const supportUpload = createS3Uploader("support");
 const competitionUpload = createS3Uploader("competitions");
@@ -2442,6 +2444,7 @@ res.json({
   
         // Get order
         const order = await storage.getOrder(orderId);
+        console.log(order)
         if (!order || order.userId !== userId) {
           await db.insert(auditLogs).values({
             userId,
@@ -2502,6 +2505,7 @@ res.json({
               orderId,
               pending.id,
               paymentRef,
+              order.quantity,
               parseFloat(order.totalAmount),
               competition?.type || 'scratch'
             );
@@ -2516,7 +2520,16 @@ res.json({
             await db.update(pendingPayments)
               .set({ status: "completed" })
               .where(eq(pendingPayments.id, pending.id));
-  
+              console.log({
+                success: true,
+                orderId,
+                competitionId: order.competitionId,
+                competitionType: competition?.type || "competition",
+                tickets: orderTickets.map(t => ({ ticketNumber: t.ticketNumber })),
+                cardsPurchased: order.quantity,
+                quantity: order.quantity,  // Add this for consistency
+      totalAmount: order.totalAmount,
+              });
             return res.json({
               success: true,
               orderId,
@@ -2524,6 +2537,8 @@ res.json({
               competitionType: competition?.type || "competition",
               tickets: orderTickets.map(t => ({ ticketNumber: t.ticketNumber })),
               cardsPurchased: order.quantity,
+              quantity: order.quantity,  // Add this for consistency
+    totalAmount: order.totalAmount,
             });
           }
         }
@@ -2740,8 +2755,8 @@ res.json({
           pending.userId,
           pending.orderId!,
           pending.id,
-          pending.quantity,
           paymentReference ?? paymentJobReference,
+          pending.quantity,
           paidAmount,
           gameType
         );
@@ -2813,7 +2828,7 @@ res.json({
         await tx.insert(transactions).values({
           userId,
           type: "purchase",
-          amount: Math.round(amount * 100) / 100,
+          amount: -(Math.round(amount * 100) / 100),
           paymentRef,
           pendingPaymentId,
           orderId,
@@ -2874,40 +2889,6 @@ res.json({
           generatedTickets.push(ticket);
         }
   
-        // Create game usage records based on game type
-        // These track that the user has used their plays
-        for (let i = 0; i < order.quantity; i++) {
-          switch (gameType) {
-            case 'scratch':
-              await tx.insert(scratchCardUsage).values({
-                orderId: orderId,
-                userId,
-                usedAt: new Date(),
-              });
-              break;
-            case 'spin':
-              await tx.insert(spinUsage).values({
-                orderId: orderId,
-                userId,
-                usedAt: new Date(),
-              });
-              break;
-            case 'pop':
-              await tx.insert(popUsage).values({
-                orderId: orderId,
-                userId,
-                usedAt: new Date(),
-              });
-              break;
-            case 'plinko':
-              await tx.insert(plinkoUsage).values({
-                orderId: orderId,
-                userId,
-                usedAt: new Date(),
-              });
-              break;
-          }
-        }
   
         // Get user for email
         const [user] = await tx
@@ -6433,6 +6414,108 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   );
 
 
+  // PRIZE TABLE ROUTES
+
+ //
+// 🟢 GET prizes for a game
+//
+app.get("/games/admin/:gameId/prizes", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const gameId = req.params.gameId; // Keep as uuid string, don't convert to Number
+
+    const prizes = await db
+      .select()
+      .from(gamePrizes)
+      .where(eq(gamePrizes.gameId, gameId));
+
+    res.json(prizes);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch prizes" });
+  }
+});
+
+//
+// 🟢 CREATE prize
+//
+app.post("/games/admin/:gameId/prizes", isAuthenticated, isAdmin, async (req, res) => {
+  console.log("REQ BODY:", req.body);
+  console.log("GAME ID:", req.params.gameId);
+
+  try {
+    const parsed = createPrizeSchema.parse(req.body);
+    const inserted = await db
+      .insert(gamePrizes)
+      .values({
+        gameId: req.params.gameId,
+        ...parsed,
+        remainingQty: parsed.remainingQty ?? parsed.totalQty,
+      })
+      .returning();
+
+    res.json(inserted[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ message: err.message });
+  }
+});
+
+
+//
+// 🟢 UPDATE prize
+//
+app.put("/games/admin/prizes/:id", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id); // Keep as Number (prize id is still serial)
+    const parsed = updatePrizeSchema.parse(req.body);
+
+    const updated = await db
+      .update(gamePrizes)
+      .set(parsed)
+      .where(eq(gamePrizes.id, id))
+      .returning();
+
+    res.json(updated[0]);
+  } catch (err: any) {
+    console.error(err);
+    res.status(400).json({ message: err.message });
+  }
+});
+
+//
+// 🔴 CLEAR prize table (PER GAME)
+//
+app.delete("/games/admin/:gameId/prizes", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const gameId = req.params.gameId; // Keep as uuid string
+
+    await db
+      .delete(gamePrizes)
+      .where(eq(gamePrizes.gameId, gameId));
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to clear prize table" });
+  }
+});
+
+app.get("/games/:gameId/prizes", isAuthenticated, async (req, res) => {
+  try {
+    const gameId = req.params.gameId; // Keep as uuid string
+
+    const prizes = await db
+      .select()
+      .from(gamePrizes)
+      .where(eq(gamePrizes.gameId, gameId));
+
+    res.setHeader("Cache-Control", "no-store");
+    res.json(prizes);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch prizes" });
+  }
+});
 
   // discount routes
   // CREATE DISCOUNT CODE

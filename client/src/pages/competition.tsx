@@ -22,6 +22,7 @@ import { useRef } from "react";
 import CountdownTimer from "./countdownTimer";
 import { Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
+import { GamePrizesDisplay } from "@/components/game-prize";
 
 export default function CompetitionPage() {
   const rangeRef = useRef<HTMLDivElement | null>(null);
@@ -960,6 +961,14 @@ const purchaseTicketMutation = useMutation({
     </div>
   </div>
 </section>
+
+{ competition.type !== "instant" &&
+
+  <GamePrizesDisplay 
+            gameId={competition.id} 
+            
+          />
+}
 
       {/* Call to Action */}
       <section className="bg-gradient-to-r from-blue-900 via-purple-900 to-pink-900 py-12 md:py-16 relative overflow-hidden">
