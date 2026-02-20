@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { GamePrizesDisplay } from "./game-prize";
 
 interface UnifiedBillingProps {
   orderId: string;
@@ -516,6 +517,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
     );
 
   return (
+    <>
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Payment Section */}
@@ -877,6 +879,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
             )}
           </Button>
 
+
           {/* Instaplay benefits - Only show for games */}
           {isGame && selectedMethods.instaplay && (
             <div className="bg-gradient-to-br from-purple-900/20 to-indigo-900/20 rounded-2xl p-4 border border-purple-500/20">
@@ -894,6 +897,8 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
               </div>
             </div>
           )}
+
+
         </div>
 
         {/* Sidebar - Payment Breakdown & Security */}
@@ -1042,6 +1047,8 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
         </div>
       </div>
 
+      
+
       {/* Discount Dialog */}
       <Dialog open={showDiscountDialog} onOpenChange={setShowDiscountDialog}>
         <DialogContent className="bg-gradient-to-br from-zinc-900 to-zinc-950 border-yellow-500/30 text-white max-w-md rounded-2xl shadow-2xl">
@@ -1178,5 +1185,8 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
         </DialogContent>
       </Dialog>
     </div>
+  
+    </>
+
   );
 }

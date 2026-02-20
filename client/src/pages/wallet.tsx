@@ -2513,33 +2513,33 @@ const handleDeleteBankAccount = (
                       How it works:
                     </h3>
                     <ul className="space-y-2 text-sm text-gray-300">
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500">•</span>
-                        <span>
-                          Share your unique referral link with friends
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500">•</span>
-                        <span>
-                          They sign up using your link and make their first wallet top-up
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500">•</span>
-                        <span>
-                          Your friend gets 100 Ringtone Points as a welcome
-                          bonus
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500">•</span>
-                        <span>
-                          Unlimited referrals - the more friends, the more you
-                          earn!
-                        </span>
-                      </li>
-                    </ul>
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-500">•</span>
+                      <span>
+                        Share your unique referral link with friends
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-500">•</span>
+                      <span>
+                        They sign up using your link and make their first wallet top-up
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-500">•</span>
+                      <span>
+                        Your friend gets 100 Ringtone Points as a welcome bonus, and you
+                        receive 200 Ringtone Points
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-500">•</span>
+                      <span>
+                        Unlimited referrals - the more friends, the more you earn!
+                      </span>
+                    </li>
+                  </ul>
+
                   </div>
                 </CardContent>
               </Card>

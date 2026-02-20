@@ -100,7 +100,7 @@ const CompactFacebookCTA = () => {
               <div className="flex items-center gap-2 px-3 py-1 bg-gray-800/50 rounded-full border border-yellow-500/20 group-hover:border-yellow-500/40 transition-all">
                 <Users className="w-4 h-4 text-yellow-400" />
                 <span className="text-white font-semibold">
-               7.5K
+               7.6K
                 </span>
                 {/* {loading ? (
                   <span className="inline-block w-8 h-4 bg-gray-700 rounded animate-pulse" />

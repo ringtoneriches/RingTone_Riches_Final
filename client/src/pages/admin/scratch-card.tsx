@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, Trophy, Upload, Settings, Archive, ArchiveRestore } from "lucide-react";
+import { Plus, Edit, Trash2, Trophy, Upload, Settings, Archive, ArchiveRestore, Gift } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -28,6 +28,7 @@ import PrizeConfigInstant, {
   InstantPrizeData,
 } from "@/components/admin/prize-config-instant";
 import { Textarea } from "@/components/ui/textarea";
+import { Link } from "wouter";
 
 interface CompetitionFormData {
   title: string;
@@ -787,6 +788,17 @@ export default function AdminScratchCard() {
                         <Archive className="w-4 h-4" />
                     
                       </Button>
+                      <Link to={`/admin/prize-table/${competition.id}`}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 text-purple-500 hover:text-purple-600 hover:bg-purple-50"
+                        data-testid={`button-prizes-${competition.id}`}
+                      >
+                        <Gift  className="w-4 h-4" />
+                        <span className="hidden sm:inline">Prizes</span>
+                      </Button>
+                    </Link>
                     </div>
                   </div>
                 </div>
