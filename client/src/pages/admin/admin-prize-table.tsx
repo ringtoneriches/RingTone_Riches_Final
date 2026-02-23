@@ -3,7 +3,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, Gift, ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Edit, Trash2, Gift, ArrowLeft, ChevronDown, ChevronUp, Award } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -28,6 +28,7 @@ import { Link, useParams } from "wouter";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Competition } from "@shared/schema";
 
 // Types
 interface GamePrize {
@@ -254,6 +255,12 @@ export default function AdminPrizeTable() {
     enabled: !!gameId,
   });
 
+  const { data: competition } = useQuery<Competition>({
+    queryKey: ["/api/competitions", gameId],
+    enabled: !!gameId,
+  });
+
+  console.log(competition)
   // Create prize mutation
   const createMutation = useMutation({
     mutationFn: async (data: CreatePrizeFormData) => {
@@ -330,18 +337,18 @@ export default function AdminPrizeTable() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Link to="/admin/ringtone-plinko">
+            {/* <Link to="/admin/ringtone-plinko">
               <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-            </Link>
+            </Link> */}
             <div className="min-w-0 flex-1">
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground truncate">
                 Prize Table
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Manage prizes for games
-              </p>
+    {competition?.title}
+</p>
             </div>
           </div>
 

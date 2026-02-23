@@ -690,154 +690,6 @@ export const isAdmin = (req: any, res: any, next: any) => {
   next();
 };
 
-// ✅ Top of the file or after imports
-// export async function recheckPendingPayments() {
-//   // ⏱️ Time window
-//   const minAge = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
-//   const maxAge = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
-
-//   const pendings = await db.query.pendingPayments.findMany({
-//     where: (p, { and, eq, gte, lte }) =>
-//       and(
-//         eq(p.status, "pending"),
-//         gte(p.createdAt, maxAge), // newer than 24h
-//         lte(p.createdAt, minAge) // older than 5m
-//       ),
-//   });
-
-//   console.log(`🔎 Rechecking ${pendings.length} eligible pending payments`);
-
-//   for (const p of pendings) {
-//     try {
-//       if (!p.paymentReference) {
-//         console.log(
-//           "⚠️ Skipping pending without paymentReference:",
-//           p.paymentJobReference
-//         );
-//         continue;
-//       }
-
-//       let payment;
-//       try {
-//         payment = await cashflows.getPaymentStatus(
-//           p.paymentJobReference,
-//           p.paymentReference
-//         );
-//       } catch (err) {
-//         // Handle 404 - payment might be completed and archived
-//         if (err.response?.status === 404) {
-//           console.log(
-//             `📭 Payment ${p.paymentJobReference} not found (likely completed)`
-//           );
-
-//           // Check if we have a transaction for this payment
-//           const existingTransaction = await db.query.transactions.findFirst({
-//             where: (t, { eq }) => eq(t.paymentRef, p.paymentReference),
-//           });
-
-//           if (existingTransaction) {
-//             console.log(
-//               `✅ Found existing transaction, marking as completed: ${p.paymentJobReference}`
-//             );
-//             await db
-//               .update(pendingPayments)
-//               .set({
-//                 status: "completed",
-//                 updatedAt: new Date(),
-//               })
-//               .where(eq(pendingPayments.id, p.id));
-//           } else {
-//             console.log(
-//               `❓ Payment ${p.paymentJobReference} not found and no transaction exists`
-//             );
-//           }
-//           continue;
-//         }
-//         throw err;
-//       }
-
-//       const { status, paidAmount } = normalizeCashflowsStatus(payment);
-
-//       if (status !== "PAID") continue;
-
-//       // 🔒 SAFETY CHECKS
-//       if (!paidAmount || paidAmount <= 0) {
-//         console.warn("❌ Invalid paid amount (cron)", p.paymentJobReference);
-//         continue;
-//       }
-
-//       if (paidAmount !== Number(p.amount)) {
-//         console.error("❌ Amount mismatch (cron)", {
-//           expected: p.amount,
-//           paid: paidAmount,
-//         });
-//         continue;
-//       }
-
-//       await processWalletTopup(p.userId, p.paymentReference, paidAmount);
-
-//       await db
-//         .update(pendingPayments)
-//         .set({
-//           status: "completed",
-//           updatedAt: new Date(),
-//         })
-//         .where(eq(pendingPayments.id, p.id));
-
-//       console.log("♻️ Recovered payment:", p.paymentJobReference);
-//     } catch (err) {
-//       console.error("❌ Recheck error:", p.paymentJobReference, err.message);
-//     }
-//   }
-// }
-
-// export async function cleanup404Payments() {
-//   // Find payments that are pending but keep getting 404s
-//   // Mark them as "archived" after 7 days
-//   const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-//   const oldPending = await db.query.pendingPayments.findMany({
-//     where: (p, { and, eq, lte }) =>
-//       and(
-//         eq(p.status, "pending"),
-//         lte(p.createdAt, cutoff),
-//         // Optional: only those with paymentReference
-//         sql`${p.paymentReference} IS NOT NULL`
-//       ),
-//   });
-
-//   console.log(`🧹 Found ${oldPending.length} old pending payments to cleanup`);
-
-//   for (const p of oldPending) {
-//     // Check if transaction exists (payment was processed)
-//     const transaction = await db.query.transactions.findFirst({
-//       where: (t, { eq }) => eq(t.paymentRef, p.paymentReference),
-//     });
-
-//     if (transaction) {
-//       // Transaction exists, so payment was processed
-//       await db
-//         .update(pendingPayments)
-//         .set({
-//           status: "completed",
-//           updatedAt: new Date(),
-//         })
-//         .where(eq(pendingPayments.id, p.id));
-//       console.log(`✅ Cleaned up completed payment: ${p.paymentJobReference}`);
-//     } else {
-//       // No transaction, mark as expired
-//       await db
-//         .update(pendingPayments)
-//         .set({
-//           status: "expired",
-//           updatedAt: new Date(),
-//         })
-//         .where(eq(pendingPayments.id, p.id));
-//       console.log(`📭 Marked expired payment: ${p.paymentJobReference}`);
-//     }
-//   }
-// }
-
 export function getClientIp(req: any) {
   return (
     req.headers["cf-connecting-ip"] || // Cloudflare
@@ -958,7 +810,7 @@ async function processWalletTopup(
 
   try {
     await db.transaction(async (tx) => {
-      // 🛑 Idempotency guard
+      // 🛑 Check for existing transaction first
       const existing = await tx.query.transactions.findFirst({
         where: (t, { eq }) => eq(t.pendingPaymentId, pendingPaymentId),
       });
@@ -968,6 +820,25 @@ async function processWalletTopup(
         return;
       }
 
+      // Check pending payment status with FOR UPDATE lock using SQL
+      const pendingResult = await tx.execute<{
+        rows: Array<{ id: string; status: string }>
+      }>(sql`
+        SELECT id, status 
+        FROM pending_payments 
+        WHERE id = ${pendingPaymentId}
+        FOR UPDATE
+      `);
+      
+      // Handle the result properly - depending on your Drizzle version
+      const pending = Array.isArray(pendingResult) ? pendingResult[0] : pendingResult.rows?.[0];
+
+      if (!pending || pending.status !== "pending") {
+        console.warn("Pending payment not found or already processed:", pendingPaymentId);
+        return;
+      }
+
+      // Insert transaction
       await tx.insert(transactions).values({
         userId,
         type: "deposit",
@@ -975,67 +846,89 @@ async function processWalletTopup(
         paymentRef,
         pendingPaymentId,
         description: `Cashflows wallet top-up £${amount}`,
+        status: "completed",
+        createdAt: new Date(),
       });
 
+      // Update user balance
       await tx.execute(sql`
         UPDATE users
         SET balance = balance + ${amount}
         WHERE id = ${userId}
       `);
+
+      // Update pending payment status
+      await tx.update(pendingPayments)
+        .set({
+          status: "completed",
+          updatedAt: new Date(),
+        })
+        .where(eq(pendingPayments.id, pendingPaymentId));
+
+      console.log("Wallet credited successfully", {
+        userId,
+        pendingPaymentId,
+        amount,
+      });
     });
 
-    console.log("Wallet credited successfully", {
-      userId,
-      pendingPaymentId,
-      amount,
-    });
+    // Trigger referral bonus OUTSIDE the transaction
+    try {
+      await checkAndAwardReferralBonus(userId, amount);
+    } catch (referralError) {
+      // Log but don't fail the transaction
+      console.error("Referral bonus error:", referralError);
+    }
   } catch (err) {
     console.error("processWalletTopup FAILED", err);
     throw err;
   }
 }
 
-// In your order creation endpoint
-async function createInstantPlayOrder(userId: string, competitionId: string, quantity: number) {
-  return await db.transaction(async (tx) => {
-    // Get competition details
-    const competition = await tx.query.competitions.findFirst({
-      where: (c, { eq }) => eq(c.id, competitionId),
-    });
+// Separate function for referral bonus
+async function checkAndAwardReferralBonus(userId: string, amount: number) {
+  const user = await storage.getUser(userId);
+  
+  if (!user || !user.referredBy) return;
 
-    if (!competition) {
-      throw new Error("Competition not found");
+  // Check if this is the user's FIRST EVER completed deposit
+  const userTransactions = await storage.getUserTransactions(userId);
+  const completedTopups = userTransactions.filter(
+    (tx) => tx.type === "deposit" && tx.status === "completed"
+  );
+
+  // Count only this transaction? Need to be careful
+  if (completedTopups.length === 1) {
+    const referrer = await storage.getUser(user.referredBy);
+
+    if (referrer) {
+      const bonusAmount = 2.0;
+
+      await db.transaction(async (tx) => {
+        // Add £2 to referrer balance
+        await tx.execute(sql`
+          UPDATE users
+          SET balance = balance + ${bonusAmount}
+          WHERE id = ${referrer.id}
+        `);
+
+        // Create referral transaction
+        await tx.insert(transactions).values({
+          userId: referrer.id,
+          amount: bonusAmount,
+          type: "referral",
+          status: "completed",
+          description: `Referral reward: ${user.email} made their first wallet top-up`,
+          paymentMethod: "bonus",
+          createdAt: new Date(),
+        });
+      });
+
+      console.log(
+        `🎉 Referral bonus awarded: £${bonusAmount} to ${referrer.email} for ${user.email}'s first top-up`
+      );
     }
-
-    const totalAmount = competition.ticketPrice * quantity;
-
-    // Create order
-    const [order] = await tx.insert(orders).values({
-      userId,
-      competitionId,
-      quantity,
-      totalAmount,
-      paymentMethod: "card_instant",
-      status: "pending",
-      remainingPlays: quantity,
-    }).returning();
-
-    // Create pending payment record
-    await tx.insert(pendingPayments).values({
-      userId,
-      orderId: order.id,
-      paymentType: "instant_play",
-      amount: totalAmount,
-      metadata: {
-        competitionId,
-        competitionTitle: competition.title,
-        competitionType: competition.type,
-        quantity,
-      },
-    });
-
-    return order;
-  });
+  }
 }
 
 
@@ -2464,6 +2357,9 @@ res.json({
             .json({ message: "Order not found or belongs to wrong user" });
         }
   
+        // Get competition
+        const competition = await storage.getCompetition(order.competitionId);
+  
         // Check if order is already completed
         if (order.status === "completed") {
           console.log("⚠️ Order already completed");
@@ -2478,29 +2374,48 @@ res.json({
             success: true,
             orderId,
             competitionId: order.competitionId,
-            competitionType: "competition",
+            competitionType: competition?.type || "competition",
             tickets: orderTickets.map(t => ({ ticketNumber: t.ticketNumber })),
             cardsPurchased: order.quantity,
+            quantity: order.quantity,
+            totalAmount: order.totalAmount,
           });
         }
   
-        // Get competition
-        const competition = await storage.getCompetition(order.competitionId);
-  
-        // If this is an instant play payment, we need to wait for or trigger the processing
+        // For instant play payments, generate tickets immediately
         if (order.paymentMethod === "instaplay") {
-          // Check if there's a pending payment record
-          const pending = await db.query.pendingPayments.findFirst({
+          // Check if there's a pending payment record or create one
+          let pending = await db.query.pendingPayments.findFirst({
             where: (p, { eq, and }) => and(
               eq(p.paymentJobReference, paymentJobRef),
               eq(p.status, "pending")
             ),
           });
   
+          // Create pending payment if it doesn't exist
+          if (!pending) {
+            const [newPending] = await db.insert(pendingPayments).values({
+              userId,
+              orderId,
+              paymentType: "instant_play",
+              paymentJobReference: paymentJobRef,
+              paymentReference: paymentRef,
+              amount: parseFloat(order.totalAmount),
+              status: "pending",
+              metadata: {
+                gameType: competition?.type || 'scratch',
+                competitionType: competition?.type,
+              },
+              createdAt: new Date(),
+            }).returning();
+            
+            pending = newPending;
+          }
+  
           if (pending) {
-            // Process the instant play purchase immediately instead of waiting for webhook
-            // This ensures the user gets their tickets right away
-            await processInstantPlayPurchase(
+            // Process the instant play purchase IMMEDIATELY
+            // This creates tickets right away without waiting for webhook
+            const tickets = await processInstantPlayPurchase(
               userId,
               orderId,
               pending.id,
@@ -2510,40 +2425,50 @@ res.json({
               competition?.type || 'scratch'
             );
   
-            // Get the newly created tickets
-            const orderTickets = await db
-              .select()
-              .from(tickets)
-              .where(eq(tickets.orderId, orderId));
-  
-            // Update pending payment status
+            // Update pending payment status to completed
             await db.update(pendingPayments)
-              .set({ status: "completed" })
+              .set({ 
+                status: "completed",
+                updatedAt: new Date()
+              })
               .where(eq(pendingPayments.id, pending.id));
-              console.log({
-                success: true,
-                orderId,
-                competitionId: order.competitionId,
-                competitionType: competition?.type || "competition",
-                tickets: orderTickets.map(t => ({ ticketNumber: t.ticketNumber })),
-                cardsPurchased: order.quantity,
-                quantity: order.quantity,  // Add this for consistency
-      totalAmount: order.totalAmount,
-              });
+  
+            // Log success
+            await db.insert(auditLogs).values({
+              userId,
+              userName:
+                `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+                "Customer",
+              email: user?.email || "",
+              action: "instant_play_completed",
+              competitionId: order.competitionId,
+              description: `Instant play purchase completed immediately: ${order.quantity} tickets for £${order.totalAmount}`,
+              startBalance: balance,
+              endBalance: balance,
+              createdAt: new Date(),
+            });
+  
+            console.log("✅ Instant play tickets generated immediately:", {
+              orderId,
+              ticketCount: tickets.length,
+              gameType: competition?.type
+            });
+  
             return res.json({
               success: true,
               orderId,
               competitionId: order.competitionId,
               competitionType: competition?.type || "competition",
-              tickets: orderTickets.map(t => ({ ticketNumber: t.ticketNumber })),
+              tickets: tickets.map(t => ({ ticketNumber: t.ticketNumber })),
               cardsPurchased: order.quantity,
-              quantity: order.quantity,  // Add this for consistency
-    totalAmount: order.totalAmount,
+              quantity: order.quantity,
+              totalAmount: order.totalAmount,
+              generatedImmediately: true
             });
           }
         }
   
-        // If we get here, just wait for webhook
+        // For non-instant play or fallback, wait for webhook
         await db.insert(auditLogs).values({
           userId,
           userName:
@@ -2663,9 +2588,28 @@ res.json({
     res.status(200).json({ received: true });
   
     try {
-      const pending = await db.query.pendingPayments.findFirst({
-        where: (p, { eq }) => eq(p.paymentJobReference, paymentJobReference),
-      });
+      // Add small delay to prevent race conditions
+      await new Promise(resolve => setTimeout(resolve, 100));
+  
+      // Find pending payment - REMOVED quantity from SELECT
+      const pendingResult = await db.execute<{
+        rows: Array<{
+          id: string;
+          userId: string;
+          status: string;
+          paymentType: string;
+          orderId: string | null;
+          metadata: any;
+        }>
+      }>(sql`
+        SELECT id, user_id as "userId", status, payment_type as "paymentType", 
+               order_id as "orderId", metadata
+        FROM pending_payments 
+        WHERE payment_job_reference = ${paymentJobReference}
+        LIMIT 1
+      `);
+      
+      const pending = Array.isArray(pendingResult) ? pendingResult[0] : pendingResult.rows?.[0];
   
       if (!pending) {
         console.warn("No pending payment found:", paymentJobReference);
@@ -2680,9 +2624,11 @@ res.json({
   
       // Save payment reference once
       if (!pending.paymentReference && paymentReference) {
-        await db.update(pendingPayments)
-          .set({ paymentReference })
-          .where(eq(pendingPayments.id, pending.id));
+        await db.execute(sql`
+          UPDATE pending_payments 
+          SET payment_reference = ${paymentReference}
+          WHERE id = ${pending.id}
+        `);
       }
   
       // 🔍 Ask Cashflows for truth
@@ -2705,21 +2651,18 @@ res.json({
   
       // ❌ Handle failures
       if (status === "FAILED") {
-        await db.update(pendingPayments)
-          .set({
-            status: "failed",
-            updatedAt: new Date(),
-          })
-          .where(eq(pendingPayments.id, pending.id));
+        await db.execute(sql`
+          UPDATE pending_payments 
+          SET status = 'failed', updated_at = NOW()
+          WHERE id = ${pending.id}
+        `);
   
-        // If this was an instant play order, mark it as failed
         if (pending.orderId && pending.paymentType === 'instant_play') {
-          await db.update(orders)
-            .set({
-              status: "failed",
-              updatedAt: new Date(),
-            })
-            .where(eq(orders.id, pending.orderId));
+          await db.execute(sql`
+            UPDATE orders 
+            SET status = 'failed', updated_at = NOW()
+            WHERE id = ${pending.orderId}
+          `);
         }
   
         console.warn("Payment failed", {
@@ -2745,33 +2688,37 @@ res.json({
           paidAmount
         );
       } else if (pending.paymentType === 'instant_play') {
-        // Get game type from metadata
-        const gameType = pending.metadata?.gameType || 
-                         pending.metadata?.competitionType || 
-                         'unknown';
-      const quantity = pending.metadata?.quantity || 1;
-        
-        await processInstantPlayPurchase(
-          pending.userId,
-          pending.orderId!,
-          pending.id,
-          paymentReference ?? paymentJobReference,
-          pending.quantity,
-          paidAmount,
-          gameType
-        );
+        // Get quantity from orders table since it's not in pending_payments
+        if (pending.orderId) {
+          const orderResult = await db.execute<{
+            rows: Array<{ quantity: number }>
+          }>(sql`
+            SELECT quantity 
+            FROM orders 
+            WHERE id = ${pending.orderId}
+          `);
+          
+          const order = Array.isArray(orderResult) ? orderResult[0] : orderResult.rows?.[0];
+          const quantity = order?.quantity || 1;
+          
+          const gameType = pending.metadata?.gameType || 
+                           pending.metadata?.competitionType || 
+                           'unknown';
+          
+          await processInstantPlayPurchase(
+            pending.userId,
+            pending.orderId,
+            pending.id,
+            paymentReference ?? paymentJobReference,
+            quantity,
+            paidAmount,
+            gameType
+          );
+        }
       } else {
         console.warn("Unknown payment type:", pending.paymentType);
         return;
       }
-  
-      // Mark pending payment as completed
-      await db.update(pendingPayments)
-        .set({
-          status: "completed",
-          updatedAt: new Date(),
-        })
-        .where(eq(pendingPayments.id, pending.id));
   
       console.log(`✅ ${pending.paymentType} processed successfully:`, paymentJobReference);
     } catch (err) {
@@ -2788,115 +2735,134 @@ res.json({
     paymentRef: string,
     quantity: number,
     amount: number,
-    gameType: string
+    gameType: string,
+    tx?: any // Make transaction optional for webhook usage
   ) {
     if (amount <= 0) {
       throw new Error("Invalid payment amount");
     }
   
-    try {
-      await db.transaction(async (tx) => {
-        // 🛑 Idempotency guard
-        const [existing] = await tx
-          .select()
-          .from(transactions)
-          .where(eq(transactions.pendingPaymentId, pendingPaymentId))
-          .limit(1);
+    // If tx is provided, use it (for webhook), otherwise create new transaction
+    const executeInTx = async (transaction: any) => {
+      // 🛑 Idempotency guard
+      const [existing] = await transaction
+        .select()
+        .from(transactions)
+        .where(eq(transactions.pendingPaymentId, pendingPaymentId))
+        .limit(1);
   
-        if (existing) {
-          console.warn("Duplicate instant play transaction blocked:", pendingPaymentId);
-          return;
-        }
+      if (existing) {
+        console.warn("Duplicate instant play transaction blocked:", pendingPaymentId);
+        return;
+      }
   
-        // Get the order details
-        const [order] = await tx
-          .select()
-          .from(orders)
-          .where(eq(orders.id, orderId));
+      // Get the order details
+      const [order] = await transaction
+        .select()
+        .from(orders)
+        .where(eq(orders.id, orderId));
   
-        if (!order) {
-          throw new Error(`Order not found: ${orderId}`);
-        }
+      if (!order) {
+        throw new Error(`Order not found: ${orderId}`);
+      }
   
-        // Get competition
-        const [competition] = await tx
-          .select()
-          .from(competitions)
-          .where(eq(competitions.id, order.competitionId));
+      // Get competition
+      const [competition] = await transaction
+        .select()
+        .from(competitions)
+        .where(eq(competitions.id, order.competitionId));
   
-        // Create transaction record
-        await tx.insert(transactions).values({
-          userId,
-          type: "purchase",
-          amount: -(Math.round(amount * 100) / 100),
-          paymentRef,
-          pendingPaymentId,
-          orderId,
-          description: `Instant play purchase: ${competition?.title || gameType} - £${amount}`,
-          createdAt: new Date(),
-        });
+      // Create transaction record
+      await transaction.insert(transactions).values({
+        userId,
+        type: "purchase",
+        amount: -(Math.round(amount * 100) / 100),
+        paymentRef,
+        pendingPaymentId,
+        orderId,
+        description: `Instant play purchase: ${competition?.title || gameType} - £${amount}`,
+        status: "completed",
+        createdAt: new Date(),
+      });
   
-        // Update order status
-        await tx.update(orders)
-          .set({
-            status: "completed",
-            updatedAt: new Date(),
-            paymentMethod: "instaplay",
+      // Update order status
+      await transaction.update(orders)
+        .set({
+          status: "completed",
+          updatedAt: new Date(),
+          paymentMethod: "instaplay",
+        })
+        .where(eq(orders.id, orderId));
+  
+      // Update competition sold tickets count
+      if (competition) {
+        await transaction.update(competitions)
+          .set({ 
+            soldTickets: (competition.soldTickets || 0) + order.quantity,
+            updatedAt: new Date()
           })
-          .where(eq(orders.id, orderId));
+          .where(eq(competitions.id, order.competitionId));
+      }
   
-        // Update competition sold tickets count
-        if (competition) {
-          await tx.update(competitions)
-            .set({ 
-              soldTickets: (competition.soldTickets || 0) + order.quantity,
-              updatedAt: new Date()
-            })
-            .where(eq(competitions.id, order.competitionId));
+      // Generate tickets for the game (these are the entries/plays)
+      const generatedTickets = [];
+      for (let i = 0; i < order.quantity; i++) {
+        // Generate appropriate ticket number format based on game type
+        let ticketNumber;
+        switch (gameType) {
+          case 'scratch':
+            ticketNumber = `SCRATCH-${nanoid(8).toUpperCase()}`;
+            break;
+          case 'spin':
+            ticketNumber = `SPIN-${nanoid(8).toUpperCase()}`;
+            break;
+          case 'pop':
+            ticketNumber = `POP-${nanoid(8).toUpperCase()}`;
+            break;
+          case 'plinko':
+            ticketNumber = `PLINKO-${nanoid(8).toUpperCase()}`;
+            break;
+          default:
+            ticketNumber = `GAME-${nanoid(8).toUpperCase()}`;
         }
+        
+        const [ticket] = await transaction.insert(tickets).values({
+          userId,
+          competitionId: order.competitionId,
+          orderId: orderId,
+          ticketNumber,
+          isWinner: false,
+          createdAt: new Date(),
+        }).returning();
+        
+        generatedTickets.push(ticket);
+      }
   
-        // Generate tickets for the game (these are the entries/plays)
-        const generatedTickets = [];
-        for (let i = 0; i < order.quantity; i++) {
-          // Generate appropriate ticket number format based on game type
-          let ticketNumber;
-          switch (gameType) {
-            case 'scratch':
-              ticketNumber = `SCRATCH-${nanoid(8).toUpperCase()}`;
-              break;
-            case 'spin':
-              ticketNumber = `SPIN-${nanoid(8).toUpperCase()}`;
-              break;
-            case 'pop':
-              ticketNumber = `POP-${nanoid(8).toUpperCase()}`;
-              break;
-            case 'plinko':
-              ticketNumber = `PLINKO-${nanoid(8).toUpperCase()}`;
-              break;
-            default:
-              ticketNumber = `GAME-${nanoid(8).toUpperCase()}`;
-          }
-          
-          const [ticket] = await tx.insert(tickets).values({
-            userId,
-            competitionId: order.competitionId,
-            orderId: orderId,
-            ticketNumber,
-            isWinner: false,
-            createdAt: new Date(),
-          }).returning();
-          
-          generatedTickets.push(ticket);
-        }
+      return { order, competition, generatedTickets };
+    };
   
+    try {
+      let result;
+      if (tx) {
+        // Use provided transaction (for webhook)
+        result = await executeInTx(tx);
+      } else {
+        // Create new transaction (for direct calls)
+        result = await db.transaction(async (transaction) => {
+          return await executeInTx(transaction);
+        });
+      }
   
+      // Send confirmation email (non-blocking) - do this outside transaction
+      if (result) {
+        const { order, competition, generatedTickets } = result;
+        
         // Get user for email
-        const [user] = await tx
+        const [user] = await db
           .select()
           .from(users)
           .where(eq(users.id, userId));
   
-        // Send confirmation email (non-blocking)
         if (user?.email) {
           const ticketNumbers = generatedTickets.map(t => t.ticketNumber);
           
@@ -2920,7 +2886,7 @@ res.json({
             console.error(`Failed to send ${gameType} confirmation email:`, err)
           );
         }
-      });
+      }
   
       console.log("Instant play purchase processed successfully", {
         userId,
@@ -2929,6 +2895,8 @@ res.json({
         quantity,
         amount,
       });
+  
+      return result?.generatedTickets || [];
     } catch (err) {
       console.error("processInstantPlayPurchase FAILED", err);
       throw err;
@@ -7720,6 +7688,32 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
     const { paymentJobRef, paymentRef } = req.body;
     const userId = req.user.id;
 
+    if (!paymentJobRef) {
+      return res.status(400).json({
+        message: "Missing paymentJobRef"
+      });
+    }
+
+    // Check if already processed
+    const existingResult = await db.execute<{
+      rows: Array<{ id: string }>
+    }>(sql`
+      SELECT id 
+      FROM transactions 
+      WHERE payment_ref = ${paymentRef ?? paymentJobRef} 
+      AND user_id = ${userId}
+      LIMIT 1
+    `);
+    
+    const existingTx = Array.isArray(existingResult) ? existingResult[0] : existingResult.rows?.[0];
+
+    if (existingTx) {
+      return res.json({
+        status: "PAID",
+        message: "Payment already processed.",
+      });
+    }
+
     const payment = await cashflows.getPaymentStatus(
       paymentJobRef,
       paymentRef ?? undefined
@@ -7727,16 +7721,19 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
 
     const { status, paidAmount } = normalizeCashflowsStatus(payment);
 
-    // ✅ Only proceed for real paid payments
     if (status === "PAID" && paidAmount > 0) {
-      let didProcessTopup = false;
+      // Find pending payment
+      const pendingResult = await db.execute<{
+        rows: Array<{ id: string; userId: string; status: string }>
+      }>(sql`
+        SELECT id, user_id as "userId", status 
+        FROM pending_payments 
+        WHERE payment_job_reference = ${paymentJobRef}
+        LIMIT 1
+      `);
+      
+      const pending = Array.isArray(pendingResult) ? pendingResult[0] : pendingResult.rows?.[0];
 
-      // 🔍 Find pending payment
-      const pending = await db.query.pendingPayments.findFirst({
-        where: (p, { eq }) => eq(p.paymentJobReference, paymentJobRef),
-      });
-
-      // ✅ Fallback wallet credit (idempotent)
       if (pending && pending.status === "pending") {
         await processWalletTopup(
           pending.userId,
@@ -7745,74 +7742,18 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
           paidAmount
         );
 
-        await db.update(pendingPayments)
-          .set({
-            status: "completed",
-            updatedAt: new Date(),
-          })
-          .where(eq(pendingPayments.id, pending.id));
-
-        didProcessTopup = true;
+        return res.json({
+          status: "PAID",
+          message: "Payment received. Wallet updated.",
+        });
+      } else {
+        return res.json({
+          status: "PAID",
+          message: "Payment already processed.",
+        });
       }
-
-      // ⭐⭐ Referral bonus — ONLY when we actually processed first top-up
-      if (didProcessTopup) {
-        try {
-          const user = await storage.getUser(userId);
-
-          if (user && user.referredBy) {
-            // Check if this is the user's FIRST EVER completed deposit
-            const userTransactions = await storage.getUserTransactions(userId);
-            const completedTopups = userTransactions.filter(
-              (tx) => tx.type === "deposit" && tx.status === "completed"
-            );
-
-            if (completedTopups.length === 1) {
-              const referrer = await storage.getUser(user.referredBy);
-
-              if (referrer) {
-                const bonusAmount = 2.0;
-
-                // Add £2 to referrer balance
-                const newBalance =
-                  parseFloat(referrer.balance || "0") + bonusAmount;
-
-                await storage.updateUserBalance(
-                  referrer.id,
-                  newBalance.toFixed(2)
-                );
-
-                // Create referral transaction
-                await storage.createTransaction({
-                  userId: referrer.id,
-                  amount: bonusAmount.toFixed(2),
-                  type: "referral",
-                  status: "completed",
-                  description: `Referral reward: ${user.email} made their first wallet top-up`,
-                  paymentMethod: "bonus",
-                });
-
-                console.log(
-                  `🎉 Referral bonus awarded: £${bonusAmount} to ${referrer.email} for ${user.email}'s first top-up`
-                );
-              }
-            }
-          }
-        } catch (referralError) {
-          console.error(
-            "Referral bonus error during top-up:",
-            referralError
-          );
-        }
-      }
-
-      return res.json({
-        status: "PAID",
-        message: "Payment received. Wallet updated.",
-      });
     }
 
-    // ❌ Not paid yet
     return res.json({
       status,
       message: "Payment not completed. Please try again manually.",
@@ -7821,6 +7762,7 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
     console.error("Confirm top-up error:", err);
     return res.status(500).json({
       message: "Failed to confirm wallet top-up",
+      error: err.message
     });
   }
 });
