@@ -71,6 +71,8 @@ import PlinkoGamePage from "./pages/plinkoGamePage";
 import AdminVerifications from "./pages/admin/admin-verification";
 import PremiumBalloonPop from "./components/PremiumBalloonPop";
 import AdminPrizeTable from "./pages/admin/admin-prize-table";
+import AdminRedeemCodes from "./pages/admin/adminRedeem";
+import AdminPushMessages from "./pages/admin/push-messages";
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading || !isAuthenticated) return <Landing />;
@@ -156,6 +158,8 @@ function Router() {
       <Route path="/admin/plinko" component={AdminPlinkoBalloon} />
       <Route path="/admin/ringtone-plinko/settings" component={AdminPlinko} />
       <Route path="/admin/verification" component={AdminVerifications} />
+      <Route path="/admin/redeem" component={AdminRedeemCodes} />
+      <Route path="/admin/notification" component={AdminPushMessages} />
       <Route path="/admin/prize-table/:gameId" component={AdminPrizeTable} />
 
       <Route component={NotFound} />

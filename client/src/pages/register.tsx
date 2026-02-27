@@ -10,7 +10,7 @@ import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-// Remove WelcomeBonusPopup import - we'll show this after verification
+import { Gift } from "lucide-react"; // Add icon for redeem field
 
 type RegisterForm = {
   firstName: string;
@@ -23,6 +23,7 @@ type RegisterForm = {
   phoneNumber: string;
   referralCode?: string;
   howDidYouFindUs: string;
+  redeemCode?: string; // Add redeem code field
 };
 
 type RegisterResponse = {
@@ -32,6 +33,7 @@ type RegisterResponse = {
   emailSent: boolean;
   expiresIn: string;
   requiresVerification: boolean;
+  hasRedeemCode?: boolean; // Add to response
 };
 
 export default function Register() {
@@ -48,6 +50,7 @@ export default function Register() {
     phoneNumber: "",
     referralCode: "",
     howDidYouFindUs: "",
+    redeemCode: "", // Initialize redeem code
   });
   const { toast } = useToast();
 
@@ -57,6 +60,7 @@ export default function Register() {
     "Social Media",
     "Street Promotions",
     "Ringtone Riches Vehicles",
+    "Flyer", // Add Flyer as an option
   ];
 
   const registerMutation = useMutation({
@@ -65,11 +69,18 @@ export default function Register() {
       return res.json();
     },
     onSuccess: (data: RegisterResponse) => {
-      // Show success message
-      toast({
-        title: "Registration Successful!",
-        description: "Please check your email for verification code.",
-      });
+      // Show success message with redeem code info if applicable
+      if (data.hasRedeemCode) {
+        toast({
+          title: "🎉 Flyer Code Accepted!",
+          description: "Your flyer code is valid! You'll receive the bonus after email verification.",
+        });
+      } else {
+        toast({
+          title: "Registration Successful!",
+          description: "Please check your email for verification code.",
+        });
+      }
       
       // Redirect to verification page with email
       setLocation(`/verify-email?email=${encodeURIComponent(data.email)}`);
@@ -253,32 +264,43 @@ export default function Register() {
                   required
                 />
               </div>
+              <div>
+                <Label htmlFor="redeemCode" className="text-white">Redeem Code</Label>
+                <Input
+                  id="redeemCode"
+                  value={formData.redeemCode}
+                  onChange={(e) => setFormData(prev => ({ ...prev, redeemCode: e.target.value.toUpperCase() }))}
+                  className="bg-white text-black border-gray-300 mt-2"
+                  data-testid="input-redeem-code"
+                  placeholder="e.g., 5PZNC"
+                />
+              </div>
+         
 
-            <div>
-              <Label className="text-white">
-                How did you find out about Ringtone Riches?
-              </Label>
+              <div>
+                <Label className="text-white">
+                  How did you find out about Ringtone Riches?
+                </Label>
 
-              <Select
-                value={formData.howDidYouFindUs}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, howDidYouFindUs: value }))
-                }
-              >
-                <SelectTrigger className="bg-white text-black mt-2">
-                  <SelectValue placeholder="Select an option" />
-                </SelectTrigger>
+                <Select
+                  value={formData.howDidYouFindUs}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, howDidYouFindUs: value }))
+                  }
+                >
+                  <SelectTrigger className="bg-white text-black mt-2">
+                    <SelectValue placeholder="Select an option" />
+                  </SelectTrigger>
 
-                <SelectContent>
-                  {discoveryOptions.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
+                  <SelectContent>
+                    {discoveryOptions.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
               {/* Newsletter Checkbox */}
               <div className="flex items-center space-x-2">

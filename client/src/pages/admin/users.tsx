@@ -1034,10 +1034,10 @@ export default function AdminUsers() {
                     </div>
                   </th>
                   <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
-  <div className="flex items-center">
-    <span>IP Address</span>
-  </div>
-</th>
+                  <div className="flex items-center">
+                    <span>IP Address</span>
+                  </div>
+                </th>
                   <th 
                     className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted transition-colors"
                     onClick={() => handleSort("createdAt")}

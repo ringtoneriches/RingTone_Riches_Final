@@ -95,6 +95,8 @@ const getTransactionIcon = (type: string) => {
       return <Gift className="h-4 w-4 text-yellow-500" />;
     case "refund":
       return <RefreshCcw className="h-4 w-4 text-orange-500" />;
+    case "redeem": // Add this case
+    return <Gift className="h-4 w-4 text-purple-400" />;
     default:
       return <DollarSign className="h-4 w-4 text-gray-500" />;
   }
@@ -113,6 +115,7 @@ const getTransactionTypeBadge = (type: string) => {
     referral: "bg-purple-500/10 text-purple-500 border-purple-500/20",
     referral_bonus: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
     refund: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+    redeem: "bg-purple-500/10 text-purple-400 border-purple-500/20", 
   };
 
   // Format the display name nicely
@@ -128,6 +131,7 @@ const getTransactionTypeBadge = (type: string) => {
       referral: "Referral",
       referral_bonus: "Referral Bonus",
       refund: "Refund",
+      redeem: "Redeem Code",
     };
     
     return names[type] || type.charAt(0).toUpperCase() + type.slice(1);
@@ -1602,6 +1606,7 @@ const handleDeleteBankAccount = (
                             <SelectItem value="referral_bonus">Referrals Bonus</SelectItem>
                             <SelectItem value="refund">Refund</SelectItem>
                             <SelectItem value="plinko_purchase">Plinko Purchases</SelectItem>
+                            <SelectItem value="redeem">Redeem Codes</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1652,6 +1657,7 @@ const handleDeleteBankAccount = (
               transaction.type === "referral" ||
               transaction.type === "referral_bonus" ||
               transaction.type === "refund" ||
+              transaction.type === "redeem" ||
               (transaction.type === "ringtone_points" && parseFloat(transaction.amount) > 0))
                 ? "text-green-400"
                 : "text-red-400"

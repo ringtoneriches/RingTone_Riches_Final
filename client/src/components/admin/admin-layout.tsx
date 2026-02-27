@@ -26,6 +26,8 @@ import {
   Check,
   Lock,
   Unlock,
+  FileDigit,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,6 +82,8 @@ const sidebarGroups = [
       { name: "Discounts", path: "/admin/discount", icon: TicketIcon },
       { name: "Withdrawals", path: "/admin/withdrawals", icon: ArrowDownCircle, hasNotification: true, notificationType: "withdrawals" },
       { name: "Verification", path: "/admin/verification", icon: Check, hasNotification: true, notificationType: "verification" },
+      { name: "Redeem Code", path: "/admin/redeem", icon: FileDigit},
+      // { name: "Notification", path: "/admin/notification", icon: Send},
       { name: "Well-being", path: "/admin/well-being", icon: Heart },
       { name: "Marketing", path: "/admin/marketing", icon: Mail },
       { name: "Settings", path: "/admin/settings", icon: Settings },
@@ -427,7 +431,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="flex min-h-screen -mt-20">
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-300 ${
+        className={`fixed overflow-y-scroll sm:overflow-y-auto lg:static inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >

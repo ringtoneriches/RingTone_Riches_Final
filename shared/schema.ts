@@ -58,6 +58,8 @@ export const users = pgTable("users", {
   isVerified: boolean("is_verified").default(false),
   referralCode: varchar("referral_code").unique(),
   phoneNumber: varchar("phone_number"),
+  pendingRedeemCode: varchar("pending_redeem_code"), // Store code during verification
+  pendingRedeemAmount: decimal("pending_redeem_amount", { precision: 10, scale: 2 }), 
   referredBy: varchar("referred_by"),
   addressStreet: text("address_street"),
   addressCity: text("address_city"),
@@ -181,7 +183,7 @@ export const orders = pgTable("orders", {
 export const transactions = pgTable("transactions", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  type: varchar("type", { enum: ["deposit", "withdrawal", "purchase", "prize", "referral" , "referral_bonus"] }).notNull(),
+  type: varchar("type", { enum: ["deposit", "withdrawal", "purchase", "prize", "referral" , "referral_bonus" , "redeem"] }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   pendingPaymentId: uuid("pending_payment_id").references(() => pendingPayments.id),
   paymentRef: varchar("payment_ref").unique(), 
@@ -240,6 +242,68 @@ export const discountCodeUsages = pgTable("discount_code_usages", {
 });
 
 
+// Redeem codes table - stores codes printed on flyers
+export const redeemCodes = pgTable("redeem_codes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code").notNull().unique(), // e.g., "5PZNC"
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // £10.00, £5.00 etc
+  isUsed: boolean("is_used").default(false),
+  usedByUserId: varchar("used_by_user_id").references(() => users.id),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"), // Optional expiry date
+  batchId: uuid("batch_id"), // To group codes from same flyer run
+  createdBy: varchar("created_by").references(() => users.id), // Admin who created them
+  notes: text("notes"), // Optional notes about this batch
+});
+
+// Track redemption history (for analytics)
+export const redeemCodeRedemptions = pgTable("redeem_code_redemptions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  redeemCodeId: uuid("redeem_code_id").notNull().references(() => redeemCodes.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  ipAddress: varchar("ip_address"),
+  userAgent: text("user_agent"),
+  redeemedAt: timestamp("redeemed_at").defaultNow(),
+});
+
+
+export const smsMessages = pgTable("sms_messages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title").notNull(),
+  message: text("message").notNull(),
+  targetType: varchar("target_type", { 
+    enum: ["all", "specific_users", "by_filter"] 
+  }).notNull(),
+  targetUserIds: jsonb("target_user_ids"),
+  targetFilter: jsonb("target_filter"),
+  sentCount: integer("sent_count").default(0),
+  failedCount: integer("failed_count").default(0),
+  status: varchar("status", { 
+    enum: ["draft", "scheduled", "sent", "cancelled", "partial"] 
+  }).default("draft"),
+  createdBy: varchar("created_by").references(() => users.id),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// SMS Delivery tracking
+export const smsDeliveries = pgTable("sms_deliveries", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  smsMessageId: uuid("sms_message_id").notNull().references(() => smsMessages.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  phoneNumber: varchar("phone_number").notNull(),
+  status: varchar("status", { 
+    enum: ["pending", "sent", "delivered", "failed", "undelivered"] 
+  }).default("pending"),
+  twilioMessageId: varchar("twilio_message_id"),
+  errorMessage: text("error_message"),
+  sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
 
 export const wellbeingRequests = pgTable("wellbeing_requests", {
@@ -578,6 +642,33 @@ export const insertSavedBankAccountSchema = createInsertSchema(savedBankAccounts
   createdAt: true,
   updatedAt: true,
 });
+export const insertRedeemCodeSchema = createInsertSchema(redeemCodes).omit({
+  id: true,
+  createdAt: true,
+  isUsed: true,
+  usedAt: true,
+  usedByUserId: true,
+});
+
+export const insertRedeemCodeRedemptionSchema = createInsertSchema(redeemCodeRedemptions).omit({
+  id: true,
+  redeemedAt: true,
+});
+
+export const insertSmsMessageSchema = createInsertSchema(smsMessages).omit({
+  id: true,
+  sentCount: true,
+  failedCount: true,
+  sentAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSmsDeliverySchema = createInsertSchema(smsDeliveries).omit({
+  id: true,
+  createdAt: true,
+});
+
 
 
 // Types
@@ -633,6 +724,15 @@ export type InsertCampaignEmail = z.infer<typeof insertCampaignEmailSchema>;
 // Type definitions
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type RedeemCode = typeof redeemCodes.$inferSelect;
+export type InsertRedeemCode = z.infer<typeof insertRedeemCodeSchema>;
+export type RedeemCodeRedemption = typeof redeemCodeRedemptions.$inferSelect;
+export type InsertRedeemCodeRedemption = z.infer<typeof insertRedeemCodeRedemptionSchema>;
+// Types
+export type SmsMessage = typeof smsMessages.$inferSelect;
+export type InsertSmsMessage = z.infer<typeof insertSmsMessageSchema>;
+export type SmsDelivery = typeof smsDeliveries.$inferSelect;
+export type InsertSmsDelivery = z.infer<typeof insertSmsDeliverySchema>;
 
 // Registration and login schemas
 export const registerUserSchema = createInsertSchema(users).pick({
@@ -643,6 +743,8 @@ export const registerUserSchema = createInsertSchema(users).pick({
   phoneNumber:true,
   dateOfBirth: true,
   receiveNewsletter: true,
+}).extend({
+  redeemCode: z.string().optional(), // Add redeem code field
 });
 
 export const loginUserSchema = z.object({
