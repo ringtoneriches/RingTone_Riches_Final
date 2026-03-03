@@ -327,7 +327,7 @@ export default function AdminDashboard() {
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
                         <p className="text-xs text-muted-foreground font-medium">Competition</p>
-                        <p className="text-xs sm:text-sm truncate pr-2">{order.competition || "N/A"}</p>
+                        <p className="text-xs sm:text-sm truncate pr-2 w-48">{order.competition || "N/A"}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-muted-foreground font-medium">Status</p>
