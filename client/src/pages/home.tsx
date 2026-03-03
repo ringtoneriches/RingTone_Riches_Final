@@ -280,7 +280,7 @@ export default function Home() {
               borderColor: "border-rose-400/50",
               glowColor: "shadow-rose-500/50",
               filter: "scratch",
-              prize: "£10,000"
+              prize: "£5,000"
               // winChance: "FAST"£10,000
 
             },

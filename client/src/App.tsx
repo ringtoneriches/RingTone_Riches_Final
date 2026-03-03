@@ -100,13 +100,10 @@ function Router() {
       <Route path="/winners" component={PastWinners} />
 
       {/* Game routes - always registered */}
-      <Route
-        path="/scratch/:competitionId/:orderId"
-        component={ScratchGamePage}
-      />
+      <Route path="/scratch/:competitionId/:orderId" component={ScratchGamePage} />
       <Route path="/spin/:competitionId/:orderId" component={SpinGamePage} />
-        <Route path="/pop/:competitionId/:orderId" component={PopGamePage} />
-        <Route path="/plinko/:competitionId/:orderId" component={PlinkoGamePage} />
+      <Route path="/pop/:competitionId/:orderId" component={PopGamePage} />
+      <Route path="/plinko/:competitionId/:orderId" component={PlinkoGamePage} />
 
       {/* Authenticated routes - always registered, auth checked in component */}
       <Route path="/instant" component={instant} />
@@ -114,7 +111,7 @@ function Router() {
       <Route path="/checkout/:orderId" component={Checkout} />
       <Route path="/spin-wheel" component={spinWheel} />
       <Route path="/scratch-card" component={ScratchCardPage} />
-       <Route path="/ringtone-pop" component={RingtonePopPage} />
+      <Route path="/ringtone-pop" component={RingtonePopPage} />
       <Route path="/wallet/success" component={WalletSuccess} />
       <Route path="/wallet/cancelled" component={PaymentCancelled} />
       <Route path="/wallet/failed" component={PaymentFailed} />
@@ -122,15 +119,10 @@ function Router() {
       <Route path="/failed" component={CheckoutFailed} />
       <Route path="/cancelled" component={CheckoutCancelled} />
       <Route path="/scratch" component={scratchcard} />
-   <Route
-  path="/spin-billing/:orderId/:wheelType"
-  component={SpinBilling}
-/>
-
+      <Route path="/spin-billing/:orderId/:wheelType" component={SpinBilling} />
       <Route path="/scratch-billing/:orderId" component={ScratchBilling} />
-          <Route path="/pop-billing/:orderId" component={PopBilling} />
+      <Route path="/pop-billing/:orderId" component={PopBilling} />
       <Route path="/plinko-billing/:orderId" component={PlinkoBilling} />
-      {/* <Route path="/support" component={Support} /> */}
 
       {/* Admin routes - always registered, auth checked in component */}
       <Route path="/admin/login" component={AdminLogin} />
@@ -150,8 +142,8 @@ function Router() {
       <Route path="/admin/transactions" component={AdminTransactions} />
       <Route path="/admin/support" component={AdminSupport} />
       <Route path="/admin/well-being" component={AdminWellbeing} />
-            <Route path="/admin/ringtone-pop/settings" component={AdminRingtonePop} />
-            <Route path="/admin/add-ringtone-pop" component={AdminPopBalloon} />
+      <Route path="/admin/ringtone-pop/settings" component={AdminRingtonePop} />
+      <Route path="/admin/add-ringtone-pop" component={AdminPopBalloon} />
       <Route path="/admin/users/:id" component={UserAuditPage} />
       <Route path="/admin/intelligence" component={Intelligence} />
       <Route path="/admin/discount" component={AdminDiscountCodes} />
