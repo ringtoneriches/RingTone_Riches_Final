@@ -284,13 +284,13 @@ export default function AdminVoltz() {
                   Voltz Settings
                 </Button>
               </Link>
-              {/* <Button
+              <Button
                 onClick={() => setCreateDialogOpen(true)}
                 data-testid="button-create-pop"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Voltz Game
-              </Button> */}
+              </Button>
             </div>
           </div>
         </div>

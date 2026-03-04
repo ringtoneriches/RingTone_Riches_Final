@@ -1793,6 +1793,8 @@ const handleDeleteBankAccount = (
                                   ? "Ringtone Pop"
                                   : order.competitions?.type === "plinko"
                                   ? "Ringtone Plinko"
+                                  : order.competitions?.type === "voltz"
+                                  ? "Voltz Game"
                                   : "Scratch Card"}
                               </p>
                             </div>
@@ -1825,6 +1827,8 @@ const handleDeleteBankAccount = (
                                 ? `/pop/${order.orders.competitionId}/${order.orders.id}`
                                 : order.competitions?.type === "plinko"
                                 ? `/plinko/${order.orders.competitionId}/${order.orders.id}`
+                                : order.competitions?.type === "voltz"
+                                ? `/voltz/${order.orders.competitionId}/${order.orders.id}`
                                 : `/scratch/${order.orders.competitionId}/${order.orders.id}`
                             }
                             className="block"

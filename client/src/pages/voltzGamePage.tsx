@@ -473,6 +473,38 @@ export default function VoltzGamePage() {
   const [gameHistory, setGameHistory] = useState<any[]>([]);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
 
+   useEffect(() => {
+    if (orderId) {
+      const savedHistory = localStorage.getItem(`voltzHistory_${orderId}`);
+      if (savedHistory) {
+        try {
+          setGameHistory(JSON.parse(savedHistory));
+        } catch (e) {
+          console.error("Failed to parse saved history", e);
+        }
+      }
+    }
+  }, [orderId]);
+
+    // Save history to localStorage whenever it changes
+  useEffect(() => {
+    if (orderId && gameHistory.length > 0) {
+      localStorage.setItem(`voltzHistory_${orderId}`, JSON.stringify(gameHistory));
+    }
+  }, [gameHistory, orderId]);
+
+ useEffect(() => {
+    return () => {
+      if (orderId && remainingPlays === 0) {
+        // Optional: check if all games are complete before removing
+        const allComplete = gameHistory.length === (orderData?.order?.quantity || 0);
+        if (allComplete) {
+          localStorage.removeItem(`voltzHistory_${orderId}`);
+        }
+      }
+    };
+  }, [orderId, remainingPlays, gameHistory]);
+
   const { data: voltzConfig } = useQuery<{ isVisible: boolean; isActive: boolean }>({
     queryKey: ["/api/voltz-config"],
   });
@@ -504,14 +536,22 @@ export default function VoltzGamePage() {
   useEffect(() => {
     if (orderData) {
       setRemainingPlays(orderData.playsRemaining || 0);
-      setGameHistory(orderData.history || []);
+            const serverHistory = orderData.history || [];
+      if (serverHistory.length > gameHistory.length) {
+        setGameHistory(serverHistory);
+      }
     }
   }, [orderData]);
 
-  const handlePlayComplete = (serverPlaysRemaining: number) => {
+  const handlePlayComplete = (serverPlaysRemaining: number, newGameResult?: any) => {
     if (typeof serverPlaysRemaining === "number") {
       setRemainingPlays(serverPlaysRemaining);
     }
+
+    if (newGameResult) {
+      setGameHistory(prev => [...prev, newGameResult]);
+    }
+
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     queryClient.invalidateQueries({ queryKey: ["/api/voltz-order", orderId] });
     refetchOrder();

@@ -20,6 +20,7 @@ interface PlayResult {
   rewardType: string;
   rewardValue: string;
   prizeName: string;
+  prizeId?: string;
   isWin: boolean;
   switchTexts: string[];
 }
@@ -257,101 +258,130 @@ export default function VoltzGameComponent({
     lastServerPlaysRef.current = null;
   }, []);
 
-  const handleSwitchPress = useCallback(async (switchIndex: number) => {
-    if (roundStartedRef.current && roundResultRef.current) {
-      if (gameSceneRef.current) {
-        gameSceneRef.current.deliverResult({
-          outcome: roundResultRef.current.outcome,
-          switchTexts: roundResultRef.current.switchTexts,
-          prizeName: roundResultRef.current.prizeName,
-          rewardValue: roundResultRef.current.rewardValue,
-          rewardType: roundResultRef.current.rewardType,
-        });
-      }
-      return;
-    }
-
-    if (playsRemainingRef.current <= 0 || isProcessingRef.current) {
-      if (gameSceneRef.current) {
-        gameSceneRef.current.isPlaying = false;
-      }
-      return;
-    }
-
-    isProcessingRef.current = true;
-    setIsProcessing(true);
-
-    try {
-      const res = await apiRequest("/api/play-voltz", "POST", {
-        orderId: orderIdRef.current,
-        competitionId: competitionIdRef.current,
-        switchChosen: switchIndex,
+const handleSwitchPress = useCallback(async (switchIndex: number) => {
+  if (roundStartedRef.current && roundResultRef.current) {
+    if (gameSceneRef.current) {
+      gameSceneRef.current.deliverResult({
+        outcome: roundResultRef.current.outcome,
+        switchTexts: roundResultRef.current.switchTexts,
+        prizeName: roundResultRef.current.prizeName,
+        rewardValue: roundResultRef.current.rewardValue,
+        rewardType: roundResultRef.current.rewardType,
       });
+    }
+    return;
+  }
 
-      const data = await res.json();
+  if (playsRemainingRef.current <= 0 || isProcessingRef.current) {
+    if (gameSceneRef.current) {
+      gameSceneRef.current.isPlaying = false;
+    }
+    return;
+  }
 
-      if (!data.success) {
-        try { if (surgeAudioRef.current) { surgeAudioRef.current.pause(); surgeAudioRef.current.currentTime = 0; } } catch (e) {}
-        toastRef.current({
-          title: "Error",
-          description: data.message || "Failed to play",
-          variant: "destructive",
-        });
-        if (gameSceneRef.current) {
-          gameSceneRef.current.isPlaying = false;
-        }
-        isProcessingRef.current = false;
-        setIsProcessing(false);
-        return;
-      }
+  isProcessingRef.current = true;
+  setIsProcessing(true);
 
-      if (data.playsRemaining !== undefined) {
-        lastServerPlaysRef.current = data.playsRemaining;
-        playsRemainingRef.current = data.playsRemaining;
-      }
+  try {
+    const res = await apiRequest("/api/play-voltz", "POST", {
+      orderId: orderIdRef.current,
+      competitionId: competitionIdRef.current,
+      switchChosen: switchIndex,
+    });
 
-      const result: PlayResult = {
-        outcome: data.result.outcome,
-        switchChosen: switchIndex,
-        rewardType: data.result.rewardType,
-        rewardValue: data.result.rewardValue,
-        prizeName: data.result.prizeName,
-        isWin: data.result.isWin,
-        switchTexts: data.result.switchTexts || ["?", "?", "?"],
-      };
+    const data = await res.json();
 
-      setLastResult(result);
-      lastResultRef.current = result;
-      roundResultRef.current = result;
-      roundStartedRef.current = true;
-
-      if (gameSceneRef.current) {
-        gameSceneRef.current.deliverResult({
-          outcome: result.outcome,
-          switchTexts: result.switchTexts,
-          prizeName: result.prizeName,
-          rewardValue: result.rewardValue,
-          rewardType: result.rewardType,
-        });
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/voltz-order", orderIdRef.current] });
-    } catch (err) {
+    if (!data.success) {
       try { if (surgeAudioRef.current) { surgeAudioRef.current.pause(); surgeAudioRef.current.currentTime = 0; } } catch (e) {}
       toastRef.current({
         title: "Error",
-        description: "Network error. Please try again.",
+        description: data.message || "Failed to play",
         variant: "destructive",
       });
       if (gameSceneRef.current) {
         gameSceneRef.current.isPlaying = false;
       }
-    } finally {
       isProcessingRef.current = false;
       setIsProcessing(false);
+      return;
     }
-  }, []);
+
+    if (data.playsRemaining !== undefined) {
+      lastServerPlaysRef.current = data.playsRemaining;
+      playsRemainingRef.current = data.playsRemaining;
+    }
+
+    const result: PlayResult = {
+      outcome: data.result.outcome,
+      switchChosen: switchIndex,
+      rewardType: data.result.rewardType,
+      rewardValue: data.result.rewardValue,
+      prizeName: data.result.prizeName,
+      isWin: data.result.isWin,
+      switchTexts: data.result.switchTexts || ["?", "?", "?"],
+      prizeId: data.result.prizeId, // Add this to PlayResult interface
+    };
+
+    setLastResult(result);
+    lastResultRef.current = result;
+    roundResultRef.current = result;
+    roundStartedRef.current = true;
+
+    if (gameSceneRef.current) {
+      gameSceneRef.current.deliverResult({
+        outcome: result.outcome,
+        switchTexts: result.switchTexts,
+        prizeName: result.prizeName,
+        rewardValue: result.rewardValue,
+        rewardType: result.rewardType,
+      });
+    }
+
+    // Don't show result yet - wait for all buttons
+    // queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    // queryClient.invalidateQueries({ queryKey: ["/api/voltz-order", orderIdRef.current] });
+  } catch (err) {
+    try { if (surgeAudioRef.current) { surgeAudioRef.current.pause(); surgeAudioRef.current.currentTime = 0; } } catch (e) {}
+    toastRef.current({
+      title: "Error",
+      description: "Network error. Please try again.",
+      variant: "destructive",
+    });
+    if (gameSceneRef.current) {
+      gameSceneRef.current.isPlaying = false;
+    }
+  } finally {
+    isProcessingRef.current = false;
+    setIsProcessing(false);
+  }
+}, []);
+
+const confirmGameResult = useCallback(async () => {
+  if (!lastResultRef.current || !orderIdRef.current) return;
+
+  try {
+    const res = await apiRequest("/api/confirm-voltz-result", "POST", {
+      orderId: orderIdRef.current,
+      result: {
+        outcome: lastResultRef.current.outcome,
+        rewardType: lastResultRef.current.rewardType,
+        rewardValue: lastResultRef.current.rewardValue,
+        prizeName: lastResultRef.current.prizeName,
+        prizeId: lastResultRef.current.prizeId,
+        switchChosen: lastResultRef.current.switchChosen,
+      },
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      // Now invalidate queries after confirmation
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/voltz-order", orderIdRef.current] });
+    }
+  } catch (error) {
+    console.error("Error confirming game result:", error);
+  }
+}, []);
 
   useEffect(() => {
     if (!gameContainerRef.current) return;
@@ -440,26 +470,30 @@ export default function VoltzGameComponent({
             } catch (e) {}
           });
 
-          game.events.on("gameComplete", () => {
-            resultTimersRef.current.forEach(t => clearTimeout(t));
-            resultTimersRef.current = [];
+         game.events.on("gameComplete", () => {
+  resultTimersRef.current.forEach(t => clearTimeout(t));
+  resultTimersRef.current = [];
 
-            const currentResult = lastResultRef.current;
-            if (currentResult?.isWin) {
-              fireWinConfetti();
-              playWinSound();
-            } else if (currentResult?.outcome === "freeReplay") {
-              fireBackupConfetti();
-              playBackupPower();
-            } else {
-              playPowerDown();
-            }
+  const currentResult = lastResultRef.current;
+  
+  // Confirm the result with the server before showing
+  confirmGameResult().then(() => {
+    if (currentResult?.isWin) {
+      fireWinConfetti();
+      playWinSound();
+    } else if (currentResult?.outcome === "freeReplay") {
+      fireBackupConfetti();
+      playBackupPower();
+    } else {
+      playPowerDown();
+    }
 
-            setResultAnimStage(0);
-            setShowResult(true);
-            resultTimersRef.current.push(setTimeout(() => setResultAnimStage(1), 50));
-            resultTimersRef.current.push(setTimeout(() => setResultAnimStage(2), 300));
-          });
+    setResultAnimStage(0);
+    setShowResult(true);
+    resultTimersRef.current.push(setTimeout(() => setResultAnimStage(1), 50));
+    resultTimersRef.current.push(setTimeout(() => setResultAnimStage(2), 300));
+  });
+});
         } else {
           setTimeout(pollForScene, 200);
         }
