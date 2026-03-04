@@ -28,6 +28,7 @@ import {
   Unlock,
   FileDigit,
   Send,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,7 @@ const sidebarGroups = [
       { name: "Scratch Card", path: "/admin/scratch-card", icon: CreditCard },
       { name: "Ringtone Pop", path: "/admin/add-ringtone-pop", icon: Sparkles },
       { name: "Ringtone Plinko", path: "/admin/plinko", icon: Target },
+      { name: "Ringtone Voltz", path: "/admin/voltz", icon: Zap },
     ],
     protected: true, // Add protection flag for Games tab
   },

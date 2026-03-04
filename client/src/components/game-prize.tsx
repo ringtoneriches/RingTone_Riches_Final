@@ -454,19 +454,14 @@ export function GamePrizesDisplay({
                         </div>
 
                         {/* Stats row */}
-                        <div className="grid grid-cols-2 gap-2 text-center">
+                        <div className="grid grid-cols-1 gap-2 text-center">
                           <div className="bg-black/30 rounded-lg p-2">
                             <div className="text-xs text-gray-400">Remaining</div>
                             <div className="text-sm font-bold text-yellow-400">
                               {prize.remainingQty}
                             </div>
                           </div>
-                          <div className="bg-black/30 rounded-lg p-2">
-                            <div className="text-xs text-gray-400">Rarity</div>
-                            <div className={`text-sm font-bold ${rarity.color}`}>
-                              {rarity.percentage.toFixed(0)}%
-                            </div>
-                          </div>
+                          
                         </div>
 
                         {/* Timer effect for low stock */}

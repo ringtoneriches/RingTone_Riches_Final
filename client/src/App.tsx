@@ -73,6 +73,10 @@ import PremiumBalloonPop from "./components/PremiumBalloonPop";
 import AdminPrizeTable from "./pages/admin/admin-prize-table";
 import AdminRedeemCodes from "./pages/admin/adminRedeem";
 import AdminPushMessages from "./pages/admin/push-messages";
+import AdminVoltz from "./pages/admin/admin-voltz";
+import AdminRingtoneVoltzSettings from "./pages/admin/ringtone-voltz-settings";
+import VoltzGamePage from "./pages/voltzGamePage";
+import VoltzBilling from "./pages/voltzBilling";
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading || !isAuthenticated) return <Landing />;
@@ -104,6 +108,7 @@ function Router() {
       <Route path="/spin/:competitionId/:orderId" component={SpinGamePage} />
       <Route path="/pop/:competitionId/:orderId" component={PopGamePage} />
       <Route path="/plinko/:competitionId/:orderId" component={PlinkoGamePage} />
+       <Route path="/voltz/:competitionId/:orderId" component={VoltzGamePage} />
 
       {/* Authenticated routes - always registered, auth checked in component */}
       <Route path="/instant" component={instant} />
@@ -123,6 +128,7 @@ function Router() {
       <Route path="/scratch-billing/:orderId" component={ScratchBilling} />
       <Route path="/pop-billing/:orderId" component={PopBilling} />
       <Route path="/plinko-billing/:orderId" component={PlinkoBilling} />
+      <Route path="/voltz-billing/:orderId" component={VoltzBilling} />
 
       {/* Admin routes - always registered, auth checked in component */}
       <Route path="/admin/login" component={AdminLogin} />
@@ -153,6 +159,8 @@ function Router() {
       <Route path="/admin/redeem" component={AdminRedeemCodes} />
       <Route path="/admin/notification" component={AdminPushMessages} />
       <Route path="/admin/prize-table/:gameId" component={AdminPrizeTable} />
+      <Route path="/admin/voltz" component={AdminVoltz} />
+      <Route path="/admin/ringtone-voltz/settings" component={AdminRingtoneVoltzSettings} />
 
       <Route component={NotFound} />
     </Switch>

@@ -24,10 +24,10 @@ export function getSession() {
     resave: false,
     saveUninitialized: false,
     cookie: {
-      // httpOnly: true,
+      httpOnly: true,
       secure: false,
       maxAge: sessionTtl,
-      // sameSite: "none",
+      sameSite: "none",
     },
   });
 }

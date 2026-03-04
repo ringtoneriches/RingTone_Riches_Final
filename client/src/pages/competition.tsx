@@ -125,6 +125,10 @@ const purchaseTicketMutation = useMutation({
       const response = await apiRequest("/api/create-plinko-order", "POST", data);
       return response.json();
     }
+    else if (competition?.type === "voltz") {
+      const response = await apiRequest("/api/create-voltz-order", "POST", data);
+      return response.json();
+    }
     else {
       // 🎟️ Regular competition - create order for billing page
       const response = await apiRequest("/api/create-competition-order", "POST", data);
@@ -156,6 +160,11 @@ const purchaseTicketMutation = useMutation({
     if (competitionType === "plinko") {
       // ✅ Redirect to plinko billing
       setLocation(`/plinko-billing/${data.orderId}`);
+      return;
+    }
+    if (competitionType === "voltz") {
+      // ✅ Redirect to voltz billing
+      setLocation(`/voltz-billing/${data.orderId}`);
       return;
     }
 
@@ -216,7 +225,7 @@ const purchaseTicketMutation = useMutation({
   const type = competition.type?.toLowerCase();
 
   // ✅ Only check ticket limits for regular COMPETITIONS (not spin/scratch)
-  if (type !== "spin" && type !== "scratch"  && type !== "pop" && type !== "plinko") {
+  if (type !== "spin" && type !== "scratch"  && type !== "pop" && type !== "plinko" && type !== "voltz") {
     const competitionRemainingTickets =
       (competition.maxTickets ?? 0) - (competition.soldTickets ?? 0);
 
@@ -487,6 +496,8 @@ const purchaseTicketMutation = useMutation({
                             ? "🎈 Pop Balloon"
                             : competition.type === "plinko"  
                             ? "🎯 Plinko"
+                            : competition.type === "voltz"  
+                            ? "⚡ Voltz"
                             : "🏆 Competition"}
                         </span>
                       </div>
@@ -619,7 +630,7 @@ const purchaseTicketMutation = useMutation({
                       ) : null}
 
                       {/* Monthly Draw Info for Spin & Scratch Cards */}
-                      {(competition.type === "spin" || competition.type === "scratch" || competition.type === "pop" || competition.type === "plinko") && (
+                      {(competition.type === "spin" || competition.type === "scratch" || competition.type === "pop" || competition.type === "plinko" || competition.type === "voltz") && (
                         <div className="mb-4 md:mb-5">
                           <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-lg p-3 md:p-4 border border-green-500/30 shadow-lg">
                             <div className="flex items-start gap-3">
@@ -675,7 +686,7 @@ const purchaseTicketMutation = useMutation({
                         </p>
                       </div>
 
-                      {availableTickets.length > 0 && competition.type !== "spin" && competition.type !== "scratch" && competition.type !== "pop" && competition.type !== "plinko" ? (
+                      {availableTickets.length > 0 && competition.type !== "spin" && competition.type !== "scratch" && competition.type !== "pop" && competition.type !== "plinko" && competition.type !== "voltz" ? (
                         <div className="space-y-2.5 md:space-y-3">
                           {/* Existing Tickets Badge - GOLD THEME */}
                           <div className="bg-gradient-to-r from-[#facc15]/20 to-[#f59e0b]/20 border border-[#facc15]/30 rounded-lg p-2.5 md:p-3 text-center">

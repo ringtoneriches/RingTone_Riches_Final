@@ -87,6 +87,8 @@ const getTransactionIcon = (type: string) => {
       return <Gift className="h-4 w-4 text-yellow-500" />;
     case "pop_purchase":
       return <Gift className="w-4 h-4 text-pink-400" />;
+    case "voltz_purchase":
+      return <Sparkles className="w-4 h-4 text-blue-400" />;
     case "ringtone_points":
       return <Star className="h-4 w-4 text-purple-500" />;
     case "referral":
@@ -111,6 +113,7 @@ const getTransactionTypeBadge = (type: string) => {
     plinko_purchase: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20", // Add this
     prize: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
     pop_purchase: "bg-pink-500/20 text-pink-400 border-pink-500/30",
+    voltz_purchase: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     ringtone_points: "bg-purple-500/10 text-purple-500 border-purple-500/20",
     referral: "bg-purple-500/10 text-purple-500 border-purple-500/20",
     referral_bonus: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
@@ -125,6 +128,7 @@ const getTransactionTypeBadge = (type: string) => {
       withdrawal: "Withdrawal",
       purchase: "Purchase",
       plinko_purchase: "Plinko Purchase",
+      voltz_purchase: "Voltz Purchase",
       prize: "Prize",
       pop_purchase: "Pop Purchase",
       ringtone_points: "Ringtones", 
@@ -972,10 +976,10 @@ const handleSortCodeChange = (e) => {
 
   const handleTopUp = () => {
     const amountNum = Number(topUpAmount);
-    if (amountNum < 0.50) {
+    if (amountNum < 3) {
       toast({
         title: "Invalid Amount",
-        description: "Minimum top-up amount is £0.50",
+        description: "Minimum top-up amount is £3.00",
         variant: "destructive",
       });
       return;
@@ -1515,7 +1519,7 @@ const handleDeleteBankAccount = (
                         </div>
                         <input
                           type="number"
-                          min="0.50"
+                          min="3"
                           max="1000"
                           value={topUpAmount}
                           onChange={(e) => setTopUpAmount(e.target.value)}
@@ -1664,7 +1668,7 @@ const handleDeleteBankAccount = (
             }`}
           >
             {(() => {
-              if (transaction.type === "pop_purchase" || transaction.type === "plinko_purchase") return "-";
+              if (transaction.type === "pop_purchase" || transaction.type === "plinko_purchase" || transaction.type === "voltz_purchase") return "-";
               return parseFloat(transaction.amount) > 0 ? "+" : "-";
             })()}
             {formatAmount(transaction)}

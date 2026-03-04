@@ -34,7 +34,7 @@ import { GamePrizesDisplay } from "./game-prize";
 
 interface UnifiedBillingProps {
   orderId: string;
-  orderType: 'competition' | 'spin' | 'scratch' | 'pop' | 'plinko';
+  orderType: 'competition' | 'spin' | 'scratch' | 'pop' | 'plinko' | 'voltz';
   wheelType?: string;
 }
 
@@ -55,7 +55,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
   const [showTopUpModal, setShowTopUpModal] = useState(false);
 
   // Check if this is a game (spin, scratch, pop, plinko) vs competition
-  const isGame = ['spin', 'scratch', 'pop', 'plinko'].includes(orderType);
+  const isGame = ['spin', 'scratch', 'pop', 'plinko' , 'voltz'].includes(orderType);
 
   // Determine API endpoints based on order type
   const getEndpoint = () => {
@@ -64,6 +64,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
       case 'scratch': return '/api/scratch-order';
       case 'pop': return '/api/pop-order';
       case 'plinko': return '/api/plinko-order';
+      case 'voltz': return '/api/voltz-order';
       default: return '/api/order';
     }
   };
@@ -83,6 +84,8 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
         return "Ringtone Pop Purchase";
       case "plinko":
         return "Ringtone Plinko Purchase";
+      case "voltz":
+      return "Ringtone Voltz Purchase";
       default:
         return "Competition Tickets";
     }
@@ -103,6 +106,8 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
         return "Pop Games";
       case "plinko":
         return "Plinko Games";
+      case "voltz":
+        return "Voltz Games";
       default:
         return "Tickets";
     }
@@ -118,6 +123,8 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
         return "/api/process-pop-payment";
       case "plinko": 
         return "/api/process-plinko-payment";
+       case "voltz":
+        return "/api/process-voltz-payment";
       default:
         return "/api/purchase-ticket";
     }
@@ -129,6 +136,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
       case 'scratch': return `/scratch/${competitionId}/${orderId}`;
       case 'pop': return `/pop/${competitionId}/${orderId}`;
       case 'plinko': return `/plinko/${competitionId}/${orderId}`;
+      case 'voltz': return `/voltz/${competitionId}/${orderId}`;
       default: return `/success/competition?orderId=${orderId}`;
     }
   };
