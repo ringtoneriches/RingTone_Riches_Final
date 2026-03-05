@@ -184,28 +184,36 @@ export default function AdminRingtoneVoltzSettings() {
 
   const [isSavingConfig, setIsSavingConfig] = useState(false);
 
-  const handleSaveConfig = async () => {
-    setIsSavingConfig(true);
-    try {
-      const res = await fetch("/api/admin/voltz-config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isVisible, isActive, winProbability, freeReplayProbability }),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || "Failed to save config");
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/voltz-config"] });
-      setHasConfigChanges(false);
-      toast({ title: "Saved!", description: "Configuration updated successfully" });
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message || "Failed to save config", variant: "destructive" });
-    } finally {
-      setIsSavingConfig(false);
+  // Update the handleSaveConfig function with better error logging
+const handleSaveConfig = async () => {
+  setIsSavingConfig(true);
+  try {
+    console.log("Saving config:", { isVisible, isActive, winProbability, freeReplayProbability });
+    
+    const res = await fetch("/api/admin/voltz-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isVisible, isActive, winProbability, freeReplayProbability }),
+      credentials: "include",
+    });
+    
+    const responseText = await res.text();
+    console.log("Config save response:", responseText);
+    
+    if (!res.ok) {
+      throw new Error(responseText || "Failed to save config");
     }
-  };
+    
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/voltz-config"] });
+    setHasConfigChanges(false);
+    toast({ title: "Saved!", description: "Configuration updated successfully" });
+  } catch (err: any) {
+    console.error("Config save error:", err);
+    toast({ title: "Error", description: err.message || "Failed to save config", variant: "destructive" });
+  } finally {
+    setIsSavingConfig(false);
+  }
+};
 
   const handleCreatePrize = () => {
     if (!newPrize.prizeName.trim()) {
@@ -585,19 +593,19 @@ export default function AdminRingtoneVoltzSettings() {
                                     variant="ghost"
                                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); saveEdit(prize.id); }}
                                     disabled={isSaving}
-                                    className="h-7 w-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20"
+                                    className="h-7 w-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 z-90"
                                     data-testid={`button-save-edit-${prize.id}`}
                                   >
-                                    {isSaving ? <div className="w-3.5 h-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                    {isSaving ? <div className="w-3.5 h-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5 z-90" />}
                                   </Button>
                                   <Button
                                     size="icon"
                                     variant="ghost"
                                     onClick={cancelEdit}
-                                    className="h-7 w-7 text-muted-foreground hover:text-white hover:bg-muted/50"
+                                    className="h-7 w-7 text-muted-foreground hover:text-white hover:bg-muted/50 z-90"
                                     data-testid={`button-cancel-edit-${prize.id}`}
                                   >
-                                    <X className="w-3.5 h-3.5" />
+                                    <X className="w-3.5 h-3.5 z-90" />
                                   </Button>
                                 </>
                               ) : (
@@ -615,19 +623,19 @@ export default function AdminRingtoneVoltzSettings() {
                                     size="icon"
                                     variant="ghost"
                                     onClick={() => togglePrizeMutation.mutate({ id: prize.id, isActive: !prize.isActive })}
-                                    className="h-7 w-7"
+                                    className="h-7 w-7 z-90"
                                     data-testid={`button-toggle-${prize.id}`}
                                   >
-                                    {prize.isActive ? <Eye className="w-3.5 h-3.5 text-emerald-400" /> : <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />}
+                                    {prize.isActive ? <Eye className="w-3.5 h-3.5 text-emerald-400 z-90" /> : <EyeOff className="w-3.5 h-3.5 text-muted-foreground z-90" />}
                                   </Button>
                                   <Button
                                     size="icon"
                                     variant="ghost"
                                     onClick={() => setDeleteConfirmId(prize.id)}
-                                    className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                                    className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/20 z-90"
                                     data-testid={`button-delete-${prize.id}`}
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Trash2 className="w-3.5 h-3.5 z-90" />
                                   </Button>
                                 </>
                               )}

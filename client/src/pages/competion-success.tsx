@@ -59,6 +59,9 @@ export default function CheckoutSuccess() {
                else if (data.competitionType === "plinko") {
                 redirectUrl = `/plinko/${data.competitionId}/${data.orderId}`;
               }
+               else if (data.competitionType === "voltz") {
+                redirectUrl = `/voltz/${data.competitionId}/${data.orderId}`;
+              }
 
 
             setTimeout(() => setLocation(redirectUrl), 2000);

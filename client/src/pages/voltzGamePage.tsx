@@ -335,26 +335,64 @@ function VoltzGameHistory({ games }: { games: any[] }) {
                     <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r-full" style={{ background: 'linear-gradient(180deg, #22d3ee, rgba(6,182,212,0.2))', boxShadow: '0 0 12px rgba(6,182,212,0.3)' }} />
                   </>
                 )}
-                {!isWin && !isFree && (
-                  <>
-                    <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.2), transparent)' }} />
-                    <div className="absolute left-0 top-0 bottom-0 w-[2px] rounded-r-full" style={{ background: 'linear-gradient(180deg, rgba(239,68,68,0.3), rgba(239,68,68,0.05))' }} />
-                  </>
-                )}
+              {!isWin && !isFree && (
+                <>
+                  <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.4), transparent)' }} />
+                  <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r-full" style={{ background: 'linear-gradient(180deg, #ef4444, rgba(239,68,68,0.2))', boxShadow: '0 0 12px rgba(239,68,68,0.4)' }} />
+                  <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-10">
+                    <div className="absolute top-0 h-full w-[30%]" style={{
+                      background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.15), transparent)',
+                      animation: 'voltz-stat-shine 4s ease-in-out infinite',
+                    }} />
+                  </div>
+                </>
+              )}
 
                 <div className="relative flex items-center gap-3 px-4 py-3.5">
-                  <div className="relative flex-shrink-0">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-                         style={{
-                           background: `linear-gradient(145deg, rgba(${sw.rgb},0.22), rgba(${sw.rgb},0.06))`,
-                           border: `1px solid rgba(${sw.rgb},0.35)`,
-                           boxShadow: `0 4px 16px rgba(${sw.rgb},0.12), 0 0 24px rgba(${sw.rgb},0.06), inset 0 1px 0 rgba(255,255,255,0.08)`,
-                         }}>
-                      <Zap className="w-5 h-5" style={{ color: sw.hex, filter: `drop-shadow(0 0 8px rgba(${sw.rgb},0.8))` }} />
-                    </div>
-                    <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 h-[3px] rounded-full"
-                         style={{ width: 16, background: `linear-gradient(90deg, transparent, ${sw.hex}, transparent)`, boxShadow: `0 0 10px rgba(${sw.rgb},0.7)` }} />
-                  </div>
+                 <div className="relative flex-shrink-0">
+  <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+       style={{
+         background: isWin 
+           ? 'linear-gradient(145deg, rgba(34,197,94,0.25), rgba(34,197,94,0.08))'
+           : isFree 
+             ? 'linear-gradient(145deg, rgba(59,130,246,0.25), rgba(59,130,246,0.08))'
+             : `linear-gradient(145deg, rgba(${sw.rgb},0.22), rgba(${sw.rgb},0.06))`,
+         border: isWin 
+           ? '1px solid rgba(34,197,94,0.4)'
+           : isFree 
+             ? '1px solid rgba(59,130,246,0.4)'
+             : `1px solid rgba(${sw.rgb},0.35)`,
+         boxShadow: isWin
+           ? '0 4px 16px rgba(34,197,94,0.2), 0 0 24px rgba(34,197,94,0.1), inset 0 1px 0 rgba(255,255,255,0.08)'
+           : isFree
+             ? '0 4px 16px rgba(59,130,246,0.2), 0 0 24px rgba(59,130,246,0.1), inset 0 1px 0 rgba(255,255,255,0.08)'
+             : `0 4px 16px rgba(${sw.rgb},0.12), 0 0 24px rgba(${sw.rgb},0.06), inset 0 1px 0 rgba(255,255,255,0.08)`,
+       }}>
+    <Zap className="w-5 h-5" 
+         style={{ 
+           color: isWin ? '#22c55e' : isFree ? '#3b82f6' : sw.hex, 
+           filter: isWin
+             ? 'drop-shadow(0 0 8px rgba(34,197,94,0.9))'
+             : isFree
+               ? 'drop-shadow(0 0 8px rgba(59,130,246,0.9))'
+               : `drop-shadow(0 0 8px rgba(${sw.rgb},0.8))`
+         }} />
+  </div>
+  <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 h-[3px] rounded-full"
+       style={{ 
+         width: 16, 
+         background: isWin
+           ? 'linear-gradient(90deg, transparent, #22c55e, transparent)'
+           : isFree
+             ? 'linear-gradient(90deg, transparent, #3b82f6, transparent)'
+             : `linear-gradient(90deg, transparent, ${sw.hex}, transparent)`,
+         boxShadow: isWin
+           ? '0 0 10px rgba(34,197,94,0.8)'
+           : isFree
+             ? '0 0 10px rgba(59,130,246,0.8)'
+             : `0 0 10px rgba(${sw.rgb},0.7)`
+       }} />
+</div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -369,7 +407,7 @@ function VoltzGameHistory({ games }: { games: any[] }) {
                           BACKUP POWER
                         </span>
                       ) : (
-                        <span className="text-xs font-bold tracking-[0.12em] uppercase" style={{ color: 'rgba(139,92,246,0.35)' }}>
+                        <span className="text-xs font-bold tracking-[0.12em] uppercase" style={{ color: 'rgba(248, 97, 97, 0.73)' }}>
                           POWER CUT
                         </span>
                       )}
@@ -379,8 +417,34 @@ function VoltzGameHistory({ games }: { games: any[] }) {
                             style={{ color: 'rgba(139,92,246,0.5)', background: 'rgba(139,92,246,0.06)' }}>
                         #{String(gameNumber).padStart(2, '0')}
                       </span>
-                      <div className="w-2 h-2 rounded-full" style={{ background: sw.hex, boxShadow: `0 0 8px rgba(${sw.rgb},0.6)` }} />
-                      <span className="text-[10px] font-black tracking-wider uppercase" style={{ color: sw.hex, opacity: 0.8 }}>{sw.name}</span>
+                     <div
+  className="w-2 h-2 rounded-full"
+  style={{
+    background: isWin 
+      ? "#22c55e" 
+      : isFree 
+        ? "#3b82f6"  // Blue for free play
+        : sw.hex,
+    boxShadow: isWin
+      ? "0 0 8px rgba(34,197,94,0.8)"
+      : isFree
+        ? "0 0 8px rgba(59,130,246,0.8)"  // Blue glow for free play
+        : `0 0 8px rgba(${sw.rgb},0.6)`
+  }}
+/>
+<span
+  className="text-[10px] font-black tracking-wider uppercase"
+  style={{
+    color: isWin 
+      ? "#22c55e" 
+      : isFree 
+        ? "#3b82f6"  // Blue text for free play
+        : sw.hex,
+    opacity: 0.8
+  }}
+>
+  {isWin ? "GREEN" : isFree ? "BLUE" : sw.name}
+</span>
                     </div>
                   </div>
 
@@ -431,8 +495,17 @@ function VoltzGameHistory({ games }: { games: any[] }) {
                         </span>
                       </div>
                     ) : (
-                      <span className="text-xs font-mono px-3 py-1.5 rounded-lg" style={{ color: 'rgba(139,92,246,0.2)', background: 'rgba(139,92,246,0.03)' }}
-                            data-testid={`prize-value-${currentPage * itemsPerPage + index + 1}`}>—</span>
+                      <div className="px-4 py-2.5 rounded-xl"
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(239,68,68,0.02))',
+                            border: '1px solid rgba(239,68,68,0.2)',
+                          }}>
+                        <span className="text-xs font-black tracking-wider"
+                              style={{ color: '#ef4444', textShadow: '0 0 8px rgba(239,68,68,0.4)' }}
+                              data-testid={`prize-value-${currentPage * itemsPerPage + index + 1}`}>
+                          NO WIN
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>

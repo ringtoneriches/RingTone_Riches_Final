@@ -666,7 +666,7 @@ const incompleteGames = orders.filter((order) => {
   const status = order.orders.status;
 
   return (
-    ["spin", "scratch", "plinko", "pop"].includes(type) &&
+    ["spin", "scratch", "plinko", "pop" , "voltz"].includes(type) &&
     ["paid", "completed"].includes(status) &&
     remaining > 0 &&
     !excludedCompetitionIds.includes(order.orders.competitionId)
@@ -976,10 +976,10 @@ const handleSortCodeChange = (e) => {
 
   const handleTopUp = () => {
     const amountNum = Number(topUpAmount);
-    if (amountNum < 3) {
+    if (amountNum < 1) {
       toast({
         title: "Invalid Amount",
-        description: "Minimum top-up amount is £3.00",
+        description: "Minimum top-up amount is £1.00",
         variant: "destructive",
       });
       return;
@@ -1502,7 +1502,7 @@ const handleDeleteBankAccount = (
                           Quick Top-Up
                         </label>
                         <div className="grid grid-cols-4 gap-2">
-                          {[10, 25, 50, 100].map((amount) => (
+                          {[3, 25, 50, 100].map((amount) => (
                             <button
                               key={amount}
                               onClick={() => setTopUpAmount(String(amount))}
@@ -1519,7 +1519,7 @@ const handleDeleteBankAccount = (
                         </div>
                         <input
                           type="number"
-                          min="3"
+                          min="1"
                           max="1000"
                           value={topUpAmount}
                           onChange={(e) => setTopUpAmount(e.target.value)}

@@ -26,176 +26,83 @@ interface PlayResult {
 }
 
 function fireWinConfetti() {
-  const duration = 5000;
-  const end = Date.now() + duration;
-  const colors = ["#eab308", "#f59e0b", "#fbbf24", "#fcd34d", "#ffffff", "#fef08a", "#d4af37", "#f5d76e"];
+  const colors = ["#eab308", "#f59e0b", "#fbbf24", "#ffffff"];
 
   confetti({
-    particleCount: 120,
-    spread: 100,
+    particleCount: 60,
+    spread: 90,
     origin: { y: 0.4, x: 0.5 },
     colors,
-    zIndex: 9999,
-    startVelocity: 45,
-    gravity: 0.8,
-    scalar: 1.2,
-    ticks: 300,
+    startVelocity: 35,
+    gravity: 0.9,
+    scalar: 1.1,
+    ticks: 200,
   });
 
   setTimeout(() => {
     confetti({
-      particleCount: 80,
+      particleCount: 40,
       angle: 60,
-      spread: 70,
+      spread: 60,
       origin: { x: 0, y: 0.5 },
       colors,
-      zIndex: 9999,
-      startVelocity: 55,
-      gravity: 0.9,
-      scalar: 1.1,
-      ticks: 250,
+      startVelocity: 40,
     });
+
     confetti({
-      particleCount: 80,
+      particleCount: 40,
       angle: 120,
-      spread: 70,
+      spread: 60,
       origin: { x: 1, y: 0.5 },
       colors,
-      zIndex: 9999,
-      startVelocity: 55,
-      gravity: 0.9,
-      scalar: 1.1,
-      ticks: 250,
+      startVelocity: 40,
     });
   }, 200);
 
   setTimeout(() => {
     confetti({
-      particleCount: 150,
-      spread: 160,
+      particleCount: 70,
+      spread: 140,
       origin: { y: 0.35, x: 0.5 },
       colors,
-      zIndex: 9999,
-      startVelocity: 35,
-      gravity: 0.6,
-      scalar: 1.4,
-      ticks: 350,
-      shapes: ['circle', 'square'],
+      scalar: 1.2,
+      ticks: 250,
     });
   }, 600);
-
-  const sideFrame = () => {
-    confetti({
-      particleCount: 5,
-      angle: 60,
-      spread: 45,
-      origin: { x: 0, y: 0.65 },
-      colors,
-      zIndex: 9999,
-      startVelocity: 40,
-      gravity: 1,
-    });
-    confetti({
-      particleCount: 5,
-      angle: 120,
-      spread: 45,
-      origin: { x: 1, y: 0.65 },
-      colors,
-      zIndex: 9999,
-      startVelocity: 40,
-      gravity: 1,
-    });
-    if (Date.now() < end) requestAnimationFrame(sideFrame);
-  };
-  sideFrame();
-
-  setTimeout(() => {
-    confetti({
-      particleCount: 100,
-      spread: 120,
-      origin: { y: 0.5, x: 0.3 },
-      colors,
-      zIndex: 9999,
-      startVelocity: 30,
-      gravity: 0.5,
-      scalar: 1.3,
-      ticks: 300,
-    });
-    confetti({
-      particleCount: 100,
-      spread: 120,
-      origin: { y: 0.5, x: 0.7 },
-      colors,
-      zIndex: 9999,
-      startVelocity: 30,
-      gravity: 0.5,
-      scalar: 1.3,
-      ticks: 300,
-    });
-  }, 1500);
-
-  setTimeout(() => {
-    confetti({
-      particleCount: 80,
-      spread: 180,
-      origin: { y: 0.3, x: 0.5 },
-      colors: ["#ffd700", "#ffffff", "#f5d76e"],
-      zIndex: 9999,
-      startVelocity: 25,
-      gravity: 0.4,
-      scalar: 1.5,
-      ticks: 400,
-    });
-  }, 3000);
 }
 
 function fireBackupConfetti() {
-  const colors = ["#06b6d4", "#22d3ee", "#67e8f9", "#a5f3fc", "#ffffff", "#0ea5e9"];
+  const colors = ["#06b6d4", "#22d3ee", "#ffffff"];
+
   confetti({
-    particleCount: 80,
+    particleCount: 50,
     spread: 100,
     origin: { y: 0.45, x: 0.5 },
     colors,
-    zIndex: 9999,
-    startVelocity: 35,
-    gravity: 0.7,
-    scalar: 1.2,
-    ticks: 250,
+    startVelocity: 30,
+    gravity: 0.8,
+    ticks: 200,
   });
+
   setTimeout(() => {
     confetti({
-      particleCount: 50,
+      particleCount: 30,
       angle: 60,
-      spread: 55,
+      spread: 50,
       origin: { x: 0, y: 0.6 },
       colors,
-      zIndex: 9999,
-      startVelocity: 40,
     });
+
     confetti({
-      particleCount: 50,
+      particleCount: 30,
       angle: 120,
-      spread: 55,
+      spread: 50,
       origin: { x: 1, y: 0.6 },
       colors,
-      zIndex: 9999,
-      startVelocity: 40,
     });
-  }, 300);
-  setTimeout(() => {
-    confetti({
-      particleCount: 60,
-      spread: 140,
-      origin: { y: 0.4, x: 0.5 },
-      colors,
-      zIndex: 9999,
-      startVelocity: 25,
-      gravity: 0.5,
-      scalar: 1.3,
-      ticks: 300,
-    });
-  }, 800);
+  }, 250);
 }
+
 
 export default function VoltzGameComponent({
   orderId,
@@ -533,6 +440,26 @@ const confirmGameResult = useCallback(async () => {
     }
   }, [playsRemaining, isProcessing]);
 
+  const formatSwitchText = (text: string) => {
+  // If it's a number and too long, format it
+  if (!isNaN(Number(text)) && text.length > 6) {
+    const num = parseInt(text);
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    }
+  }
+  
+  // If it's text and too long, truncate with ellipsis
+  if (text.length > 8) {
+    return text.substring(0, 6) + '';
+  }
+  
+  return text;
+};
+
   return (
     <div className="relative w-full" data-testid="voltz-game-container">
       <div
@@ -639,18 +566,23 @@ const confirmGameResult = useCallback(async () => {
 
               <div className="px-6 pt-10 pb-8 text-center">
                 <div className="flex justify-center gap-3 mb-6">
-                  {lastResult.switchTexts.map((text, i) => (
-                    <div key={i} className={`px-3 py-2 rounded-lg border text-sm font-black ${
-                      lastResult.isWin
-                        ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-                        : lastResult.outcome === "freeReplay"
-                        ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
-                        : 'bg-red-500/10 border-red-500/30 text-red-400'
-                    }`} data-testid={`text-switch-result-${i}`}>
-                      {text}
-                    </div>
-                  ))}
+              {lastResult.switchTexts.map((text, i) => (
+                <div 
+                  key={i} 
+                  className={`px-3 py-2 rounded-lg border text-sm font-black min-w-[60px] text-center ${
+                    lastResult.isWin
+                      ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                      : lastResult.outcome === "freeReplay"
+                      ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
+                      : 'bg-red-500/10 border-red-500/30 text-red-400'
+                  }`} 
+                  data-testid={`text-switch-result-${i}`}
+                  title={text} // Shows full text on hover
+                >
+                  {formatSwitchText(text)}
                 </div>
+              ))}
+            </div>
 
                 {lastResult.isWin ? (
                   <>

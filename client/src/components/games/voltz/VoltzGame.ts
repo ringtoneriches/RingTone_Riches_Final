@@ -85,472 +85,470 @@ export class VoltzGame extends Scene {
   private pendingSwitchIndex = 0;
 
   private revealCurrentSwitch() {
-    if (!this.pendingResult) return;
-    const idx = this.pendingSwitchIndex;
-    const switchTexts = this.pendingResult.switchTexts;
-    const text = switchTexts[idx];
+  if (!this.pendingResult) return;
+  const idx = this.pendingSwitchIndex;
+  const switchTexts = this.pendingResult.switchTexts;
+  const text = switchTexts[idx];
 
-    this.game.events.emit("electricStart");
+  this.game.events.emit("electricStart");
 
-    const anims = ["red", "blue", "green"];
-    const switchNum = idx + 1;
-    this.currentElectro.setScale(1, 0.2);
-    this.currentElectro.setAlpha(0.3);
-    this.anims.play(anims[idx] + "Electro", this.currentElectro);
+  const anims = ["red", "blue", "green"];
+  const switchNum = idx + 1;
+  
+  // Faster electro animation
+  this.currentElectro.setScale(1, 0.2);
+  this.currentElectro.setAlpha(0.4);
+  this.anims.play(anims[idx] + "Electro", this.currentElectro);
 
-    this.tweens.add({
-      targets: this.currentElectro,
-      scaleY: 0.5,
-      alpha: 0.8,
-      duration: 400,
-      ease: "Sine.easeIn",
-    });
+  // Compressed timeline - all animations happen faster
+  this.tweens.add({
+    targets: this.currentElectro,
+    scaleY: 0.8,
+    alpha: 1,
+    duration: 300, // Reduced from 400+600
+    ease: "Sine.easeInOut",
+  });
 
-    this.time.delayedCall(500, () => {
-      this.tweens.add({
-        targets: this.currentElectro,
-        scaleY: 0.8,
-        alpha: 1,
-        duration: 600,
-        ease: "Sine.easeInOut",
-      });
-    });
-
-    this.time.delayedCall(1200, () => {
-      this.tweens.add({
-        targets: this.currentElectro,
-        scaleY: 1.1,
-        alpha: 1,
-        duration: 500,
-        ease: "Sine.easeOut",
-      });
-
-      for (let i = 0; i < 4; i++) {
-        this.time.delayedCall(i * 120, () => {
-          this.tweens.add({
-            targets: [this.lightOverlay],
-            alpha: 0.12 + i * 0.03,
-            duration: 60,
-            yoyo: true,
-            ease: "Linear",
-          });
-        });
-      }
-    });
-
-    this.time.delayedCall(1800, () => {
-      this.tweens.add({
-        targets: this.currentElectro,
-        scaleY: 1.2,
-        alpha: 1,
-        duration: 400,
-        ease: "Power2",
-      });
-    });
-
-    this.time.delayedCall(2300, () => {
-      this.tweens.add({
-        targets: this.currentElectro,
-        scaleY: 0.1,
-        alpha: 0,
-        duration: 400,
-        ease: "Sine.easeIn",
-      });
-
-      this.game.events.emit("electricStop");
-
-      this.showRevealText(idx, text);
-
-      this.switchesPressed[idx] = true;
-      this.switchCount++;
-
-      if (this.switchCount >= 3) {
-        this.time.delayedCall(1200, () => {
-          this.finishRound();
-        });
-      } else {
-        this.time.delayedCall(600, () => {
-          this.isPlaying = false;
-        });
-      }
-    });
-  }
-
-  private showRevealText(switchIdx: number, text: string) {
-    const xPositions = [this.width * 0.2, this.width * 0.5, this.width * 0.8];
-    const x = xPositions[switchIdx];
-    const preBaseW = Math.round(this.width * 0.224);
-    const preBaseH = Math.round(preBaseW * 0.75);
-    const y = this.height * 0.32 - preBaseH * 0.035;
-
-    let textColor = "#ffffff";
-    let glowColor = "#ffd700";
-    let bgHex = 0x3d2e0a;
-    let fillHex = 0xd4af37;
-    let borderHex = 0xf5d76e;
-    let accentHex = 0xffd700;
-    let screenLightHex = 0x5c4a12;
-
-    if (this.pendingResult) {
-      if (this.pendingResult.outcome === "win") {
-        textColor = "#fffbe6";
-        glowColor = "#ffd700";
-        bgHex = 0x4a3a0c;
-        fillHex = 0xd4af37;
-        borderHex = 0xffd700;
-        accentHex = 0xf5d76e;
-        screenLightHex = 0x6b5518;
-      } else if (this.pendingResult.outcome === "freeReplay") {
-        textColor = "#e8ffff";
-        glowColor = "#00e5ff";
-        bgHex = 0x0a3040;
-        fillHex = 0x06b6d4;
-        borderHex = 0x22d3ee;
-        accentHex = 0x67e8f9;
-        screenLightHex = 0x0e4a5e;
-      } else {
-        textColor = "#fffbe6";
-        glowColor = "#ffd700";
-        bgHex = 0x3d2e0a;
-        fillHex = 0xd4af37;
-        borderHex = 0xf5d76e;
-        accentHex = 0xffd700;
-        screenLightHex = 0x5c4a12;
-      }
-    }
-
-    const scaleFactor = Math.min(this.width / 1024, this.height / 1536);
-    const sf = Math.max(scaleFactor, 0.45);
-    const baseW = Math.round(this.width * 0.224);
-    const baseH = Math.round(baseW * 0.75);
-    const boxW = Math.round(baseW * 1.105);
-    const boxH = Math.round(baseH * 0.87);
-    const boxXOffset = boxW * 0.0075;
-    const bx = x + boxXOffset;
-    const maxTextWidth = boxW - Math.round(14 * sf);
-    const radius = Math.round(Math.min(boxW, boxH) * 0.15);
-
-    let baseFontSize = Math.round(68 * sf);
-    if (text.length > 4) baseFontSize = Math.round(58 * sf);
-    if (text.length > 7) baseFontSize = Math.round(50 * sf);
-    if (text.length > 10) baseFontSize = Math.round(40 * sf);
-    if (text.length > 14) baseFontSize = Math.round(32 * sf);
-    baseFontSize = Math.max(baseFontSize, 22);
-
-    const extras: Phaser.GameObjects.GameObject[] = [];
-
-    const makeRoundedRect = (cx: number, cy: number, w: number, h: number, color: number, depth: number, r?: number): Phaser.GameObjects.Graphics => {
-      const g = this.add.graphics();
-      g.fillStyle(color, 1);
-      g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, r !== undefined ? r : radius);
-      g.setDepth(depth);
-      g.setAlpha(0);
-      return g;
-    };
-
-    const outerGlow1 = makeRoundedRect(bx, y, boxW + 24, boxH + 24, accentHex, 7, radius + 6);
-    const outerGlow2 = makeRoundedRect(bx, y, boxW + 16, boxH + 16, fillHex, 7.5, radius + 4);
-    extras.push(outerGlow1, outerGlow2);
-
-    const borderThick = Math.max(3, Math.round(4 * sf));
-    const borderOuter = makeRoundedRect(bx, y, boxW + borderThick * 2, boxH + borderThick * 2, borderHex, 8, radius + borderThick);
-    extras.push(borderOuter);
-
-    const screenBg = makeRoundedRect(bx, y, boxW, boxH, bgHex, 8.5);
-    screenBg.setAlpha(1);
-    screenBg.setScale(1, 0.02);
-    this.revealedBgs[switchIdx] = screenBg;
-
-    const screenLight = makeRoundedRect(bx, y, boxW - 2, boxH - 2, screenLightHex, 8.6);
-    extras.push(screenLight);
-
-    const innerFill = makeRoundedRect(bx, y, boxW - 4, boxH - 4, fillHex, 8.8);
-    extras.push(innerFill);
-
-    const innerHighlight = makeRoundedRect(bx, y - boxH * 0.18, boxW - 8, boxH * 0.3, 0xffffff, 8.9, Math.round(radius * 0.5));
-    extras.push(innerHighlight);
-
-    const bottomHighlight = makeRoundedRect(bx, y + boxH * 0.2, boxW - 8, boxH * 0.2, fillHex, 8.85, Math.round(radius * 0.5));
-    extras.push(bottomHighlight);
-
-    const cornerSize = Math.round(12 * sf);
-    const corners = [
-      [-1, -1], [1, -1], [-1, 1], [1, 1]
-    ].map(([dx, dy]) => {
-      const cx = bx + dx * (boxW / 2 - cornerSize / 2);
-      const cy = y + dy * (boxH / 2 - cornerSize / 2);
-      const corner = makeRoundedRect(cx, cy, cornerSize, cornerSize, accentHex, 9.5, Math.round(cornerSize * 0.3));
-      extras.push(corner);
-      return corner;
-    });
-
-    const glow = this.add.text(bx, y, text, {
-      fontFamily: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif",
-      fontSize: `${baseFontSize + 4}px`,
-      color: glowColor,
-      align: "center",
-      stroke: glowColor,
-      strokeThickness: Math.round(16 * sf),
-      wordWrap: { width: maxTextWidth, useAdvancedWrap: true },
-    })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setDepth(10);
-
-    const main = this.add.text(bx, y, text, {
-      fontFamily: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif",
-      fontSize: `${baseFontSize}px`,
-      color: textColor,
-      align: "center",
-      stroke: "#000000",
-      strokeThickness: Math.round(6 * sf),
-      wordWrap: { width: maxTextWidth, useAdvancedWrap: true },
-      shadow: {
-        offsetX: 0,
-        offsetY: Math.round(3 * sf),
-        color: 'rgba(0,0,0,0.95)',
-        blur: Math.round(12 * sf),
-        fill: true,
-      },
-    })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setScale(0.05)
-      .setDepth(11);
-
-    const switchLabels = ["RED", "BLUE", "GREEN"];
-    const labelColors = ["#ff4444", "#4488ff", "#44dd66"];
-    const subFontSize = Math.max(Math.round(11 * sf), 8);
-    const sub = this.add.text(bx, y + boxH / 2 + Math.round(12 * sf), switchLabels[switchIdx], {
-      fontFamily: "Impact, 'Arial Black', sans-serif",
-      fontSize: `${subFontSize}px`,
-      color: labelColors[switchIdx],
-      align: "center",
-      stroke: "#000000",
-      strokeThickness: Math.round(3 * sf),
-      letterSpacing: Math.round(6 * sf),
-    })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setDepth(11);
-
-    this.revealedTexts[switchIdx] = main;
-    this.revealedGlows[switchIdx] = glow;
-    this.revealedSubs[switchIdx] = sub;
-    this.revealedBgExtras[switchIdx] = extras;
-
-    this.tweens.add({
-      targets: screenBg,
-      scaleY: 1,
-      alpha: 1,
-      duration: 200,
-      ease: "Power4",
-    });
-
-    this.time.delayedCall(60, () => {
+  // Quick flash effects
+  for (let i = 0; i < 3; i++) {
+    this.time.delayedCall(i * 60, () => { // Reduced from 120
       this.tweens.add({
         targets: [this.lightOverlay],
-        alpha: 0.25,
-        duration: 50,
+        alpha: 0.15 + i * 0.04,
+        duration: 40, // Reduced from 60
         yoyo: true,
         ease: "Linear",
       });
     });
+  }
 
-    this.time.delayedCall(150, () => {
-      this.tweens.add({
-        targets: borderOuter,
-        alpha: 1,
-        duration: 150,
-        ease: "Sine.easeOut",
-      });
+  // Faster peak and fade
+  this.time.delayedCall(400, () => { // Reduced from 1200
+    this.tweens.add({
+      targets: this.currentElectro,
+      scaleY: 1.1,
+      alpha: 1,
+      duration: 300, // Reduced from 500
+      ease: "Sine.easeOut",
+    });
+  });
 
-      this.tweens.add({
-        targets: outerGlow2,
-        alpha: 0.35,
-        duration: 300,
-        ease: "Sine.easeOut",
-      });
+  this.time.delayedCall(700, () => { // Reduced from 1800
+    this.tweens.add({
+      targets: this.currentElectro,
+      scaleY: 1.2,
+      alpha: 1,
+      duration: 250, // Reduced from 400
+      ease: "Power2",
+    });
+  });
 
-      this.tweens.add({
-        targets: outerGlow1,
-        alpha: 0.2,
-        duration: 400,
-        ease: "Sine.easeOut",
-      });
+  this.time.delayedCall(950, () => { // Reduced from 2300
+    this.tweens.add({
+      targets: this.currentElectro,
+      scaleY: 0.1,
+      alpha: 0,
+      duration: 250, // Reduced from 400
+      ease: "Sine.easeIn",
     });
 
-    this.time.delayedCall(120, () => {
-      this.tweens.add({
-        targets: screenLight,
-        alpha: 0.5,
-        duration: 200,
-        ease: "Sine.easeOut",
+    this.game.events.emit("electricStop");
+
+    this.showRevealText(idx, text);
+
+    this.switchesPressed[idx] = true;
+    this.switchCount++;
+
+    if (this.switchCount >= 3) {
+      this.time.delayedCall(800, () => { // Slightly reduced
+        this.finishRound();
       });
+    } else {
+      this.time.delayedCall(400, () => { // Reduced from 600
+        this.isPlaying = false;
+      });
+    }
+  });
+}
+
+ private showRevealText(switchIdx: number, text: string) {
+  const xPositions = [this.width * 0.2, this.width * 0.5, this.width * 0.8];
+  const x = xPositions[switchIdx];
+  const preBaseW = Math.round(this.width * 0.224);
+  const preBaseH = Math.round(preBaseW * 0.75);
+  const y = this.height * 0.32 - preBaseH * 0.035;
+
+  let textColor = "#ffffff";
+  let glowColor = "#ffd700";
+  let bgHex = 0x3d2e0a;
+  let fillHex = 0xd4af37;
+  let borderHex = 0xf5d76e;
+  let accentHex = 0xffd700;
+  let screenLightHex = 0x5c4a12;
+
+  if (this.pendingResult) {
+    if (this.pendingResult.outcome === "win") {
+      textColor = "#fffbe6";
+      glowColor = "#ffd700";
+      bgHex = 0x4a3a0c;
+      fillHex = 0xd4af37;
+      borderHex = 0xffd700;
+      accentHex = 0xf5d76e;
+      screenLightHex = 0x6b5518;
+    } else if (this.pendingResult.outcome === "freeReplay") {
+      textColor = "#e8ffff";
+      glowColor = "#00e5ff";
+      bgHex = 0x0a3040;
+      fillHex = 0x06b6d4;
+      borderHex = 0x22d3ee;
+      accentHex = 0x67e8f9;
+      screenLightHex = 0x0e4a5e;
+    } else {
+      textColor = "#fffbe6";
+      glowColor = "#ffd700";
+      bgHex = 0x3d2e0a;
+      fillHex = 0xd4af37;
+      borderHex = 0xf5d76e;
+      accentHex = 0xffd700;
+      screenLightHex = 0x5c4a12;
+    }
+  }
+
+  const scaleFactor = Math.min(this.width / 1024, this.height / 1536);
+  const sf = Math.max(scaleFactor, 0.45);
+  const baseW = Math.round(this.width * 0.224);
+  const baseH = Math.round(baseW * 0.75);
+  const boxW = Math.round(baseW * 1.105);
+  const boxH = Math.round(baseH * 0.87);
+  const boxXOffset = boxW * 0.0075;
+  const bx = x + boxXOffset;
+  const maxTextWidth = boxW - Math.round(14 * sf);
+  const radius = Math.round(Math.min(boxW, boxH) * 0.15);
+
+  let baseFontSize = Math.round(68 * sf);
+  if (text.length > 4) baseFontSize = Math.round(58 * sf);
+  if (text.length > 7) baseFontSize = Math.round(50 * sf);
+  if (text.length > 10) baseFontSize = Math.round(40 * sf);
+  if (text.length > 14) baseFontSize = Math.round(32 * sf);
+  baseFontSize = Math.max(baseFontSize, 22);
+
+  const extras: Phaser.GameObjects.GameObject[] = [];
+
+  const makeRoundedRect = (cx: number, cy: number, w: number, h: number, color: number, depth: number, r?: number): Phaser.GameObjects.Graphics => {
+    const g = this.add.graphics();
+    g.fillStyle(color, 1);
+    g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, r !== undefined ? r : radius);
+    g.setDepth(depth);
+    g.setAlpha(0);
+    return g;
+  };
+
+  const outerGlow1 = makeRoundedRect(bx, y, boxW + 24, boxH + 24, accentHex, 7, radius + 6);
+  const outerGlow2 = makeRoundedRect(bx, y, boxW + 16, boxH + 16, fillHex, 7.5, radius + 4);
+  extras.push(outerGlow1, outerGlow2);
+
+  const borderThick = Math.max(3, Math.round(4 * sf));
+  const borderOuter = makeRoundedRect(bx, y, boxW + borderThick * 2, boxH + borderThick * 2, borderHex, 8, radius + borderThick);
+  extras.push(borderOuter);
+
+  const screenBg = makeRoundedRect(bx, y, boxW, boxH, bgHex, 8.5);
+  screenBg.setAlpha(1);
+  screenBg.setScale(1, 0.02);
+  this.revealedBgs[switchIdx] = screenBg;
+
+  const screenLight = makeRoundedRect(bx, y, boxW - 2, boxH - 2, screenLightHex, 8.6);
+  extras.push(screenLight);
+
+  const innerFill = makeRoundedRect(bx, y, boxW - 4, boxH - 4, fillHex, 8.8);
+  extras.push(innerFill);
+
+  const innerHighlight = makeRoundedRect(bx, y - boxH * 0.18, boxW - 8, boxH * 0.3, 0xffffff, 8.9, Math.round(radius * 0.5));
+  extras.push(innerHighlight);
+
+  const bottomHighlight = makeRoundedRect(bx, y + boxH * 0.2, boxW - 8, boxH * 0.2, fillHex, 8.85, Math.round(radius * 0.5));
+  extras.push(bottomHighlight);
+
+  const cornerSize = Math.round(12 * sf);
+  const corners = [
+    [-1, -1], [1, -1], [-1, 1], [1, 1]
+  ].map(([dx, dy]) => {
+    const cx = bx + dx * (boxW / 2 - cornerSize / 2);
+    const cy = y + dy * (boxH / 2 - cornerSize / 2);
+    const corner = makeRoundedRect(cx, cy, cornerSize, cornerSize, accentHex, 9.5, Math.round(cornerSize * 0.3));
+    extras.push(corner);
+    return corner;
+  });
+
+  const glow = this.add.text(bx, y, text, {
+    fontFamily: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif",
+    fontSize: `${baseFontSize + 4}px`,
+    color: glowColor,
+    align: "center",
+    stroke: glowColor,
+    strokeThickness: Math.round(16 * sf),
+    wordWrap: { width: maxTextWidth, useAdvancedWrap: true },
+  })
+    .setOrigin(0.5)
+    .setAlpha(0)
+    .setDepth(10);
+
+  const main = this.add.text(bx, y, text, {
+    fontFamily: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif",
+    fontSize: `${baseFontSize}px`,
+    color: textColor,
+    align: "center",
+    stroke: "#000000",
+    strokeThickness: Math.round(6 * sf),
+    wordWrap: { width: maxTextWidth, useAdvancedWrap: true },
+    shadow: {
+      offsetX: 0,
+      offsetY: Math.round(3 * sf),
+      color: 'rgba(0,0,0,0.95)',
+      blur: Math.round(12 * sf),
+      fill: true,
+    },
+  })
+    .setOrigin(0.5)
+    .setAlpha(0)
+    .setScale(0.05)
+    .setDepth(11);
+
+  const switchLabels = ["RED", "BLUE", "GREEN"];
+  const labelColors = ["#ff4444", "#4488ff", "#44dd66"];
+  const subFontSize = Math.max(Math.round(11 * sf), 8);
+  const sub = this.add.text(bx, y + boxH / 2 + Math.round(12 * sf), switchLabels[switchIdx], {
+    fontFamily: "Impact, 'Arial Black', sans-serif",
+    fontSize: `${subFontSize}px`,
+    color: labelColors[switchIdx],
+    align: "center",
+    stroke: "#000000",
+    strokeThickness: Math.round(3 * sf),
+    letterSpacing: Math.round(6 * sf),
+  })
+    .setOrigin(0.5)
+    .setAlpha(0)
+    .setDepth(11);
+
+  this.revealedTexts[switchIdx] = main;
+  this.revealedGlows[switchIdx] = glow;
+  this.revealedSubs[switchIdx] = sub;
+  this.revealedBgExtras[switchIdx] = extras;
+
+  // ============= OPTIMIZED ANIMATIONS =============
+  // All durations and delays reduced by ~40-50%
+
+  // Screen background grows quickly
+  this.tweens.add({
+    targets: screenBg,
+    scaleY: 1,
+    alpha: 1,
+    duration: 120, // Was 200
+    ease: "Power4",
+  });
+
+  // Quick flash
+  this.time.delayedCall(40, () => { // Was 60
+    this.tweens.add({
+      targets: [this.lightOverlay],
+      alpha: 0.25,
+      duration: 30, // Was 50
+      yoyo: true,
+      ease: "Linear",
+    });
+  });
+
+  // Border and glows appear faster
+  this.time.delayedCall(80, () => { // Was 150
+    this.tweens.add({
+      targets: borderOuter,
+      alpha: 1,
+      duration: 80, // Was 150
+      ease: "Sine.easeOut",
     });
 
-    this.time.delayedCall(200, () => {
-      this.tweens.add({
-        targets: innerFill,
-        alpha: 0.2,
-        duration: 250,
-        ease: "Sine.easeOut",
-      });
-
-      this.tweens.add({
-        targets: innerHighlight,
-        alpha: 0.12,
-        duration: 300,
-        ease: "Sine.easeOut",
-      });
-
-      this.tweens.add({
-        targets: bottomHighlight,
-        alpha: 0.08,
-        duration: 300,
-        ease: "Sine.easeOut",
-      });
-
-      corners.forEach((c, i) => {
-        this.time.delayedCall(i * 40, () => {
-          this.tweens.add({
-            targets: c,
-            alpha: 0.9,
-            duration: 150,
-            ease: "Sine.easeOut",
-          });
-        });
-      });
+    this.tweens.add({
+      targets: outerGlow2,
+      alpha: 0.35,
+      duration: 150, // Was 300
+      ease: "Sine.easeOut",
     });
 
-    this.time.delayedCall(250, () => {
-      for (let i = 0; i < 4; i++) {
-        this.time.delayedCall(i * 50, () => {
-          this.tweens.add({
-            targets: [this.lightOverlay],
-            alpha: 0.06 + i * 0.03,
-            duration: 25,
-            yoyo: true,
-            ease: "Linear",
-          });
-        });
-      }
+    this.tweens.add({
+      targets: outerGlow1,
+      alpha: 0.2,
+      duration: 200, // Was 400
+      ease: "Sine.easeOut",
+    });
+  });
 
-      this.tweens.add({
-        targets: main,
-        alpha: 1,
-        scaleX: 1,
-        scaleY: 1,
-        duration: 350,
-        ease: "Back.easeOut",
-      });
+  // Screen light appears
+  this.time.delayedCall(60, () => { // Was 120
+    this.tweens.add({
+      targets: screenLight,
+      alpha: 0.5,
+      duration: 120, // Was 200
+      ease: "Sine.easeOut",
+    });
+  });
 
-      this.tweens.add({
-        targets: glow,
-        alpha: 0.4,
-        duration: 300,
-        ease: "Sine.easeOut",
-      });
-
-      this.tweens.add({
-        targets: sub,
-        alpha: 0.9,
-        duration: 300,
-        ease: "Power2",
-      });
+  // Inner elements appear
+  this.time.delayedCall(100, () => { // Was 200
+    this.tweens.add({
+      targets: innerFill,
+      alpha: 0.2,
+      duration: 150, // Was 250
+      ease: "Sine.easeOut",
     });
 
-    this.time.delayedCall(600, () => {
-      this.tweens.add({
-        targets: outerGlow1,
-        alpha: { from: 0.2, to: 0.08 },
-        duration: 1000,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1,
-      });
+    this.tweens.add({
+      targets: innerHighlight,
+      alpha: 0.12,
+      duration: 180, // Was 300
+      ease: "Sine.easeOut",
+    });
 
-      this.tweens.add({
-        targets: outerGlow2,
-        alpha: { from: 0.35, to: 0.15 },
-        duration: 800,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1,
-        delay: 200,
-      });
+    this.tweens.add({
+      targets: bottomHighlight,
+      alpha: 0.08,
+      duration: 180, // Was 300
+      ease: "Sine.easeOut",
+    });
 
-      this.tweens.add({
-        targets: borderOuter,
-        alpha: { from: 1, to: 0.5 },
-        duration: 1200,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1,
-      });
-
-      this.tweens.add({
-        targets: glow,
-        alpha: { from: 0.4, to: 0.15 },
-        scaleX: { from: 1, to: 1.06 },
-        scaleY: { from: 1, to: 1.06 },
-        duration: 1000,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1,
-      });
-
-      this.tweens.add({
-        targets: screenLight,
-        alpha: { from: 0.5, to: 0.25 },
-        duration: 1800,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1,
-      });
-
-      this.tweens.add({
-        targets: innerFill,
-        alpha: { from: 0.2, to: 0.08 },
-        duration: 1500,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1,
-      });
-
-      this.tweens.add({
-        targets: innerHighlight,
-        alpha: { from: 0.12, to: 0.04 },
-        duration: 1200,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1,
-        delay: 300,
-      });
-
-      this.tweens.add({
-        targets: bottomHighlight,
-        alpha: { from: 0.08, to: 0.03 },
-        duration: 1400,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1,
-        delay: 200,
-      });
-
-      corners.forEach((c, i) => {
+    corners.forEach((c, i) => {
+      this.time.delayedCall(i * 20, () => { // Was 40
         this.tweens.add({
           targets: c,
-          alpha: { from: 0.9, to: 0.3 },
-          duration: 900,
-          ease: "Sine.easeInOut",
-          yoyo: true,
-          repeat: -1,
-          delay: i * 100,
+          alpha: 0.9,
+          duration: 80, // Was 150
+          ease: "Sine.easeOut",
         });
       });
     });
-  }
+  });
+
+  // Text reveals
+  this.time.delayedCall(150, () => { // Was 250
+    // Faster light flashes
+    for (let i = 0; i < 3; i++) { // Reduced from 4 flashes to 3
+      this.time.delayedCall(i * 30, () => { // Was 50
+        this.tweens.add({
+          targets: [this.lightOverlay],
+          alpha: 0.08 + i * 0.05,
+          duration: 15, // Was 25
+          yoyo: true,
+          ease: "Linear",
+        });
+      });
+    }
+
+    // Main text pops in
+    this.tweens.add({
+      targets: main,
+      alpha: 1,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 200, // Was 350
+      ease: "Back.easeOut",
+    });
+
+    // Glow appears
+    this.tweens.add({
+      targets: glow,
+      alpha: 0.4,
+      duration: 180, // Was 300
+      ease: "Sine.easeOut",
+    });
+
+    // Subtext appears
+    this.tweens.add({
+      targets: sub,
+      alpha: 0.9,
+      duration: 180, // Was 300
+      ease: "Power2",
+    });
+  });
+
+  // Looping animations start sooner but with less intensity
+  this.time.delayedCall(400, () => { // Was 600
+    // Outer glow pulsing - faster cycle
+    this.tweens.add({
+      targets: outerGlow1,
+      alpha: { from: 0.2, to: 0.1 },
+      duration: 600, // Was 1000
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
+
+    this.tweens.add({
+      targets: outerGlow2,
+      alpha: { from: 0.35, to: 0.2 },
+      duration: 500, // Was 800
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+      delay: 100, // Was 200
+    });
+
+    // Border pulsing
+    this.tweens.add({
+      targets: borderOuter,
+      alpha: { from: 1, to: 0.6 },
+      duration: 800, // Was 1200
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
+
+    // Text glow pulsing
+    this.tweens.add({
+      targets: glow,
+      alpha: { from: 0.4, to: 0.2 },
+      scaleX: { from: 1, to: 1.04 }, // Less scale change
+      scaleY: { from: 1, to: 1.04 },
+      duration: 600, // Was 1000
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
+
+    // Screen light pulsing
+    this.tweens.add({
+      targets: screenLight,
+      alpha: { from: 0.5, to: 0.3 },
+      duration: 1000, // Was 1800
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
+
+    // Inner fill pulsing
+    this.tweens.add({
+      targets: innerFill,
+      alpha: { from: 0.2, to: 0.1 },
+      duration: 900, // Was 1500
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
+
+    // Corner pulses - faster
+    corners.forEach((c, i) => {
+      this.tweens.add({
+        targets: c,
+        alpha: { from: 0.9, to: 0.4 },
+        duration: 600, // Was 900
+        ease: "Sine.easeInOut",
+        yoyo: true,
+        repeat: -1,
+        delay: i * 60, // Was 100
+      });
+    });
+
+    // Removed some redundant highlights to reduce complexity
+    // (innerHighlight and bottomHighlight pulsing removed - they're subtle anyway)
+  });
+}
 
   private finishRound() {
     if (!this.pendingResult) return;

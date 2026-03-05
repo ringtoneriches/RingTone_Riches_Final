@@ -29,6 +29,10 @@ import {
   FileDigit,
   Send,
   Zap,
+  Megaphone,
+  Percent,
+  QrCode,
+  Network,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,8 +71,17 @@ const sidebarGroups = [
     items: [
       { name: "Competitions", path: "/admin/competitions", icon: Trophy },
       { name: "Entries", path: "/admin/entries", icon: Ticket },
-     
-      
+    ],
+  },
+  {
+    name: "Marketing",
+    icon: null,
+    items: [
+      { name: "Marketing", path: "/admin/marketing", icon: Mail },
+      { name: "Discounts", path: "/admin/discount", icon: TicketIcon },
+      { name: "Redeem Code", path: "/admin/redeem", icon: FileDigit },
+      { name: "Intelligence", path: "/admin/intelligence", icon: Brain },
+      { name: "Notification", path: "/admin/notification", icon: Send },
     ],
   },
   {
@@ -80,14 +93,9 @@ const sidebarGroups = [
       { name: "Transactions", path: "/admin/transactions", icon: Euro },
       { name: "Orders", path: "/admin/orders", icon: ShoppingCart },
       { name: "Support", path: "/admin/support", icon: MessageSquare, hasNotification: true, notificationType: "support" },
-      { name: "Intelligence", path: "/admin/intelligence", icon: Brain },
-      { name: "Discounts", path: "/admin/discount", icon: TicketIcon },
       { name: "Withdrawals", path: "/admin/withdrawals", icon: ArrowDownCircle, hasNotification: true, notificationType: "withdrawals" },
       { name: "Verification", path: "/admin/verification", icon: Check, hasNotification: true, notificationType: "verification" },
-      { name: "Redeem Code", path: "/admin/redeem", icon: FileDigit},
-      // { name: "Notification", path: "/admin/notification", icon: Send},
       { name: "Well-being", path: "/admin/well-being", icon: Heart },
-      { name: "Marketing", path: "/admin/marketing", icon: Mail },
       { name: "Settings", path: "/admin/settings", icon: Settings },
     ],
   },

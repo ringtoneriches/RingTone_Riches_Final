@@ -50,6 +50,7 @@ import {
   type InsertSupportMessage,
   plinkoUsage,
   userVerifications,
+  voltzUsage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sum, sql, notInArray, lt } from "drizzle-orm";
@@ -369,6 +370,14 @@ async getUserRingtonePoints(userId: string): Promise<number> {
   
     return Number(result[0]?.count || 0);
   }
+  async getVoltzUsed(orderId: string) {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(voltzUsage)
+      .where(eq(voltzUsage.orderId, orderId));
+  
+    return Number(result[0]?.count || 0);
+  }
   
 
  async getUserOrders(userId: string): Promise<any[]> {
@@ -407,6 +416,10 @@ async getUserRingtonePoints(userId: string): Promise<number> {
         }
         else if (competitionType === 'plinko' && order.orders.status === 'completed') {
           const used = await this.getPlinkoUsed(order.orders.id);
+          remainingPlays = order.orders.quantity - used;
+        }
+        else if (competitionType === 'voltz' && order.orders.status === 'completed') {
+          const used = await this.getVoltzUsed(order.orders.id);
           remainingPlays = order.orders.quantity - used;
         }
 
