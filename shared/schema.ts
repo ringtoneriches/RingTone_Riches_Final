@@ -126,21 +126,6 @@ export const competitions = pgTable("competitions", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const gamePrizes = pgTable("game_prizes", {
-  id: serial("id").primaryKey(),
-
-  gameId: uuid("game_id")
-    .references(() => competitions.id)
-    .notNull(),
-
-  title: text("title").notNull(), // £1000, iPhone etc
-  value: integer("value"), // optional
-
-  totalQty: integer("total_qty").notNull(),
-  remainingQty: integer("remaining_qty").notNull(),
-
-  createdAt: timestamp("created_at").defaultNow(),
-});
 
 // User tickets/entries
 export const tickets = pgTable("tickets", {
@@ -269,19 +254,22 @@ export const redeemCodeRedemptions = pgTable("redeem_code_redemptions", {
 });
 
 
-export const smsMessages = pgTable("sms_messages", {
+// Push Notifications table
+export const pushNotifications = pgTable("push_notifications", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   title: varchar("title").notNull(),
   message: text("message").notNull(),
+  type: varchar("type", { 
+    enum: ["info", "success", "warning", "promotion", "system"] 
+  }).default("info"),
   targetType: varchar("target_type", { 
-    enum: ["all", "specific_users", "by_filter"] 
+    enum: ["all", "specific_users"] 
   }).notNull(),
   targetUserIds: jsonb("target_user_ids"),
-  targetFilter: jsonb("target_filter"),
   sentCount: integer("sent_count").default(0),
-  failedCount: integer("failed_count").default(0),
+  readCount: integer("read_count").default(0),
   status: varchar("status", { 
-    enum: ["draft", "scheduled", "sent", "cancelled", "partial"] 
+    enum: ["draft", "scheduled", "sent", "cancelled"] 
   }).default("draft"),
   createdBy: varchar("created_by").references(() => users.id),
   sentAt: timestamp("sent_at"),
@@ -289,19 +277,16 @@ export const smsMessages = pgTable("sms_messages", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// SMS Delivery tracking
-export const smsDeliveries = pgTable("sms_deliveries", {
+// Push Notification Deliveries tracking
+export const pushDeliveries = pgTable("push_deliveries", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  smsMessageId: uuid("sms_message_id").notNull().references(() => smsMessages.id, { onDelete: "cascade" }),
+  notificationId: uuid("notification_id").notNull().references(() => pushNotifications.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  phoneNumber: varchar("phone_number").notNull(),
   status: varchar("status", { 
-    enum: ["pending", "sent", "delivered", "failed", "undelivered"] 
+    enum: ["pending", "sent", "delivered", "read", "failed"] 
   }).default("pending"),
-  twilioMessageId: varchar("twilio_message_id"),
-  errorMessage: text("error_message"),
+  readAt: timestamp("read_at"),
   sentAt: timestamp("sent_at"),
-  deliveredAt: timestamp("delivered_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -706,19 +691,7 @@ export const insertRedeemCodeRedemptionSchema = createInsertSchema(redeemCodeRed
   redeemedAt: true,
 });
 
-export const insertSmsMessageSchema = createInsertSchema(smsMessages).omit({
-  id: true,
-  sentCount: true,
-  failedCount: true,
-  sentAt: true,
-  createdAt: true,
-  updatedAt: true,
-});
 
-export const insertSmsDeliverySchema = createInsertSchema(smsDeliveries).omit({
-  id: true,
-  createdAt: true,
-});
 
 
 
@@ -786,11 +759,7 @@ export type RedeemCode = typeof redeemCodes.$inferSelect;
 export type InsertRedeemCode = z.infer<typeof insertRedeemCodeSchema>;
 export type RedeemCodeRedemption = typeof redeemCodeRedemptions.$inferSelect;
 export type InsertRedeemCodeRedemption = z.infer<typeof insertRedeemCodeRedemptionSchema>;
-// Types
-export type SmsMessage = typeof smsMessages.$inferSelect;
-export type InsertSmsMessage = z.infer<typeof insertSmsMessageSchema>;
-export type SmsDelivery = typeof smsDeliveries.$inferSelect;
-export type InsertSmsDelivery = z.infer<typeof insertSmsDeliverySchema>;
+
 
 // Registration and login schemas
 export const registerUserSchema = createInsertSchema(users).pick({

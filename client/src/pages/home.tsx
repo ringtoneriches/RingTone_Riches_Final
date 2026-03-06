@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import CompetitionCard from "@/components/competition-card";
@@ -7,7 +7,7 @@ import StatsBanner from "@/components/stats-banner";
 import { Competition, User } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import FeaturedCompetitions from "./featuredCompetitions";
-import { Sparkles, Trophy, Zap, Gift, Mail, CheckCircle2, Shield, Award, Star, ChevronRight, Crown, Wallet, RotateCw, Ticket, Coins, Play, TrendingUp, Flame, PartyPopper, Circle, Target, TicketCheck } from "lucide-react";
+import { Sparkles, Trophy, Zap, Gift, Mail, CheckCircle2, Shield, Award, Star, ChevronRight, Crown, Wallet, RotateCw, Ticket, Coins, Play, TrendingUp, Flame, PartyPopper, Circle, Target, TicketCheck, Clock, Users, MapPin, Diamond, Gem } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,9 +17,25 @@ import { useToast } from "@/hooks/use-toast";
 import PremiumFacebookEngagement from "@/components/PremiumFacebookEngagement";
 import CompactFacebookCTA from "@/components/PremiumFacebookEngagement";
 import Testimonials from "@/components/testimonials";
+import heroImage from "@assets/explosive_jackpot_winning_moment.png";
+import trophyImage from "@assets/trophy_winner_celebration_moment.png";
+import heroJackpotImg from "@assets/generated_images/hero_jackpot_3d.png";
+import heroBgVideo from "@assets/generated_videos/luxury-casino-hero-bg.mp4";
 
-
-
+function useInView() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isVisible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setVisible(true); obs.unobserve(el); }
+    }, { threshold: 0.1 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  return { ref, isVisible };
+}
 
 export default function Home() {
   const { isAuthenticated, user } = useAuth() as { isAuthenticated: boolean; user: User | null };
@@ -117,338 +133,748 @@ export default function Home() {
     newsletterUnsubscribeMutation.mutate();
   };
 
+  const [playersOnline] = useState(() => Math.floor(Math.random() * 200) + 340);
+
+  const [countdownTime, setCountdownTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date();
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+      const diff = endOfDay.getTime() - now.getTime();
+      setCountdownTime({
+        hours: Math.floor(diff / (1000 * 60 * 60)),
+        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+      });
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const gamesSection = useInView();
+  const winnersSection = useInView();
+  const newsletterSection = useInView();
+
+  const gameCards = [
+    {
+      Icon: TicketCheck,
+      title: "Scratch Card",
+      desc: "Scratch to win",
+      gradient: "linear-gradient(135deg, #dc2626, #f97316)",
+      glowColor: "rgba(239,68,68,0.25)",
+      borderColor: "rgba(239,68,68,0.4)",
+      bgColor: "rgba(239,68,68,0.06)",
+      iconBg: "linear-gradient(135deg, #dc2626, #ef4444)",
+      prize: "£5,000",
+      filter: "scratch",
+      badge: "JACKPOT",
+      badgeColor: "#ef4444",
+      popular: true
+    },
+    {
+      Icon: Circle,
+      title: "Ringtone Plinko",
+      desc: "Drop to win",
+      gradient: "linear-gradient(135deg, #14b8a6, #06b6d4)",
+      glowColor: "rgba(20,184,166,0.25)",
+      borderColor: "rgba(20,184,166,0.4)",
+      bgColor: "rgba(20,184,166,0.06)",
+      iconBg: "linear-gradient(135deg, #14b8a6, #2dd4bf)",
+      prize: "£5,000",
+      filter: "all",
+      badge: "HOT",
+      badgeColor: "#06b6d4",
+      popular: false
+    },
+    {
+      Icon: Target,
+      title: "Ringtone Pop",
+      desc: "Pop to win",
+      gradient: "linear-gradient(135deg, #10b981, #84cc16)",
+      glowColor: "rgba(34,197,94,0.25)",
+      borderColor: "rgba(34,197,94,0.4)",
+      bgColor: "rgba(34,197,94,0.06)",
+      iconBg: "linear-gradient(135deg, #10b981, #34d399)",
+      prize: "£1,000",
+      filter: "all",
+      badge: "NEW",
+      badgeColor: "#10b981",
+      popular: false
+    },
+    {
+      Icon: Zap,
+      title: "Competition",
+      desc: "Win Big Prizes",
+      gradient: "linear-gradient(135deg, #3b82f6, #06b6d4)",
+      glowColor: "rgba(59,130,246,0.25)",
+      borderColor: "rgba(59,130,246,0.4)",
+      bgColor: "rgba(59,130,246,0.06)",
+      iconBg: "linear-gradient(135deg, #3b82f6, #60a5fa)",
+      prize: "£1,000",
+      filter: "instant",
+      badge: "MEGA",
+      badgeColor: "#d4af37",
+      popular: false
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-950 text-foreground relative overflow-x-hidden">
+    <div className="min-h-screen text-foreground relative overflow-x-hidden" style={{ backgroundColor: '#070709' }}>
       <Header />
 
-      {/* RINGTONE RICHES PORTAL - Cinematic Gamified Experience */}
-      <section className="relative min-h-screen overflow-hidden bg-[#030712]">
-        
-        {/* Immersive Background with Spotlight Effect */}
+      <div className="fixed inset-0 pointer-events-none z-0 opacity-[0.02]" style={{
+        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+      }} />
+
+      <section className="relative min-h-[100vh] overflow-hidden" style={{ background: '#070709' }}>
         <div className="absolute inset-0 pointer-events-none">
-          {/* Deep base */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,#0a0f1a_0%,#030712_50%,#000_100%)]" />
-          
-          {/* Golden spotlight from top */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(212,175,55,0.25),transparent_70%)]" />
-          
-          {/* Animated glow orbs */}
-          <div className="absolute top-[20%] left-[10%] w-96 h-96 rounded-full bg-amber-500/8 blur-[100px] animate-pulse" />
-          <div className="absolute bottom-[10%] right-[10%] w-72 h-72 rounded-full bg-purple-500/6 blur-[80px] animate-pulse" style={{ animationDelay: '1s' }} />
-          <div className="absolute top-[50%] right-[20%] w-64 h-64 rounded-full bg-emerald-500/5 blur-[60px] animate-pulse" style={{ animationDelay: '2s' }} />
-          
-          {/* Subtle grid pattern */}
-          <div className="absolute inset-0 opacity-[0.02]" style={{
-            backgroundImage: `linear-gradient(rgba(212,175,55,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.3) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px'
+          <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover" style={{ opacity: 0.55, filter: 'saturate(1.4) brightness(0.85) contrast(1.1)' }}>
+            <source src={heroBgVideo} type="video/mp4" />
+          </video>
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(7,7,9,0.1) 0%, rgba(7,7,9,0.15) 30%, rgba(7,7,9,0.4) 65%, #070709 100%)' }} />
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(7,7,9,0.5) 0%, transparent 25%, transparent 75%, rgba(7,7,9,0.5) 100%)' }} />
+
+          <div className="absolute bottom-0 left-0 right-0 h-[40%] nv-grid-floor" style={{
+            backgroundImage: `
+              linear-gradient(rgba(212,175,55,0.06) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(212,175,55,0.06) 1px, transparent 1px)
+            `,
+            backgroundSize: '70px 70px',
+            maskImage: 'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 100%)',
+            transform: 'perspective(500px) rotateX(60deg)',
+            transformOrigin: 'bottom center',
           }} />
+
+          <div className="absolute top-[5%] left-[8%] w-[800px] h-[800px] rounded-full nv-orb-1" style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.02) 40%, transparent 65%)', filter: 'blur(100px)' }} />
+          <div className="absolute bottom-[5%] right-[2%] w-[600px] h-[600px] rounded-full nv-orb-2" style={{ background: 'radial-gradient(circle, rgba(245,215,110,0.08) 0%, transparent 50%)', filter: 'blur(120px)' }} />
+
+          <div className="absolute top-0 left-0 right-0 h-[2px] nv-line-sweep" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.9), rgba(245,215,110,0.7), transparent)', backgroundSize: '200% 100%' }} />
+          <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent 5%, rgba(212,175,55,0.3) 30%, rgba(212,175,55,0.5) 50%, rgba(212,175,55,0.3) 70%, transparent 95%)' }} />
         </div>
 
-        {/* Header Spacer */}
-        <div className="" />
+        {[...Array(25)].map((_, i) => (
+          <div key={i} className="absolute rounded-full pointer-events-none nv-sparkle" style={{
+            width: `${1 + (i % 4)}px`,
+            height: `${1 + (i % 4)}px`,
+            background: i % 4 === 0 ? '#f5d76e' : i % 4 === 1 ? '#d4af37' : i % 4 === 2 ? '#fffbe6' : '#f5d742',
+            top: `${2 + (i * 3.8) % 92}%`,
+            left: `${1 + (i * 4.1) % 97}%`,
+            animationDelay: `${i * 0.25}s`,
+            animationDuration: `${2 + (i % 5) * 0.5}s`,
+            boxShadow: `0 0 ${8 + i % 8}px rgba(212,175,55,0.7)`,
+          }} />
+        ))}
 
-        {/* Main Content */}
-        <div className="relative z-10 px-4 py-6 sm:py-8">
+        <div className="relative z-20 flex items-center min-h-[auto] lg:min-h-[100vh] px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20">
           <div className="w-full max-w-7xl mx-auto">
-            
-            {/* === TIER 1: Promise Banner + Live Feed === */}
-            <div className="text-center mb-8 sm:mb-12 animate-fade-up">
-              {/* Three-Part Promise Banner */}
-              <div className="inline-flex items-center gap-1 sm:gap-2 px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/20 border border-amber-500/40 backdrop-blur-sm mb-6">
-                <span className="text-amber-400 font-black text-sm sm:text-base tracking-wide">PLAY</span>
-                <span className="text-white/30">•</span>
-                <span className="text-emerald-400 font-black text-sm sm:text-base tracking-wide">WIN</span>
-                <span className="text-white/30">•</span>
-                <span className="text-purple-400 font-black text-sm sm:text-base tracking-wide">CELEBRATE</span>
-              </div>
-              
-              {/* Personalized Welcome */}
-              <h1 className="mb-4">
-                <span className="block text-white/60 text-lg sm:text-xl font-medium mb-2">
-                  Welcome back, <span className="text-amber-400 font-bold">{user?.firstName || user?.email?.split('@')[0] || 'Champion'}</span>
-                </span>
-                <span className="block text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white leading-none">
-                  Ready to Join the
-                </span>
-                <span className="block text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-none animate-text-shimmer">
-                  Winner List
-                </span>
-              </h1>
-              
-              
-            </div>
 
-            {/* === TIER 2: Powerful Hero Section === */}
-            <div className="grid lg:grid-cols-12 gap-6 lg:gap-8 mb-8">
-              
-              {/* Main Hero Image - Takes More Space */}
-              <div className="lg:col-span-8 animate-fade-up-delay-1">
-                <div className="relative">
-                  
-                  {/* Dramatic ambient glow */}
-                  <div className="absolute -inset-8 rounded-3xl bg-gradient-to-br from-amber-500/30 via-yellow-500/20 to-purple-500/10 blur-3xl" />
-                  
-                  {/* Hero Image Container - Large and Impactful */}
-                  <div className="relative z-10">
-                    {/* Outer glow ring */}
-                    <div className="absolute -inset-3 rounded-3xl bg-gradient-to-r from-amber-500/50 via-yellow-400/30 to-amber-500/50 blur-xl" />
-                    
-                    {/* Premium frame */}
-                    <div className="relative rounded-2xl overflow-hidden border-2 border-amber-500/60 shadow-[0_0_100px_rgba(212,175,55,0.5)]">
-                      {/* Hero Image - Large and Clean */}
-                      <img 
-                        src="/attached_assets/herosection.png"
-                        alt="Win Amazing Prizes - Spin, Scratch, Win Instantly"
-                        className="w-full h-auto object-cover"
-                      />
+            <div className="grid lg:grid-cols-12 gap-6 sm:gap-8 lg:gap-10 items-center">
+              <div className="lg:col-span-7 space-y-5 sm:space-y-6 nv-col-left text-center lg:text-left flex flex-col items-center lg:items-start">
+
+                <div className="nv-fade-in" style={{ animationDelay: '0.1s' }}>
+                  <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full nv-badge-glow relative overflow-hidden" style={{
+                    background: 'linear-gradient(135deg, rgba(212,175,55,0.15), rgba(184,134,11,0.08), rgba(212,175,55,0.12))',
+                    border: '1px solid rgba(212,175,55,0.35)',
+                    boxShadow: '0 0 30px rgba(212,175,55,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
+                  }}>
+                    <div className="absolute inset-0 nv-badge-shine-sweep" />
+                    <Crown className="w-4 h-4 nv-crown-spin" style={{ color: '#f5d76e', filter: 'drop-shadow(0 0 6px rgba(245,215,110,0.6))' }} />
+                    <span style={{ background: 'linear-gradient(90deg, #b8860b, #d4af37, #f5d76e, #fffef2, #f5d76e, #d4af37, #b8860b)', backgroundSize: '200% auto', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} className="text-xs font-black uppercase tracking-[0.25em] nv-badge-text-shimmer">Exclusive Prizes & Rewards</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 nv-badge-dot-pulse" style={{ boxShadow: '0 0 8px rgba(212,175,55,0.8)' }} />
+                  </div>
+                </div>
+
+                <div className="nv-fade-in" style={{ animationDelay: '0.15s' }}>
+                  <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg" style={{
+                    background: 'linear-gradient(135deg, rgba(255,255,255,0.03), rgba(212,175,55,0.04))',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                  }}>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400/50" />
+                    <span className="text-white text-sm font-semibold tracking-wide">
+                      Welcome back, <span className="font-black nv-name-glow" style={{ background: 'linear-gradient(90deg, #d4af37, #f5d76e, #fffef2, #f5d76e, #d4af37)', backgroundSize: '200% auto', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 15px rgba(212,175,55,0.5))' }}>{user?.firstName || user?.email?.split('@')[0] || 'Champion'}</span>
+                    </span>
+                    <Diamond className="w-3 h-3 text-amber-400/30" />
+                  </div>
+                </div>
+
+                <div className="overflow-hidden w-full">
+                  <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-[4.5rem] font-black leading-[1.05] tracking-tighter">
+                    <span className="block nv-text-reveal" style={{ animationDelay: '0.2s' }}>
+                      <span className="nv-hero-title-glow" style={{ 
+                        color: 'white',
+                        textShadow: '0 0 80px rgba(255,255,255,0.15), 0 0 40px rgba(212,175,55,0.08), 0 4px 20px rgba(0,0,0,0.5)',
+                        letterSpacing: '-0.03em',
+                      }}>Your Next Big</span>
+                    </span>
+                    <span className="block nv-text-reveal" style={{ animationDelay: '0.4s' }}>
+                      <span className="nv-gold-shimmer-text" style={{
+                        background: 'linear-gradient(100deg, #705a1a 0%, #b8860b 8%, #d4af37 16%, #f5d76e 24%, #fffef2 35%, #fff 42%, #fffef2 48%, #f5d76e 56%, #d4af37 65%, #b8860b 75%, #8b6914 85%, #d4af37 95%, #f5d76e 100%)',
+                        backgroundSize: '400% auto',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        filter: 'drop-shadow(0 0 80px rgba(212,175,55,0.6)) drop-shadow(0 0 30px rgba(245,215,110,0.3)) drop-shadow(0 8px 16px rgba(0,0,0,0.8))',
+                        letterSpacing: '-0.02em',
+                      }}>Win Awaits</span>
+                      <span className="inline-block ml-3 nv-trophy-bounce">
+                        <Trophy className="w-10 h-10 sm:w-12 sm:h-12 inline-block" style={{ color: '#f5d76e', filter: 'drop-shadow(0 0 20px rgba(245,215,110,0.6))' }} />
+                      </span>
+                    </span>
+                  </h1>
+                </div>
+
+                <p className="text-white text-sm sm:text-base lg:text-lg max-w-md leading-relaxed nv-fade-in" style={{ animationDelay: '0.6s', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
+                  Premium jackpots, instant prizes, and exclusive games. Play your way to <span className="font-bold text-amber-400/60">extraordinary wins</span>.
+                </p>
+
+                <div className="flex items-center justify-center lg:justify-start gap-3 sm:gap-4 nv-fade-in flex-wrap" style={{ animationDelay: '0.65s' }}>
+                  <div className="flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 rounded-xl" data-testid="badge-players-online" style={{
+                    background: 'linear-gradient(135deg, rgba(16,185,129,0.1), rgba(16,185,129,0.04))',
+                    border: '1px solid rgba(16,185,129,0.25)',
+                    boxShadow: '0 0 20px rgba(16,185,129,0.08), inset 0 1px 0 rgba(255,255,255,0.04)',
+                  }}>
+                    <div className="relative">
+                      <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full" style={{ boxShadow: '0 0 10px rgba(16,185,129,0.8)' }} />
+                      <div className="absolute inset-0 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
+                    </div>
+                    <span className="text-emerald-400 text-xs sm:text-sm font-black tracking-wide">{playersOnline} <span className="text-emerald-400/60 text-[10px] sm:text-xs font-semibold uppercase">online</span></span>
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 rounded-xl" data-testid="badge-countdown" style={{
+                    background: 'linear-gradient(135deg, rgba(212,175,55,0.08), rgba(212,175,55,0.03))',
+                    border: '1px solid rgba(212,175,55,0.2)',
+                    boxShadow: '0 0 20px rgba(212,175,55,0.06), inset 0 1px 0 rgba(255,255,255,0.04)',
+                  }}>
+                    <Clock className="w-4 h-4" style={{ color: '#f5d76e', filter: 'drop-shadow(0 0 6px rgba(245,215,110,0.5))' }} />
+                    <div className="flex items-center gap-1 font-mono">
+                      {[
+                        { val: String(countdownTime.hours).padStart(2, '0'), label: 'h' },
+                        { val: String(countdownTime.minutes).padStart(2, '0'), label: 'm' },
+                        { val: String(countdownTime.seconds).padStart(2, '0'), label: 's' }
+                      ].map((unit, i) => (
+                        <span key={i} className="flex items-center gap-0.5">
+                          <span className="inline-flex flex-col items-center min-w-[28px] sm:min-w-[36px] px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg relative overflow-hidden" style={{ 
+                            background: 'linear-gradient(180deg, rgba(212,175,55,0.15), rgba(184,134,11,0.08))',
+                            border: '1px solid rgba(212,175,55,0.3)',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06), 0 0 15px rgba(212,175,55,0.08)',
+                          }}>
+                            <span className="text-[13px] sm:text-[15px] font-black leading-none" style={{ background: 'linear-gradient(180deg, #fff, #f5d76e)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{unit.val}</span>
+                            <span className="text-[6px] sm:text-[7px] font-bold uppercase mt-0.5" style={{ color: 'rgba(212,175,55,0.5)' }}>{unit.label}</span>
+                          </span>
+                          {i < 2 && <span className="text-amber-400/40 text-sm font-black nv-colon-blink mx-0.5" style={{ textShadow: '0 0 8px rgba(212,175,55,0.5)' }}>:</span>}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </div>
-                
-                {/* Power Stats Row Below Image */}
-                <div className="grid grid-cols-3 gap-3 mt-6">
-                  <div className="text-center p-4 rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-600/5 border border-amber-500/30">
-                    <div className="text-3xl sm:text-4xl font-black animate-text-shimmer">£20K+</div>
-                    <div className="text-amber-400/80 text-xs uppercase tracking-wider font-bold mt-1">Weekly Prizes</div>
-                  </div>
-                  <div className="text-center p-4 rounded-xl bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border border-emerald-500/30">
-                    <div className="text-3xl sm:text-4xl font-black text-emerald-400">1000+</div>
-                    <div className="text-emerald-400/80 text-xs uppercase tracking-wider font-bold mt-1">Winners</div>
-                  </div>
-                  <div className="text-center p-4 rounded-xl bg-gradient-to-br from-purple-500/15 to-purple-600/5 border border-purple-500/30">
-                    <div className="text-3xl sm:text-4xl font-black text-purple-400">99p</div>
-                    <div className="text-purple-400/80 text-xs uppercase tracking-wider font-bold mt-1">From Only</div>
-                  </div>
+
+                <div className="flex items-center justify-center lg:justify-start gap-2 sm:gap-3 nv-fade-in flex-wrap" style={{ animationDelay: '0.7s' }}>
+                  {[
+                    { value: "£20K+", label: "in prizes", icon: Coins, color: '#f5d76e' },
+                    { value: "1,000+", label: "winners", icon: Trophy, color: '#34d399' },
+                    { value: "99p", label: "per entry", icon: Ticket, color: '#fbbf24' }
+                  ].map((stat, index) => (
+                    <div key={index} className="flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full transition-all duration-300 hover:scale-[1.03] nv-stat-float" data-testid={`text-stat-value-${index}`} style={{
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      backdropFilter: 'blur(10px)',
+                      animationDelay: `${0.7 + index * 0.1}s`,
+                    }}>
+                      <stat.icon className="w-3.5 sm:w-4 h-3.5 sm:h-4 flex-shrink-0" style={{ color: stat.color }} />
+                      <span className="text-base sm:text-lg font-black text-white tracking-tight">{stat.value}</span>
+                      <span className="text-white text-[10px] sm:text-xs font-medium">{stat.label}</span>
+                    </div>
+                  ))}
                 </div>
-                
-                {/* CTA Button */}
-                <div className="text-center mt-6">
+
+                <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 nv-fade-in w-full sm:w-auto" style={{ animationDelay: '0.8s' }}>
                   <Button 
                     onClick={() => {
-    const section = document.getElementById("competitions-grid");
-    if (section) {
-      const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
-      window.scrollTo({
-        top: elementTop - 100, // Same offset
-        behavior: "smooth"
-      });
-    }
-  }}
-                    className="h-14 px-12 text-lg font-black rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-900 border-0 shadow-[0_0_60px_rgba(212,175,55,0.6)] hover:shadow-[0_0_80px_rgba(212,175,55,0.8)] hover:scale-105 transition-all"
+                      const section = document.getElementById("competitions-grid");
+                      if (section) {
+                        const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
+                        window.scrollTo({ top: elementTop - 100, behavior: "smooth" });
+                      }
+                    }}
+                    className="group relative h-12 px-8 text-sm font-bold rounded-full text-[#0a0a0a] border-0 transition-all duration-300 overflow-hidden hover:scale-[1.03] uppercase tracking-wider nv-cta-glow w-full sm:w-auto"
+                    style={{
+                      background: 'linear-gradient(135deg, #f5d742 0%, #d4af37 50%, #b8860b 100%)',
+                      boxShadow: '0 0 40px rgba(212,175,55,0.25), 0 4px 20px rgba(0,0,0,0.4)',
+                    }}
                     data-testid="button-hero-play-now"
                   >
-                    <Play className="w-6 h-6 mr-2" />
-                    START WINNING NOW
+                    <span className="absolute inset-0 nv-btn-shine" />
+                    <span className="relative flex items-center gap-2">
+                      <Play className="w-4 h-4" />
+                      Start Winning Now
+                    </span>
+                  </Button>
+                  <Button 
+                    variant="ghost"
+                    onClick={() => {
+                      const section = document.getElementById("games-section");
+                      if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                    className="group h-12 px-6 text-sm font-medium rounded-full transition-all duration-300 hover:scale-[1.03] w-full sm:w-auto"
+                    style={{
+                      color: 'rgb(255, 255, 255)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      background: 'rgba(255,255,255,0.03)',
+                    }}
+                    data-testid="button-hero-browse"
+                  >
+                    <Sparkles className="w-4 h-4 mr-2 text-amber-400/50" />
+                    Explore Games
                   </Button>
                 </div>
               </div>
 
-              {/* Right Panel: Ultra Premium Game Selection */}
-              <div className="lg:col-span-4 animate-fade-up-delay-2">
-                
-                {/* Animated Border Container */}
-                <div className="relative rounded-xl sm:rounded-2xl p-[2px] bg-gradient-to-r from-amber-500 via-purple-500 to-emerald-500 animate-gradient-x">
-                  <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500 via-purple-500 to-emerald-500 blur-lg sm:blur-xl opacity-40 sm:opacity-50 animate-gradient-x" />
-                  
-                  <div className="relative rounded-xl sm:rounded-2xl bg-slate-950 p-3 sm:p-5 overflow-hidden">
-                    {/* Floating orbs - hidden on mobile for performance */}
-                    <div className="hidden sm:block absolute top-4 right-4 w-20 h-20 bg-amber-500/20 rounded-full blur-2xl animate-pulse" />
-                    <div className="hidden sm:block absolute bottom-4 left-4 w-16 h-16 bg-purple-500/20 rounded-full blur-2xl animate-pulse delay-500" />
-                    
-                    {/* Header with live indicator */}
-                    <div className="relative text-center mb-4 sm:mb-6">
-                      <div className="inline-flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full bg-gradient-to-r from-red-500/20 via-orange-500/20 to-amber-500/20 border border-red-500/40 mb-2 sm:mb-4 animate-pulse">
-                        <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-red-500 rounded-full animate-ping" />
-                        <span className="text-red-400 text-xs sm:text-sm font-black tracking-wider">LIVE NOW</span>
-                        <Flame className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />
+              <div className="lg:col-span-5 nv-col-right" id="games-section">
+                <div className="relative rounded-2xl overflow-hidden mb-5 nv-hero-img-card group" style={{
+                  border: '1px solid rgba(212,175,55,0.2)',
+                  boxShadow: '0 30px 80px rgba(0,0,0,0.7), 0 0 80px rgba(212,175,55,0.08)',
+                }}>
+                  <div className="absolute -inset-[2px] rounded-2xl nv-border-spin" style={{
+                    background: 'conic-gradient(from 0deg, rgba(212,175,55,0.5), transparent 20%, rgba(245,215,110,0.5) 40%, transparent 60%, rgba(212,175,55,0.5) 80%, transparent)',
+                    filter: 'blur(2px)',
+                    zIndex: 0,
+                  }} />
+                  <div className="relative z-[1] rounded-2xl overflow-hidden">
+                    <img src={heroJackpotImg} alt="Win Amazing Prizes" className="w-full h-auto object-cover nv-img-float" style={{ maxHeight: '280px' }} />
+                    <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 0%, transparent 50%, rgba(7,7,9,0.3) 75%, rgba(7,7,9,0.7) 100%)' }} />
+                    <div className="absolute inset-0 nv-img-sheen" />
+                    <div className="absolute top-2.5 left-2.5">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-xl" style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', boxShadow: '0 0 15px rgba(16,185,129,0.15)' }}>
+                        <div className="relative">
+                          <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full" style={{ boxShadow: '0 0 8px rgba(16,185,129,0.8)' }} />
+                          <div className="absolute inset-0 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
+                        </div>
+                        <span className="text-emerald-400 text-[11px] font-black uppercase tracking-wider">Live</span>
                       </div>
-                      <h3 className="text-lg sm:text-2xl font-black text-white mb-0.5 sm:mb-1">Pick Your Winner</h3>
-                      <p className="text-white/50 text-xs sm:text-sm">4 ways to win big today</p>
                     </div>
-                    
-                    {/* Game Cards - Responsive */}
-                    <div className="relative space-y-2.5 sm:space-y-4">
-          {[
-            {
-              Icon: TicketCheck,
-              title: "Scratch Card",
-              tagline: "Scratch to win",
-              stars: 5,
-              badge: "JACKPOT",
-              badgeColor: "bg-rose-500",
-              gradient: "from-rose-600 via-pink-500 to-orange-500",
-              borderColor: "border-rose-400/50",
-              glowColor: "shadow-rose-500/50",
-              filter: "scratch",
-              prize: "£5,000"
-              // winChance: "FAST"£10,000
-
-            },
-            { Icon: Circle, title: "Ringtone Plinko", tagline: "Drop in to win",  stars: 5, badge: "HOT", badgeColor: "bg-purple-500", gradient: "from-purple-600 via-purple-500 to-violet-600", borderColor: "border-purple-400/50", glowColor: "shadow-purple-500/50", filter: "all", prize: "£5,000" },
-            { Icon: Target, title: "Ringtone Pop", tagline: "Pop to win",  stars: 5, badge: "POPULAR", badgeColor: "bg-emerald-500", gradient: "from-emerald-600 via-emerald-500 to-teal-600", borderColor: "border-emerald-400/50", glowColor: "shadow-emerald-500/50", filter: "all" ,prize: "£1,000" },
-            { Icon: Zap, title: "Competition", tagline: "Win Big Prizes",  stars: 5,  badge: "MEGA", badgeColor: "bg-amber-500", gradient: "from-amber-500 via-yellow-500 to-orange-500", borderColor: "border-amber-400/50", glowColor: "shadow-amber-500/50", filter: "instant" ,prize: "£1,000" }
-          ].map((game, index) => (
-            <button
-              key={index}
-            onClick={() => {
-            handleFilterChange(game.filter);
-            setTimeout(() => {
-              const section = document.getElementById("competitions-grid");
-              if (section) {
-                // Get the element's position
-                const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
-                // Scroll to a position 100px above the element
-                window.scrollTo({
-                  top: elementTop - 100, // Adjust this value (100px up from the element)
-                  behavior: "smooth"
-                });
-              }
-            }, 100);
-          }}
-      className={`w-full group relative rounded-xl sm:rounded-2xl bg-gradient-to-r ${game.gradient} p-[2px] sm:p-1 transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl ${game.glowColor} shadow-md sm:shadow-lg`}
-      data-testid={`button-game-${game.title.toLowerCase().replace(/\s+/g, '-')}`}
-    >
-      {/* Inner card */}
-      <div className={`relative rounded-lg sm:rounded-xl bg-slate-900/90 backdrop-blur-sm p-2.5 sm:p-4 border ${game.borderColor}`}>
-        {/* Badge */}
-        <div className={`absolute -top-1.5 -right-1.5 sm:-top-2 sm:-right-2 ${game.badgeColor} text-white text-[8px] sm:text-[10px] font-black px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg`}>
-          {game.badge}
-        </div>
-        
-        {/* Shine effect */}
-        <div className="absolute inset-0 rounded-lg sm:rounded-xl bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-        
-        <div className="relative flex items-center gap-2.5 sm:gap-4">
-          {/* Glowing Icon */}
-          <div className={`relative w-10 h-10 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-gradient-to-br ${game.gradient} flex items-center justify-center shadow-lg sm:shadow-xl shrink-0`}>
-            <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-white/20" />
-            <game.Icon className="w-5 h-5 sm:w-8 sm:h-8 text-white drop-shadow-lg" />
-          </div>
-          
-          {/* Content */}
-          <div className="flex-1 text-left min-w-0">
-            <div className="text-white font-black text-sm sm:text-lg mb-0 sm:mb-0.5 truncate">{game.title}</div>
-            <div className="text-white/70 text-[10px] sm:text-xs font-medium mb-0.5 sm:mb-1">{game.tagline}</div>
-            {/* Stars Rating */}
-            <div className="flex items-center gap-0.5">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className={`w-2.5 h-2.5 sm:w-3 sm:h-3 ${i < game.stars ? 'text-amber-400 fill-amber-400' : 'text-white/20'}`} />
-              ))}
-              <span className="text-amber-400 text-[9px] sm:text-[10px] font-bold ml-1">{game.winChance}</span>
-            </div>
-          </div>
-          
-          {/* Prize Column */}
-          <div className="text-right shrink-0">
-            <div className="text-white/50 text-[8px] sm:text-[10px] uppercase tracking-wider font-bold hidden sm:block">Win Up To</div>
-            <div className={`text-xl sm:text-3xl font-black bg-gradient-to-r ${game.gradient} bg-clip-text text-transparent`}>{game.prize}</div>
-            <div className="flex items-center justify-end gap-0.5 sm:gap-1 mt-0.5 sm:mt-1 text-white/40 group-hover:text-white transition-colors">
-              <span className="text-[10px] sm:text-xs font-bold">PLAY</span>
-              <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </button>
-  ))}
+                    <div className="absolute top-2.5 right-2.5">
+                      <div className="px-3 py-1.5 rounded-full backdrop-blur-xl" style={{ background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.3)', boxShadow: '0 0 15px rgba(212,175,55,0.1)' }}>
+                        <span className="text-[11px] font-black uppercase tracking-wider" style={{ background: 'linear-gradient(90deg, #d4af37, #f5d76e)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Premium</span>
+                      </div>
+                    </div>
                   </div>
-                    
-                    {/* Bottom - Winning Message */}
-                    <div className="mt-3 sm:mt-5 pt-3 sm:pt-4 border-t border-white/10">
-  <div className="flex items-center justify-between">
-    <div className="flex items-center gap-2 sm:gap-3">
-      <div className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-500/30">
-        <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400" />
-        <span className="text-amber-400 text-[10px] sm:text-xs font-bold">Your luck awaits</span>
-      </div>
-    </div>
-    <Button 
-      variant="ghost"
-      size="sm"
-      onClick={() => {
-        handleFilterChange("all");
-        setTimeout(() => {
-          const section = document.getElementById("competitions-grid");
-          if (section) {
-            const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
-            window.scrollTo({
-              top: elementTop - 100,
-              behavior: "smooth"
-            });
-          }
-        }, 100);
-      }}
-      className="text-amber-400 hover:text-amber-300 font-bold h-7 sm:h-8 text-xs sm:text-sm px-2 sm:px-3"
-      data-testid="button-view-all-prizes"
-    >
-      View All
-      <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 ml-0.5 sm:ml-1" />
-    </Button>
-  </div>
-</div>
+                </div>
+
+                <div className="rounded-2xl overflow-hidden nv-panel-glass relative" style={{
+                  background: 'linear-gradient(180deg, rgba(12,12,18,0.97), rgba(6,6,10,0.99))',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  boxShadow: '0 30px 80px rgba(0,0,0,0.7), 0 0 60px rgba(212,175,55,0.05)',
+                  backdropFilter: 'blur(20px)',
+                }}>
+                  <div className="absolute -inset-[1px] rounded-2xl nv-panel-border-glow" style={{
+                    background: 'conic-gradient(from 0deg, rgba(239,68,68,0.4), rgba(20,184,166,0.4), rgba(34,197,94,0.4), rgba(59,130,246,0.4), rgba(245,215,110,0.4), rgba(239,68,68,0.4))',
+                    filter: 'blur(1px)',
+                    zIndex: 0,
+                  }} />
+                  <div className="relative z-[1] rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(180deg, rgba(12,12,18,0.98), rgba(6,6,10,0.99))' }}>
+                  <div className="p-4 pb-3 relative" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <div className="absolute top-0 left-0 right-0 h-[2px] nv-panel-top-line" style={{ background: 'linear-gradient(90deg, rgba(239,68,68,0.6), rgba(20,184,166,0.6), rgba(34,197,94,0.6), rgba(59,130,246,0.6), rgba(245,215,110,0.6))', backgroundSize: '200% 100%' }} />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center nv-pick-icon-pulse relative" style={{ background: 'linear-gradient(135deg, rgba(245,215,110,0.2), rgba(239,68,68,0.15))', border: '1px solid rgba(245,215,110,0.3)', boxShadow: '0 0 20px rgba(245,215,110,0.15), 0 0 40px rgba(245,215,110,0.08)' }}>
+                          <Flame className="w-5 h-5" style={{ color: '#f5d76e', filter: 'drop-shadow(0 0 8px rgba(245,215,110,0.8))' }} />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-black tracking-tight leading-none nv-pick-title-shimmer" style={{ background: 'linear-gradient(90deg, #fff, #f5d76e, #ff6b6b, #14b8a6, #fff)', backgroundSize: '300% auto', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Pick Your Winner</h3>
+                          <p className="text-white/25 text-[10px] mt-0.5 font-medium">Choose your game mode</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full nv-games-counter-pulse" style={{ background: 'linear-gradient(135deg, rgba(245,215,110,0.12), rgba(239,68,68,0.08))', border: '1px solid rgba(245,215,110,0.2)', boxShadow: '0 0 15px rgba(245,215,110,0.1)' }}>
+                        <Sparkles className="w-3 h-3" style={{ color: '#f5d76e', filter: 'drop-shadow(0 0 4px rgba(245,215,110,0.6))' }} />
+                        <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#f5d76e' }}>4 Games</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 space-y-2">
+                    {gameCards.map((game, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          handleFilterChange(game.filter);
+                          setTimeout(() => {
+                            const section = document.getElementById("competitions-grid");
+                            if (section) {
+                              const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
+                              window.scrollTo({ top: elementTop - 100, behavior: "smooth" });
+                            }
+                          }, 100);
+                        }}
+                        className="group w-full relative rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.03] hover:-translate-y-0.5 nv-game-card"
+                        data-testid={`button-game-${game.title.toLowerCase().replace(/\s+/g, '-')}`}
+                        style={{
+                          background: `linear-gradient(135deg, ${game.bgColor}, rgba(10,10,15,0.97))`,
+                          border: `1px solid ${game.borderColor}`,
+                          boxShadow: `0 4px 25px ${game.glowColor}, 0 0 40px ${game.glowColor}, 0 8px 30px rgba(0,0,0,0.4)`,
+                        }}
+                      >
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-400" style={{ background: `linear-gradient(135deg, ${game.glowColor}, transparent 50%)` }} />
+                        <div className="absolute right-0 top-0 bottom-0 w-[70%] opacity-[0.04]" style={{ background: `radial-gradient(circle at 100% 50%, ${game.borderColor}, transparent 60%)` }} />
+                        <div className="absolute inset-0 nv-game-card-shimmer" style={{ background: `linear-gradient(105deg, transparent 40%, ${game.glowColor} 50%, transparent 60%)`, backgroundSize: '250% 100%', opacity: 0.15 }} />
+                        
+                        <div className="relative flex items-center gap-3 p-3">
+                          <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 relative nv-game-icon-glow" style={{
+                            background: game.iconBg,
+                            boxShadow: `0 6px 25px ${game.glowColor}, 0 0 40px ${game.glowColor}, 0 0 60px ${game.glowColor}`,
+                          }}>
+                            <game.Icon className="w-5 h-5 text-white drop-shadow-lg" />
+                            <div className="absolute -inset-1 rounded-xl opacity-40 group-hover:opacity-80 transition-opacity" style={{ background: game.iconBg, filter: 'blur(10px)', zIndex: -1 }} />
+                          </div>
+
+                          <div className="flex-1 text-left min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <h4 className="text-white font-bold text-[13px] truncate" style={{ textShadow: '0 0 15px rgba(255,255,255,0.1)' }}>{game.title}</h4>
+                              {game.popular && (
+                                <span className="px-2 py-0.5 text-[7px] font-black uppercase tracking-wider rounded-full text-white nv-badge-pulse" style={{
+                                  background: game.badgeColor,
+                                  boxShadow: `0 0 15px ${game.glowColor}, 0 0 30px ${game.glowColor}`,
+                                }}>{game.badge}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex gap-0.5">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star key={i} className="w-2.5 h-2.5 text-amber-400 fill-amber-400" style={{ filter: 'drop-shadow(0 0 3px rgba(245,158,11,0.5))' }} />
+                                ))}
+                              </div>
+                              <span className="text-white/20 text-[10px] font-medium">{game.desc}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-right flex-shrink-0 mr-1">
+                            <div className="text-[9px] font-bold uppercase tracking-wider mb-0.5" style={{ color: game.borderColor, textShadow: `0 0 10px ${game.glowColor}` }}>Win up to</div>
+                            <div className="text-xl font-black" style={{
+                              background: game.gradient,
+                              WebkitBackgroundClip: 'text',
+                              WebkitTextFillColor: 'transparent',
+                              filter: `drop-shadow(0 0 12px ${game.glowColor})`,
+                            }}>{game.prize}</div>
+                          </div>
+
+                          <div className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-125 group-hover:shadow-lg" style={{
+                            background: `linear-gradient(135deg, ${game.bgColor}, rgba(255,255,255,0.08))`,
+                            border: `1px solid ${game.borderColor}`,
+                            boxShadow: `0 0 15px ${game.glowColor}`,
+                          }}>
+                            <ChevronRight className="w-4 h-4 text-white/60 group-hover:text-white transition-colors group-hover:translate-x-0.5 transition-transform" />
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="px-3 pb-3">
+                    <Button 
+                      variant="ghost"
+                      onClick={() => {
+                        handleFilterChange("all");
+                        setTimeout(() => {
+                          const section = document.getElementById("competitions-grid");
+                          if (section) {
+                            const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
+                            window.scrollTo({ top: elementTop - 100, behavior: "smooth" });
+                          }
+                        }, 100);
+                      }}
+                      className="w-full h-10 text-xs font-bold rounded-xl transition-all duration-300 hover:scale-[1.02] uppercase tracking-wider"
+                      style={{
+                        color: 'rgba(212,175,55,0.7)',
+                        border: '1px solid rgba(212,175,55,0.12)',
+                        background: 'rgba(212,175,55,0.04)',
+                      }}
+                      data-testid="button-view-all-prizes"
+                    >
+                      <Trophy className="w-3.5 h-3.5 mr-2" />
+                      View All Prizes
+                      <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                    </Button>
+                  </div>
                   </div>
                 </div>
               </div>
             </div>
-
-            {/* === TIER 3: Trust Signals === */}
-            <div className="pt-6 border-t border-white/5 animate-fade-up-delay-4">
-              <div className="flex flex-wrap justify-center gap-6 sm:gap-10">
-                {[
-                  { icon: Shield, text: "SSL Secure", color: "text-emerald-400" },
-                  { icon: CheckCircle2, text: "Verified Fair", color: "text-amber-400" },
-                  { icon: Coins, text: "Instant Payouts", color: "text-purple-400" },
-                  // { icon: Award, text: "UK Licensed", color: "text-amber-400" }
-                ].map((badge, index) => (
-                  <div key={index} className="flex items-center gap-2 text-white/40">
-                    <badge.icon className={`w-4 h-4 ${badge.color}`} />
-                    <span className="text-xs font-medium">{badge.text}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
+
+        <style>{`
+          @keyframes nv-sparkle-float {
+            0%, 100% { opacity: 0; transform: scale(0.2) translateY(0); }
+            10% { opacity: 1; transform: scale(1.2) translateY(-5px); }
+            50% { opacity: 0.8; transform: scale(0.9) translateY(-15px); }
+            90% { opacity: 0.3; transform: scale(0.5) translateY(-25px); }
+          }
+          .nv-sparkle { animation: nv-sparkle-float 2.5s ease-in-out infinite; }
+
+          @keyframes nv-orb-1 {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+            33% { transform: translate(50px, -30px) scale(1.2); opacity: 0.9; }
+            66% { transform: translate(-30px, 25px) scale(0.85); opacity: 0.6; }
+          }
+          .nv-orb-1 { animation: nv-orb-1 16s ease-in-out infinite; }
+
+          @keyframes nv-orb-2 {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.4; }
+            50% { transform: translate(-35px, -25px) scale(1.25); opacity: 0.8; }
+          }
+          .nv-orb-2 { animation: nv-orb-2 13s ease-in-out infinite; }
+
+          @keyframes nv-line-sweep-anim {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          .nv-line-sweep { animation: nv-line-sweep-anim 3s ease-in-out infinite; }
+
+          @keyframes nv-grid-pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.8; }
+          }
+          .nv-grid-floor { animation: nv-grid-pulse 6s ease-in-out infinite; }
+
+          @keyframes nv-fade-in-anim {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+          }
+          .nv-fade-in { animation: nv-fade-in-anim 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+
+          @keyframes nv-text-reveal-anim {
+            0% { opacity: 0; transform: translateY(110%) rotateX(-30deg) scale(0.95); filter: blur(6px); }
+            50% { opacity: 1; transform: translateY(-3%) rotateX(3deg) scale(1.01); filter: blur(0); }
+            100% { opacity: 1; transform: translateY(0) rotateX(0deg) scale(1); filter: blur(0); }
+          }
+          .nv-text-reveal { 
+            animation: nv-text-reveal-anim 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+            opacity: 0; display: block; transform-style: preserve-3d;
+          }
+
+          @keyframes nv-gold-shimmer-anim {
+            0% { background-position: 400% center; }
+            100% { background-position: -400% center; }
+          }
+          .nv-gold-shimmer-text { animation: nv-gold-shimmer-anim 6s linear infinite; }
+
+          @keyframes nv-col-left-enter {
+            0% { opacity: 0; transform: translateX(-30px); }
+            100% { opacity: 1; transform: translateX(0); }
+          }
+          .nv-col-left { animation: nv-col-left-enter 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards; opacity: 0; }
+
+          @keyframes nv-col-right-enter {
+            0% { opacity: 0; transform: translateX(30px); }
+            100% { opacity: 1; transform: translateX(0); }
+          }
+          .nv-col-right { animation: nv-col-right-enter 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards; opacity: 0; }
+
+          @keyframes nv-crown-spin-anim {
+            0%, 70%, 100% { transform: rotateY(0deg); }
+            85% { transform: rotateY(180deg); }
+          }
+          .nv-crown-spin { animation: nv-crown-spin-anim 4s ease-in-out infinite; transform-style: preserve-3d; }
+
+          .nv-name-glow { filter: drop-shadow(0 0 12px rgba(212,175,55,0.4)); }
+
+          @keyframes nv-stat-float-anim {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+          }
+          .nv-stat-float { animation: nv-stat-float-anim 4s ease-in-out infinite; }
+
+          .nv-colon-blink { animation: nv-colon-blink-anim 1s steps(2) infinite; }
+          @keyframes nv-colon-blink-anim { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
+
+          @keyframes nv-btn-shine-anim {
+            0% { transform: translateX(-100%) skewX(-20deg); }
+            100% { transform: translateX(300%) skewX(-20deg); }
+          }
+          .nv-btn-shine {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: nv-btn-shine-anim 4s ease-in-out infinite;
+          }
+
+          .nv-cta-glow { animation: nv-cta-pulse 2.5s ease-in-out infinite; }
+          @keyframes nv-cta-pulse {
+            0%, 100% { box-shadow: 0 0 60px rgba(212,175,55,0.35), 0 0 25px rgba(212,175,55,0.15), 0 8px 30px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.3); }
+            50% { box-shadow: 0 0 100px rgba(212,175,55,0.55), 0 0 50px rgba(212,175,55,0.3), 0 8px 30px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.3); }
+          }
+
+          @keyframes nv-badge-glow-anim {
+            0%, 100% { box-shadow: 0 0 15px rgba(212,175,55,0.08); }
+            50% { box-shadow: 0 0 30px rgba(212,175,55,0.18); }
+          }
+          .nv-badge-glow { animation: nv-badge-glow-anim 3s ease-in-out infinite; }
+
+          @keyframes nv-badge-pulse-anim {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+          }
+          .nv-badge-pulse { animation: nv-badge-pulse-anim 2s ease-in-out infinite; }
+
+          .nv-icon-pulse { animation: nv-icon-pulse-anim 2s ease-in-out infinite; }
+          @keyframes nv-icon-pulse-anim { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } }
+
+          @keyframes nv-border-spin-anim {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          .nv-border-spin { animation: nv-border-spin-anim 10s linear infinite; }
+
+          @keyframes nv-img-float-anim {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-3px) scale(1.01); }
+          }
+          .nv-img-float { animation: nv-img-float-anim 5s ease-in-out infinite; }
+
+          @keyframes nv-img-sheen-anim {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          .nv-img-sheen { background: linear-gradient(105deg, transparent 35%, rgba(212,175,55,0.03) 42%, rgba(255,255,255,0.07) 50%, rgba(212,175,55,0.03) 58%, transparent 65%); background-size: 200% 100%; animation: nv-img-sheen-anim 5s ease-in-out infinite; }
+
+          .nv-hero-img-card:hover { transform: translateY(-4px); box-shadow: 0 35px 90px rgba(0,0,0,0.8), 0 0 100px rgba(212,175,55,0.12) !important; }
+          .nv-hero-img-card { transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1); }
+
+          .nv-panel-glass { transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1); }
+          .nv-panel-glass:hover { transform: translateY(-2px); box-shadow: 0 35px 90px rgba(0,0,0,0.7), 0 0 50px rgba(212,175,55,0.06) !important; }
+
+          .nv-game-card { transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1) !important; }
+
+          @keyframes nv-badge-shine-sweep-anim {
+            0% { transform: translateX(-100%) skewX(-20deg); }
+            100% { transform: translateX(300%) skewX(-20deg); }
+          }
+          .nv-badge-shine-sweep {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+            animation: nv-badge-shine-sweep-anim 5s ease-in-out infinite;
+          }
+
+          @keyframes nv-badge-text-shimmer-anim {
+            0% { background-position: 200% center; }
+            100% { background-position: -200% center; }
+          }
+          .nv-badge-text-shimmer { animation: nv-badge-text-shimmer-anim 4s linear infinite; }
+
+          @keyframes nv-badge-dot-pulse-anim {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.4); }
+          }
+          .nv-badge-dot-pulse { animation: nv-badge-dot-pulse-anim 2s ease-in-out infinite; }
+
+          @keyframes nv-trophy-bounce-anim {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-4px) rotate(-5deg); }
+            50% { transform: translateY(0) rotate(0deg); }
+            75% { transform: translateY(-2px) rotate(5deg); }
+          }
+          .nv-trophy-bounce { animation: nv-trophy-bounce-anim 3s ease-in-out infinite; }
+
+          @keyframes nv-panel-border-glow-anim { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          .nv-panel-border-glow { animation: nv-panel-border-glow-anim 6s linear infinite; }
+
+          @keyframes nv-panel-top-line-anim { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+          .nv-panel-top-line { animation: nv-panel-top-line-anim 4s linear infinite; }
+
+          @keyframes nv-pick-title-shimmer-anim { 0% { background-position: 300% center; } 100% { background-position: -300% center; } }
+          .nv-pick-title-shimmer { animation: nv-pick-title-shimmer-anim 5s linear infinite; }
+
+          @keyframes nv-pick-icon-pulse-anim { 0%, 100% { box-shadow: 0 0 20px rgba(245,215,110,0.15), 0 0 40px rgba(245,215,110,0.08); } 50% { box-shadow: 0 0 30px rgba(245,215,110,0.3), 0 0 60px rgba(245,215,110,0.15); } }
+          .nv-pick-icon-pulse { animation: nv-pick-icon-pulse-anim 2s ease-in-out infinite; }
+
+          @keyframes nv-games-counter-pulse-anim { 0%, 100% { opacity: 0.8; } 50% { opacity: 1; } }
+          .nv-games-counter-pulse { animation: nv-games-counter-pulse-anim 2s ease-in-out infinite; }
+
+          @keyframes nv-game-card-shimmer-anim { 0% { background-position: -250% 0; } 100% { background-position: 250% 0; } }
+          .nv-game-card-shimmer { animation: nv-game-card-shimmer-anim 6s ease-in-out infinite; }
+
+          @keyframes nv-game-icon-glow-anim { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
+          .nv-game-icon-glow { animation: nv-game-icon-glow-anim 2.5s ease-in-out infinite; }
+        `}</style>
       </section>
 
-      {/* Featured Competitions Section */}
-      <section className="relative py-8 sm:py-12 bg-slate-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {competitions.length > 0 ? (
-            <FeaturedCompetitions competitions={competitions} />
-          ) : (
-            <div className="text-center text-slate-400 py-12">
-              <Sparkles className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-              <p className="text-lg">Loading amazing prizes...</p>
-            </div>
-          )}
+      <section className="py-5 relative overflow-hidden" style={{ background: '#070709' }}>
+        <div className="absolute inset-0 nv-trust-bg-sweep" style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(0,255,136,0.03) 20%, rgba(212,175,55,0.04) 40%, rgba(59,130,246,0.03) 60%, rgba(245,158,11,0.04) 80%, transparent 100%)', backgroundSize: '200% 100%' }} />
+        <div className="absolute top-0 left-0 right-0 h-[1px] nv-trust-line-glow" style={{ background: 'linear-gradient(90deg, transparent 5%, rgba(0,255,136,0.4) 20%, rgba(212,175,55,0.5) 40%, rgba(59,130,246,0.4) 60%, rgba(245,158,11,0.5) 80%, transparent 95%)', filter: 'blur(0.5px)' }} />
+        <div className="absolute bottom-0 left-0 right-0 h-[1px] nv-trust-line-glow" style={{ background: 'linear-gradient(90deg, transparent 5%, rgba(245,158,11,0.4) 20%, rgba(59,130,246,0.5) 40%, rgba(212,175,55,0.4) 60%, rgba(0,255,136,0.5) 80%, transparent 95%)', filter: 'blur(0.5px)', animationDelay: '1.5s' }} />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="flex items-center justify-center gap-2 sm:gap-6 lg:gap-10">
+            {[
+              { icon: Shield, text: "SSL Encrypted", color: '#00ff88', glow: 'rgba(0,255,136,0.3)', bg: 'rgba(0,255,136,0.08)', border: 'rgba(0,255,136,0.25)' },
+              { icon: CheckCircle2, text: "Verified Fair Play", color: '#f5d76e', glow: 'rgba(245,215,110,0.3)', bg: 'rgba(245,215,110,0.08)', border: 'rgba(245,215,110,0.25)' },
+              { icon: Coins, text: "Instant Payouts", color: '#60a5fa', glow: 'rgba(96,165,250,0.3)', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.25)' }
+            ].map((item, index) => (
+              <div key={index} className="flex items-center gap-1.5 sm:gap-3 px-2.5 sm:px-5 py-1.5 sm:py-2.5 rounded-full group cursor-default transition-all duration-500 hover:scale-[1.05] nv-trust-badge-float" data-testid={`trust-badge-${index}`} style={{
+                background: item.bg,
+                border: `1px solid ${item.border}`,
+                boxShadow: `0 0 20px ${item.glow}, inset 0 1px 0 rgba(255,255,255,0.05)`,
+                animationDelay: `${index * 0.3}s`,
+              }}>
+                <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 nv-trust-icon-glow" style={{ background: `linear-gradient(135deg, ${item.bg}, rgba(0,0,0,0.2))`, boxShadow: `0 0 15px ${item.glow}, 0 0 30px ${item.glow}`, border: `1px solid ${item.border}` }}>
+                  <item.icon className="w-3 h-3 sm:w-4 sm:h-4" style={{ color: item.color, filter: `drop-shadow(0 0 6px ${item.glow})` }} />
+                </div>
+                <span className="text-[9px] sm:text-xs font-bold uppercase tracking-wider sm:tracking-widest whitespace-nowrap" style={{ color: item.color, textShadow: `0 0 15px ${item.glow}` }}>{item.text}</span>
+              </div>
+            ))}
+          </div>
         </div>
+        <style>{`
+          @keyframes nv-trust-bg-sweep-anim { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+          .nv-trust-bg-sweep { animation: nv-trust-bg-sweep-anim 8s ease-in-out infinite; }
+          @keyframes nv-trust-line-glow-anim { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+          .nv-trust-line-glow { animation: nv-trust-line-glow-anim 3s ease-in-out infinite; }
+          @keyframes nv-trust-badge-float-anim { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+          .nv-trust-badge-float { animation: nv-trust-badge-float-anim 4s ease-in-out infinite; }
+          @keyframes nv-trust-icon-glow-anim { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.4); } }
+          .nv-trust-icon-glow { animation: nv-trust-icon-glow-anim 2.5s ease-in-out infinite; }
+        `}</style>
       </section>
 
-      {/* Trust Banner */}
+      <section className="relative">
+        {competitions.length > 0 ? (
+          <FeaturedCompetitions competitions={competitions} />
+        ) : (
+          <div className="text-center text-amber-400/60 py-12" style={{ background: '#070709' }}>
+            <Sparkles className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+            <p className="text-lg">Loading amazing prizes...</p>
+          </div>
+        )}
+      </section>
+
       <StatsBanner />
 
-      {/* Modern Filter Tabs */}
-      <section className="glass-modern sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <section className="sticky top-0 z-40 backdrop-blur-2xl" style={{
+        background: 'rgba(7,7,9,0.92)',
+        borderBottom: '1px solid rgba(0,255,136,0.08)',
+        boxShadow: '0 4px 40px rgba(0,0,0,0.5), 0 1px 0 rgba(0,255,136,0.05)',
+      }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
           <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
             {[
-              { id: "all", label: "All", icon: Trophy },
-              { id: "spin", label: "Spin", icon: Zap },
-              { id: "scratch", label: "Scratch", icon: Sparkles },
-              { id: "instant", label: "Competition", icon: Gift }
+              { id: "all", label: "All Games", icon: Trophy, color: '#00ff88', glow: 'rgba(0,255,136,0.3)' },
+              { id: "spin", label: "Spin to Win", icon: RotateCw, color: '#ffb800', glow: 'rgba(245,158,11,0.3)' },
+              { id: "scratch", label: "Scratch Cards", icon: Sparkles, color: '#00ff88', glow: 'rgba(0,255,136,0.3)' },
+              { id: "instant", label: "Competitions", icon: Gift, color: '#f5d76e', glow: 'rgba(245,215,110,0.3)' }
             ].map((filter) => (
               <button
                 key={filter.id}
                 onClick={() => handleFilterChange(filter.id)}
-                className={`px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-semibold text-sm transition-all duration-300 flex items-center gap-2 ${
-                  activeFilter === filter.id
-                    ? "btn-modern-primary"
-                    : "bg-white/5 text-slate-400 border border-white/10 hover:border-amber-500/30 hover:text-white"
-                }`}
+                className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm uppercase tracking-wider transition-all duration-400 flex items-center gap-2`}
+                style={activeFilter === filter.id ? {
+                  background: `linear-gradient(135deg, ${filter.color}, ${filter.color}cc)`,
+                  color: '#0a0a0a',
+                  boxShadow: `0 0 25px ${filter.glow}, 0 0 50px ${filter.glow}, 0 2px 8px rgba(0,0,0,0.3)`,
+                  border: `1px solid ${filter.color}`,
+                } : {
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: 'rgba(255,255,255,0.4)',
+                }}
                 data-testid={`button-filter-${filter.id}`}
               >
-                <filter.icon className="w-4 h-4" />
+                <filter.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 {filter.label}
               </button>
             ))}
@@ -456,34 +882,72 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Competitions Grid - Modern Design */}
-      <section className="py-16 sm:py-20 lg:py-24 bg-slate-950 relative">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(212,175,55,0.06),transparent)]" />
+      <section className="py-16 sm:py-24 relative" style={{ background: '#070709' }}>
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,255,136,0.03), transparent 70%), radial-gradient(ellipse 60% 40% at 80% 80%, rgba(245,215,110,0.02), transparent)' }} />
+        <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent 5%, rgba(0,255,136,0.08) 30%, rgba(245,215,110,0.12) 50%, rgba(0,255,136,0.08) 70%, transparent 95%)' }} />
         
         <div id="competitions-grid" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           {isLoading ? (
             <div className="text-center py-20">
-              <Sparkles className="w-12 h-12 text-amber-500 mx-auto mb-4 animate-pulse" />
-              <p className="text-slate-400 text-lg">Loading prizes...</p>
+              <div className="w-12 h-12 border-2 border-emerald-500/20 border-t-emerald-400 rounded-full mx-auto mb-4 animate-spin" />
+              <p className="text-white/30 text-base font-medium">Loading prizes...</p>
             </div>
           ) : filteredCompetitions.length > 0 ? (
             <>
-              <div className="text-center mb-12 lg:mb-16">
-                <h2 className="heading-xl text-white mb-4">
+              <div className="text-center mb-10 sm:mb-14">
+                <div className="flex items-center justify-center gap-3 mb-5">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center" style={{
+                    background: 'linear-gradient(135deg, rgba(0,255,136,0.12), rgba(245,215,110,0.08))',
+                    border: '1px solid rgba(0,255,136,0.25)',
+                    boxShadow: '0 0 20px rgba(0,255,136,0.1)',
+                  }}>
+                    {activeFilter === "spin" ? <RotateCw className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#ffb800', filter: 'drop-shadow(0 0 6px rgba(245,158,11,0.6))' }} /> :
+                     activeFilter === "scratch" ? <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#00ff88', filter: 'drop-shadow(0 0 6px rgba(0,255,136,0.6))' }} /> :
+                     activeFilter === "instant" ? <Gift className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#f5d76e', filter: 'drop-shadow(0 0 6px rgba(245,215,110,0.6))' }} /> :
+                     <Trophy className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#00ff88', filter: 'drop-shadow(0 0 6px rgba(0,255,136,0.6))' }} />}
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{
+                    background: 'rgba(0,255,136,0.06)',
+                    border: '1px solid rgba(0,255,136,0.2)',
+                  }}>
+                    <div className="relative">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#00ff88', boxShadow: '0 0 6px rgba(0,255,136,0.8)' }} />
+                      <div className="absolute inset-0 w-1.5 h-1.5 rounded-full animate-ping" style={{ background: '#00ff88' }} />
+                    </div>
+                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider" style={{ color: '#00ff88' }}>{filteredCompetitions.length} Live</span>
+                  </div>
+                </div>
+                <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight mb-3" style={{
+                  background: 'linear-gradient(135deg, #b8860b 0%, #d4af37 25%, #f5d76e 50%, #d4af37 75%, #b8860b 100%)',
+                  backgroundSize: '200% 100%',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  filter: 'drop-shadow(0 0 20px rgba(212,175,55,0.3))',
+                }} data-testid="text-section-title">
                   {activeFilter === "all" 
-                    ? "All Prizes" 
+                    ? "All Competition Prizes" 
                     : activeFilter === "spin"
-                    ? "Spin & Win"
+                    ? "Spin & Win Games"
                     : activeFilter === "scratch"
-                    ? "Scratch Cards"
-                    : "Competitions"}
+                    ? "Scratch Card Games"
+                    : "Live Competitions"}
                 </h2>
-                <p className="text-slate-500 text-base sm:text-lg">
-                  {filteredCompetitions.length} prizes available
+                <div className="w-24 h-[2px] mx-auto mb-4" style={{
+                  background: 'linear-gradient(90deg, transparent, #d4af37, #00ff88, #d4af37, transparent)',
+                  boxShadow: '0 0 8px rgba(212,175,55,0.4)',
+                }} />
+                <p className="text-white/50 text-sm sm:text-base font-medium max-w-lg mx-auto">
+                  {activeFilter === "all"
+                    ? "Explore our collection of premium prize competitions"
+                    : activeFilter === "spin"
+                    ? "Spin the wheel for instant prizes"
+                    : activeFilter === "scratch"
+                    ? "Scratch and reveal your winning prize"
+                    : "Enter now for your chance to win big"}
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 lg:gap-6">
                 {filteredCompetitions.map((competition) => (
                   <CompetitionCard
                     key={competition.id}
@@ -495,8 +959,8 @@ export default function Home() {
             </>
           ) : (
             <div className="text-center py-20">
-              <Gift className="w-16 h-16 text-slate-700 mx-auto mb-4" />
-              <p className="text-slate-500 text-xl">No competitions found.</p>
+              <Gift className="w-16 h-16 text-white/5 mx-auto mb-4" />
+              <p className="text-white/20 text-xl">No competitions found.</p>
             </div>
           )}
         </div>
@@ -507,133 +971,196 @@ export default function Home() {
             50% { background-size: 200% 200%; background-position: right center; }
           }
           .animate-gradient-x { animation: gradient-x 3s ease infinite; }
+          @keyframes hero-glow {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.08); }
+          }
+          .animate-hero-glow { animation: hero-glow 8s ease-in-out infinite; }
+          .animate-hero-glow-delay { animation: hero-glow 8s ease-in-out infinite; animation-delay: 4s; }
         `}</style>
       </section>
 
-
-   
-
-      {/* Newsletter Section */}
-      {isAuthenticated && (
-        <section className="py-12 md:py-20 relative overflow-hidden">
-          {/* Royal background */}
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950" />
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-10 left-10 w-72 h-72 bg-amber-500/10 rounded-full blur-[80px]" />
-            <div className="absolute bottom-10 right-10 w-72 h-72 bg-yellow-500/10 rounded-full blur-[80px]" />
+      <section className="py-24 sm:py-32 relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #070709 0%, #0d0d12 50%, #070709 100%)' }}>
+        <div className="absolute inset-0">
+          <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.1), transparent)' }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full blur-[200px]" style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.03) 0%, transparent 60%)' }} />
+        </div>
+        
+        <div ref={winnersSection.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 transition-all duration-1000 ${winnersSection.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full mb-6 backdrop-blur-sm" style={{
+              background: 'rgba(212,175,55,0.08)',
+              border: '1px solid rgba(212,175,55,0.15)',
+            }}>
+              <Trophy className="w-4 h-4 text-amber-400" />
+              <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">Hall of Winners</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight mb-5">
+              Real Players. <span style={{
+                background: 'linear-gradient(90deg, #d4af37, #f5d76e, #d4af37)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}>Real Wins.</span>
+            </h2>
+            <p className="text-white/20 text-base sm:text-lg max-w-xl mx-auto">
+              Every day, players just like you are winning incredible prizes.
+            </p>
           </div>
 
-          {/* Decorative elements */}
-          {/* <div className="absolute left-5 top-1/2 -translate-y-1/2 text-amber-500/15 pointer-events-none">
-            <Gift className="w-40 h-40" />
-          </div>
-          <div className="absolute right-5 top-1/2 -translate-y-1/2 text-yellow-500/15 pointer-events-none">
-            <Sparkles className="w-40 h-40" />
-          </div> */}
-
-          <div className="container mx-auto px-4 relative z-10">
-            <div className="max-w-2xl mx-auto relative">
-              {/* Premium Gold Glowing border effect */}
-              <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 rounded-3xl blur-sm opacity-60" />
-              
-              <div className="relative bg-gradient-to-br from-slate-800/95 to-slate-900/95 backdrop-blur-sm rounded-2xl p-8 md:p-12 border border-white/10 shadow-2xl">
-                <div className="text-center mb-8">
-                  <div className="relative inline-block mb-4">
-                    {/* <div className="w-24 h-24 bg-gradient-to-br from-amber-500 to-yellow-600 rounded-full flex items-center justify-center shadow-2xl shadow-amber-500/40">
-                      <Gift className="w-12 h-12 text-slate-900" />
-                    </div> */}
-                    {/* <div className="absolute -top-2 -right-2">
-                      <Star className="w-8 h-8 text-yellow-400 animate-pulse" />
-                    </div> */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-7 mb-16">
+            {[
+              { quote: "Won £2,500 on my first scratch card. Best decision I ever made!", name: "James T.", location: "London", prize: "£2,500", game: "Scratch Card" },
+              { quote: "The plinko game is addictive! Already won twice this month.", name: "Sarah M.", location: "Manchester", prize: "£1,200", game: "Plinko" },
+              { quote: "Fast payouts, amazing prizes. This is the real deal.", name: "David K.", location: "Birmingham", prize: "£5,000", game: "Competition" }
+            ].map((review, index) => (
+              <div
+                key={index}
+                className="group relative rounded-2xl overflow-hidden transition-all duration-500 hover:-translate-y-2"
+                data-testid={`card-winner-${index}`}
+              >
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: 'radial-gradient(circle at 50% 0%, rgba(212,175,55,0.06), transparent 70%)' }} />
+                <div className="relative p-8 sm:p-9 rounded-2xl transition-all duration-500" style={{
+                  background: '#0d0d12',
+                  border: '1px solid rgba(255,255,255,0.04)',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+                }}>
+                  <div className="flex items-center gap-1 mb-6">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-4 h-4 text-amber-400 fill-amber-400" style={{ filter: 'drop-shadow(0 0 4px rgba(212,175,55,0.3))' }} />
+                    ))}
                   </div>
-                  
-                  <h3 className="text-2xl md:text-4xl font-black mb-3">
-                    <span className="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 bg-clip-text text-transparent">
-                      {user?.receiveNewsletter ? "You're on the VIP List!" : "Join our VIP List!"}
-                    </span>
-                  </h3>
-                  <p className="text-slate-300 text-sm md:text-lg leading-relaxed flex items-center justify-center gap-2 flex-wrap">
-                    {/* <Sparkles className="w-4 h-4 text-amber-400" /> */}
-                    {user?.receiveNewsletter 
-                      ? "Get ready for exclusive deals and amazing surprises!"
-                      : "Subscribe for exclusive deals and prizes!"}
-                    {/* <Sparkles className="w-4 h-4 text-amber-400" /> */}
-                  </p>
-                </div>
-
-                {user?.receiveNewsletter ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-center gap-2 text-green-400 mb-4 p-3 bg-green-500/10 rounded-xl border border-green-500/20">
-                      <CheckCircle2 className="w-6 h-6" />
-                      <span className="font-semibold">Subscribed with {user.email}</span>
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={handleNewsletterUnsubscribe}
-                      variant="outline"
-                      className="w-full h-12 md:h-14 border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300 font-semibold text-base md:text-lg rounded-xl transition-all"
-                      disabled={newsletterUnsubscribeMutation.isPending}
-                      data-testid="button-newsletter-unsubscribe"
-                    >
-                      {newsletterUnsubscribeMutation.isPending ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 border-3 border-red-400 border-t-transparent rounded-full animate-spin"></div>
-                          Unsubscribing...
+                  <p className="text-white/40 text-sm sm:text-base leading-relaxed mb-8 italic">"{review.quote}"</p>
+                  <div className="flex items-center justify-between pt-6" style={{ borderTop: '1px solid rgba(212,175,55,0.08)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{
+                        background: 'linear-gradient(135deg, #d4af37, #f5d76e)',
+                        boxShadow: '0 0 20px rgba(212,175,55,0.25)',
+                      }}>
+                        <span className="text-[#0a0a0a] font-black text-xs">{review.name.split(' ').map(n => n[0]).join('')}</span>
+                      </div>
+                      <div>
+                        <div className="text-white font-bold text-sm" data-testid={`text-winner-name-${index}`}>{review.name}</div>
+                        <div className="text-white/12 text-xs flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {review.location}
                         </div>
-                      ) : (
-                        "Unsubscribe"
-                      )}
-                    </Button>
-                  </div>
-                ) : (
-                  <form onSubmit={handleNewsletterSubscribe} className="space-y-4">
-                    <div className="relative group">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500 to-yellow-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition" />
-                      <div className="relative">
-                        <Input
-                          type="email"
-                          value={newsletterEmail}
-                          onChange={(e) => setNewsletterEmail(e.target.value)}
-                          placeholder={user?.email || "Enter your email for exclusive deals"}
-                          className="bg-slate-700/80 border-slate-600 text-white placeholder:text-slate-400 h-14 md:h-16 text-base md:text-lg pl-14 pr-4 rounded-xl focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50"
-                          data-testid="input-newsletter-email"
-                          disabled={newsletterSubscribeMutation.isPending}
-                        />
-                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-slate-400" />
                       </div>
                     </div>
+                    <div className="text-right">
+                      <div className="text-white/8 text-[9px] uppercase tracking-widest font-bold mb-1">Won</div>
+                      <div className="text-xl font-black" data-testid={`text-winner-prize-${index}`} style={{
+                        background: 'linear-gradient(90deg, #d4af37, #f5d76e)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        filter: 'drop-shadow(0 0 10px rgba(212,175,55,0.4))',
+                      }}>{review.prize}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
+      {isAuthenticated && (
+        <section className="py-24 sm:py-32 relative overflow-hidden" style={{ background: '#070709' }}>
+          <div className="absolute inset-0">
+            <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.1), transparent)' }} />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[200px]" style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.03) 0%, transparent 60%)' }} />
+          </div>
+
+          <div ref={newsletterSection.ref} className={`container mx-auto px-4 relative z-10 transition-all duration-1000 ${newsletterSection.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+            <div className="max-w-lg mx-auto text-center">
+              <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full mb-6 backdrop-blur-sm" style={{
+                background: 'rgba(212,175,55,0.08)',
+                border: '1px solid rgba(212,175,55,0.15)',
+              }}>
+                <Mail className="w-4 h-4 text-amber-400" />
+                <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">VIP Access</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-white mb-4 tracking-tight">
+                {user?.receiveNewsletter ? "You're VIP" : "Get VIP Access"}
+              </h3>
+              <p className="text-white/20 text-sm sm:text-base mb-8">
+                {user?.receiveNewsletter 
+                  ? "You'll be first to hear about exclusive drops and prizes."
+                  : "Early access to new prizes, exclusive offers, and insider tips."}
+              </p>
+
+              {user?.receiveNewsletter ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center gap-2 text-emerald-400 p-4 rounded-xl" style={{
+                    background: 'rgba(16,185,129,0.06)',
+                    border: '1px solid rgba(16,185,129,0.12)',
+                    boxShadow: '0 0 20px rgba(16,185,129,0.05)',
+                  }}>
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="font-medium text-sm">Subscribed with {user.email}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleNewsletterUnsubscribe}
+                    variant="ghost"
+                    className="w-full h-12 text-white/15 hover:text-red-400 font-medium text-sm rounded-xl transition-all"
+                    disabled={newsletterUnsubscribeMutation.isPending}
+                    data-testid="button-newsletter-unsubscribe"
+                  >
+                    {newsletterUnsubscribeMutation.isPending ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+                        Unsubscribing...
+                      </div>
+                    ) : (
+                      "Unsubscribe"
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <form onSubmit={handleNewsletterSubscribe} className="space-y-3">
+                  <div className="flex gap-3">
+                    <div className="relative flex-1">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/12" />
+                      <Input
+                        type="email"
+                        value={newsletterEmail}
+                        onChange={(e) => setNewsletterEmail(e.target.value)}
+                        placeholder={user?.email || "your@email.com"}
+                        className="w-full text-white placeholder:text-white/12 h-14 text-base pl-12 rounded-xl transition-all duration-300"
+                        style={{
+                          background: 'rgba(255,255,255,0.03)',
+                          border: '1px solid rgba(255,255,255,0.06)',
+                        }}
+                        data-testid="input-newsletter-email"
+                        disabled={newsletterSubscribeMutation.isPending}
+                      />
+                    </div>
                     <Button
                       type="submit"
-                      className="w-full h-14 md:h-16 btn-premium text-slate-900 font-black text-lg md:text-xl rounded-xl border border-amber-300/30"
+                      className="h-14 px-8 text-[#0a0a0a] font-black rounded-xl transition-all duration-500 hover:scale-[1.03]"
+                      style={{
+                        background: 'linear-gradient(135deg, #f5d742 0%, #d4af37 50%, #b8860b 100%)',
+                        boxShadow: '0 0 25px rgba(212,175,55,0.25), 0 2px 8px rgba(0,0,0,0.2)',
+                      }}
                       disabled={newsletterSubscribeMutation.isPending}
                       data-testid="button-newsletter-subscribe"
                     >
                       {newsletterSubscribeMutation.isPending ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 border-3 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
-                          Joining VIP List...
-                        </div>
+                        <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
                       ) : (
-                        <div className="flex items-center gap-3">
-                          {/* <Gift className="w-6 h-6" /> */}
-                          Get VIP Deals
-                          {/* <Star className="w-5 h-5" /> */}
-                        </div>
+                        "Join VIP"
                       )}
                     </Button>
-
-                   
-                  </form>
-                )}
-              </div>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         </section>
       )}
 
-<CompactFacebookCTA/>
-<Testimonials/>
+      <CompactFacebookCTA/>
+      <Testimonials/>
       <Footer />
     </div>
   );

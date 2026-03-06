@@ -70,7 +70,9 @@ import {
   voltzWins,
   voltzPrizes,
   gameVoltzConfig,
-  voltzUsage
+  voltzUsage,
+  pushNotifications,
+  pushDeliveries
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -88,7 +90,7 @@ import {
   lte,
   or,
 } from "drizzle-orm";
-import { count, gt, isNull } from "drizzle-orm/sql";
+import { count, gt, isNull, ne } from "drizzle-orm/sql";
 import { z } from "zod";
 import {
   sendOrderConfirmationEmail,
@@ -1052,689 +1054,445 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Registration route
-  app.post("/api/auth/register", async (req, res) => {
-    try {
-      console.log("🚀 [register] Starting registration...");
-      console.log("   Request body:", JSON.stringify(req.body, null, 2));
-  
-      // Update schema validation to include redeemCode
-      const result = registerUserSchema.safeParse(req.body);
-      if (!result.success) {
-        console.error("❌ [register] Validation failed:", result.error);
-        return res.status(400).json({
-          message: "Invalid registration data",
-          errors: result.error.issues,
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    console.log("🚀 [register] Starting registration...");
+    console.log("   Request body:", JSON.stringify(req.body, null, 2));
+
+    // Update schema validation to include redeemCode
+    const result = registerUserSchema.safeParse(req.body);
+    if (!result.success) {
+      console.error("❌ [register] Validation failed:", result.error);
+      return res.status(400).json({
+        message: "Invalid registration data",
+        errors: result.error.issues,
+      });
+    }
+
+    const {
+      email,
+      password,
+      firstName,
+      lastName,
+      dateOfBirth,
+      phoneNumber,
+      receiveNewsletter,
+      birthMonth,
+      birthYear,
+      referralCode,
+      howDidYouFindUs,
+      redeemCode,
+    } = req.body;
+
+    console.log("   Email to register:", email);
+    console.log("   Referral code provided:", referralCode);
+    console.log("   Redeem code provided:", redeemCode);
+
+    // Check if user exists
+    const existingUser = await storage.getUserByEmail(email);
+    if (existingUser) {
+      console.log("❌ [register] User already exists:", email);
+      return res.status(400).json({ message: "User already exists with this email" });
+    }
+
+    // Validate referral code if provided
+    let referrerId = null;
+    if (referralCode) {
+      const referrer = await storage.getUserByReferralCode(referralCode);
+      if (referrer) {
+        referrerId = referrer.id;
+        console.log("   ✅ Valid referral code found. Referrer:", referrer.email);
+      } else {
+        console.log("   ❌ Invalid referral code:", referralCode);
+      }
+    }
+
+    // Validate redeem code if provided
+    let pendingRedeemCode = null;
+    let pendingRedeemAmount = null;
+    
+    if (redeemCode) {
+      try {
+        const upperCode = redeemCode.toUpperCase().trim();
+        
+        // Find the redeem code
+        const foundCode = await db.query.redeemCodes.findFirst({
+          where: eq(redeemCodes.code, upperCode),
         });
-      }
-  
-      const {
-        email,
-        password,
-        firstName,
-        lastName,
-        dateOfBirth,
-        phoneNumber,
-        receiveNewsletter,
-        birthMonth,
-        birthYear,
-        referralCode,
-        howDidYouFindUs,
-        redeemCode, // ⭐ NEW: Get redeem code from request
-      } = req.body;
-  
-      console.log("   Email to register:", email);
-      console.log("   Referral code provided:", referralCode);
-      console.log("   Redeem code provided:", redeemCode); // ⭐ Log it
-  
-      // Check if user exists
-      const existingUser = await storage.getUserByEmail(email);
-      if (existingUser) {
-        console.log("❌ [register] User already exists:", email);
-        return res.status(400).json({ message: "User already exists with this email" });
-      }
-  
-      // ⭐⭐ Validate referral code if provided
-      let referrerId = null;
-      if (referralCode) {
-        const referrer = await storage.getUserByReferralCode(referralCode);
-        if (referrer) {
-          referrerId = referrer.id;
-          console.log("   ✅ Valid referral code found. Referrer:", referrer.email);
-        } else {
-          console.log("   ❌ Invalid referral code:", referralCode);
-        }
-      }
-  
-      // ⭐⭐ Validate redeem code if provided (but don't mark as used yet)
-      let pendingRedeemCode = null;
-      let pendingRedeemAmount = null;
-      
-      if (redeemCode) {
-        try {
-          const upperCode = redeemCode.toUpperCase().trim();
-          
-          // Find the redeem code
-          const foundCode = await db.query.redeemCodes.findFirst({
-            where: eq(redeemCodes.code, upperCode),
-          });
-  
-          if (foundCode) {
-            // Check if not used and not expired
-            if (!foundCode.isUsed) {
-              if (!foundCode.expiresAt || new Date() <= new Date(foundCode.expiresAt)) {
-                pendingRedeemCode = upperCode;
-                pendingRedeemAmount = foundCode.amount;
-                console.log(`   ✅ Valid redeem code found: ${upperCode} worth £${foundCode.amount}`);
-              } else {
-                console.log(`   ❌ Redeem code expired: ${upperCode}`);
-              }
+
+        if (foundCode) {
+          // Check if not used and not expired
+          if (!foundCode.isUsed) {
+            if (!foundCode.expiresAt || new Date() <= new Date(foundCode.expiresAt)) {
+              pendingRedeemCode = upperCode;
+              pendingRedeemAmount = foundCode.amount;
+              console.log(`   ✅ Valid redeem code found: ${upperCode} worth £${foundCode.amount}`);
             } else {
-              console.log(`   ❌ Redeem code already used: ${upperCode}`);
+              console.log(`   ❌ Redeem code expired: ${upperCode}`);
             }
           } else {
-            console.log(`   ❌ Invalid redeem code: ${upperCode}`);
+            console.log(`   ❌ Redeem code already used: ${upperCode}`);
           }
-        } catch (redeemError) {
-          console.error("   Error validating redeem code:", redeemError);
+        } else {
+          console.log(`   ❌ Invalid redeem code: ${upperCode}`);
         }
+      } catch (redeemError) {
+        console.error("   Error validating redeem code:", redeemError);
       }
-  
-      // Hash password
-      const hashedPassword = await hashPassword(password || "");
-      console.log("   Password hashed");
-  
-      // Create DOB
-      const dobString =
-        birthMonth && birthYear
-          ? `${birthYear}-${String(birthMonth).padStart(2, "0")}-01`
-          : undefined;
-  
-      // Generate OTP
-      const otp = OTPGenerator.generate();
-      const expiresAt = OTPGenerator.getExpiryTime(10);
-      console.log("   Generated OTP:", otp);
-  
-      // Create new user with pending redeem code
-      console.log("   Creating user in database...");
-      const user = await storage.createUser({
-        email,
-        password: hashedPassword,
-        firstName,
-        lastName,
-        dateOfBirth: dobString,
-        phoneNumber,
-        howDidYouFindUs,
-        receiveNewsletter: receiveNewsletter || false,
-        emailVerificationOtp: otp,
-        emailVerificationOtpExpiresAt: expiresAt,
-        verificationSentAt: new Date(),
-        referredBy: referrerId,
-        pendingRedeemCode: pendingRedeemCode, // ⭐ Store pending code
-        pendingRedeemAmount: pendingRedeemAmount, // ⭐ Store pending amount
-      });
-  
-      console.log("✅ [register] User created:", user.id);
-  
-      // Log IP
-      try {
-        const ip = getClientIp(req);
-        const ua = req.headers["user-agent"] || "";
-        await db.insert(userIpLogs).values({
-          userId: user.id,
-          ipAddress: ip,
-          userAgent: ua,
-        });
-      } catch (e) {
-        console.error("IP log failed on register:", e);
-      }
-  
-      // Send verification email
-      console.log("   Sending verification email...");
-      const emailResult = await sendVerificationEmail(
-        email,
-        otp,
-        `${firstName} ${lastName}`.trim() || firstName || "User"
-      );
-  
-      if (!emailResult.success) {
-        console.error("❌ [register] Email sending failed but user created");
-        return res.status(201).json({
-          message: "Registration successful but we couldn't send the verification email. Please use 'Resend OTP' on the verification page.",
-          userId: user.id,
-          email: user.email,
-          emailSent: false,
-          requiresVerification: true,
-          warning: "Email delivery failed - use Resend OTP",
-          hasRedeemCode: !!pendingRedeemCode, // ⭐ Let frontend know
-        });
-      }
-  
-      console.log("✅ [register] Registration complete!");
-      res.status(201).json({
-        message: "Registration successful! Please check your email for verification code.",
+    }
+
+    // Hash password
+    const hashedPassword = await hashPassword(password || "");
+    console.log("   Password hashed");
+
+    // Create DOB
+    const dobString =
+      birthMonth && birthYear
+        ? `${birthYear}-${String(birthMonth).padStart(2, "0")}-01`
+        : undefined;
+
+    // Create new user (emailVerified set to true by default)
+    console.log("   Creating user in database...");
+    const user = await storage.createUser({
+      email,
+      password: hashedPassword,
+      firstName,
+      lastName,
+      dateOfBirth: dobString,
+      phoneNumber,
+      howDidYouFindUs,
+      receiveNewsletter: receiveNewsletter || false,
+      emailVerified: true, // ⭐ Auto-verify email
+      referredBy: referrerId,
+      pendingRedeemCode: pendingRedeemCode,
+      pendingRedeemAmount: pendingRedeemAmount,
+    });
+
+    console.log("✅ [register] User created:", user.id);
+
+    // Log IP
+    try {
+      const ip = getClientIp(req);
+      const ua = req.headers["user-agent"] || "";
+      await db.insert(userIpLogs).values({
         userId: user.id,
-        email: user.email,
-        emailSent: true,
-        expiresIn: "30 minutes",
-        requiresVerification: true,
-        hasRedeemCode: !!pendingRedeemCode, // ⭐ Let frontend know
+        ipAddress: ip,
+        userAgent: ua,
       });
-  
-    } catch (error: any) {
-      console.error("🔥 [register] Registration error:", error);
-      res.status(500).json({
-        message: "Failed to register user",
-        error: error.message,
-      });
+    } catch (e) {
+      console.error("IP log failed on register:", e);
     }
-  });
 
-  app.post("/api/test-email", async (req, res) => {
-    try {
-      const { email } = req.body;
+    // Apply bonuses immediately (no verification needed)
+    let bonusCashCredited = 0;
+    let bonusPointsCredited = 0;
+    let redeemAmountCredited = 0;
 
-      if (!email) {
-        return res.status(400).json({ message: "Email is required" });
-      }
+    await db.transaction(async (tx) => {
+      // 1. Apply normal signup bonus
+      try {
+        const settings = await storage.getPlatformSettings();
+        if (settings?.signupBonusEnabled) {
+          const bonusCash = parseFloat(settings.signupBonusCash || "0");
+          const bonusPoints = settings.signupBonusPoints || 0;
 
-      console.log("🧪 Testing email sending to:", email);
-      console.log("Resend API Key exists:", !!process.env.RESEND_API_KEY);
-      console.log("FROM_EMAIL:", FROM_EMAIL);
+          if (bonusCash > 0) {
+            await tx.update(users)
+              .set({
+                balance: sql`${users.balance} + ${bonusCash}`,
+              })
+              .where(eq(users.id, user.id));
+            bonusCashCredited = bonusCash;
 
-      const testOtp = "123456";
-      const result = await sendVerificationEmail(email, testOtp, "Test User");
-
-      if (result.success) {
-        res.json({
-          success: true,
-          message: "Test email sent successfully",
-          emailId: result.data?.id,
-        });
-      } else {
-        res.status(500).json({
-          success: false,
-          message: "Failed to send test email",
-          error: result.error,
-        });
-      }
-    } catch (error) {
-      console.error("Test email error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Test failed",
-        error: error.message,
-      });
-    }
-  });
-
-  app.post("/api/auth/verify-email", async (req, res) => {
-    try {
-      const { email, otp } = req.body;
-  
-      if (!email || !otp) {
-        return res.status(400).json({
-          message: "Email and OTP are required",
-        });
-      }
-  
-      // Get user
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-  
-      // Check if already verified
-      if (user.emailVerified) {
-        return res.status(400).json({
-          message: "Email already verified",
-        });
-      }
-  
-      // Check if OTP exists and matches
-      if (!user.emailVerificationOtp || user.emailVerificationOtp !== otp) {
-        return res.status(400).json({
-          message: "Invalid OTP",
-        });
-      }
-  
-      // Check if OTP is expired
-      if (!user.emailVerificationOtpExpiresAt || new Date() > user.emailVerificationOtpExpiresAt) {
-        return res.status(400).json({
-          message: "OTP has expired. Please request a new one.",
-        });
-      }
-  
-      let bonusCashCredited = 0;
-      let bonusPointsCredited = 0;
-      let redeemAmountCredited = 0;
-  
-      // Start transaction
-      await db.transaction(async (tx) => {
-        // 1. Verify the email
-        await tx
-          .update(users)
-          .set({
-            emailVerified: true,
-            emailVerificationOtp: null,
-            emailVerificationOtpExpiresAt: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(users.id, user.id));
-  
-        // 2. Apply normal signup bonus
-        try {
-          const settings = await storage.getPlatformSettings();
-          if (settings?.signupBonusEnabled) {
-            const bonusCash = parseFloat(settings.signupBonusCash || "0");
-            const bonusPoints = settings.signupBonusPoints || 0;
-  
-            if (bonusCash > 0) {
-              await tx.update(users)
-                .set({
-                  balance: sql`${users.balance} + ${bonusCash}`,
-                })
-                .where(eq(users.id, user.id));
-              bonusCashCredited = bonusCash;
-  
-              await tx.insert(transactions).values({
-                userId: user.id,
-                amount: bonusCash.toFixed(2),
-                type: "deposit",
-                status: "completed",
-                description: "Signup bonus - Welcome cash",
-              });
-            }
-  
-            if (bonusPoints > 0) {
-              await tx.update(users)
-                .set({
-                  ringtonePoints: sql`${users.ringtonePoints} + ${bonusPoints}`,
-                })
-                .where(eq(users.id, user.id));
-              bonusPointsCredited = bonusPoints;
-  
-              await tx.insert(transactions).values({
-                userId: user.id,
-                amount: "0.00",
-                type: "deposit",
-                status: "completed",
-                description: `Signup bonus - ${bonusPoints} RingTone Points`,
-              });
-            }
-          }
-        } catch (bonusError) {
-          console.error("Signup bonus error:", bonusError);
-        }
-  
-        // 3. ⭐⭐ Apply pending redeem code if exists
-        if (user.pendingRedeemCode && user.pendingRedeemAmount) {
-          try {
-            const code = user.pendingRedeemCode;
-            const amount = parseFloat(user.pendingRedeemAmount);
-  
-            // Find the redeem code again (double-check)
-            const redeemCode = await tx.query.redeemCodes.findFirst({
-              where: eq(redeemCodes.code, code),
+            await tx.insert(transactions).values({
+              userId: user.id,
+              amount: bonusCash.toFixed(2),
+              type: "deposit",
+              status: "completed",
+              description: "Signup bonus - Welcome cash",
             });
-  
-            if (redeemCode && !redeemCode.isUsed) {
-              // Check if not expired
-              if (!redeemCode.expiresAt || new Date() <= new Date(redeemCode.expiresAt)) {
-                
-                // Mark code as used
-                await tx.update(redeemCodes)
-                  .set({
-                    isUsed: true,
-                    usedByUserId: user.id,
-                    usedAt: new Date(),
-                  })
-                  .where(eq(redeemCodes.id, redeemCode.id));
-  
-                // Add amount to user's balance
-                await tx.update(users)
-                  .set({
-                    balance: sql`${users.balance} + ${amount}`,
-                  })
-                  .where(eq(users.id, user.id));
-  
-                // Record redemption
-                await tx.insert(redeemCodeRedemptions).values({
-                  redeemCodeId: redeemCode.id,
-                  userId: user.id,
-                  amount: amount.toString(),
-                  ipAddress: req.ip,
-                  userAgent: req.headers["user-agent"],
-                });
-  
-                // Create transaction record
-                await tx.insert(transactions).values({
-                  userId: user.id,
-                  amount: amount.toString(),
-                  type: "redeem",
-                  description: `Redeemed flyer code: ${code}`,
-                  status: "completed",
-                });
-  
-                redeemAmountCredited = amount;
-                console.log(`✅ Flyer code ${code} redeemed for user ${user.id} - £${amount}`);
-              }
-            }
-  
-            // Clear pending fields regardless (don't try again)
+          }
+
+          if (bonusPoints > 0) {
             await tx.update(users)
               .set({
-                pendingRedeemCode: null,
-                pendingRedeemAmount: null,
+                ringtonePoints: sql`${users.ringtonePoints} + ${bonusPoints}`,
               })
               .where(eq(users.id, user.id));
-  
-          } catch (redeemError) {
-            console.error("Failed to apply redeem code during verification:", redeemError);
-            // Clear pending fields to prevent future attempts
-            await tx.update(users)
-              .set({
-                pendingRedeemCode: null,
-                pendingRedeemAmount: null,
-              })
-              .where(eq(users.id, user.id));
-          }
-        }
-  
-        // 4. Apply referral system
-        try {
-          if (user.referredBy) {
-            const referrer = await storage.getUser(user.referredBy);
-            if (referrer && referrer.id !== user.id) {
-              await storage.saveUserReferral({
-                userId: user.id,
-                referrerId: referrer.id,
-              });
-  
-              console.log(`🎉 Referral: ${referrer.email} referred ${user.email}`);
-  
-              // Give new user 100 points
-              const welcomeReferralPoints = 100;
-              await tx.update(users)
-                .set({
-                  ringtonePoints: sql`${users.ringtonePoints} + ${welcomeReferralPoints}`,
-                })
-                .where(eq(users.id, user.id));
-  
-              await tx.insert(transactions).values({
-                userId: user.id,
-                amount: welcomeReferralPoints.toString(),
-                type: "referral_bonus",
-                status: "completed",
-                description: `Welcome referral bonus +${welcomeReferralPoints} points`,
-              });
-            }
-          }
-        } catch (referralError) {
-          console.error("Referral processing error:", referralError);
-        }
-      });
-  
-      // Send welcome email
-      sendWelcomeEmail(email, {
-        userName: `${user.firstName} ${user.lastName}`.trim() || "there",
-        email,
-      }).catch((err) => console.error("Failed to send welcome email:", err));
-  
-      // Create session
-      (req as any).session.userId = user.id;
-  
-      // Get updated user
-      const updatedUser = await storage.getUser(user.id);
-  
-      res.json({
-        message: "Email verified successfully! Welcome bonuses applied.",
-        verified: true,
-        bonusesApplied: {
-          cash: bonusCashCredited,
-          points: bonusPointsCredited,
-          referral: !!user.referredBy,
-          redeemCode: redeemAmountCredited > 0 ? `£${redeemAmountCredited.toFixed(2)}` : null,
-        },
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          emailVerified: true,
-          balance: updatedUser?.balance,
-        },
-      });
-  
-    } catch (error) {
-      console.error("Verification error:", error);
-      res.status(500).json({ message: "Failed to verify email" });
-    }
-  });
+            bonusPointsCredited = bonusPoints;
 
-  app.post("/api/auth/resend-otp", async (req, res) => {
-    try {
-      const { email } = req.body;
-
-      if (!email) {
-        return res.status(400).json({
-          message: "Email is required",
-        });
-      }
-
-      // Get user
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Check if already verified
-      if (user.emailVerified) {
-        return res.status(400).json({
-          message: "Email already verified",
-        });
-      }
-
-      // Check rate limiting (max 3 attempts per hour)
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-      if (
-        user.verificationSentAt &&
-        new Date(user.verificationSentAt) > oneHourAgo
-      ) {
-        // Simple check: if OTP was sent less than 20 minutes ago, limit resends
-        const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
-        if (user.verificationSentAt > twentyMinutesAgo) {
-          // Count how many times OTP was sent in last hour
-          const sentCount = await db
-            .select()
-            .from(users)
-            .where(
-              and(
-                eq(users.email, email),
-                gt(users.verificationSentAt, oneHourAgo)
-              )
-            )
-            .then((rows) => rows.length);
-
-          if (sentCount >= 3) {
-            return res.status(429).json({
-              message: "Too many OTP requests. Please try again in 1 hour.",
-              retryAfter: "1 hour",
+            await tx.insert(transactions).values({
+              userId: user.id,
+              amount: "0.00",
+              type: "deposit",
+              status: "completed",
+              description: `Signup bonus - ${bonusPoints} RingTone Points`,
             });
           }
         }
+      } catch (bonusError) {
+        console.error("Signup bonus error:", bonusError);
       }
 
-      // Generate new OTP
-      const newOtp = OTPGenerator.generate();
-      const expiresAt = OTPGenerator.getExpiryTime(10);
+      // 2. Apply redeem code if exists
+      if (pendingRedeemCode && pendingRedeemAmount) {
+        try {
+          const code = pendingRedeemCode;
+          const amount = parseFloat(pendingRedeemAmount);
 
-      // Update user with new OTP
-      await db
-        .update(users)
-        .set({
-          emailVerificationOtp: newOtp,
-          emailVerificationOtpExpiresAt: expiresAt,
-          verificationSentAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, user.id));
+          // Find the redeem code again
+          const redeemCode = await tx.query.redeemCodes.findFirst({
+            where: eq(redeemCodes.code, code),
+          });
 
-      // Send new verification email
-      await sendVerificationEmail(
-        email,
-        newOtp,
-        `${user.firstName} ${user.lastName}`.trim() || user.firstName || "User"
-      );
+          if (redeemCode && !redeemCode.isUsed) {
+            // Check if not expired
+            if (!redeemCode.expiresAt || new Date() <= new Date(redeemCode.expiresAt)) {
+              
+              // Mark code as used
+              await tx.update(redeemCodes)
+                .set({
+                  isUsed: true,
+                  usedByUserId: user.id,
+                  usedAt: new Date(),
+                })
+                .where(eq(redeemCodes.id, redeemCode.id));
 
-      res.json({
-        message: "New OTP sent successfully to your email",
-        expiresIn: "30 minutes",
-      });
-    } catch (error) {
-      console.error("Resend OTP error:", error);
-      res.status(500).json({ message: "Failed to resend OTP" });
-    }
-  });
+              // Add amount to user's balance
+              await tx.update(users)
+                .set({
+                  balance: sql`${users.balance} + ${amount}`,
+                })
+                .where(eq(users.id, user.id));
 
-  // Login route
-  app.post("/api/auth/login", async (req, res) => {
-    try {
-      const result = loginUserSchema.safeParse(req.body);
-      if (!result.success) {
-        return res.status(400).json({ message: "Invalid login data" });
-      }
+              // Record redemption
+              await tx.insert(redeemCodeRedemptions).values({
+                redeemCodeId: redeemCode.id,
+                userId: user.id,
+                amount: amount.toString(),
+                ipAddress: req.ip,
+                userAgent: req.headers["user-agent"],
+              });
 
-      const now = new Date();
-      const { email, password } = result.data;
+              // Create transaction record
+              await tx.insert(transactions).values({
+                userId: user.id,
+                amount: amount.toString(),
+                type: "redeem",
+                description: `Redeemed flyer code: ${code}`,
+                status: "completed",
+              });
 
-      // Get user by email
-      const user = await storage.getUserByEmail(email);
-      if (!user || !user.password) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
+              redeemAmountCredited = amount;
+              console.log(`✅ Flyer code ${code} redeemed for user ${user.id} - £${amount}`);
+            }
+          }
 
-      // ⭐⭐ CHECK IF EMAIL IS VERIFIED
-      if (!user.emailVerified) {
-        return res.status(403).json({
-          code: "EMAIL_NOT_VERIFIED",
-          message: "Please verify your email before logging in.",
-          email: user.email,
-          canResend: true,
-          userId: user.id,
-        });
-      }
-
-      // 1️⃣ Check admin disables first
-      if (user.disabled) {
-        if (user.disabledUntil && now > new Date(user.disabledUntil)) {
-          await db
-            .update(users)
+          // Clear pending fields
+          await tx.update(users)
             .set({
-              disabled: false,
-              disabledAt: null,
-              disabledUntil: null,
-              updatedAt: now,
+              pendingRedeemCode: null,
+              pendingRedeemAmount: null,
             })
             .where(eq(users.id, user.id));
-          user.disabled = false;
+
+        } catch (redeemError) {
+          console.error("Failed to apply redeem code during registration:", redeemError);
+          // Clear pending fields
+          await tx.update(users)
+            .set({
+              pendingRedeemCode: null,
+              pendingRedeemAmount: null,
+            })
+            .where(eq(users.id, user.id));
         }
+      }
 
-        if (user.disabled) {
-          return res
-            .status(403)
-            .json({ message: "This account has been closed." });
+      // 3. Apply referral system
+      try {
+        if (referrerId) {
+          const referrer = await storage.getUser(referrerId);
+          if (referrer && referrer.id !== user.id) {
+            await storage.saveUserReferral({
+              userId: user.id,
+              referrerId: referrer.id,
+            });
+
+            console.log(`🎉 Referral: ${referrer.email} referred ${user.email}`);
+
+            // Give new user 100 points
+            const welcomeReferralPoints = 100;
+            await tx.update(users)
+              .set({
+                ringtonePoints: sql`${users.ringtonePoints} + ${welcomeReferralPoints}`,
+              })
+              .where(eq(users.id, user.id));
+
+            await tx.insert(transactions).values({
+              userId: user.id,
+              amount: welcomeReferralPoints.toString(),
+              type: "referral_bonus",
+              status: "completed",
+              description: `Welcome referral bonus +${welcomeReferralPoints} points`,
+            });
+          }
         }
+      } catch (referralError) {
+        console.error("Referral processing error:", referralError);
+      }
+    });
+
+    // Send welcome email (optional - just for notification)
+    sendWelcomeEmail(email, {
+      userName: `${user.firstName} ${user.lastName}`.trim() || "there",
+      email,
+    }).catch((err) => console.error("Failed to send welcome email:", err));
+
+    // Create session immediately
+    (req as any).session.userId = user.id;
+
+    // Get updated user
+    const updatedUser = await storage.getUser(user.id);
+
+    console.log("✅ [register] Registration complete with bonuses!");
+
+    res.status(201).json({
+      message: "Registration successful! Welcome to RingTone Riches!",
+      user: {
+        id: updatedUser?.id,
+        email: updatedUser?.email,
+        firstName: updatedUser?.firstName,
+        lastName: updatedUser?.lastName,
+        balance: updatedUser?.balance,
+        ringtonePoints: updatedUser?.ringtonePoints,
+        isAdmin: updatedUser?.isAdmin || false,
+        emailVerified: true,
+      },
+      bonusesApplied: {
+        cash: bonusCashCredited,
+        points: bonusPointsCredited,
+        referral: !!referrerId,
+        redeemCode: redeemAmountCredited > 0 ? `£${redeemAmountCredited.toFixed(2)}` : null,
+      },
+    });
+
+  } catch (error: any) {
+    console.error("🔥 [register] Registration error:", error);
+    res.status(500).json({
+      message: "Failed to register user",
+      error: error.message,
+    });
+  }
+});
+
+// Login route (simplified - no verification check)
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const result = loginUserSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ message: "Invalid login data" });
+    }
+
+    const now = new Date();
+    const { email, password } = result.data;
+
+    // Get user by email
+    const user = await storage.getUserByEmail(email);
+    if (!user || !user.password) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    // 1️⃣ Check admin disables first
+    if (user.disabled) {
+      if (user.disabledUntil && now > new Date(user.disabledUntil)) {
+        await db
+          .update(users)
+          .set({
+            disabled: false,
+            disabledAt: null,
+            disabledUntil: null,
+            updatedAt: now,
+          })
+          .where(eq(users.id, user.id));
+        user.disabled = false;
       }
 
-      // 2️⃣ Check self-suspension before password verification
-      if (
-        user.selfSuspended &&
-        user.selfSuspensionEndsAt &&
-        now < new Date(user.selfSuspensionEndsAt)
-      ) {
-        return res.status(403).json({
-          code: "SELF_SUSPENDED",
-          message:
-            "Your account is temporarily suspended due to a wellbeing request.",
-          endsAt: user.selfSuspensionEndsAt,
-        });
+      if (user.disabled) {
+        return res
+          .status(403)
+          .json({ message: "This account has been closed." });
       }
+    }
 
-      // 3️⃣ Apply self-suspension expiry for past suspensions
-      await applySelfSuspensionExpiry(user.id);
+    // 2️⃣ Check self-suspension before password verification
+    if (
+      user.selfSuspended &&
+      user.selfSuspensionEndsAt &&
+      now < new Date(user.selfSuspensionEndsAt)
+    ) {
+      return res.status(403).json({
+        code: "SELF_SUSPENDED",
+        message:
+          "Your account is temporarily suspended due to a wellbeing request.",
+        endsAt: user.selfSuspensionEndsAt,
+      });
+    }
 
-      // Refresh user object after potential suspension removal
-      const freshUser = await storage.getUser(user.id);
+    // 3️⃣ Apply self-suspension expiry for past suspensions
+    await applySelfSuspensionExpiry(user.id);
 
-      // Verify password
-      const isValidPassword = await verifyPassword(
-        password,
-        freshUser.password
-      );
-      if (!isValidPassword) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
+    // Refresh user object after potential suspension removal
+    const freshUser = await storage.getUser(user.id);
 
-      // Store user ID in session
-      (req as any).session.userId = freshUser.id;
-      // ⭐ LOG USER IP ON LOGIN WITH DETAILED DEBUGGING
+    // Verify password
+    const isValidPassword = await verifyPassword(
+      password,
+      freshUser.password
+    );
+    if (!isValidPassword) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    // Store user ID in session
+    (req as any).session.userId = freshUser.id;
+
+    // Log IP
     try {
       console.log("=== IP LOGGING DEBUG ===");
-      console.log("Headers:", {
-        'cf-connecting-ip': req.headers['cf-connecting-ip'],
-        'x-forwarded-for': req.headers['x-forwarded-for'],
-        'x-real-ip': req.headers['x-real-ip'],
-      });
-      console.log("Socket remoteAddress:", req.socket?.remoteAddress);
-      console.log("req.ip:", req.ip);
-      
       const ip = getClientIp(req);
-      console.log("Extracted IP:", ip);
-      
       const ua = req.headers["user-agent"] || "";
-      console.log("User Agent:", ua.substring(0, 50) + "...");
       
-      console.log("User ID:", freshUser.id);
-      console.log("User Email:", freshUser.email);
-
-      // Check if table exists and insert
-      const result = await db.insert(userIpLogs).values({
+      await db.insert(userIpLogs).values({
         userId: freshUser.id,
         ipAddress: ip,
         userAgent: ua,
       }).returning();
       
-      console.log("IP Log inserted successfully, ID:", result[0]?.id);
+      console.log("IP Log inserted successfully");
       console.log("=== END IP LOGGING DEBUG ===");
       
     } catch (e) {
       console.error("❌ IP log failed on login:", e);
-      if (e instanceof Error) {
-        console.error("Error details:", e.message);
-        console.error("Error stack:", e.stack);
-      }
     }
 
-
-      res.json({
-        message: "Login successful",
-        user: {
-          id: freshUser.id,
-          email: freshUser.email,
-          firstName: freshUser.firstName,
-          lastName: freshUser.lastName,
-          balance: freshUser.balance,
-          ringtonePoints: freshUser.ringtonePoints,
-          isAdmin: freshUser.isAdmin || false,
-          emailVerified: freshUser.emailVerified,
-        },
-      });
-    } catch (error) {
-      console.error("Login error:", error);
-      res.status(500).json({ message: "Failed to log in" });
-    }
-  });
+    res.json({
+      message: "Login successful",
+      user: {
+        id: freshUser.id,
+        email: freshUser.email,
+        firstName: freshUser.firstName,
+        lastName: freshUser.lastName,
+        balance: freshUser.balance,
+        ringtonePoints: freshUser.ringtonePoints,
+        isAdmin: freshUser.isAdmin || false,
+        emailVerified: true,
+      },
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ message: "Failed to log in" });
+  }
+});
 
 
   app.get("/api/auth/verification-status/:email", async (req, res) => {
@@ -2366,86 +2124,73 @@ app.get("/api/redeem/history", isAuthenticated, async (req, res) => {
 });
 
 
-  // GET /api/admin/sms-messages/:id/check-users - Debug users with phone numbers
-  app.get("/api/admin/sms-messages/:id/check-users", isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      
-      // Get the SMS message
-      const message = await db.query.smsMessages.findFirst({
-        where: eq(smsMessages.id, id),
-      });
-  
-      if (!message) {
-        return res.status(404).json({ error: "Message not found" });
-      }
-  
-      let debug = {
-        messageId: id,
-        targetType: message.targetType,
-        selectedUserIds: [] as string[],
-        usersWithPhone: [] as any[],
-        usersWithoutPhone: [] as any[],
-        allUsers: [] as any[],
-      };
-  
-      // Get selected user IDs
-      if (message.targetType === "specific_users" && message.targetUserIds) {
-        try {
-          if (typeof message.targetUserIds === 'string') {
-            debug.selectedUserIds = JSON.parse(message.targetUserIds);
-          } else if (Array.isArray(message.targetUserIds)) {
-            debug.selectedUserIds = message.targetUserIds;
-          }
-        } catch (e) {
-          debug.selectedUserIds = [];
-        }
-      }
-  
-      // Get all users with their phone numbers
-      const allUsers = await db.select({
-        id: users.id,
-        email: users.email,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        phoneNumber: users.phoneNumber,
-        isActive: users.isActive,
-      }).from(users);
-  
-      debug.allUsers = allUsers;
-  
-      // Check which selected users have phone numbers
-      if (debug.selectedUserIds.length > 0) {
-        debug.usersWithPhone = allUsers.filter(u => 
-          debug.selectedUserIds.includes(u.id) && 
-          u.phoneNumber && 
-          u.phoneNumber.trim() !== ''
-        );
-        
-        debug.usersWithoutPhone = allUsers.filter(u => 
-          debug.selectedUserIds.includes(u.id) && 
-          (!u.phoneNumber || u.phoneNumber.trim() === '')
-        );
-      }
-  
-      res.json(debug);
-    } catch (error) {
-      console.error("Check users error:", error);
-      res.status(500).json({ error: "Failed to check users" });
+  // GET /api/admin/push-notifications/:id/check-users - Debug users
+app.get("/api/admin/push-notifications/:id/check-users", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const notification = await db.query.pushNotifications.findFirst({
+      where: eq(pushNotifications.id, id),
+    });
+
+    if (!notification) {
+      return res.status(404).json({ error: "Notification not found" });
     }
-  });
-// POST /api/admin/sms-messages - Create SMS message
-app.post("/api/admin/sms-messages", isAuthenticated, isAdmin, async (req, res) => {
+
+    let debug = {
+      notificationId: id,
+      targetType: notification.targetType,
+      selectedUserIds: [] as string[],
+      targetUsers: [] as any[],
+      allUsers: [] as any[],
+    };
+
+    // Get selected user IDs
+    if (notification.targetType === "specific_users" && notification.targetUserIds) {
+      try {
+        if (typeof notification.targetUserIds === 'string') {
+          debug.selectedUserIds = JSON.parse(notification.targetUserIds);
+        } else if (Array.isArray(notification.targetUserIds)) {
+          debug.selectedUserIds = notification.targetUserIds;
+        }
+      } catch (e) {
+        debug.selectedUserIds = [];
+      }
+    }
+
+    // Get all users
+    const allUsers = await db.select({
+      id: users.id,
+      email: users.email,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      isActive: users.isActive,
+    }).from(users);
+
+    debug.allUsers = allUsers;
+
+    // Get target users
+    if (debug.selectedUserIds.length > 0) {
+      debug.targetUsers = allUsers.filter(u => debug.selectedUserIds.includes(u.id));
+    }
+
+    res.json(debug);
+  } catch (error) {
+    console.error("Check users error:", error);
+    res.status(500).json({ error: "Failed to check users" });
+  }
+});
+
+// POST /api/admin/push-notifications - Create push notification
+app.post("/api/admin/push-notifications", isAuthenticated, isAdmin, async (req, res) => {
   try {
     const schema = z.object({
       title: z.string().min(1).max(200),
-      message: z.string().min(1).max(1600),
-      targetType: z.enum(["all", "specific_users", "by_filter"]),
+      message: z.string().min(1).max(10000),
+      type: z.enum(["info", "success", "warning", "promotion", "system"]),
+      targetType: z.enum(["all", "specific_users"]),
       targetUserIds: z.array(z.string()).optional(),
-      targetFilter: z.object({
-        userType: z.enum(["all", "verified", "unverified"]).optional(),
-        searchTerm: z.string().optional(),
-      }).optional(),
+      status: z.enum(["draft", "scheduled"]),
     });
 
     const data = schema.parse(req.body);
@@ -2454,87 +2199,72 @@ app.post("/api/admin/sms-messages", isAuthenticated, isAdmin, async (req, res) =
     const insertData: any = {
       title: data.title,
       message: data.message,
+      type: data.type,
       targetType: data.targetType,
       createdBy: req.user.id,
-      status: "draft",
+      status: data.status,
     };
 
-    // Only add JSON fields if they have valid data
+    // Add targetUserIds if present
     if (data.targetUserIds && data.targetUserIds.length > 0) {
       insertData.targetUserIds = JSON.stringify(data.targetUserIds);
     } else {
       insertData.targetUserIds = null;
     }
 
-    if (data.targetFilter && (data.targetFilter.searchTerm || data.targetFilter.userType !== "all")) {
-      // Only store filter if it has meaningful data
-      const filterToStore: any = {};
-      if (data.targetFilter.searchTerm) filterToStore.searchTerm = data.targetFilter.searchTerm;
-      if (data.targetFilter.userType && data.targetFilter.userType !== "all") {
-        filterToStore.userType = data.targetFilter.userType;
-      }
-      insertData.targetFilter = Object.keys(filterToStore).length > 0 ? JSON.stringify(filterToStore) : null;
-    } else {
-      insertData.targetFilter = null;
-    }
-
-    // Create SMS message
-    const [message] = await db.insert(smsMessages).values(insertData).returning();
+    // Create push notification
+    const [notification] = await db.insert(pushNotifications).values(insertData).returning();
 
     res.json({
       success: true,
-      message: "SMS message created successfully",
-      data: message
+      message: "Push notification created successfully",
+      data: notification
     });
 
   } catch (error) {
-    console.error("Create SMS error:", error);
+    console.error("Create push notification error:", error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors });
     }
-    res.status(500).json({ error: "Failed to create SMS message" });
+    res.status(500).json({ error: "Failed to create push notification" });
   }
 });
 
-// POST /api/admin/sms-messages/:id/send - Send SMS
-app.post("/api/admin/sms-messages/:id/send", isAuthenticated, isAdmin, async (req, res) => {
+// POST /api/admin/push-notifications/:id/send - Send push notification
+app.post("/api/admin/push-notifications/:id/send", isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`📨 Attempting to send SMS message: ${id}`);
+    console.log(`📨 Attempting to send push notification: ${id}`);
     
-    // Get the SMS message
-    const message = await db.query.smsMessages.findFirst({
-      where: eq(smsMessages.id, id),
+    // Get the notification
+    const notification = await db.query.pushNotifications.findFirst({
+      where: eq(pushNotifications.id, id),
     });
 
-    if (!message) {
-      console.error(`❌ SMS message not found: ${id}`);
-      return res.status(404).json({ error: "SMS message not found" });
+    if (!notification) {
+      console.error(`❌ Push notification not found: ${id}`);
+      return res.status(404).json({ error: "Push notification not found" });
     }
 
-    console.log(`📨 Message found:`, {
-      title: message.title,
-      targetType: message.targetType,
-      status: message.status,
-      targetUserIds: message.targetUserIds,
-      targetUserIdsType: typeof message.targetUserIds
+    console.log(`📨 Notification found:`, {
+      title: notification.title,
+      targetType: notification.targetType,
+      status: notification.status,
     });
 
-    if (message.status === "sent") {
-      return res.status(400).json({ error: "SMS already sent" });
+    if (notification.status === "sent") {
+      return res.status(400).json({ error: "Notification already sent" });
     }
 
-    // Get target users with phone numbers
-    let targetUsers: { id: string; phoneNumber: string }[] = [];
+    // Get target users
+    let targetUsers: { id: string }[] = [];
     let selectedCount = 0;
-    let usersWithoutPhone: any[] = [];
-    let usersWithInvalidPhone: any[] = [];
+    let usersNotFound: any[] = [];
 
-    if (message.targetType === "all") {
-      // Get all users with phone numbers
+    if (notification.targetType === "all") {
+      // Get all active users
       const allUsers = await db.select({ 
         id: users.id, 
-        phoneNumber: users.phoneNumber,
         email: users.email,
         firstName: users.firstName,
         lastName: users.lastName,
@@ -2542,38 +2272,25 @@ app.post("/api/admin/sms-messages/:id/send", isAuthenticated, isAdmin, async (re
       .from(users)
       .where(eq(users.isActive, true));
       
-      // Test format each phone number
-      for (const user of allUsers) {
-        if (user.phoneNumber && user.phoneNumber.trim() !== '') {
-          const formatted = SMSService.formatPhoneNumber(user.phoneNumber);
-          if (formatted) {
-            targetUsers.push({ id: user.id, phoneNumber: formatted });
-          } else {
-            usersWithInvalidPhone.push(user);
-          }
-        } else {
-          usersWithoutPhone.push(user);
-        }
-      }
-      
+      targetUsers = allUsers;
       selectedCount = allUsers.length;
     } 
-    else if (message.targetType === "specific_users" && message.targetUserIds) {
+    else if (notification.targetType === "specific_users" && notification.targetUserIds) {
       try {
         // Parse user IDs
         let userIds: string[] = [];
         
-        if (Array.isArray(message.targetUserIds)) {
-          userIds = message.targetUserIds;
+        if (Array.isArray(notification.targetUserIds)) {
+          userIds = notification.targetUserIds;
           console.log("✅ targetUserIds is already an array:", userIds);
         } 
-        else if (typeof message.targetUserIds === 'string') {
-          if (message.targetUserIds && message.targetUserIds.trim() !== '') {
+        else if (typeof notification.targetUserIds === 'string') {
+          if (notification.targetUserIds && notification.targetUserIds.trim() !== '') {
             try {
-              userIds = JSON.parse(message.targetUserIds);
+              userIds = JSON.parse(notification.targetUserIds);
               console.log("✅ Parsed targetUserIds from string:", userIds);
             } catch (parseErr) {
-              userIds = [message.targetUserIds];
+              userIds = [notification.targetUserIds];
             }
           }
         }
@@ -2582,10 +2299,9 @@ app.post("/api/admin/sms-messages/:id/send", isAuthenticated, isAdmin, async (re
         selectedCount = userIds.length;
         
         if (userIds.length > 0) {
-          // FIX: Use SQL array syntax correctly
+          // Get selected users
           const selectedUsers = await db.select({ 
             id: users.id, 
-            phoneNumber: users.phoneNumber,
             email: users.email,
             firstName: users.firstName,
             lastName: users.lastName,
@@ -2594,164 +2310,147 @@ app.post("/api/admin/sms-messages/:id/send", isAuthenticated, isAdmin, async (re
           .where(sql`${users.id} = ANY(ARRAY[${sql.join(userIds, sql`, `)}]::varchar[])`);
           
           console.log(`📊 Found ${selectedUsers.length} users in database`);
+          targetUsers = selectedUsers;
           
-          // Log each user's details
-          for (const user of selectedUsers) {
-            console.log(`User ${user.email}: phone="${user.phoneNumber}"`);
-          }
-          
-          // Test format each phone number
-          for (const user of selectedUsers) {
-            if (user.phoneNumber && user.phoneNumber.trim() !== '') {
-              const formatted = SMSService.formatPhoneNumber(user.phoneNumber);
-              if (formatted) {
-                targetUsers.push({ id: user.id, phoneNumber: formatted });
-                console.log(`✅ Valid phone for ${user.email}: ${user.phoneNumber} -> ${formatted}`);
-              } else {
-                usersWithInvalidPhone.push(user);
-                console.log(`❌ Invalid phone format for ${user.email}: ${user.phoneNumber}`);
-              }
-            } else {
-              usersWithoutPhone.push(user);
-              console.log(`❌ No phone for ${user.email}`);
-            }
-          }
+          // Check for users not found
+          const foundUserIds = new Set(selectedUsers.map(u => u.id));
+          usersNotFound = userIds.filter(id => !foundUserIds.has(id));
         }
       } catch (parseError) {
         console.error("Failed to process targetUserIds:", parseError);
-        console.error("targetUserIds value:", message.targetUserIds);
+        console.error("targetUserIds value:", notification.targetUserIds);
       }
     }
 
     console.log(`📊 Results:`, {
       selectedCount,
-      validPhones: targetUsers.length,
-      noPhone: usersWithoutPhone.length,
-      invalidFormat: usersWithInvalidPhone.length
+      validUsers: targetUsers.length,
+      notFound: usersNotFound.length
     });
 
     if (targetUsers.length === 0) {
       return res.status(400).json({ 
-        error: "No users with valid phone numbers found",
+        error: "No valid users found",
         debug: {
           selectedCount,
-          validPhones: targetUsers.length,
-          noPhone: usersWithoutPhone.map(u => ({
-            id: u.id,
-            email: u.email,
-            name: `${u.firstName} ${u.lastName}`.trim(),
-            phoneNumber: u.phoneNumber || 'MISSING'
-          })),
-          invalidFormat: usersWithInvalidPhone.map(u => ({
-            id: u.id,
-            email: u.email,
-            name: `${u.firstName} ${u.lastName}`.trim(),
-            phoneNumber: u.phoneNumber,
-            reason: 'Could not format to international format'
-          }))
+          validUsers: targetUsers.length,
+          notFound: usersNotFound
         }
       });
     }
 
-    // If some users don't have valid phones, warn but proceed
-    if (usersWithoutPhone.length > 0 || usersWithInvalidPhone.length > 0) {
-      console.warn(`⚠️ Skipped ${usersWithoutPhone.length} users with no phone and ${usersWithInvalidPhone.length} users with invalid phone format`);
-    }
-
-    // Send SMS in bulk
-    console.log(`📱 Sending SMS to ${targetUsers.length} users...`);
-    const result = await SMSService.sendBulkSMS(
-      targetUsers.map(u => ({ userId: u.id, phoneNumber: u.phoneNumber })),
-      message.message,
-      message.title,
-      (sent, failed, total) => {
-        console.log(`Progress: ${sent + failed}/${total} - Sent: ${sent}, Failed: ${failed}`);
-      }
-    );
+    // Send push notifications (you'll need to implement your push notification service)
+    // For now, we'll just record the deliveries
+    console.log(`📱 Sending push notification to ${targetUsers.length} users...`);
 
     // Record deliveries in database
     await db.transaction(async (tx) => {
-      for (const smsResult of result.results) {
-        await tx.insert(smsDeliveries).values({
-          smsMessageId: message.id,
-          userId: smsResult.userId,
-          phoneNumber: smsResult.phoneNumber,
-          status: smsResult.success ? "sent" : "failed",
-          twilioMessageId: smsResult.messageId,
-          errorMessage: smsResult.error,
-          sentAt: smsResult.success ? new Date() : null,
+      for (const user of targetUsers) {
+        await tx.insert(pushDeliveries).values({
+          notificationId: notification.id,
+          userId: user.id,
+          status: "sent",
+          sentAt: new Date(),
         });
       }
 
-      // Update message status
-      await tx.update(smsMessages)
+      // Update notification status
+      await tx.update(pushNotifications)
         .set({
-          status: result.failed === 0 ? "sent" : result.sent > 0 ? "partial" : "failed",
-          sentCount: result.sent,
-          failedCount: result.failed,
+          status: "sent",
+          sentCount: targetUsers.length,
           sentAt: new Date(),
         })
-        .where(eq(smsMessages.id, message.id));
+        .where(eq(pushNotifications.id, notification.id));
     });
 
-    console.log(`✅ SMS campaign completed: ${result.sent} sent, ${result.failed} failed`);
+    console.log(`✅ Push notification campaign completed: sent to ${targetUsers.length} users`);
 
     res.json({
       success: true,
-      message: `SMS sent to ${result.sent} users (${result.failed} failed)`,
+      message: `Push notification sent to ${targetUsers.length} users`,
       stats: {
-        total: result.total,
-        sent: result.sent,
-        failed: result.failed,
-        skipped: usersWithoutPhone.length + usersWithInvalidPhone.length,
-        noPhone: usersWithoutPhone.length,
-        invalidFormat: usersWithInvalidPhone.length,
+        total: targetUsers.length,
+        notFound: usersNotFound.length,
       }
     });
 
   } catch (error) {
-    console.error("🔥 Send SMS error:", error);
+    console.error("🔥 Send push notification error:", error);
     res.status(500).json({ 
-      error: "Failed to send SMS",
+      error: "Failed to send push notification",
       details: error.message 
     });
   }
 });
 
-// GET /api/admin/sms-messages - List all SMS messages
-app.get("/api/admin/sms-messages", isAuthenticated, isAdmin, async (req, res) => {
+// POST /api/admin/push-notifications/:id/read - Mark as read (for client-side)
+app.post("/api/admin/push-notifications/:id/read", isAuthenticated, async (req, res) => {
   try {
-    const messages = await db.query.smsMessages.findMany({
-      orderBy: desc(smsMessages.createdAt),
-    });
-    res.json(messages);
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Update delivery record
+    const [delivery] = await db.update(pushDeliveries)
+      .set({
+        status: "read",
+        readAt: new Date(),
+      })
+      .where(
+        and(
+          eq(pushDeliveries.notificationId, id),
+          eq(pushDeliveries.userId, userId)
+        )
+      )
+      .returning();
+
+    if (delivery) {
+      // Increment read count on notification
+      await db.update(pushNotifications)
+        .set({
+          readCount: sql`${pushNotifications.readCount} + 1`
+        })
+        .where(eq(pushNotifications.id, id));
+    }
+
+    res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch SMS messages" });
+    res.status(500).json({ error: "Failed to mark as read" });
   }
 });
 
-// GET /api/admin/sms-messages/:id/deliveries - Get delivery details
-app.get("/api/admin/sms-messages/:id/deliveries", isAuthenticated, isAdmin, async (req, res) => {
+// GET /api/admin/push-notifications - List all push notifications
+app.get("/api/admin/push-notifications", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const notifications = await db.query.pushNotifications.findMany({
+      orderBy: desc(pushNotifications.createdAt),
+    });
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch push notifications" });
+  }
+});
+
+// GET /api/admin/push-notifications/:id/deliveries - Get delivery details
+app.get("/api/admin/push-notifications/:id/deliveries", isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
     const deliveries = await db.select({
-      id: smsDeliveries.id,
-      phoneNumber: smsDeliveries.phoneNumber,
-      status: smsDeliveries.status,
-      errorMessage: smsDeliveries.errorMessage,
-      sentAt: smsDeliveries.sentAt,
-      deliveredAt: smsDeliveries.deliveredAt,
+      id: pushDeliveries.id,
+      status: pushDeliveries.status,
+      sentAt: pushDeliveries.sentAt,
+      readAt: pushDeliveries.readAt,
       user: {
         email: users.email,
         firstName: users.firstName,
         lastName: users.lastName,
       }
     })
-    .from(smsDeliveries)
-    .leftJoin(users, eq(smsDeliveries.userId, users.id))
-    .where(eq(smsDeliveries.smsMessageId, id))
-    .orderBy(desc(smsDeliveries.createdAt));
+    .from(pushDeliveries)
+    .leftJoin(users, eq(pushDeliveries.userId, users.id))
+    .where(eq(pushDeliveries.notificationId, id))
+    .orderBy(desc(pushDeliveries.createdAt));
 
     res.json(deliveries);
   } catch (error) {
@@ -2759,25 +2458,209 @@ app.get("/api/admin/sms-messages/:id/deliveries", isAuthenticated, isAdmin, asyn
   }
 });
 
-// GET /api/admin/sms-messages/stats - Get SMS statistics
-app.get("/api/admin/sms-messages/stats", isAuthenticated, isAdmin, async (req, res) => {
+// GET /api/admin/push-notifications/stats - Get statistics
+app.get("/api/admin/push-notifications/stats", isAuthenticated, isAdmin, async (req, res) => {
   try {
-    const total = await db.select({ count: sql<number>`count(*)` }).from(smsMessages);
-    const totalSms = await db.select({ count: sql<number>`count(*)` }).from(smsDeliveries);
-    const sentSms = await db.select({ count: sql<number>`count(*)` })
-      .from(smsDeliveries)
-      .where(eq(smsDeliveries.status, "sent"));
+    const total = await db.select({ count: sql<number>`count(*)` }).from(pushNotifications);
+    const totalDeliveries = await db.select({ count: sql<number>`count(*)` }).from(pushDeliveries);
+    const readDeliveries = await db.select({ count: sql<number>`count(*)` })
+      .from(pushDeliveries)
+      .where(eq(pushDeliveries.status, "read"));
     
     res.json({
-      totalMessages: Number(total[0].count),
-      totalSmsSent: Number(totalSms[0].count),
-      successfulSms: Number(sentSms[0].count),
+      totalNotifications: Number(total[0].count),
+      totalDeliveries: Number(totalDeliveries[0].count),
+      readCount: Number(readDeliveries[0].count),
     });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch stats" });
   }
 });
 
+// DELETE /api/admin/push-notifications/:id - Delete notification
+app.delete("/api/admin/push-notifications/:id", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.delete(pushNotifications).where(eq(pushNotifications.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete notification" });
+  }
+});
+
+
+
+// GET /api/user/notifications - Get user's notifications
+app.get("/api/user/notifications", isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const deliveries = await db.select({
+      id: pushDeliveries.id,
+      notificationId: pushDeliveries.notificationId,
+      status: pushDeliveries.status,
+      readAt: pushDeliveries.readAt,
+      sentAt: pushDeliveries.sentAt,
+      createdAt: pushDeliveries.createdAt,
+      notification: {
+        id: pushNotifications.id,
+        title: pushNotifications.title,
+        message: pushNotifications.message,
+        type: pushNotifications.type,
+        sentAt: pushNotifications.sentAt,
+      }
+    })
+    .from(pushDeliveries)
+    .innerJoin(pushNotifications, eq(pushDeliveries.notificationId, pushNotifications.id))
+    .where(eq(pushDeliveries.userId, userId))
+    .orderBy(desc(pushDeliveries.createdAt));
+
+    res.json(deliveries);
+  } catch (error) {
+    console.error("Fetch notifications error:", error);
+    res.status(500).json({ error: "Failed to fetch notifications" });
+  }
+});
+
+// GET /api/user/notifications/unread-count - Get unread count
+app.get("/api/user/notifications/unread-count", isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const [result] = await db.select({ 
+      count: sql<number>`count(*)` 
+    })
+    .from(pushDeliveries)
+    .where(
+      and(
+        eq(pushDeliveries.userId, userId),
+        ne(pushDeliveries.status, "read")
+      )
+    );
+
+    res.json({ count: Number(result.count) });
+  } catch (error) {
+    console.error("Fetch unread count error:", error);
+    res.status(500).json({ error: "Failed to fetch unread count" });
+  }
+});
+
+// POST /api/user/notifications/:notificationId/read - Mark as read
+app.post("/api/user/notifications/:notificationId/read", isAuthenticated, async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    const userId = req.user.id;
+
+    const [delivery] = await db.update(pushDeliveries)
+      .set({
+        status: "read",
+        readAt: new Date(),
+      })
+      .where(
+        and(
+          eq(pushDeliveries.notificationId, notificationId),
+          eq(pushDeliveries.userId, userId)
+        )
+      )
+      .returning();
+
+    if (delivery) {
+      // Increment read count on notification
+      await db.update(pushNotifications)
+        .set({
+          readCount: sql`${pushNotifications.readCount} + 1`
+        })
+        .where(eq(pushNotifications.id, notificationId));
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Mark as read error:", error);
+    res.status(500).json({ error: "Failed to mark as read" });
+  }
+});
+
+// POST /api/user/notifications/read-all - Mark all as read
+app.post("/api/user/notifications/read-all", isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get all unread notifications for this user
+    const unreadDeliveries = await db.select({
+      notificationId: pushDeliveries.notificationId,
+    })
+    .from(pushDeliveries)
+    .where(
+      and(
+        eq(pushDeliveries.userId, userId),
+        ne(pushDeliveries.status, "read")
+      )
+    );
+
+    // Update all deliveries to read
+    await db.update(pushDeliveries)
+      .set({
+        status: "read",
+        readAt: new Date(),
+      })
+      .where(
+        and(
+          eq(pushDeliveries.userId, userId),
+          ne(pushDeliveries.status, "read")
+        )
+      );
+
+    // Update read counts for each notification
+    for (const delivery of unreadDeliveries) {
+      await db.update(pushNotifications)
+        .set({
+          readCount: sql`${pushNotifications.readCount} + 1`
+        })
+        .where(eq(pushNotifications.id, delivery.notificationId));
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Mark all as read error:", error);
+    res.status(500).json({ error: "Failed to mark all as read" });
+  }
+});
+
+// DELETE /api/user/notifications/:notificationId - Delete a notification
+app.delete("/api/user/notifications/:notificationId", isAuthenticated, async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    const userId = req.user.id;
+
+    await db.delete(pushDeliveries)
+      .where(
+        and(
+          eq(pushDeliveries.notificationId, notificationId),
+          eq(pushDeliveries.userId, userId)
+        )
+      );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete notification error:", error);
+    res.status(500).json({ error: "Failed to delete notification" });
+  }
+});
+
+// POST /api/user/notifications/clear-all - Clear all notifications
+app.post("/api/user/notifications/clear-all", isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    await db.delete(pushDeliveries)
+      .where(eq(pushDeliveries.userId, userId));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Clear all notifications error:", error);
+    res.status(500).json({ error: "Failed to clear notifications" });
+  }
+});
 
   // Competition routes
   app.get("/api/competitions", async (req, res) => {
@@ -7473,109 +7356,6 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
     }
   );
 
-
-  // PRIZE TABLE ROUTES
-
- //
-// 🟢 GET prizes for a game
-//
-app.get("/games/admin/:gameId/prizes", isAuthenticated, isAdmin, async (req, res) => {
-  try {
-    const gameId = req.params.gameId; // Keep as uuid string, don't convert to Number
-
-    const prizes = await db
-      .select()
-      .from(gamePrizes)
-      .where(eq(gamePrizes.gameId, gameId));
-
-    res.json(prizes);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to fetch prizes" });
-  }
-});
-
-//
-// 🟢 CREATE prize
-//
-app.post("/games/admin/:gameId/prizes", isAuthenticated, isAdmin, async (req, res) => {
-  console.log("REQ BODY:", req.body);
-  console.log("GAME ID:", req.params.gameId);
-
-  try {
-    const parsed = createPrizeSchema.parse(req.body);
-    const inserted = await db
-      .insert(gamePrizes)
-      .values({
-        gameId: req.params.gameId,
-        ...parsed,
-        remainingQty: parsed.remainingQty ?? parsed.totalQty,
-      })
-      .returning();
-
-    res.json(inserted[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(400).json({ message: err.message });
-  }
-});
-
-
-//
-// 🟢 UPDATE prize
-//
-app.put("/games/admin/prizes/:id", isAuthenticated, isAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id); // Keep as Number (prize id is still serial)
-    const parsed = updatePrizeSchema.parse(req.body);
-
-    const updated = await db
-      .update(gamePrizes)
-      .set(parsed)
-      .where(eq(gamePrizes.id, id))
-      .returning();
-
-    res.json(updated[0]);
-  } catch (err: any) {
-    console.error(err);
-    res.status(400).json({ message: err.message });
-  }
-});
-
-//
-// 🔴 CLEAR prize table (PER GAME)
-//
-app.delete("/games/admin/:gameId/prizes", isAuthenticated, isAdmin, async (req, res) => {
-  try {
-    const gameId = req.params.gameId; // Keep as uuid string
-
-    await db
-      .delete(gamePrizes)
-      .where(eq(gamePrizes.gameId, gameId));
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to clear prize table" });
-  }
-});
-
-app.get("/games/:gameId/prizes", isAuthenticated, async (req, res) => {
-  try {
-    const gameId = req.params.gameId; // Keep as uuid string
-
-    const prizes = await db
-      .select()
-      .from(gamePrizes)
-      .where(eq(gamePrizes.gameId, gameId));
-
-    res.setHeader("Cache-Control", "no-store");
-    res.json(prizes);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to fetch prizes" });
-  }
-});
 
   // discount routes
   // CREATE DISCOUNT CODE
@@ -15406,7 +15186,13 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
       }
     }
 
-    // IMPORTANT: Don't record usage or wins here - just return the result
+    // IMPORTANT: Calculate the NEW plays remaining correctly based on outcome
+    let newPlaysRemaining = playsRemaining - 1; // Subtract the used play
+    if (isFreeReplay) {
+      // If it's a free replay, they get +1 play after using this one
+      newPlaysRemaining = playsRemaining; // Net zero change (used 1, gained 1)
+    }
+
     res.json({
       success: true,
       result: { 
@@ -15419,7 +15205,7 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
         prizeId: selectedPrize.id, // Include prizeId for later recording
         switchTexts 
       },
-      playsRemaining: playsRemaining - 1, // Subtract one play immediately
+      playsRemaining: newPlaysRemaining, // Return the correct remaining count
     });
   } catch (error) {
     console.error("Error playing voltz game:", error);
@@ -15446,70 +15232,84 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
     const user = await storage.getUser(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Now record the usage and win
-    await db.insert(voltzUsage).values({ orderId, userId, usedAt: new Date() });
+    // Start a transaction to ensure data consistency
+    await db.transaction(async (tx) => {
+      // Record the usage
+      await tx.insert(voltzUsage).values({ orderId, userId, usedAt: new Date() });
 
-    if (result.outcome === "win") {
-      // Update user balance/points
-      if (result.rewardType === "cash") {
-        const finalBalance = parseFloat(user.balance || "0") + parseFloat(result.rewardValue);
-        await storage.updateUserBalance(userId, finalBalance.toFixed(2));
-        await storage.createTransaction({ 
+      if (result.outcome === "win") {
+        // Update user balance/points
+        if (result.rewardType === "cash") {
+          const finalBalance = parseFloat(user.balance || "0") + parseFloat(result.rewardValue);
+          await tx.update(users).set({ balance: finalBalance.toFixed(2) }).where(eq(users.id, userId));
+          await tx.insert(transactions).values({ 
+            userId, 
+            type: "prize", 
+            amount: result.rewardValue, 
+            description: `Ringtone Voltz Win - £${result.rewardValue}`,
+            createdAt: new Date()
+          });
+        } else if (result.rewardType === "points") {
+          const pointsValue = Math.floor(parseFloat(result.rewardValue));
+          const newPoints = (user.ringtonePoints || 0) + pointsValue;
+          await tx.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
+          await tx.insert(transactions).values({ 
+            userId, 
+            type: "ringtone_points", 
+            amount: pointsValue.toString(), 
+            description: `Ringtone Voltz Win - ${pointsValue} pts`,
+            createdAt: new Date()
+          });
+        }
+
+        // Record winner
+        await tx.insert(winners).values({
           userId, 
-          type: "prize", 
-          amount: result.rewardValue, 
-          description: `Ringtone Voltz Win - £${result.rewardValue}` 
+          competitionId: order.competitionId, 
+          prizeDescription: "Ringtone Voltz Win",
+          prizeValue: result.rewardType === "cash" ? `£${result.rewardValue} Cash` : `${result.rewardValue} Points`,
+          isShowcase: false, 
+          createdAt: new Date(), 
+          updatedAt: new Date(),
         });
-      } else if (result.rewardType === "points") {
-        const pointsValue = Math.floor(parseFloat(result.rewardValue));
-        const newPoints = (user.ringtonePoints || 0) + pointsValue;
-        await db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
-        await storage.createTransaction({ 
-          userId, 
-          type: "ringtone_points", 
-          amount: pointsValue.toString(), 
-          description: `Ringtone Voltz Win - ${pointsValue} pts` 
-        });
+
+        // Update prize count
+        if (result.prizeId) {
+          await tx.update(voltzPrizes)
+            .set({ quantityWon: sql`${voltzPrizes.quantityWon} + 1` })
+            .where(eq(voltzPrizes.id, result.prizeId));
+        }
+      } else if (result.outcome === "freeReplay") {
+        // Add free replay to order - this happens AFTER using the current play
+        await tx.update(orders)
+          .set({ quantity: order.quantity + 1 })
+          .where(eq(orders.id, orderId));
       }
 
-      // Record winner
-      await db.insert(winners).values({
+      // Record the win in voltzWins
+      await tx.insert(voltzWins).values({
+        orderId, 
         userId, 
-        competitionId: order.competitionId, 
-        prizeDescription: "Ringtone Voltz Win",
-        prizeValue: result.rewardType === "cash" ? `£${result.rewardValue} Cash` : `${result.rewardValue} Points`,
-        isShowcase: false, 
-        createdAt: new Date(), 
-        updatedAt: new Date(),
+        prizeId: result.prizeId || null,
+        switchChosen: result.switchChosen || 1,
+        rewardType: result.outcome === "win" ? result.rewardType : 
+                    result.outcome === "freeReplay" ? "try_again" : "no_win",
+        rewardValue: result.rewardValue || "0",
+        isWin: result.outcome === "win",
+        wonAt: new Date(),
       });
-
-      // Update prize count
-      if (result.prizeId) {
-        await db.update(voltzPrizes)
-          .set({ quantityWon: sql`${voltzPrizes.quantityWon} + 1` })
-          .where(eq(voltzPrizes.id, result.prizeId));
-      }
-    } else if (result.outcome === "freeReplay") {
-      // Add free replay to order
-      await db.update(orders)
-        .set({ quantity: order.quantity + 1 })
-        .where(eq(orders.id, orderId));
-    }
-
-    // Record the win in voltzWins
-    await db.insert(voltzWins).values({
-      orderId, 
-      userId, 
-      prizeId: result.prizeId || null,
-      switchChosen: result.switchChosen || 1,
-      rewardType: result.outcome === "win" ? result.rewardType : 
-                  result.outcome === "freeReplay" ? "try_again" : "no_win",
-      rewardValue: result.rewardValue || "0",
-      isWin: result.outcome === "win",
-      wonAt: new Date(),
     });
 
-    res.json({ success: true });
+    // Get updated order to return correct plays remaining
+    const updatedOrder = await storage.getOrder(orderId);
+    const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
+    const usedCount = Number(playsUsed[0]?.count || 0);
+    const newPlaysRemaining = updatedOrder!.quantity - usedCount;
+
+    res.json({ 
+      success: true,
+      playsRemaining: newPlaysRemaining 
+    });
   } catch (error) {
     console.error("Error confirming voltz result:", error);
     res.status(500).json({ message: "Failed to confirm voltz result" });

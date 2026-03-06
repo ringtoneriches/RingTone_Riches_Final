@@ -81,9 +81,8 @@ export default function Register() {
           description: "Please check your email for verification code.",
         });
       }
-      
-      // Redirect to verification page with email
-      setLocation(`/verify-email?email=${encodeURIComponent(data.email)}`);
+    
+      setLocation(`/login`);
     },
     onError: (error: any) => {
       toast({

@@ -70,13 +70,13 @@ import AdminPlinkoBalloon from "./pages/admin/admin-plinko";
 import PlinkoGamePage from "./pages/plinkoGamePage";
 import AdminVerifications from "./pages/admin/admin-verification";
 import PremiumBalloonPop from "./components/PremiumBalloonPop";
-import AdminPrizeTable from "./pages/admin/admin-prize-table";
 import AdminRedeemCodes from "./pages/admin/adminRedeem";
 import AdminPushMessages from "./pages/admin/push-messages";
 import AdminVoltz from "./pages/admin/admin-voltz";
 import AdminRingtoneVoltzSettings from "./pages/admin/ringtone-voltz-settings";
 import VoltzGamePage from "./pages/voltzGamePage";
 import VoltzBilling from "./pages/voltzBilling";
+import UserNotifications from "./components/notifications";
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading || !isAuthenticated) return <Landing />;
@@ -102,6 +102,7 @@ function Router() {
       <Route path="/competition/:id" component={Competition} />
       <Route path="/play/:id" component={PlayGame} />
       <Route path="/winners" component={PastWinners} />
+      <Route path="/notifications" component={UserNotifications} />
 
       {/* Game routes - always registered */}
       <Route path="/scratch/:competitionId/:orderId" component={ScratchGamePage} />
@@ -158,7 +159,6 @@ function Router() {
       <Route path="/admin/verification" component={AdminVerifications} />
       <Route path="/admin/redeem" component={AdminRedeemCodes} />
       <Route path="/admin/notification" component={AdminPushMessages} />
-      <Route path="/admin/prize-table/:gameId" component={AdminPrizeTable} />
       <Route path="/admin/voltz" component={AdminVoltz} />
       <Route path="/admin/ringtone-voltz/settings" component={AdminRingtoneVoltzSettings} />
 

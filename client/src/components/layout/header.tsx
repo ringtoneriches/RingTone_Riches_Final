@@ -6,7 +6,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Menu, X, Wallet, Music, User as UserIcon, LogOut, ChevronRight } from "lucide-react";
+import { Menu, X, Wallet, Music, User as UserIcon, LogOut, ChevronRight, Bell } from "lucide-react";
+import { NotificationsDropdown } from "@/components/notifications-dropdown";
 
 // Helper function to safely parse balance
 function getValidBalance(balance: string | null | undefined): number {
@@ -119,25 +120,28 @@ export default function Header() {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {isAuthenticated ? (
               <>
+                {/* Notifications Dropdown - Always visible when authenticated */}
+                
+
                 <Link href="/wallet?tab=points">
-                  <div className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-full bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all cursor-pointer group" data-testid="button-ringtone-points">
-                    <Music className="w-3 h-3 md:w-4 md:h-4 text-amber-400" />
-                    <span className="text-xs md:text-sm font-semibold text-white">{ringtonePoints.toLocaleString()}</span>
+                  <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 md:px-4 md:py-2.5 rounded-full bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all cursor-pointer group" data-testid="button-ringtone-points">
+                    <Music className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400" />
+                    <span className="text-xs sm:text-sm font-semibold text-white">{ringtonePoints.toLocaleString()}</span>
                   </div>
                 </Link>
 
                 <Link href="/wallet?tab=wallet">
-                  <div className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-full bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all cursor-pointer group" data-testid="button-wallet">
-                    <Wallet className="w-3 h-3 md:w-4 md:h-4 text-amber-400" />
-                    <span className="text-xs md:text-sm font-semibold text-white">
+                  <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 md:px-4 md:py-2.5 rounded-full bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all cursor-pointer group" data-testid="button-wallet">
+                    <Wallet className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400" />
+                    <span className="text-xs sm:text-sm font-semibold text-white">
                       £{userBalance.toFixed(2)}
                     </span>
                   </div>
                 </Link>
-                
+                <NotificationsDropdown />
                 <Link href="/wallet?tab=account">
                   <div className="hidden lg:flex">
                     <button className="btn-modern-primary text-xs px-6 py-3" data-testid="button-account">
@@ -172,11 +176,11 @@ export default function Header() {
             )}
 
             <button
-              className="lg:hidden flex items-center justify-center w-12 h-12 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
+              className="lg:hidden flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
               onClick={() => setMobileOpen(!mobileOpen)}
               data-testid="button-mobile-menu"
             >
-              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileOpen ? <X className="w-4 h-4 sm:w-5 sm:h-5" /> : <Menu className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
           </div>
         </nav>
@@ -185,7 +189,7 @@ export default function Header() {
       {mobileOpen && (
         <div className="fixed inset-0 z-[9999] lg:hidden">
           <div 
-            className="absolute inset-0 bg-black"
+            className="absolute inset-0 bg-black/95 backdrop-blur-md"
             onClick={() => setMobileOpen(false)}
           />
           
@@ -197,7 +201,7 @@ export default function Header() {
             <X className="w-6 h-6 text-white" />
           </button>
           
-          <div className="relative h-full flex flex-col pt-20 px-6 pb-8">
+          <div className="relative h-full flex flex-col pt-20 px-6 pb-8 overflow-y-auto">
             <div className="space-y-2">
               <Link href="/" onClick={() => setMobileOpen(false)}>
                 <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-500/30 transition-all group" data-testid="mobile-link-competitions">
@@ -223,8 +227,22 @@ export default function Header() {
 
             {isAuthenticated ? (
               <div className="space-y-3">
+                {/* Notifications in mobile menu */}
+                <Link href="/notifications" onClick={() => setMobileOpen(false)}>
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-500/30 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <Bell className="w-5 h-5 text-amber-400" />
+                        {/* You can add a badge here if you want to show unread count */}
+                      </div>
+                      <span className="text-lg font-bold text-white">NOTIFICATIONS</span>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </Link>
+
                 <div className="flex gap-3">
-                  <Link href="/wallet?tab=ringtone" onClick={() => setMobileOpen(false)} className="flex-1">
+                  <Link href="/wallet?tab=points" onClick={() => setMobileOpen(false)} className="flex-1">
                     <div className="flex items-center justify-center gap-2 p-4 rounded-2xl bg-white/5 border border-white/10" data-testid="mobile-ringtone-points">
                       <Music className="w-5 h-5 text-amber-400" />
                       <span className="text-lg font-bold text-white">{ringtonePoints.toLocaleString()}</span>

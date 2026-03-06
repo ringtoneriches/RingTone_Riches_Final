@@ -1,9 +1,9 @@
 import { useLocation } from "wouter";
 import { Competition } from "@shared/schema";
-import { TrendingUp, Trophy, Sparkles, Gift, Zap, Users, Clock, Shield, Target } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { TrendingUp, Trophy, Sparkles, Gift, Zap, Target, ChevronRight, Flame, Star } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useState } from "react";
 
 interface CompetitionCardProps {
   competition: Competition;
@@ -12,256 +12,297 @@ interface CompetitionCardProps {
 
 export default function CompetitionCard({ competition, authenticated = false }: CompetitionCardProps) {
   const [, setLocation] = useLocation();
+  const [hovered, setHovered] = useState(false);
 
   const { data: plinkoConfig } = useQuery({
     queryKey: ["/api/plinko-config"],
-    queryFn: async () => {
-      const res = await apiRequest("/api/plinko-config", "GET");
-      return res.json();
-    },
+    queryFn: async () => { const res = await apiRequest("/api/plinko-config", "GET"); return res.json(); },
+  });
+  const { data: voltzConfig } = useQuery({
+    queryKey: ["/api/voltz-config"],
+    queryFn: async () => { const res = await apiRequest("/api/voltz-config", "GET"); return res.json(); },
   });
   const { data: spinConfig } = useQuery({
     queryKey: ["/api/admin/game-spin-2-config"],
-    queryFn: async () => {
-      const res = await apiRequest("/api/admin/game-spin-2-config", "GET");
-      return res.json();
-    },
+    queryFn: async () => { const res = await apiRequest("/api/admin/game-spin-2-config", "GET"); return res.json(); },
   });
 
-  // Hide Plinko competition if Plinko is not visible
-  if (competition.type === "plinko" && plinkoConfig?.isVisible === false) {
-    return null;
-  }
-  if (competition.wheelType === "wheel2" && spinConfig?.isVisible === false) {
-    return null;
-  }
+  if (competition.type === "plinko" && plinkoConfig?.isVisible === false) return null;
+  if (competition.wheelType === "wheel2" && spinConfig?.isVisible === false) return null;
+  if (competition.type === "voltz" && voltzConfig?.isVisible === false) return null;
+  const hiddenCompetitionIds = ["d54eee36-2280-4372-84f6-93d07343a970", "25f0ee99-6f54-435d-9605-f4c287fe1338"];
+  if (hiddenCompetitionIds.includes(competition.id)) return null;
 
-   const hiddenCompetitionIds = [
-  "d54eee36-2280-4372-84f6-93d07343a970", 
-  "25f0ee99-6f54-435d-9605-f4c287fe1338"
-];
-
-    if (hiddenCompetitionIds.includes(competition.id)) {
-    return null;
-  }
-
-  const handleViewCompetition = () => {
-    setLocation(`/competition/${competition.id}`);
-  };
-
-  const progressPercentage = competition.maxTickets 
-    ? (competition.soldTickets! / competition.maxTickets) * 100 
-    : 0;
-
+  const progressPercentage = competition.maxTickets ? (competition.soldTickets! / competition.maxTickets) * 100 : 0;
   const isHot = progressPercentage > 60;
   const isAlmostGone = progressPercentage > 85;
-  
-  const remainingTickets = competition.maxTickets 
-    ? competition.maxTickets - (competition.soldTickets || 0)
-    : 0;
+  const remainingTickets = competition.maxTickets ? competition.maxTickets - (competition.soldTickets || 0) : 0;
 
-  const getTypeConfig = () => {
+  const tc = (() => {
     switch (competition.type) {
-      case "spin":
-        return { 
-          icon: Zap, 
-          label: "Spin",
-          gradient: "from-purple-500 to-purple-600",
-          glow: "rgba(168,85,247,0.5)"
-        };
-      case "scratch":
-        return { 
-          icon: Sparkles, 
-          label: "Scratch",
-          gradient: "from-emerald-500 to-emerald-600",
-          glow: "rgba(16,185,129,0.5)"
-        };
-      case "pop":
-        return { 
-          icon: Gift, 
-          label: "Pop",
-          gradient: "from-pink-500 to-pink-600",
-          glow: "rgba(236,72,153,0.5)"
-        };
-        case "plinko":
-          return { 
-            icon: Target, 
-            label: "Plinko",
-            gradient: "from-purple-500 to-amber-500",
-            glow: "rgba(147,51,234,0.5)"
-          };
-        default:
-        return { 
-          icon: Trophy, 
-          label: "Competition",
-          gradient: "from-amber-500 to-amber-600",
-          glow: "rgba(212,175,55,0.5)"
-        };
+      case "spin": return { icon: Zap, label: "SPIN TO WIN", c1: "#ffb800", c2: "#ff8c00", c3: "#4a3000" };
+      case "scratch": return { icon: Sparkles, label: "SCRATCH & WIN", c1: "#00ff88", c2: "#00cc6a", c3: "#003d20" };
+      case "pop": return { icon: Gift, label: "BALLOON POP", c1: "#ff6b6b", c2: "#ff4040", c3: "#4a1010" };
+      case "plinko": return { icon: Target, label: "PLINKO DROP", c1: "#a855f7", c2: "#7c3aed", c3: "#2a1050" };
+      case "voltz": return { icon: Zap, label: "RINGTONE VOLTZ", c1: "#60a5fa", c2: "#3b82f6", c3: "#102a50" };
+      default: return { icon: Trophy, label: "COMPETITION", c1: "#f5d76e", c2: "#d4af37", c3: "#3a3010" };
     }
-  };
+  })();
 
-  const typeConfig = getTypeConfig();
-  const TypeIcon = typeConfig.icon;
+  const Icon = tc.icon;
+  const isFree = competition.ticketPrice === "0.00";
+  const uid = competition.id.slice(0, 8);
 
   return (
-    <div 
+    <div
       className="group cursor-pointer h-full"
-      style={{ perspective: "1200px" }}
       data-testid={`card-competition-${competition.id}`}
-      onClick={handleViewCompetition}
+      onClick={() => setLocation(`/competition/${competition.id}`)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      {/* 3D Card Container */}
-      <div 
-        className="relative h-full transition-all duration-500 ease-out group-hover:translate-y-[-4px]"
-        style={{ 
-          transformStyle: "preserve-3d",
-          transform: "translateZ(0)"
+      <div
+        className="relative h-full"
+        style={{
+          transform: hovered ? 'translateY(-8px) scale(1.03)' : 'none',
+          transition: 'transform 0.4s cubic-bezier(.4,0,.2,1)',
+          filter: hovered ? `drop-shadow(0 0 20px ${tc.c1}40) drop-shadow(0 15px 30px rgba(0,0,0,0.5))` : 'drop-shadow(0 5px 15px rgba(0,0,0,0.4))',
         }}
       >
-        {/* Ambient Glow - Behind card (hidden on mobile) */}
-        <div 
-          className="absolute -inset-3 rounded-3xl opacity-0 group-hover:opacity-100 transition-all duration-700 hidden sm:block"
-          style={{ 
-            background: `radial-gradient(ellipse at 50% 80%, ${typeConfig.glow}, transparent 60%)`,
-            transform: "translateZ(-30px)",
-            filter: "blur(25px)"
-          }}
-        />
-        
-        {/* Outer Frame - Metallic border */}
-        <div 
-          className="relative h-full rounded-xl sm:rounded-2xl p-[1px] overflow-hidden"
-          style={{
-            background: "linear-gradient(180deg, rgba(212,175,55,0.5) 0%, rgba(255,255,255,0.15) 50%, rgba(212,175,55,0.3) 100%)"
-          }}
-        >
-          {/* Inner Card */}
-          <div 
-            className="relative h-full rounded-xl sm:rounded-2xl overflow-hidden bg-gradient-to-b from-slate-800 via-slate-850 to-slate-900"
-            style={{ 
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 20px 50px -15px rgba(0,0,0,0.7)"
-            }}
-          >
-            {/* Image Section */}
-            <div className="relative aspect-[4/5] sm:aspect-[16/20] md:aspect-[16/18] overflow-hidden">
-              <img 
-                src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"} 
-                alt={competition.title}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-              />
-              
-              {/* Gradient overlay */}
-              <div className="absolute " />
-              
-              {/* Top Row - Badges */}
-              <div className="absolute top-0 left-0 right-0 p-2 sm:p-3 flex items-start justify-between gap-1">
-                {/* Game Type Badge */}
-                <div 
-                  className={`flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r ${typeConfig.gradient}`}
-                  style={{ boxShadow: `0 2px 10px ${typeConfig.glow}` }}
-                >
-                  <TypeIcon className="w-3 h-3 text-white" />
-                  <span className="text-[10px] sm:text-xs font-bold text-white">{typeConfig.label}</span>
+
+        <div className="h-full overflow-hidden" style={{
+          clipPath: 'polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px)',
+          background: `linear-gradient(180deg, ${tc.c1}, ${tc.c2})`,
+          padding: '2px',
+        }}>
+          <div className="h-full" style={{
+            clipPath: 'polygon(11px 0, calc(100% - 11px) 0, 100% 11px, 100% calc(100% - 11px), calc(100% - 11px) 100%, 11px 100%, 0 calc(100% - 11px), 0 11px)',
+            background: '#08080c',
+          }}>
+
+            <div className="relative" style={{
+              background: `linear-gradient(135deg, ${tc.c1}, ${tc.c2})`,
+            }}>
+              <div className="flex items-center justify-between px-2.5 sm:px-3 py-1 sm:py-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-black" strokeWidth={2.5} />
+                  <span className="text-[8px] sm:text-[10px] font-black text-black tracking-[0.15em]">{tc.label}</span>
                 </div>
-                
-                {/* Urgency Badge */}
                 {isAlmostGone ? (
-                  <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-red-600 to-red-500 animate-pulse">
-                    <Clock className="w-3 h-3 text-white" />
+                  <div className="flex items-center gap-1 bg-black/20 px-1.5 py-0.5 rounded-sm">
+                    <Flame className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
+                    <span className="text-[7px] sm:text-[8px] font-black text-white tracking-wider">SELLING FAST</span>
                   </div>
                 ) : isHot ? (
-                  <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-orange-500 to-red-500">
-                    <TrendingUp className="w-3 h-3 text-white" />
+                  <div className="flex items-center gap-1 bg-black/20 px-1.5 py-0.5 rounded-sm">
+                    <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
+                    <span className="text-[7px] sm:text-[8px] font-black text-white tracking-wider">POPULAR</span>
                   </div>
                 ) : null}
               </div>
-              
-              {/* Bottom Row - Live indicator */}
-              {/* <div className="absolute bottom-2 left-2 right-2 flex items-end justify-between">
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-900/90 border border-emerald-500/30">
-                  <div className="relative">
-                    <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
-                    <div className="absolute inset-0 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
-                  </div>
-                  <span className="text-[10px] text-emerald-400 font-bold">LIVE</span>
-                </div>
-              </div> */}
+              <div className="h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.3), transparent)' }} />
             </div>
 
-            {/* Content Section */}
-            <div className="p-2 sm:p-3 flex flex-col gap-2 bg-gradient-to-b from-slate-800/50 to-slate-900/80">
-              {/* Title - Full text */}
-              <h3 
-                className="text-xs sm:text-sm font-bold text-white leading-snug group-hover:text-amber-400 transition-colors"
-                data-testid={`text-title-${competition.id}`}
-              >
-                {competition.title}
-              </h3>
-              
-              {/* Entries Info */}
-             {competition.maxTickets && competition.maxTickets > 0 && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <Users className="w-3 h-3 text-amber-400" />
-                <span className="text-[10px] sm:text-xs text-slate-300">
-                  {Math.round(((competition.soldTickets || 0) / competition.maxTickets) * 100)}% progress
-                </span>
-              </div>
-              {/* <span className={`text-[10px] sm:text-xs font-semibold ${
-                isAlmostGone ? 'text-red-400' : isHot ? 'text-amber-400' : 'text-slate-400'
-              }`}>
-                {remainingTickets} left
-              </span> */}
-            </div>
-          )}
-              
-              {/* Progress bar */}
-              {competition.maxTickets && competition.maxTickets > 0 && (
-                <div className="h-1 sm:h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full ${
-                      isAlmostGone 
-                        ? 'bg-gradient-to-r from-red-500 to-orange-500' 
-                        : `bg-gradient-to-r ${typeConfig.gradient}`
-                    }`}
-                    style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-                  />
+            <div className="relative overflow-hidden" style={{ aspectRatio: '16/12' }}>
+              <img
+                src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"}
+                alt={competition.title}
+                className="w-full h-full object-cover"
+                style={{
+                  transform: hovered ? 'scale(1.1)' : 'scale(1.02)',
+                  transition: 'transform 0.6s ease-out',
+                  filter: 'saturate(1.1)',
+                }}
+              />
+
+              <div className="absolute inset-0" style={{
+                background: `
+                  linear-gradient(180deg, ${tc.c3}80 0%, transparent 25%, transparent 50%, ${tc.c3}cc 80%, ${tc.c3} 100%),
+                  linear-gradient(135deg, ${tc.c1}08 0%, transparent 50%)
+                `,
+              }} />
+
+              <div className="absolute inset-0 pointer-events-none" style={{
+                backgroundImage: `
+                  repeating-linear-gradient(0deg, transparent, transparent 2px, ${tc.c1}05 2px, ${tc.c1}05 3px)
+                `,
+                opacity: 0.5,
+              }} />
+
+              {isFree && (
+                <div className="absolute top-2 right-0 sm:top-2.5" style={{
+                  background: `linear-gradient(135deg, #00ff88, #00cc6a)`,
+                  padding: '3px 10px 3px 14px',
+                  clipPath: 'polygon(8px 0, 100% 0, 100% 100%, 8px 100%, 0 50%)',
+                  boxShadow: '0 0 15px rgba(0,255,136,0.5)',
+                }}>
+                  <span className="text-[8px] sm:text-[10px] font-black text-black tracking-[0.15em]">FREE ENTRY</span>
                 </div>
               )}
-              
-              {/* Price & CTA Row */}
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-700/50">
-                {/* Price */}
-                <span 
-                  className={`text-base sm:text-xl font-black ${
-                    competition.ticketPrice === "0.00" 
-                      ? 'text-emerald-400' 
-                      : 'text-amber-400'
-                  }`}
-                  data-testid={`text-price-${competition.id}`}
+
+              <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-3">
+                <h3
+                  className="text-xs sm:text-sm font-extrabold text-white leading-tight line-clamp-2"
+                  style={{ textShadow: `0 1px 2px rgba(0,0,0,1), 0 0 20px ${tc.c3}` }}
+                  data-testid={`text-title-${competition.id}`}
                 >
-                  {competition.ticketPrice === "0.00" ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
-                </span>
-                
-                {/* Simple CTA Button */}
-                <Button 
-                  className="h-7 sm:h-9 px-3 sm:px-4 text-[10px] sm:text-xs font-bold rounded-md sm:rounded-lg border-0"
+                  {competition.title}
+                </h3>
+              </div>
+            </div>
+
+            <div className="h-[2px]" style={{ background: `linear-gradient(90deg, ${tc.c1}40, ${tc.c1}, ${tc.c1}40)` }} />
+
+            <div className="relative p-2.5 sm:p-3" style={{
+              background: `linear-gradient(180deg, ${tc.c3}40 0%, #08080c 40%, #06060a 100%)`,
+            }}>
+
+              <div className="absolute inset-0 pointer-events-none" style={{
+                backgroundImage: `radial-gradient(${tc.c1}08 1px, transparent 1px)`,
+                backgroundSize: '12px 12px',
+                opacity: 0.6,
+              }} />
+
+              <div className="relative flex items-end justify-between mb-2 sm:mb-3" data-testid={`text-price-${competition.id}`}>
+                {!isFree ? (
+                  <div>
+                    <div className="text-[7px] sm:text-[9px] font-bold uppercase tracking-[0.25em] mb-1" style={{ color: `${tc.c1}90` }}>Entry Price</div>
+                    <div className="flex items-baseline gap-0.5">
+                      <span className="text-[10px] sm:text-xs font-bold" style={{ color: `${tc.c1}80` }}>£</span>
+                      <span className="text-3xl sm:text-5xl font-black leading-none" style={{
+                        color: tc.c1,
+                        textShadow: `0 0 30px ${tc.c1}60, 0 0 60px ${tc.c1}30`,
+                        letterSpacing: '-0.02em',
+                      }}>{parseFloat(competition.ticketPrice).toFixed(2)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="text-[7px] sm:text-[9px] font-bold uppercase tracking-[0.25em] mb-1 text-emerald-400/60">Entry Price</div>
+                    <span className="text-3xl sm:text-5xl font-black leading-none text-emerald-400" style={{
+                      textShadow: '0 0 30px rgba(0,255,136,0.5)',
+                    }}>FREE</span>
+                  </div>
+                )}
+
+                {competition.maxTickets && competition.maxTickets > 0 && (
+                  <div className="text-right">
+                    <div className="text-[7px] sm:text-[9px] font-bold uppercase tracking-[0.25em] mb-1 text-white/30">Tickets Sold</div>
+                    <div className="text-2xl sm:text-4xl font-black leading-none" style={{
+                      color: isAlmostGone ? '#ff4040' : tc.c1,
+                      textShadow: isAlmostGone ? '0 0 20px rgba(255,64,64,0.5)' : `0 0 20px ${tc.c1}40`,
+                    }}>{Math.round(progressPercentage)}%</div>
+                  </div>
+                )}
+              </div>
+
+              {competition.maxTickets && competition.maxTickets > 0 && (
+                <div className="relative mb-2.5 sm:mb-3">
+                  <div className="relative h-2.5 sm:h-3 overflow-hidden" style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${tc.c1}20`,
+                    clipPath: 'polygon(4px 0, calc(100% - 4px) 0, 100% 50%, calc(100% - 4px) 100%, 4px 100%, 0 50%)',
+                  }}>
+                    <div className="h-full relative overflow-hidden" style={{
+                      width: `${Math.min(progressPercentage, 100)}%`,
+                      background: isAlmostGone
+                        ? 'linear-gradient(90deg, #ff2020, #ff6b00)'
+                        : `linear-gradient(90deg, ${tc.c2}, ${tc.c1})`,
+                      boxShadow: `0 0 8px ${isAlmostGone ? 'rgba(255,32,32,0.6)' : tc.c1 + '60'}`,
+                      transition: 'width 1.2s ease-out',
+                      clipPath: 'polygon(4px 0, calc(100% - 4px) 0, 100% 50%, calc(100% - 4px) 100%, 4px 100%, 0 50%)',
+                    }}>
+                      <div className="absolute inset-0" style={{
+                        background: 'linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 40%, transparent 60%)',
+                      }} />
+                      <div className={`gc-bar-sweep-${uid} absolute inset-0`} style={{
+                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
+                        backgroundSize: '40% 100%',
+                      }} />
+                    </div>
+                  </div>
+                  {isAlmostGone && (
+                    <div className="flex items-center justify-center gap-1 mt-1.5">
+                      <div className={`gc-urgency-dot-${uid} w-1.5 h-1.5 rounded-full bg-red-500`} />
+                      <span className="text-[8px] sm:text-[9px] font-black text-red-400 uppercase tracking-[0.2em]">{remainingTickets} remaining</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="relative">
+                <button
+                  className="w-full py-2 sm:py-3 font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-2 relative overflow-hidden"
                   style={{
-                    background: "linear-gradient(135deg, #d4af37 0%, #f5d76e 50%, #d4af37 100%)",
-                    boxShadow: "0 2px 10px rgba(212,175,55,0.3)"
+                    background: hovered
+                      ? `linear-gradient(135deg, ${tc.c1}, ${tc.c2})`
+                      : `linear-gradient(135deg, ${tc.c1}15, ${tc.c2}10)`,
+                    border: `2px solid ${hovered ? tc.c1 : tc.c1 + '50'}`,
+                    color: hovered ? '#000' : tc.c1,
+                    clipPath: 'polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px)',
+                    boxShadow: hovered ? `0 0 30px ${tc.c1}40, 0 4px 12px rgba(0,0,0,0.4)` : 'none',
+                    transition: 'all 0.3s ease',
+                    textShadow: hovered ? 'none' : `0 0 8px ${tc.c1}60`,
                   }}
                   data-testid={`button-view-competition-${competition.id}`}
                 >
-                  <span className="text-slate-900 font-bold">Enter Now</span>
-                </Button>
+                  <span className="relative z-10 font-black">Enter Now</span>
+                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 relative z-10" style={{
+                    transform: hovered ? 'translateX(3px)' : 'none',
+                    transition: 'transform 0.3s',
+                  }} />
+                  {hovered && (
+                    <div className={`gc-btn-sweep-${uid} absolute inset-0`} style={{
+                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
+                      backgroundSize: '200% 100%',
+                    }} />
+                  )}
+                </button>
               </div>
             </div>
-            
-            {/* Top edge highlight */}
-            <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+
+            <div className="absolute top-[36px] sm:top-[42px] left-0 w-[6px] h-[20px] sm:h-[24px]" style={{
+              background: `linear-gradient(180deg, ${tc.c1}, ${tc.c2})`,
+              clipPath: 'polygon(0 0, 100% 15%, 100% 85%, 0 100%)',
+            }} />
+            <div className="absolute top-[36px] sm:top-[42px] right-0 w-[6px] h-[20px] sm:h-[24px]" style={{
+              background: `linear-gradient(180deg, ${tc.c1}, ${tc.c2})`,
+              clipPath: 'polygon(0 15%, 100% 0, 100% 100%, 0 85%)',
+            }} />
+
           </div>
         </div>
+
+        <div className="absolute -top-[1px] left-1/2 -translate-x-1/2 w-[40%] h-[3px]" style={{
+          background: `linear-gradient(90deg, transparent, ${tc.c1}, transparent)`,
+          boxShadow: `0 0 10px ${tc.c1}60`,
+          filter: 'blur(0.5px)',
+        }} />
       </div>
+
+      <style>{`
+        @keyframes gc-bar-sweep-kf {
+          0% { background-position: -100% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .gc-bar-sweep-${uid} {
+          animation: gc-bar-sweep-kf 2s ease-in-out infinite;
+        }
+        @keyframes gc-urgency-dot-kf {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.2; }
+        }
+        .gc-urgency-dot-${uid} {
+          animation: gc-urgency-dot-kf 1s ease-in-out infinite;
+        }
+        @keyframes gc-btn-sweep-kf {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .gc-btn-sweep-${uid} {
+          animation: gc-btn-sweep-kf 1.2s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
@@ -59,6 +59,15 @@ interface PushMessage {
   createdAt: string;
 }
 
+// Add interface for delivery stats
+interface DeliveryStats {
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  pending: number;
+}
+
 export default function AdminPushMessages() {
   const { toast } = useToast();
   const [searchInput, setSearchInput] = useState("");
@@ -71,6 +80,7 @@ export default function AdminPushMessages() {
   const [viewDetailsOpen, setViewDetailsOpen] = useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [deliveryStats, setDeliveryStats] = useState<DeliveryStats | null>(null);
   const itemsPerPage = 20;
 
   // Form state
@@ -89,13 +99,33 @@ export default function AdminPushMessages() {
 
   // Fetch messages
   const { data: messages, isLoading } = useQuery<PushMessage[]>({
-    queryKey: ["/api/admin/sms-messages"],
+   queryKey: ["/api/admin/push-notifications"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/sms-messages", { credentials: "include" });
+      const res = await fetch("/api/admin/push-notifications", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch messages");
       return res.json();
     },
   });
+
+  // Fetch delivery stats when a message is selected
+  const { data: statsData, refetch: refetchStats } = useQuery<DeliveryStats>({
+    queryKey: ["/api/admin/push-notifications", selectedMessage?.id, "stats"],
+    queryFn: async () => {
+      if (!selectedMessage) return null;
+      const res = await fetch(`/api/admin/push-notifications/${selectedMessage.id}/stats`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json();
+    },
+    enabled: !!selectedMessage && viewDetailsOpen,
+    refetchInterval: 5000, // Refresh every 5 seconds while dialog is open
+  });
+
+  // Update local stats when query data changes
+  useEffect(() => {
+    if (statsData) {
+      setDeliveryStats(statsData);
+    }
+  }, [statsData]);
 
   // Fetch users for selection
   const { data: users } = useQuery<any[]>({
@@ -139,10 +169,10 @@ export default function AdminPushMessages() {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: typeof form) => {
-      return apiRequest("/api/admin/sms-messages", "POST", data);
+      return apiRequest("/api/admin/push-notifications", "POST", data)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/sms-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/push-notifications"] });
       toast({
         title: "Message Created",
         description: "Your push message has been saved as draft.",
@@ -162,10 +192,10 @@ export default function AdminPushMessages() {
   // Send mutation
   const sendMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/admin/sms-messages/${id}/send`, "POST");
+      return apiRequest(`/api/admin/push-notifications/${id}/send`, "POST")
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/sms-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/push-notifications"] });
       toast({
         title: "Message Sent! 🎉",
         description: data.message || "Message sent successfully",
@@ -184,10 +214,10 @@ export default function AdminPushMessages() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/admin/sms-messages/${id}`, "DELETE");
+      return apiRequest(`/api/admin/push-notifications/${id}`, "DELETE")
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/sms-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/push-notifications"] });
       toast({
         title: "Message Deleted",
         description: "The push message has been deleted.",
@@ -248,7 +278,10 @@ export default function AdminPushMessages() {
 
   const handleViewDetails = (message: PushMessage) => {
     setSelectedMessage(message);
+    setDeliveryStats(null); // Reset stats when opening
     setViewDetailsOpen(true);
+    // Trigger initial stats fetch
+    setTimeout(() => refetchStats(), 100);
   };
 
   const getTypeIcon = (type: string) => {
@@ -353,6 +386,12 @@ export default function AdminPushMessages() {
       rows={4}
       required
     />
+      {/* Optional character counter */}
+  <div className="flex justify-end">
+    <span className="text-xs text-muted-foreground">
+      {form.message.length}/10000 characters
+    </span>
+  </div>
   </div>
 
   {/* Type and Status */}
@@ -816,19 +855,85 @@ export default function AdminPushMessages() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <Card className="p-3">
-                    <div className="text-2xl font-bold text-green-500">
-                      {selectedMessage.sentCount || 0}
+                {/* Enhanced Delivery Stats with real-time updates */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-sm">Delivery Statistics</h4>
+                    {deliveryStats && (
+                      <Badge variant="outline" className="text-xs">
+                        <Clock className="w-3 h-3 mr-1" />
+                        Live updates
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <Card className="p-3">
+                      <div className="text-2xl font-bold text-blue-500">
+                        {deliveryStats?.sent || selectedMessage.sentCount || 0}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Total Sent</div>
+                    </Card>
+                    
+                    <Card className="p-3">
+                      <div className="text-2xl font-bold text-green-500">
+                        {deliveryStats?.delivered || 0}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Delivered</div>
+                    </Card>
+                    
+                    <Card className="p-3">
+                      <div className="text-2xl font-bold text-purple-500">
+                        {deliveryStats?.read || selectedMessage.readCount || 0}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Read</div>
+                    </Card>
+                    
+                    <Card className="p-3">
+                      <div className="text-2xl font-bold text-yellow-500">
+                        {deliveryStats?.pending || 0}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Pending</div>
+                    </Card>
+                    
+                    <Card className="p-3">
+                      <div className="text-2xl font-bold text-red-500">
+                        {deliveryStats?.failed || 0}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Failed</div>
+                    </Card>
+                  </div>
+
+                  {/* Progress bar for delivery rate */}
+                  {deliveryStats && deliveryStats.sent > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs">
+                        <span>Delivery Rate</span>
+                        <span className="font-medium">
+                          {Math.round((deliveryStats.delivered / deliveryStats.sent) * 100)}%
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-green-500 transition-all duration-500"
+                          style={{ width: `${(deliveryStats.delivered / deliveryStats.sent) * 100}%` }}
+                        />
+                      </div>
+                      
+                      <div className="flex justify-between text-xs mt-2">
+                        <span>Read Rate</span>
+                        <span className="font-medium">
+                          {Math.round((deliveryStats.read / deliveryStats.sent) * 100)}%
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-purple-500 transition-all duration-500"
+                          style={{ width: `${(deliveryStats.read / deliveryStats.sent) * 100}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">Recipients</div>
-                  </Card>
-                  <Card className="p-3">
-                    <div className="text-2xl font-bold text-blue-500">
-                      {selectedMessage.readCount || 0}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Read</div>
-                  </Card>
+                  )}
                 </div>
 
                 {selectedMessage.actionText && selectedMessage.actionUrl && (

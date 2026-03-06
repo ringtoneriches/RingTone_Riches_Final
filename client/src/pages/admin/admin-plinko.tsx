@@ -449,19 +449,7 @@ export default function AdminPlinkoBalloon() {
               </Button>
             )}
             
-            {/* <div className="flex gap-2">
-            <Link to={`/admin/prize-table/${competition.id}`}>
-            <Button
-              variant="outline"
-              className="gap-2"
-              data-testid={`button-prizes-${competition.id}`}
-            >
-                  <Settings className="w-4 h-4" />
-                  Prize Table
-                </Button>
-              </Link>
-             
-            </div> */}
+            
             <div className="flex gap-2">
               <Link to="/admin/ringtone-plinko/settings">
                 <Button
@@ -623,17 +611,7 @@ export default function AdminPlinkoBalloon() {
                        
                       </Button>
                        {/* Add Prize Table button here */}
-                    <Link to={`/admin/prize-table/${competition.id}`}>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1 text-purple-500 hover:text-purple-600 hover:bg-purple-50"
-                        data-testid={`button-prizes-${competition.id}`}
-                      >
-                        <Gift  className="w-4 h-4" />
-                        <span className="hidden sm:inline">Prizes</span>
-                      </Button>
-                    </Link>
+                   
                     </div>
                   </div>
                 </div>

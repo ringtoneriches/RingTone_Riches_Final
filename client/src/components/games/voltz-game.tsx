@@ -282,6 +282,13 @@ const confirmGameResult = useCallback(async () => {
     const data = await res.json();
     if (data.success) {
       // Now invalidate queries after confirmation
+
+       // Update the plays remaining from the server response
+      if (data.playsRemaining !== undefined) {
+        playsRemainingRef.current = data.playsRemaining;
+        lastServerPlaysRef.current = data.playsRemaining;
+      }
+      
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/voltz-order", orderIdRef.current] });
     }
