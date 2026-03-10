@@ -103,6 +103,9 @@ export default function AdminTransactions() {
   // FILTERING
   const filtered = useMemo(() => {
     return transactions.filter((tx) => {
+       if (tx.description?.toLowerCase().includes('signup bonus')) {
+      return false;
+    }
       const searchLower = search.toLowerCase().trim();
       const matchSearch =
         searchLower === "" ||

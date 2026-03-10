@@ -174,35 +174,35 @@ export default function Home() {
       popular: true
     },
     {
-      Icon: Circle,
-      title: "Ringtone Plinko",
-      desc: "Drop to win",
-      gradient: "linear-gradient(135deg, #14b8a6, #06b6d4)",
-      glowColor: "rgba(20,184,166,0.25)",
-      borderColor: "rgba(20,184,166,0.4)",
-      bgColor: "rgba(20,184,166,0.06)",
-      iconBg: "linear-gradient(135deg, #14b8a6, #2dd4bf)",
-      prize: "£5,000",
-      filter: "all",
-      badge: "HOT",
-      badgeColor: "#06b6d4",
-      popular: false
-    },
-    {
-      Icon: Target,
-      title: "Ringtone Pop",
-      desc: "Pop to win",
-      gradient: "linear-gradient(135deg, #10b981, #84cc16)",
-      glowColor: "rgba(34,197,94,0.25)",
-      borderColor: "rgba(34,197,94,0.4)",
-      bgColor: "rgba(34,197,94,0.06)",
-      iconBg: "linear-gradient(135deg, #10b981, #34d399)",
-      prize: "£1,000",
-      filter: "all",
-      badge: "NEW",
-      badgeColor: "#10b981",
-      popular: false
-    },
+  Icon: Circle,
+  title: "Ringtone Plinko",
+  desc: "Drop to win",
+  gradient: "linear-gradient(135deg, #8b5cf6, #a78bfa)",
+  glowColor: "rgba(139,92,246,0.25)",
+  borderColor: "rgba(139,92,246,0.4)",
+  bgColor: "rgba(139,92,246,0.06)",
+  iconBg: "linear-gradient(135deg, #8b5cf6, #c4b5fd)",
+  prize: "£5,000",
+  filter: "all",
+  badge: "HOT",
+  badgeColor: "#8b5cf6",
+  popular: false
+},
+{
+  Icon: Target,
+  title: "Ringtone Pop",
+  desc: "Pop to win",
+  gradient: "linear-gradient(135deg, #eab308, #fde047)",
+  glowColor: "rgba(234,179,8,0.25)",
+  borderColor: "rgba(234,179,8,0.4)",
+  bgColor: "rgba(234,179,8,0.06)",
+  iconBg: "linear-gradient(135deg, #eab308, #facc15)",
+  prize: "£1,000",
+  filter: "all",
+  badge: "NEW",
+  badgeColor: "#eab308",
+  popular: false
+},
     {
       Icon: Zap,
       title: "Competition",
@@ -212,7 +212,6 @@ export default function Home() {
       borderColor: "rgba(59,130,246,0.4)",
       bgColor: "rgba(59,130,246,0.06)",
       iconBg: "linear-gradient(135deg, #3b82f6, #60a5fa)",
-      prize: "£1,000",
       filter: "instant",
       badge: "MEGA",
       badgeColor: "#d4af37",
@@ -329,50 +328,12 @@ export default function Home() {
                   Premium jackpots, instant prizes, and exclusive games. Play your way to <span className="font-bold text-amber-400/60">extraordinary wins</span>.
                 </p>
 
-                <div className="flex items-center justify-center lg:justify-start gap-3 sm:gap-4 nv-fade-in flex-wrap" style={{ animationDelay: '0.65s' }}>
-                  <div className="flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 rounded-xl" data-testid="badge-players-online" style={{
-                    background: 'linear-gradient(135deg, rgba(16,185,129,0.1), rgba(16,185,129,0.04))',
-                    border: '1px solid rgba(16,185,129,0.25)',
-                    boxShadow: '0 0 20px rgba(16,185,129,0.08), inset 0 1px 0 rgba(255,255,255,0.04)',
-                  }}>
-                    <div className="relative">
-                      <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full" style={{ boxShadow: '0 0 10px rgba(16,185,129,0.8)' }} />
-                      <div className="absolute inset-0 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
-                    </div>
-                    <span className="text-emerald-400 text-xs sm:text-sm font-black tracking-wide">{playersOnline} <span className="text-emerald-400/60 text-[10px] sm:text-xs font-semibold uppercase">online</span></span>
-                  </div>
-                  <div className="flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 rounded-xl" data-testid="badge-countdown" style={{
-                    background: 'linear-gradient(135deg, rgba(212,175,55,0.08), rgba(212,175,55,0.03))',
-                    border: '1px solid rgba(212,175,55,0.2)',
-                    boxShadow: '0 0 20px rgba(212,175,55,0.06), inset 0 1px 0 rgba(255,255,255,0.04)',
-                  }}>
-                    <Clock className="w-4 h-4" style={{ color: '#f5d76e', filter: 'drop-shadow(0 0 6px rgba(245,215,110,0.5))' }} />
-                    <div className="flex items-center gap-1 font-mono">
-                      {[
-                        { val: String(countdownTime.hours).padStart(2, '0'), label: 'h' },
-                        { val: String(countdownTime.minutes).padStart(2, '0'), label: 'm' },
-                        { val: String(countdownTime.seconds).padStart(2, '0'), label: 's' }
-                      ].map((unit, i) => (
-                        <span key={i} className="flex items-center gap-0.5">
-                          <span className="inline-flex flex-col items-center min-w-[28px] sm:min-w-[36px] px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg relative overflow-hidden" style={{ 
-                            background: 'linear-gradient(180deg, rgba(212,175,55,0.15), rgba(184,134,11,0.08))',
-                            border: '1px solid rgba(212,175,55,0.3)',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06), 0 0 15px rgba(212,175,55,0.08)',
-                          }}>
-                            <span className="text-[13px] sm:text-[15px] font-black leading-none" style={{ background: 'linear-gradient(180deg, #fff, #f5d76e)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{unit.val}</span>
-                            <span className="text-[6px] sm:text-[7px] font-bold uppercase mt-0.5" style={{ color: 'rgba(212,175,55,0.5)' }}>{unit.label}</span>
-                          </span>
-                          {i < 2 && <span className="text-amber-400/40 text-sm font-black nv-colon-blink mx-0.5" style={{ textShadow: '0 0 8px rgba(212,175,55,0.5)' }}>:</span>}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+               
 
                 <div className="flex items-center justify-center lg:justify-start gap-2 sm:gap-3 nv-fade-in flex-wrap" style={{ animationDelay: '0.7s' }}>
                   {[
-                    { value: "£20K+", label: "in prizes", icon: Coins, color: '#f5d76e' },
-                    { value: "1,000+", label: "winners", icon: Trophy, color: '#34d399' },
+                    { value: "£100K+", label: "in prizes", icon: Coins, color: '#f5d76e' },
+                    { value: "50,000+", label: "winners", icon: Trophy, color: '#34d399' },
                     { value: "99p", label: "per entry", icon: Ticket, color: '#fbbf24' }
                   ].map((stat, index) => (
                     <div key={index} className="flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full transition-all duration-300 hover:scale-[1.03] nv-stat-float" data-testid={`text-stat-value-${index}`} style={{
@@ -980,88 +941,7 @@ export default function Home() {
         `}</style>
       </section>
 
-      <section className="py-24 sm:py-32 relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #070709 0%, #0d0d12 50%, #070709 100%)' }}>
-        <div className="absolute inset-0">
-          <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.1), transparent)' }} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full blur-[200px]" style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.03) 0%, transparent 60%)' }} />
-        </div>
-        
-        <div ref={winnersSection.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 transition-all duration-1000 ${winnersSection.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full mb-6 backdrop-blur-sm" style={{
-              background: 'rgba(212,175,55,0.08)',
-              border: '1px solid rgba(212,175,55,0.15)',
-            }}>
-              <Trophy className="w-4 h-4 text-amber-400" />
-              <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">Hall of Winners</span>
-            </div>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight mb-5">
-              Real Players. <span style={{
-                background: 'linear-gradient(90deg, #d4af37, #f5d76e, #d4af37)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}>Real Wins.</span>
-            </h2>
-            <p className="text-white/20 text-base sm:text-lg max-w-xl mx-auto">
-              Every day, players just like you are winning incredible prizes.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-7 mb-16">
-            {[
-              { quote: "Won £2,500 on my first scratch card. Best decision I ever made!", name: "James T.", location: "London", prize: "£2,500", game: "Scratch Card" },
-              { quote: "The plinko game is addictive! Already won twice this month.", name: "Sarah M.", location: "Manchester", prize: "£1,200", game: "Plinko" },
-              { quote: "Fast payouts, amazing prizes. This is the real deal.", name: "David K.", location: "Birmingham", prize: "£5,000", game: "Competition" }
-            ].map((review, index) => (
-              <div
-                key={index}
-                className="group relative rounded-2xl overflow-hidden transition-all duration-500 hover:-translate-y-2"
-                data-testid={`card-winner-${index}`}
-              >
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: 'radial-gradient(circle at 50% 0%, rgba(212,175,55,0.06), transparent 70%)' }} />
-                <div className="relative p-8 sm:p-9 rounded-2xl transition-all duration-500" style={{
-                  background: '#0d0d12',
-                  border: '1px solid rgba(255,255,255,0.04)',
-                  boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
-                }}>
-                  <div className="flex items-center gap-1 mb-6">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="w-4 h-4 text-amber-400 fill-amber-400" style={{ filter: 'drop-shadow(0 0 4px rgba(212,175,55,0.3))' }} />
-                    ))}
-                  </div>
-                  <p className="text-white/40 text-sm sm:text-base leading-relaxed mb-8 italic">"{review.quote}"</p>
-                  <div className="flex items-center justify-between pt-6" style={{ borderTop: '1px solid rgba(212,175,55,0.08)' }}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{
-                        background: 'linear-gradient(135deg, #d4af37, #f5d76e)',
-                        boxShadow: '0 0 20px rgba(212,175,55,0.25)',
-                      }}>
-                        <span className="text-[#0a0a0a] font-black text-xs">{review.name.split(' ').map(n => n[0]).join('')}</span>
-                      </div>
-                      <div>
-                        <div className="text-white font-bold text-sm" data-testid={`text-winner-name-${index}`}>{review.name}</div>
-                        <div className="text-white/12 text-xs flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {review.location}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-white/8 text-[9px] uppercase tracking-widest font-bold mb-1">Won</div>
-                      <div className="text-xl font-black" data-testid={`text-winner-prize-${index}`} style={{
-                        background: 'linear-gradient(90deg, #d4af37, #f5d76e)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        filter: 'drop-shadow(0 0 10px rgba(212,175,55,0.4))',
-                      }}>{review.prize}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+     
 
       {isAuthenticated && (
         <section className="py-24 sm:py-32 relative overflow-hidden" style={{ background: '#070709' }}>
