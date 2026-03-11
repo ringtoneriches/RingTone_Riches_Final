@@ -103,9 +103,16 @@ export default function AdminTransactions() {
   // FILTERING
   const filtered = useMemo(() => {
     return transactions.filter((tx) => {
-       if (tx.description?.toLowerCase().includes('signup bonus')) {
+      const desc = tx.description?.toLowerCase() || "";
+
+    if (desc.includes("signup bonus")) {
       return false;
     }
+
+    if (desc.includes("redeemed flyer code")) {
+      return false;
+    }
+
       const searchLower = search.toLowerCase().trim();
       const matchSearch =
         searchLower === "" ||

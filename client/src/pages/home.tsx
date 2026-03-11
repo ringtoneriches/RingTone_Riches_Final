@@ -169,25 +169,11 @@ export default function Home() {
       iconBg: "linear-gradient(135deg, #dc2626, #ef4444)",
       prize: "£5,000",
       filter: "scratch",
-      badge: "JACKPOT",
-      badgeColor: "#ef4444",
+    
+    
       popular: true
     },
-    {
-  Icon: Circle,
-  title: "Ringtone Plinko",
-  desc: "Drop to win",
-  gradient: "linear-gradient(135deg, #8b5cf6, #a78bfa)",
-  glowColor: "rgba(139,92,246,0.25)",
-  borderColor: "rgba(139,92,246,0.4)",
-  bgColor: "rgba(139,92,246,0.06)",
-  iconBg: "linear-gradient(135deg, #8b5cf6, #c4b5fd)",
-  prize: "£5,000",
-  filter: "all",
-  badge: "HOT",
-  badgeColor: "#8b5cf6",
-  popular: false
-},
+    
 {
   Icon: Target,
   title: "Ringtone Pop",
@@ -197,10 +183,25 @@ export default function Home() {
   borderColor: "rgba(234,179,8,0.4)",
   bgColor: "rgba(234,179,8,0.06)",
   iconBg: "linear-gradient(135deg, #eab308, #facc15)",
-  prize: "£1,000",
+  prize: "£5,000",
   filter: "all",
   badge: "NEW",
   badgeColor: "#eab308",
+  popular: false
+},
+{
+  Icon: Circle,
+  title: "Ringtone Plinko",
+  desc: "Drop to win",
+  gradient: "linear-gradient(135deg, #8b5cf6, #a78bfa)",
+  glowColor: "rgba(139,92,246,0.25)",
+  borderColor: "rgba(139,92,246,0.4)",
+  bgColor: "rgba(139,92,246,0.06)",
+  iconBg: "linear-gradient(135deg, #8b5cf6, #c4b5fd)",
+  prize: "£1,000",
+  filter: "all",
+  badge: "HOT",
+  badgeColor: "#8b5cf6",
   popular: false
 },
     {
@@ -334,7 +335,7 @@ export default function Home() {
                   {[
                     { value: "£100K+", label: "in prizes", icon: Coins, color: '#f5d76e' },
                     { value: "50,000+", label: "winners", icon: Trophy, color: '#34d399' },
-                    { value: "99p", label: "per entry", icon: Ticket, color: '#fbbf24' }
+                    
                   ].map((stat, index) => (
                     <div key={index} className="flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full transition-all duration-300 hover:scale-[1.03] nv-stat-float" data-testid={`text-stat-value-${index}`} style={{
                       background: 'rgba(255,255,255,0.04)',
