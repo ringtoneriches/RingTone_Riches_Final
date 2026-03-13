@@ -21,6 +21,7 @@ import heroImage from "@assets/explosive_jackpot_winning_moment.png";
 import trophyImage from "@assets/trophy_winner_celebration_moment.png";
 import heroJackpotImg from "@assets/generated_images/hero_jackpot_3d.png";
 import heroBgVideo from "@assets/generated_videos/luxury-casino-hero-bg.mp4";
+import FAQ from "./faq";
 
 function useInView() {
   const ref = useRef<HTMLDivElement>(null);
@@ -818,7 +819,7 @@ export default function Home() {
               { id: "all", label: "All Games", icon: Trophy, color: '#00ff88', glow: 'rgba(0,255,136,0.3)' },
               { id: "spin", label: "Spin to Win", icon: RotateCw, color: '#ffb800', glow: 'rgba(245,158,11,0.3)' },
               { id: "scratch", label: "Scratch Cards", icon: Sparkles, color: '#00ff88', glow: 'rgba(0,255,136,0.3)' },
-              { id: "instant", label: "Competitions", icon: Gift, color: '#f5d76e', glow: 'rgba(245,215,110,0.3)' }
+              ...(user ? [{ id: "instant", label: "Competitions", icon: Gift, color: '#f5d76e', glow: 'rgba(245,215,110,0.3)' }] : [])
             ].map((filter) => (
               <button
                 key={filter.id}
@@ -1042,6 +1043,7 @@ export default function Home() {
 
       <CompactFacebookCTA/>
       <Testimonials/>
+      <FAQ/>
       <Footer />
     </div>
   );

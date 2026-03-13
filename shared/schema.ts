@@ -227,22 +227,33 @@ export const discountCodeUsages = pgTable("discount_code_usages", {
 });
 
 
-// Redeem codes table - stores codes printed on flyers
+// Redeem codes table - supports both flyer codes and admin custom codes
 export const redeemCodes = pgTable("redeem_codes", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  code: varchar("code").notNull().unique(), // e.g., "5PZNC"
+  code: varchar("code").notNull().unique(), // Custom code or generated
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // £10.00, £5.00 etc
-  isUsed: boolean("is_used").default(false),
-  usedByUserId: varchar("used_by_user_id").references(() => users.id),
-  usedAt: timestamp("used_at"),
+  
+  // Usage tracking
+  usageLimit: integer("usage_limit").default(1), // How many times this code can be used (null = unlimited)
+  currentUses: integer("current_uses").default(0), // How many times it's been used so far
+  
+  // Status
+  isActive: boolean("is_active").default(true), // Admin can deactivate codes
+  isSystemGenerated: boolean("is_system_generated").default(true), // True for flyer codes, false for admin custom codes
+  
+  // Metadata
+  createdBy: varchar("created_by").references(() => users.id), // Admin who created them
   createdAt: timestamp("created_at").defaultNow(),
   expiresAt: timestamp("expires_at"), // Optional expiry date
-  batchId: uuid("batch_id"), // To group codes from same flyer run
-  createdBy: varchar("created_by").references(() => users.id), // Admin who created them
-  notes: text("notes"), // Optional notes about this batch
+  notes: text("notes"), // Optional notes
+  
+  // For compatibility with existing system
+  isUsed: boolean("is_used").default(false), // Kept for backward compatibility
+  usedByUserId: varchar("used_by_user_id").references(() => users.id),
+  usedAt: timestamp("used_at"),
 });
 
-// Track redemption history (for analytics)
+// Track individual redemptions (for analytics and per-user tracking)
 export const redeemCodeRedemptions = pgTable("redeem_code_redemptions", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   redeemCodeId: uuid("redeem_code_id").notNull().references(() => redeemCodes.id),
@@ -645,6 +656,16 @@ export const auditLogs = pgTable("audit_logs", {
   index("audit_logs_created_at_idx").on(table.createdAt),
 ]);
 
+
+export const faqs = pgTable("faqs", {
+  id: serial("id").primaryKey(),
+  question: text("question").notNull(),
+  answer: text("answer").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+
 // Insert schemas
 export const insertCompetitionSchema = createInsertSchema(competitions);
 export const insertTicketSchema = createInsertSchema(tickets);
@@ -690,7 +711,11 @@ export const insertRedeemCodeRedemptionSchema = createInsertSchema(redeemCodeRed
   id: true,
   redeemedAt: true,
 });
-
+export const insertFaqSchema = createInsertSchema(faqs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
 
 
@@ -759,7 +784,8 @@ export type RedeemCode = typeof redeemCodes.$inferSelect;
 export type InsertRedeemCode = z.infer<typeof insertRedeemCodeSchema>;
 export type RedeemCodeRedemption = typeof redeemCodeRedemptions.$inferSelect;
 export type InsertRedeemCodeRedemption = z.infer<typeof insertRedeemCodeRedemptionSchema>;
-
+export type Faq = typeof faqs.$inferSelect;
+export type InsertFaq = z.infer<typeof insertFaqSchema>;
 
 // Registration and login schemas
 export const registerUserSchema = createInsertSchema(users).pick({

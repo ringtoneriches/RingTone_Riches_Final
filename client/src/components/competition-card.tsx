@@ -69,6 +69,34 @@ export default function CompetitionCard({ competition, authenticated = false }: 
           filter: hovered ? `drop-shadow(0 0 20px ${tc.c1}40) drop-shadow(0 15px 30px rgba(0,0,0,0.5))` : 'drop-shadow(0 5px 15px rgba(0,0,0,0.4))',
         }}
       >
+        {/* Glowing LED Effect - Contained within card */}
+        <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden rounded-[inherit]" style={{
+          clipPath: 'polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px)',
+        }}>
+          {/* Top LED strip - moves left to right */}
+          <div className={`gc-chaser-top-${uid} absolute top-0 left-0 w-full h-[3px]`} style={{
+            background: `linear-gradient(90deg, transparent, ${tc.c1}, ${tc.c2}, ${tc.c1}, transparent)`,
+            boxShadow: `0 0 15px ${tc.c1}, 0 0 30px ${tc.c2}`,
+          }} />
+          
+          {/* Right LED strip - moves top to bottom */}
+          <div className={`gc-chaser-right-${uid} absolute top-0 right-0 w-[3px] h-full`} style={{
+            background: `linear-gradient(180deg, transparent, ${tc.c1}, ${tc.c2}, ${tc.c1}, transparent)`,
+            boxShadow: `0 0 15px ${tc.c1}, 0 0 30px ${tc.c2}`,
+          }} />
+          
+          {/* Bottom LED strip - moves right to left */}
+          <div className={`gc-chaser-bottom-${uid} absolute bottom-0 left-0 w-full h-[3px]`} style={{
+            background: `linear-gradient(90deg, transparent, ${tc.c1}, ${tc.c2}, ${tc.c1}, transparent)`,
+            boxShadow: `0 0 15px ${tc.c1}, 0 0 30px ${tc.c2}`,
+          }} />
+          
+          {/* Left LED strip - moves bottom to top */}
+          <div className={`gc-chaser-left-${uid} absolute top-0 left-0 w-[3px] h-full`} style={{
+            background: `linear-gradient(180deg, transparent, ${tc.c1}, ${tc.c2}, ${tc.c1}, transparent)`,
+            boxShadow: `0 0 15px ${tc.c1}, 0 0 30px ${tc.c2}`,
+          }} />
+        </div>
 
         <div className="h-full overflow-hidden" style={{
           clipPath: 'polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px)',
@@ -301,6 +329,45 @@ export default function CompetitionCard({ competition, authenticated = false }: 
         }
         .gc-btn-sweep-${uid} {
           animation: gc-btn-sweep-kf 1.2s ease-in-out infinite;
+        }
+        
+        /* Moving LED animations - Contained within card */
+        @keyframes gc-chaser-top {
+          0% { transform: translateX(-100%); opacity: 0; }
+          20% { opacity: 1; }
+          80% { opacity: 1; }
+          100% { transform: translateX(100%); opacity: 0; }
+        }
+        @keyframes gc-chaser-right {
+          0% { transform: translateY(-100%); opacity: 0; }
+          20% { opacity: 1; }
+          80% { opacity: 1; }
+          100% { transform: translateY(100%); opacity: 0; }
+        }
+        @keyframes gc-chaser-bottom {
+          0% { transform: translateX(100%); opacity: 0; }
+          20% { opacity: 1; }
+          80% { opacity: 1; }
+          100% { transform: translateX(-100%); opacity: 0; }
+        }
+        @keyframes gc-chaser-left {
+          0% { transform: translateY(100%); opacity: 0; }
+          20% { opacity: 1; }
+          80% { opacity: 1; }
+          100% { transform: translateY(-100%); opacity: 0; }
+        }
+        
+        .gc-chaser-top-${uid} {
+          animation: gc-chaser-top 3s ease-in-out infinite;
+        }
+        .gc-chaser-right-${uid} {
+          animation: gc-chaser-right 3s ease-in-out infinite;
+        }
+        .gc-chaser-bottom-${uid} {
+          animation: gc-chaser-bottom 3s ease-in-out infinite;
+        }
+        .gc-chaser-left-${uid} {
+          animation: gc-chaser-left 3s ease-in-out infinite;
         }
       `}</style>
     </div>

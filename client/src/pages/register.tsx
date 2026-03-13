@@ -73,12 +73,12 @@ export default function Register() {
       if (data.hasRedeemCode) {
         toast({
           title: "🎉 Flyer Code Accepted!",
-          description: "Your flyer code is valid! You'll receive the bonus after email verification.",
+          description: "Your flyer code is valid! You'll receive the bonus after Login.",
         });
       } else {
         toast({
           title: "Registration Successful!",
-          description: "Please check your email for verification code.",
+          description: "Please Login.",
         });
       }
     

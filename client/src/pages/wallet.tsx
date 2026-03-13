@@ -976,10 +976,10 @@ const handleSortCodeChange = (e) => {
 
   const handleTopUp = () => {
     const amountNum = Number(topUpAmount);
-    if (amountNum < 1) {
+    if (amountNum < 3) {
       toast({
         title: "Invalid Amount",
-        description: "Minimum top-up amount is £1.00",
+        description: "Minimum top-up amount is £3.00",
         variant: "destructive",
       });
       return;
@@ -1519,7 +1519,7 @@ const handleDeleteBankAccount = (
                         </div>
                         <input
                           type="number"
-                          min="1"
+                          min="3"
                           max="1000"
                           value={topUpAmount}
                           onChange={(e) => setTopUpAmount(e.target.value)}

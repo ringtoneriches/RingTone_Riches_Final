@@ -221,9 +221,17 @@ async initializeAdminUser(): Promise<void> {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user;
-  }
+  // Normalize the email to lowercase first
+  const normalizedEmail = email.toLowerCase().trim();
+  
+  // Use case-insensitive comparison with SQL LOWER function
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(sql`LOWER(${users.email}) = LOWER(${normalizedEmail})`);
+  
+  return user;
+}
 
   async updateUser(userId: string, data: Partial<UpsertUser>): Promise<User> {
   const [user] = await db

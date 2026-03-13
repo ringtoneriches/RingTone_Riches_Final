@@ -72,7 +72,8 @@ import {
   gameVoltzConfig,
   voltzUsage,
   pushNotifications,
-  pushDeliveries
+  pushDeliveries,
+  faqs
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -1088,10 +1089,15 @@ app.post("/api/auth/register", async (req, res) => {
     console.log("   Referral code provided:", referralCode);
     console.log("   Redeem code provided:", redeemCode);
 
+ const normalizedEmail = email.toLowerCase().trim();
+    
+    console.log("   Original email:", email);
+    console.log("   Normalized email (stored in DB):", normalizedEmail);
+
     // Check if user exists
-    const existingUser = await storage.getUserByEmail(email);
+    const existingUser = await storage.getUserByEmail(normalizedEmail);
     if (existingUser) {
-      console.log("❌ [register] User already exists:", email);
+      console.log("❌ [register] User already exists:", normalizedEmail);
       return res.status(400).json({ message: "User already exists with this email" });
     }
 
@@ -1154,7 +1160,7 @@ app.post("/api/auth/register", async (req, res) => {
     // Create new user (emailVerified set to true by default)
     console.log("   Creating user in database...");
     const user = await storage.createUser({
-      email,
+      email : normalizedEmail ,
       password: hashedPassword,
       firstName,
       lastName,
@@ -1234,79 +1240,123 @@ app.post("/api/auth/register", async (req, res) => {
         console.error("Signup bonus error:", bonusError);
       }
 
-      // 2. Apply redeem code if exists
-      if (pendingRedeemCode && pendingRedeemAmount) {
-        try {
-          const code = pendingRedeemCode;
-          const amount = parseFloat(pendingRedeemAmount);
+     // Apply redeem code if exists
+if (pendingRedeemCode && pendingRedeemAmount) {
+  try {
+    const code = pendingRedeemCode;
+    const amount = parseFloat(pendingRedeemAmount);
 
-          // Find the redeem code again
-          const redeemCode = await tx.query.redeemCodes.findFirst({
-            where: eq(redeemCodes.code, code),
-          });
+    // Find the redeem code again
+    const redeemCode = await tx.query.redeemCodes.findFirst({
+      where: eq(redeemCodes.code, code),
+    });
 
-          if (redeemCode && !redeemCode.isUsed) {
-            // Check if not expired
-            if (!redeemCode.expiresAt || new Date() <= new Date(redeemCode.expiresAt)) {
-              
-              // Mark code as used
-              await tx.update(redeemCodes)
-                .set({
-                  isUsed: true,
-                  usedByUserId: user.id,
-                  usedAt: new Date(),
-                })
-                .where(eq(redeemCodes.id, redeemCode.id));
+    if (redeemCode) {
+      // Check if code is active
+      if (!redeemCode.isActive) {
+        console.log(`❌ Code ${code} is inactive`);
+        return;
+      }
 
-              // Add amount to user's balance
-              await tx.update(users)
-                .set({
-                  balance: sql`${users.balance} + ${amount}`,
-                })
-                .where(eq(users.id, user.id));
+      // Check if expired
+      if (redeemCode.expiresAt && new Date() > new Date(redeemCode.expiresAt)) {
+        console.log(`❌ Code ${code} has expired`);
+        return;
+      }
 
-              // Record redemption
-              await tx.insert(redeemCodeRedemptions).values({
-                redeemCodeId: redeemCode.id,
-                userId: user.id,
-                amount: amount.toString(),
-                ipAddress: req.ip,
-                userAgent: req.headers["user-agent"],
-              });
+      // Check usage limits - THIS IS THE IMPORTANT PART
+      if (redeemCode.usageLimit !== null && redeemCode.currentUses >= redeemCode.usageLimit) {
+        console.log(`❌ Code ${code} has reached its usage limit (${redeemCode.usageLimit} uses)`);
+        return;
+      }
 
-              // Create transaction record
-              await tx.insert(transactions).values({
-                userId: user.id,
-                amount: amount.toString(),
-                type: "redeem",
-                description: `Redeemed flyer code: ${code}`,
-                status: "completed",
-              });
+      // Check if user has already used this specific code
+      const existingRedemption = await tx.query.redeemCodeRedemptions.findFirst({
+        where: and(
+          eq(redeemCodeRedemptions.redeemCodeId, redeemCode.id),
+          eq(redeemCodeRedemptions.userId, user.id)
+        ),
+      });
 
-              redeemAmountCredited = amount;
-              console.log(`✅ Flyer code ${code} redeemed for user ${user.id} - £${amount}`);
-            }
-          }
+      if (existingRedemption) {
+        console.log(`❌ User ${user.id} has already used code ${code}`);
+        return;
+      }
 
-          // Clear pending fields
-          await tx.update(users)
-            .set({
-              pendingRedeemCode: null,
-              pendingRedeemAmount: null,
-            })
-            .where(eq(users.id, user.id));
+      // For flyer codes (system generated), check if they've used any code
+      if (redeemCode.isSystemGenerated) {
+        const anyRedemption = await tx.query.redeemCodeRedemptions.findFirst({
+          where: eq(redeemCodeRedemptions.userId, user.id),
+        });
 
-        } catch (redeemError) {
-          console.error("Failed to apply redeem code during registration:", redeemError);
-          // Clear pending fields
-          await tx.update(users)
-            .set({
-              pendingRedeemCode: null,
-              pendingRedeemAmount: null,
-            })
-            .where(eq(users.id, user.id));
+        if (anyRedemption) {
+          console.log(`❌ User ${user.id} has already used a flyer code`);
+          return;
         }
       }
+
+      // IMPORTANT: Update the usage counter - NOT just isUsed
+      console.log(`📝 Updating code usage from ${redeemCode.currentUses} to ${redeemCode.currentUses + 1}`);
+      
+      await tx.update(redeemCodes)
+        .set({ 
+          currentUses: redeemCode.currentUses + 1, // Increment the counter!
+          // Also update legacy fields for backward compatibility
+          isUsed: true,
+          usedByUserId: user.id,
+          usedAt: new Date(),
+        })
+        .where(eq(redeemCodes.id, redeemCode.id));
+
+      // Add amount to user's balance
+      await tx.update(users)
+        .set({
+          balance: sql`${users.balance} + ${amount}`,
+        })
+        .where(eq(users.id, user.id));
+
+      // Record redemption (THIS IS CRITICAL for tracking)
+      await tx.insert(redeemCodeRedemptions).values({
+        redeemCodeId: redeemCode.id,
+        userId: user.id,
+        amount: amount.toString(),
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+
+      // Create transaction record
+      await tx.insert(transactions).values({
+        userId: user.id,
+        amount: amount.toString(),
+        type: "redeem",
+        description: `Redeemed flyer code: ${code}`,
+        status: "completed",
+      });
+
+      redeemAmountCredited = amount;
+      console.log(`✅ Flyer code ${code} redeemed for user ${user.id} - £${amount}`);
+      console.log(`   New currentUses: ${redeemCode.currentUses + 1}`);
+    }
+
+    // Clear pending fields
+    await tx.update(users)
+      .set({
+        pendingRedeemCode: null,
+        pendingRedeemAmount: null,
+      })
+      .where(eq(users.id, user.id));
+
+  } catch (redeemError) {
+    console.error("Failed to apply redeem code during registration:", redeemError);
+    // Clear pending fields
+    await tx.update(users)
+      .set({
+        pendingRedeemCode: null,
+        pendingRedeemAmount: null,
+      })
+      .where(eq(users.id, user.id));
+  }
+}
 
       // 3. Apply referral system
       try {
@@ -1396,12 +1446,19 @@ app.post("/api/auth/login", async (req, res) => {
     const now = new Date();
     const { email, password } = result.data;
 
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    console.log("   Login attempt with:", email);
+    console.log("   Looking up with normalized email:", normalizedEmail);
+
+
     // Get user by email
-    const user = await storage.getUserByEmail(email);
+    const user = await storage.getUserByEmail(normalizedEmail);
     if (!user || !user.password) {
+       console.log("❌ [login] User not found for:", normalizedEmail);
       return res.status(401).json({ message: "Invalid email or password" });
     }
-
+ console.log("✅ [login] User found:", user.email);
     // 1️⃣ Check admin disables first
     if (user.disabled) {
       if (user.disabledUntil && now > new Date(user.disabledUntil)) {
@@ -1768,7 +1825,15 @@ app.post("/api/auth/login", async (req, res) => {
     return code;
   }
 
-// POST /api/admin/redeem-codes/generate - Generate codes for flyers (NO BATCHES)
+  function getCodeStatus(code: any): string {
+  if (!code.isActive) return "inactive";
+  if (code.expiresAt && new Date() > new Date(code.expiresAt)) return "expired";
+  if (code.usageLimit !== null && code.currentUses >= code.usageLimit) return "fully_used";
+  if (code.currentUses > 0) return "partially_used";
+  return "available";
+}
+
+// POST /api/admin/redeem-codes/generate - Generate flyer codes (system generated)
 app.post("/api/admin/redeem-codes/generate", isAuthenticated, isAdmin, async (req, res) => {
   try {
     const schema = z.object({
@@ -1782,12 +1847,11 @@ app.post("/api/admin/redeem-codes/generate", isAuthenticated, isAdmin, async (re
 
     // Start a transaction
     const results = await db.transaction(async (tx) => {
-      // Generate unique codes
       const codes = [];
       for (let i = 0; i < quantity; i++) {
         let code = generateFlyerCode();
         
-        // Ensure uniqueness (rare but possible)
+        // Ensure uniqueness
         let existing = await tx.query.redeemCodes.findFirst({
           where: eq(redeemCodes.code, code),
         });
@@ -1805,6 +1869,9 @@ app.post("/api/admin/redeem-codes/generate", isAuthenticated, isAdmin, async (re
           expiresAt: expiresAt ? new Date(expiresAt) : null,
           createdBy: req.user.id,
           notes,
+          isSystemGenerated: true,
+          usageLimit: 1, // Flyer codes are single-use by default
+          currentUses: 0,
         }).returning();
 
         codes.push(newCode);
@@ -1818,6 +1885,7 @@ app.post("/api/admin/redeem-codes/generate", isAuthenticated, isAdmin, async (re
       message: `Generated ${quantity} redeem codes`,
       codes: results,
       totalValue: `£${(amount * quantity).toFixed(2)}`,
+      type: "flyer_codes",
     });
 
   } catch (error) {
@@ -1829,12 +1897,65 @@ app.post("/api/admin/redeem-codes/generate", isAuthenticated, isAdmin, async (re
   }
 });
 
-// GET /api/admin/redeem-codes - List all redeem codes (UPDATED - removed batch filter)
+// POST /api/admin/redeem-codes/create-custom - Admin creates custom code
+app.post("/api/admin/redeem-codes/create-custom", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const schema = z.object({
+      code: z.string().min(3).max(20).transform(c => c.toUpperCase().trim()),
+      amount: z.number().positive(),
+      usageLimit: z.number().int().min(1).nullable().optional(), // null = unlimited
+      expiresAt: z.string().optional(),
+      notes: z.string().optional(),
+      isActive: z.boolean().default(true),
+    });
+
+    const { code, amount, usageLimit, expiresAt, notes, isActive } = schema.parse(req.body);
+
+    // Check if code already exists
+    const existing = await db.query.redeemCodes.findFirst({
+      where: eq(redeemCodes.code, code),
+    });
+
+    if (existing) {
+      return res.status(400).json({ error: "Code already exists" });
+    }
+
+    // Create custom code
+    const [newCode] = await db.insert(redeemCodes).values({
+      code,
+      amount: amount.toString(),
+      usageLimit: usageLimit || null,
+      currentUses: 0,
+      isActive,
+      isSystemGenerated: false,
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      createdBy: req.user.id,
+      notes: notes || `Custom code created by admin`,
+    }).returning();
+
+    res.json({
+      success: true,
+      message: `Custom code ${code} created successfully`,
+      code: newCode,
+      usageLimit: usageLimit || "unlimited",
+    });
+
+  } catch (error) {
+    console.error("Create custom code error:", error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors });
+    }
+    res.status(500).json({ error: "Failed to create custom code" });
+  }
+});
+
+// GET /api/admin/redeem-codes - List all redeem codes (updated)
+
 app.get("/api/admin/redeem-codes", isAuthenticated, isAdmin, async (req, res) => {
   try {
     console.log("📦 Fetching redeem codes...");
     
-    const { used } = req.query;
+    const { used, type, isActive } = req.query;
     
     // Build the query
     let query = db.select().from(redeemCodes);
@@ -1845,8 +1966,20 @@ app.get("/api/admin/redeem-codes", isAuthenticated, isAdmin, async (req, res) =>
       query = query.where(eq(redeemCodes.isUsed, false));
     }
 
+    if (type === "system") {
+      query = query.where(eq(redeemCodes.isSystemGenerated, true));
+    } else if (type === "custom") {
+      query = query.where(eq(redeemCodes.isSystemGenerated, false));
+    }
+
+    if (isActive === "true") {
+      query = query.where(eq(redeemCodes.isActive, true));
+    } else if (isActive === "false") {
+      query = query.where(eq(redeemCodes.isActive, false));
+    }
+
     // Execute the main query
-    const codes = await query.orderBy(redeemCodes.createdAt);
+    const codes = await query.orderBy(desc(redeemCodes.createdAt));
     console.log(`✅ Found ${codes.length} redeem codes`);
 
     // Get usage stats for each code
@@ -1857,6 +1990,9 @@ app.get("/api/admin/redeem-codes", isAuthenticated, isAdmin, async (req, res) =>
             .from(redeemCodeRedemptions)
             .where(eq(redeemCodeRedemptions.redeemCodeId, code.id))
             .leftJoin(users, eq(redeemCodeRedemptions.userId, users.id));
+          
+          // Get unique users who redeemed this code
+          const uniqueUserIds = new Set(redemptions.map(r => r.redeem_code_redemptions.userId));
           
           // Format the redemptions with user data
           const formattedRedemptions = redemptions.map(r => ({
@@ -1875,6 +2011,9 @@ app.get("/api/admin/redeem-codes", isAuthenticated, isAdmin, async (req, res) =>
             ...code,
             redemptions: formattedRedemptions,
             redemptionCount: formattedRedemptions.length,
+            uniqueUserCount: uniqueUserIds.size,
+            usageRemaining: code.usageLimit ? code.usageLimit - code.currentUses : "unlimited",
+            status: getCodeStatus(code),
           };
         } catch (err) {
           console.error(`Error fetching redemptions for code ${code.code}:`, err);
@@ -1882,7 +2021,9 @@ app.get("/api/admin/redeem-codes", isAuthenticated, isAdmin, async (req, res) =>
             ...code,
             redemptions: [],
             redemptionCount: 0,
-            redemptionError: true
+            uniqueUserCount: 0,
+            usageRemaining: "error",
+            status: "error",
           };
         }
       })
@@ -1899,30 +2040,102 @@ app.get("/api/admin/redeem-codes", isAuthenticated, isAdmin, async (req, res) =>
   }
 });
 
-// GET /api/admin/redeem-codes/stats - Get statistics (UPDATED - removed batch references)
+// PATCH /api/admin/redeem-codes/:id/toggle - Activate/deactivate a code
+app.patch("/api/admin/redeem-codes/:id/toggle", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    const [updated] = await db.update(redeemCodes)
+      .set({ isActive })
+      .where(eq(redeemCodes.id, id))
+      .returning();
+
+    res.json({
+      success: true,
+      message: `Code ${updated.isActive ? 'activated' : 'deactivated'} successfully`,
+      code: updated,
+    });
+  } catch (error) {
+    console.error("Toggle code error:", error);
+    res.status(500).json({ error: "Failed to update code" });
+  }
+});
+
+// PATCH /api/admin/redeem-codes/:id/limit - Update usage limit
+app.patch("/api/admin/redeem-codes/:id/limit", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { usageLimit } = req.body;
+
+    const schema = z.object({
+      usageLimit: z.number().int().min(1).nullable(),
+    });
+
+    const validated = schema.parse({ usageLimit });
+
+    const [updated] = await db.update(redeemCodes)
+      .set({ usageLimit: validated.usageLimit })
+      .where(eq(redeemCodes.id, id))
+      .returning();
+
+    res.json({
+      success: true,
+      message: `Usage limit updated to ${updated.usageLimit || 'unlimited'}`,
+      code: updated,
+    });
+  } catch (error) {
+    console.error("Update limit error:", error);
+    res.status(500).json({ error: "Failed to update usage limit" });
+  }
+});
+
+// GET /api/admin/redeem-codes/stats - Get statistics (updated)
 app.get("/api/admin/redeem-codes/stats", isAuthenticated, isAdmin, async (req, res) => {
   try {
+    // Overall stats
     const totalCodes = await db.select({ count: sql<number>`count(*)` }).from(redeemCodes);
-    const usedCodes = await db.select({ count: sql<number>`count(*)` })
-      .from(redeemCodes)
-      .where(eq(redeemCodes.isUsed, true));
     
+    const activeCodes = await db.select({ count: sql<number>`count(*)` })
+      .from(redeemCodes)
+      .where(eq(redeemCodes.isActive, true));
+    
+    const systemCodes = await db.select({ count: sql<number>`count(*)` })
+      .from(redeemCodes)
+      .where(eq(redeemCodes.isSystemGenerated, true));
+    
+    const customCodes = await db.select({ count: sql<number>`count(*)` })
+      .from(redeemCodes)
+      .where(eq(redeemCodes.isSystemGenerated, false));
+    
+    // Value stats
     const totalValue = await db.select({ 
       sum: sql<number>`sum(CAST(amount as decimal))` 
-    }).from(redeemCodes);
-    
-    const usedValue = await db.select({ 
-      sum: sql<number>`sum(CAST(amount as decimal))` 
     }).from(redeemCodes)
-      .where(eq(redeemCodes.isUsed, true));
+      .where(eq(redeemCodes.isActive, true));
+    
+    const redeemedValue = await db.select({ 
+      sum: sql<number>`sum(CAST(amount as decimal) * current_uses)` 
+    }).from(redeemCodes)
+      .where(eq(redeemCodes.isActive, true));
+
+    // Redemption stats
+    const totalRedemptions = await db.select({ count: sql<number>`count(*)` })
+      .from(redeemCodeRedemptions);
+    
+    const uniqueUsers = await db.select({ count: sql<number>`count(distinct user_id)` })
+      .from(redeemCodeRedemptions);
 
     res.json({
       totalCodes: Number(totalCodes[0].count),
-      usedCodes: Number(usedCodes[0].count),
-      remainingCodes: Number(totalCodes[0].count) - Number(usedCodes[0].count),
+      activeCodes: Number(activeCodes[0].count),
+      systemCodes: Number(systemCodes[0].count),
+      customCodes: Number(customCodes[0].count),
+      totalRedemptions: Number(totalRedemptions[0].count),
+      uniqueUsers: Number(uniqueUsers[0].count),
       totalValue: Number(totalValue[0].sum) || 0,
-      usedValue: Number(usedValue[0].sum) || 0,
-      remainingValue: (Number(totalValue[0].sum) || 0) - (Number(usedValue[0].sum) || 0),
+      redeemedValue: Number(redeemedValue[0].sum) || 0,
+      remainingValue: (Number(totalValue[0].sum) || 0) - (Number(redeemedValue[0].sum) || 0),
     });
   } catch (error) {
     console.error("Stats error:", error);
@@ -1984,15 +2197,19 @@ app.delete("/api/admin/redeem-codes/:id", isAuthenticated, isAdmin, async (req, 
 // USER ENDPOINTS
 // ========================================
 
-// POST /api/redeem - User redeems a code
-app.post("/api/redeem",isAuthenticated,  async (req, res) => {
-  try {
 
+
+
+
+// POST /api/redeem - User redeems a code (with debugging)
+app.post("/api/redeem", isAuthenticated, async (req, res) => {
+  try {
     const schema = z.object({
-      code: z.string().min(4).max(10).transform(c => c.toUpperCase().trim()),
+      code: z.string().min(3).max(20).transform(c => c.toUpperCase().trim()),
     });
 
     const { code } = schema.parse(req.body);
+    console.log(`🔍 Redeem attempt for code: ${code} by user: ${req.user.id}`);
 
     // Find the redeem code
     const redeemCode = await db.query.redeemCodes.findFirst({
@@ -2000,12 +2217,15 @@ app.post("/api/redeem",isAuthenticated,  async (req, res) => {
     });
 
     if (!redeemCode) {
+      console.log(`❌ Code not found: ${code}`);
       return res.status(404).json({ error: "Invalid redeem code" });
     }
 
-    // Check if already used
-    if (redeemCode.isUsed) {
-      return res.status(400).json({ error: "This code has already been used" });
+    console.log(`📊 Before redemption - Code: ${redeemCode.code}, currentUses: ${redeemCode.currentUses}, usageLimit: ${redeemCode.usageLimit}`);
+
+    // Check if code is active
+    if (!redeemCode.isActive) {
+      return res.status(400).json({ error: "This code is currently inactive" });
     }
 
     // Check if expired
@@ -2013,69 +2233,128 @@ app.post("/api/redeem",isAuthenticated,  async (req, res) => {
       return res.status(400).json({ error: "This code has expired" });
     }
 
-    // Check if this user already used any code (optional - if you want 1 code per user total)
+    // Check usage limits
+    if (redeemCode.usageLimit !== null && redeemCode.currentUses >= redeemCode.usageLimit) {
+      return res.status(400).json({ 
+        error: `This code has reached its usage limit (${redeemCode.usageLimit} uses)` 
+      });
+    }
+
+    // Check if user has already used this specific code
     const existingRedemption = await db.query.redeemCodeRedemptions.findFirst({
-      where: eq(redeemCodeRedemptions.userId, req.user.id),
+      where: and(
+        eq(redeemCodeRedemptions.redeemCodeId, redeemCode.id),
+        eq(redeemCodeRedemptions.userId, req.user.id)
+      ),
     });
 
     if (existingRedemption) {
-      return res.status(400).json({ error: "You have already used a redeem code" });
+      return res.status(400).json({ error: "You have already used this code" });
+    }
+
+    // For flyer codes (single-use), check if they've used any code (optional)
+    if (redeemCode.isSystemGenerated) {
+      const anyRedemption = await db.query.redeemCodeRedemptions.findFirst({
+        where: eq(redeemCodeRedemptions.userId, req.user.id),
+      });
+
+      if (anyRedemption) {
+        return res.status(400).json({ error: "You have already used a flyer code" });
+      }
     }
 
     // Start transaction
-    const result = await db.transaction(async (tx) => {
-      // Mark code as used
-      await tx.update(redeemCodes)
-        .set({
-          isUsed: true,
-          usedByUserId: req.user.id,
-          usedAt: new Date(),
-        })
-        .where(eq(redeemCodes.id, redeemCode.id));
+console.log(`🔄 Starting transaction for code: ${redeemCode.code}`);
 
-      // Add amount to user's balance
-      const amount = parseFloat(redeemCode.amount);
-      await tx.update(users)
-        .set({
-          balance: sql`${users.balance} + ${amount}`,
-        })
-        .where(eq(users.id, req.user.id));
+const result = await db.transaction(async (tx) => {
+  // First, get the current value to ensure we have the latest
+  const currentCode = await tx.query.redeemCodes.findFirst({
+    where: eq(redeemCodes.id, redeemCode.id),
+  });
 
-      // Record redemption
-      const [redemption] = await tx.insert(redeemCodeRedemptions).values({
-        redeemCodeId: redeemCode.id,
-        userId: req.user.id,
-        amount: amount.toString(),
-        ipAddress: req.ip,
-        userAgent: req.headers["user-agent"],
-      }).returning();
+  if (!currentCode) {
+    throw new Error("Code not found during transaction");
+  }
 
-      // Create transaction record
-      await tx.insert(transactions).values({
-        userId: req.user.id,
-        amount: amount.toString(),
-        type: "redeem",
-        description: `Redeemed flyer code: ${code}`,
-        status: "completed",
-      });
+  console.log(`📝 Updating currentUses from ${currentCode.currentUses} to ${currentCode.currentUses + 1}`);
+  
+  // Update code usage - use the current value from the fetched record
+  const [updatedCode] = await tx.update(redeemCodes)
+    .set({
+      currentUses: currentCode.currentUses + 1, // Use the actual number, not SQL expression
+      // For backward compatibility with single-use codes
+      ...(redeemCode.usageLimit === 1 ? {
+        isUsed: true,
+        usedByUserId: req.user.id,
+        usedAt: new Date(),
+      } : {}),
+    })
+    .where(eq(redeemCodes.id, redeemCode.id))
+    .returning();
 
-      return { amount, redemption };
-    });
+  console.log(`✅ After update - currentUses: ${updatedCode.currentUses}`);
+
+  // Add amount to user's balance
+  const amount = parseFloat(redeemCode.amount);
+  console.log(`💰 Adding £${amount} to user ${req.user.id} balance`);
+  
+  await tx.update(users)
+    .set({
+      balance: sql`${users.balance} + ${amount}`,
+    })
+    .where(eq(users.id, req.user.id));
+
+  // Record redemption
+  console.log(`📝 Recording redemption for user ${req.user.id}`);
+  
+  const [redemption] = await tx.insert(redeemCodeRedemptions).values({
+    redeemCodeId: redeemCode.id,
+    userId: req.user.id,
+    amount: amount.toString(),
+    ipAddress: req.ip,
+    userAgent: req.headers["user-agent"],
+  }).returning();
+
+  console.log(`✅ Redemption recorded with ID: ${redemption.id}`);
+
+  // Create transaction record
+  await tx.insert(transactions).values({
+    userId: req.user.id,
+    amount: amount.toString(),
+    type: "redeem",
+    description: `Redeemed code: ${code}`,
+    status: "completed",
+  });
+
+  return { amount, redemption, updatedCode };
+});
+
+    console.log(`🎉 Transaction completed successfully for code: ${code}`);
 
     // Get updated user balance
     const updatedUser = await db.query.users.findFirst({
       where: eq(users.id, req.user.id),
     });
 
+    // Calculate remaining uses
+    const remainingUses = redeemCode.usageLimit 
+      ? redeemCode.usageLimit - (result.updatedCode.currentUses)
+      : "unlimited";
+
     res.json({
       success: true,
-      message: `🎉 You've received £${result.amount.toFixed(2)} from your flyer code!`,
+      message: `🎉 You've received £${result.amount.toFixed(2)}!`,
       amount: result.amount,
       newBalance: updatedUser?.balance,
+      codeDetails: {
+        code: redeemCode.code,
+        remainingUses,
+        isSystemGenerated: redeemCode.isSystemGenerated,
+      },
     });
 
   } catch (error) {
-    console.error("Redeem error:", error);
+    console.error("🔥 Redeem error:", error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: "Invalid code format" });
     }
@@ -13465,7 +13744,21 @@ app.post(
           if (!user) {
             throw new Error("USER_NOT_FOUND");
           }
-  
+          
+           await tx
+          .delete(userIpLogs)
+          .where(eq(userIpLogs.userId, id));
+
+
+           await tx
+          .delete(redeemCodeRedemptions)
+          .where(eq(redeemCodeRedemptions.userId, id));
+
+           await tx
+          .update(redeemCodes)
+          .set({ usedByUserId: null })
+          .where(eq(redeemCodes.usedByUserId, id));
+
           // 1️⃣ Get all order IDs for this user
           const ordersList = await tx
             .select({ id: orders.id })
@@ -15632,6 +15925,101 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
     }
   });
 
+
+
+// <------ FAQ ROUTES ------>
+
+// Change from /admin/faqs to /api/admin/faqs
+app.post("/api/admin/faqs", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { question, answer } = req.body;
+
+    if (!question || !answer) {
+      return res.status(400).json({ error: "Question and answer required" });
+    }
+
+    const result = await db
+      .insert(faqs)
+      .values({
+        question,
+        answer
+      })
+      .returning();
+
+    res.json(result[0]);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/admin/faqs", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const result = await db
+      .select()
+      .from(faqs)
+      .orderBy(desc(faqs.id));
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Keep public endpoint as is or also move to /api
+app.get("/api/faqs", async (req, res) => {
+  try {
+    const result = await db
+      .select()
+      .from(faqs)
+      .orderBy(desc(faqs.id));
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.put("/api/admin/faqs/:id", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { question, answer } = req.body;
+
+    const result = await db
+      .update(faqs)
+      .set({
+        question,
+        answer
+      })
+      .where(eq(faqs.id, Number(id)))
+      .returning();
+
+    res.json(result[0]);
+
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.delete("/api/admin/faqs/:id", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await db
+      .delete(faqs)
+      .where(eq(faqs.id, Number(id)));
+
+    res.json({ success: true });
+
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
   const httpServer = createServer(app);
   return httpServer;
 }
+
+

@@ -77,9 +77,10 @@ import AdminRingtoneVoltzSettings from "./pages/admin/ringtone-voltz-settings";
 import VoltzGamePage from "./pages/voltzGamePage";
 import VoltzBilling from "./pages/voltzBilling";
 import UserNotifications from "./components/notifications";
+import AdminFAQManager from "./pages/admin/faq-manager";
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
-  if (isLoading || !isAuthenticated) return <Landing />;
+ 
   return <Home />;
 }
 
@@ -161,7 +162,7 @@ function Router() {
       <Route path="/admin/notification" component={AdminPushMessages} />
       <Route path="/admin/voltz" component={AdminVoltz} />
       <Route path="/admin/ringtone-voltz/settings" component={AdminRingtoneVoltzSettings} />
-
+      <Route path="/admin/faqs" component={AdminFAQManager} />
       <Route component={NotFound} />
     </Switch>
   );

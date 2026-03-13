@@ -33,6 +33,7 @@ import {
   Percent,
   QrCode,
   Network,
+  MailQuestion,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,6 +83,13 @@ const sidebarGroups = [
       { name: "Redeem Code", path: "/admin/redeem", icon: FileDigit },
       { name: "Intelligence", path: "/admin/intelligence", icon: Brain },
       { name: "Notification", path: "/admin/notification", icon: Send },
+    ],
+  },
+  {
+    name: "Personalisation",
+    icon: null,
+    items: [
+      { name: "Faq", path: "/admin/faqs", icon: MailQuestion },
     ],
   },
   {
