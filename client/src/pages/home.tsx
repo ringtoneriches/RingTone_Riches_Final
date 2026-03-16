@@ -808,44 +808,46 @@ export default function Home() {
 
       <StatsBanner />
 
-      <section className="sticky top-0 z-40 backdrop-blur-2xl" style={{
-        background: 'rgba(7,7,9,0.92)',
-        borderBottom: '1px solid rgba(0,255,136,0.08)',
-        boxShadow: '0 4px 40px rgba(0,0,0,0.5), 0 1px 0 rgba(0,255,136,0.05)',
-      }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
-          <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
-            {[
-              { id: "all", label: "All Games", icon: Trophy, color: '#00ff88', glow: 'rgba(0,255,136,0.3)' },
-              { id: "spin", label: "Spin to Win", icon: RotateCw, color: '#ffb800', glow: 'rgba(245,158,11,0.3)' },
-              { id: "scratch", label: "Scratch Cards", icon: Sparkles, color: '#00ff88', glow: 'rgba(0,255,136,0.3)' },
-              ...(user ? [{ id: "instant", label: "Competitions", icon: Gift, color: '#f5d76e', glow: 'rgba(245,215,110,0.3)' }] : [])
-            ].map((filter) => (
-              <button
-                key={filter.id}
-                onClick={() => handleFilterChange(filter.id)}
-                className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm uppercase tracking-wider transition-all duration-400 flex items-center gap-2`}
-                style={activeFilter === filter.id ? {
-                  background: `linear-gradient(135deg, ${filter.color}, ${filter.color}cc)`,
-                  color: '#0a0a0a',
-                  boxShadow: `0 0 25px ${filter.glow}, 0 0 50px ${filter.glow}, 0 2px 8px rgba(0,0,0,0.3)`,
-                  border: `1px solid ${filter.color}`,
-                } : {
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  color: 'rgba(255,255,255,0.4)',
-                }}
-                data-testid={`button-filter-${filter.id}`}
-              >
-                <filter.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                {filter.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="py-16 sm:py-24 relative" style={{ background: '#070709' }}>
+      {isAuthenticated && (
+  <section className="sticky top-0 z-40 backdrop-blur-2xl" style={{
+    background: 'rgba(7,7,9,0.92)',
+    borderBottom: '1px solid rgba(0,255,136,0.08)',
+    boxShadow: '0 4px 40px rgba(0,0,0,0.5), 0 1px 0 rgba(0,255,136,0.05)',
+  }}>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+      <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
+        {[
+          { id: "all", label: "All Games", icon: Trophy, color: '#00ff88', glow: 'rgba(0,255,136,0.3)' },
+          { id: "spin", label: "Spin to Win", icon: RotateCw, color: '#ffb800', glow: 'rgba(245,158,11,0.3)' },
+          { id: "scratch", label: "Scratch Cards", icon: Sparkles, color: '#00ff88', glow: 'rgba(0,255,136,0.3)' },
+          { id: "instant", label: "Competitions", icon: Gift, color: '#f5d76e', glow: 'rgba(245,215,110,0.3)' }
+        ].map((filter) => (
+          <button
+            key={filter.id}
+            onClick={() => handleFilterChange(filter.id)}
+            className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm uppercase tracking-wider transition-all duration-400 flex items-center gap-2`}
+            style={activeFilter === filter.id ? {
+              background: `linear-gradient(135deg, ${filter.color}, ${filter.color}cc)`,
+              color: '#0a0a0a',
+              boxShadow: `0 0 25px ${filter.glow}, 0 0 50px ${filter.glow}, 0 2px 8px rgba(0,0,0,0.3)`,
+              border: `1px solid ${filter.color}`,
+            } : {
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              color: 'rgba(255,255,255,0.4)',
+            }}
+            data-testid={`button-filter-${filter.id}`}
+          >
+            <filter.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            {filter.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  </section>
+)}
+{ isAuthenticated && (
+<section className="py-16 sm:py-24 relative" style={{ background: '#070709' }}>
         <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,255,136,0.03), transparent 70%), radial-gradient(ellipse 60% 40% at 80% 80%, rgba(245,215,110,0.02), transparent)' }} />
         <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent 5%, rgba(0,255,136,0.08) 30%, rgba(245,215,110,0.12) 50%, rgba(0,255,136,0.08) 70%, transparent 95%)' }} />
         
@@ -942,6 +944,9 @@ export default function Home() {
           .animate-hero-glow-delay { animation: hero-glow 8s ease-in-out infinite; animation-delay: 4s; }
         `}</style>
       </section>
+)
+}
+      
 
      
 

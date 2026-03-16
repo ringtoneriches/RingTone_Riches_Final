@@ -201,21 +201,37 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
   const ringtonePoints = user?.ringtonePoints || 0;
   const ringtoneBalance = ringtonePoints * 0.01;
 
-  // Simple calculations for wallet/points
-  const maxWalletUse = Math.min(walletBalance, totalAmount);
-  const maxPointsUse = isPointsDisabled ? 0 : Math.min(ringtoneBalance, totalAmount);
-  const walletUsed = selectedMethods.walletBalance ? maxWalletUse : 0;
-  const pointsUsed = selectedMethods.ringtonePoints ? maxPointsUse : 0;
-  const remainingAfterWallet = totalAmount - walletUsed;
-  const actualPointsUsed = isPointsDisabled ? 0 : Math.min(maxPointsUse, remainingAfterWallet);
-  const finalPointsUsed = selectedMethods.ringtonePoints ? actualPointsUsed : 0;
-  const finalAmount = totalAmount - walletUsed - finalPointsUsed;
-  const pointsNeeded = Math.ceil(finalPointsUsed * 100);
+  // Calculate available funds based on selected methods
+  const calculatePaymentBreakdown = () => {
+    let remainingAmount = totalAmount;
+    let walletUsed = 0;
+    let pointsUsed = 0;
+
+    if (selectedMethods.walletBalance) {
+      walletUsed = Math.min(walletBalance, remainingAmount);
+      remainingAmount -= walletUsed;
+    }
+
+    if (selectedMethods.ringtonePoints && !isPointsDisabled) {
+      pointsUsed = Math.min(ringtoneBalance, remainingAmount);
+      remainingAmount -= pointsUsed;
+    }
+
+    return {
+      walletUsed,
+      pointsUsed,
+      pointsNeeded: Math.ceil(pointsUsed * 100),
+      remainingAmount,
+      hasSufficientFunds: remainingAmount === 0
+    };
+  };
+
+  const { walletUsed, pointsUsed, pointsNeeded, remainingAmount, hasSufficientFunds } = calculatePaymentBreakdown();
 
   // Check if any payment method is selected
   const hasSelectedMethod = selectedMethods.walletBalance || selectedMethods.ringtonePoints || (isGame && selectedMethods.instaplay);
 
-  // Handle method selection (mutually exclusive)
+  // Handle method selection (now allows combinations)
   const handleMethodToggle = (method: 'walletBalance' | 'ringtonePoints' | 'instaplay') => {
     // Prevent enabling points for instant competitions
     if (method === 'ringtonePoints' && isPointsDisabled) {
@@ -227,18 +243,31 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
       return;
     }
 
-    // If toggling the same method, just toggle it off
-    if (selectedMethods[method]) {
-      setSelectedMethods({ walletBalance: false, ringtonePoints: false, instaplay: false });
+    // Instaplay is always exclusive - if selected, turn off others
+    if (method === 'instaplay') {
+      setSelectedMethods({
+        walletBalance: false,
+        ringtonePoints: false,
+        instaplay: !selectedMethods.instaplay
+      });
       return;
     }
 
-    // Otherwise, set only this method to true (mutually exclusive)
-    setSelectedMethods({
-      walletBalance: method === 'walletBalance',
-      ringtonePoints: method === 'ringtonePoints',
-      instaplay: method === 'instaplay'
-    });
+    // If instaplay is currently selected, turning it off and selecting wallet/points
+    if (selectedMethods.instaplay) {
+      setSelectedMethods({
+        walletBalance: method === 'walletBalance',
+        ringtonePoints: method === 'ringtonePoints',
+        instaplay: false
+      });
+      return;
+    }
+
+    // For wallet and points - allow both to be selected together
+    setSelectedMethods(prev => ({
+      ...prev,
+      [method]: !prev[method]
+    }));
   };
 
   // Apply discount mutation
@@ -466,16 +495,19 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
     }
 
     // For wallet/points, check if we need top-up
-    if (finalAmount > 0) {
+    if (remainingAmount > 0) {
       setShowTopUpModal(true);
       return;
     }
 
-    // Process wallet/points payment
+    // Process wallet/points payment (could be both combined)
     setIsProcessing(true);
     processPaymentMutation.mutate({
       useWalletBalance: selectedMethods.walletBalance,
       useRingtonePoints: selectedMethods.ringtonePoints,
+      walletAmount: walletUsed,
+      pointsAmount: pointsUsed,
+      pointsNeeded: pointsNeeded
     });
   };
 
@@ -702,9 +734,11 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                         <p className="text-sm text-gray-400 mb-2">
                           Available: <span className="text-green-400 font-semibold">£{walletBalance.toFixed(2)}</span>
                         </p>
-                        <p className="text-sm font-semibold text-yellow-400">
-                          Use £{maxWalletUse.toFixed(2)} from wallet
-                        </p>
+                        {selectedMethods.walletBalance && (
+                          <p className="text-sm font-semibold text-green-400">
+                            Using £{Math.min(walletBalance, totalAmount).toFixed(2)} from wallet
+                          </p>
+                        )}
                       </div>
                     </div>
                     <input
@@ -765,9 +799,10 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                           <p className="text-sm font-semibold text-red-400">
                             Points cannot be used for competitions
                           </p>
-                        ) : (
+                        ) : selectedMethods.ringtonePoints && (
                           <p className="text-sm font-semibold text-yellow-400">
-                            Use £{maxPointsUse.toFixed(2)} ({Math.ceil(maxPointsUse * 100)} points)
+                            Using up to £{Math.min(ringtoneBalance, totalAmount - (selectedMethods.walletBalance ? walletBalance : 0)).toFixed(2)} 
+                            ({Math.ceil(Math.min(ringtoneBalance, totalAmount - (selectedMethods.walletBalance ? walletBalance : 0)) * 100)} points)
                           </p>
                         )}
                       </div>
@@ -833,6 +868,16 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                 </div>
               )}
             </div>
+
+            {/* Combined Payment Hint */}
+            {selectedMethods.walletBalance && selectedMethods.ringtonePoints && !selectedMethods.instaplay && (
+              <div className="mt-4 p-3 bg-gradient-to-r from-green-500/10 to-yellow-500/10 rounded-lg border border-yellow-500/20">
+                <p className="text-sm text-gray-300 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-yellow-400" />
+                  Using both Wallet and Points together
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Terms */}
@@ -880,13 +925,12 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                 ) : (
                   <>
                     <Lock className="w-5 h-5" />
-                    {finalAmount > 0 ? `TOP UP REQUIRED - £${finalAmount.toFixed(2)}` : 'COMPLETE PURCHASE'}
+                    {remainingAmount > 0 ? `TOP UP REQUIRED - £${remainingAmount.toFixed(2)}` : 'COMPLETE PURCHASE'}
                   </>
                 )}
               </div>
             )}
           </Button>
-
 
           {/* Instaplay benefits - Only show for games */}
           {isGame && selectedMethods.instaplay && (
@@ -905,8 +949,6 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
               </div>
             </div>
           )}
-
-
         </div>
 
         {/* Sidebar - Payment Breakdown & Security */}
@@ -959,7 +1001,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                 </div>
                 
                 {/* Wallet Payment */}
-                {selectedMethods.walletBalance && (
+                {selectedMethods.walletBalance && walletUsed > 0 && (
                   <div className="flex justify-between items-center py-2 border-b border-zinc-700">
                     <span className="text-gray-300">Wallet Balance</span>
                     <span className="text-green-400 font-semibold">-£{walletUsed.toFixed(2)}</span>
@@ -967,11 +1009,11 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                 )}
                 
                 {/* Points Payment */}
-                {selectedMethods.ringtonePoints && !isPointsDisabled && (
+                {selectedMethods.ringtonePoints && !isPointsDisabled && pointsUsed > 0 && (
                   <div className="flex justify-between items-center py-2 border-b border-zinc-700">
                     <span className="text-gray-300">Ringtone Points</span>
                     <span className="text-yellow-400 font-semibold">
-                      -£{finalPointsUsed.toFixed(2)} ({pointsNeeded} pts)
+                      -£{pointsUsed.toFixed(2)} ({pointsNeeded} pts)
                     </span>
                   </div>
                 )}
@@ -980,7 +1022,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                 <div className="flex justify-between items-center pt-3 mt-3 bg-yellow-500/10 -mx-6 px-6 py-3 rounded-lg">
                   <span className="font-bold text-white">Remaining to Pay</span>
                   <span className="font-black text-yellow-400 text-xl">
-                    {finalAmount > 0 ? `£${finalAmount.toFixed(2)}` : 'PAID IN FULL'}
+                    {remainingAmount > 0 ? `£${remainingAmount.toFixed(2)}` : 'PAID IN FULL'}
                   </span>
                 </div>
               </div>
@@ -1055,8 +1097,6 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
         </div>
       </div>
 
-      
-
       {/* Discount Dialog */}
       <Dialog open={showDiscountDialog} onOpenChange={setShowDiscountDialog}>
         <DialogContent className="bg-gradient-to-br from-zinc-900 to-zinc-950 border-yellow-500/30 text-white max-w-md rounded-2xl shadow-2xl">
@@ -1127,13 +1167,21 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                   <span className="text-gray-300">Order Total:</span>
                   <span className="font-bold text-yellow-400">£{totalAmount.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-300">Available Funds:</span>
-                  <span className="text-green-400">£{(walletBalance + (isPointsDisabled ? 0 : ringtoneBalance)).toFixed(2)}</span>
-                </div>
+                {selectedMethods.walletBalance && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Wallet Balance:</span>
+                    <span className="text-green-400">£{walletBalance.toFixed(2)}</span>
+                  </div>
+                )}
+                {selectedMethods.ringtonePoints && !isPointsDisabled && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Points Value:</span>
+                    <span className="text-yellow-400">£{ringtoneBalance.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between border-t border-yellow-500/20 pt-2">
                   <span className="text-gray-300">Remaining:</span>
-                  <span className="font-bold text-red-400">£{finalAmount.toFixed(2)}</span>
+                  <span className="font-bold text-red-400">£{remainingAmount.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -1176,7 +1224,8 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                   orderType,
                   wheelType,
                   totalAmount,
-                  finalAmount,
+                  remainingAmount,
+                  selectedMethods,
                   topupCompleted: false,
                   timestamp: Date.now()
                 }));
