@@ -2,10 +2,12 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
-import { Zap, Trophy, RotateCcw, PowerOff, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Zap, Trophy, RotateCcw, PowerOff, ShieldCheck, Sparkles, X, Bolt, Swords, Gauge } from "lucide-react";
 import confetti from "canvas-confetti";
 import { playWinSound, playPowerDown, playBackupPower, disposeAudioContext } from "@/lib/voltz-sounds";
 import surgeSoundUrl from "@assets/surgessound_1772193798276.mp3";
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogAction, AlertDialogCancel, AlertDialogFooter } from "../ui/alert-dialog";
+import { useLocation } from "wouter";
 
 interface VoltzGameProps {
   orderId: string;
@@ -61,6 +63,7 @@ export default function VoltzGameComponent({
   const [lastResult, setLastResult] = useState<PlayResult | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [resultAnimStage, setResultAnimStage] = useState(0);
+  const [showNoPlaysDialog, setShowNoPlaysDialog] = useState(false);
 
   const orderIdRef = useRef(orderId);
   const competitionIdRef = useRef(competitionId);
@@ -74,6 +77,8 @@ export default function VoltzGameComponent({
   const surgeAudioRef = useRef<HTMLAudioElement | null>(null);
   const roundResultRef = useRef<PlayResult | null>(null);
   const roundStartedRef = useRef(false);
+  
+  const [,setLocation] = useLocation();
 
   const particlePositions = useMemo(() =>
     Array.from({ length: 20 }, (_, i) => ({
@@ -88,6 +93,15 @@ export default function VoltzGameComponent({
   useEffect(() => { playsRemainingRef.current = playsRemaining; }, [playsRemaining]);
   useEffect(() => { onPlayCompleteRef.current = onPlayComplete; }, [onPlayComplete]);
   useEffect(() => { toastRef.current = toast; }, [toast]);
+
+  // Show dialog when plays run out
+  useEffect(() => {
+    if (playsRemaining <= 0 && isGameReady && !isProcessing && !showResult) {
+      setShowNoPlaysDialog(true);
+    } else {
+      setShowNoPlaysDialog(false);
+    }
+  }, [playsRemaining, isGameReady, isProcessing, showResult]);
 
   const closeResult = useCallback(() => {
     resultTimersRef.current.forEach(t => clearTimeout(t));
@@ -504,70 +518,6 @@ export default function VoltzGameComponent({
         </div>
       )}
 
-      {/* ── No plays overlay ─────────────────────────────────────────────────── */}
-      {playsRemaining <= 0 && isGameReady && !isProcessing && !showResult && (
-        <div
-          className="vg-root vg-glass absolute inset-0 flex items-center justify-center rounded-2xl z-10"
-          style={{ background: 'rgba(0,0,0,0.82)' }}
-          data-testid="no-plays-overlay"
-        >
-          <div className="relative mx-4 w-full max-w-[280px]">
-            {/* outer frame */}
-            <div
-              className="relative p-8 text-center"
-              style={{
-                background: 'linear-gradient(160deg, rgba(30,10,10,0.95) 0%, rgba(10,0,0,0.98) 100%)',
-                border: '1px solid rgba(239,68,68,0.25)',
-                borderRadius: '20px',
-                boxShadow: '0 0 60px rgba(239,68,68,0.08), 0 0 0 1px rgba(255,255,255,0.03)',
-              }}
-            >
-              <span className="vg-hex-corner vg-hex-corner-tl text-red-500/30" />
-              <span className="vg-hex-corner vg-hex-corner-tr text-red-500/30" />
-              <span className="vg-hex-corner vg-hex-corner-bl text-red-500/30" />
-              <span className="vg-hex-corner vg-hex-corner-br text-red-500/30" />
-
-              {/* icon */}
-              <div
-                className="w-20 h-20 mx-auto mb-5 rounded-full flex items-center justify-center"
-                style={{
-                  background: 'radial-gradient(circle, rgba(239,68,68,0.12) 0%, transparent 70%)',
-                  border: '1px solid rgba(239,68,68,0.2)',
-                }}
-              >
-                <PowerOff className="w-9 h-9 text-red-400/70 vg-anim-glow-red" strokeWidth={1.5} />
-              </div>
-
-              <p
-                className="vg-title text-3xl text-white mb-1"
-                data-testid="text-no-plays"
-                style={{ textShadow: '0 0 16px rgba(239,68,68,0.3)' }}
-              >
-                POWER DEPLETED
-              </p>
-              <p className="text-red-400/50 text-xs tracking-[0.25em] font-semibold mb-6">SYSTEM OFFLINE</p>
-
-              {/* drained bars */}
-              <div className="flex justify-center gap-1.5" data-testid="depleted-bars">
-                {[...Array(5)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-1.5 rounded-full"
-                    style={{
-                      width: 24,
-                      background: i < 1 ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.06)',
-                      border: '1px solid rgba(239,68,68,0.12)',
-                    }}
-                  />
-                ))}
-              </div>
-
-              <p className="text-gray-600 text-xs mt-4 tracking-wide">Purchase more entries to recharge</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── Result overlay ───────────────────────────────────────────────────── */}
       {showResult && lastResult && (
         <div
@@ -892,6 +842,124 @@ export default function VoltzGameComponent({
           </div>
         </div>
       )}
+
+      {/* ── VoltZ-themed No Plays Dialog ─────────────────────────────────────── */}
+      <AlertDialog open={showNoPlaysDialog} onOpenChange={setShowNoPlaysDialog}>
+        <AlertDialogContent className="vg-root max-w-[360px] p-0 overflow-hidden border-0 bg-transparent">
+          <div
+            className="relative overflow-hidden"
+            style={{
+              borderRadius: '24px',
+              border: '1px solid rgba(239,68,68,0.35)',
+              background: 'linear-gradient(170deg, rgba(30,5,5,0.98) 0%, rgba(8,0,0,0.99) 100%)',
+              boxShadow: '0 0 80px rgba(239,68,68,0.15), 0 0 0 1px rgba(255,255,255,0.03), 0 32px 64px rgba(0,0,0,0.7)',
+            }}
+          >
+            {/* Hex corners */}
+            <span className="vg-hex-corner vg-hex-corner-tl text-red-500/40" />
+            <span className="vg-hex-corner vg-hex-corner-tr text-red-500/40" />
+            <span className="vg-hex-corner vg-hex-corner-bl text-red-500/40" />
+            <span className="vg-hex-corner vg-hex-corner-br text-red-500/40" />
+
+            {/* Top accent line */}
+            <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-red-500/60 to-transparent" />
+
+            {/* Scanlines overlay */}
+            <div className="absolute inset-0 pointer-events-none opacity-20" style={{
+              background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,0,0,0.1) 2px, rgba(255,0,0,0.1) 4px)',
+            }} />
+
+            <div className="px-6 pt-10 pb-6 text-center relative z-10">
+              {/* Animated icon */}
+              <div className="relative w-28 h-28 mx-auto mb-6">
+                <div className="absolute inset-0 rounded-full vg-anim-ping-gold" style={{ background: 'rgba(239,68,68,0.15)' }} />
+                <div
+                  className="relative w-28 h-28 rounded-full flex items-center justify-center vg-anim-glow-red"
+                  style={{
+                    background: 'radial-gradient(circle at 38% 32%, rgba(239,68,68,0.25) 0%, rgba(120,0,0,0.1) 60%, transparent 100%)',
+                    border: '1px solid rgba(239,68,68,0.4)',
+                  }}
+                >
+                  <Gauge className="w-14 h-14 text-red-400 vg-anim-flicker" strokeWidth={1.5} style={{ filter: 'drop-shadow(0 0 14px rgba(239,68,68,0.5))' }} />
+                </div>
+                {/* Energy bolts around */}
+                <Bolt className="absolute -top-2 -right-2 w-6 h-6 text-red-500/40 rotate-45" />
+                <Bolt className="absolute -bottom-2 -left-2 w-6 h-6 text-red-500/40 -rotate-45" />
+              </div>
+
+              <AlertDialogHeader className="space-y-2">
+                <AlertDialogTitle className="vg-title text-4xl text-center text-white mb-2" style={{ textShadow: '0 0 24px rgba(239,68,68,0.4)' }}>
+                  POWER DEPLETED
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-red-400/80 text-sm tracking-wide font-medium">
+                  <div className="flex items-center justify-center gap-2 mb-3">
+                    <Zap className="w-4 h-4" />
+                    <span className="text-[10px] tracking-[0.25em]">SYSTEM OFFLINE — RECHARGE REQUIRED</span>
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <div className="flex justify-center gap-1.5 mb-4">
+                    {[...Array(5)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="h-1.5 w-6 rounded-full"
+                        style={{
+                          background: i < 1 ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.06)',
+                          border: '1px solid rgba(239,68,68,0.15)',
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-gray-400 text-xs">
+                    Your energy cells are empty. Boost your power to continue playing VoltZ.
+                  </p>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+
+              <div className="mt-8 space-y-3">
+                <AlertDialogAction
+                  className="w-full py-4 text-sm font-bold tracking-[0.18em] uppercase transition-all duration-200 hover:brightness-110 active:scale-[0.98] rounded-xl"
+                  style={{
+                    background: 'linear-gradient(90deg, rgba(239,68,68,0.15) 0%, rgba(180,0,0,0.1) 100%)',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    color: '#ef4444',
+                    boxShadow: '0 0 20px rgba(239,68,68,0.1) inset',
+                  }}
+                  onClick={() => {
+                    setTimeout(() => {
+                      if (orderId) {
+                        localStorage.removeItem(`voltzHistory_${orderId}`);
+                      }
+                      setLocation(`/competition/${competitionId}`);
+                    }, 200);
+                  }}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Bolt className="w-4 h-4" />
+                    <span>BOOST POWER</span>
+                    <Swords className="w-4 h-4" />
+                  </div>
+                </AlertDialogAction>
+
+                <AlertDialogCancel
+                  className="w-full py-4 text-sm font-medium tracking-wider transition-all duration-200 hover:brightness-110 rounded-xl border-0"
+                  style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    color: '#9ca3af',
+                  }}
+                >
+                  EXIT SYSTEM
+                </AlertDialogCancel>
+              </div>
+
+              {/* Small system text */}
+              <p className="text-[8px] text-red-900/50 mt-4 tracking-widest font-mono">
+                POWER CELLS: 0/5 • SYSTEM STANDBY
+              </p>
+            </div>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

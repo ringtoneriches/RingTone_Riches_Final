@@ -2,10 +2,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Play, Zap, Trophy, X, RefreshCw, Volume2, VolumeX, Target, Gift, Crown, Sparkles } from "lucide-react";
+import { Loader2, Play, Zap, Trophy, X, RefreshCw, Volume2, VolumeX, Target, Gift, Crown, Sparkles, Gauge, Bolt, Swords, PowerOff } from "lucide-react";
 import confetti from "canvas-confetti";
 import popSoundFile from "@assets/balloon-pop-sound_1766057573479.mp3";
 import hitSoundFile from "@assets/hitsound_1769687506654.mp3";
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogAction, AlertDialogCancel } from "../ui/alert-dialog";
+import { useLocation } from "wouter";
 
 interface Prize {
   slotIndex: number;
@@ -50,13 +52,23 @@ const SLOT_HEIGHT = 50;
 
 export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayComplete, onDropStart, prizes }: PlinkoGameProps) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const [balls, setBalls] = useState<Ball[]>([]);
   const [isDropping, setIsDropping] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [showFreePlayNotification, setShowFreePlayNotification] = useState(false);
-  // Ball drops automatically from pre-calculated position - no user control
+  const [showNoPlaysDialog, setShowNoPlaysDialog] = useState(false);
+   const [showResultPopup, setShowResultPopup] = useState(false);
+  // Show dialog when plays run out
+  useEffect(() => {
+    if (playsRemaining <= 0 && !isDropping && !showResultPopup) {
+      setShowNoPlaysDialog(true);
+    } else {
+      setShowNoPlaysDialog(false);
+    }
+  }, [playsRemaining, isDropping, showResultPopup]);
   
   // Sound refs
   const winSoundRef = useRef<HTMLAudioElement | null>(null);
@@ -203,7 +215,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     }, 1500);
   };
   const [currentResult, setCurrentResult] = useState<any>(null);
-  const [showResultPopup, setShowResultPopup] = useState(false);
+ 
   const [localPlaysRemaining, setLocalPlaysRemaining] = useState(playsRemaining);
   const ballIdRef = useRef(0);
   
@@ -1200,6 +1212,154 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
         </div>
       )}
       
+      {/* ── Plinko-themed No Plays Dialog ─────────────────────────────────────── */}
+      <AlertDialog open={showNoPlaysDialog} onOpenChange={setShowNoPlaysDialog}>
+        <AlertDialogContent className="max-w-[360px] p-0 overflow-hidden border-0 bg-transparent">
+          <div
+            className="relative overflow-hidden"
+            style={{
+              borderRadius: '24px',
+              border: '2px solid rgba(147, 51, 234, 0.35)',
+              background: 'linear-gradient(170deg, rgba(20,5,30,0.98) 0%, rgba(8,0,12,0.99) 100%)',
+              boxShadow: '0 0 80px rgba(147,51,234,0.2), 0 0 0 1px rgba(255,255,255,0.03), 0 32px 64px rgba(0,0,0,0.7)',
+            }}
+          >
+            {/* Cyber corners */}
+            <div className="absolute top-3 left-3 w-6 h-6 border-l-2 border-t-2 border-purple-500/40 rounded-tl-xl" />
+            <div className="absolute top-3 right-3 w-6 h-6 border-r-2 border-t-2 border-purple-500/40 rounded-tr-xl" />
+            <div className="absolute bottom-3 left-3 w-6 h-6 border-l-2 border-b-2 border-purple-500/40 rounded-bl-xl" />
+            <div className="absolute bottom-3 right-3 w-6 h-6 border-r-2 border-b-2 border-purple-500/40 rounded-br-xl" />
+
+            {/* Top accent line */}
+            <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-purple-500/60 to-transparent" />
+
+            {/* Scanlines overlay */}
+            <div className="absolute inset-0 pointer-events-none opacity-10" style={{
+              background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(147,51,234,0.15) 2px, rgba(147,51,234,0.15) 4px)',
+            }} />
+
+            <div className="px-6 pt-10 pb-6 text-center relative z-10">
+              {/* Animated icon - Plinko ball themed */}
+              <div className="relative w-28 h-28 mx-auto mb-6">
+                {/* Ring pulse animation */}
+                <div className="absolute inset-0 rounded-full animate-ping" style={{ 
+                  background: 'rgba(147,51,234,0.15)',
+                  animation: 'plinko-ping 1.5s ease-out infinite'
+                }} />
+                
+                {/* Main icon */}
+                <div
+                  className="relative w-28 h-28 rounded-full flex items-center justify-center"
+                  style={{
+                    background: 'radial-gradient(circle at 38% 32%, rgba(147,51,234,0.25) 0%, rgba(88,28,135,0.1) 60%, transparent 100%)',
+                    border: '2px solid rgba(147,51,234,0.4)',
+                    boxShadow: '0 0 30px rgba(147,51,234,0.3), inset 0 0 20px rgba(147,51,234,0.2)',
+                  }}
+                >
+                  {/* Ball with metallic gradient */}
+                  <div className="absolute inset-0 rounded-full" style={{
+                    background: 'radial-gradient(circle at 30% 30%, #fff7cc, #c084fc 40%, #7c3aed 80%)',
+                    opacity: 0.9,
+                  }} />
+                  
+                  {/* Ball highlight */}
+                  <div className="absolute top-3 left-3 w-5 h-5 rounded-full bg-white/30 blur-[1px]" />
+                  
+                  {/* Ball icon */}
+                  <Target className="w-14 h-14 text-white drop-shadow-lg transform rotate-12" strokeWidth={1.5} />
+                  
+                  {/* Energy sparks */}
+                  <Bolt className="absolute -top-2 -right-2 w-5 h-5 text-purple-400/60 rotate-45" />
+                  <Bolt className="absolute -bottom-2 -left-2 w-5 h-5 text-purple-400/60 -rotate-45" />
+                </div>
+                
+                {/* Orbiting pegs */}
+                <div className="absolute -top-3 -right-3 w-3 h-3 rounded-full bg-purple-500/40 animate-pulse" />
+                <div className="absolute -bottom-3 -left-3 w-3 h-3 rounded-full bg-purple-500/40 animate-pulse" style={{ animationDelay: '0.3s' }} />
+              </div>
+
+              <AlertDialogHeader className="space-y-2">
+                <AlertDialogTitle className="text-4xl text-center font-black mb-2" style={{
+                  background: 'linear-gradient(135deg, #c084fc 0%, #a855f7 50%, #7c3aed 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  filter: 'drop-shadow(0 4px 12px rgba(168,85,247,0.4))',
+                }}>
+                  NO DROPS LEFT
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-purple-300/80 text-sm tracking-wide font-medium">
+                  <div className="flex items-center justify-center gap-2 mb-3">
+                    <Zap className="w-4 h-4 text-purple-400" />
+                    <span className="text-[10px] tracking-[0.25em]">BALL MAGAZINE EMPTY</span>
+                    <Zap className="w-4 h-4 text-purple-400" />
+                  </div>
+                  
+                  {/* Power bars */}
+                  <div className="flex justify-center gap-1.5 mb-4">
+                    {[...Array(5)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="h-1.5 w-6 rounded-full"
+                        style={{
+                          background: i < 1 ? 'rgba(147,51,234,0.2)' : 'rgba(147,51,234,0.06)',
+                          border: '1px solid rgba(147,51,234,0.15)',
+                        }}
+                      />
+                    ))}
+                  </div>
+                  
+                  <p className="text-gray-400 text-xs">
+                    Your ball magazine is empty. Reload to continue dropping and winning big prizes!
+                  </p>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+
+              <div className="mt-8 space-y-3">
+                <AlertDialogAction
+                  className="w-full py-4 text-sm font-bold tracking-[0.18em] uppercase transition-all duration-200 hover:brightness-110 active:scale-[0.98] rounded-xl"
+                  style={{
+                    background: 'linear-gradient(90deg, rgba(147,51,234,0.15) 0%, rgba(126,34,206,0.1) 100%)',
+                    border: '2px solid rgba(147,51,234,0.3)',
+                    color: '#c084fc',
+                    boxShadow: '0 0 20px rgba(147,51,234,0.1) inset, 0 0 30px rgba(147,51,234,0.2)',
+                  }}
+                  onClick={() => {
+                    setTimeout(() => {
+                      if (orderId) {
+                        localStorage.removeItem(`plinkoHistory_${orderId}`);
+                      }
+                      setLocation(`/competition/${competitionId}`);
+                    }, 200);
+                  }}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Bolt className="w-4 h-4" />
+                    <span>RELOAD MAGAZINE</span>
+                    <Swords className="w-4 h-4" />
+                  </div>
+                </AlertDialogAction>
+
+                <AlertDialogCancel
+                  className="w-full py-4 text-sm font-medium tracking-wider transition-all duration-200 hover:brightness-110 rounded-xl border-0"
+                  style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    color: '#9ca3af',
+                  }}
+                >
+                  EXIT ARENA
+                </AlertDialogCancel>
+              </div>
+
+              {/* System status */}
+              <p className="text-[8px] text-purple-900/50 mt-4 tracking-widest font-mono">
+                BALLS: 0/5 • SYSTEM STANDBY • READY FOR RELOAD
+              </p>
+            </div>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+      
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -1295,6 +1455,13 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
         @keyframes zap-flash {
           0%, 100% { opacity: 0.7; transform: scale(1); }
           50% { opacity: 1; transform: scale(1.2); }
+        }
+        
+        /* Plinko specific animations */
+        @keyframes plinko-ping {
+          0% { transform: scale(0.8); opacity: 0.6; }
+          50% { transform: scale(1.3); opacity: 0.2; }
+          100% { transform: scale(1.8); opacity: 0; }
         }
         
         /* Premium popup entrance animations */

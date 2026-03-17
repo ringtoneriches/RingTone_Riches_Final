@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Volume2, VolumeX, PartyPopper, RotateCcw, Gift, Trophy, X, Sparkles, Star, Zap, Target, Flame, Crown, Music, Sparkle } from "lucide-react";
+import { Loader2, Volume2, VolumeX, PartyPopper, RotateCcw, Gift, Trophy, X, Sparkles, Star, Zap, Target, Flame, Crown, Music, Sparkle, Gauge, Swords, Popcorn } from "lucide-react";
 import confetti from "canvas-confetti";
 import {
   Dialog,
@@ -373,6 +373,15 @@ export default function RingtonePopGame({
   const winSoundRef = useRef<HTMLAudioElement | null>(null);
   const loseSoundRef = useRef<HTMLAudioElement | null>(null);
 
+  // Show dialog when plays run out
+  useEffect(() => {
+    if (playsRemaining <= 0 && !isPlaying && !showResultModal) {
+      setShowOutOfPlaysDialog(true);
+    } else {
+      setShowOutOfPlaysDialog(false);
+    }
+  }, [playsRemaining, isPlaying, showResultModal]);
+
   useEffect(() => {
     winSoundRef.current = new Audio("data:audio/wav;base64,UklGRpQFAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YXAFAABkZGRkZGRkZGRkZGRkZGR3d3d3d3d3ioqKioqKnZ2dnZ2dsLCwsLCww8PDw8PD1tbW1tbW6enp6enp/Pz8/Pz8/Pz8/Pz86enp6enp1tbW1tbWw8PDw8PDsLCwsLCwnZ2dnZ2dioqKioqKd3d3d3d3ZGRkZGRkUVFRUVFRPj4+Pj4+Kysr");
     loseSoundRef.current = new Audio("data:audio/wav;base64,UklGRlQCAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YTACAABkZF5YUkxGQDo0LigiFhAKBAD//fn38/Hu6ufk4d7b2NXS0M7LycfFw8HAvr28u7q5uLe2trW1tbW1tra2t7i5ury9v8HCxMbIyszO0NLU1tja3d/i5Ofo6+7x9Pb5+/4A");
@@ -614,12 +623,6 @@ export default function RingtonePopGame({
             
             {/* Main glass pill container */}
             <div className="relative">
-              {/* Radiant burst behind */}
-              {/* <div className="absolute -left-8 top-1/2 -translate-y-1/2 w-16 h-16">
-                <div className="absolute inset-0 bg-gradient-to-r from-amber-400/60 to-transparent blur-xl rounded-full" />
-                <Crown className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.8)]" />
-              </div> */}
-              
               {/* Glass pill */}
               <div className="relative flex items-center gap-3 sm:gap-4 px-6 sm:px-8 py-2.5 sm:py-3 rounded-full overflow-hidden"
                 style={{
@@ -638,11 +641,6 @@ export default function RingtonePopGame({
                 <div className="absolute bottom-2 right-8 w-1 h-1 bg-amber-200 rounded-full opacity-60" />
                 <div className="absolute top-2 left-12 w-1 h-1 bg-yellow-200 rounded-full opacity-70" />
                 
-                {/* Trophy icon */}
-                {/* <div className="relative z-10">
-                  <Trophy className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
-                </div> */}
-                
                 {/* Text content */}
                 <div className="relative z-10 flex flex-col items-center">
                   <span className="text-2xl sm:text-3xl md:text-4xl font-black bg-gradient-to-b from-yellow-200 via-amber-300 to-amber-500 bg-clip-text text-transparent drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">
@@ -652,11 +650,6 @@ export default function RingtonePopGame({
                     Jackpot Prize
                   </span>
                 </div>
-                
-                {/* Sparkle icon */}
-                {/* <div className="relative z-10">
-                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-fuchsia-400 drop-shadow-[0_0_6px_rgba(232,121,249,0.6)]" />
-                </div> */}
               </div>
               
               {/* Match 3 subtitle */}
@@ -914,6 +907,175 @@ export default function RingtonePopGame({
         `}</style>
       </Card>
 
+      {/* ── Ringtone Pop-themed No Plays Dialog ─────────────────────────────────────── */}
+      <AlertDialog open={showOutOfPlaysDialog} onOpenChange={setShowOutOfPlaysDialog}>
+        <AlertDialogContent className="max-w-[360px] p-0 overflow-hidden border-0 bg-transparent">
+          <div
+            className="relative overflow-hidden"
+            style={{
+              borderRadius: '28px',
+              border: '2px solid rgba(168, 85, 247, 0.4)',
+              background: 'linear-gradient(170deg, rgba(30,10,30,0.98) 0%, rgba(15,5,20,0.99) 100%)',
+              boxShadow: '0 0 80px rgba(168,85,247,0.25), 0 0 0 1px rgba(255,255,255,0.03), 0 32px 64px rgba(0,0,0,0.7)',
+            }}
+          >
+            {/* Balloon-themed decorative elements */}
+            <div className="absolute top-0 left-0 w-16 h-16 opacity-20">
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full blur-xl" />
+            </div>
+            <div className="absolute bottom-0 right-0 w-20 h-20 opacity-20">
+              <div className="absolute inset-0 bg-gradient-to-tl from-amber-500 to-orange-500 rounded-full blur-xl" />
+            </div>
+            
+            {/* Floating mini balloons */}
+            <div className="absolute top-3 right-8 w-3 h-4 rounded-full bg-purple-500/40 animate-float-slow" />
+            <div className="absolute bottom-6 left-4 w-2.5 h-3.5 rounded-full bg-amber-500/40 animate-float-slower" />
+            <div className="absolute top-12 left-6 w-2 h-3 rounded-full bg-emerald-500/40 animate-float" />
+
+            {/* Cyber corners with balloon colors */}
+            <div className="absolute top-3 left-3 w-6 h-6 border-l-2 border-t-2 border-purple-500/40 rounded-tl-xl" />
+            <div className="absolute top-3 right-3 w-6 h-6 border-r-2 border-t-2 border-pink-500/40 rounded-tr-xl" />
+            <div className="absolute bottom-3 left-3 w-6 h-6 border-l-2 border-b-2 border-amber-500/40 rounded-bl-xl" />
+            <div className="absolute bottom-3 right-3 w-6 h-6 border-r-2 border-b-2 border-orange-500/40 rounded-br-xl" />
+
+            {/* Top accent line - rainbow gradient */}
+            <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-purple-500 via-pink-500 via-amber-500 to-transparent" />
+
+            {/* Scanlines overlay */}
+            <div className="absolute inset-0 pointer-events-none opacity-10" style={{
+              background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.05) 2px, rgba(255,255,255,0.05) 4px)',
+            }} />
+
+            <div className="px-6 pt-10 pb-6 text-center relative z-10">
+              {/* Animated icon - deflated balloon with party theme */}
+              <div className="relative w-28 h-28 mx-auto mb-6">
+                {/* Ring pulse animation */}
+                <div className="absolute inset-0 rounded-full animate-ping" style={{ 
+                  background: 'radial-gradient(circle, rgba(168,85,247,0.15) 0%, transparent 70%)',
+                  animation: 'pop-ping 1.5s ease-out infinite'
+                }} />
+                
+                {/* Main icon */}
+                <div
+                  className="relative w-28 h-28 rounded-full flex items-center justify-center"
+                  style={{
+                    background: 'radial-gradient(circle at 38% 32%, rgba(168,85,247,0.25) 0%, rgba(236,72,153,0.1) 60%, transparent 100%)',
+                    border: '2px solid rgba(168,85,247,0.4)',
+                    boxShadow: '0 0 30px rgba(168,85,247,0.3), inset 0 0 20px rgba(168,85,247,0.2)',
+                  }}
+                >
+                  {/* Deflated balloon with sad expression */}
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400/60 to-pink-400/60 transform scale-y-75">
+                      {/* String hanging down */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-4 w-0.5 h-10 bg-gradient-to-b from-purple-500/60 to-transparent" />
+                    </div>
+                    {/* Sad eyes */}
+                    <div className="absolute top-8 left-4 w-2 h-2 rounded-full bg-white/80" />
+                    <div className="absolute top-8 right-4 w-2 h-2 rounded-full bg-white/80" />
+                    {/* Droopy mouth */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-6 h-1 rounded-full bg-white/60" />
+                  </div>
+                  
+                  {/* Party popper sparks */}
+                  <Popcorn className="absolute -top-2 -right-2 w-5 h-5 text-purple-400/60 rotate-12" />
+                  {/* <Balloon className="absolute -bottom-2 -left-2 w-5 h-5 text-pink-400/60 -rotate-12" /> */}
+                </div>
+                
+                {/* Floating strings */}
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-0.5 h-8 bg-gradient-to-b from-purple-500/40 to-transparent animate-float-string" />
+              </div>
+
+              <AlertDialogHeader className="space-y-2">
+                <AlertDialogTitle className="text-4xl text-center font-black mb-2" style={{
+                  background: 'linear-gradient(135deg, #c084fc 0%, #f472b6 50%, #fbbf24 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  filter: 'drop-shadow(0 4px 12px rgba(168,85,247,0.4))',
+                }}>
+                  NO POPS LEFT
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-purple-300/80 text-sm tracking-wide font-medium">
+                  <div className="flex items-center justify-center gap-2 mb-3">
+                    <Zap className="w-4 h-4 text-purple-400" />
+                    <span className="text-[10px] tracking-[0.25em]">BALLOON MAGAZINE EMPTY</span>
+                    <Zap className="w-4 h-4 text-purple-400" />
+                  </div>
+                  
+                  {/* Balloon count indicator */}
+                  <div className="flex justify-center gap-1.5 mb-4">
+                    {[...Array(5)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="relative"
+                      >
+                        <div
+                          className="w-5 h-6 rounded-full"
+                          style={{
+                            background: i < 1 ? 'rgba(168,85,247,0.2)' : 'rgba(168,85,247,0.06)',
+                            border: '1px solid rgba(168,85,247,0.15)',
+                          }}
+                        />
+                        {/* String */}
+                        {i === 0 && (
+                          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-px h-2 bg-purple-500/30" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <p className="text-gray-400 text-xs">
+                    Your balloons are all popped! Grab more pops to keep playing and win big prizes!
+                  </p>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+
+              <div className="mt-8 space-y-3">
+                <AlertDialogAction
+                  className="w-full py-4 text-sm font-bold tracking-[0.18em] uppercase transition-all duration-200 hover:brightness-110 active:scale-[0.98] rounded-xl"
+                  style={{
+                    background: 'linear-gradient(90deg, rgba(168,85,247,0.15) 0%, rgba(236,72,153,0.1) 100%)',
+                    border: '2px solid rgba(168,85,247,0.3)',
+                    color: '#c084fc',
+                    boxShadow: '0 0 20px rgba(168,85,247,0.1) inset, 0 0 30px rgba(168,85,247,0.2)',
+                  }}
+                  onClick={() => {
+                    setTimeout(() => {
+                      if (orderId) {
+                        localStorage.removeItem(`popGameHistory_${orderId}`);
+                      }
+                      setLocation(`/competition/${competitionId}`);
+                    }, 200);
+                  }}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    {/* <Balloon className="w-4 h-4" /> */}
+                    <span>GET MORE POPS</span>
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                </AlertDialogAction>
+
+                <AlertDialogCancel
+                  className="w-full py-4 text-sm font-medium tracking-wider transition-all duration-200 hover:brightness-110 rounded-xl border-0"
+                  style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    color: '#9ca3af',
+                  }}
+                >
+                  EXIT PARTY
+                </AlertDialogCancel>
+              </div>
+
+              {/* System status */}
+              <p className="text-[8px] text-purple-900/50 mt-4 tracking-widest font-mono">
+                BALLOONS: 0/5 • PARTY MODE • READY FOR REFILL
+              </p>
+            </div>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={showResultModal} onOpenChange={setShowResultModal}>
         <DialogContent className={`
           max-w-[calc(100vw-2rem)] sm:max-w-md border-2 overflow-hidden p-0 max-h-[calc(100vh-4rem)]
@@ -1143,6 +1305,25 @@ export default function RingtonePopGame({
             @keyframes bounce-dot {
               0%, 100% { transform: translateY(0); }
               50% { transform: translateY(-4px); }
+            }
+            @keyframes pop-ping {
+              0% { transform: scale(0.8); opacity: 0.6; }
+              50% { transform: scale(1.3); opacity: 0.2; }
+              100% { transform: scale(1.8); opacity: 0; }
+            }
+            @keyframes float-slow {
+              0%, 100% { transform: translateY(0) translateX(0); }
+              25% { transform: translateY(-5px) translateX(2px); }
+              75% { transform: translateY(3px) translateX(-2px); }
+            }
+            @keyframes float-slower {
+              0%, 100% { transform: translateY(0) translateX(0); }
+              33% { transform: translateY(-7px) translateX(-3px); }
+              66% { transform: translateY(2px) translateX(4px); }
+            }
+            @keyframes float-string {
+              0%, 100% { transform: translateY(0) rotate(0deg); }
+              50% { transform: translateY(3px) rotate(2deg); }
             }
           `}</style>
         </DialogContent>
