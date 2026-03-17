@@ -1901,7 +1901,7 @@ app.post("/api/admin/redeem-codes/generate", isAuthenticated, isAdmin, async (re
 app.post("/api/admin/redeem-codes/create-custom", isAuthenticated, isAdmin, async (req, res) => {
   try {
     const schema = z.object({
-      code: z.string().min(3).max(20).transform(c => c.toUpperCase().trim()),
+      code: z.string().min(2).max(20).transform(c => c.toUpperCase().trim()),
       amount: z.number().positive(),
       usageLimit: z.number().int().min(1).nullable().optional(), // null = unlimited
       expiresAt: z.string().optional(),

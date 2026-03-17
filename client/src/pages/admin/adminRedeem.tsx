@@ -509,7 +509,7 @@ export default function AdminRedeemCodes() {
                       maxLength={20}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Only uppercase letters and numbers, 3-20 characters
+                      Only uppercase letters and numbers, 2-20 characters
                     </p>
                   </div>
 
