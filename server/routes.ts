@@ -1089,7 +1089,7 @@ app.post("/api/auth/register", async (req, res) => {
     console.log("   Referral code provided:", referralCode);
     console.log("   Redeem code provided:", redeemCode);
 
- const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = email.toLowerCase().trim();
     
     console.log("   Original email:", email);
     console.log("   Normalized email (stored in DB):", normalizedEmail);
@@ -1127,17 +1127,24 @@ app.post("/api/auth/register", async (req, res) => {
         });
 
         if (foundCode) {
-          // Check if not used and not expired
-          if (!foundCode.isUsed) {
-            if (!foundCode.expiresAt || new Date() <= new Date(foundCode.expiresAt)) {
-              pendingRedeemCode = upperCode;
-              pendingRedeemAmount = foundCode.amount;
-              console.log(`   ✅ Valid redeem code found: ${upperCode} worth £${foundCode.amount}`);
-            } else {
-              console.log(`   ❌ Redeem code expired: ${upperCode}`);
-            }
-          } else {
-            console.log(`   ❌ Redeem code already used: ${upperCode}`);
+          // Check if code is active
+          if (!foundCode.isActive) {
+            console.log(`   ❌ Redeem code is inactive: ${upperCode}`);
+          }
+          // Check if expired
+          else if (foundCode.expiresAt && new Date() > new Date(foundCode.expiresAt)) {
+            console.log(`   ❌ Redeem code expired: ${upperCode}`);
+          }
+          // Check usage limits
+          else if (foundCode.usageLimit !== null && foundCode.currentUses >= foundCode.usageLimit) {
+            console.log(`   ❌ Redeem code has reached its usage limit (${foundCode.usageLimit} uses): ${upperCode}`);
+          }
+          // Code is valid for potential use
+          else {
+            pendingRedeemCode = upperCode;
+            pendingRedeemAmount = foundCode.amount;
+            console.log(`   ✅ Valid redeem code found: ${upperCode} worth £${foundCode.amount}`);
+            console.log(`      Current usage: ${foundCode.currentUses}/${foundCode.usageLimit || '∞'}`);
           }
         } else {
           console.log(`   ❌ Invalid redeem code: ${upperCode}`);
@@ -1160,7 +1167,7 @@ app.post("/api/auth/register", async (req, res) => {
     // Create new user (emailVerified set to true by default)
     console.log("   Creating user in database...");
     const user = await storage.createUser({
-      email : normalizedEmail ,
+      email: normalizedEmail,
       password: hashedPassword,
       firstName,
       lastName,
@@ -1240,123 +1247,123 @@ app.post("/api/auth/register", async (req, res) => {
         console.error("Signup bonus error:", bonusError);
       }
 
-     // Apply redeem code if exists
-if (pendingRedeemCode && pendingRedeemAmount) {
-  try {
-    const code = pendingRedeemCode;
-    const amount = parseFloat(pendingRedeemAmount);
+      // 2. Apply redeem code if exists
+      if (pendingRedeemCode && pendingRedeemAmount) {
+        try {
+          const code = pendingRedeemCode;
+          const amount = parseFloat(pendingRedeemAmount);
 
-    // Find the redeem code again
-    const redeemCode = await tx.query.redeemCodes.findFirst({
-      where: eq(redeemCodes.code, code),
-    });
+          // Find the redeem code again (within transaction)
+          const redeemCode = await tx.query.redeemCodes.findFirst({
+            where: eq(redeemCodes.code, code),
+          });
 
-    if (redeemCode) {
-      // Check if code is active
-      if (!redeemCode.isActive) {
-        console.log(`❌ Code ${code} is inactive`);
-        return;
-      }
+          if (redeemCode) {
+            // Double-check all conditions within the transaction
+            if (!redeemCode.isActive) {
+              console.log(`❌ Code ${code} is inactive`);
+              return;
+            }
 
-      // Check if expired
-      if (redeemCode.expiresAt && new Date() > new Date(redeemCode.expiresAt)) {
-        console.log(`❌ Code ${code} has expired`);
-        return;
-      }
+            if (redeemCode.expiresAt && new Date() > new Date(redeemCode.expiresAt)) {
+              console.log(`❌ Code ${code} has expired`);
+              return;
+            }
 
-      // Check usage limits - THIS IS THE IMPORTANT PART
-      if (redeemCode.usageLimit !== null && redeemCode.currentUses >= redeemCode.usageLimit) {
-        console.log(`❌ Code ${code} has reached its usage limit (${redeemCode.usageLimit} uses)`);
-        return;
-      }
+            // Check usage limits
+            if (redeemCode.usageLimit !== null && redeemCode.currentUses >= redeemCode.usageLimit) {
+              console.log(`❌ Code ${code} has reached its usage limit (${redeemCode.usageLimit} uses)`);
+              return;
+            }
 
-      // Check if user has already used this specific code
-      const existingRedemption = await tx.query.redeemCodeRedemptions.findFirst({
-        where: and(
-          eq(redeemCodeRedemptions.redeemCodeId, redeemCode.id),
-          eq(redeemCodeRedemptions.userId, user.id)
-        ),
-      });
+            // Check if user has already used this specific code
+            const existingRedemption = await tx.query.redeemCodeRedemptions.findFirst({
+              where: and(
+                eq(redeemCodeRedemptions.redeemCodeId, redeemCode.id),
+                eq(redeemCodeRedemptions.userId, user.id)
+              ),
+            });
 
-      if (existingRedemption) {
-        console.log(`❌ User ${user.id} has already used code ${code}`);
-        return;
-      }
+            if (existingRedemption) {
+              console.log(`❌ User ${user.id} has already used code ${code}`);
+              return;
+            }
 
-      // For flyer codes (system generated), check if they've used any code
-      if (redeemCode.isSystemGenerated) {
-        const anyRedemption = await tx.query.redeemCodeRedemptions.findFirst({
-          where: eq(redeemCodeRedemptions.userId, user.id),
-        });
+            // For flyer codes (system generated), check if they've used any code
+            if (redeemCode.isSystemGenerated) {
+              const anyRedemption = await tx.query.redeemCodeRedemptions.findFirst({
+                where: eq(redeemCodeRedemptions.userId, user.id),
+              });
 
-        if (anyRedemption) {
-          console.log(`❌ User ${user.id} has already used a flyer code`);
-          return;
+              if (anyRedemption) {
+                console.log(`❌ User ${user.id} has already used a flyer code`);
+                return;
+              }
+            }
+
+            // IMPORTANT: Update the usage counter
+            const newCurrentUses = redeemCode.currentUses + 1;
+            console.log(`📝 Updating code usage from ${redeemCode.currentUses} to ${newCurrentUses}`);
+            
+            await tx.update(redeemCodes)
+              .set({ 
+                currentUses: newCurrentUses,
+                // Update legacy fields for backward compatibility
+                isUsed: redeemCode.usageLimit !== null && newCurrentUses >= redeemCode.usageLimit,
+                usedByUserId: user.id,
+                usedAt: new Date(),
+              })
+              .where(eq(redeemCodes.id, redeemCode.id));
+
+            // Add amount to user's balance
+            await tx.update(users)
+              .set({
+                balance: sql`${users.balance} + ${amount}`,
+              })
+              .where(eq(users.id, user.id));
+
+            // Record redemption
+            await tx.insert(redeemCodeRedemptions).values({
+              redeemCodeId: redeemCode.id,
+              userId: user.id,
+              amount: amount.toString(),
+              ipAddress: req.ip,
+              userAgent: req.headers["user-agent"],
+            });
+
+            // Create transaction record
+            await tx.insert(transactions).values({
+              userId: user.id,
+              amount: amount.toString(),
+              type: "redeem",
+              description: `Redeemed flyer code: ${code}`,
+              status: "completed",
+            });
+
+            redeemAmountCredited = amount;
+            console.log(`✅ Flyer code ${code} redeemed for user ${user.id} - £${amount}`);
+            console.log(`   New currentUses: ${newCurrentUses}`);
+          }
+
+          // Clear pending fields
+          await tx.update(users)
+            .set({
+              pendingRedeemCode: null,
+              pendingRedeemAmount: null,
+            })
+            .where(eq(users.id, user.id));
+
+        } catch (redeemError) {
+          console.error("Failed to apply redeem code during registration:", redeemError);
+          // Clear pending fields
+          await tx.update(users)
+            .set({
+              pendingRedeemCode: null,
+              pendingRedeemAmount: null,
+            })
+            .where(eq(users.id, user.id));
         }
       }
-
-      // IMPORTANT: Update the usage counter - NOT just isUsed
-      console.log(`📝 Updating code usage from ${redeemCode.currentUses} to ${redeemCode.currentUses + 1}`);
-      
-      await tx.update(redeemCodes)
-        .set({ 
-          currentUses: redeemCode.currentUses + 1, // Increment the counter!
-          // Also update legacy fields for backward compatibility
-          isUsed: true,
-          usedByUserId: user.id,
-          usedAt: new Date(),
-        })
-        .where(eq(redeemCodes.id, redeemCode.id));
-
-      // Add amount to user's balance
-      await tx.update(users)
-        .set({
-          balance: sql`${users.balance} + ${amount}`,
-        })
-        .where(eq(users.id, user.id));
-
-      // Record redemption (THIS IS CRITICAL for tracking)
-      await tx.insert(redeemCodeRedemptions).values({
-        redeemCodeId: redeemCode.id,
-        userId: user.id,
-        amount: amount.toString(),
-        ipAddress: req.ip,
-        userAgent: req.headers["user-agent"],
-      });
-
-      // Create transaction record
-      await tx.insert(transactions).values({
-        userId: user.id,
-        amount: amount.toString(),
-        type: "redeem",
-        description: `Redeemed flyer code: ${code}`,
-        status: "completed",
-      });
-
-      redeemAmountCredited = amount;
-      console.log(`✅ Flyer code ${code} redeemed for user ${user.id} - £${amount}`);
-      console.log(`   New currentUses: ${redeemCode.currentUses + 1}`);
-    }
-
-    // Clear pending fields
-    await tx.update(users)
-      .set({
-        pendingRedeemCode: null,
-        pendingRedeemAmount: null,
-      })
-      .where(eq(users.id, user.id));
-
-  } catch (redeemError) {
-    console.error("Failed to apply redeem code during registration:", redeemError);
-    // Clear pending fields
-    await tx.update(users)
-      .set({
-        pendingRedeemCode: null,
-        pendingRedeemAmount: null,
-      })
-      .where(eq(users.id, user.id));
-  }
-}
 
       // 3. Apply referral system
       try {
