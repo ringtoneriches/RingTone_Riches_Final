@@ -160,6 +160,21 @@ export default function Home() {
 
   const gameCards = [
     {
+      Icon: Zap,
+      title: "Ringtone Voltz",
+      desc: "Volt to win",
+      gradient: "linear-gradient(135deg, #3b82f6, #06b6d4)",
+      glowColor: "rgba(59,130,246,0.25)",
+      borderColor: "rgba(59,130,246,0.4)",
+      bgColor: "rgba(59,130,246,0.06)",
+      iconBg: "linear-gradient(135deg, #3b82f6, #60a5fa)",
+      filter: "all",
+      prize: "£10,000",
+      badge: "MEGA",
+      badgeColor: "linear-gradient(135deg, #3b82f6, #06b6d4)",
+      popular: true
+    },
+    {
       Icon: TicketCheck,
       title: "Scratch Card",
       desc: "Scratch to win",
@@ -170,8 +185,6 @@ export default function Home() {
       iconBg: "linear-gradient(135deg, #dc2626, #ef4444)",
       prize: "£5,000",
       filter: "scratch",
-    
-    
       popular: true
     },
     
@@ -205,20 +218,7 @@ export default function Home() {
   badgeColor: "#8b5cf6",
   popular: false
 },
-    {
-      Icon: Zap,
-      title: "Competition",
-      desc: "Win Big Prizes",
-      gradient: "linear-gradient(135deg, #3b82f6, #06b6d4)",
-      glowColor: "rgba(59,130,246,0.25)",
-      borderColor: "rgba(59,130,246,0.4)",
-      bgColor: "rgba(59,130,246,0.06)",
-      iconBg: "linear-gradient(135deg, #3b82f6, #60a5fa)",
-      filter: "instant",
-      badge: "MEGA",
-      badgeColor: "#d4af37",
-      popular: false
-    }
+    
   ];
 
   return (
@@ -335,7 +335,7 @@ export default function Home() {
                 <div className="flex items-center justify-center lg:justify-start gap-2 sm:gap-3 nv-fade-in flex-wrap" style={{ animationDelay: '0.7s' }}>
                   {[
                     { value: "£100K+", label: "in prizes", icon: Coins, color: '#f5d76e' },
-                    { value: "50,000+", label: "winners", icon: Trophy, color: '#34d399' },
+                    // { value: "50,000+", label: "winners", icon: Trophy, color: '#34d399' },
                     
                   ].map((stat, index) => (
                     <div key={index} className="flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full transition-all duration-300 hover:scale-[1.03] nv-stat-float" data-testid={`text-stat-value-${index}`} style={{
@@ -394,35 +394,7 @@ export default function Home() {
               </div>
 
               <div className="lg:col-span-5 nv-col-right" id="games-section">
-                <div className="relative rounded-2xl overflow-hidden mb-5 nv-hero-img-card group" style={{
-                  border: '1px solid rgba(212,175,55,0.2)',
-                  boxShadow: '0 30px 80px rgba(0,0,0,0.7), 0 0 80px rgba(212,175,55,0.08)',
-                }}>
-                  <div className="absolute -inset-[2px] rounded-2xl nv-border-spin" style={{
-                    background: 'conic-gradient(from 0deg, rgba(212,175,55,0.5), transparent 20%, rgba(245,215,110,0.5) 40%, transparent 60%, rgba(212,175,55,0.5) 80%, transparent)',
-                    filter: 'blur(2px)',
-                    zIndex: 0,
-                  }} />
-                  <div className="relative z-[1] rounded-2xl overflow-hidden">
-                    <img src={heroJackpotImg} alt="Win Amazing Prizes" className="w-full h-auto object-cover nv-img-float" style={{ maxHeight: '280px' }} />
-                    <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 0%, transparent 50%, rgba(7,7,9,0.3) 75%, rgba(7,7,9,0.7) 100%)' }} />
-                    <div className="absolute inset-0 nv-img-sheen" />
-                    <div className="absolute top-2.5 left-2.5">
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-xl" style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', boxShadow: '0 0 15px rgba(16,185,129,0.15)' }}>
-                        <div className="relative">
-                          <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full" style={{ boxShadow: '0 0 8px rgba(16,185,129,0.8)' }} />
-                          <div className="absolute inset-0 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
-                        </div>
-                        <span className="text-emerald-400 text-[11px] font-black uppercase tracking-wider">Live</span>
-                      </div>
-                    </div>
-                    <div className="absolute top-2.5 right-2.5">
-                      <div className="px-3 py-1.5 rounded-full backdrop-blur-xl" style={{ background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.3)', boxShadow: '0 0 15px rgba(212,175,55,0.1)' }}>
-                        <span className="text-[11px] font-black uppercase tracking-wider" style={{ background: 'linear-gradient(90deg, #d4af37, #f5d76e)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Premium</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                
 
                 <div className="rounded-2xl overflow-hidden nv-panel-glass relative" style={{
                   background: 'linear-gradient(180deg, rgba(12,12,18,0.97), rgba(6,6,10,0.99))',
@@ -808,7 +780,7 @@ export default function Home() {
 
       <StatsBanner />
 
-      {isAuthenticated && (
+    
   <section className="sticky top-0 z-40 backdrop-blur-2xl" style={{
     background: 'rgba(7,7,9,0.92)',
     borderBottom: '1px solid rgba(0,255,136,0.08)',
@@ -845,8 +817,8 @@ export default function Home() {
       </div>
     </div>
   </section>
-)}
-{ isAuthenticated && (
+
+
 <section className="py-16 sm:py-24 relative" style={{ background: '#070709' }}>
         <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,255,136,0.03), transparent 70%), radial-gradient(ellipse 60% 40% at 80% 80%, rgba(245,215,110,0.02), transparent)' }} />
         <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent 5%, rgba(0,255,136,0.08) 30%, rgba(245,215,110,0.12) 50%, rgba(0,255,136,0.08) 70%, transparent 95%)' }} />
@@ -944,8 +916,7 @@ export default function Home() {
           .animate-hero-glow-delay { animation: hero-glow 8s ease-in-out infinite; animation-delay: 4s; }
         `}</style>
       </section>
-)
-}
+
       
 
      
