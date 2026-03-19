@@ -6,7 +6,6 @@ export async function getBrowser(): Promise<puppeteer.Browser> {
   if (!browser) {
     browser = await puppeteer.launch({
       headless: "new",
-      userDataDir: path.join(process.cwd(), "puppeteer-profile"),
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
     });
     console.log("Puppeteer browser launched");

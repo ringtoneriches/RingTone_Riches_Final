@@ -168,7 +168,7 @@ export default function Home() {
       borderColor: "rgba(59,130,246,0.4)",
       bgColor: "rgba(59,130,246,0.06)",
       iconBg: "linear-gradient(135deg, #3b82f6, #60a5fa)",
-      filter: "all",
+      filter: "voltz",
       prize: "£10,000",
       badge: "MEGA",
       badgeColor: "linear-gradient(135deg, #3b82f6, #06b6d4)",
@@ -198,7 +198,7 @@ export default function Home() {
   bgColor: "rgba(234,179,8,0.06)",
   iconBg: "linear-gradient(135deg, #eab308, #facc15)",
   prize: "£5,000",
-  filter: "all",
+  filter: "pop",
   badge: "NEW",
   badgeColor: "#eab308",
   popular: false
@@ -213,7 +213,7 @@ export default function Home() {
   bgColor: "rgba(139,92,246,0.06)",
   iconBg: "linear-gradient(135deg, #8b5cf6, #c4b5fd)",
   prize: "£1,000",
-  filter: "all",
+  filter: "plinko",
   badge: "HOT",
   badgeColor: "#8b5cf6",
   popular: false
@@ -792,7 +792,10 @@ export default function Home() {
           { id: "all", label: "All Games", icon: Trophy, color: '#00ff88', glow: 'rgba(0,255,136,0.3)' },
           { id: "spin", label: "Spin to Win", icon: RotateCw, color: '#ffb800', glow: 'rgba(245,158,11,0.3)' },
           { id: "scratch", label: "Scratch Cards", icon: Sparkles, color: '#00ff88', glow: 'rgba(0,255,136,0.3)' },
-          { id: "instant", label: "Competitions", icon: Gift, color: '#f5d76e', glow: 'rgba(245,215,110,0.3)' }
+          { id: "instant", label: "Competitions", icon: Gift, color: '#f5d76e', glow: 'rgba(245,215,110,0.3)' },
+          { id: "plinko", label: "Ringtone Plinko", icon: Circle, color: '#ca6ef5', glow: 'rgba(218, 110, 245, 0.3)' },
+          { id: "voltz", label: "Ringtone Voltz", icon: Zap, color: '#6ebff5', glow: 'rgba(110, 157, 245, 0.3)' },
+          { id: "pop", label: "Ringtone Pop", icon: Target, color: '#f5736e', glow: 'rgba(245, 126, 110, 0.3)' }
         ].map((filter) => (
           <button
             key={filter.id}
@@ -841,6 +844,9 @@ export default function Home() {
                     {activeFilter === "spin" ? <RotateCw className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#ffb800', filter: 'drop-shadow(0 0 6px rgba(245,158,11,0.6))' }} /> :
                      activeFilter === "scratch" ? <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#00ff88', filter: 'drop-shadow(0 0 6px rgba(0,255,136,0.6))' }} /> :
                      activeFilter === "instant" ? <Gift className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#f5d76e', filter: 'drop-shadow(0 0 6px rgba(245,215,110,0.6))' }} /> :
+                     activeFilter === "voltz" ? <Zap className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#6e99f5', filter: 'drop-shadow(0 0 6px rgba(245,215,110,0.6))' }} /> :
+                     activeFilter === "pop" ? <Target className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#f56e6e', filter: 'drop-shadow(0 0 6px rgba(245,215,110,0.6))' }} /> :
+                     activeFilter === "plinko" ? <Circle className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#cf6ef5', filter: 'drop-shadow(0 0 6px rgba(245,215,110,0.6))' }} /> :
                      <Trophy className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#00ff88', filter: 'drop-shadow(0 0 6px rgba(0,255,136,0.6))' }} />}
                   </div>
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{
@@ -867,6 +873,12 @@ export default function Home() {
                     ? "Spin & Win Games"
                     : activeFilter === "scratch"
                     ? "Scratch Card Games"
+                    : activeFilter === "voltz"
+                    ? "Ringtone Voltz"
+                    : activeFilter === "pop"
+                    ? "Ringtone Pop"
+                    : activeFilter === "plinko"
+                    ? "Ringtone Plinko"
                     : "Live Competitions"}
                 </h2>
                 <div className="w-24 h-[2px] mx-auto mb-4" style={{
