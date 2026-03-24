@@ -73,7 +73,8 @@ import {
   voltzUsage,
   pushNotifications,
   pushDeliveries,
-  faqs
+  faqs,
+  competitionPrizes
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -16024,6 +16025,156 @@ app.delete("/api/admin/faqs/:id", isAuthenticated, isAdmin, async (req, res) => 
     res.status(500).json({ error: "Server error" });
   }
 });
+
+
+
+// prize table 
+
+app.get("/api/competitions/:competitionId/prize-table", isAuthenticated,  async (req, res) => {
+  try {
+    const { competitionId } = req.params;
+    
+    const prizes = await db
+      .select()
+      .from(competitionPrizes)
+      .where(
+        and(
+          eq(competitionPrizes.competitionId, competitionId),  
+        )
+      )
+    
+    res.json(prizes);
+  } catch (error) {
+    console.error("Error fetching prizes:", error);
+    res.status(500).json({ error: "Failed to fetch prizes" });
+  }
+});
+
+app.get("/api/competitions/:competitionId/prizes", isAuthenticated, isAdmin , async (req, res) => {
+  try {
+    const { competitionId } = req.params;
+    
+    const prizes = await db
+      .select()
+      .from(competitionPrizes)
+      .where(
+        and(
+          eq(competitionPrizes.competitionId, competitionId),  
+        )
+      )
+    
+    res.json(prizes);
+  } catch (error) {
+    console.error("Error fetching prizes:", error);
+    res.status(500).json({ error: "Failed to fetch prizes" });
+  }
+});
+
+// CREATE a new prize
+app.post("/api/competitions/:competitionId/prizes", isAuthenticated, isAdmin , async (req, res) => {
+  try {
+    const { competitionId } = req.params;
+    const { prizeName, prizeValue, totalQuantity, remainingQuantity  } = req.body;
+    
+   
+   
+    
+    const [newPrize] = await db
+      .insert(competitionPrizes)
+      .values({
+        competitionId,
+        prizeName,
+        prizeValue,
+        totalQuantity,
+        remainingQuantity,
+      })
+      .returning();
+    
+    res.json(newPrize);
+  } catch (error) {
+    console.error("Error creating prize:", error);
+    res.status(500).json({ error: "Failed to create prize" });
+  }
+});
+
+// UPDATE a prize
+app.put("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
+  try {
+    const { prizeId } = req.params;
+    const { prizeName, prizeValue, totalQuantity, remainingQuantity } = req.body;
+    
+    
+    const [updatedPrize] = await db
+      .update(competitionPrizes)
+      .set({
+        prizeName,
+        prizeValue,
+        totalQuantity,
+        remainingQuantity,
+        updatedAt: new Date(),
+      })
+      .where(eq(competitionPrizes.id, prizeId))
+      .returning();
+    
+    res.json(updatedPrize);
+  } catch (error) {
+    console.error("Error updating prize:", error);
+    res.status(500).json({ error: "Failed to update prize" });
+  }
+});
+
+// DELETE a prize
+app.delete("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
+  try {
+    const { prizeId } = req.params;
+  
+    
+    await db
+      .delete(competitionPrizes)
+      .where(eq(competitionPrizes.id, prizeId));
+    
+    res.json({ message: "Prize deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting prize:", error);
+    res.status(500).json({ error: "Failed to delete prize" });
+  }
+});
+
+// UPDATE prize quantity when a prize is won
+app.patch("/api/prizes/:prizeId/reduce-quantity", isAuthenticated, isAdmin , async (req, res) => {
+  try {
+    const { prizeId } = req.params;
+    const { quantity = 1 } = req.body;
+    
+    const [prize] = await db
+      .select()
+      .from(competitionPrizes)
+      .where(eq(competitionPrizes.id, prizeId));
+    
+    if (!prize) {
+      return res.status(404).json({ error: "Prize not found" });
+    }
+    
+    if (prize.remainingQuantity < quantity) {
+      return res.status(400).json({ error: "Not enough prizes remaining" });
+    }
+    
+    const [updatedPrize] = await db
+      .update(competitionPrizes)
+      .set({
+        remainingQuantity: prize.remainingQuantity - quantity,
+        updatedAt: new Date(),
+      })
+      .where(eq(competitionPrizes.id, prizeId))
+      .returning();
+    
+    res.json(updatedPrize);
+  } catch (error) {
+    console.error("Error reducing prize quantity:", error);
+    res.status(500).json({ error: "Failed to update prize quantity" });
+  }
+});
+
 
   const httpServer = createServer(app);
   return httpServer;

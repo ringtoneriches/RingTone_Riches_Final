@@ -164,6 +164,17 @@ export const orders = pgTable("orders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const competitionPrizes = pgTable("competition_prizes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+  prizeName: varchar("prize_name").notNull(),
+  prizeValue: decimal("prize_value", { precision: 10, scale: 2 }).notNull(),
+  totalQuantity: integer("total_quantity").notNull(),
+  remainingQuantity: integer("remaining_quantity").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Wallet transactions
 export const transactions = pgTable("transactions", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),

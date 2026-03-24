@@ -158,68 +158,70 @@ export default function Home() {
   const winnersSection = useInView();
   const newsletterSection = useInView();
 
-  const gameCards = [
-    {
-      Icon: Zap,
-      title: "Ringtone Voltz",
-      desc: "Volt to win",
-      gradient: "linear-gradient(135deg, #3b82f6, #06b6d4)",
-      glowColor: "rgba(59,130,246,0.25)",
-      borderColor: "rgba(59,130,246,0.4)",
-      bgColor: "rgba(59,130,246,0.06)",
-      iconBg: "linear-gradient(135deg, #3b82f6, #60a5fa)",
-      filter: "voltz",
-      prize: "£10,000",
-      badge: "MEGA",
-      badgeColor: "linear-gradient(135deg, #3b82f6, #06b6d4)",
-      popular: true
-    },
-    {
-      Icon: TicketCheck,
-      title: "Scratch Card",
-      desc: "Scratch to win",
-      gradient: "linear-gradient(135deg, #dc2626, #f97316)",
-      glowColor: "rgba(239,68,68,0.25)",
-      borderColor: "rgba(239,68,68,0.4)",
-      bgColor: "rgba(239,68,68,0.06)",
-      iconBg: "linear-gradient(135deg, #dc2626, #ef4444)",
-      prize: "£5,000",
-      filter: "scratch",
-      popular: true
-    },
-    
-{
-  Icon: Target,
-  title: "Ringtone Pop",
-  desc: "Pop to win",
-  gradient: "linear-gradient(135deg, #eab308, #fde047)",
-  glowColor: "rgba(234,179,8,0.25)",
-  borderColor: "rgba(234,179,8,0.4)",
-  bgColor: "rgba(234,179,8,0.06)",
-  iconBg: "linear-gradient(135deg, #eab308, #facc15)",
-  prize: "£5,000",
-  filter: "pop",
-  badge: "NEW",
-  badgeColor: "#eab308",
-  popular: false
-},
-{
-  Icon: Circle,
-  title: "Ringtone Plinko",
-  desc: "Drop to win",
-  gradient: "linear-gradient(135deg, #8b5cf6, #a78bfa)",
-  glowColor: "rgba(139,92,246,0.25)",
-  borderColor: "rgba(139,92,246,0.4)",
-  bgColor: "rgba(139,92,246,0.06)",
-  iconBg: "linear-gradient(135deg, #8b5cf6, #c4b5fd)",
-  prize: "£1,000",
-  filter: "plinko",
-  badge: "HOT",
-  badgeColor: "#8b5cf6",
-  popular: false
-},
-    
-  ];
+ const gameCards = [
+  {
+    id: competitions.find(c => c.type === "voltz")?.id, 
+    Icon: Zap,
+    title: "Ringtone Voltz",
+    desc: "Volt to win",
+    gradient: "linear-gradient(135deg, #3b82f6, #06b6d4)",
+    glowColor: "rgba(59,130,246,0.25)",
+    borderColor: "rgba(59,130,246,0.4)",
+    bgColor: "rgba(59,130,246,0.06)",
+    iconBg: "linear-gradient(135deg, #3b82f6, #60a5fa)",
+    filter: "voltz",
+    prize: "£10,000",
+    badge: "MEGA",
+    badgeColor: "linear-gradient(135deg, #3b82f6, #06b6d4)",
+    popular: true
+  },
+  {
+    id: competitions.find(c => c.type === "scratch")?.id, 
+    Icon: TicketCheck,
+    title: "Scratch Card",
+    desc: "Scratch to win",
+    gradient: "linear-gradient(135deg, #dc2626, #f97316)",
+    glowColor: "rgba(239,68,68,0.25)",
+    borderColor: "rgba(239,68,68,0.4)",
+    bgColor: "rgba(239,68,68,0.06)",
+    iconBg: "linear-gradient(135deg, #dc2626, #ef4444)",
+    prize: "£5,000",
+    filter: "scratch",
+    popular: true
+  },
+  {
+    id: competitions.find(c => c.type === "pop")?.id, 
+    Icon: Target,
+    title: "Ringtone Pop",
+    desc: "Pop to win",
+    gradient: "linear-gradient(135deg, #eab308, #fde047)",
+    glowColor: "rgba(234,179,8,0.25)",
+    borderColor: "rgba(234,179,8,0.4)",
+    bgColor: "rgba(234,179,8,0.06)",
+    iconBg: "linear-gradient(135deg, #eab308, #facc15)",
+    prize: "£5,000",
+    filter: "pop",
+    badge: "NEW",
+    badgeColor: "#eab308",
+    popular: false
+  },
+  {
+    id: competitions.find(c => c.type === "plinko")?.id, 
+    Icon: Circle,
+    title: "Ringtone Plinko",
+    desc: "Drop to win",
+    gradient: "linear-gradient(135deg, #8b5cf6, #a78bfa)",
+    glowColor: "rgba(139,92,246,0.25)",
+    borderColor: "rgba(139,92,246,0.4)",
+    bgColor: "rgba(139,92,246,0.06)",
+    iconBg: "linear-gradient(135deg, #8b5cf6, #c4b5fd)",
+    prize: "£1,000",
+    filter: "plinko",
+    badge: "HOT",
+    badgeColor: "#8b5cf6",
+    popular: false
+  },
+];
 
   return (
     <div className="min-h-screen text-foreground relative overflow-x-hidden" style={{ backgroundColor: '#070709' }}>
@@ -376,7 +378,7 @@ export default function Home() {
                   <Button 
                     variant="ghost"
                     onClick={() => {
-                      const section = document.getElementById("games-section");
+                      const section = document.getElementById("featured-competitions");
                       if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
                     }}
                     className="group h-12 px-6 text-sm font-medium rounded-full transition-all duration-300 hover:scale-[1.03] w-full sm:w-auto"
@@ -393,7 +395,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="lg:col-span-5 nv-col-right" id="games-section">
+              <div className="lg:col-span-5 nv-col-right">
                 
 
                 <div className="rounded-2xl overflow-hidden nv-panel-glass relative" style={{
@@ -431,16 +433,7 @@ export default function Home() {
                     {gameCards.map((game, index) => (
                       <button
                         key={index}
-                        onClick={() => {
-                          handleFilterChange(game.filter);
-                          setTimeout(() => {
-                            const section = document.getElementById("competitions-grid");
-                            if (section) {
-                              const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
-                              window.scrollTo({ top: elementTop - 100, behavior: "smooth" });
-                            }
-                          }, 100);
-                        }}
+                        onClick={() => setLocation(`/competition/${game.id}`)}
                         className="group w-full relative rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.03] hover:-translate-y-0.5 nv-game-card"
                         data-testid={`button-game-${game.title.toLowerCase().replace(/\s+/g, '-')}`}
                         style={{
@@ -767,7 +760,7 @@ export default function Home() {
         `}</style>
       </section>
 
-      <section className="relative">
+      <section id="featured-competitions" className="relative">
         {competitions.length > 0 ? (
           <FeaturedCompetitions competitions={competitions} />
         ) : (

@@ -22,6 +22,7 @@ import { useRef } from "react";
 import CountdownTimer from "./countdownTimer";
 import { Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
+import UserCompetitionPrizes from "./user-competition-prizes";
 
 export default function CompetitionPage() {
   const rangeRef = useRef<HTMLDivElement | null>(null);
@@ -971,6 +972,10 @@ const purchaseTicketMutation = useMutation({
     </div>
   </div>
 </section>
+
+<UserCompetitionPrizes
+  competitionId={competition.id}
+/>
 
 
       {/* Call to Action */}

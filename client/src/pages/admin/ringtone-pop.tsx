@@ -54,6 +54,8 @@ export default function AdminRingtonePop() {
   const [hasChanges, setHasChanges] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("prizes");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+const [segmentToDelete, setSegmentToDelete] = useState<string | null>(null);
 
   const { data: config, isLoading } = useQuery<PopConfig>({
     queryKey: ["/api/admin/game-pop-config"],
@@ -214,6 +216,24 @@ const updateSegment = (id: string, field: keyof PopSegment, value: string | numb
       default: return <Badge variant="secondary">{type}</Badge>;
     }
   };
+
+const confirmDeleteSegment = () => {
+  if (!segmentToDelete) return;
+
+  if (segments.length <= 2) {
+    toast({
+      title: "Cannot Remove",
+      description: "You need at least 2 segments",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  setSegments(segments.filter(seg => seg.id !== segmentToDelete));
+  setHasChanges(true);
+  setDeleteConfirmOpen(false);
+  setSegmentToDelete(null);
+};
 
   const segmentsByType = {
     cash: segments.filter(s => s.rewardType === "cash"),
@@ -383,7 +403,10 @@ const updateSegment = (id: string, field: keyof PopSegment, value: string | numb
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => removeSegment(seg.id)}
+                            onClick={() => {
+                              setSegmentToDelete(seg.id);
+                              setDeleteConfirmOpen(true);
+                            }}
                             className="h-6 w-6 text-red-400"
                             data-testid={`button-remove-${index}`}
                           >
@@ -660,6 +683,30 @@ const updateSegment = (id: string, field: keyof PopSegment, value: string | numb
           </div>
         </div>
       </div>
+
+            <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Prize?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this prize segment? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setSegmentToDelete(null)}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteSegment}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Yes, Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
         <AlertDialogContent>

@@ -97,6 +97,7 @@ const sidebarGroups = [
     icon: null,
     items: [
       { name: "Past Winners", path: "/admin/past-winners", icon: Award },
+      { name: "Prize Table", path: "/admin/prize-table", icon: Award },
       { name: "Users", path: "/admin/users", icon: Users, protected: true }, // Users sub-tab protected
       { name: "Transactions", path: "/admin/transactions", icon: Euro },
       { name: "Orders", path: "/admin/orders", icon: ShoppingCart },

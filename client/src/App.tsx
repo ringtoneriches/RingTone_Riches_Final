@@ -78,6 +78,7 @@ import VoltzGamePage from "./pages/voltzGamePage";
 import VoltzBilling from "./pages/voltzBilling";
 import UserNotifications from "./components/notifications";
 import AdminFAQManager from "./pages/admin/faq-manager";
+import AdminPrizes from "./pages/admin/admin-prizes";
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
  
@@ -163,6 +164,7 @@ function Router() {
       <Route path="/admin/voltz" component={AdminVoltz} />
       <Route path="/admin/ringtone-voltz/settings" component={AdminRingtoneVoltzSettings} />
       <Route path="/admin/faqs" component={AdminFAQManager} />
+      <Route path="/admin/prize-table" component={AdminPrizes} />
       <Route component={NotFound} />
     </Switch>
   );
