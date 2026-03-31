@@ -106,6 +106,7 @@ import { wsManager } from "./websocket";
 import { applySelfSuspensionExpiry, isNotRestricted } from "./restriction";
 import {
   createS3Uploader,
+  createVideoUploader,
   deleteR2Object,
 } from "./cloudeflare/cloudeflareHelper";
 import { OTPGenerator } from "./otp";
@@ -16172,6 +16173,163 @@ app.patch("/api/prizes/:prizeId/reduce-quantity", isAuthenticated, isAdmin , asy
   } catch (error) {
     console.error("Error reducing prize quantity:", error);
     res.status(500).json({ error: "Failed to update prize quantity" });
+  }
+});
+
+
+const uploadCompetitionVideo = createVideoUploader('competition-videos');
+
+// Get all competitions that have videos (Public route - no auth needed)
+// In your backend route
+app.get('/api/promo-competitions/with-videos', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+  
+    
+    const competitionsWithVideos = await db.select({
+      id: competitions.id,
+      title: competitions.title,
+      type: competitions.type,
+      videoUrl: competitions.videoUrl,
+      videoKey: competitions.videoKey,
+      videoMimeType: competitions.videoMimeType,
+      videoUpdatedAt: competitions.videoUpdatedAt,
+    })
+    .from(competitions)
+    .where(sql`${competitions.videoUrl} IS NOT NULL`)
+    .orderBy(desc(competitions.videoUpdatedAt));
+    
+   
+    
+    return res.status(200).json(competitionsWithVideos);
+  } catch (error) {
+    console.error('Error fetching competitions with videos:', error);
+    return res.status(500).json({ error: 'Failed to fetch competitions with videos' });
+  }
+});
+
+app.post('/api/promo-competitions/:id/video', uploadCompetitionVideo.single('video'), isAuthenticated, isAdmin,  async (req, res) => {
+  try {
+    const competitionId = req.params.id;
+    const file = req.file;
+    
+    if (!file) {
+      return res.status(400).json({ error: 'No video file provided' });
+    }
+
+    // Get the S3 key from the uploaded file
+    const videoKey = (file as any).key; // multer-s3 adds the key property
+    const videoUrl = `${process.env.R2_PUBLIC_URL}/${videoKey}`;
+
+    // Check if competition exists
+    const competition = await db.select().from(competitions).where(eq(competitions.id, competitionId)).limit(1);
+   
+      if (!competition.length) {
+        await deleteR2Object(videoKey);
+        return res.status(404).json({ error: 'Competition not found' });
+      }
+
+      if (competition[0].type !== "instant") {
+        await deleteR2Object(videoKey);
+        return res.status(400).json({
+          error: "Videos are only allowed for instant competitions",
+        });
+      }
+    
+    // Delete existing video if any
+    if (competition[0].videoKey) {
+      await deleteR2Object(competition[0].videoKey);
+    }
+    
+    // Update competition record with video info
+    await db.update(competitions)
+      .set({
+        videoUrl: videoUrl,
+        videoKey: videoKey,
+        videoMimeType: file.mimetype,
+        videoUpdatedAt: new Date(),
+      })
+      .where(eq(competitions.id, competitionId));
+    
+    res.json({
+      success: true,
+      video: {
+        url: videoUrl,
+        key: videoKey,
+      }
+    });
+  } catch (error) {
+    console.error('Error uploading competition video:', error);
+    res.status(500).json({ error: 'Failed to upload video' });
+  }
+});
+
+// Delete competition video
+app.delete('/api/promo-competitions/:id/video', isAuthenticated, isAdmin , async (req, res) => {
+  try {
+    const competitionId = req.params.id;
+    
+    const competition = await db.select().from(competitions).where(eq(competitions.id, competitionId)).limit(1);
+    
+    if (!competition.length) {
+      return res.status(404).json({ error: 'Competition not found' });
+    }
+    
+    if (competition[0].videoKey) {
+      // Delete from R2
+      await deleteR2Object(competition[0].videoKey);
+      
+      // Clear video fields in database
+      await db.update(competitions)
+        .set({
+          videoUrl: null,
+          videoKey: null,
+          videoMimeType: null,
+          videoUpdatedAt: null,
+        })
+        .where(eq(competitions.id, competitionId));
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting competition video:', error);
+    res.status(500).json({ error: 'Failed to delete video' });
+  }
+});
+
+
+app.get('/api/promo-competitions/:id/video', async (req, res) => {
+  try {
+    const competitionId = req.params.id;
+    
+    const competition = await db.select({
+      id: competitions.id,
+      title: competitions.title,
+      videoUrl: competitions.videoUrl,
+      videoKey: competitions.videoKey,
+      videoMimeType: competitions.videoMimeType,
+      videoUpdatedAt: competitions.videoUpdatedAt,
+    }).from(competitions).where(eq(competitions.id, competitionId)).limit(1);
+    
+    if (!competition.length) {
+      return res.status(404).json({ error: 'Competition not found' });
+    }
+    
+    if (!competition[0].videoUrl) {
+      return res.status(404).json({ error: 'No video available for this competition' });
+    }
+    
+    // Return video info (but not the key for security)
+    res.json({
+      success: true,
+      video: {
+        url: competition[0].videoUrl,
+        mimeType: competition[0].videoMimeType,
+        updatedAt: competition[0].videoUpdatedAt,
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching competition video:', error);
+    res.status(500).json({ error: 'Failed to fetch video' });
   }
 });
 

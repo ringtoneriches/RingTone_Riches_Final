@@ -23,6 +23,32 @@ export const createS3Uploader = (folder: string) => {
 };
 
 
+export const createVideoUploader = (folder: string) => {
+  return multer({
+    storage: multerS3({
+      s3: r2,
+      bucket: process.env.R2_BUCKET_NAME!,
+      contentType: multerS3.AUTO_CONTENT_TYPE,
+      key: (req, file, cb) => {
+        const ext = file.originalname.split(".").pop();
+        const fileName = `${folder}/${Date.now()}-${nanoid(8)}.${ext}`;
+        cb(null, fileName);
+      },
+    }),
+    limits: {
+      fileSize: 100 * 1024 * 1024, // 100MB for videos
+    },
+    fileFilter: (req, file, cb) => {
+      // Allow only video files
+      if (file.mimetype.startsWith('video/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only video files are allowed'));
+      }
+    },
+  });
+};
+
 
 export async function deleteR2Object(key: string) {
   try {
@@ -35,3 +61,5 @@ export async function deleteR2Object(key: string) {
     console.error(`Failed to delete R2 object: ${key}`, err);
   }
 }
+
+

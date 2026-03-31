@@ -12,6 +12,7 @@ import {
   boolean,
   uuid,
   serial,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -122,6 +123,10 @@ export const competitions = pgTable("competitions", {
   endDate: timestamp("end_date"), // Optional countdown timer end date
   wheelType: varchar("wheel_type", { enum: ["wheel1", "wheel2"] }).default("wheel1"),
   status: text("status").default("active"),
+   videoUrl: text("video_url"),
+  videoKey: text("video_key"),
+  videoMimeType: text("video_mime_type"),
+  videoUpdatedAt: timestamp("video_updated_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

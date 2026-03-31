@@ -39,7 +39,8 @@ export default function CompetitionPage() {
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
   const [isPostalModalOpen, setIsPostalModalOpen] = useState(false);
-  
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [isVideoLoading, setIsVideoLoading] = useState(false);
   // Carousel state
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [canScrollPrev, setCanScrollPrev] = useState(false);
@@ -190,7 +191,33 @@ const purchaseTicketMutation = useMutation({
   },
 });
 
+useEffect(() => {
+  const fetchVideo = async () => {
+    if (!competition || competition.type?.toLowerCase() !== "instant") {
+      return;
+    }
 
+    setIsVideoLoading(true);
+    try {
+      const response = await fetch(`/api/promo-competitions/${competition.id}/video`, {
+        credentials: "include",
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.video?.url) {
+          setVideoUrl(data.video.url);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching video:", error);
+    } finally {
+      setIsVideoLoading(false);
+    }
+  };
+
+  fetchVideo();
+}, [competition]);
 
  const handlePurchase = () => {
   if (!isAuthenticated) {
@@ -568,13 +595,32 @@ const purchaseTicketMutation = useMutation({
                         </div>
                       </div>
                     </div>
+                    
                   </div>
                   </div>
                 </div>
+                 {/* Promo Video Section - For instant competitions */}
+  {competition.type?.toLowerCase() === "instant" && videoUrl && (
+    <div className="relative group">
+      <div className="absolute -inset-0.5 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-xl opacity-30 blur group-hover:opacity-50 transition duration-500"></div>
+      <div className="relative bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-3 overflow-hidden shadow-2xl">
+        <div className="relative rounded-lg overflow-hidden bg-black cursor-pointer group/video">
+          <video
+            controls
+            className="w-full max-h-[200px] md:max-h-[240px] object-contain"
+            preload="metadata"
+          >
+            <source src={videoUrl} type="video/mp4" />
+          </video>
+        </div>
+      </div>
+    </div>
+  )}
               </div>
 
               {/* Right: PREMIUM Purchase Form */}
               <div className="space-y-4 md:space-y-6">
+                
                 {/* Premium Card with Glassmorphism */}
                 <div className="relative group">
                   {/* Animated Border - GOLD THEME */}
