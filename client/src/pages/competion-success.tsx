@@ -17,72 +17,10 @@ export default function CheckoutSuccess() {
 
       const paymentJobRef = urlParams.get("paymentjobref");
       const paymentRef = urlParams.get("paymentref");
-      const orderId = urlParams.get("orderId"); // ✅ NEW
+      const orderId = urlParams.get("orderId");
 
-      // console.log("🔍 Success Page Query:", {
-      //   paymentJobRef,
-      //   paymentRef,
-      //   orderId,
-      // });
-
-      // ⭐ Must include orderId when confirming:
-      if (paymentJobRef && paymentRef && orderId) {
-        try {
-          const res = await apiRequest("/api/payment-success/competition", "POST", {
-            paymentJobRef,
-            paymentRef,
-            orderId,   // ✅ SEND IT TO BACKEND
-          });
-
-          const data = await res.json();
-          // console.log(data)
-          if (data.success) {
-            toast({
-              title: "Payment Successful",
-              description: "Your tickets have been issued!",
-            });
-
-            // Refresh relevant data
-            queryClient.invalidateQueries({ queryKey: ["/api/user/tickets"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
-
-           let redirectUrl = `/competition/${data.competitionId}`;
-
-              if (data.competitionType === "spin") {
-                redirectUrl = `/spin/${data.competitionId}/${data.orderId}`;
-              } else if (data.competitionType === "scratch") {
-                redirectUrl = `/scratch/${data.competitionId}/${data.orderId}`;
-              }
-               else if (data.competitionType === "pop") {
-                redirectUrl = `/pop/${data.competitionId}/${data.orderId}`;
-              }
-               else if (data.competitionType === "plinko") {
-                redirectUrl = `/plinko/${data.competitionId}/${data.orderId}`;
-              }
-               else if (data.competitionType === "voltz") {
-                redirectUrl = `/voltz/${data.competitionId}/${data.orderId}`;
-              }
-
-
-            setTimeout(() => setLocation(redirectUrl), 2000);
-          } else {
-            toast({
-              title: "Error",
-              description: data.message || "Failed to confirm payment.",
-              variant: "destructive",
-            });
-          }
-        } catch (err: any) {
-          toast({
-            title: "Error",
-            description: err.message || "Payment confirmation failed.",
-            variant: "destructive",
-          });
-        }
-      }
-
-      // Wallet-only case: user is not redirected from Cashflows
-      else if (orderId && !paymentJobRef && !paymentRef) {
+      // ✅ Wallet-only case (no Cashflows redirect)
+      if (orderId && !paymentJobRef && !paymentRef) {
         setIsProcessing(false);
 
         toast({
@@ -94,6 +32,69 @@ export default function CheckoutSuccess() {
         queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
 
         setTimeout(() => setLocation("/wallet"), 2500);
+        return;
+      }
+
+      // ✅ Cashflows redirect: include delay for FB in-app browser
+      if (paymentJobRef && paymentRef && orderId) {
+        // Delay to ensure webhook has time to process first
+        setTimeout(async () => {
+          try {
+            const res = await apiRequest("/api/payment-success/competition", "POST", {
+              paymentJobRef,
+              paymentRef,
+              orderId,
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+              toast({
+                title: "Payment Successful",
+                description: "Your tickets have been issued!",
+              });
+
+              // Refresh relevant queries
+              queryClient.invalidateQueries({ queryKey: ["/api/user/tickets"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
+
+              // Determine redirect URL based on competition type
+              let redirectUrl = `/competition/${data.competitionId}`;
+              switch (data.competitionType) {
+                case "spin":
+                  redirectUrl = `/spin/${data.competitionId}/${data.orderId}`;
+                  break;
+                case "scratch":
+                  redirectUrl = `/scratch/${data.competitionId}/${data.orderId}`;
+                  break;
+                case "pop":
+                  redirectUrl = `/pop/${data.competitionId}/${data.orderId}`;
+                  break;
+                case "plinko":
+                  redirectUrl = `/plinko/${data.competitionId}/${data.orderId}`;
+                  break;
+                case "voltz":
+                  redirectUrl = `/voltz/${data.competitionId}/${data.orderId}`;
+                  break;
+              }
+
+              // Small delay before redirect for UX
+              setTimeout(() => setLocation(redirectUrl), 2000);
+            } else {
+              toast({
+                title: "Error",
+                description: data.message || "Failed to confirm payment.",
+                variant: "destructive",
+              });
+            }
+          } catch (err: any) {
+            toast({
+              title: "Error",
+              description: err.message || "Payment confirmation failed.",
+              variant: "destructive",
+            });
+          }
+        }, 2000); // 2s delay for webhook
       }
     };
 

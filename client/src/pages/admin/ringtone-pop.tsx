@@ -37,6 +37,7 @@ interface PopSegment {
   probability: number | string;
   maxWins: number | null;
   currentWins?: number;
+  isActive?: boolean;
 }
 
 interface PopConfig {
@@ -110,29 +111,30 @@ const [segmentToDelete, setSegmentToDelete] = useState<string | null>(null);
 });
 
 
-  const addSegment = (type: "cash" | "points" | "lose" | "try_again") => {
-    const defaults = {
-      cash: { label: "Cash Prize", rewardValue: 5 },
-      points: { label: "Points Prize", rewardValue: 100 },
-      lose: { label: "No Win", rewardValue: 0 },
-      try_again: { label: "Free Replay", rewardValue: 0 },
-    };
-    
-    const newSegment: PopSegment = {
-      id: crypto.randomUUID(),
-      label: defaults[type].label,
-      rewardType: type,
-      rewardValue: defaults[type].rewardValue,
-      probability: 0,
-      maxWins: null,
-      currentWins: 0,
-    };
-    setSegments([...segments, newSegment]);
-    setHasChanges(true);
-    toast({ title: "Segment Added", description: `New ${defaults[type].label} segment created` });
+ const addSegment = (type: "cash" | "points" | "lose" | "try_again") => {
+  const defaults = {
+    cash: { label: "Cash Prize", rewardValue: 5 },
+    points: { label: "Points Prize", rewardValue: 100 },
+    lose: { label: "No Win", rewardValue: 0 },
+    try_again: { label: "Free Replay", rewardValue: 0 },
   };
+  
+  const newSegment: PopSegment = {
+    id: crypto.randomUUID(),
+    label: defaults[type].label,
+    rewardType: type,
+    rewardValue: defaults[type].rewardValue,
+    probability: 0,
+    maxWins: null,
+    currentWins: 0,
+    isActive: true, // Add this line
+  };
+  setSegments([...segments, newSegment]);
+  setHasChanges(true);
+  toast({ title: "Segment Added", description: `New ${defaults[type].label} segment created` });
+};
 
-const updateSegment = (id: string, field: keyof PopSegment, value: string | number | null) => {
+const updateSegment = (id: string, field: keyof PopSegment, value: string | number | null | boolean) => {
   setSegments(segments.map(seg =>
     seg.id === id ? { ...seg, [field]: value } : seg
   ));
@@ -163,24 +165,31 @@ const updateSegment = (id: string, field: keyof PopSegment, value: string | numb
     setHasChanges(true);
   };
 
-  const totalProbability = segments.reduce((sum, seg) => sum + (Number(seg.probability) || 0), 0);
+  const activeSegments = segments.filter(seg => seg.isActive !== false);
+
+const totalProbability = activeSegments.reduce(
+  (sum, seg) => sum + (Number(seg.probability) || 0),
+  0
+);
   const isValid = Math.abs(totalProbability - 100) < 0.01;
   const probabilityDiff = totalProbability - 100;
 
- const handleSave = () => {
-  if (!isValid) {
-    toast({
-      title: "Fix Probability First",
-      description: `Total must be 100%. Currently ${totalProbability.toFixed(2)}%`,
-      variant: "destructive",
-    });
-    return;
-  }
+const handleSave = () => {
+  
+  if (Math.abs(totalProbability - 100) > 0.01) {
+  toast({
+    title: "Fix Probability First",
+    description: `Active segments total must be 100%. Currently ${totalProbability.toFixed(2)}%`,
+    variant: "destructive",
+  });
+  return;
+}
 
   const cleanSegments = segments.map(({ currentWins, rewardValue, probability, ...rest }) => ({
     ...rest,
     rewardValue: rewardValue === "" ? 0 : parseFloat(rewardValue as string),
     probability: probability === "" ? 0 : parseFloat(probability as string),
+    isActive: rest.isActive !== false, // Preserve isActive status
   }));
 
   updateConfigMutation.mutate({ segments: cleanSegments, isVisible, isActive });
@@ -236,11 +245,11 @@ const confirmDeleteSegment = () => {
 };
 
   const segmentsByType = {
-    cash: segments.filter(s => s.rewardType === "cash"),
-    points: segments.filter(s => s.rewardType === "points"),
-    lose: segments.filter(s => s.rewardType === "lose"),
-    try_again: segments.filter(s => s.rewardType === "try_again"),
-  };
+  cash: segments.filter(s => s.rewardType === "cash" && s.isActive !== false),
+  points: segments.filter(s => s.rewardType === "points" && s.isActive !== false),
+  lose: segments.filter(s => s.rewardType === "lose" && s.isActive !== false),
+  try_again: segments.filter(s => s.rewardType === "try_again" && s.isActive !== false),
+};
 
   if (isLoading) {
     return (
@@ -357,7 +366,10 @@ const confirmDeleteSegment = () => {
                 </span>
                 {!isValid && (
                   <span className="text-xs text-red-400">
-                    ({probabilityDiff > 0 ? `-${probabilityDiff.toFixed(1)}` : `+${Math.abs(probabilityDiff).toFixed(1)}`})
+                    ({totalProbability < 100
+                    ? `-${(100 - totalProbability).toFixed(1)}`
+                    : `+${(totalProbability - 100).toFixed(1)}`
+                  })
                   </span>
                 )}
               </div>
@@ -372,7 +384,7 @@ const confirmDeleteSegment = () => {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {segments.map((seg, index) => (
-                    <div key={seg.id} className={`${getTypeStyles(seg.rewardType)} border rounded-lg p-3`}>
+                    <div key={seg.id}  className={`${getTypeStyles(seg.rewardType)} border rounded-lg p-3 ${seg.isActive === false ? 'opacity-50 bg-muted/30' : ''}`}>
                       {/* Header with Badge and Actions */}
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2">
@@ -380,6 +392,24 @@ const confirmDeleteSegment = () => {
                           <span className="text-xs text-muted-foreground">#{index + 1}</span>
                         </div>
                         <div className="flex items-center gap-0.5">
+                          {/* Add this Eye Toggle Button */}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              const newStatus = !(seg.isActive ?? true);
+                              updateSegment(seg.id, "isActive", newStatus);
+                              toast({ 
+                                title: newStatus ? "Prize Activated" : "Prize Deactivated",
+                                description: newStatus ? "This prize will appear in the game" : "This prize is hidden from the game"
+                              });
+                            }}
+                            className="h-6 w-6"
+                            data-testid={`button-toggle-${index}`}
+                          >
+                            {seg.isActive === false ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          </Button>
+    
                           <Button
                             size="icon"
                             variant="ghost"

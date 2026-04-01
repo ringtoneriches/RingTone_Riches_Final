@@ -3480,23 +3480,33 @@ res.json({
           });
   
           // Create pending payment if it doesn't exist
-          if (!pending) {
-            const [newPending] = await db.insert(pendingPayments).values({
-              userId,
-              orderId,
-              paymentType: "instant_play",
-              paymentJobReference: paymentJobRef,
-              paymentReference: paymentRef,
-              amount: parseFloat(order.totalAmount),
-              status: "pending",
-              metadata: {
-                gameType: competition?.type || 'scratch',
-                competitionType: competition?.type,
-              },
-              createdAt: new Date(),
-            }).returning();
+          // if (!pending) {
+          //   const [newPending] = await db.insert(pendingPayments).values({
+          //     userId,
+          //     orderId,
+          //     paymentType: "instant_play",
+          //     paymentJobReference: paymentJobRef,
+          //     paymentReference: paymentRef,
+          //     amount: parseFloat(order.totalAmount),
+          //     status: "pending",
+          //     metadata: {
+          //       gameType: competition?.type || 'scratch',
+          //       competitionType: competition?.type,
+          //     },
+          //     createdAt: new Date(),
+          //   }).returning();
             
-            pending = newPending;
+          //   pending = newPending;
+          // }
+
+          if (!pending) {
+            console.warn("No pending payment found in success route");
+
+            return res.json({
+              success: true,
+              waitingForWebhook: true,
+              message: "Payment received, processing shortly",
+            });
           }
   
           if (pending) {
@@ -3702,6 +3712,18 @@ res.json({
         console.warn("No pending payment found:", paymentJobReference);
         return;
       }
+
+      // 🛑 GLOBAL IDEMPOTENCY CHECK (VERY IMPORTANT)
+        const [existingTx] = await db
+          .select()
+          .from(transactions)
+          .where(eq(transactions.paymentRef, paymentReference ?? paymentJobReference))
+          .limit(1);
+
+        if (existingTx) {
+          console.log("⚠️ Already processed (webhook/success):", paymentReference);
+          return;
+        }
   
       // 🚫 Hard stop if not pending
       if (pending.status !== "pending") {
@@ -3835,7 +3857,7 @@ res.json({
       const [existing] = await transaction
         .select()
         .from(transactions)
-        .where(eq(transactions.pendingPaymentId, pendingPaymentId))
+          .where(eq(transactions.paymentRef, paymentRef))
         .limit(1);
   
       if (existing) {
@@ -12766,66 +12788,104 @@ app.post(
 
   // Update Ringtone Pop configuration (admin)
   app.put(
-    "/api/admin/game-pop-config",
-    isAuthenticated,
-    isAdmin,
-    async (req: any, res) => {
-      try {
-        const { segments, isVisible, isActive } = req.body;
+  "/api/admin/game-pop-config",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { segments, isVisible, isActive } = req.body;
 
-        // Validate probability
-        const total = segments.reduce(
-          (sum: number, s: any) => sum + (Number(s.probability) || 0),
-          0
-        );
-
-        if (Math.abs(total - 100) > 0.01) {
-          return res
-            .status(400)
-            .json({ message: "Total probability must be 100%" });
-        }
-
-        // REMOVE currentWins before saving
-        const cleanSegments = segments.map(
-          ({ currentWins, ...rest }: any) => rest
-        );
-
-        const [existing] = await db
-          .select()
-          .from(gamePopConfig)
-          .where(eq(gamePopConfig.id, "active"));
-
-        const [saved] = existing
-          ? await db
-              .update(gamePopConfig)
-              .set({
-                prizes: cleanSegments,
-                isVisible,
-                isActive,
-                updatedAt: new Date(),
-              })
-              .where(eq(gamePopConfig.id, "active"))
-              .returning()
-          : await db
-              .insert(gamePopConfig)
-              .values({
-                id: "active",
-                prizes: cleanSegments,
-                isVisible: true,
-                isActive: true,
-              })
-              .returning();
-
-        res.json({
-          ...saved,
-          segments: cleanSegments,
-        });
-      } catch (err) {
-        console.error("PUT pop config error:", err);
-        res.status(500).json({ message: "Failed to save pop config" });
+      if (!Array.isArray(segments)) {
+        return res.status(400).json({ message: "Invalid segments data" });
       }
+
+      // ✅ Normalize segments (VERY IMPORTANT)
+      const normalizedSegments = segments.map((s: any) => ({
+        ...s,
+        probability:
+          s.isActive === false ? 0 : Number(s.probability) || 0,
+        rewardValue:
+          s.rewardValue === "" || s.rewardValue === null
+            ? 0
+            : Number(s.rewardValue) || 0,
+        isActive: s.isActive !== false, // default true
+      }));
+
+      // ✅ Only ACTIVE segments for validation
+      const activeSegments = normalizedSegments.filter(
+        (s: any) => s.isActive !== false
+      );
+
+      // 🚨 Ensure at least 2 active segments
+      if (activeSegments.length < 2) {
+        return res.status(400).json({
+          message: "At least 2 active segments required",
+        });
+      }
+
+      // ✅ Calculate total probability (ONLY active)
+      const total = activeSegments.reduce(
+        (sum: number, s: any) => sum + s.probability,
+        0
+      );
+
+      if (Math.abs(total - 100) > 0.01) {
+        return res.status(400).json({
+          message: `Total probability must be 100% (currently ${total.toFixed(
+            2
+          )}%)`,
+        });
+      }
+
+      // ✅ Remove currentWins before saving
+      const cleanSegments = normalizedSegments.map(
+        ({ currentWins, ...rest }: any) => rest
+      );
+
+      // 🔍 Check existing config
+      const [existing] = await db
+        .select()
+        .from(gamePopConfig)
+        .where(eq(gamePopConfig.id, "active"));
+
+      let saved;
+
+      if (existing) {
+        [saved] = await db
+          .update(gamePopConfig)
+          .set({
+            prizes: cleanSegments,
+            isVisible,
+            isActive,
+            updatedAt: new Date(),
+          })
+          .where(eq(gamePopConfig.id, "active"))
+          .returning();
+      } else {
+        [saved] = await db
+          .insert(gamePopConfig)
+          .values({
+            id: "active",
+            prizes: cleanSegments,
+            isVisible: isVisible ?? true,
+            isActive: isActive ?? true,
+          })
+          .returning();
+      }
+
+      return res.json({
+        ...saved,
+        segments: cleanSegments,
+      });
+
+    } catch (err) {
+      console.error("PUT pop config error:", err);
+      return res.status(500).json({
+        message: "Failed to save pop config",
+      });
     }
-  );
+  }
+);
 
   // Get pop prizes (admin)
   app.get(
@@ -16031,7 +16091,7 @@ app.delete("/api/admin/faqs/:id", isAuthenticated, isAdmin, async (req, res) => 
 
 // prize table 
 
-app.get("/api/competitions/:competitionId/prize-table", isAuthenticated,  async (req, res) => {
+app.get("/api/competitions/:competitionId/prize-table",  async (req, res) => {
   try {
     const { competitionId } = req.params;
     

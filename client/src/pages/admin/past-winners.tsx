@@ -966,7 +966,7 @@ const winners = useMemo(() => {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Date:</span>
                     <span className="text-xs text-muted-foreground">
-                      {new Date(item.winners.createdAt).toLocaleDateString()}
+                      {new Date(item.winners.createdAt).toLocaleString()}
                     </span>
                   </div>
                 </div>

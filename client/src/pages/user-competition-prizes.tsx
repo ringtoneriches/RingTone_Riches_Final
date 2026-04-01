@@ -77,7 +77,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
   const { data: prizes = [], isLoading, error } = useQuery<Prize[]>({
     queryKey: ["/api/competitions", competitionId, "prizes"],
     queryFn: async () => {
-      const res = await fetch(`/api/competitions/${competitionId}/prizes`, {
+      const res = await fetch(`/api/competitions/${competitionId}/prize-table`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch prizes");
