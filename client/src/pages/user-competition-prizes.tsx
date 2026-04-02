@@ -161,7 +161,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
       <div
         className={cn(
           "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mx-4 sm:mx-28 gap-6 transition-all duration-500 ease-in-out overflow-hidden",
-          isOpen ? "max-h-[5000px] opacity-100" : "max-h-0 opacity-0"
+         isOpen ? "max-h-none opacity-100" : "max-h-0 opacity-0"
         )}
       >
         {sortedPrizes.map((prize, index) => {
