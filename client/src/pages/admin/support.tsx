@@ -360,6 +360,25 @@ export default function AdminSupport() {
     setDeleteDialogOpen(false);
   };
 
+  // NEW: Navigate to customer with ticket context
+  const handleGoToCustomer = (ticket: SupportTicketWithUser) => {
+    if (!ticket.userId) {
+      toast({
+        title: "Error",
+        description: "User information not found for this ticket.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Store ticket ID in sessionStorage to show it on customer page
+    sessionStorage.setItem('pendingTicketToClose', ticket.id);
+    sessionStorage.setItem('returnToSupportPage', window.location.pathname);
+    
+    // Navigate to customer edit page
+    window.location.href = `/admin/users/${ticket.userId}/edit`;
+  };
+
   // Filter tickets
   const filteredTickets = tickets.filter((ticket) => {
     const searchLower = searchQuery.toLowerCase();
@@ -615,7 +634,7 @@ export default function AdminSupport() {
                         </div>
                       </div>
                       
-                      {/* Right column for badges */}
+                      {/* Right column for badges and actions */}
                       <div className="flex flex-col items-start sm:items-end gap-2">
                         <div className="flex flex-wrap gap-2">
                           <Badge className={`${getStatusBadgeColor(ticket.status)} border text-xs`}>
@@ -629,12 +648,28 @@ export default function AdminSupport() {
                             <span className="capitalize">{ticket.priority}</span>
                           </Badge>
                         </div>
-                        {ticket.imageUrls && ticket.imageUrls.length > 0 && (
-                          <span className="text-xs text-gray-400 flex items-center gap-1">
-                            <Image className="h-3 w-3" />
-                            {ticket.imageUrls.length}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {ticket.imageUrls && ticket.imageUrls.length > 0 && (
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <Image className="h-3 w-3" />
+                              {ticket.imageUrls.length}
+                            </span>
+                          )}
+                          {/* NEW: Go to Customer Button on Ticket Card */}
+                          {/* <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleGoToCustomer(ticket);
+                            }}
+                            className="text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10 h-7 px-2"
+                            title="Work on customer profile"
+                          >
+                            <User className="h-3 w-3" />
+                            <span className="hidden sm:inline ml-1 text-xs">Customer</span>
+                          </Button> */}
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -732,8 +767,22 @@ export default function AdminSupport() {
                     {selectedTicket?.ticketNumber ? `#${selectedTicket.ticketNumber} ` : ""}{selectedTicket?.subject}
                   </DialogTitle>
                   {selectedTicket?.user && (
-                    <DialogDescription className="text-gray-400 text-sm sm:text-base truncate">
-                      From: {selectedTicket.user.firstName} {selectedTicket.user.lastName} ({selectedTicket.user.email})
+                    <DialogDescription className="text-gray-400 text-sm sm:text-base truncate flex items-center gap-2 flex-wrap">
+                      <span>From: {selectedTicket.user.firstName} {selectedTicket.user.lastName} ({selectedTicket.user.email})</span>
+                      {/* NEW: Go to Customer Button in Dialog */}
+                      {/* <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (selectedTicket) {
+                            handleGoToCustomer(selectedTicket);
+                          }
+                        }}
+                        className="border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10 h-7 px-2"
+                      >
+                        <User className="h-3 w-3 mr-1" />
+                        Edit Customer
+                      </Button> */}
                     </DialogDescription>
                   )}
                 </div>

@@ -379,35 +379,7 @@ export default function Home() {
               </div>
 
               <div className="lg:col-span-5 nv-col-right" id="games-section">
-                <div className="relative rounded-2xl overflow-hidden mb-5 nv-hero-img-card group" style={{
-                  border: '1px solid rgba(212,175,55,0.2)',
-                  boxShadow: '0 30px 80px rgba(0,0,0,0.7), 0 0 80px rgba(212,175,55,0.08)',
-                }}>
-                  <div className="absolute -inset-[2px] rounded-2xl nv-border-spin" style={{
-                    background: 'conic-gradient(from 0deg, rgba(212,175,55,0.5), transparent 20%, rgba(245,215,110,0.5) 40%, transparent 60%, rgba(212,175,55,0.5) 80%, transparent)',
-                    filter: 'blur(2px)',
-                    zIndex: 0,
-                  }} />
-                  <div className="relative z-[1] rounded-2xl overflow-hidden">
-                    <img src={heroJackpotImg} alt="Win Amazing Prizes" className="w-full h-auto object-cover nv-img-float" style={{ maxHeight: '280px' }} />
-                    <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, transparent 0%, transparent 50%, rgba(7,7,9,0.3) 75%, rgba(7,7,9,0.7) 100%)' }} />
-                    <div className="absolute inset-0 nv-img-sheen" />
-                    <div className="absolute top-2.5 left-2.5">
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-xl" style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', boxShadow: '0 0 15px rgba(16,185,129,0.15)' }}>
-                        <div className="relative">
-                          <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full" style={{ boxShadow: '0 0 8px rgba(16,185,129,0.8)' }} />
-                          <div className="absolute inset-0 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
-                        </div>
-                        <span className="text-emerald-400 text-[11px] font-black uppercase tracking-wider">Live</span>
-                      </div>
-                    </div>
-                    <div className="absolute top-2.5 right-2.5">
-                      <div className="px-3 py-1.5 rounded-full backdrop-blur-xl" style={{ background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.3)', boxShadow: '0 0 15px rgba(212,175,55,0.1)' }}>
-                        <span className="text-[11px] font-black uppercase tracking-wider" style={{ background: 'linear-gradient(90deg, #d4af37, #f5d76e)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Premium</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+           
 
                 <div className="rounded-2xl overflow-hidden nv-panel-glass relative" style={{
                   background: 'linear-gradient(180deg, rgba(12,12,18,0.97), rgba(6,6,10,0.99))',
