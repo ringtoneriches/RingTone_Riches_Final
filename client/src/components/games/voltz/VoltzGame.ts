@@ -41,6 +41,12 @@ export class VoltzGame extends Scene {
   private switchCount = 0;
   private roundActive = false;
 
+  // Premium glow properties
+  private ambientGlow!: Phaser.GameObjects.Rectangle;
+  private btnGlows: { red: Phaser.GameObjects.Graphics | null; blue: Phaser.GameObjects.Graphics | null; green: Phaser.GameObjects.Graphics | null } = { red: null, blue: null, green: null };
+  private floatingParticles: Phaser.GameObjects.Graphics[] = [];
+  private electroGlow!: Phaser.GameObjects.Graphics;
+
   constructor() {
     super("Game");
   }
@@ -51,6 +57,7 @@ export class VoltzGame extends Scene {
 
     this.createAnims();
     this.createBg();
+    this.createAmbientGlow();
     this.createBtns();
 
     this.currentElectro = this.add
@@ -58,6 +65,11 @@ export class VoltzGame extends Scene {
       .setAlpha(0)
       .setOrigin(0.5, 1)
       .setScale(1);
+
+    // Add electric aura around electro
+    this.electroGlow = this.add.graphics();
+    this.electroGlow.setDepth(3);
+    this.electroGlow.setAlpha(0);
 
     this.lightEffects();
 
@@ -92,6 +104,9 @@ export class VoltzGame extends Scene {
 
     this.game.events.emit("electricStart");
 
+    // Intense electro glow on press
+    this.showElectroGlow(idx);
+
     const anims = ["red", "blue", "green"];
 
     this.currentElectro.setScale(1, 0.2);
@@ -106,12 +121,13 @@ export class VoltzGame extends Scene {
       ease: "Sine.easeInOut",
     });
 
-    for (let i = 0; i < 3; i++) {
-      this.time.delayedCall(i * 60, () => {
+    // Lightning flash effect
+    for (let i = 0; i < 5; i++) {
+      this.time.delayedCall(i * 40, () => {
         this.tweens.add({
           targets: [this.lightOverlay],
-          alpha: 0.15 + i * 0.04,
-          duration: 40,
+          alpha: 0.12 + i * 0.05,
+          duration: 30,
           yoyo: true,
           ease: "Linear",
         });
@@ -128,6 +144,7 @@ export class VoltzGame extends Scene {
 
     this.time.delayedCall(950, () => {
       this.tweens.add({ targets: this.currentElectro, scaleY: 0.1, alpha: 0, duration: 250, ease: "Sine.easeIn" });
+      this.tweens.add({ targets: this.electroGlow, alpha: 0, duration: 200 });
 
       this.game.events.emit("electricStop");
       this.showRevealText(idx, text);
@@ -143,6 +160,31 @@ export class VoltzGame extends Scene {
     });
   }
 
+  private showElectroGlow(switchIdx: number) {
+    const colors = [0xff3366, 0x3399ff, 0x33ff66];
+    const color = colors[switchIdx];
+    const x = this.width / 2;
+    const y = this.height * 0.66;
+
+    this.electroGlow.clear();
+    this.electroGlow.fillStyle(color, 0.4);
+    this.electroGlow.fillEllipse(x, y, 180, 200);
+    this.electroGlow.fillStyle(color, 0.2);
+    this.electroGlow.fillEllipse(x, y, 280, 300);
+    this.electroGlow.fillStyle(color, 0.1);
+    this.electroGlow.fillEllipse(x, y, 400, 420);
+    this.electroGlow.setAlpha(0.8);
+
+    this.tweens.add({
+      targets: this.electroGlow,
+      alpha: { from: 0.8, to: 0.2 },
+      duration: 400,
+      yoyo: true,
+      repeat: 2,
+      ease: "Sine.easeInOut"
+    });
+  }
+
   private showRevealText(switchIdx: number, text: string) {
     const xPositions = [this.width * 0.2, this.width * 0.5, this.width * 0.8];
     const x = xPositions[switchIdx];
@@ -150,41 +192,11 @@ export class VoltzGame extends Scene {
     const preBaseH = Math.round(preBaseW * 0.75);
     const y = this.height * 0.32 - preBaseH * 0.035;
 
-    let textColor = "#ffffff";
-    let glowColor = "#ffd700";
-    let bgHex = 0x3d2e0a;
-    let fillHex = 0xd4af37;
-    let borderHex = 0xf5d76e;
-    let accentHex = 0xffd700;
-    let screenLightHex = 0x5c4a12;
-
-    if (this.pendingResult) {
-      if (this.pendingResult.outcome === "win") {
-        textColor = "#fffbe6";
-        glowColor = "#ffd700";
-        bgHex = 0x4a3a0c;
-        fillHex = 0xd4af37;
-        borderHex = 0xffd700;
-        accentHex = 0xf5d76e;
-        screenLightHex = 0x6b5518;
-      } else if (this.pendingResult.outcome === "freeReplay") {
-        textColor = "#e8ffff";
-        glowColor = "#00e5ff";
-        bgHex = 0x0a3040;
-        fillHex = 0x06b6d4;
-        borderHex = 0x22d3ee;
-        accentHex = 0x67e8f9;
-        screenLightHex = 0x0e4a5e;
-      } else {
-        textColor = "#fffbe6";
-        glowColor = "#ffd700";
-        bgHex = 0x3d2e0a;
-        fillHex = 0xd4af37;
-        borderHex = 0xf5d76e;
-        accentHex = 0xffd700;
-        screenLightHex = 0x5c4a12;
-      }
-    }
+    // Premium glowing colors - Voltz signature
+    const coreColor = 0xffaa33;      // Rich amber gold
+    const midColor = 0xffdd77;       // Bright gold
+    const outerColor = 0xfff5cc;     // Soft radiant glow
+    const textColor = "#ffffff";
 
     const scaleFactor = Math.min(this.width / 1024, this.height / 1536);
     const sf = Math.max(scaleFactor, 0.45);
@@ -204,145 +216,219 @@ export class VoltzGame extends Scene {
     if (text.length > 14) baseFontSize = Math.round(32 * sf);
     baseFontSize = Math.max(baseFontSize, 22);
 
-    const extras: Phaser.GameObjects.GameObject[] = [];
+    // === PREMIUM MULTI-LAYER GLOW SYSTEM ===
+    
+    // Layer 5: Outermost aura (largest, softest)
+    const outerAura = this.add.graphics();
+    outerAura.fillStyle(outerColor, 0.08);
+    outerAura.fillRoundedRect(bx - boxW / 2 - 35, y - boxH / 2 - 35, boxW + 70, boxH + 70, radius + 18);
+    outerAura.setDepth(5);
+    outerAura.setAlpha(0);
 
-    const makeRoundedRect = (cx: number, cy: number, w: number, h: number, color: number, depth: number, r?: number): Phaser.GameObjects.Graphics => {
-      const g = this.add.graphics();
-      g.fillStyle(color, 1);
-      g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, r !== undefined ? r : radius);
-      g.setDepth(depth);
-      g.setAlpha(0);
-      return g;
-    };
+    // Layer 4: Wide glow
+    const wideGlow = this.add.graphics();
+    wideGlow.fillStyle(midColor, 0.15);
+    wideGlow.fillRoundedRect(bx - boxW / 2 - 22, y - boxH / 2 - 22, boxW + 44, boxH + 44, radius + 12);
+    wideGlow.setDepth(6);
+    wideGlow.setAlpha(0);
 
-    const outerGlow1 = makeRoundedRect(bx, y, boxW + 24, boxH + 24, accentHex, 7, radius + 6);
-    const outerGlow2 = makeRoundedRect(bx, y, boxW + 16, boxH + 16, fillHex, 7.5, radius + 4);
-    extras.push(outerGlow1, outerGlow2);
+    // Layer 3: Medium intense glow
+    const mediumGlow = this.add.graphics();
+    mediumGlow.fillStyle(coreColor, 0.3);
+    mediumGlow.fillRoundedRect(bx - boxW / 2 - 12, y - boxH / 2 - 12, boxW + 24, boxH + 24, radius + 7);
+    mediumGlow.setDepth(7);
+    mediumGlow.setAlpha(0);
 
-    const borderThick = Math.max(3, Math.round(4 * sf));
-    const borderOuter = makeRoundedRect(bx, y, boxW + borderThick * 2, boxH + borderThick * 2, borderHex, 8, radius + borderThick);
-    extras.push(borderOuter);
+    // Layer 2: Inner hot glow
+    const innerHotGlow = this.add.graphics();
+    innerHotGlow.fillStyle(0xffaa44, 0.55);
+    innerHotGlow.fillRoundedRect(bx - boxW / 2 - 5, y - boxH / 2 - 5, boxW + 10, boxH + 10, radius + 3);
+    innerHotGlow.setDepth(7.5);
+    innerHotGlow.setAlpha(0);
 
-    const screenBg = makeRoundedRect(bx, y, boxW, boxH, bgHex, 8.5);
-    screenBg.setAlpha(1);
-    screenBg.setScale(1, 0.02);
-    this.revealedBgs[switchIdx] = screenBg;
+    // Layer 1: Main solid metallic box with gradient feel
+    const mainBox = this.add.graphics();
+    mainBox.fillStyle(coreColor, 1);
+    mainBox.fillRoundedRect(bx - boxW / 2, y - boxH / 2, boxW, boxH, radius);
+    mainBox.setDepth(8);
+    mainBox.setAlpha(0);
+    mainBox.setScale(1, 0.02);
+    
+    // Premium shimmer line (top edge highlight)
+    const topShimmer = this.add.graphics();
+    topShimmer.fillStyle(0xffeedd, 0.7);
+    topShimmer.fillRoundedRect(bx - boxW / 2 + 5, y - boxH / 2 + 3, boxW - 10, 5, 2);
+    topShimmer.setDepth(9);
+    topShimmer.setAlpha(0);
+    
+    // Bottom accent glow
+    const bottomAccent = this.add.graphics();
+    bottomAccent.fillStyle(coreColor, 0.4);
+    bottomAccent.fillRoundedRect(bx - boxW / 2 + 5, y + boxH / 2 - 8, boxW - 10, 5, 2);
+    bottomAccent.setDepth(9);
+    bottomAccent.setAlpha(0);
+    
+    this.revealedBgs[switchIdx] = mainBox;
 
-    const screenLight = makeRoundedRect(bx, y, boxW - 2, boxH - 2, screenLightHex, 8.6);
-    extras.push(screenLight);
-
-    const innerFill = makeRoundedRect(bx, y, boxW - 4, boxH - 4, fillHex, 8.8);
-    extras.push(innerFill);
-
-    const innerHighlight = makeRoundedRect(bx, y - boxH * 0.18, boxW - 8, boxH * 0.3, 0xffffff, 8.9, Math.round(radius * 0.5));
-    extras.push(innerHighlight);
-
-    const bottomHighlight = makeRoundedRect(bx, y + boxH * 0.2, boxW - 8, boxH * 0.2, fillHex, 8.85, Math.round(radius * 0.5));
-    extras.push(bottomHighlight);
-
-    const cornerSize = Math.round(12 * sf);
-    const corners = [
-      [-1, -1], [1, -1], [-1, 1], [1, 1]
-    ].map(([dx, dy]) => {
-      const cx = bx + dx * (boxW / 2 - cornerSize / 2);
-      const cy = y + dy * (boxH / 2 - cornerSize / 2);
-      const corner = makeRoundedRect(cx, cy, cornerSize, cornerSize, accentHex, 9.5, Math.round(cornerSize * 0.3));
-      extras.push(corner);
-      return corner;
-    });
-
-    const glow = this.add.text(bx, y, text, {
-      fontFamily: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif",
-      fontSize: `${baseFontSize + 4}px`,
-      color: glowColor,
-      align: "center",
-      stroke: glowColor,
-      strokeThickness: Math.round(16 * sf),
-      wordWrap: { width: maxTextWidth, useAdvancedWrap: true },
-    }).setOrigin(0.5).setAlpha(0).setDepth(10);
-
+    // Main text with premium styling
     const main = this.add.text(bx, y, text, {
       fontFamily: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif",
       fontSize: `${baseFontSize}px`,
       color: textColor,
       align: "center",
       stroke: "#000000",
-      strokeThickness: Math.round(6 * sf),
+      strokeThickness: Math.round(7 * sf),
       wordWrap: { width: maxTextWidth, useAdvancedWrap: true },
       shadow: {
         offsetX: 0,
-        offsetY: Math.round(3 * sf),
-        color: 'rgba(0,0,0,0.95)',
-        blur: Math.round(12 * sf),
+        offsetY: Math.round(4 * sf),
+        color: 'rgba(0,0,0,0.98)',
+        blur: Math.round(15 * sf),
         fill: true,
       },
-    }).setOrigin(0.5).setAlpha(0).setScale(0.05).setDepth(11);
+    }).setOrigin(0.5).setAlpha(0).setScale(0.05).setDepth(12);
 
-    const switchLabels = ["RED", "BLUE", "GREEN"];
-    const labelColors = ["#ff4444", "#4488ff", "#44dd66"];
-    const subFontSize = Math.max(Math.round(11 * sf), 8);
-    const sub = this.add.text(bx, y + boxH / 2 + Math.round(12 * sf), switchLabels[switchIdx], {
+    // Text inner glow effect (duplicate text with blur)
+    const textGlow = this.add.text(bx, y, text, {
+      fontFamily: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif",
+      fontSize: `${baseFontSize}px`,
+      color: "#ffdd99",
+      align: "center",
+      stroke: "#ffaa33",
+      strokeThickness: Math.round(3 * sf),
+    }).setOrigin(0.5).setAlpha(0).setBlendMode(Phaser.BlendModes.ADD).setDepth(11);
+
+    const switchLabels = ["⚡ RED ⚡", "⚡ BLUE ⚡", "⚡ GREEN ⚡"];
+    const labelColors = ["#ff6666", "#66aaff", "#66ff88"];
+    const subFontSize = Math.max(Math.round(13 * sf), 9);
+    const sub = this.add.text(bx, y + boxH / 2 + Math.round(14 * sf), switchLabels[switchIdx], {
       fontFamily: "Impact, 'Arial Black', sans-serif",
       fontSize: `${subFontSize}px`,
       color: labelColors[switchIdx],
       align: "center",
       stroke: "#000000",
-      strokeThickness: Math.round(3 * sf),
-      letterSpacing: Math.round(6 * sf),
+      strokeThickness: Math.round(4 * sf),
+      letterSpacing: Math.round(8 * sf),
     }).setOrigin(0.5).setAlpha(0).setDepth(11);
 
     this.revealedTexts[switchIdx] = main;
-    this.revealedGlows[switchIdx] = glow;
     this.revealedSubs[switchIdx] = sub;
-    this.revealedBgExtras[switchIdx] = extras;
+    this.revealedBgExtras[switchIdx] = [mainBox, outerAura, wideGlow, mediumGlow, innerHotGlow, topShimmer, bottomAccent, textGlow];
 
-    this.tweens.add({ targets: screenBg, scaleY: 1, alpha: 1, duration: 120, ease: "Power4" });
-
-    this.time.delayedCall(40, () => {
-      this.tweens.add({ targets: [this.lightOverlay], alpha: 0.25, duration: 30, yoyo: true, ease: "Linear" });
+    // === ANIMATION SEQUENCE ===
+    
+    // Main box pop
+    this.tweens.add({ 
+      targets: mainBox, 
+      scaleY: 1, 
+      alpha: 1, 
+      duration: 200, 
+      ease: "Back.easeOutCubic" 
     });
 
-    this.time.delayedCall(80, () => {
-      this.tweens.add({ targets: borderOuter, alpha: 1, duration: 80, ease: "Sine.easeOut" });
-      this.tweens.add({ targets: outerGlow2, alpha: 0.35, duration: 150, ease: "Sine.easeOut" });
-      this.tweens.add({ targets: outerGlow1, alpha: 0.2, duration: 200, ease: "Sine.easeOut" });
+    // Glow layers fade in with cascade
+    this.time.delayedCall(20, () => {
+      this.tweens.add({ targets: outerAura, alpha: 0.8, duration: 250, ease: "Sine.easeOut" });
+    });
+    
+    this.time.delayedCall(45, () => {
+      this.tweens.add({ targets: wideGlow, alpha: 0.9, duration: 220, ease: "Sine.easeOut" });
+      this.tweens.add({ targets: topShimmer, alpha: 0.9, duration: 280, ease: "Sine.easeOut" });
+    });
+    
+    this.time.delayedCall(70, () => {
+      this.tweens.add({ targets: mediumGlow, alpha: 1, duration: 200, ease: "Sine.easeOut" });
+      this.tweens.add({ targets: bottomAccent, alpha: 0.6, duration: 250, ease: "Sine.easeOut" });
+    });
+    
+    this.time.delayedCall(95, () => {
+      this.tweens.add({ targets: innerHotGlow, alpha: 1, duration: 180, ease: "Sine.easeOut" });
     });
 
-    this.time.delayedCall(60, () => {
-      this.tweens.add({ targets: screenLight, alpha: 0.5, duration: 120, ease: "Sine.easeOut" });
-    });
-
-    this.time.delayedCall(100, () => {
-      this.tweens.add({ targets: innerFill, alpha: 0.2, duration: 150, ease: "Sine.easeOut" });
-      this.tweens.add({ targets: innerHighlight, alpha: 0.12, duration: 180, ease: "Sine.easeOut" });
-      this.tweens.add({ targets: bottomHighlight, alpha: 0.08, duration: 180, ease: "Sine.easeOut" });
-      corners.forEach((c, i) => {
-        this.time.delayedCall(i * 20, () => {
-          this.tweens.add({ targets: c, alpha: 0.9, duration: 80, ease: "Sine.easeOut" });
-        });
+    // Text reveal with bounce
+    this.time.delayedCall(110, () => {
+      this.tweens.add({ 
+        targets: main, 
+        alpha: 1, 
+        scaleX: 1, 
+        scaleY: 1, 
+        duration: 250, 
+        ease: "Back.easeOutCubic" 
+      });
+      this.tweens.add({ 
+        targets: textGlow, 
+        alpha: 0.6, 
+        duration: 300, 
+        ease: "Power2" 
+      });
+      this.tweens.add({ 
+        targets: sub, 
+        alpha: 1, 
+        duration: 250, 
+        ease: "Back.easeOut" 
       });
     });
 
-    this.time.delayedCall(150, () => {
-      for (let i = 0; i < 3; i++) {
-        this.time.delayedCall(i * 30, () => {
-          this.tweens.add({ targets: [this.lightOverlay], alpha: 0.08 + i * 0.05, duration: 15, yoyo: true, ease: "Linear" });
-        });
-      }
-      this.tweens.add({ targets: main, alpha: 1, scaleX: 1, scaleY: 1, duration: 200, ease: "Back.easeOut" });
-      this.tweens.add({ targets: glow, alpha: 0.4, duration: 180, ease: "Sine.easeOut" });
-      this.tweens.add({ targets: sub, alpha: 0.9, duration: 180, ease: "Power2" });
-    });
-
+    // === PREMIUM SUSTAINED PULSING ===
     this.time.delayedCall(400, () => {
-      this.tweens.add({ targets: outerGlow1, alpha: { from: 0.2, to: 0.1 }, duration: 600, ease: "Sine.easeInOut", yoyo: true, repeat: -1 });
-      this.tweens.add({ targets: outerGlow2, alpha: { from: 0.35, to: 0.2 }, duration: 500, ease: "Sine.easeInOut", yoyo: true, repeat: -1, delay: 100 });
-      this.tweens.add({ targets: borderOuter, alpha: { from: 1, to: 0.6 }, duration: 800, ease: "Sine.easeInOut", yoyo: true, repeat: -1 });
-      this.tweens.add({ targets: glow, alpha: { from: 0.4, to: 0.2 }, scaleX: { from: 1, to: 1.04 }, scaleY: { from: 1, to: 1.04 }, duration: 600, ease: "Sine.easeInOut", yoyo: true, repeat: -1 });
-      this.tweens.add({ targets: screenLight, alpha: { from: 0.5, to: 0.3 }, duration: 1000, ease: "Sine.easeInOut", yoyo: true, repeat: -1 });
-      this.tweens.add({ targets: innerFill, alpha: { from: 0.2, to: 0.1 }, duration: 900, ease: "Sine.easeInOut", yoyo: true, repeat: -1 });
-      corners.forEach((c, i) => {
-        this.tweens.add({ targets: c, alpha: { from: 0.9, to: 0.4 }, duration: 600, ease: "Sine.easeInOut", yoyo: true, repeat: -1, delay: i * 60 });
+      // Outer aura gentle breathe
+      this.tweens.add({
+        targets: outerAura,
+        alpha: { from: 0.08, to: 0.18 },
+        duration: 1500,
+        ease: "Sine.easeInOut",
+        yoyo: true,
+        repeat: -1
+      });
+      
+      // Wide glow pulse
+      this.tweens.add({
+        targets: wideGlow,
+        alpha: { from: 0.15, to: 0.28 },
+        duration: 1200,
+        ease: "Sine.easeInOut",
+        yoyo: true,
+        repeat: -1
+      });
+      
+      // Medium glow energetic pulse
+      this.tweens.add({
+        targets: mediumGlow,
+        alpha: { from: 0.3, to: 0.55 },
+        duration: 900,
+        ease: "Sine.easeInOut",
+        yoyo: true,
+        repeat: -1
+      });
+      
+      // Inner hot glow fast flicker
+      this.tweens.add({
+        targets: innerHotGlow,
+        alpha: { from: 0.55, to: 0.85 },
+        duration: 600,
+        ease: "Sine.easeInOut",
+        yoyo: true,
+        repeat: -1
+      });
+      
+      // Text glow shimmer
+      this.tweens.add({
+        targets: textGlow,
+        alpha: { from: 0.4, to: 0.9 },
+        duration: 800,
+        ease: "Sine.easeInOut",
+        yoyo: true,
+        repeat: -1
+      });
+      
+      // Top shimmer flowing
+      this.tweens.add({
+        targets: topShimmer,
+        alpha: { from: 0.5, to: 1 },
+        duration: 700,
+        ease: "Sine.easeInOut",
+        yoyo: true,
+        repeat: -1
       });
     });
   }
@@ -352,25 +438,55 @@ export class VoltzGame extends Scene {
     const result = this.pendingResult;
 
     if (result.outcome === "win" || result.outcome === "freeReplay") {
+      // Victory celebration effect
       for (let i = 0; i < 3; i++) {
         if (this.revealedTexts[i]) {
           this.tweens.add({
             targets: this.revealedTexts[i],
-            scaleX: 1.15,
-            scaleY: 1.15,
-            duration: 300,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            duration: 250,
             yoyo: true,
-            repeat: 1,
-            ease: "Sine.easeInOut",
+            repeat: 2,
+            ease: "Back.easeOut",
           });
+          // Add gold sparkle around winning texts
+          this.addSparkles(this.revealedTexts[i]!.x, this.revealedTexts[i]!.y);
         }
       }
+      
+      // Full screen victory flash
+      this.tweens.add({
+        targets: this.lightOverlay,
+        alpha: 0.25,
+        duration: 100,
+        yoyo: true,
+        ease: "Sine.easeOut"
+      });
     }
 
-    this.time.delayedCall(1000, () => {
+    this.time.delayedCall(1200, () => {
       const savedResult = this.pendingResult;
       this.game.events.emit("gameComplete", savedResult);
     });
+  }
+
+  private addSparkles(x: number, y: number) {
+    for (let i = 0; i < 12; i++) {
+      const spark = this.add.circle(x + (Math.random() - 0.5) * 80, y + (Math.random() - 0.5) * 60, 3 + Math.random() * 5, 0xffdd77, 1);
+      spark.setDepth(20);
+      this.tweens.add({
+        targets: spark,
+        alpha: 0,
+        scaleX: 0,
+        scaleY: 0,
+        x: spark.x + (Math.random() - 0.5) * 100,
+        y: spark.y + (Math.random() - 0.5) * 80,
+        duration: 500,
+        ease: "Power2",
+        onComplete: () => spark.destroy()
+      });
+    }
   }
 
   resetRound() {
@@ -393,109 +509,111 @@ export class VoltzGame extends Scene {
     this.tweens.add({ targets: this.redBtnImg, y: this.redBtnH - 10, duration: 100 });
     this.tweens.add({ targets: this.blueBtnImg, y: this.blueBtnH - 10, duration: 100 });
     this.tweens.add({ targets: this.greenBtnImg, y: this.greenBtnH - 10, duration: 100 });
+    
+    // Recreate button glows with fresh energy
+    if (this.btnGlows.red) this.btnGlows.red.destroy();
+    if (this.btnGlows.blue) this.btnGlows.blue.destroy();
+    if (this.btnGlows.green) this.btnGlows.green.destroy();
+    this.createButtonGlows();
+  }
+
+  private createAmbientGlow() {
+    // Dynamic ambient glow that pulses with energy
+    this.ambientGlow = this.add.rectangle(this.width / 2, this.height / 2, this.width, this.height, 0x2244aa, 0.05);
+    this.ambientGlow.setDepth(1);
+    this.ambientGlow.setBlendMode(Phaser.BlendModes.ADD);
+    
+    this.tweens.add({
+      targets: this.ambientGlow,
+      alpha: { from: 0.03, to: 0.12 },
+      duration: 3000,
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1
+    });
   }
 
   private lightEffects() {
-    // lightBg — alpha 0 at all times, only kept as a reference object
-    this.lightBg = this.add
-      .image(this.width / 2, this.height / 2, "blink")
-      .setAlpha(0)
-      .setDepth(5);
+    this.lightBg = this.add.image(this.width / 2, this.height / 2, "blink").setAlpha(0).setDepth(5);
+    this.lightOverlay = this.add.rectangle(this.width / 2, this.height / 2, this.width, this.height, 0xffffff).setAlpha(0).setOrigin(0.5, 0.5).setDepth(5);
 
-    // lightOverlay — pure white flash rectangle, invisible at rest
-    // Only tweened to briefly non-zero alpha during electric button events
-    this.lightOverlay = this.add
-      .rectangle(this.width / 2, this.height / 2, this.width, this.height, 0xffffff)
-      .setAlpha(0)
-      .setOrigin(0.5, 0.5)
-      .setDepth(5);
-
-    // ── ALL ambient colour orbs removed — they were fogging the bg sprites ──
-    // ── sweepBar removed — was casting a yellow tint over everything        ──
-    // ── coronaTop removed — was dimming the top of the scene               ──
-    // ── lightBg periodic pulse removed — was adding a constant white film  ──
-
-    // Edge accent glows — very thin, barely visible, just an energy hint
+    // === PREMIUM EDGE GLOWS ===
     const edgeGlowLeft = this.add.graphics();
-    edgeGlowLeft.setDepth(3.5);
-    edgeGlowLeft.setAlpha(0);
-    for (let i = 0; i < 4; i++) {
-      edgeGlowLeft.fillStyle(0xff4444, 0.025 - i * 0.004);
-      edgeGlowLeft.fillRect(0, 0, 14 + i * 10, this.height);
+    edgeGlowLeft.setDepth(3);
+    for (let i = 0; i < 6; i++) {
+      edgeGlowLeft.fillStyle(0xff4488, 0.03 - i * 0.003);
+      edgeGlowLeft.fillRect(0, 0, 20 + i * 12, this.height);
     }
     const edgeGlowRight = this.add.graphics();
-    edgeGlowRight.setDepth(3.5);
-    edgeGlowRight.setAlpha(0);
-    for (let i = 0; i < 4; i++) {
-      edgeGlowRight.fillStyle(0x4488ff, 0.025 - i * 0.004);
-      edgeGlowRight.fillRect(this.width - 14 - i * 10, 0, 14 + i * 10, this.height);
+    edgeGlowRight.setDepth(3);
+    for (let i = 0; i < 6; i++) {
+      edgeGlowRight.fillStyle(0x44aaff, 0.03 - i * 0.003);
+      edgeGlowRight.fillRect(this.width - 20 - i * 12, 0, 20 + i * 12, this.height);
     }
-    this.tweens.add({ targets: edgeGlowLeft, alpha: { from: 0, to: 0.55 }, duration: 3000, ease: "Sine.easeInOut", yoyo: true, repeat: -1 });
-    this.tweens.add({ targets: edgeGlowRight, alpha: { from: 0, to: 0.55 }, duration: 3500, ease: "Sine.easeInOut", yoyo: true, repeat: -1, delay: 1500 });
+    this.tweens.add({ targets: edgeGlowLeft, alpha: { from: 0, to: 0.7 }, duration: 2500, ease: "Sine.easeInOut", yoyo: true, repeat: -1 });
+    this.tweens.add({ targets: edgeGlowRight, alpha: { from: 0, to: 0.7 }, duration: 2800, ease: "Sine.easeInOut", yoyo: true, repeat: -1, delay: 800 });
 
-    // Tiny floating particles — minimal alpha so they don't fog the scene
-    const glowColors = [0xff4444, 0x4488ff, 0x44dd66, 0xffd700, 0xff6600, 0xaa44ff, 0x00e5ff];
-    for (let i = 0; i < 20; i++) {
+    // === FLOATING ENERGY PARTICLES ===
+    const glowColors = [0xff3366, 0x33ff66, 0x3399ff, 0xffaa33, 0xff66cc, 0x66ffcc];
+    for (let i = 0; i < 35; i++) {
       const px = Math.random() * this.width;
-      const py = Math.random() * this.height * 0.7;
+      const py = Math.random() * this.height;
       const pColor = glowColors[Math.floor(Math.random() * glowColors.length)];
-      const pSize = 1.5 + Math.random() * 2.5;
+      const pSize = 2 + Math.random() * 4;
       const particle = this.add.graphics();
-      particle.setDepth(4.5);
-      particle.setAlpha(0);
-      particle.fillStyle(pColor, 1);
+      particle.setDepth(4);
+      particle.fillStyle(pColor, 0.8);
       particle.fillCircle(0, 0, pSize);
-      particle.fillStyle(pColor, 0.15);
-      particle.fillCircle(0, 0, pSize * 2);
+      particle.fillStyle(pColor, 0.3);
+      particle.fillCircle(0, 0, pSize * 2.5);
       particle.setPosition(px, py);
 
       this.tweens.add({
         targets: particle,
-        alpha: { from: 0, to: 0.25 + Math.random() * 0.2 }, // max ~0.45, was 0.9
-        x: px + (Math.random() - 0.5) * 100,
-        y: py + (-30 - Math.random() * 60),
-        duration: 3000 + Math.random() * 4000,
+        alpha: { from: 0, to: 0.5 + Math.random() * 0.4 },
+        x: px + (Math.random() - 0.5) * 150,
+        y: py + (Math.random() - 0.5) * 100,
+        duration: 4000 + Math.random() * 4000,
         ease: "Sine.easeInOut",
         yoyo: true,
         repeat: -1,
         delay: Math.random() * 5000,
       });
+      this.floatingParticles.push(particle);
     }
 
-    // Periodic random flash — short-lived, no lingering colour tint
+    // === PERIODIC ENERGY SURGES ===
     this.time.addEvent({
-      delay: 8000,
+      delay: 6000,
       callback: () => {
-        const flashColor = glowColors[Math.floor(Math.random() * glowColors.length)];
-        const flash = this.add.graphics();
-        flash.setDepth(5.5);
-        flash.setAlpha(0);
-        flash.fillStyle(flashColor, 0.06);
-        flash.fillRect(0, 0, this.width, this.height);
+        const surgeColor = glowColors[Math.floor(Math.random() * glowColors.length)];
+        const surge = this.add.graphics();
+        surge.setDepth(5);
+        surge.fillStyle(surgeColor, 0.1);
+        surge.fillRect(0, 0, this.width, this.height);
         this.tweens.add({
-          targets: flash,
-          alpha: { from: 0, to: 0.14 },
-          duration: 90,
+          targets: surge,
+          alpha: { from: 0, to: 0.2 },
+          duration: 120,
           yoyo: true,
           ease: "Linear",
-          onComplete: () => flash.destroy(),
+          onComplete: () => surge.destroy(),
         });
       },
       loop: true,
     });
 
-    // Periodic lightOverlay multi-flash
+    // Lightning bolts occasionally
     this.time.addEvent({
-      delay: 15000,
+      delay: 12000,
       callback: () => {
-        for (let i = 0; i < 4; i++) {
-          this.time.delayedCall(i * 150, () => {
+        for (let i = 0; i < 3; i++) {
+          this.time.delayedCall(i * 80, () => {
             this.tweens.add({
-              targets: [this.lightOverlay],
-              alpha: 0.06 + i * 0.015,
-              duration: 70,
+              targets: this.lightOverlay,
+              alpha: 0.1 + i * 0.04,
+              duration: 50,
               yoyo: true,
-              ease: "Linear",
             });
           });
         }
@@ -505,10 +623,10 @@ export class VoltzGame extends Scene {
   }
 
   private createAnims() {
-    const frameRate = 6;
+    const frameRate = 8;
     this.anims.create({ key: "bgAnim", frames: [{ key: "bg1" }, { key: "bg2" }, { key: "bg3" }], frameRate: 2, repeat: -1 });
     this.anims.create({ key: "bgUpperAnim", frames: [{ key: "bg11" }, { key: "bg21" }, { key: "bg31" }], frameRate: 2, repeat: -1 });
-    this.anims.create({ key: "electronics", frames: [{ key: "electro1" }, { key: "electro2" }], frameRate: 4, repeat: -1 });
+    this.anims.create({ key: "electronics", frames: [{ key: "electro1" }, { key: "electro2" }], frameRate: 5, repeat: -1 });
     this.anims.create({ key: "redElectro", frames: [{ key: "redElectro1" }, { key: "redElectro2" }], frameRate, repeat: -1 });
     this.anims.create({ key: "blueElectro", frames: [{ key: "blueElectro1" }, { key: "blueElectro2" }], frameRate, repeat: -1 });
     this.anims.create({ key: "greenElectro", frames: [{ key: "greenElectro1" }, { key: "greenElectro2" }], frameRate, repeat: -1 });
@@ -521,20 +639,74 @@ export class VoltzGame extends Scene {
     bgUpper.setDisplaySize(this.width, this.height);
   }
 
+  private createButtonGlows() {
+    const redX = this.width * 0.2;
+    const blueX = this.width * 0.5;
+    const greenX = this.width * 0.8;
+    const btnY = this.redBtnH + 330;
+
+    const redColor = 0xff4466;
+    const blueColor = 0x44aaff;
+    const greenColor = 0x44ff88;
+
+    this.btnGlows.red = this.add.graphics();
+    this.btnGlows.red.setDepth(0);
+    this.createGlowForButton(this.btnGlows.red, redX, btnY, redColor);
+    
+    this.btnGlows.blue = this.add.graphics();
+    this.btnGlows.blue.setDepth(0);
+    this.createGlowForButton(this.btnGlows.blue, blueX, btnY, blueColor);
+    
+    this.btnGlows.green = this.add.graphics();
+    this.btnGlows.green.setDepth(0);
+    this.createGlowForButton(this.btnGlows.green, greenX, btnY, greenColor);
+  }
+
+  private createGlowForButton(graphics: Phaser.GameObjects.Graphics, x: number, y: number, color: number) {
+    // Multi-layer intense glow
+    graphics.fillStyle(color, 0.4);
+    graphics.fillEllipse(x, y, 220, 160);
+    graphics.fillStyle(color, 0.25);
+    graphics.fillEllipse(x, y, 300, 220);
+    graphics.fillStyle(color, 0.12);
+    graphics.fillEllipse(x, y, 400, 300);
+    graphics.fillStyle(color, 0.06);
+    graphics.fillEllipse(x, y, 520, 400);
+    
+    this.tweens.add({
+      targets: graphics,
+      alpha: { from: 0.7, to: 1 },
+      duration: 1000,
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+      onUpdate: () => {
+        if (graphics) {
+          graphics.clear();
+          const currentAlpha = graphics.alpha;
+          graphics.fillStyle(color, 0.4 * currentAlpha);
+          graphics.fillEllipse(x, y, 220, 160);
+          graphics.fillStyle(color, 0.25 * currentAlpha);
+          graphics.fillEllipse(x, y, 300, 220);
+          graphics.fillStyle(color, 0.12 * currentAlpha);
+          graphics.fillEllipse(x, y, 400, 300);
+          graphics.fillStyle(color, 0.06 * currentAlpha);
+          graphics.fillEllipse(x, y, 520, 400);
+        }
+      }
+    });
+  }
+
   private createBtns() {
     this.redBtnImg = this.add.sprite(this.width / 2, this.redBtnH, "redBtn");
     this.blueBtnImg = this.add.sprite(this.width / 2, this.blueBtnH, "blueBtn");
     this.greenBtnImg = this.add.sprite(this.width / 2, this.greenBtnH, "greenBtn");
 
-    this.redBtn = this.physics.add
-      .sprite(this.width * 0.2, this.redBtnH + 330, "redBtn")
-      .setScale(0.15, 0.06).setDepth(-1).setInteractive();
-    this.blueBtn = this.physics.add
-      .sprite(this.width * 0.5, this.blueBtnH + 320, "redBtn")
-      .setScale(0.15, 0.06).setDepth(-1).setInteractive();
-    this.greenBtn = this.physics.add
-      .sprite(this.width * 0.8, this.greenBtnH + 320, "redBtn")
-      .setScale(0.15, 0.06).setDepth(-1).setInteractive();
+    this.redBtn = this.physics.add.sprite(this.width * 0.2, this.redBtnH + 330, "redBtn").setScale(0.15, 0.06).setDepth(-1).setInteractive();
+    this.blueBtn = this.physics.add.sprite(this.width * 0.5, this.blueBtnH + 320, "redBtn").setScale(0.15, 0.06).setDepth(-1).setInteractive();
+    this.greenBtn = this.physics.add.sprite(this.width * 0.8, this.greenBtnH + 320, "redBtn").setScale(0.15, 0.06).setDepth(-1).setInteractive();
+
+    this.createButtonGlows();
 
     this.redBtn.on("pointerover", () => this.input.setDefaultCursor("pointer"));
     this.redBtn.on("pointerout", () => this.input.setDefaultCursor("default"));
@@ -547,21 +719,70 @@ export class VoltzGame extends Scene {
       if (!this.isPlaying && this.buttonsEnabled && !this.switchesPressed[0]) {
         this.isPlaying = true;
         this.pendingSwitchIndex = 0;
-        this.tweens.add({ targets: this.redBtnImg, y: this.redBtnH + 10, duration: 100, yoyo: false, onComplete: () => this.handleSwitchPress(1) });
+        this.pulseButtonGlow(this.btnGlows.red, 0xff4466, this.width * 0.2, this.redBtnH + 330);
+        this.tweens.add({ 
+          targets: this.redBtnImg, 
+          y: this.redBtnH + 12, 
+          duration: 80, 
+          yoyo: false, 
+          onComplete: () => this.handleSwitchPress(1) 
+        });
       }
     });
+    
     this.blueBtn.on("pointerdown", () => {
       if (!this.isPlaying && this.buttonsEnabled && !this.switchesPressed[1]) {
         this.isPlaying = true;
         this.pendingSwitchIndex = 1;
-        this.tweens.add({ targets: this.blueBtnImg, y: this.blueBtnH + 10, duration: 100, yoyo: false, onComplete: () => this.handleSwitchPress(2) });
+        this.pulseButtonGlow(this.btnGlows.blue, 0x44aaff, this.width * 0.5, this.blueBtnH + 320);
+        this.tweens.add({ 
+          targets: this.blueBtnImg, 
+          y: this.blueBtnH + 12, 
+          duration: 80, 
+          yoyo: false, 
+          onComplete: () => this.handleSwitchPress(2) 
+        });
       }
     });
+    
     this.greenBtn.on("pointerdown", () => {
       if (!this.isPlaying && this.buttonsEnabled && !this.switchesPressed[2]) {
         this.isPlaying = true;
         this.pendingSwitchIndex = 2;
-        this.tweens.add({ targets: this.greenBtnImg, y: this.greenBtnH + 10, duration: 100, yoyo: false, onComplete: () => this.handleSwitchPress(3) });
+        this.pulseButtonGlow(this.btnGlows.green, 0x44ff88, this.width * 0.8, this.greenBtnH + 320);
+        this.tweens.add({ 
+          targets: this.greenBtnImg, 
+          y: this.greenBtnH + 12, 
+          duration: 80, 
+          yoyo: false, 
+          onComplete: () => this.handleSwitchPress(3) 
+        });
+      }
+    });
+  }
+
+  private pulseButtonGlow(graphics: Phaser.GameObjects.Graphics | null, color: number, x: number, y: number) {
+    if (!graphics) return;
+    
+    this.tweens.add({
+      targets: { alpha: 1 },
+      alpha: 0.2,
+      duration: 120,
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      onUpdate: (tween, target, key, value) => {
+        if (graphics) {
+          graphics.clear();
+          const intensity = value * 1.5;
+          graphics.fillStyle(color, 0.6 * intensity);
+          graphics.fillEllipse(x, y, 240, 180);
+          graphics.fillStyle(color, 0.35 * intensity);
+          graphics.fillEllipse(x, y, 340, 260);
+          graphics.fillStyle(color, 0.18 * intensity);
+          graphics.fillEllipse(x, y, 460, 360);
+          graphics.fillStyle(color, 0.08 * intensity);
+          graphics.fillEllipse(x, y, 600, 480);
+        }
       }
     });
   }
