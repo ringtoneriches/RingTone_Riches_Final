@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
-import { Zap, Trophy, RotateCcw, PowerOff, ShieldCheck, Sparkles, X, Bolt, Swords, Gauge } from "lucide-react";
+import { Zap, Trophy, RotateCcw, PowerOff, ShieldCheck, Sparkles, X, Bolt, Swords, Gauge, Package } from "lucide-react";
 import confetti from "canvas-confetti";
 import { playWinSound, playPowerDown, playBackupPower, disposeAudioContext } from "@/lib/voltz-sounds";
 import surgeSoundUrl from "@assets/surgessound_1772193798276.mp3";
@@ -24,6 +24,7 @@ interface PlayResult {
   prizeName: string;
   prizeId?: string;
   isWin: boolean;
+  isPhysical?: boolean;
   switchTexts: string[];
 }
 
@@ -46,6 +47,18 @@ function fireBackupConfetti() {
     confetti({ particleCount: 30, angle: 60, spread: 50, origin: { x: 0, y: 0.6 }, colors });
     confetti({ particleCount: 30, angle: 120, spread: 50, origin: { x: 1, y: 0.6 }, colors });
   }, 250);
+}
+
+function firePhysicalPrizeConfetti() {
+  const colors = ["#a855f7", "#d8b4fe", "#c084fc", "#ffffff"];
+  confetti({ particleCount: 80, spread: 120, origin: { y: 0.4, x: 0.5 }, colors, startVelocity: 40, gravity: 0.7, scalar: 1.2, ticks: 300 });
+  setTimeout(() => {
+    confetti({ particleCount: 50, angle: 55, spread: 70, origin: { x: 0, y: 0.5 }, colors, startVelocity: 45 });
+    confetti({ particleCount: 50, angle: 125, spread: 70, origin: { x: 1, y: 0.5 }, colors, startVelocity: 45 });
+  }, 200);
+  setTimeout(() => {
+    confetti({ particleCount: 100, spread: 160, origin: { y: 0.3, x: 0.5 }, colors, scalar: 1.4, ticks: 350 });
+  }, 500);
 }
 
 export default function VoltzGameComponent({
@@ -169,6 +182,7 @@ export default function VoltzGameComponent({
         rewardValue: data.result.rewardValue,
         prizeName: data.result.prizeName,
         isWin: data.result.isWin,
+        isPhysical: data.result.isPhysical || false,
         switchTexts: data.result.switchTexts || ["?", "?", "?"],
         prizeId: data.result.prizeId,
       };
@@ -209,6 +223,7 @@ export default function VoltzGameComponent({
           prizeName: lastResultRef.current.prizeName,
           prizeId: lastResultRef.current.prizeId,
           switchChosen: lastResultRef.current.switchChosen,
+          isPhysical: lastResultRef.current.isPhysical,
         },
       });
       const data = await res.json();
@@ -286,9 +301,18 @@ export default function VoltzGameComponent({
             resultTimersRef.current = [];
             const currentResult = lastResultRef.current;
             confirmGameResult().then(() => {
-              if (currentResult?.isWin) { fireWinConfetti(); playWinSound(); }
-              else if (currentResult?.outcome === "freeReplay") { fireBackupConfetti(); playBackupPower(); }
-              else { playPowerDown(); }
+              if (currentResult?.isWin && !currentResult?.isPhysical) { 
+                fireWinConfetti(); 
+                playWinSound(); 
+              } else if (currentResult?.isPhysical) {
+                firePhysicalPrizeConfetti();
+                playWinSound();
+              } else if (currentResult?.outcome === "freeReplay") { 
+                fireBackupConfetti(); 
+                playBackupPower(); 
+              } else { 
+                playPowerDown(); 
+              }
               setResultAnimStage(0);
               setShowResult(true);
               resultTimersRef.current.push(setTimeout(() => setResultAnimStage(1), 50));
@@ -333,12 +357,13 @@ export default function VoltzGameComponent({
       if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
       if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
     }
-    if (text.length > 8) return text.substring(0, 6) + '';
+    if (text.length > 8) return text.substring(0, 6) + '…';
     return text;
   };
 
   // ─── Determine current theme ───────────────────────────────────────────────
-  const isWin = lastResult?.isWin;
+  const isWin = lastResult?.isWin && !lastResult?.isPhysical;
+  const isPhysicalWin = lastResult?.isPhysical === true;
   const isFreeReplay = lastResult?.outcome === "freeReplay";
   const isNoWin = lastResult?.outcome === "noWin";
 
@@ -408,6 +433,10 @@ export default function VoltzGameComponent({
           0%,100% { box-shadow: 0 0 16px rgba(239,68,68,0.25), 0 0 40px rgba(239,68,68,0.08); }
           50%      { box-shadow: 0 0 28px rgba(239,68,68,0.4), 0 0 60px rgba(239,68,68,0.15); }
         }
+        @keyframes vg-glow-pulse-purple {
+          0%,100% { box-shadow: 0 0 20px rgba(168,85,247,0.35), 0 0 60px rgba(168,85,247,0.12); }
+          50%      { box-shadow: 0 0 40px rgba(168,85,247,0.55), 0 0 90px rgba(168,85,247,0.2); }
+        }
         @keyframes vg-spin-slow {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
@@ -428,6 +457,7 @@ export default function VoltzGameComponent({
         .vg-anim-glow-gold { animation: vg-glow-pulse 2s ease-in-out infinite; }
         .vg-anim-glow-cyan { animation: vg-glow-pulse-cyan 2s ease-in-out infinite; }
         .vg-anim-glow-red  { animation: vg-glow-pulse-red 2.5s ease-in-out infinite; }
+        .vg-anim-glow-purple { animation: vg-glow-pulse-purple 2s ease-in-out infinite; }
         .vg-anim-spin-slow { animation: vg-spin-slow 2.8s linear infinite; }
         .vg-anim-bar       { animation: vg-bar-fill 1.2s cubic-bezier(.22,1,.36,1) forwards; }
         .vg-anim-ping-gold { animation: vg-ping-gold 1.4s ease-out infinite; }
@@ -525,6 +555,8 @@ export default function VoltzGameComponent({
           style={{
             background: isWin
               ? 'radial-gradient(ellipse at 50% 40%, rgba(234,179,8,0.22) 0%, rgba(0,0,0,0.94) 65%)'
+              : isPhysicalWin
+              ? 'radial-gradient(ellipse at 50% 40%, rgba(168,85,247,0.2) 0%, rgba(0,0,0,0.94) 65%)'
               : isFreeReplay
               ? 'radial-gradient(ellipse at 50% 40%, rgba(6,182,212,0.18) 0%, rgba(0,0,0,0.94) 65%)'
               : 'radial-gradient(ellipse at 50% 40%, rgba(239,68,68,0.14) 0%, rgba(0,0,0,0.94) 65%)',
@@ -532,7 +564,7 @@ export default function VoltzGameComponent({
           data-testid="result-overlay"
         >
           {/* win particle field */}
-          {isWin && (
+          {(isWin || isPhysicalWin) && (
             <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
               {particlePositions.map((pos, i) => (
                 <div
@@ -542,14 +574,14 @@ export default function VoltzGameComponent({
                     left: pos.left, top: pos.top,
                     animationDelay: pos.delay, animationDuration: '1.6s',
                     animation: `vg-ping-gold 1.6s ${pos.delay} ease-out infinite`,
-                    backgroundColor: i % 2 === 0 ? '#eab308' : '#fbbf24',
+                    backgroundColor: isPhysicalWin ? (i % 2 === 0 ? '#a855f7' : '#c084fc') : (i % 2 === 0 ? '#eab308' : '#fbbf24'),
                     opacity: 0.7,
                   }}
                 />
               ))}
               {/* top / bottom accent lines */}
-              <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-yellow-400/60 to-transparent" />
-              <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-yellow-400/30 to-transparent" />
+              <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-purple-400/60 to-transparent" />
+              <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-purple-400/30 to-transparent" />
             </div>
           )}
 
@@ -565,26 +597,32 @@ export default function VoltzGameComponent({
                 borderRadius: '24px',
                 border: isWin
                   ? '1px solid rgba(234,179,8,0.45)'
+                  : isPhysicalWin
+                  ? '1px solid rgba(168,85,247,0.45)'
                   : isFreeReplay
                   ? '1px solid rgba(6,182,212,0.35)'
                   : '1px solid rgba(239,68,68,0.25)',
                 background: isWin
                   ? 'linear-gradient(170deg, rgba(40,28,0,0.97) 0%, rgba(10,8,0,0.99) 100%)'
+                  : isPhysicalWin
+                  ? 'linear-gradient(170deg, rgba(40,20,60,0.97) 0%, rgba(10,5,20,0.99) 100%)'
                   : isFreeReplay
                   ? 'linear-gradient(170deg, rgba(0,30,40,0.97) 0%, rgba(0,8,12,0.99) 100%)'
                   : 'linear-gradient(170deg, rgba(30,5,5,0.97) 0%, rgba(8,0,0,0.99) 100%)',
                 boxShadow: isWin
                   ? '0 0 80px rgba(234,179,8,0.18), 0 0 0 1px rgba(255,255,255,0.03), 0 32px 64px rgba(0,0,0,0.6)'
+                  : isPhysicalWin
+                  ? '0 0 80px rgba(168,85,247,0.18), 0 0 0 1px rgba(255,255,255,0.03), 0 32px 64px rgba(0,0,0,0.6)'
                   : isFreeReplay
                   ? '0 0 60px rgba(6,182,212,0.14), 0 0 0 1px rgba(255,255,255,0.02), 0 32px 64px rgba(0,0,0,0.6)'
                   : '0 0 50px rgba(239,68,68,0.1), 0 0 0 1px rgba(255,255,255,0.02), 0 32px 64px rgba(0,0,0,0.6)',
               }}
             >
               {/* hex corners inside card */}
-              <span className={`vg-hex-corner vg-hex-corner-tl ${isWin ? 'text-yellow-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
-              <span className={`vg-hex-corner vg-hex-corner-tr ${isWin ? 'text-yellow-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
-              <span className={`vg-hex-corner vg-hex-corner-bl ${isWin ? 'text-yellow-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
-              <span className={`vg-hex-corner vg-hex-corner-br ${isWin ? 'text-yellow-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
+              <span className={`vg-hex-corner vg-hex-corner-tl ${isWin ? 'text-yellow-500/40' : isPhysicalWin ? 'text-purple-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
+              <span className={`vg-hex-corner vg-hex-corner-tr ${isWin ? 'text-yellow-500/40' : isPhysicalWin ? 'text-purple-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
+              <span className={`vg-hex-corner vg-hex-corner-bl ${isWin ? 'text-yellow-500/40' : isPhysicalWin ? 'text-purple-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
+              <span className={`vg-hex-corner vg-hex-corner-br ${isWin ? 'text-yellow-500/40' : isPhysicalWin ? 'text-purple-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
 
               {/* top accent line */}
               <div
@@ -592,6 +630,8 @@ export default function VoltzGameComponent({
                 style={{
                   background: isWin
                     ? 'linear-gradient(90deg, transparent, #eab308, transparent)'
+                    : isPhysicalWin
+                    ? 'linear-gradient(90deg, transparent, #a855f7, transparent)'
                     : isFreeReplay
                     ? 'linear-gradient(90deg, transparent, #06b6d4, transparent)'
                     : 'linear-gradient(90deg, transparent, rgba(239,68,68,0.6), transparent)',
@@ -603,9 +643,9 @@ export default function VoltzGameComponent({
                 onClick={closeResult}
                 className="absolute top-4 right-4 z-30 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-150 hover:scale-110 active:scale-95"
                 style={{
-                  background: isWin ? 'rgba(234,179,8,0.1)' : isFreeReplay ? 'rgba(6,182,212,0.1)' : 'rgba(239,68,68,0.1)',
-                  border: isWin ? '1px solid rgba(234,179,8,0.25)' : isFreeReplay ? '1px solid rgba(6,182,212,0.25)' : '1px solid rgba(239,68,68,0.2)',
-                  color: isWin ? '#eab308' : isFreeReplay ? '#06b6d4' : '#ef4444',
+                  background: isWin ? 'rgba(234,179,8,0.1)' : isPhysicalWin ? 'rgba(168,85,247,0.1)' : isFreeReplay ? 'rgba(6,182,212,0.1)' : 'rgba(239,68,68,0.1)',
+                  border: isWin ? '1px solid rgba(234,179,8,0.25)' : isPhysicalWin ? '1px solid rgba(168,85,247,0.25)' : isFreeReplay ? '1px solid rgba(6,182,212,0.25)' : '1px solid rgba(239,68,68,0.2)',
+                  color: isWin ? '#eab308' : isPhysicalWin ? '#a855f7' : isFreeReplay ? '#06b6d4' : '#ef4444',
                 }}
                 data-testid="button-close-result"
               >
@@ -623,16 +663,20 @@ export default function VoltzGameComponent({
                         borderRadius: '10px',
                         background: isWin
                           ? 'rgba(234,179,8,0.08)'
+                          : isPhysicalWin
+                          ? 'rgba(168,85,247,0.08)'
                           : isFreeReplay
                           ? 'rgba(6,182,212,0.08)'
                           : 'rgba(239,68,68,0.07)',
                         border: isWin
                           ? '1px solid rgba(234,179,8,0.28)'
+                          : isPhysicalWin
+                          ? '1px solid rgba(168,85,247,0.28)'
                           : isFreeReplay
                           ? '1px solid rgba(6,182,212,0.28)'
                           : '1px solid rgba(239,68,68,0.2)',
-                        color: isWin ? '#fbbf24' : isFreeReplay ? '#22d3ee' : '#f87171',
-                        boxShadow: isWin ? '0 0 8px rgba(234,179,8,0.1) inset' : isFreeReplay ? '0 0 8px rgba(6,182,212,0.1) inset' : 'none',
+                        color: isWin ? '#fbbf24' : isPhysicalWin ? '#c084fc' : isFreeReplay ? '#22d3ee' : '#f87171',
+                        boxShadow: isWin || isPhysicalWin ? '0 0 8px rgba(168,85,247,0.1) inset' : isFreeReplay ? '0 0 8px rgba(6,182,212,0.1) inset' : 'none',
                       }}
                       data-testid={`text-switch-result-${i}`}
                       title={text}
@@ -642,7 +686,77 @@ export default function VoltzGameComponent({
                   ))}
                 </div>
 
-                {/* ── WIN ── */}
+                {/* ── PHYSICAL PRIZE WIN ── */}
+                {isPhysicalWin && (
+                  <>
+                    <div
+                      className={`relative w-24 h-24 mx-auto mb-6 transition-all duration-600 ${resultAnimStage >= 2 ? 'scale-100' : 'scale-0'}`}
+                      style={{ animationFillMode: 'both' }}
+                    >
+                      <div
+                        className="absolute inset-0 rounded-full vg-anim-ping-gold"
+                        style={{ background: 'rgba(168,85,247,0.15)' }}
+                      />
+                      <div
+                        className="relative w-24 h-24 rounded-full flex items-center justify-center vg-anim-glow-purple"
+                        style={{
+                          background: 'radial-gradient(circle at 38% 32%, rgba(168,85,247,0.3) 0%, rgba(100,50,150,0.12) 60%, transparent 100%)',
+                          border: '1px solid rgba(168,85,247,0.5)',
+                        }}
+                      >
+                        <Package
+                          className="w-12 h-12 text-purple-400"
+                          strokeWidth={1.5}
+                          style={{ filter: 'drop-shadow(0 0 14px rgba(168,85,247,0.7))' }}
+                          data-testid="icon-physical-prize"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                      <p
+                        className="text-purple-400/80 text-[10px] font-bold tracking-[0.35em] uppercase"
+                        data-testid="text-result-label-physical"
+                      >PHYSICAL PRIZE — 3 MATCH!</p>
+                      <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                    </div>
+
+                    <p
+                      className="vg-title text-2xl text-white mb-2"
+                      style={{ textShadow: '0 0 24px rgba(168,85,247,0.35)' }}
+                      data-testid="text-prize-name-physical"
+                    >
+                      {lastResult.prizeName}
+                    </p>
+
+                    <div
+                      className="inline-flex items-center gap-2.5 px-5 py-3 mb-5"
+                      style={{
+                        borderRadius: '14px',
+                        background: 'linear-gradient(135deg, rgba(168,85,247,0.12) 0%, rgba(100,50,150,0.08) 100%)',
+                        border: '1px solid rgba(168,85,247,0.28)',
+                        boxShadow: '0 0 24px rgba(168,85,247,0.08) inset',
+                      }}
+                      data-testid="text-physical-prize-badge"
+                    >
+                      <Package className="w-5 h-5 text-purple-400" strokeWidth={1.5} />
+                      <span
+                        className="vg-title text-xl text-purple-300"
+                        style={{ textShadow: '0 0 12px rgba(168,85,247,0.4)' }}
+                      >
+                        Physical Prize Won!
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-1.5 text-gray-700 text-[10px] mb-1">
+                      <ShieldCheck className="w-3 h-3" />
+                      <span data-testid="text-verified-physical">Contact support to claim</span>
+                    </div>
+                  </>
+                )}
+
+                {/* ── CASH/POINTS WIN ── */}
                 {isWin && (
                   <>
                     <div
@@ -823,20 +937,24 @@ export default function VoltzGameComponent({
                 style={{
                   background: isWin
                     ? 'linear-gradient(90deg, rgba(234,179,8,0.14) 0%, rgba(180,100,0,0.1) 100%)'
+                    : isPhysicalWin
+                    ? 'linear-gradient(90deg, rgba(168,85,247,0.14) 0%, rgba(100,50,150,0.1) 100%)'
                     : isFreeReplay
                     ? 'linear-gradient(90deg, rgba(6,182,212,0.14) 0%, rgba(0,80,100,0.1) 100%)'
                     : 'linear-gradient(90deg, rgba(239,68,68,0.1) 0%, rgba(120,0,0,0.08) 100%)',
                   borderTop: isWin
                     ? '1px solid rgba(234,179,8,0.18)'
+                    : isPhysicalWin
+                    ? '1px solid rgba(168,85,247,0.18)'
                     : isFreeReplay
                     ? '1px solid rgba(6,182,212,0.18)'
                     : '1px solid rgba(239,68,68,0.15)',
-                  color: isWin ? '#eab308' : isFreeReplay ? '#06b6d4' : '#ef4444',
+                  color: isWin ? '#eab308' : isPhysicalWin ? '#a855f7' : isFreeReplay ? '#06b6d4' : '#ef4444',
                   letterSpacing: '0.15em',
                 }}
                 data-testid="button-continue"
               >
-                {isWin ? 'COLLECT & CONTINUE' : isFreeReplay ? 'USE FREE PLAY' : 'TRY AGAIN'}
+                {isWin || isPhysicalWin ? 'COLLECT & CONTINUE' : isFreeReplay ? 'USE FREE PLAY' : 'TRY AGAIN'}
               </button>
             </div>
           </div>

@@ -9,7 +9,7 @@ import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, Zap, Trophy, RotateCcw, ChevronLeft, ChevronRight, Award } from "lucide-react";
+import { Loader2, ArrowLeft, Zap, Trophy, RotateCcw, ChevronLeft, ChevronRight, Award, Package } from "lucide-react";
 
 const voltzKeyframes = `
 @keyframes voltz-pulse {
@@ -113,10 +113,11 @@ function VoltzGameHistory({ games }: { games: any[] }) {
 
   const cashWins = games.filter((g: any) => g.isWin && g.rewardType === "cash");
   const pointsWins = games.filter((g: any) => g.isWin && g.rewardType === "points");
+  const physicalWins = games.filter((g: any) => g.isWin && g.rewardType === "physical");
   const freePlayWins = games.filter((g: any) => g.rewardType === "try_again");
   const totalCashWinnings = cashWins.reduce((sum: number, g: any) => sum + (parseFloat(g.rewardValue) || 0), 0);
   const totalPointsWinnings = pointsWins.reduce((sum: number, g: any) => sum + (parseInt(g.rewardValue) || 0), 0);
-  const surgeCount = cashWins.length + pointsWins.length;
+  const surgeCount = cashWins.length + pointsWins.length + physicalWins.length;
   const winRate = games.length > 0 ? Math.round((surgeCount / games.length) * 100) : 0;
 
   const getSwitchColor = (switchChosen: number) => {
@@ -125,6 +126,65 @@ function VoltzGameHistory({ games }: { games: any[] }) {
       case 2: return { name: "BLUE", hex: "#3b82f6", rgb: "59,130,246" };
       case 3: return { name: "GREEN", hex: "#22c55e", rgb: "34,197,94" };
       default: return { name: "?", hex: "#6b7280", rgb: "107,114,128" };
+    }
+  };
+
+  const getPrizeDisplay = (game: any) => {
+    if (game.rewardType === "cash") {
+      return {
+        icon: <Trophy className="w-4 h-4" />,
+        value: `£${game.rewardValue}`,
+        label: "CASH",
+        color: "234,179,8",
+        hex: "#fbbf24",
+        gradient: 'linear-gradient(135deg, rgba(234,179,8,0.18), rgba(234,179,8,0.05))',
+        border: '1px solid rgba(234,179,8,0.3)',
+        textColor: '#fbbf24'
+      };
+    } else if (game.rewardType === "points") {
+      return {
+        icon: <Award className="w-4 h-4" />,
+        value: `${parseInt(game.rewardValue).toLocaleString()} pts`,
+        label: "POINTS",
+        color: "168,85,247",
+        hex: "#c084fc",
+        gradient: 'linear-gradient(135deg, rgba(168,85,247,0.18), rgba(168,85,247,0.05))',
+        border: '1px solid rgba(168,85,247,0.3)',
+        textColor: '#c084fc'
+      };
+    } else if (game.rewardType === "physical") {
+      return {
+        icon: <Package className="w-4 h-4" />,
+        value: game.prizeName || game.rewardValue || "Physical Prize",
+        label: "PHYSICAL",
+        color: "168,85,247",
+        hex: "#a855f7",
+        gradient: 'linear-gradient(135deg, rgba(168,85,247,0.18), rgba(168,85,247,0.05))',
+        border: '1px solid rgba(168,85,247,0.3)',
+        textColor: '#a855f7'
+      };
+    } else if (game.rewardType === "try_again") {
+      return {
+        icon: <RotateCcw className="w-4 h-4" />,
+        value: "+1 Play",
+        label: "FREE PLAY",
+        color: "6,182,212",
+        hex: "#22d3ee",
+        gradient: 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(6,182,212,0.04))',
+        border: '1px solid rgba(6,182,212,0.25)',
+        textColor: '#22d3ee'
+      };
+    } else {
+      return {
+        icon: null,
+        value: "NO WIN",
+        label: "LOSE",
+        color: "239,68,68",
+        hex: "#ef4444",
+        gradient: 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(239,68,68,0.02))',
+        border: '1px solid rgba(239,68,68,0.2)',
+        textColor: '#ef4444'
+      };
     }
   };
 
@@ -183,10 +243,11 @@ function VoltzGameHistory({ games }: { games: any[] }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             {[
               { active: cashWins.length > 0, icon: <Trophy className="w-4 h-4" />, value: `£${totalCashWinnings.toFixed(2)}`, label: "CASH WON", color: "234,179,8", hex: "#fbbf24", testId: "stat-cash-total" },
               { active: pointsWins.length > 0, icon: <Award className="w-4 h-4" />, value: totalPointsWinnings.toLocaleString(), label: "POINTS", color: "168,85,247", hex: "#c084fc", testId: "stat-points-total" },
+              { active: physicalWins.length > 0, icon: <Package className="w-4 h-4" />, value: String(physicalWins.length), label: "PRIZES", color: "168,85,247", hex: "#a855f7", testId: "stat-physical-total" },
               { active: freePlayWins.length > 0, icon: <RotateCcw className="w-4 h-4" />, value: String(freePlayWins.length), label: "REPLAYS", color: "6,182,212", hex: "#22d3ee", testId: "stat-free-plays" },
             ].map((stat) => (
               <div key={stat.label} className="relative rounded-xl p-3.5 overflow-hidden group" data-testid={stat.testId}
@@ -291,15 +352,25 @@ function VoltzGameHistory({ games }: { games: any[] }) {
             const sw = getSwitchColor(game.switchChosen);
             const isWin = game.isWin;
             const isFree = game.rewardType === "try_again";
-            const isNoWin = game.rewardType === "no_win" || (!isWin && !isFree);
+            const isPhysical = game.rewardType === "physical";
+            const isNoWin = game.rewardType === "no_win" || (!isWin && !isFree && !isPhysical);
+            
+            // For physical prizes, treat as win
+            const actualIsWin = isWin || isPhysical;
 
-            const rowBg = isWin
-              ? 'linear-gradient(135deg, rgba(234,179,8,0.1), rgba(234,179,8,0.03), rgba(15,12,40,0.5))'
+            const rowBg = actualIsWin
+              ? isPhysical
+                ? 'linear-gradient(135deg, rgba(168,85,247,0.12), rgba(168,85,247,0.04), rgba(15,12,40,0.5))'
+                : 'linear-gradient(135deg, rgba(234,179,8,0.1), rgba(234,179,8,0.03), rgba(15,12,40,0.5))'
               : isFree
               ? 'linear-gradient(135deg, rgba(6,182,212,0.08), rgba(6,182,212,0.02), rgba(15,12,40,0.5))'
               : 'linear-gradient(135deg, rgba(239,68,68,0.06), rgba(239,68,68,0.02), rgba(15,12,40,0.5))';
 
-            const rowBorder = isWin ? 'rgba(234,179,8,0.25)' : isFree ? 'rgba(6,182,212,0.2)' : 'rgba(239,68,68,0.12)';
+            const rowBorder = actualIsWin
+              ? isPhysical ? 'rgba(168,85,247,0.3)' : 'rgba(234,179,8,0.25)'
+              : isFree ? 'rgba(6,182,212,0.2)' : 'rgba(239,68,68,0.12)';
+
+            const prizeDisplay = getPrizeDisplay(game);
 
             return (
               <div
@@ -308,8 +379,10 @@ function VoltzGameHistory({ games }: { games: any[] }) {
                 style={{
                   background: rowBg,
                   border: `1px solid ${rowBorder}`,
-                  boxShadow: isWin
-                    ? '0 6px 24px rgba(234,179,8,0.08), 0 0 40px rgba(234,179,8,0.03)'
+                  boxShadow: actualIsWin
+                    ? isPhysical
+                      ? '0 6px 24px rgba(168,85,247,0.1), 0 0 40px rgba(168,85,247,0.04)'
+                      : '0 6px 24px rgba(234,179,8,0.08), 0 0 40px rgba(234,179,8,0.03)'
                     : isFree
                     ? '0 4px 20px rgba(6,182,212,0.06)'
                     : '0 2px 12px rgba(239,68,68,0.04)',
@@ -317,13 +390,24 @@ function VoltzGameHistory({ games }: { games: any[] }) {
                 }}
                 data-testid={`history-row-${currentPage * itemsPerPage + index + 1}`}
               >
-                {isWin && (
+                {actualIsWin && (
                   <>
-                    <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(234,179,8,0.5), transparent)' }} />
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r-full" style={{ background: 'linear-gradient(180deg, #fbbf24, rgba(234,179,8,0.3))', boxShadow: '0 0 16px rgba(234,179,8,0.4), 0 0 32px rgba(234,179,8,0.15)' }} />
+                    <div className="absolute top-0 left-0 right-0 h-[1px]" 
+                         style={{ background: isPhysical 
+                           ? 'linear-gradient(90deg, transparent, rgba(168,85,247,0.5), transparent)' 
+                           : 'linear-gradient(90deg, transparent, rgba(234,179,8,0.5), transparent)' }} />
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r-full" 
+                         style={{ background: isPhysical
+                           ? 'linear-gradient(180deg, #a855f7, rgba(168,85,247,0.3))'
+                           : 'linear-gradient(180deg, #fbbf24, rgba(234,179,8,0.3))', 
+                           boxShadow: isPhysical
+                             ? '0 0 16px rgba(168,85,247,0.4), 0 0 32px rgba(168,85,247,0.15)'
+                             : '0 0 16px rgba(234,179,8,0.4), 0 0 32px rgba(234,179,8,0.15)' }} />
                     <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
                       <div className="absolute top-0 h-full w-[40%]" style={{
-                        background: 'linear-gradient(90deg, transparent, rgba(234,179,8,0.2), transparent)',
+                        background: isPhysical
+                          ? 'linear-gradient(90deg, transparent, rgba(168,85,247,0.2), transparent)'
+                          : 'linear-gradient(90deg, transparent, rgba(234,179,8,0.2), transparent)',
                         animation: 'voltz-stat-shine 5s ease-in-out infinite',
                       }} />
                     </div>
@@ -335,72 +419,93 @@ function VoltzGameHistory({ games }: { games: any[] }) {
                     <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r-full" style={{ background: 'linear-gradient(180deg, #22d3ee, rgba(6,182,212,0.2))', boxShadow: '0 0 12px rgba(6,182,212,0.3)' }} />
                   </>
                 )}
-              {!isWin && !isFree && (
-                <>
-                  <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.4), transparent)' }} />
-                  <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r-full" style={{ background: 'linear-gradient(180deg, #ef4444, rgba(239,68,68,0.2))', boxShadow: '0 0 12px rgba(239,68,68,0.4)' }} />
-                  <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-10">
-                    <div className="absolute top-0 h-full w-[30%]" style={{
-                      background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.15), transparent)',
-                      animation: 'voltz-stat-shine 4s ease-in-out infinite',
-                    }} />
-                  </div>
-                </>
-              )}
+                {isNoWin && (
+                  <>
+                    <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.4), transparent)' }} />
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r-full" style={{ background: 'linear-gradient(180deg, #ef4444, rgba(239,68,68,0.2))', boxShadow: '0 0 12px rgba(239,68,68,0.4)' }} />
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-10">
+                      <div className="absolute top-0 h-full w-[30%]" style={{
+                        background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.15), transparent)',
+                        animation: 'voltz-stat-shine 4s ease-in-out infinite',
+                      }} />
+                    </div>
+                  </>
+                )}
 
                 <div className="relative flex items-center gap-3 px-4 py-3.5">
-                 <div className="relative flex-shrink-0">
-  <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-       style={{
-         background: isWin 
-           ? 'linear-gradient(145deg, rgba(34,197,94,0.25), rgba(34,197,94,0.08))'
-           : isFree 
-             ? 'linear-gradient(145deg, rgba(59,130,246,0.25), rgba(59,130,246,0.08))'
-             : `linear-gradient(145deg, rgba(${sw.rgb},0.22), rgba(${sw.rgb},0.06))`,
-         border: isWin 
-           ? '1px solid rgba(34,197,94,0.4)'
-           : isFree 
-             ? '1px solid rgba(59,130,246,0.4)'
-             : `1px solid rgba(${sw.rgb},0.35)`,
-         boxShadow: isWin
-           ? '0 4px 16px rgba(34,197,94,0.2), 0 0 24px rgba(34,197,94,0.1), inset 0 1px 0 rgba(255,255,255,0.08)'
-           : isFree
-             ? '0 4px 16px rgba(59,130,246,0.2), 0 0 24px rgba(59,130,246,0.1), inset 0 1px 0 rgba(255,255,255,0.08)'
-             : `0 4px 16px rgba(${sw.rgb},0.12), 0 0 24px rgba(${sw.rgb},0.06), inset 0 1px 0 rgba(255,255,255,0.08)`,
-       }}>
-    <Zap className="w-5 h-5" 
-         style={{ 
-           color: isWin ? '#22c55e' : isFree ? '#3b82f6' : sw.hex, 
-           filter: isWin
-             ? 'drop-shadow(0 0 8px rgba(34,197,94,0.9))'
-             : isFree
-               ? 'drop-shadow(0 0 8px rgba(59,130,246,0.9))'
-               : `drop-shadow(0 0 8px rgba(${sw.rgb},0.8))`
-         }} />
-  </div>
-  <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 h-[3px] rounded-full"
-       style={{ 
-         width: 16, 
-         background: isWin
-           ? 'linear-gradient(90deg, transparent, #22c55e, transparent)'
-           : isFree
-             ? 'linear-gradient(90deg, transparent, #3b82f6, transparent)'
-             : `linear-gradient(90deg, transparent, ${sw.hex}, transparent)`,
-         boxShadow: isWin
-           ? '0 0 10px rgba(34,197,94,0.8)'
-           : isFree
-             ? '0 0 10px rgba(59,130,246,0.8)'
-             : `0 0 10px rgba(${sw.rgb},0.7)`
-       }} />
-</div>
+                  <div className="relative flex-shrink-0">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                         style={{
+                           background: actualIsWin 
+                             ? isPhysical
+                               ? 'linear-gradient(145deg, rgba(168,85,247,0.25), rgba(168,85,247,0.08))'
+                               : 'linear-gradient(145deg, rgba(34,197,94,0.25), rgba(34,197,94,0.08))'
+                             : isFree 
+                               ? 'linear-gradient(145deg, rgba(59,130,246,0.25), rgba(59,130,246,0.08))'
+                               : `linear-gradient(145deg, rgba(${sw.rgb},0.22), rgba(${sw.rgb},0.06))`,
+                           border: actualIsWin 
+                             ? isPhysical
+                               ? '1px solid rgba(168,85,247,0.4)'
+                               : '1px solid rgba(34,197,94,0.4)'
+                             : isFree 
+                               ? '1px solid rgba(59,130,246,0.4)'
+                               : `1px solid rgba(${sw.rgb},0.35)`,
+                           boxShadow: actualIsWin
+                             ? isPhysical
+                               ? '0 4px 16px rgba(168,85,247,0.2), 0 0 24px rgba(168,85,247,0.1), inset 0 1px 0 rgba(255,255,255,0.08)'
+                               : '0 4px 16px rgba(34,197,94,0.2), 0 0 24px rgba(34,197,94,0.1), inset 0 1px 0 rgba(255,255,255,0.08)'
+                             : isFree
+                               ? '0 4px 16px rgba(59,130,246,0.2), 0 0 24px rgba(59,130,246,0.1), inset 0 1px 0 rgba(255,255,255,0.08)'
+                               : `0 4px 16px rgba(${sw.rgb},0.12), 0 0 24px rgba(${sw.rgb},0.06), inset 0 1px 0 rgba(255,255,255,0.08)`,
+                         }}>
+                      {isPhysical ? (
+                        <Package className="w-5 h-5" style={{ color: '#a855f7', filter: 'drop-shadow(0 0 8px rgba(168,85,247,0.9))' }} />
+                      ) : (
+                        <Zap className="w-5 h-5" 
+                             style={{ 
+                               color: actualIsWin ? '#22c55e' : isFree ? '#3b82f6' : sw.hex, 
+                               filter: actualIsWin
+                                 ? 'drop-shadow(0 0 8px rgba(34,197,94,0.9))'
+                                 : isFree
+                                   ? 'drop-shadow(0 0 8px rgba(59,130,246,0.9))'
+                                   : `drop-shadow(0 0 8px rgba(${sw.rgb},0.8))`
+                             }} />
+                      )}
+                    </div>
+                    <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 h-[3px] rounded-full"
+                         style={{ 
+                           width: 16, 
+                           background: actualIsWin
+                             ? isPhysical
+                               ? 'linear-gradient(90deg, transparent, #a855f7, transparent)'
+                               : 'linear-gradient(90deg, transparent, #22c55e, transparent)'
+                             : isFree
+                               ? 'linear-gradient(90deg, transparent, #3b82f6, transparent)'
+                               : `linear-gradient(90deg, transparent, ${sw.hex}, transparent)`,
+                           boxShadow: actualIsWin
+                             ? isPhysical
+                               ? '0 0 10px rgba(168,85,247,0.8)'
+                               : '0 0 10px rgba(34,197,94,0.8)'
+                             : isFree
+                               ? '0 0 10px rgba(59,130,246,0.8)'
+                               : `0 0 10px rgba(${sw.rgb},0.7)`
+                         }} />
+                  </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      {isWin ? (
-                        <span className="text-xs font-black tracking-[0.15em] uppercase"
-                              style={{ color: '#fbbf24', textShadow: '0 0 18px rgba(234,179,8,0.6), 0 0 40px rgba(234,179,8,0.2)' }}>
-                          POWER SURGE
-                        </span>
+                      {actualIsWin ? (
+                        isPhysical ? (
+                          <span className="text-xs font-black tracking-[0.15em] uppercase"
+                                style={{ color: '#a855f7', textShadow: '0 0 18px rgba(168,85,247,0.6), 0 0 40px rgba(168,85,247,0.2)' }}>
+                            PHYSICAL PRIZE!
+                          </span>
+                        ) : (
+                          <span className="text-xs font-black tracking-[0.15em] uppercase"
+                                style={{ color: '#fbbf24', textShadow: '0 0 18px rgba(234,179,8,0.6), 0 0 40px rgba(234,179,8,0.2)' }}>
+                            POWER SURGE
+                          </span>
+                        )
                       ) : isFree ? (
                         <span className="text-xs font-black tracking-[0.15em] uppercase"
                               style={{ color: '#22d3ee', textShadow: '0 0 15px rgba(6,182,212,0.6)' }}>
@@ -417,96 +522,63 @@ function VoltzGameHistory({ games }: { games: any[] }) {
                             style={{ color: 'rgba(139,92,246,0.5)', background: 'rgba(139,92,246,0.06)' }}>
                         #{String(gameNumber).padStart(2, '0')}
                       </span>
-                     <div
-  className="w-2 h-2 rounded-full"
-  style={{
-    background: isWin 
-      ? "#22c55e" 
-      : isFree 
-        ? "#3b82f6"  // Blue for free play
-        : sw.hex,
-    boxShadow: isWin
-      ? "0 0 8px rgba(34,197,94,0.8)"
-      : isFree
-        ? "0 0 8px rgba(59,130,246,0.8)"  // Blue glow for free play
-        : `0 0 8px rgba(${sw.rgb},0.6)`
-  }}
-/>
-<span
-  className="text-[10px] font-black tracking-wider uppercase"
-  style={{
-    color: isWin 
-      ? "#22c55e" 
-      : isFree 
-        ? "#3b82f6"  // Blue text for free play
-        : sw.hex,
-    opacity: 0.8
-  }}
->
-  {isWin ? "GREEN" : isFree ? "BLUE" : sw.name}
-</span>
+                      <div
+                        className="w-2 h-2 rounded-full"
+                        style={{
+                          background: actualIsWin 
+                            ? isPhysical ? "#a855f7" : "#22c55e"
+                            : isFree 
+                              ? "#3b82f6"
+                              : sw.hex,
+                          boxShadow: actualIsWin
+                            ? isPhysical
+                              ? "0 0 8px rgba(168,85,247,0.8)"
+                              : "0 0 8px rgba(34,197,94,0.8)"
+                            : isFree
+                              ? "0 0 8px rgba(59,130,246,0.8)"
+                              : `0 0 8px rgba(${sw.rgb},0.6)`
+                        }}
+                      />
+                      <span
+                        className="text-[10px] font-black tracking-wider uppercase"
+                        style={{
+                          color: actualIsWin 
+                            ? isPhysical ? "#a855f7" : "#22c55e"
+                            : isFree 
+                              ? "#3b82f6"
+                              : sw.hex,
+                          opacity: 0.8
+                        }}
+                      >
+                        {actualIsWin ? (isPhysical ? "PURPLE" : "GREEN") : isFree ? "BLUE" : sw.name}
+                      </span>
                     </div>
                   </div>
 
                   <div className="flex-shrink-0">
-                    {game.rewardType === "cash" ? (
-                      <div className="relative px-4 py-2.5 rounded-xl overflow-hidden"
-                           style={{
-                             background: 'linear-gradient(135deg, rgba(234,179,8,0.18), rgba(234,179,8,0.05))',
-                             border: '1px solid rgba(234,179,8,0.3)',
-                             boxShadow: '0 4px 16px rgba(234,179,8,0.1), 0 0 30px rgba(234,179,8,0.05)',
-                           }}>
+                    <div className="relative px-4 py-2.5 rounded-xl overflow-hidden"
+                         style={{
+                           background: prizeDisplay.gradient,
+                           border: prizeDisplay.border,
+                           boxShadow: actualIsWin ? '0 4px 16px rgba(168,85,247,0.1), 0 0 30px rgba(168,85,247,0.05)' : 'none',
+                         }}>
+                      {actualIsWin && (
                         <div className="absolute inset-0 opacity-30"
                              style={{
-                               background: 'linear-gradient(90deg, transparent, rgba(234,179,8,0.3), transparent)',
+                               background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.3), transparent)',
                                backgroundSize: '200% 100%',
                                animation: 'surge-slide 3s ease-in-out infinite',
                              }} />
-                        <span className="relative text-sm font-black tabular-nums"
-                              style={{ color: '#fbbf24', textShadow: '0 0 15px rgba(234,179,8,0.6)' }}
-                              data-testid={`prize-value-${currentPage * itemsPerPage + index + 1}`}>
-                          £{game.rewardValue}
-                        </span>
-                      </div>
-                    ) : game.rewardType === "points" ? (
-                      <div className="relative px-4 py-2.5 rounded-xl overflow-hidden"
-                           style={{
-                             background: 'linear-gradient(135deg, rgba(168,85,247,0.18), rgba(168,85,247,0.05))',
-                             border: '1px solid rgba(168,85,247,0.3)',
-                             boxShadow: '0 4px 16px rgba(168,85,247,0.1)',
-                           }}>
+                      )}
+                      <div className="relative flex items-center gap-1.5">
+                        {prizeDisplay.icon}
                         <span className="text-sm font-black tabular-nums"
-                              style={{ color: '#c084fc', textShadow: '0 0 12px rgba(168,85,247,0.6)' }}
+                              style={{ color: prizeDisplay.textColor, textShadow: actualIsWin ? `0 0 15px rgba(168,85,247,0.6)` : 'none' }}
                               data-testid={`prize-value-${currentPage * itemsPerPage + index + 1}`}>
-                          {parseInt(game.rewardValue).toLocaleString()} pts
+                          {prizeDisplay.value}
                         </span>
                       </div>
-                    ) : game.rewardType === "try_again" ? (
-                      <div className="px-4 py-2.5 rounded-xl"
-                           style={{
-                             background: 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(6,182,212,0.04))',
-                             border: '1px solid rgba(6,182,212,0.25)',
-                             boxShadow: '0 4px 16px rgba(6,182,212,0.08)',
-                           }}>
-                        <span className="text-xs font-black tracking-wider"
-                              style={{ color: '#22d3ee', textShadow: '0 0 10px rgba(6,182,212,0.6)' }}
-                              data-testid={`prize-value-${currentPage * itemsPerPage + index + 1}`}>
-                          +1 Play
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="px-4 py-2.5 rounded-xl"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(239,68,68,0.02))',
-                            border: '1px solid rgba(239,68,68,0.2)',
-                          }}>
-                        <span className="text-xs font-black tracking-wider"
-                              style={{ color: '#ef4444', textShadow: '0 0 8px rgba(239,68,68,0.4)' }}
-                              data-testid={`prize-value-${currentPage * itemsPerPage + index + 1}`}>
-                          NO WIN
-                        </span>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -627,6 +699,8 @@ export default function VoltzGamePage() {
 
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     queryClient.invalidateQueries({ queryKey: ["/api/voltz-order", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+  queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
     refetchOrder();
   };
 

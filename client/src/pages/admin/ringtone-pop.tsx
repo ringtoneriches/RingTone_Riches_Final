@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, Trash2, Save, Eye, EyeOff, Sparkles, AlertCircle, RotateCcw, Settings, Gift, Coins, Music, Repeat, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Save, Eye, EyeOff, Sparkles, AlertCircle, RotateCcw, Settings, Gift, Coins, Music, Repeat, X, ChevronUp, ChevronDown, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,7 @@ import {
 interface PopSegment {
   id: string;
   label: string;
-  rewardType: "cash" | "points" | "lose" | "try_again";
+  rewardType: "cash" | "points" | "physical" | "lose" | "try_again";
   rewardValue: number | string;
   probability: number | string;
   maxWins: number | null;
@@ -56,7 +56,7 @@ export default function AdminRingtonePop() {
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("prizes");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-const [segmentToDelete, setSegmentToDelete] = useState<string | null>(null);
+  const [segmentToDelete, setSegmentToDelete] = useState<string | null>(null);
 
   const { data: config, isLoading } = useQuery<PopConfig>({
     queryKey: ["/api/admin/game-pop-config"],
@@ -90,57 +90,56 @@ const [segmentToDelete, setSegmentToDelete] = useState<string | null>(null);
   });
 
   const resetWinsMutation = useMutation({
-  mutationFn: async () => {
-    return apiRequest("/api/admin/game-pop-reset-wins", "POST");
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/admin/game-pop-config"] });
-    toast({
-      title: "Success",
-      description: "All win counts have been reset",
-    });
-    setResetConfirmOpen(false);
-  },
-  onError: (error: any) => {
-    toast({
-      title: "Error",
-      description: error.message,
-      variant: "destructive",
-    });
-  },
-});
+    mutationFn: async () => {
+      return apiRequest("/api/admin/game-pop-reset-wins", "POST");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/game-pop-config"] });
+      toast({
+        title: "Success",
+        description: "All win counts have been reset",
+      });
+      setResetConfirmOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
-
- const addSegment = (type: "cash" | "points" | "lose" | "try_again") => {
-  const defaults = {
-    cash: { label: "Cash Prize", rewardValue: 5 },
-    points: { label: "Points Prize", rewardValue: 100 },
-    lose: { label: "No Win", rewardValue: 0 },
-    try_again: { label: "Free Replay", rewardValue: 0 },
+  const addSegment = (type: "cash" | "points" | "physical" | "lose" | "try_again") => {
+    const defaults = {
+      cash: { label: "Cash Prize", rewardValue: 5 },
+      points: { label: "Points Prize", rewardValue: 100 },
+      physical: { label: "Physical Prize", rewardValue: 25 },
+      lose: { label: "No Win", rewardValue: 0 },
+      try_again: { label: "Free Replay", rewardValue: 0 },
+    };
+    
+    const newSegment: PopSegment = {
+      id: crypto.randomUUID(),
+      label: defaults[type].label,
+      rewardType: type,
+      rewardValue: defaults[type].rewardValue,
+      probability: 0,
+      maxWins: null,
+      currentWins: 0,
+      isActive: true,
+    };
+    setSegments([...segments, newSegment]);
+    setHasChanges(true);
+    toast({ title: "Segment Added", description: `New ${defaults[type].label} segment created` });
   };
-  
-  const newSegment: PopSegment = {
-    id: crypto.randomUUID(),
-    label: defaults[type].label,
-    rewardType: type,
-    rewardValue: defaults[type].rewardValue,
-    probability: 0,
-    maxWins: null,
-    currentWins: 0,
-    isActive: true, // Add this line
+
+  const updateSegment = (id: string, field: keyof PopSegment, value: string | number | null | boolean) => {
+    setSegments(segments.map(seg =>
+      seg.id === id ? { ...seg, [field]: value } : seg
+    ));
+    setHasChanges(true);
   };
-  setSegments([...segments, newSegment]);
-  setHasChanges(true);
-  toast({ title: "Segment Added", description: `New ${defaults[type].label} segment created` });
-};
-
-const updateSegment = (id: string, field: keyof PopSegment, value: string | number | null | boolean) => {
-  setSegments(segments.map(seg =>
-    seg.id === id ? { ...seg, [field]: value } : seg
-  ));
-  setHasChanges(true);
-};
-
 
   const removeSegment = (id: string) => {
     if (segments.length <= 2) {
@@ -166,40 +165,42 @@ const updateSegment = (id: string, field: keyof PopSegment, value: string | numb
   };
 
   const activeSegments = segments.filter(seg => seg.isActive !== false);
-
-const totalProbability = activeSegments.reduce(
-  (sum, seg) => sum + (Number(seg.probability) || 0),
-  0
-);
+  const totalProbability = activeSegments.reduce(
+    (sum, seg) => sum + (Number(seg.probability) || 0),
+    0
+  );
   const isValid = Math.abs(totalProbability - 100) < 0.01;
   const probabilityDiff = totalProbability - 100;
 
-const handleSave = () => {
-  
+  const handleSave = () => {
   if (Math.abs(totalProbability - 100) > 0.01) {
-  toast({
-    title: "Fix Probability First",
-    description: `Active segments total must be 100%. Currently ${totalProbability.toFixed(2)}%`,
-    variant: "destructive",
-  });
-  return;
-}
+    toast({
+      title: "Fix Probability First",
+      description: `Active segments total must be 100%. Currently ${totalProbability.toFixed(2)}%`,
+      variant: "destructive",
+    });
+    return;
+  }
 
   const cleanSegments = segments.map(({ currentWins, rewardValue, probability, ...rest }) => ({
     ...rest,
-    rewardValue: rewardValue === "" ? 0 : parseFloat(rewardValue as string),
+    rewardValue: rest.rewardType === "physical" 
+      ? rewardValue  // Keep as string for physical prizes (e.g., "iPhone 14")
+      : rewardValue === "" 
+        ? 0 
+        : parseFloat(rewardValue as string), // Convert to number for cash/points
     probability: probability === "" ? 0 : parseFloat(probability as string),
-    isActive: rest.isActive !== false, // Preserve isActive status
+    isActive: rest.isActive !== false,
   }));
 
   updateConfigMutation.mutate({ segments: cleanSegments, isVisible, isActive });
 };
 
-
   const getTypeIcon = (type: string) => {
     switch (type) {
       case "cash": return <Coins className="w-4 h-4" />;
       case "points": return <Music className="w-4 h-4" />;
+      case "physical": return <Package className="w-4 h-4" />;
       case "lose": return <X className="w-4 h-4" />;
       case "try_again": return <Repeat className="w-4 h-4" />;
       default: return <Gift className="w-4 h-4" />;
@@ -210,6 +211,7 @@ const handleSave = () => {
     switch (type) {
       case "cash": return "border-green-500/50 bg-green-500/10";
       case "points": return "border-yellow-500/50 bg-yellow-500/10";
+      case "physical": return "border-purple-500/50 bg-purple-500/10";
       case "lose": return "border-muted-foreground/30 bg-muted/30";
       case "try_again": return "border-blue-500/50 bg-blue-500/10";
       default: return "border-border";
@@ -220,36 +222,38 @@ const handleSave = () => {
     switch (type) {
       case "cash": return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Cash</Badge>;
       case "points": return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Points</Badge>;
+      case "physical": return <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">Physical</Badge>;
       case "lose": return <Badge variant="secondary">No Win</Badge>;
       case "try_again": return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Free Play</Badge>;
       default: return <Badge variant="secondary">{type}</Badge>;
     }
   };
 
-const confirmDeleteSegment = () => {
-  if (!segmentToDelete) return;
+  const confirmDeleteSegment = () => {
+    if (!segmentToDelete) return;
 
-  if (segments.length <= 2) {
-    toast({
-      title: "Cannot Remove",
-      description: "You need at least 2 segments",
-      variant: "destructive",
-    });
-    return;
-  }
+    if (segments.length <= 2) {
+      toast({
+        title: "Cannot Remove",
+        description: "You need at least 2 segments",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  setSegments(segments.filter(seg => seg.id !== segmentToDelete));
-  setHasChanges(true);
-  setDeleteConfirmOpen(false);
-  setSegmentToDelete(null);
-};
+    setSegments(segments.filter(seg => seg.id !== segmentToDelete));
+    setHasChanges(true);
+    setDeleteConfirmOpen(false);
+    setSegmentToDelete(null);
+  };
 
   const segmentsByType = {
-  cash: segments.filter(s => s.rewardType === "cash" && s.isActive !== false),
-  points: segments.filter(s => s.rewardType === "points" && s.isActive !== false),
-  lose: segments.filter(s => s.rewardType === "lose" && s.isActive !== false),
-  try_again: segments.filter(s => s.rewardType === "try_again" && s.isActive !== false),
-};
+    cash: segments.filter(s => s.rewardType === "cash" && s.isActive !== false),
+    points: segments.filter(s => s.rewardType === "points" && s.isActive !== false),
+    physical: segments.filter(s => s.rewardType === "physical" && s.isActive !== false),
+    lose: segments.filter(s => s.rewardType === "lose" && s.isActive !== false),
+    try_again: segments.filter(s => s.rewardType === "try_again" && s.isActive !== false),
+  };
 
   if (isLoading) {
     return (
@@ -275,7 +279,6 @@ const confirmDeleteSegment = () => {
               <p className="text-sm text-muted-foreground">Configure your balloon game</p>
             </div>
           </div>
-          
         </div>
 
         {/* Probability Warning */}
@@ -314,7 +317,7 @@ const confirmDeleteSegment = () => {
                 <CardDescription>Click to add a new prize segment</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   <Button 
                     variant="outline" 
                     onClick={() => addSegment("cash")}
@@ -330,6 +333,14 @@ const confirmDeleteSegment = () => {
                     data-testid="button-add-points"
                   >
                     <Music className="w-4 h-4 text-yellow-400" /> Points
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => addSegment("physical")}
+                    className="border-purple-500/50 hover:bg-purple-500/10 gap-2"
+                    data-testid="button-add-physical"
+                  >
+                    <Package className="w-4 h-4 text-purple-400" /> Physical
                   </Button>
                   <Button 
                     variant="outline" 
@@ -384,7 +395,7 @@ const confirmDeleteSegment = () => {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {segments.map((seg, index) => (
-                    <div key={seg.id}  className={`${getTypeStyles(seg.rewardType)} border rounded-lg p-3 ${seg.isActive === false ? 'opacity-50 bg-muted/30' : ''}`}>
+                    <div key={seg.id} className={`${getTypeStyles(seg.rewardType)} border rounded-lg p-3 ${seg.isActive === false ? 'opacity-50 bg-muted/30' : ''}`}>
                       {/* Header with Badge and Actions */}
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2">
@@ -392,7 +403,6 @@ const confirmDeleteSegment = () => {
                           <span className="text-xs text-muted-foreground">#{index + 1}</span>
                         </div>
                         <div className="flex items-center gap-0.5">
-                          {/* Add this Eye Toggle Button */}
                           <Button
                             size="icon"
                             variant="ghost"
@@ -454,51 +464,55 @@ const confirmDeleteSegment = () => {
                         data-testid={`input-label-${index}`}
                       />
                       
-                      {/* Value and Probability Row */}
-                      <div className="grid grid-cols-2 gap-2 mb-2">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">
-                            {seg.rewardType === "cash" ? "£ Amount" : seg.rewardType === "points" ? "Points" : "Value"}
-                          </Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={
-                              seg.rewardType === "lose" || seg.rewardType === "try_again"
-                                ? ""
-                                : seg.rewardValue === null || seg.rewardValue === undefined
-                                  ? ""
-                                  : seg.rewardValue
-                            }
-                            onChange={(e) => updateSegment(seg.id, "rewardValue", e.target.value)}
-                            disabled={seg.rewardType === "lose" || seg.rewardType === "try_again"}
-                            placeholder="-"
-                            className="h-8 text-sm"
-                            data-testid={`input-value-${index}`}
-                          />
+                     {/* Value and Probability Row */}
+<div className={`grid ${seg.rewardType === "physical" ? "grid-cols-1" : "grid-cols-2"} gap-2 mb-2`}>
+  
+  {/* VALUE INPUT (HIDE FOR PHYSICAL) */}
+  {seg.rewardType !== "physical" && (
+    <div>
+      <Label className="text-xs text-muted-foreground">
+        {seg.rewardType === "cash" ? "£ Amount" : 
+         seg.rewardType === "points" ? "Points" : "Value"}
+      </Label>
+      <Input
+        type="number"
+        step="0.01"
+        value={
+          seg.rewardType === "lose" || seg.rewardType === "try_again"
+            ? ""
+            : seg.rewardValue ?? ""
+        }
+        onChange={(e) => updateSegment(seg.id, "rewardValue", e.target.value)}
+        disabled={seg.rewardType === "lose" || seg.rewardType === "try_again"}
+        placeholder="-"
+        className="h-8 text-sm"
+        data-testid={`input-value-${index}`}
+      />
+    </div>
+  )}
 
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Probability %</Label>
-                         <Input
-                          type="number"
-                          step="0.01" // allows decimals
-                          min="0"
-                          max="100"
-                          value={seg.probability === undefined || seg.probability === null ? "" : seg.probability}
-                          onChange={(e) => updateSegment(seg.id, "probability", e.target.value)}
-                          className="h-8 text-sm"
-                          data-testid={`input-probability-${index}`}
-                        />
+  {/* PROBABILITY (ALWAYS SHOW) */}
+  <div>
+    <Label className="text-xs text-muted-foreground">Probability %</Label>
+    <Input
+      type="number"
+      step="0.01"
+      min="0"
+      max="100"
+      value={seg.probability ?? ""}
+      onChange={(e) => updateSegment(seg.id, "probability", e.target.value)}
+      className="h-8 text-sm"
+      data-testid={`input-probability-${index}`}
+    />
+  </div>
 
-                        </div>
-                      </div>
+</div>
 
                       {/* Max Wins Row */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <Label className="text-xs text-muted-foreground">Limit:</Label>
-                           <Input
+                          <Input
                             type="number"
                             value={seg.maxWins ?? ""}
                             onChange={(e) => {
@@ -611,6 +625,17 @@ const confirmDeleteSegment = () => {
                     </p>
                   </div>
                   
+                  <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Package className="w-4 h-4 text-purple-400" />
+                      <span className="text-sm font-medium text-purple-400">Physical Prizes</span>
+                    </div>
+                    <p className="text-2xl font-bold">{segmentsByType.physical.length}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {segmentsByType.physical.reduce((sum, s) => sum + Number(s.probability), 0).toFixed(1)}% total chance
+                    </p>
+                  </div>
+                  
                   <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
                     <div className="flex items-center gap-2 mb-1">
                       <Repeat className="w-4 h-4 text-blue-400" />
@@ -714,7 +739,7 @@ const confirmDeleteSegment = () => {
         </div>
       </div>
 
-            <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Prize?</AlertDialogTitle>

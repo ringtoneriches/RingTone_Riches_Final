@@ -481,7 +481,7 @@ export const popPrizes = pgTable("pop_prizes", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   prizeName: varchar("prize_name").notNull(), // e.g., "£1", "£5", "£10"
   prizeValue: decimal("prize_value", { precision: 10, scale: 2 }).notNull(),
-  rewardType: varchar("reward_type", { enum: ["cash", "points", "try_again"] }).notNull(),
+  rewardType: varchar("reward_type", { enum: ["cash", "points", "physical", "try_again"] }).notNull(),
   weight: integer("weight").notNull().default(10), // For weighted random selection
   maxWins: integer("max_wins"), // null = unlimited
   quantityWon: integer("quantity_won").default(0),
@@ -504,9 +504,10 @@ export const popWins = pgTable("pop_wins", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   orderId: uuid("order_id").references(() => orders.id),
   userId: varchar("user_id").notNull().references(() => users.id),
+  prizeName: text("prize_name"),
   prizeId: text("prize_id").notNull(), // References prize.id from config
   balloonValues: jsonb("balloon_values").notNull(), // Array of 3 values revealed
-  rewardType: varchar("reward_type", { enum: ["cash", "points", "try_again", "lose"] }).notNull(),
+  rewardType: varchar("reward_type", { enum: ["cash", "physical" , "points", "try_again", "lose"] }).notNull(),
   rewardValue: text("reward_value").notNull(),
   isWin: boolean("is_win").default(false),
   wonAt: timestamp("won_at").defaultNow(),
@@ -531,7 +532,7 @@ export const plinkoPrizes = pgTable("plinko_prizes", {
   slotIndex: integer("slot_index").notNull(), // 0-7 for 8 prize slots
   prizeName: varchar("prize_name").notNull(), // Display name e.g., "£1,000 JACKPOT", "100 Points"
   prizeValue: decimal("prize_value", { precision: 10, scale: 2 }).notNull(), // Numeric value of prize
-  rewardType: varchar("reward_type", { enum: ["cash", "points", "try_again", "free_play"] }).notNull(), // Prize type
+  rewardType: varchar("reward_type", { enum: ["cash", "physical", "points", "try_again", "free_play"] }).notNull(), // Prize type
   probability: decimal("probability", { precision: 6, scale: 3 }).notNull(), // Percentage e.g., 45.000 for 45%
   color: varchar("color").default("#FFD700"), // Slot background color for display
   maxWins: integer("max_wins"), // Win limit - null means unlimited
@@ -558,7 +559,7 @@ export const plinkoWins = pgTable("plinko_wins", {
   userId: varchar("user_id").notNull().references(() => users.id), // Player
   prizeId: uuid("prize_id").notNull().references(() => plinkoPrizes.id), // Prize slot that was hit
   slotIndex: integer("slot_index").notNull(), // Which slot (0-7) the ball landed in
-  rewardType: varchar("reward_type", { enum: ["cash", "points", "try_again"] }).notNull(),
+  rewardType: varchar("reward_type", { enum: ["cash","physical", "points", "try_again"] }).notNull(),
   rewardValue: text("reward_value").notNull(), // Amount won as string
   isWin: boolean("is_win").default(false), // True if won cash or points
   wonAt: timestamp("won_at").defaultNow(),

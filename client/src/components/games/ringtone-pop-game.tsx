@@ -196,9 +196,14 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }:
               className="absolute top-3 left-4 w-8 h-12 rounded-full opacity-60 blur-sm"
               style={{ background: `linear-gradient(135deg, white 0%, transparent 100%)` }}
             />
-            <span className="text-2xl sm:text-3xl md:text-4xl font-black text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] text-center px-2">
-              {value || "?"}
-            </span>
+            <span className={`
+  font-black text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] text-center px-2
+  ${value === "R" || (typeof value === 'string' && (value.includes('£') || value.includes('pts')))
+    ? 'text-2xl sm:text-3xl md:text-4xl'
+    : 'text-sm sm:text-base md:text-lg'}
+`}>
+  {value || "?"}
+</span>
           </div>
         </div>
       </div>
@@ -448,24 +453,62 @@ export default function RingtonePopGame({
         throw new Error(error.message || "Failed to play");
       }
 
-      const data = await response.json();
-      const gameData = data.result || data;
-      setGameResult({ ...gameData, _fullResponse: data });
-      
-      const values = gameData.balloonValues || [0, 0, 0];
-      const formattedValues = values.map((v: number | string) => {
-      if (v === -1) return "R";
-      const numVal = typeof v === 'string' ? parseFloat(v) : v;
-      if (isNaN(numVal)) return String(v);
-      
-      // Check if the reward type is points, then show pts instead of £
-      if (gameData.rewardType === "points") {
-        return `${numVal} pts`;
+   const data = await response.json();
+const gameData = data.result || data;
+setGameResult({ 
+  ...gameData, 
+  _fullResponse: data,
+  // Ensure prizeName is available for physical prizes
+  prizeName: gameData.prizeName || (gameData.rewardType === "physical" ? gameData.rewardValue : null)
+});
+
+const values = gameData.balloonValues || [0, 0, 0];
+const formattedValues = values.map((v: number | string, idx: number) => {
+  if (v === -1) return "R";
+  const numVal = typeof v === 'string' ? parseFloat(v) : v;
+  
+  // For physical prizes - smart formatting for balloons
+  if (gameData.rewardType === "physical") {
+    let prizeName = gameData.prizeName || gameData.rewardValue || "Prize";
+    
+    // Remove common prefixes for cleaner display
+    prizeName = prizeName.replace(/^(Apple |Samsung |Google )/i, "");
+    
+    // Smart truncation based on length
+    if (prizeName.length > 10) {
+      // Try to get first meaningful words
+      const words = prizeName.split(' ');
+      if (words.length > 1) {
+        // "iPhone 14 Pro Max" -> "iPhone..."
+        return words[0] + "…";
       }
-      
-      // Otherwise show £ for cash or other types
-      return `£${numVal}`;
-    });
+      // "PlayStation5" -> "PS5" style or truncate
+      if (prizeName.length > 12) {
+        return prizeName.substring(0, 9) + "…";
+      }
+      return prizeName;
+    }
+    
+    // Short names display fully
+    return prizeName;
+  }
+  
+  if (isNaN(numVal)) return String(v);
+  
+  if (gameData.rewardType === "points") {
+    // Format points nicely - if over 999, show as "1k"
+    if (numVal >= 1000) {
+      return `${(numVal / 1000).toFixed(0)}k pts`;
+    }
+    return `${numVal} pts`;
+  }
+  
+  // Cash values - format nicely
+  if (numVal >= 1000) {
+    return `£${(numVal / 1000).toFixed(0)}k`;
+  }
+  return `£${numVal}`;
+});
       
       setBalloonValues(formattedValues);
       setIsPlaying(true);
@@ -531,12 +574,15 @@ export default function RingtonePopGame({
     resetGame();
   };
 
-  const getPrizeDisplay = () => {
-    if (!gameResult) return "";
-    if (gameResult.rewardType === "cash") return `£${gameResult.rewardValue}`;
-    if (gameResult.rewardType === "points") return `${gameResult.rewardValue} Points`;
-    return "Prize";
-  };
+const getPrizeDisplay = () => {
+  if (!gameResult) return "";
+  if (gameResult.rewardType === "cash") return `£${gameResult.rewardValue}`;
+  if (gameResult.rewardType === "points") return `${gameResult.rewardValue} Points`;
+  if (gameResult.rewardType === "physical") {
+    return gameResult.prizeName || gameResult.rewardValue || "Physical Prize";
+  }
+  return "Prize";
+};
 
   return (
     <>
@@ -1149,7 +1195,7 @@ export default function RingtonePopGame({
                 <div className="relative">
                   <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/20 via-yellow-400/30 to-yellow-500/20 blur-xl rounded-lg" />
                   <div className="relative bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 border border-yellow-500/40 rounded-xl px-5 sm:px-8 py-3 sm:py-4">
-                    <div className="text-3xl sm:text-5xl md:text-6xl font-black text-white drop-shadow-lg">
+                    <div className="text-3xl text-center sm:text-5xl md:text-6xl font-black text-white drop-shadow-lg">
                       {getPrizeDisplay()}
                     </div>
                   </div>

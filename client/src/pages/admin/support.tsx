@@ -35,6 +35,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  ExternalLink,
 } from "lucide-react";
 import {
   Select,
@@ -44,6 +45,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { useLocation } from "wouter";
 
 interface SupportTicketWithUser {
   id: string;
@@ -129,6 +131,7 @@ const getPriorityBadgeColor = (priority: string) => {
 export default function AdminSupport() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -148,6 +151,31 @@ export default function AdminSupport() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, priorityFilter]);
+
+  // Check for return from user profile
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const returnToTicket = params.get("returnToTicket");
+    const ticketData = params.get("ticketData");
+    
+    if (returnToTicket && ticketData) {
+      try {
+        const ticket = JSON.parse(decodeURIComponent(ticketData));
+        setSelectedTicket(ticket);
+        setAdminResponse(ticket.adminResponse || "");
+        setNewStatus(ticket.status);
+        setNewPriority(ticket.priority);
+        // Clean URL
+        window.history.replaceState({}, "", "/admin/support");
+        toast({
+          title: "Returned to Ticket",
+          description: `Back to ticket #${ticket.ticketNumber}`,
+        });
+      } catch (e) {
+        console.error("Failed to restore ticket:", e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const markAsRead = async () => {
@@ -360,24 +388,28 @@ export default function AdminSupport() {
     setDeleteDialogOpen(false);
   };
 
-  // NEW: Navigate to customer with ticket context
-  const handleGoToCustomer = (ticket: SupportTicketWithUser) => {
-    if (!ticket.userId) {
-      toast({
-        title: "Error",
-        description: "User information not found for this ticket.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    // Store ticket ID in sessionStorage to show it on customer page
-    sessionStorage.setItem('pendingTicketToClose', ticket.id);
-    sessionStorage.setItem('returnToSupportPage', window.location.pathname);
-    
-    // Navigate to customer edit page
-    window.location.href = `/admin/users/${ticket.userId}/edit`;
-  };
+  // Navigate to user profile
+  const handleViewUserProfile = (ticket: SupportTicketWithUser) => {
+  if (!ticket.user?.id) return;
+  
+  // Store the user's email to search for them
+  const userEmail = encodeURIComponent(ticket.user.email);
+  
+  // Navigate to users page with search parameter
+  setLocation(`/admin/users?search=${userEmail}&returnTo=support&ticketId=${ticket.id}&ticketData=${encodeURIComponent(JSON.stringify({
+    id: ticket.id,
+    ticketNumber: ticket.ticketNumber,
+    subject: ticket.subject,
+    status: ticket.status,
+    priority: ticket.priority,
+    adminResponse: ticket.adminResponse,
+    adminImageUrls: ticket.adminImageUrls,
+    createdAt: ticket.createdAt,
+    updatedAt: ticket.updatedAt,
+    resolvedAt: ticket.resolvedAt,
+    user: ticket.user,
+  }))}`);
+};
 
   // Filter tickets
   const filteredTickets = tickets.filter((ticket) => {
@@ -634,7 +666,7 @@ export default function AdminSupport() {
                         </div>
                       </div>
                       
-                      {/* Right column for badges and actions */}
+                      {/* Right column for badges */}
                       <div className="flex flex-col items-start sm:items-end gap-2">
                         <div className="flex flex-wrap gap-2">
                           <Badge className={`${getStatusBadgeColor(ticket.status)} border text-xs`}>
@@ -648,28 +680,12 @@ export default function AdminSupport() {
                             <span className="capitalize">{ticket.priority}</span>
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {ticket.imageUrls && ticket.imageUrls.length > 0 && (
-                            <span className="text-xs text-gray-400 flex items-center gap-1">
-                              <Image className="h-3 w-3" />
-                              {ticket.imageUrls.length}
-                            </span>
-                          )}
-                          {/* NEW: Go to Customer Button on Ticket Card */}
-                          {/* <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleGoToCustomer(ticket);
-                            }}
-                            className="text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10 h-7 px-2"
-                            title="Work on customer profile"
-                          >
-                            <User className="h-3 w-3" />
-                            <span className="hidden sm:inline ml-1 text-xs">Customer</span>
-                          </Button> */}
-                        </div>
+                        {ticket.imageUrls && ticket.imageUrls.length > 0 && (
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Image className="h-3 w-3" />
+                            {ticket.imageUrls.length}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -767,26 +783,25 @@ export default function AdminSupport() {
                     {selectedTicket?.ticketNumber ? `#${selectedTicket.ticketNumber} ` : ""}{selectedTicket?.subject}
                   </DialogTitle>
                   {selectedTicket?.user && (
-                    <DialogDescription className="text-gray-400 text-sm sm:text-base truncate flex items-center gap-2 flex-wrap">
-                      <span>From: {selectedTicket.user.firstName} {selectedTicket.user.lastName} ({selectedTicket.user.email})</span>
-                      {/* NEW: Go to Customer Button in Dialog */}
-                      {/* <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (selectedTicket) {
-                            handleGoToCustomer(selectedTicket);
-                          }
-                        }}
-                        className="border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10 h-7 px-2"
-                      >
-                        <User className="h-3 w-3 mr-1" />
-                        Edit Customer
-                      </Button> */}
+                    <DialogDescription className="text-gray-400 text-sm sm:text-base truncate">
+                      From: {selectedTicket.user.firstName} {selectedTicket.user.lastName} ({selectedTicket.user.email})
                     </DialogDescription>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* View User Profile Button */}
+                  {selectedTicket?.user && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => selectedTicket && handleViewUserProfile(selectedTicket)}
+                      className="bg-blue-500/20 border-blue-500/30 text-blue-400 hover:bg-blue-500/30 hover:text-blue-300"
+                      title="View User Profile"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-1" />
+                      User Profile
+                    </Button>
+                  )}
                   <Select value={newStatus} onValueChange={setNewStatus}>
                     <SelectTrigger className="bg-[#1a1a1a] border-gray-600 text-white w-full sm:w-32 text-sm" data-testid="select-update-status">
                       <SelectValue />

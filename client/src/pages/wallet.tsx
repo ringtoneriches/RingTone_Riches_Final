@@ -35,6 +35,7 @@ import {
   Star,
   Target,
   Check,
+  Package,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -1654,25 +1655,44 @@ const handleDeleteBankAccount = (
                                 </p>
                               </div>
                             </div>
-                                      <div
-            className={`font-bold text-lg whitespace-nowrap ${
-              (transaction.type === "deposit" ||
-              transaction.type === "prize" ||
-              transaction.type === "referral" ||
-              transaction.type === "referral_bonus" ||
-              transaction.type === "refund" ||
-              transaction.type === "redeem" ||
-              (transaction.type === "ringtone_points" && parseFloat(transaction.amount) > 0))
-                ? "text-green-400"
-                : "text-red-400"
-            }`}
-          >
-            {(() => {
-              if (transaction.type === "pop_purchase" || transaction.type === "plinko_purchase" || transaction.type === "voltz_purchase") return "-";
-              return parseFloat(transaction.amount) > 0 ? "+" : "-";
-            })()}
-            {formatAmount(transaction)}
-          </div>
+                                   <div
+                            className={`font-bold text-lg whitespace-nowrap ${
+                              (transaction.type === "deposit" ||
+                              transaction.type === "prize" ||
+                              transaction.type === "referral" ||
+                              transaction.type === "referral_bonus" ||
+                              transaction.type === "refund" ||
+                              transaction.type === "redeem" ||
+                              (transaction.type === "ringtone_points" && parseFloat(transaction.amount) > 0))
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }`}
+                          >
+                            {(() => {
+                              // Check if this is a physical prize transaction
+                              const isPhysicalPrize = transaction.description?.toLowerCase().includes('physical prize');
+                              
+                              if (isPhysicalPrize) {
+                                // Extract prize name from description
+                                const match = transaction.description?.match(/Physical Prize Won: ([^-]+)/);
+                                const prizeName = match ? match[1].trim() : "Prize";
+                                // Shorten long prize names
+                                const shortName = prizeName.length > 12 ? prizeName.substring(0, 10) + "…" : prizeName;
+                                return (
+                                  <span className="flex items-center gap-1 text-sm text-purple-400">
+                                    <Package className="w-4 h-4" />
+                                    {shortName}
+                                  </span>
+                                );
+                              }
+                              
+                              if (transaction.type === "pop_purchase" || transaction.type === "plinko_purchase" || transaction.type === "voltz_purchase") {
+                                return "-";
+                              }
+                              const sign = parseFloat(transaction.amount) > 0 ? "+" : "-";
+                              return `${sign}${formatAmount(transaction)}`;
+                            })()}
+                          </div>
                           </div>
                         ))
                       )}

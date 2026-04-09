@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown, ArrowBigLeft, ArrowBigRight, CheckCircle,  XCircle, Users, Badge, Shield, AlertTriangleIcon, Download, Eye } from "lucide-react";
+import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ArrowUp, ArrowDown, ChevronUp, ChevronDown, ArrowBigLeft, ArrowBigRight, CheckCircle,  XCircle, Users, Badge, Shield, AlertTriangleIcon, Download, Eye, ArrowLeft, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -172,8 +172,25 @@ export default function AdminUsers() {
   const [selectedIpUser, setSelectedIpUser] = useState<User | null>(null);
   const [ipDialogOpen, setIpDialogOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
+  const [returnToSupport, setReturnToSupport] = useState<{ ticketId: string; ticketData: string } | null>(null);
   const [currentPage , setCurrentPage] = useState(1);
   const itemsPerPage = 50;
+
+  useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const searchParam = params.get("search");
+  const returnTo = params.get("returnTo");
+  const ticketId = params.get("ticketId");
+  const ticketData = params.get("ticketData");
+  
+  if (searchParam) {
+    setSearchInput(decodeURIComponent(searchParam));
+  }
+  
+  if (returnTo === "support" && ticketId && ticketData) {
+    setReturnToSupport({ ticketId, ticketData });
+  }
+}, []);
   
   // Calculate date range (memoized to prevent infinite loops)
   const { dateFrom, dateTo } = useMemo(() => {
@@ -686,7 +703,26 @@ export default function AdminUsers() {
             <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-1">Manage platform users</p>
           </div>
         </div>
-
+        {/* Return to Support Banner */}
+        {returnToSupport && (
+          <div className="flex justify-between items-center bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
+            <div className="flex items-center gap-2">
+              <ArrowLeft className="w-4 h-4 text-blue-400" />
+              <span className="text-sm text-blue-300">Viewing user from support ticket</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setLocation(`/admin/support?returnToTicket=${returnToSupport.ticketId}&ticketData=${returnToSupport.ticketData}`);
+              }}
+              className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+            >
+              <MessageSquare className="w-3 h-3 mr-1" />
+              Back to Support Ticket
+            </Button>
+          </div>
+        )}
         {/* Date Filters */}
         <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">

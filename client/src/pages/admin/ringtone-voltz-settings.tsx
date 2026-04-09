@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, Trash2, Save, Eye, EyeOff, RotateCcw, Settings, Gift, Coins, Music, Repeat, Zap, Pencil, Check, X, Trophy, TrendingUp, Shield, Target, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Save, Eye, EyeOff, RotateCcw, Settings, Gift, Coins, Music, Repeat, Zap, Pencil, Check, X, Trophy, TrendingUp, Shield, Target, AlertCircle, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
@@ -33,12 +33,13 @@ interface VoltzPrize {
   id: string;
   prizeName: string;
   prizeValue: string;
-  rewardType: "cash" | "points" | "try_again" | "no_win";
+  rewardType: "cash" | "points" | "physical" | "try_again" | "no_win";
   weight: number;
   maxWins: number | null;
   quantityWon: number;
   isActive: boolean;
   displayOrder: number;
+  imageUrl?: string | null;
 }
 
 interface VoltzConfig {
@@ -65,10 +66,11 @@ export default function AdminRingtoneVoltzSettings() {
   const [newPrize, setNewPrize] = useState({
     prizeName: "",
     prizeValue: "",
-    rewardType: "cash" as "cash" | "points" | "try_again" | "no_win",
+    rewardType: "cash" as "cash" | "points" | "physical" | "try_again" | "no_win",
     weight: 10,
     maxWins: null as number | null,
     displayOrder: 0,
+    imageUrl: "",
   });
 
   const { data: config, isLoading } = useQuery<VoltzConfig>({
@@ -118,7 +120,7 @@ export default function AdminRingtoneVoltzSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/voltz-prizes"] });
       toast({ title: "Prize Created", description: "New prize added successfully" });
-      setNewPrize({ prizeName: "", prizeValue: "", rewardType: "cash", weight: 10, maxWins: null, displayOrder: prizes.length });
+      setNewPrize({ prizeName: "", prizeValue: "", rewardType: "cash", weight: 10, maxWins: null, displayOrder: prizes.length, imageUrl: "" });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -126,7 +128,7 @@ export default function AdminRingtoneVoltzSettings() {
   });
 
   const updatePrizeMutation = useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; prizeName?: string; prizeValue?: string; rewardType?: string; weight?: number; maxWins?: number | null; isActive?: boolean; displayOrder?: number }) => {
+    mutationFn: async ({ id, ...data }: { id: string; prizeName?: string; prizeValue?: string; rewardType?: string; weight?: number; maxWins?: number | null; isActive?: boolean; displayOrder?: number; imageUrl?: string | null }) => {
       return apiRequest(`/api/admin/voltz-prizes/${id}`, "PUT", data);
     },
     onSuccess: () => {
@@ -184,52 +186,60 @@ export default function AdminRingtoneVoltzSettings() {
 
   const [isSavingConfig, setIsSavingConfig] = useState(false);
 
-  // Update the handleSaveConfig function with better error logging
-const handleSaveConfig = async () => {
-  setIsSavingConfig(true);
-  try {
-    console.log("Saving config:", { isVisible, isActive, winProbability, freeReplayProbability });
-    
-    const res = await fetch("/api/admin/voltz-config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isVisible, isActive, winProbability, freeReplayProbability }),
-      credentials: "include",
-    });
-    
-    const responseText = await res.text();
-    console.log("Config save response:", responseText);
-    
-    if (!res.ok) {
-      throw new Error(responseText || "Failed to save config");
+  const handleSaveConfig = async () => {
+    setIsSavingConfig(true);
+    try {
+      console.log("Saving config:", { isVisible, isActive, winProbability, freeReplayProbability });
+      
+      const res = await fetch("/api/admin/voltz-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isVisible, isActive, winProbability, freeReplayProbability }),
+        credentials: "include",
+      });
+      
+      const responseText = await res.text();
+      console.log("Config save response:", responseText);
+      
+      if (!res.ok) {
+        throw new Error(responseText || "Failed to save config");
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/voltz-config"] });
+      setHasConfigChanges(false);
+      toast({ title: "Saved!", description: "Configuration updated successfully" });
+    } catch (err: any) {
+      console.error("Config save error:", err);
+      toast({ title: "Error", description: err.message || "Failed to save config", variant: "destructive" });
+    } finally {
+      setIsSavingConfig(false);
     }
-    
-    queryClient.invalidateQueries({ queryKey: ["/api/admin/voltz-config"] });
-    setHasConfigChanges(false);
-    toast({ title: "Saved!", description: "Configuration updated successfully" });
-  } catch (err: any) {
-    console.error("Config save error:", err);
-    toast({ title: "Error", description: err.message || "Failed to save config", variant: "destructive" });
-  } finally {
-    setIsSavingConfig(false);
-  }
-};
+  };
 
-  const handleCreatePrize = () => {
-    if (!newPrize.prizeName.trim()) {
-      toast({ title: "Validation Error", description: "Prize name is required", variant: "destructive" });
-      return;
-    }
-    if (newPrize.rewardType !== "try_again" && newPrize.rewardType !== "no_win" && (!newPrize.prizeValue || parseFloat(newPrize.prizeValue) <= 0)) {
+ const handleCreatePrize = () => {
+  if (!newPrize.prizeName.trim()) {
+    toast({ title: "Validation Error", description: "Prize name is required", variant: "destructive" });
+    return;
+  }
+  
+  // For physical prizes, we don't need to validate prizeValue
+  if (newPrize.rewardType !== "try_again" && newPrize.rewardType !== "no_win" && newPrize.rewardType !== "physical") {
+    if (!newPrize.prizeValue || parseFloat(newPrize.prizeValue) <= 0) {
       toast({ title: "Validation Error", description: "Prize value must be greater than 0", variant: "destructive" });
       return;
     }
-    createPrizeMutation.mutate({
-      ...newPrize,
-      prizeValue: (newPrize.rewardType === "try_again" || newPrize.rewardType === "no_win") ? "0" : newPrize.prizeValue,
-      displayOrder: prizes.length,
-    });
-  };
+  }
+  
+  createPrizeMutation.mutate({
+    ...newPrize,
+    // For try_again and no_win, set to "0"
+    // For physical prizes, also set to "0" since it's not used for value calculation
+    prizeValue: (newPrize.rewardType === "try_again" || newPrize.rewardType === "no_win" || newPrize.rewardType === "physical") 
+      ? "0" 
+      : newPrize.prizeValue,
+    displayOrder: prizes.length,
+  });
+};
 
   const startEditing = (prize: VoltzPrize) => {
     setEditingPrizeId(prize.id);
@@ -239,6 +249,7 @@ const handleSaveConfig = async () => {
       rewardType: prize.rewardType,
       weight: prize.weight,
       maxWins: prize.maxWins,
+      imageUrl: prize.imageUrl,
     });
   };
 
@@ -258,7 +269,7 @@ const handleSaveConfig = async () => {
     const type = editForm.rewardType || "cash";
     const rawValue = editForm.prizeValue;
     const numValue = Number(rawValue);
-    if (type !== "try_again" && type !== "no_win" && (isNaN(numValue) || numValue <= 0)) {
+    if (type !== "try_again" && type !== "no_win" && type !== "physical" && (isNaN(numValue) || numValue <= 0)) {
       toast({ title: "Validation Error", description: "Prize value must be greater than 0", variant: "destructive" });
       return;
     }
@@ -268,6 +279,7 @@ const handleSaveConfig = async () => {
       rewardType: type,
       weight: Number(editForm.weight) || 1,
       maxWins: editForm.maxWins !== undefined && editForm.maxWins !== null ? Number(editForm.maxWins) : null,
+      imageUrl: editForm.imageUrl || null,
     };
     setIsSaving(true);
     try {
@@ -303,6 +315,7 @@ const handleSaveConfig = async () => {
     switch (type) {
       case "cash": return <Coins className="w-4 h-4" />;
       case "points": return <Trophy className="w-4 h-4" />;
+      case "physical": return <Package className="w-4 h-4" />;
       case "try_again": return <Repeat className="w-4 h-4" />;
       case "no_win": return <X className="w-4 h-4" />;
       default: return <Gift className="w-4 h-4" />;
@@ -313,6 +326,7 @@ const handleSaveConfig = async () => {
     switch (type) {
       case "cash": return "from-emerald-500/20 via-emerald-600/10 to-transparent border-emerald-500/40";
       case "points": return "from-amber-500/20 via-amber-600/10 to-transparent border-amber-500/40";
+      case "physical": return "from-purple-500/20 via-purple-600/10 to-transparent border-purple-500/40";
       case "try_again": return "from-cyan-500/20 via-cyan-600/10 to-transparent border-cyan-500/40";
       case "no_win": return "from-red-500/20 via-red-600/10 to-transparent border-red-500/40";
       default: return "from-gray-500/20 via-gray-600/10 to-transparent border-border";
@@ -323,6 +337,7 @@ const handleSaveConfig = async () => {
     switch (type) {
       case "cash": return { text: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/30", dot: "bg-emerald-400" };
       case "points": return { text: "text-amber-400", bg: "bg-amber-500/20", border: "border-amber-500/30", dot: "bg-amber-400" };
+      case "physical": return { text: "text-purple-400", bg: "bg-purple-500/20", border: "border-purple-500/30", dot: "bg-purple-400" };
       case "try_again": return { text: "text-cyan-400", bg: "bg-cyan-500/20", border: "border-cyan-500/30", dot: "bg-cyan-400" };
       case "no_win": return { text: "text-red-400", bg: "bg-red-500/20", border: "border-red-500/30", dot: "bg-red-400" };
       default: return { text: "text-gray-400", bg: "bg-gray-500/20", border: "border-gray-500/30", dot: "bg-gray-400" };
@@ -331,7 +346,7 @@ const handleSaveConfig = async () => {
 
   const getTypeBadge = (type: string) => {
     const accent = getTypeAccent(type);
-    const label = type === "cash" ? "Cash" : type === "points" ? "Points" : type === "no_win" ? "No Win" : "Free Play";
+    const label = type === "cash" ? "Cash" : type === "points" ? "Points" : type === "physical" ? "Physical" : type === "no_win" ? "No Win" : "Free Play";
     return (
       <Badge className={`${accent.bg} ${accent.text} ${accent.border} gap-1.5 font-semibold`}>
         {getTypeIcon(type)} {label}
@@ -342,6 +357,7 @@ const handleSaveConfig = async () => {
   const activePrizes = prizes.filter(p => p.isActive);
   const cashPrizes = activePrizes.filter(p => p.rewardType === "cash");
   const pointsPrizes = activePrizes.filter(p => p.rewardType === "points");
+  const physicalPrizes = activePrizes.filter(p => p.rewardType === "physical");
   const freePlayPrizes = activePrizes.filter(p => p.rewardType === "try_again");
   const totalWon = prizes.reduce((s, p) => s + (p.quantityWon || 0), 0);
 
@@ -421,7 +437,7 @@ const handleSaveConfig = async () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <div className="relative overflow-hidden rounded-lg border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-transparent p-3">
             <div className="flex items-center gap-2 mb-1">
               <Target className="w-4 h-4 text-amber-400" />
@@ -448,10 +464,18 @@ const handleSaveConfig = async () => {
           </div>
           <div className="relative overflow-hidden rounded-lg border border-purple-500/20 bg-gradient-to-br from-purple-500/10 to-transparent p-3">
             <div className="flex items-center gap-2 mb-1">
-              <Shield className="w-4 h-4 text-purple-400" />
-              <span className="text-xs text-purple-400/80 font-medium">Win Rate</span>
+              <Package className="w-4 h-4 text-purple-400" />
+              <span className="text-xs text-purple-400/80 font-medium">Physical</span>
             </div>
-            <p className="text-2xl font-bold text-purple-300" data-testid="text-win-rate">{winProbability}%</p>
+            <p className="text-2xl font-bold text-purple-300" data-testid="text-physical-count">{physicalPrizes.length}</p>
+            <p className="text-xs text-muted-foreground">prizes</p>
+          </div>
+          <div className="relative overflow-hidden rounded-lg border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-transparent p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Shield className="w-4 h-4 text-amber-400" />
+              <span className="text-xs text-amber-400/80 font-medium">Win Rate</span>
+            </div>
+            <p className="text-2xl font-bold text-amber-300" data-testid="text-win-rate">{winProbability}%</p>
             <p className="text-xs text-muted-foreground">probability</p>
           </div>
         </div>
@@ -480,24 +504,22 @@ const handleSaveConfig = async () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                   <div className="lg:col-span-1">
                     <Label className="text-xs text-muted-foreground mb-1 block">Prize Name</Label>
-                   <Input
-                    value={newPrize.prizeName}
-                    onChange={(e) =>
-                        setNewPrize({ ...newPrize, prizeName: e.target.value })
-                    }
-                    placeholder="e.g. £5 Cash"
-                    className="h-9 bg-zinc-900 text-white border-zinc-700 placeholder:text-zinc-400 focus:border-amber-500"
-                    data-testid="input-new-prize-name"
+                    <Input
+                      value={newPrize.prizeName}
+                      onChange={(e) => setNewPrize({ ...newPrize, prizeName: e.target.value })}
+                      placeholder="e.g. iPhone 14"
+                      className="h-9 bg-zinc-900 text-white border-zinc-700 placeholder:text-zinc-400 focus:border-amber-500"
+                      data-testid="input-new-prize-name"
                     />
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground mb-1 block">Reward Type</Label>
                     <Select
                       value={newPrize.rewardType}
-                      onValueChange={(val: "cash" | "points" | "try_again" | "no_win") => setNewPrize({ ...newPrize, rewardType: val, prizeValue: (val === "try_again" || val === "no_win") ? "0" : newPrize.prizeValue })}
+                      onValueChange={(val: "cash" | "points" | "physical" | "try_again" | "no_win") => setNewPrize({ ...newPrize, rewardType: val, prizeValue: (val === "try_again" || val === "no_win") ? "0" : newPrize.prizeValue })}
                     >
                       <SelectTrigger className="h-9 bg-background/50 border-border/50" data-testid="select-new-reward-type">
                         <SelectValue />
@@ -505,13 +527,16 @@ const handleSaveConfig = async () => {
                       <SelectContent>
                         <SelectItem value="cash">Cash</SelectItem>
                         <SelectItem value="points">Points</SelectItem>
+                        <SelectItem value="physical">Physical Prize</SelectItem>
                         <SelectItem value="try_again">Free Replay</SelectItem>
                         <SelectItem value="no_win">No Win</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground mb-1 block">{newPrize.rewardType === "cash" ? "£ Amount" : newPrize.rewardType === "points" ? "Points" : "Value"}</Label>
+                    <Label className="text-xs text-muted-foreground mb-1 block">
+                      {newPrize.rewardType === "cash" ? "£ Amount" : newPrize.rewardType === "points" ? "Points" : newPrize.rewardType === "physical" ? "Value (optional)" : "Value"}
+                    </Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -536,20 +561,21 @@ const handleSaveConfig = async () => {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground mb-1 block">Max Wins</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        min="1"
-                        value={newPrize.maxWins ?? ""}
-                        onChange={(e) => setNewPrize({ ...newPrize, maxWins: e.target.value ? parseInt(e.target.value) : null })}
-                        placeholder="∞"
-                        className="h-9 bg-zinc-900 text-white border-zinc-700 placeholder:text-zinc-400 focus:border-amber-500"
-                        data-testid="input-new-max-wins"
-                      />
-                      <Button onClick={handleCreatePrize} disabled={createPrizeMutation.isPending} className="h-9 px-4 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white shadow-lg shadow-amber-500/20" data-testid="button-add-prize">
-                        <Plus className="w-4 h-4 mr-1" /> Add
-                      </Button>
-                    </div>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={newPrize.maxWins ?? ""}
+                      onChange={(e) => setNewPrize({ ...newPrize, maxWins: e.target.value ? parseInt(e.target.value) : null })}
+                      placeholder="∞"
+                      className="h-9 bg-zinc-900 text-white border-zinc-700 placeholder:text-zinc-400 focus:border-amber-500"
+                      data-testid="input-new-max-wins"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block">&nbsp;</Label>
+                    <Button onClick={handleCreatePrize} disabled={createPrizeMutation.isPending} className="h-9 px-4 w-full bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white shadow-lg shadow-amber-500/20" data-testid="button-add-prize">
+                      <Plus className="w-4 h-4 mr-1" /> Add
+                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -659,7 +685,7 @@ const handleSaveConfig = async () => {
                                   <Label className="text-xs text-muted-foreground">Type</Label>
                                   <Select
                                     value={editForm.rewardType}
-                                    onValueChange={(val: "cash" | "points" | "try_again" | "no_win") => setEditForm({ ...editForm, rewardType: val, prizeValue: (val === "try_again" || val === "no_win") ? "0" : editForm.prizeValue })}
+                                    onValueChange={(val: "cash" | "points" | "physical" | "try_again" | "no_win") => setEditForm({ ...editForm, rewardType: val, prizeValue: (val === "try_again" || val === "no_win") ? "0" : editForm.prizeValue })}
                                   >
                                     <SelectTrigger className="h-8 mt-1 text-foreground border-border/50" style={{ backgroundColor: 'var(--card)' }} data-testid={`select-edit-type-${prize.id}`}>
                                       <SelectValue />
@@ -667,6 +693,7 @@ const handleSaveConfig = async () => {
                                     <SelectContent>
                                       <SelectItem value="cash">Cash</SelectItem>
                                       <SelectItem value="points">Points</SelectItem>
+                                      <SelectItem value="physical">Physical Prize</SelectItem>
                                       <SelectItem value="try_again">Free Replay</SelectItem>
                                       <SelectItem value="no_win">No Win</SelectItem>
                                     </SelectContent>
@@ -714,15 +741,31 @@ const handleSaveConfig = async () => {
                                   />
                                 </div>
                               </div>
+                              {editForm.rewardType === "physical" && (
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Image URL (optional)</Label>
+                                  <Input
+                                    value={editForm.imageUrl ?? ""}
+                                    onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
+                                    placeholder="https://..."
+                                    className="h-8 mt-1 text-foreground border-border/50 focus:border-amber-500/50"
+                                    style={{ backgroundColor: 'var(--card)' }}
+                                    data-testid={`input-edit-image-${prize.id}`}
+                                  />
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <>
-                              <h3 className="font-bold text-base mb-3" data-testid={`text-prize-name-${prize.id}`}>{prize.prizeName}</h3>
+                              <h3 className="font-bold text-base mb-3 flex items-center gap-2" data-testid={`text-prize-name-${prize.id}`}>
+                                {prize.rewardType === "physical" && <Package className="w-4 h-4 text-purple-400" />}
+                                {prize.prizeName}
+                              </h3>
 
                               <div className="grid grid-cols-3 gap-2 mb-3">
                                 <div className="bg-black/20 rounded-lg p-2 text-center">
                                   <p className={`text-lg font-bold ${accent.text}`} data-testid={`text-prize-value-${prize.id}`}>
-                                    {prize.rewardType === "try_again" ? "Free" : prize.rewardType === "no_win" ? "—" : prize.rewardType === "cash" ? `£${prize.prizeValue}` : prize.prizeValue}
+                                    {prize.rewardType === "try_again" ? "Free" : prize.rewardType === "no_win" ? "—" : prize.rewardType === "physical" ? "Prize" : prize.rewardType === "cash" ? `£${prize.prizeValue}` : prize.prizeValue}
                                   </p>
                                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Value</p>
                                 </div>
@@ -740,7 +783,7 @@ const handleSaveConfig = async () => {
 
                               <div className="relative h-1.5 rounded-full bg-black/30 overflow-hidden">
                                 <div
-                                  className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${maxReached ? "bg-red-500" : prize.rewardType === "cash" ? "bg-emerald-500" : prize.rewardType === "points" ? "bg-amber-500" : "bg-cyan-500"}`}
+                                  className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${maxReached ? "bg-red-500" : prize.rewardType === "cash" ? "bg-emerald-500" : prize.rewardType === "points" ? "bg-amber-500" : prize.rewardType === "physical" ? "bg-purple-500" : "bg-cyan-500"}`}
                                   style={{ width: `${totalWeight > 0 ? Math.min((prize.weight / totalWeight) * 100, 100) : 0}%` }}
                                 />
                               </div>
@@ -836,7 +879,7 @@ const handleSaveConfig = async () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   <div className="relative overflow-hidden rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 to-transparent p-4">
                     <div className="absolute top-0 right-0 w-12 h-12 bg-emerald-500/10 rounded-full blur-xl" />
                     <div className="flex items-center gap-2 mb-2">
@@ -854,6 +897,15 @@ const handleSaveConfig = async () => {
                     </div>
                     <p className="text-3xl font-bold" data-testid="text-points-count">{pointsPrizes.length}</p>
                     <p className="text-xs text-muted-foreground mt-1">{totalWeight > 0 ? ((pointsPrizes.reduce((s, p) => s + p.weight, 0) / totalWeight) * 100).toFixed(1) : "0.0"}% weight</p>
+                  </div>
+                  <div className="relative overflow-hidden rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-500/15 to-transparent p-4">
+                    <div className="absolute top-0 right-0 w-12 h-12 bg-purple-500/10 rounded-full blur-xl" />
+                    <div className="flex items-center gap-2 mb-2">
+                      <Package className="w-4 h-4 text-purple-400" />
+                      <span className="text-sm font-semibold text-purple-400">Physical</span>
+                    </div>
+                    <p className="text-3xl font-bold" data-testid="text-physical-count">{physicalPrizes.length}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{totalWeight > 0 ? ((physicalPrizes.reduce((s, p) => s + p.weight, 0) / totalWeight) * 100).toFixed(1) : "0.0"}% weight</p>
                   </div>
                   <div className="relative overflow-hidden rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/15 to-transparent p-4">
                     <div className="absolute top-0 right-0 w-12 h-12 bg-cyan-500/10 rounded-full blur-xl" />

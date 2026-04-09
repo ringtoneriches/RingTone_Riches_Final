@@ -13048,544 +13048,671 @@ app.post(
   const POP_COOLDOWN_MS = 3000; // 3 seconds between plays
 
   // Play Ringtone Pop game (user)
-  app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const { orderId, competitionId } = req.body;
+ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, competitionId } = req.body;
 
-      if (!orderId || !competitionId) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Order ID and Competition ID are required",
-          });
-      }
-
-      // Cooldown
-      const cooldownKey = `${userId}-${orderId}`;
-      const lastPlayTime = popCooldowns.get(cooldownKey) || 0;
-      const now = Date.now();
-      if (now - lastPlayTime < POP_COOLDOWN_MS) {
-        return res
-          .status(429)
-          .json({
-            success: false,
-            message: "Please wait a moment before playing again",
-          });
-      }
-      popCooldowns.set(cooldownKey, now);
-
-      // Verify order
-      const order = await storage.getOrder(orderId);
-      if (!order || order.userId !== userId || order.status !== "completed") {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "No valid pop game purchase found",
-          });
-      }
-
-      // Check remaining plays
-      const playsUsed = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(popUsage)
-        .where(eq(popUsage.orderId, orderId));
-      const usedCount = Number(playsUsed[0]?.count || 0);
-      const playsRemaining = order.quantity - usedCount;
-      if (playsRemaining <= 0)
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "No plays remaining in this purchase",
-          });
-
-      const user = await storage.getUser(userId);
-      if (!user) return res.status(404).json({ message: "User not found" });
-
-      // Load active pop config
-      const [config] = await db
-        .select()
-        .from(gamePopConfig)
-        .where(eq(gamePopConfig.id, "active"));
-      const popConfig = config || DEFAULT_POP_CONFIG;
-      if (!popConfig.isActive)
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Ringtone Pop is currently unavailable",
-          });
-
-      const segments =
-        (popConfig as any).segments ||
-        (popConfig as any).prizes ||
-        DEFAULT_POP_CONFIG.segments;
-
-      // Count ALL previous pops (win + try_again + lose)
-      const counts = await db
-        .select({ prizeId: popWins.prizeId, count: sql<number>`count(*)` })
-        .from(popWins)
-        .groupBy(popWins.prizeId);
-      const segmentWinCounts = new Map<string, number>();
-      counts.forEach((c) => segmentWinCounts.set(c.prizeId, Number(c.count)));
-      segments.forEach((seg) => {
-        if (!segmentWinCounts.has(seg.id)) segmentWinCounts.set(seg.id, 0);
+    if (!orderId || !competitionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID and Competition ID are required",
       });
+    }
 
-      // Process a single play
-      const eligibleSegments = segments.filter((seg) => {
-        const wins = segmentWinCounts.get(seg.id) ?? 0;
-        // maxWins only applies to real wins
-        if (
-          seg.maxWins !== null &&
-          (seg.rewardType === "cash" || seg.rewardType === "points")
-        ) {
-          if (wins >= seg.maxWins) return false;
-        }
-        return true;
+    // Cooldown
+    const cooldownKey = `${userId}-${orderId}`;
+    const lastPlayTime = popCooldowns.get(cooldownKey) || 0;
+    const now = Date.now();
+    if (now - lastPlayTime < POP_COOLDOWN_MS) {
+      return res.status(429).json({
+        success: false,
+        message: "Please wait a moment before playing again",
       });
+    }
+    popCooldowns.set(cooldownKey, now);
 
-      // Force "lose" if nothing left
-      const finalEligible = eligibleSegments.length
-        ? eligibleSegments
-        : [segments.find((s) => s.rewardType === "lose")!];
+    // Verify order
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "No valid pop game purchase found",
+      });
+    }
 
-      // Weighted random selection
-      const totalProbability = finalEligible.reduce(
-        (sum, seg) => sum + (seg.probability || 0),
-        0
+    // Check remaining plays
+    const playsUsed = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(popUsage)
+      .where(eq(popUsage.orderId, orderId));
+
+    const usedCount = Number(playsUsed[0]?.count || 0);
+    const playsRemaining = order.quantity - usedCount;
+
+    if (playsRemaining <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No plays remaining in this purchase",
+      });
+    }
+
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Load config
+    const [config] = await db
+      .select()
+      .from(gamePopConfig)
+      .where(eq(gamePopConfig.id, "active"));
+
+    const popConfig = config || DEFAULT_POP_CONFIG;
+
+    if (!popConfig.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "Ringtone Pop is currently unavailable",
+      });
+    }
+
+    const segments =
+      (popConfig as any).segments ||
+      (popConfig as any).prizes ||
+      DEFAULT_POP_CONFIG.segments;
+
+    // Count wins
+    const counts = await db
+      .select({ prizeId: popWins.prizeId, count: sql<number>`count(*)` })
+      .from(popWins)
+      .groupBy(popWins.prizeId);
+
+    const segmentWinCounts = new Map<string, number>();
+    counts.forEach((c) => segmentWinCounts.set(c.prizeId, Number(c.count)));
+
+    segments.forEach((seg) => {
+      if (!segmentWinCounts.has(seg.id)) {
+        segmentWinCounts.set(seg.id, 0);
+      }
+    });
+
+    // Filter eligible
+    const eligibleSegments = segments.filter((seg) => {
+      const wins = segmentWinCounts.get(seg.id) ?? 0;
+
+      if (
+        seg.maxWins !== null &&
+        (seg.rewardType === "cash" ||
+          seg.rewardType === "points" ||
+          seg.rewardType === "physical")
+      ) {
+        if (wins >= seg.maxWins) return false;
+      }
+
+      return true;
+    });
+
+    // Fallback to lose
+    const loseSegment = segments.find((s) => s.rewardType === "lose");
+
+    const finalEligible = eligibleSegments.length
+      ? eligibleSegments
+      : loseSegment
+      ? [loseSegment]
+      : [];
+
+    // 🚨 Safety check (prevents crash)
+    if (!finalEligible.length) {
+      console.error("No eligible segments found", { segments });
+      return res.status(500).json({
+        success: false,
+        message: "Game configuration error",
+      });
+    }
+
+    // Weighted random
+    const totalProbability = finalEligible.reduce(
+      (sum, seg) => sum + (seg.probability || 0),
+      0
+    );
+
+    let random = Math.random() * totalProbability;
+    let selectedSegment = finalEligible[0];
+
+    for (const seg of finalEligible) {
+      random -= seg.probability || 0;
+      if (random <= 0) {
+        selectedSegment = seg;
+        break;
+      }
+    }
+
+    if (!selectedSegment) {
+      return res.status(500).json({
+        success: false,
+        message: "Selection failed",
+      });
+    }
+
+    // RESULT LOGIC
+    let balloonValues: number[] = [];
+    const rewardType = selectedSegment.rewardType || "lose";
+  const prizeName = selectedSegment.label || 
+                  selectedSegment.prizeName || 
+                  (selectedSegment.rewardType === "physical" ? selectedSegment.rewardValue : null) ||
+                  "Prize";
+    let rewardValue = "0";
+
+    const isRPrize = rewardType === "try_again";
+    const isWin =
+      rewardType === "cash" ||
+      rewardType === "points" ||
+      rewardType === "physical";
+
+    if (isRPrize) {
+      const cashSegments = segments.filter((s) => s.rewardType === "cash");
+
+      const vals = cashSegments.map((s) =>
+        parseFloat(s.rewardValue?.toString() || "1")
       );
-      let random = Math.random() * totalProbability;
-      let selectedSegment = finalEligible[0];
-      for (const seg of finalEligible) {
-        random -= seg.probability || 0;
-        if (random <= 0) {
-          selectedSegment = seg;
-          break;
-        }
+
+      let val1 = vals[Math.floor(Math.random() * vals.length)] || 1;
+      let val2 =
+        vals.length > 1
+          ? vals[Math.floor(Math.random() * vals.length)]
+          : val1 + 1;
+
+      while (val2 === val1 && vals.length > 1) {
+        val2 = vals[Math.floor(Math.random() * vals.length)];
       }
 
-      let balloonValues: number[] = [];
-      const rewardType = selectedSegment.rewardType || "lose";
-      let rewardValue = "0";
-      const isRPrize = rewardType === "try_again";
-      const isWin = rewardType === "cash" || rewardType === "points";
+      const rPos = Math.floor(Math.random() * 3);
 
-      if (isRPrize) {
-        const cashSegments = segments.filter((s) => s.rewardType === "cash");
-        const vals = cashSegments.map((s) =>
-          parseFloat(s.rewardValue?.toString() || "1")
-        );
-        let val1 = vals[Math.floor(Math.random() * vals.length)] || 1;
-        let val2 =
-          vals.length > 1
-            ? vals[Math.floor(Math.random() * vals.length)]
-            : val1 + 1;
-        while (val2 === val1 && vals.length > 1)
-          val2 = vals[Math.floor(Math.random() * vals.length)];
-        const rPos = Math.floor(Math.random() * 3);
-        balloonValues =
-          rPos === 0
-            ? [-1, val1, val2]
-            : rPos === 1
-            ? [val1, -1, val2]
-            : [val1, val2, -1];
-        rewardValue = "0";
-        await db
-          .update(orders)
-          .set({ quantity: order.quantity + 1 })
-          .where(eq(orders.id, orderId));
-      } else if (isWin) {
-        const value = parseFloat(
-          selectedSegment.rewardValue?.toString() || "0"
-        );
-        balloonValues = [value, value, value];
-        rewardValue = value.toString();
-        if (rewardType === "cash") {
-          const finalBalance = parseFloat(user.balance || "0") + value;
-          await storage.updateUserBalance(userId, finalBalance.toFixed(2));
-          await storage.createTransaction({
-            userId,
-            type: "prize",
-            amount: value.toFixed(2),
-            description: `Ringtone Pop Win - £${value}`,
-          });
-        } else if (rewardType === "points") {
-          const pointsValue = Math.floor(value);
-          const newPoints = (user.ringtonePoints || 0) + pointsValue;
-          await db
-            .update(users)
-            .set({ ringtonePoints: newPoints })
-            .where(eq(users.id, userId));
-          await storage.createTransaction({
-            userId,
-            type: "ringtone_points",
-            amount: pointsValue.toString(),
-            description: `Ringtone Pop Win - ${pointsValue} pts`,
-          });
-        }
-        await db.insert(winners).values({
-          userId,
-          competitionId,
-          prizeDescription: "Ringtone Pop Win",
-          prizeValue:
-            rewardType === "cash"
-              ? `£${rewardValue} Cash`
-              : `${rewardValue} Points`,
-          imageUrl: selectedSegment.imageUrl || null,
-          isShowcase: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      } else {
-        const cashVals = segments
-          .filter((s) => s.rewardType === "cash")
-          .map((s) => parseFloat(s.rewardValue?.toString() || "1"));
-        if (cashVals.length >= 2) {
-          let v1 = cashVals[Math.floor(Math.random() * cashVals.length)];
-          let v2 = cashVals[Math.floor(Math.random() * cashVals.length)];
-          let v3 = cashVals[Math.floor(Math.random() * cashVals.length)];
-          if (v1 === v2 && v2 === v3)
-            v3 = cashVals.find((v) => v !== v1) || v1 + 1;
-          balloonValues = [v1, v2, v3];
-        } else balloonValues = [1, 5, 10];
-      }
-      console.log("Pop win inserted into winners table:", {
-        userId,
-        competitionId,
-        rewardValue,
-        isShowcase: false,
-      });
-      // Record usage and win
-      await db.insert(popUsage).values({ orderId, userId, usedAt: new Date() });
+      balloonValues =
+        rPos === 0
+          ? [-1, val1, val2]
+          : rPos === 1
+          ? [val1, -1, val2]
+          : [val1, val2, -1];
+
+      rewardValue = "0";
+
       await db
-        .insert(popWins)
-        .values({
+        .update(orders)
+        .set({ quantity: order.quantity + 1 })
+        .where(eq(orders.id, orderId));
+
+    } else if (isWin) {
+      const value = parseFloat(
+        selectedSegment.rewardValue?.toString() || "0"
+      );
+
+      balloonValues = [value, value, value];
+      rewardValue = value.toString();
+
+      if (rewardType === "cash") {
+        const finalBalance = parseFloat(user.balance || "0") + value;
+
+        await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+
+        await storage.createTransaction({
+          userId,
+          type: "prize",
+          amount: value.toFixed(2),
+          description: `Ringtone Pop Win - £${value}`,
+        });
+
+      } else if (rewardType === "points") {
+        const pointsValue = Math.floor(value);
+
+        const newPoints = (user.ringtonePoints || 0) + pointsValue;
+
+        await db
+          .update(users)
+          .set({ ringtonePoints: newPoints })
+          .where(eq(users.id, userId));
+
+        await storage.createTransaction({
+          userId,
+          type: "ringtone_points",
+          amount: pointsValue.toString(),
+          description: `Ringtone Pop Win - ${pointsValue} pts`,
+        });
+
+      } else if (rewardType === "physical") {
+        // ✅ Physical prize handling
+        await storage.createTransaction({
+          userId,
+          type: "prize",
+          amount: "0",
+          description: `Physical Prize Won: ${prizeName} - Contact support`,
+        });
+      }
+
+      // Insert winner
+let prizeDescriptionText = "";
+let prizeValueText = "";
+
+if (rewardType === "cash") {
+  prizeDescriptionText = "Ringtone Pop Win";
+  prizeValueText = `£${rewardValue} Cash`;
+} else if (rewardType === "points") {
+  prizeDescriptionText = "Ringtone Pop Win";
+  prizeValueText = `${rewardValue} Points`;
+} else if (rewardType === "physical") {
+  prizeDescriptionText = `Physical Prize: ${prizeName}`;
+  prizeValueText = prizeName; // Use the prize name as the value
+} else {
+  prizeDescriptionText = "Ringtone Pop Win";
+  prizeValueText = "Try Again";
+}
+
+await db.insert(winners).values({
+  userId,
+  competitionId,
+  prizeDescription: prizeDescriptionText,
+  prizeValue: prizeValueText, // Now always has a value
+  imageUrl: selectedSegment.imageUrl || null,
+  isShowcase: false,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
+    } else {
+      // Lose
+      const cashVals = segments
+        .filter((s) => s.rewardType === "cash")
+        .map((s) => parseFloat(s.rewardValue?.toString() || "1"));
+
+      if (cashVals.length >= 2) {
+        let v1 = cashVals[Math.floor(Math.random() * cashVals.length)];
+        let v2 = cashVals[Math.floor(Math.random() * cashVals.length)];
+        let v3 = cashVals[Math.floor(Math.random() * cashVals.length)];
+
+        if (v1 === v2 && v2 === v3) {
+          v3 = cashVals.find((v) => v !== v1) || v1 + 1;
+        }
+
+        balloonValues = [v1, v2, v3];
+      } else {
+        balloonValues = [1, 5, 10];
+      }
+    }
+
+    // Save usage
+    await db.insert(popUsage).values({
+      orderId,
+      userId,
+      usedAt: new Date(),
+    });
+
+    await db.insert(popWins).values({
+      orderId,
+      userId,
+      prizeId: selectedSegment.id || "none",
+      balloonValues,
+      prizeName,
+      rewardType,
+      rewardValue,
+      isWin,
+      wonAt: new Date(),
+    });
+
+   // In the response section
+res.json({
+  success: true,
+  result: {
+    balloonValues: rewardType === "physical" ? [0, 0, 0] : balloonValues, // Use 0 for physical prize balloons
+    isWin,
+    isRPrize,
+    rewardType,
+    rewardValue: rewardType === "physical" ? selectedSegment.label || selectedSegment.prizeName : rewardValue,
+    prizeName: rewardType === "physical" ? (selectedSegment.label || selectedSegment.prizeName) : undefined,
+    prizeDescription: rewardType === "physical" ? (selectedSegment.prizeDescription || selectedSegment.label) : undefined,
+    isPhysical: rewardType === "physical",
+  },
+  playsRemaining: playsRemaining - 1,
+});
+
+  } catch (error) {
+    console.error("Error playing pop game:", error);
+    res.status(500).json({ message: "Failed to play pop game" });
+  }
+});
+
+  // Reveal all pop games (batch processing)
+ // Reveal all pop games (batch processing)
+app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, count, competitionId } = req.body;
+
+    if (!orderId || !count || count <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid orderId and count are required",
+      });
+    }
+
+    if (!competitionId) {
+      return res.status(400).json({
+        success: false,
+        message: "competitionId is required",
+      });
+    }
+
+    const competition = await db
+      .select()
+      .from(competitions)
+      .where(eq(competitions.id, competitionId))
+      .limit(1);
+
+    if (!competition.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid competition",
+      });
+    }
+
+    // Verify completed order
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "No valid pop game purchase found",
+      });
+    }
+
+    // Check remaining plays
+    const playsUsed = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(popUsage)
+      .where(eq(popUsage.orderId, orderId));
+    const usedCount = Number(playsUsed[0]?.count || 0);
+    const playsRemaining = order.quantity - usedCount;
+
+    if (playsRemaining <= 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No plays remaining" });
+    }
+
+    const playsToProcess = Math.min(count, playsRemaining);
+
+    // Get user and active pop config
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const [config] = await db
+      .select()
+      .from(gamePopConfig)
+      .where(eq(gamePopConfig.id, "active"));
+    const popConfig = config || DEFAULT_POP_CONFIG;
+    const segments =
+      (popConfig as any).segments ||
+      (popConfig as any).prizes ||
+      DEFAULT_POP_CONFIG.segments;
+
+    let totalCash = 0;
+    let totalPoints = 0;
+    let freeReplaysWon = 0;
+    const results: any[] = [];
+
+    // Count existing wins for all segments from popWins table
+    const counts = await db
+      .select({ prizeId: popWins.prizeId, count: sql<number>`count(*)` })
+      .from(popWins)
+      .where(eq(popWins.isWin, true))
+      .groupBy(popWins.prizeId);
+    const segmentWinCounts = new Map<string, number>();
+    counts.forEach((c) => segmentWinCounts.set(c.prizeId, Number(c.count)));
+
+    // Initialize segment counts if missing
+    segments.forEach((seg) => {
+      if (!segmentWinCounts.has(seg.id)) segmentWinCounts.set(seg.id, 0);
+    });
+
+    // Find a "lose" segment to use as fallback
+    const loseSegment = segments.find((s) => s.rewardType === "lose");
+
+    // Transaction to process all plays
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < playsToProcess; i++) {
+        let selectedSegment;
+        let isRPrize = false;
+        let isWin = false;
+
+        // Eligible segments: maxWins applies to cash/points/physical
+        const eligibleSegments = segments.filter((seg) => {
+          const wins = segmentWinCounts.get(seg.id) ?? 0;
+          if (
+            seg.maxWins !== null &&
+            (seg.rewardType === "cash" || seg.rewardType === "points" || seg.rewardType === "physical")
+          ) {
+            if (wins >= seg.maxWins) return false;
+          }
+          return true;
+        });
+
+        // If there are eligible segments, do weighted random selection
+        if (eligibleSegments.length > 0) {
+          const totalProbability = eligibleSegments.reduce(
+            (sum, seg) => sum + (seg.probability || 0),
+            0
+          );
+          let random = Math.random() * totalProbability;
+          selectedSegment = eligibleSegments[0];
+
+          for (const seg of eligibleSegments) {
+            random -= seg.probability || 0;
+            if (random <= 0) {
+              selectedSegment = seg;
+              break;
+            }
+          }
+        } else {
+          // If no eligible segments (all maxWins reached), use lose segment
+          selectedSegment = loseSegment || segments[0];
+        }
+
+        let balloonValues: number[] = [];
+        const rewardType = selectedSegment.rewardType || "lose";
+        const prizeName = selectedSegment.label || 
+                        selectedSegment.prizeName || 
+                        (selectedSegment.rewardType === "physical" ? selectedSegment.rewardValue : null) ||
+                        "Prize";
+        let rewardValue = "0";
+        isRPrize = rewardType === "try_again";
+        isWin = rewardType === "cash" || rewardType === "points" || rewardType === "physical";
+
+        if (isRPrize) {
+          // Free Replay - one R symbol + 2 random cash values
+          const cashSegments = segments.filter(
+            (s) => s.rewardType === "cash"
+          );
+          const availableValues = cashSegments.map((s) =>
+            parseFloat(s.rewardValue?.toString() || "1")
+          );
+          let val1 =
+            availableValues[
+              Math.floor(Math.random() * availableValues.length)
+            ] || 1;
+          let val2 =
+            availableValues.length > 1
+              ? availableValues[
+                  Math.floor(Math.random() * availableValues.length)
+                ]
+              : val1 + 1;
+          while (val2 === val1 && availableValues.length > 1) {
+            val2 =
+              availableValues[
+                Math.floor(Math.random() * availableValues.length)
+              ];
+          }
+          const rPosition = Math.floor(Math.random() * 3);
+          balloonValues =
+            rPosition === 0
+              ? [-1, val1, val2]
+              : rPosition === 1
+              ? [val1, -1, val2]
+              : [val1, val2, -1];
+          rewardValue = "0";
+          freeReplaysWon++;
+          segmentWinCounts.set(
+            selectedSegment.id,
+            (segmentWinCounts.get(selectedSegment.id) || 0) + 1
+          );
+        } else if (isWin) {
+          const value = parseFloat(
+            selectedSegment.rewardValue?.toString() || "0"
+          );
+          
+          if (rewardType === "physical") {
+            // For physical prizes, use placeholder values (0) for balloons
+            balloonValues = [0, 0, 0];
+            rewardValue = value.toString();
+          } else {
+            balloonValues = [value, value, value];
+            rewardValue = value.toString();
+          }
+          
+          if (rewardType === "cash") totalCash += value;
+          if (rewardType === "points") totalPoints += Math.floor(value);
+          
+          segmentWinCounts.set(
+            selectedSegment.id,
+            (segmentWinCounts.get(selectedSegment.id) || 0) + 1
+          );
+
+          // Create winner entry with proper physical prize info
+          let prizeDescriptionText = "";
+          let prizeValueText = "";
+
+          if (rewardType === "cash") {
+            prizeDescriptionText = "Ringtone Pop Win";
+            prizeValueText = `£${rewardValue} Cash`;
+          } else if (rewardType === "points") {
+            prizeDescriptionText = "Ringtone Pop Win";
+            prizeValueText = `${rewardValue} Points`;
+          } else if (rewardType === "physical") {
+            prizeDescriptionText = `Physical Prize: ${prizeName}`;
+            prizeValueText = prizeName;
+          }
+
+          await tx.insert(winners).values({
+            userId,
+            competitionId,
+            prizeDescription: prizeDescriptionText,
+            prizeValue: prizeValueText,
+            imageUrl: selectedSegment.imageUrl || null,
+            isShowcase: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        } else {
+          // Lose: generate random non-matching balloon values
+          const cashValues = segments
+            .filter((s) => s.rewardType === "cash")
+            .map((s) => parseFloat(s.rewardValue?.toString() || "1"));
+          if (cashValues.length >= 2) {
+            let val1 =
+              cashValues[Math.floor(Math.random() * cashValues.length)];
+            let val2 =
+              cashValues[Math.floor(Math.random() * cashValues.length)];
+            let val3 =
+              cashValues[Math.floor(Math.random() * cashValues.length)];
+            if (val1 === val2 && val2 === val3)
+              val3 = cashValues.find((v) => v !== val1) || val1 + 1;
+            balloonValues = [val1, val2, val3];
+          } else {
+            balloonValues = [1, 5, 10];
+          }
+        }
+
+        // Record pop usage
+        await tx
+          .insert(popUsage)
+          .values({ orderId, userId, usedAt: new Date() });
+
+        // Record result
+        await tx.insert(popWins).values({
           orderId,
           userId,
           prizeId: selectedSegment.id || "none",
           balloonValues,
+          prizeName,
           rewardType,
           rewardValue,
           isWin,
           wonAt: new Date(),
         });
 
-      res.json({
-        success: true,
-        result: { balloonValues, isWin, isRPrize, rewardType, rewardValue },
-        playsRemaining: playsRemaining - 1,
-      });
-    } catch (error) {
-      console.error("Error playing pop game:", error);
-      res.status(500).json({ message: "Failed to play pop game" });
-    }
-  });
-
-  // Reveal all pop games (batch processing)
-  app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const { orderId, count, competitionId } = req.body;
-
-      if (!orderId || !count || count <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Valid orderId and count are required",
+        // Push result with physical prize info
+        results.push({
+          balloonValues: rewardType === "physical" ? [0, 0, 0] : balloonValues,
+          isWin,
+          isRPrize,
+          rewardType,
+          rewardValue: rewardType === "physical" ? prizeName : rewardValue,
+          prizeName: rewardType === "physical" ? prizeName : undefined,
+          isPhysical: rewardType === "physical",
         });
       }
 
-      if (!competitionId) {
-        return res.status(400).json({
-          success: false,
-          message: "competitionId is required",
+      // Update user balance
+      if (totalCash > 0) {
+        const finalBalance = parseFloat(user.balance || "0") + totalCash;
+        await tx
+          .update(users)
+          .set({ balance: finalBalance.toFixed(2), updatedAt: new Date() })
+          .where(eq(users.id, userId));
+        await tx.insert(transactions).values({
+          userId,
+          type: "prize",
+          amount: totalCash.toFixed(2),
+          description: `Ringtone Pop Batch Win - £${totalCash.toFixed(2)}`,
+          createdAt: new Date(),
         });
       }
 
-      const competition = await db
-        .select()
-        .from(competitions)
-        .where(eq(competitions.id, competitionId))
-        .limit(1);
-
-      if (!competition.length) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid competition",
+      // Update points
+      if (totalPoints > 0) {
+        const newPoints = (user.ringtonePoints || 0) + totalPoints;
+        await tx
+          .update(users)
+          .set({ ringtonePoints: newPoints })
+          .where(eq(users.id, userId));
+        await tx.insert(transactions).values({
+          userId,
+          type: "ringtone_points",
+          amount: totalPoints.toString(),
+          description: `Ringtone Pop Batch Win - ${totalPoints} pts`,
+          createdAt: new Date(),
         });
       }
 
-      // Verify completed order
-      const order = await storage.getOrder(orderId);
-      if (!order || order.userId !== userId || order.status !== "completed") {
-        return res.status(400).json({
-          success: false,
-          message: "No valid pop game purchase found",
-        });
+      // Grant free replays
+      if (freeReplaysWon > 0) {
+        await tx
+          .update(orders)
+          .set({ quantity: order.quantity + freeReplaysWon })
+          .where(eq(orders.id, orderId));
       }
+    });
 
-      // Check remaining plays
-      const playsUsed = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(popUsage)
-        .where(eq(popUsage.orderId, orderId));
-      const usedCount = Number(playsUsed[0]?.count || 0);
-      const playsRemaining = order.quantity - usedCount;
-
-      if (playsRemaining <= 0) {
-        return res
-          .status(400)
-          .json({ success: false, message: "No plays remaining" });
-      }
-
-      const playsToProcess = Math.min(count, playsRemaining);
-
-      // Get user and active pop config
-      const user = await storage.getUser(userId);
-      if (!user) return res.status(404).json({ message: "User not found" });
-
-      const [config] = await db
-        .select()
-        .from(gamePopConfig)
-        .where(eq(gamePopConfig.id, "active"));
-      const popConfig = config || DEFAULT_POP_CONFIG;
-      const segments =
-        (popConfig as any).segments ||
-        (popConfig as any).prizes ||
-        DEFAULT_POP_CONFIG.segments;
-
-      let totalCash = 0;
-      let totalPoints = 0;
-      let freeReplaysWon = 0;
-      const results: any[] = [];
-
-      // Count existing wins for all segments from popWins table
-      const counts = await db
-        .select({ prizeId: popWins.prizeId, count: sql<number>`count(*)` })
-        .from(popWins)
-        .where(eq(popWins.isWin, true))
-        .groupBy(popWins.prizeId);
-      const segmentWinCounts = new Map<string, number>();
-      counts.forEach((c) => segmentWinCounts.set(c.prizeId, Number(c.count)));
-
-      // Initialize segment counts if missing
-      segments.forEach((seg) => {
-        if (!segmentWinCounts.has(seg.id)) segmentWinCounts.set(seg.id, 0);
-      });
-
-      // Find a "lose" segment to use as fallback
-      const loseSegment = segments.find((s) => s.rewardType === "lose");
-
-      // Transaction to process all plays
-      await db.transaction(async (tx) => {
-        for (let i = 0; i < playsToProcess; i++) {
-          let selectedSegment;
-          let isRPrize = false;
-          let isWin = false;
-
-          // Eligible segments: maxWins applies only to cash/points
-          const eligibleSegments = segments.filter((seg) => {
-            const wins = segmentWinCounts.get(seg.id) ?? 0;
-            if (
-              seg.maxWins !== null &&
-              (seg.rewardType === "cash" || seg.rewardType === "points")
-            ) {
-              if (wins >= seg.maxWins) return false;
-            }
-            return true;
-          });
-
-          // If there are eligible segments, do weighted random selection
-          if (eligibleSegments.length > 0) {
-            const totalProbability = eligibleSegments.reduce(
-              (sum, seg) => sum + (seg.probability || 0),
-              0
-            );
-            let random = Math.random() * totalProbability;
-            selectedSegment = eligibleSegments[0];
-
-            for (const seg of eligibleSegments) {
-              random -= seg.probability || 0;
-              if (random <= 0) {
-                selectedSegment = seg;
-                break;
-              }
-            }
-          } else {
-            // If no eligible segments (all maxWins reached), use lose segment
-            selectedSegment = loseSegment || segments[0];
-          }
-
-          let balloonValues: number[] = [];
-          const rewardType = selectedSegment.rewardType || "lose";
-          let rewardValue = "0";
-          isRPrize = rewardType === "try_again";
-          isWin = rewardType === "cash" || rewardType === "points";
-
-          if (isRPrize) {
-            // Free Replay - one R symbol + 2 random cash values
-            const cashSegments = segments.filter(
-              (s) => s.rewardType === "cash"
-            );
-            const availableValues = cashSegments.map((s) =>
-              parseFloat(s.rewardValue?.toString() || "1")
-            );
-            let val1 =
-              availableValues[
-                Math.floor(Math.random() * availableValues.length)
-              ] || 1;
-            let val2 =
-              availableValues.length > 1
-                ? availableValues[
-                    Math.floor(Math.random() * availableValues.length)
-                  ]
-                : val1 + 1;
-            while (val2 === val1 && availableValues.length > 1) {
-              val2 =
-                availableValues[
-                  Math.floor(Math.random() * availableValues.length)
-                ];
-            }
-            const rPosition = Math.floor(Math.random() * 3);
-            balloonValues =
-              rPosition === 0
-                ? [-1, val1, val2]
-                : rPosition === 1
-                ? [val1, -1, val2]
-                : [val1, val2, -1];
-            rewardValue = "0";
-            freeReplaysWon++;
-            segmentWinCounts.set(
-              selectedSegment.id,
-              (segmentWinCounts.get(selectedSegment.id) || 0) + 1
-            );
-          } else if (isWin) {
-            const value = parseFloat(
-              selectedSegment.rewardValue?.toString() || "0"
-            );
-            balloonValues = [value, value, value];
-            rewardValue = value.toString();
-            if (rewardType === "cash") totalCash += value;
-            if (rewardType === "points") totalPoints += Math.floor(value);
-            segmentWinCounts.set(
-              selectedSegment.id,
-              (segmentWinCounts.get(selectedSegment.id) || 0) + 1
-            );
-            await tx.insert(winners).values({
-              userId,
-              competitionId,
-              prizeDescription: "Ringtone Pop Win",
-              prizeValue:
-                rewardType === "cash"
-                  ? `£${rewardValue} Cash`
-                  : `${rewardValue} Points`,
-              imageUrl: selectedSegment.imageUrl || null,
-              isShowcase: false,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            });
-          } else {
-            // Lose: generate random non-matching balloon values
-            const cashValues = segments
-              .filter((s) => s.rewardType === "cash")
-              .map((s) => parseFloat(s.rewardValue?.toString() || "1"));
-            if (cashValues.length >= 2) {
-              let val1 =
-                cashValues[Math.floor(Math.random() * cashValues.length)];
-              let val2 =
-                cashValues[Math.floor(Math.random() * cashValues.length)];
-              let val3 =
-                cashValues[Math.floor(Math.random() * cashValues.length)];
-              if (val1 === val2 && val2 === val3)
-                val3 = cashValues.find((v) => v !== val1) || val1 + 1;
-              balloonValues = [val1, val2, val3];
-            } else {
-              balloonValues = [1, 5, 10];
-            }
-          }
-
-          // Record pop usage
-          await tx
-            .insert(popUsage)
-            .values({ orderId, userId, usedAt: new Date() });
-
-          // Record result
-          await tx.insert(popWins).values({
-            orderId,
-            userId,
-            prizeId: selectedSegment.id || "none",
-            balloonValues,
-            rewardType,
-            rewardValue,
-            isWin,
-            wonAt: new Date(),
-          });
-
-          results.push({
-            balloonValues,
-            isWin,
-            isRPrize,
-            prize: { type: rewardType, value: rewardValue },
-          });
-        }
-
-        // Update user balance
-        if (totalCash > 0) {
-          const finalBalance = parseFloat(user.balance || "0") + totalCash;
-          await tx
-            .update(users)
-            .set({ balance: finalBalance.toFixed(2), updatedAt: new Date() })
-            .where(eq(users.id, userId));
-          await tx.insert(transactions).values({
-            userId,
-            type: "prize",
-            amount: totalCash.toFixed(2),
-            description: `Ringtone Pop Batch Win - £${totalCash.toFixed(2)}`,
-            createdAt: new Date(),
-          });
-        }
-
-        // Update points
-        if (totalPoints > 0) {
-          const newPoints = (user.ringtonePoints || 0) + totalPoints;
-          await tx
-            .update(users)
-            .set({ ringtonePoints: newPoints })
-            .where(eq(users.id, userId));
-          await tx.insert(transactions).values({
-            userId,
-            type: "ringtone_points",
-            amount: totalPoints.toString(),
-            description: `Ringtone Pop Batch Win - ${totalPoints} pts`,
-            createdAt: new Date(),
-          });
-        }
-
-        // Grant free replays
-        if (freeReplaysWon > 0) {
-          await tx
-            .update(orders)
-            .set({ quantity: order.quantity + freeReplaysWon })
-            .where(eq(orders.id, orderId));
-        }
-      });
-
-      res.json({
-        success: true,
-        processed: playsToProcess,
-        results,
-        totalWon: totalCash,
-        freeReplaysWon,
-        playsRemaining: playsRemaining - playsToProcess + freeReplaysWon,
-      });
-    } catch (error) {
-      console.error("Error revealing all pop games:", error);
-      res.status(500).json({ message: "Failed to reveal all pop games" });
-    }
-  });
+    res.json({
+      success: true,
+      processed: playsToProcess,
+      results,
+      totalWon: totalCash,
+      totalPoints: totalPoints,
+      freeReplaysWon,
+      playsRemaining: playsRemaining - playsToProcess + freeReplaysWon,
+    });
+  } catch (error) {
+    console.error("Error revealing all pop games:", error);
+    res.status(500).json({ message: "Failed to reveal all pop games" });
+  }
+});
 
   // Get pop order info (user)
   app.get("/api/pop-order/:orderId", isAuthenticated, async (req: any, res) => {
@@ -15415,7 +15542,6 @@ app.post(
   const VOLTZ_COOLDOWN_MS = 3000;
 
   // Play Ringtone Voltz game
- // Replace the POST /api/play-voltz endpoint with this fixed version
 app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -15460,8 +15586,9 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ success: false, message: "No prizes configured for Voltz game" });
     }
 
+    // Include physical prizes in eligible prizes
     const eligiblePrizes = prizes.filter((p) => {
-      if (p.maxWins !== null && (p.rewardType === "cash" || p.rewardType === "points")) {
+      if (p.maxWins !== null && (p.rewardType === "cash" || p.rewardType === "points" || p.rewardType === "physical")) {
         if ((p.quantityWon || 0) >= p.maxWins!) return false;
       }
       return true;
@@ -15479,7 +15606,7 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
     }
 
     const rewardType = selectedPrize.rewardType;
-    const isWin = rewardType === "cash" || rewardType === "points";
+    const isWin = rewardType === "cash" || rewardType === "points" || rewardType === "physical";
     const isFreeReplay = rewardType === "try_again";
     const isNoWin = rewardType === "no_win";
     let rewardValue = "0";
@@ -15500,6 +15627,14 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
     const getPrizeDisplay = (p: typeof prizes[0]) => {
       if (p.rewardType === "cash") return `£${parseFloat(p.prizeValue || "0").toFixed(2)}`;
       if (p.rewardType === "points") return `${Math.floor(parseFloat(p.prizeValue || "0"))} PTS`;
+      if (p.rewardType === "physical") {
+        // For physical prizes, show a short version or icon + short name
+        const prizeName = p.prizeName || "Prize";
+        if (prizeName.length > 12) {
+          return prizeName.substring(0, 10) + "…";
+        }
+        return prizeName;
+      }
       return "REPLAY";
     };
 
@@ -15513,42 +15648,50 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
 
     const realPrizes = prizes.filter(p => p.rewardType === "cash" || p.rewardType === "points");
     const realDisplayValues = [...new Set(realPrizes.map(getPrizeDisplay))];
+    
+    // Include physical prizes for display values
+    const physicalPrizes = prizes.filter(p => p.rewardType === "physical");
+    const physicalDisplayValues = physicalPrizes.map(p => getPrizeDisplay(p));
 
     let switchTexts: string[] = [];
     if (isWin) {
       const displayVal = getPrizeDisplay(selectedPrize);
       switchTexts = [displayVal, displayVal, displayVal];
     } else if (isFreeReplay) {
-      if (realDisplayValues.length > 0) {
-        const matchVal = realDisplayValues[Math.floor(Math.random() * realDisplayValues.length)];
+      // For free replay, mix real prizes and possibly physical prizes for display
+      const allDisplayValues = [...realDisplayValues, ...physicalDisplayValues];
+      if (allDisplayValues.length > 0) {
+        const matchVal = allDisplayValues[Math.floor(Math.random() * allDisplayValues.length)];
         switchTexts = shuffleArray([matchVal, matchVal, "REPLAY"]);
       } else {
         switchTexts = ["REPLAY", "REPLAY", "REPLAY"];
       }
     } else {
-      if (realDisplayValues.length >= 3) {
+      // For lose, show non-matching values
+      const allDisplayValues = [...realDisplayValues, ...physicalDisplayValues];
+      if (allDisplayValues.length >= 3) {
         const pattern = Math.random();
         if (pattern < 0.5) {
-          const idx1 = Math.floor(Math.random() * realDisplayValues.length);
-          let idx2 = Math.floor(Math.random() * (realDisplayValues.length - 1));
+          const idx1 = Math.floor(Math.random() * allDisplayValues.length);
+          let idx2 = Math.floor(Math.random() * (allDisplayValues.length - 1));
           if (idx2 >= idx1) idx2++;
-          switchTexts = shuffleArray([realDisplayValues[idx1], realDisplayValues[idx1], realDisplayValues[idx2]]);
+          switchTexts = shuffleArray([allDisplayValues[idx1], allDisplayValues[idx1], allDisplayValues[idx2]]);
         } else {
-          const shuffled = shuffleArray([...realDisplayValues]);
+          const shuffled = shuffleArray([...allDisplayValues]);
           switchTexts = [shuffled[0], shuffled[1], shuffled[2]];
         }
-      } else if (realDisplayValues.length === 2) {
+      } else if (allDisplayValues.length === 2) {
         const idx1 = Math.floor(Math.random() * 2);
         const idx2 = idx1 === 0 ? 1 : 0;
-        switchTexts = shuffleArray([realDisplayValues[idx1], realDisplayValues[idx1], realDisplayValues[idx2]]);
-      } else if (realDisplayValues.length === 1) {
-        switchTexts = shuffleArray([realDisplayValues[0], realDisplayValues[0], "NO MATCH"]);
+        switchTexts = shuffleArray([allDisplayValues[idx1], allDisplayValues[idx1], allDisplayValues[idx2]]);
+      } else if (allDisplayValues.length === 1) {
+        switchTexts = shuffleArray([allDisplayValues[0], allDisplayValues[0], "NO MATCH"]);
       } else {
         switchTexts = shuffleArray(["NO MATCH", "STATIC", "OVERLOAD"]);
       }
     }
 
-    // IMPORTANT: Calculate the NEW plays remaining correctly based on outcome
+    // Calculate the NEW plays remaining correctly based on outcome
     let newPlaysRemaining = playsRemaining - 1; // Subtract the used play
     if (isFreeReplay) {
       // If it's a free replay, they get +1 play after using this one
@@ -15562,12 +15705,13 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
         isWin, 
         isFreeReplay, 
         rewardType: isWin ? rewardType : isFreeReplay ? "try_again" : "lose", 
-        rewardValue, 
-        prizeName: selectedPrize.prizeName,
-        prizeId: selectedPrize.id, // Include prizeId for later recording
+        rewardValue: rewardType === "physical" ? selectedPrize.prizeName : rewardValue,
+        prizeName: rewardType === "physical" ? selectedPrize.prizeName : undefined,
+        prizeId: selectedPrize.id,
+        isPhysical: rewardType === "physical",
         switchTexts 
       },
-      playsRemaining: newPlaysRemaining, // Return the correct remaining count
+      playsRemaining: newPlaysRemaining,
     });
   } catch (error) {
     console.error("Error playing voltz game:", error);
@@ -15600,36 +15744,60 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
       await tx.insert(voltzUsage).values({ orderId, userId, usedAt: new Date() });
 
       if (result.outcome === "win") {
-        // Update user balance/points
+        // Update user balance/points or handle physical prize
         if (result.rewardType === "cash") {
           const finalBalance = parseFloat(user.balance || "0") + parseFloat(result.rewardValue);
           await tx.update(users).set({ balance: finalBalance.toFixed(2) }).where(eq(users.id, userId));
-          await tx.insert(transactions).values({ 
-            userId, 
-            type: "prize", 
-            amount: result.rewardValue, 
+          
+          // Use storage.createTransaction instead of direct insert
+          await storage.createTransaction({
+            userId,
+            type: "prize",
+            amount: result.rewardValue,
             description: `Ringtone Voltz Win - £${result.rewardValue}`,
-            createdAt: new Date()
           });
         } else if (result.rewardType === "points") {
           const pointsValue = Math.floor(parseFloat(result.rewardValue));
           const newPoints = (user.ringtonePoints || 0) + pointsValue;
           await tx.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
-          await tx.insert(transactions).values({ 
-            userId, 
-            type: "ringtone_points", 
-            amount: pointsValue.toString(), 
+          
+          // Use storage.createTransaction instead of direct insert
+          await storage.createTransaction({
+            userId,
+            type: "ringtone_points",
+            amount: pointsValue.toString(),
             description: `Ringtone Voltz Win - ${pointsValue} pts`,
-            createdAt: new Date()
+          });
+        } else if (result.rewardType === "physical") {
+          // Physical prize - use storage.createTransaction with "0" as string (matching Pop game)
+          await storage.createTransaction({
+            userId,
+            type: "prize",
+            amount: "0",
+            description: `Physical Prize Won: ${result.prizeName} - Contact support`,
           });
         }
 
-        // Record winner
+        // Record winner with proper formatting for physical prizes
+        let prizeDescriptionText = "";
+        let prizeValueText = "";
+
+        if (result.rewardType === "cash") {
+          prizeDescriptionText = "Ringtone Voltz Win";
+          prizeValueText = `£${result.rewardValue} Cash`;
+        } else if (result.rewardType === "points") {
+          prizeDescriptionText = "Ringtone Voltz Win";
+          prizeValueText = `${result.rewardValue} Points`;
+        } else if (result.rewardType === "physical") {
+          prizeDescriptionText = `Physical Prize: ${result.prizeName}`;
+          prizeValueText = result.prizeName;
+        }
+
         await tx.insert(winners).values({
           userId, 
           competitionId: order.competitionId, 
-          prizeDescription: "Ringtone Voltz Win",
-          prizeValue: result.rewardType === "cash" ? `£${result.rewardValue} Cash` : `${result.rewardValue} Points`,
+          prizeDescription: prizeDescriptionText,
+          prizeValue: prizeValueText,
           isShowcase: false, 
           createdAt: new Date(), 
           updatedAt: new Date(),
@@ -15640,9 +15808,20 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
           await tx.update(voltzPrizes)
             .set({ quantityWon: sql`${voltzPrizes.quantityWon} + 1` })
             .where(eq(voltzPrizes.id, result.prizeId));
+        } else if (result.rewardType === "physical") {
+          const [physicalPrize] = await tx.select()
+            .from(voltzPrizes)
+            .where(eq(voltzPrizes.prizeName, result.prizeName))
+            .limit(1);
+          
+          if (physicalPrize) {
+            await tx.update(voltzPrizes)
+              .set({ quantityWon: sql`${voltzPrizes.quantityWon} + 1` })
+              .where(eq(voltzPrizes.id, physicalPrize.id));
+          }
         }
       } else if (result.outcome === "freeReplay") {
-        // Add free replay to order - this happens AFTER using the current play
+        // Add free replay to order
         await tx.update(orders)
           .set({ quantity: order.quantity + 1 })
           .where(eq(orders.id, orderId));

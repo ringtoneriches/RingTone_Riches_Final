@@ -22,9 +22,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trophy, ArrowLeft, Sparkles, Star, Zap, History, Check, X, RotateCcw, ChevronLeft, ChevronRight, Music } from "lucide-react";
+import { Loader2, Trophy, ArrowLeft, Sparkles, Star, Zap, History, Check, X, RotateCcw, ChevronLeft, ChevronRight, Music, Package } from "lucide-react";
 
 function GameHistoryCarousel({ games }: { games: any[] }) {
+  console.log(games)
   const [currentPage, setCurrentPage] = useState(0);
   const itemsPerPage = 6;
   const totalPages = Math.ceil(games.length / itemsPerPage);
@@ -37,6 +38,7 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
   
   const cashWins = games.filter((g: any) => g.isWin && g.rewardType === "cash");
   const pointsWins = games.filter((g: any) => g.isWin && g.rewardType === "points");
+  const physicalWins = games.filter((g: any) => g.rewardType === "physical");
   const freePlayWins = games.filter((g: any) => g.rewardType === "try_again");
   
   const totalCashWinnings = cashWins.reduce((sum: number, g: any) => sum + (parseFloat(g.rewardValue) || 0), 0);
@@ -76,6 +78,15 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
                   <span className="text-lg sm:text-xl font-black text-yellow-400">{totalPointsWinnings.toLocaleString()}</span>
                 </div>
                 <span className="text-[10px] sm:text-xs text-yellow-400/70 font-medium uppercase tracking-wider">Points Won</span>
+              </div>
+            )}
+            {physicalWins.length > 0 && (
+              <div className="text-center px-3 py-2 rounded-xl bg-purple-500/20 border border-purple-500/30">
+                <div className="flex items-center gap-1.5 justify-center">
+                  <Package className="w-4 h-4 text-purple-400" />
+                  <span className="text-lg sm:text-xl font-black text-purple-400">{physicalWins.length}</span>
+                </div>
+                <span className="text-[10px] sm:text-xs text-purple-400/70 font-medium uppercase tracking-wider">Physical Prizes</span>
               </div>
             )}
             {freePlayWins.length > 0 && (
@@ -138,6 +149,7 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
         <div className="space-y-2">
           {visibleGames.map((game: any, index: number) => {
             const isWin = game.isWin;
+            const isPhysical = game.rewardType === "physical";
             const isRPrize = game.rewardType === "try_again";
             const isPoints = game.rewardType === "points";
             const isCash = game.rewardType === "cash";
@@ -146,6 +158,7 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
             const getStatusColor = () => {
               if (isCash) return { bg: 'bg-green-500', border: 'border-green-400', shadow: 'shadow-green-500/50' };
               if (isPoints) return { bg: 'bg-yellow-500', border: 'border-yellow-400', shadow: 'shadow-yellow-500/50' };
+              if (isPhysical) return { bg: 'bg-purple-500', border: 'border-purple-400', shadow: 'shadow-purple-500/50' };
               if (isRPrize) return { bg: 'bg-blue-500', border: 'border-blue-400', shadow: 'shadow-blue-500/50' };
               return { bg: 'bg-muted', border: 'border-border', shadow: '' };
             };
@@ -164,21 +177,23 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
                       ? 'bg-gradient-to-r from-green-950/70 to-green-950/30 border border-green-500/40' 
                       : isPoints
                         ? 'bg-gradient-to-r from-yellow-950/70 to-yellow-950/30 border border-yellow-500/40'
+                        : isPhysical
+                          ? 'bg-gradient-to-r from-purple-950/70 to-purple-950/30 border border-purple-500/40'
                         : isRPrize 
                           ? 'bg-gradient-to-r from-blue-950/70 to-blue-950/30 border border-blue-500/40'
                           : 'bg-muted/40 border border-border/50'}
                   `}>
-                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${isCash ? 'bg-green-500' : isPoints ? 'bg-yellow-500' : isRPrize ? 'bg-blue-500' : 'bg-muted-foreground/20'}`} />
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${isCash ? 'bg-green-500' : isPoints ? 'bg-yellow-500' : isPhysical ? 'bg-purple-500' : isRPrize ? 'bg-blue-500' : 'bg-muted-foreground/20'}`} />
                     
                     <div className="relative p-2.5 sm:p-3 flex items-center gap-2 sm:gap-3">
-                      <span className={`text-xs font-bold shrink-0 ${isCash ? 'text-green-400' : isPoints ? 'text-yellow-400' : isRPrize ? 'text-blue-400' : 'text-muted-foreground'}`}>
+                      <span className={`text-xs font-bold shrink-0 ${isCash ? 'text-green-400' : isPoints ? 'text-yellow-400' : isPhysical ? 'text-purple-400' : isRPrize ? 'text-blue-400' : 'text-muted-foreground'}`}>
                         R{gameNumber}
                       </span>
                       
                       <div className="flex items-center gap-1 flex-1 justify-center">
-                        {(game.balloonValues || []).map((val: number, i: number) => {
+                        {(game.balloonValues || []).map((val: any, i: number) => {
                           const isRSymbol = val === -1;
-                          const allMatch = game.balloonValues.every((v: number) => v === game.balloonValues[0]);
+                          const allMatch = game.balloonValues.every((v: any) => v === game.balloonValues[0]);
                           
                           return (
                             <div
@@ -187,24 +202,32 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
                                 w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center text-xs sm:text-sm font-bold
                                 ${isRSymbol 
                                   ? 'bg-blue-600 text-white' 
-                                  : allMatch && isPoints
+                                  : allMatch && isPoints && !isPhysical
                                     ? 'bg-yellow-500 px-5 text-black'
-                                    : allMatch && isCash
+                                    : allMatch && isCash && !isPhysical
                                       ? 'bg-green-600 text-white'
-                                      : 'bg-muted/60 text-foreground/70'}
+                                      : isPhysical && allMatch
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-muted/60 text-foreground/70'}
                               `}
                             >
-                              {isRSymbol ? "R" : isPoints && allMatch ? (
+                              {isRSymbol ? "R" : isPhysical && allMatch ? (
+                                <Package className="w-4 h-4" />
+                              ) : isPoints && allMatch && !isPhysical ? (
                                 <span className="flex items-center gap-0.5">
                                   <Music className="w-3 h-3" />
-                                  <span className=" text-[9px] sm:text-[10px]">{val}</span>
+                                  <span className="text-[9px] sm:text-[10px]">{val}</span>
                                 </span>
-                              ) : `£${val}`}
+                              ) : typeof val === 'number' ? (
+                                `£${val}`
+                              ) : (
+                                val
+                              )}
                             </div>
                           );
                         })}
                       </div>
-                      
+
                       <div className="shrink-0 text-right min-w-[70px] sm:min-w-[90px]">
                         {isCash ? (
                           <div className="flex items-center gap-1 justify-end">
@@ -215,6 +238,16 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
                           <div className="flex items-center gap-1 justify-end">
                             <Music className="w-3.5 h-3.5 text-yellow-400" />
                             <span className="text-xs sm:text-base font-black text-yellow-400">{parseInt(game.rewardValue).toLocaleString()} pts</span>
+                          </div>
+                        ) : isPhysical ? (
+                          <div className="flex items-center gap-1 justify-end">
+                            <Package className="w-3.5 h-3.5 text-purple-400" />
+                            <span
+  className="text-xs sm:text-sm font-bold text-purple-400 truncate max-w-[120px]"
+  title={game.prizeName || game.prizeDescription || "Prize"}
+>
+  {game.prizeName || game.prizeDescription || "Prize"}
+</span>
                           </div>
                         ) : isRPrize ? (
                           <div className="flex items-center gap-1 justify-end">

@@ -174,19 +174,22 @@ export default function Home() {
   popular: false
 },
 {
-      id: competitions.find(c => c.type === "scratch")?.id, 
-    Icon: TicketCheck,
-       title: "Scratch Card",
-    desc: "Scratch to win",
-    gradient: "linear-gradient(135deg, #dc2626, #f97316)",
-    glowColor: "rgba(239,68,68,0.25)",
-    borderColor: "rgba(239,68,68,0.4)",
-    bgColor: "rgba(239,68,68,0.06)",
-    iconBg: "linear-gradient(135deg, #dc2626, #ef4444)",
-     prize: "£5,000",
-    filter: "scratch",
-    popular: true
-    },
+  id: competitions.find(c => c.type === "spin")?.id,
+  Icon: RotateCw,
+  title: "Retro Ringtone Spin",
+  desc: "Spin the retro wheel",
+  gradient: "linear-gradient(135deg, #f43f5e, #e11d48, #be123c)",
+  glowColor: "rgba(244,63,94,0.35)",
+  borderColor: "rgba(244,63,94,0.5)",
+  bgColor: "rgba(244,63,94,0.08)",
+  iconBg: "linear-gradient(135deg, #f43f5e, #e11d48, #be123c)",
+  prize: "£1,000",
+  filter: "spin",
+  popular: true,
+  wheelType: "wheel2",
+
+
+},
 {
   id: competitions.find(c => c.type === "plinko")?.id, 
   Icon: Circle,
