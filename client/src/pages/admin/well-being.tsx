@@ -212,6 +212,38 @@ const [isTopUserDialogOpen, setIsTopUserDialogOpen] = useState(false);
     disableUserMutation.mutate({ userId: selectedUser.id, days });
   };
 
+
+const handleUnsuspendUser = async () => {
+  if (!selectedUser) return;
+  
+  try {
+    const response = await apiRequest(`/api/admin/users/${selectedUser.id}/unsuspend`, "POST");
+    
+    if (response.ok) {
+      toast({
+        title: "Success",
+        description: "User has been unsuspended successfully",
+      });
+      
+      // Refresh user data
+      searchUsersMutation.mutate(selectedUser.email);
+      
+      // Refresh wellbeing requests
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/wellbeing/requests"] });
+    } else {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to unsuspend user");
+    }
+  } catch (error: any) {
+    toast({
+      title: "Error",
+      description: error.message || "Failed to unsuspend user",
+      variant: "destructive",
+    });
+  }
+};
+
+
 const handleExportData = () => {
   try {
     if (!topUsersData?.topDailyCashflowUsers || topUsersData.topDailyCashflowUsers.length === 0) {
@@ -435,155 +467,189 @@ const totalDailyDeposits = sortedTopSpenders.reduce((sum, user) => {
                 </div>
               </div>
 
-              {/* User Details */}
-              {selectedUser && (
-                <div className="bg-black/40 rounded-lg p-4 border border-zinc-700 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-lg text-gray-300">User Details</h3>
-                    <Badge variant={selectedUser.disabled ? "destructive" : selectedUser.selfSuspended ? "secondary" : "default"}>
-                      {selectedUser.disabled ? "Disabled" : selectedUser.selfSuspended ? "Suspended" : "Active"}
-                    </Badge>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-gray-500">Name</p>
-                      <p className="text-gray-300">
-                        {selectedUser.firstName} {selectedUser.lastName}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Email</p>
-                      <p className="text-gray-300">{selectedUser.email}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Daily Limit</p>
-                      <p className="text-gray-300">
-                        £{parseFloat(selectedUser.dailySpendLimit || "0").toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Status</p>
-                      <div className="flex items-center gap-2">
-                        {selectedUser.disabled ? (
-                          <XCircle className="h-4 w-4 text-red-400" />
-                        ) : selectedUser.selfSuspended ? (
-                          <EyeOff className="h-4 w-4 text-amber-400" />
-                        ) : (
-                          <CheckCircle className="h-4 w-4 text-emerald-400" />
-                        )}
-                        <span>
-                          {selectedUser.disabled ? "Disabled" : selectedUser.selfSuspended ? "Self-suspended" : "Active"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+             {/* User Details */}
+{selectedUser && (
+  <div className="bg-black/40 rounded-lg p-4 border border-zinc-700 space-y-4">
+    <div className="flex items-center justify-between">
+      <h3 className="font-semibold text-lg text-gray-300">User Details</h3>
+      <Badge variant={selectedUser.disabled ? "destructive" : selectedUser.selfSuspended ? "secondary" : "default"}>
+        {selectedUser.disabled ? "Disabled by Admin" : selectedUser.selfSuspended ? "Self-Suspended" : "Active"}
+      </Badge>
+    </div>
+    
+    <div className="grid grid-cols-2 gap-3 text-sm">
+      <div>
+        <p className="text-gray-500">Name</p>
+        <p className="text-gray-300">
+          {selectedUser.firstName} {selectedUser.lastName}
+        </p>
+      </div>
+      <div>
+        <p className="text-gray-500">Email</p>
+        <p className="text-gray-300">{selectedUser.email}</p>
+      </div>
+      <div>
+        <p className="text-gray-500">Daily Limit</p>
+        <p className="text-gray-300">
+          £{parseFloat(selectedUser.dailySpendLimit || "0").toFixed(2)}
+        </p>
+      </div>
+      <div>
+        <p className="text-gray-500">Status</p>
+        <div className="flex items-center gap-2">
+          {selectedUser.disabled ? (
+            <XCircle className="h-4 w-4 text-red-400" />
+          ) : selectedUser.selfSuspended ? (
+            <EyeOff className="h-4 w-4 text-amber-400" />
+          ) : (
+            <CheckCircle className="h-4 w-4 text-emerald-400" />
+          )}
+          <span>
+            {selectedUser.disabled ? "Disabled by Admin" : selectedUser.selfSuspended ? "Self-Suspended" : "Active"}
+          </span>
+        </div>
+      </div>
+    </div>
 
-                  {/* Disable User Section */}
-                  <div className="pt-4 border-t border-zinc-700">
-                    <Label htmlFor="disableMinutes" className="text-gray-300 font-medium mb-3 block">
-                      Disable User (Admin)
-                    </Label>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <div className="flex-1">
-                        <Input
-                          id="disableDays"
-                          type="number"
-                          min="0"
-                          placeholder="Days (0 for indefinite)"
-                          value={disableDays}
-                          onChange={(e) => setDisableDays(e.target.value)}
-                          className="bg-zinc-900 border-zinc-700 text-white"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                          Enter 0 for indefinite disable
-                        </p>
-                      </div>
-                      
-                      <Dialog open={isDisableDialogOpen} onOpenChange={setIsDisableDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="destructive"
-                            className="whitespace-nowrap"
-                          >
-                            <Lock className="h-4 w-4 mr-2" />
-                            Disable User
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="bg-zinc-900 border-red-500/30">
-                          <DialogHeader>
-                            <DialogTitle className="text-red-400 text-2xl">
-                              Confirm User Disable
-                            </DialogTitle>
-                            <DialogDescription className="text-gray-400">
-                              Are you sure you want to disable {selectedUser.email}?
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div className="bg-red-500/10 rounded-lg p-4 border border-red-500/30">
-                              <div className="flex items-start gap-3">
-                                <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="text-sm text-red-300 font-semibold mb-1">
-                                    This will prevent the user from:
-                                  </p>
-                                  <ul className="text-sm text-red-300 space-y-1">
-                                    <li>• Logging into their account</li>
-                                    <li>• Making any purchases</li>
-                                    <li>• Entering competitions</li>
-                                    <li>• Accessing any account features</li>
-                                  </ul>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="bg-black/40 rounded-lg p-4 border border-zinc-700">
-                              <p className="text-sm text-gray-300">
-                                <span className="font-semibold">Duration:</span>{" "}
-                                {parseInt(disableDays) === 0 
-                                  ? "Indefinite (until manually re-enabled)" 
-                                  : `${disableDays} day${parseInt(disableDays) === 1 ? '' : 's'}`}
-                              </p>
-                              {parseInt(disableDays) > 0 && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Will be automatically re-enabled on:{" "}
-                                  {format(
-                                    new Date(Date.now() + parseInt(disableDays) * 24 * 60 * 60 * 1000),
-                                    "dd/MM/yyyy"
-                                  )}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button
-                              variant="outline"
-                              onClick={() => setIsDisableDialogOpen(false)}
-                              className="border-zinc-700 text-gray-400 hover:bg-zinc-800"
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              onClick={handleDisableUser}
-                              disabled={disableUserMutation.isPending}
-                            >
-                              {disableUserMutation.isPending ? (
-                                <>
-                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                                  Processing...
-                                </>
-                              ) : (
-                                "Confirm Disable"
-                              )}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
+    {/* Unsuspend Section - Only show if user is self-suspended */}
+    {selectedUser.selfSuspended && !selectedUser.disabled && (
+      <div className="pt-4 border-t border-zinc-700">
+        <div className="bg-amber-500/10 rounded-lg p-4 border border-amber-500/30 mb-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-amber-300 font-semibold mb-1">
+                User Self-Suspended
+              </p>
+              <p className="text-sm text-amber-300">
+                This user has suspended their own account. You can unsuspend them to restore full access.
+              </p>
+              {selectedUser.selfSuspensionEndsAt && (
+                <p className="text-xs text-amber-400 mt-2">
+                  Auto-unsuspension scheduled for: {format(new Date(selectedUser.selfSuspensionEndsAt), "dd/MM/yyyy HH:mm")}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <Button
+          onClick={handleUnsuspendUser}
+          className="w-full bg-gradient-to-r from-amber-600 to-amber-500 text-white hover:from-amber-500 hover:to-amber-400"
+        >
+          <CheckCircle className="h-4 w-4 mr-2" />
+          Unsuspend User
+        </Button>
+      </div>
+    )}
+
+    {/* Disable User Section - Hide if user is self-suspended but show for others */}
+    {!selectedUser.selfSuspended && (
+      <div className="pt-4 border-t border-zinc-700">
+        <Label htmlFor="disableDays" className="text-gray-300 font-medium mb-3 block">
+          Disable User (Admin)
+        </Label>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1">
+            <Input
+              id="disableDays"
+              type="number"
+              min="0"
+              placeholder="Days (0 for indefinite)"
+              value={disableDays}
+              onChange={(e) => setDisableDays(e.target.value)}
+              className="bg-zinc-900 border-zinc-700 text-white"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Enter 0 for indefinite disable
+            </p>
+          </div>
+          
+          <Dialog open={isDisableDialogOpen} onOpenChange={setIsDisableDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="destructive"
+                className="whitespace-nowrap"
+              >
+                <Lock className="h-4 w-4 mr-2" />
+                Disable User
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-zinc-900 border-red-500/30">
+              <DialogHeader>
+                <DialogTitle className="text-red-400 text-2xl">
+                  Confirm User Disable
+                </DialogTitle>
+                <DialogDescription className="text-gray-400">
+                  Are you sure you want to disable {selectedUser.email}?
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="bg-red-500/10 rounded-lg p-4 border border-red-500/30">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-red-300 font-semibold mb-1">
+                        This will prevent the user from:
+                      </p>
+                      <ul className="text-sm text-red-300 space-y-1">
+                        <li>• Logging into their account</li>
+                        <li>• Making any purchases</li>
+                        <li>• Entering competitions</li>
+                        <li>• Accessing any account features</li>
+                      </ul>
                     </div>
                   </div>
                 </div>
-              )}
+                
+                <div className="bg-black/40 rounded-lg p-4 border border-zinc-700">
+                  <p className="text-sm text-gray-300">
+                    <span className="font-semibold">Duration:</span>{" "}
+                    {parseInt(disableDays) === 0 
+                      ? "Indefinite (until manually re-enabled)" 
+                      : `${disableDays} day${parseInt(disableDays) === 1 ? '' : 's'}`}
+                  </p>
+                  {parseInt(disableDays) > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Will be automatically re-enabled on:{" "}
+                      {format(
+                        new Date(Date.now() + parseInt(disableDays) * 24 * 60 * 60 * 1000),
+                        "dd/MM/yyyy"
+                      )}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDisableDialogOpen(false)}
+                  className="border-zinc-700 text-gray-400 hover:bg-zinc-800"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDisableUser}
+                  disabled={disableUserMutation.isPending}
+                >
+                  {disableUserMutation.isPending ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                      Processing...
+                    </>
+                  ) : (
+                    "Confirm Disable"
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+    )}
+  </div>
+)}
             </CardContent>
           </Card>
 

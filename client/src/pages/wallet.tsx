@@ -476,7 +476,7 @@ const [visibleIncompleteGames, setVisibleIncompleteGames] = useState(6);
     queryKey: ["/api/user/orders"],
     enabled: isAuthenticated,
   });
-
+console.log(orders)
   const { data: withdrawalRequests = [] } = useQuery<any[]>({
     queryKey: ["/api/withdrawal-requests/me"],
     enabled: isAuthenticated,
@@ -665,14 +665,49 @@ const incompleteGames = orders.filter((order) => {
   const type = (order.competitions?.type || "").toLowerCase();
   const remaining = Number(order.remainingPlays || 0);
   const status = order.orders.status;
-
+  
+  // Include ALL games with remaining plays (don't filter by time here)
   return (
-    ["spin", "scratch", "plinko", "pop" , "voltz"].includes(type) &&
+    ["spin", "scratch", "plinko", "pop", "voltz"].includes(type) &&
     ["paid", "completed"].includes(status) &&
     remaining > 0 &&
     !excludedCompetitionIds.includes(order.orders.competitionId)
   );
 });
+
+const getTimeRemaining = (order) => {
+  const now = Date.now(); // Current time in milliseconds UTC
+  const created = new Date(order.orders.createdAt).getTime(); // Convert to milliseconds
+  const expiryTime = created + (2 * 60 * 60 * 1000); // Add 2 hours in milliseconds
+  const timeLeftMs = expiryTime - now;
+  
+  console.log('Debug:', {
+    created: new Date(created).toISOString(),
+    expiry: new Date(expiryTime).toISOString(),
+    now: new Date(now).toISOString(),
+    timeLeftMs: timeLeftMs,
+    timeLeftHours: (timeLeftMs / (1000 * 60 * 60)).toFixed(2)
+  });
+  
+  if (timeLeftMs <= 0) return null;
+  
+  const hours = Math.floor(timeLeftMs / (1000 * 60 * 60));
+  const minutes = Math.floor((timeLeftMs % (1000 * 60 * 60)) / (1000 * 60));
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}m remaining`;
+  }
+  return `${minutes}m remaining`;
+};
+
+const isGameExpired = (order) => {
+  const now = Date.now();
+  const created = new Date(order.orders.createdAt).getTime();
+  const expiryTime = created + (2 * 60 * 60 * 1000);
+  return now > expiryTime;
+};
+
+
 const incompleteGamesRef = useRef(null);
 const handleShowLess = () => {
   setVisibleIncompleteGames(6);
@@ -1785,83 +1820,129 @@ const handleDeleteBankAccount = (
                         </span>
                       )}
                     </CardTitle>
+                       {/* Add info notice here */}
+    <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      Games expire 2 hours after creation and cannot be resumed after that time
+    </p>
                   </CardHeader>
                   <CardContent className="pt-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {incompleteGames.slice(0, visibleIncompleteGames).map((order) => (
-                        <div
-                          key={order.orders.id}
-                          className="bg-black/50 rounded-lg border border-yellow-500/20 p-4 hover:border-yellow-500/40 transition-all transform hover:scale-105"
-                        >
-                          <div className="flex items-center space-x-3 mb-3">
-                            {order.competitions?.imageUrl && (
-                              <img
-                                src={order.competitions.imageUrl}
-                                alt={order.competitions?.title || "Competition"}
-                                className="w-16 h-16 rounded-lg object-cover shadow-lg"
-                              />
-                            )}
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-sm text-white line-clamp-2">
-                                {order.competitions?.title ||
-                                  "Unknown Competition"}
-                              </h3>
-                              <p className="text-xs text-gray-400">
-                                {order.competitions?.type === "spin"
-                                  ? "Spin Wheel"
-                                  : order.competitions?.type === "pop"
-                                  ? "Ringtone Pop"
-                                  : order.competitions?.type === "plinko"
-                                  ? "Ringtone Plinko"
-                                  : order.competitions?.type === "voltz"
-                                  ? "Voltz Game"
-                                  : "Scratch Card"}
-                              </p>
-                            </div>
-                          </div>
+                     {incompleteGames.slice(0, visibleIncompleteGames).map((order) => {
+  const expired = isGameExpired(order); // Pass the whole order
+  const timeRemaining = getTimeRemaining(order); // Pass the whole order
+  
+  return (
+    <div
+      key={order.orders.id}
+      className={`bg-black/50 rounded-lg border p-4 transition-all transform ${
+        expired 
+          ? 'border-red-500/20 opacity-60 hover:scale-100' 
+          : 'border-yellow-500/20 hover:border-yellow-500/40 hover:scale-105'
+      }`}
+    >
+      <div className="flex items-center space-x-3 mb-3">
+        {order.competitions?.imageUrl && (
+          <img
+            src={order.competitions.imageUrl}
+            alt={order.competitions?.title || "Competition"}
+            className="w-16 h-16 rounded-lg object-cover shadow-lg"
+          />
+        )}
+        <div className="flex-1">
+          <h3 className="font-semibold text-sm text-white line-clamp-2">
+            {order.competitions?.title || "Unknown Competition"}
+          </h3>
+          <p className="text-xs text-gray-400">
+            {order.competitions?.type === "spin"
+              ? "Spin Wheel"
+              : order.competitions?.type === "pop"
+              ? "Ringtone Pop"
+              : order.competitions?.type === "plinko"
+              ? "Ringtone Plinko"
+              : order.competitions?.type === "voltz"
+              ? "Voltz Game"
+              : "Scratch Card"}
+          </p>
+        </div>
+      </div>
 
-                          <div className="bg-yellow-500/10 rounded-lg p-3 mb-3 border border-yellow-500/20">
-                            <div className="flex justify-between items-center mb-2">
-                              <span className="text-xs text-gray-400">
-                                Remaining:
-                              </span>
-                              <span className="text-xl font-bold text-yellow-400">
-                                {order.remainingPlays}/{order.orders.quantity}
-                              </span>
-                            </div>
-                            <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
-                              <div
-                                className="bg-gradient-to-r from-yellow-600 to-yellow-400 h-full transition-all shadow-lg shadow-yellow-500/50"
-                                style={{
-                                  width: `${((order.remainingPlays || 0) / order.orders.quantity) * 100}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
+      {/* Time Remaining / Expired Badge */}
+      <div className={`text-xs text-center mb-2 font-mono ${
+        expired ? 'text-red-400' : 'text-yellow-400'
+      }`}>
+        {expired ? (
+          <span className="flex items-center justify-center gap-1">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            EXPIRED (2 hour limit)
+          </span>
+        ) : (
+          <span className="flex items-center justify-center gap-1">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {timeRemaining}
+          </span>
+        )}
+      </div>
 
-                          <Link
-                            href={
-                              order.competitions?.type === "spin"
-                                ? `/spin/${order.orders.competitionId}/${order.orders.id}`
-                                : order.competitions?.type === "pop"
-                                ? `/pop/${order.orders.competitionId}/${order.orders.id}`
-                                : order.competitions?.type === "plinko"
-                                ? `/plinko/${order.orders.competitionId}/${order.orders.id}`
-                                : order.competitions?.type === "voltz"
-                                ? `/voltz/${order.orders.competitionId}/${order.orders.id}`
-                                : `/scratch/${order.orders.competitionId}/${order.orders.id}`
-                            }
-                            className="block"
-                          >
-                            <button
-                              className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-black font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-105 shadow-lg shadow-yellow-500/50"
-                              data-testid={`button-resume-${order.orders.id}`}
-                            >
-                              Resume Game
-                            </button>
-                          </Link>
-                        </div>
-                      ))}
+      <div className="bg-yellow-500/10 rounded-lg p-3 mb-3 border border-yellow-500/20">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-xs text-gray-400">
+            Remaining:
+          </span>
+          <span className="text-xl font-bold text-yellow-400">
+            {order.remainingPlays}/{order.orders.quantity}
+          </span>
+        </div>
+        <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+          <div
+            className={`h-full transition-all shadow-lg ${
+              expired 
+                ? 'bg-gradient-to-r from-red-600 to-red-400 shadow-red-500/50' 
+                : 'bg-gradient-to-r from-yellow-600 to-yellow-400 shadow-yellow-500/50'
+            }`}
+            style={{
+              width: `${((order.remainingPlays || 0) / order.orders.quantity) * 100}%`,
+            }}
+          />
+        </div>
+      </div>
+
+      {expired ? (
+        <div className="w-full bg-red-500/20 border border-red-500/30 text-red-400 font-bold py-3 px-4 rounded-lg text-center cursor-not-allowed">
+          Game Expired - Cannot Resume
+        </div>
+      ) : (
+        <Link
+          href={
+            order.competitions?.type === "spin"
+              ? `/spin/${order.orders.competitionId}/${order.orders.id}`
+              : order.competitions?.type === "pop"
+              ? `/pop/${order.orders.competitionId}/${order.orders.id}`
+              : order.competitions?.type === "plinko"
+              ? `/plinko/${order.orders.competitionId}/${order.orders.id}`
+              : order.competitions?.type === "voltz"
+              ? `/voltz/${order.orders.competitionId}/${order.orders.id}`
+              : `/scratch/${order.orders.competitionId}/${order.orders.id}`
+          }
+          className="block"
+        >
+          <button
+            className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-black font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-105 shadow-lg shadow-yellow-500/50"
+            data-testid={`button-resume-${order.orders.id}`}
+          >
+            Resume Game
+          </button>
+        </Link>
+      )}
+    </div>
+  );
+})}
                     </div>
 
                     {/* See More Button for Incomplete Games */}
