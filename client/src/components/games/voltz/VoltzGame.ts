@@ -122,17 +122,17 @@ export class VoltzGame extends Scene {
     });
 
     // Lightning flash effect
-    for (let i = 0; i < 5; i++) {
-      this.time.delayedCall(i * 40, () => {
-        this.tweens.add({
-          targets: [this.lightOverlay],
-          alpha: 0.12 + i * 0.05,
-          duration: 30,
-          yoyo: true,
-          ease: "Linear",
-        });
-      });
-    }
+    // for (let i = 0; i < 5; i++) {
+    //   this.time.delayedCall(i * 40, () => {
+    //     this.tweens.add({
+    //       targets: [this.lightOverlay],
+    //       alpha: 0.12 + i * 0.05,
+    //       duration: 30,
+    //       yoyo: true,
+    //       ease: "Linear",
+    //     });
+    //   });
+    // }
 
     this.time.delayedCall(400, () => {
       this.tweens.add({ targets: this.currentElectro, scaleY: 1.1, alpha: 1, duration: 300, ease: "Sine.easeOut" });
@@ -535,7 +535,7 @@ export class VoltzGame extends Scene {
 
   private lightEffects() {
     this.lightBg = this.add.image(this.width / 2, this.height / 2, "blink").setAlpha(0).setDepth(5);
-    this.lightOverlay = this.add.rectangle(this.width / 2, this.height / 2, this.width, this.height, 0xffffff).setAlpha(0).setOrigin(0.5, 0.5).setDepth(5);
+    // this.lightOverlay = this.add.rectangle(this.width / 2, this.height / 2, this.width, this.height, 0xffffff).setAlpha(0).setOrigin(0.5, 0.5).setDepth(5);
 
     // === PREMIUM EDGE GLOWS ===
     const edgeGlowLeft = this.add.graphics();

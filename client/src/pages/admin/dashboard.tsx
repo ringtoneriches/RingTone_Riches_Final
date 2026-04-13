@@ -286,7 +286,7 @@ export default function AdminDashboard() {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-sm text-muted-foreground whitespace-nowrap">
-                        {new Date(order.createdAt).toLocaleDateString('en-GB')}
+                        {new Date(order.createdAt).toLocaleString()}
                       </td>
                     </tr>
                   ))
@@ -349,11 +349,7 @@ export default function AdminDashboard() {
                     <div>
                       <p className="text-xs text-muted-foreground font-medium">Date</p>
                       <p className="text-xs sm:text-sm">
-                        {new Date(order.createdAt).toLocaleDateString('en-GB', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
+                        {new Date(order.createdAt).toLocaleString()}
                       </p>
                     </div>
                   </div>

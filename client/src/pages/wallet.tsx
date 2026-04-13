@@ -666,12 +666,19 @@ const incompleteGames = orders.filter((order) => {
   const remaining = Number(order.remainingPlays || 0);
   const status = order.orders.status;
   
-  // Include ALL games with remaining plays (don't filter by time here)
+  // Check if game should be removed (expired + 10 minutes)
+  const now = Date.now();
+  const created = new Date(order.orders.createdAt).getTime();
+  const expiryTime = created + (2 * 60 * 60 * 1000);
+  const removalDelay = 10 * 60 * 1000; // 10 minutes in milliseconds
+  const shouldRemove = now > (expiryTime + removalDelay);
+  
   return (
     ["spin", "scratch", "plinko", "pop", "voltz"].includes(type) &&
     ["paid", "completed"].includes(status) &&
     remaining > 0 &&
-    !excludedCompetitionIds.includes(order.orders.competitionId)
+    !excludedCompetitionIds.includes(order.orders.competitionId) &&
+    !shouldRemove // Remove after expiration + delay
   );
 });
 

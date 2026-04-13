@@ -30,34 +30,34 @@ interface PlayResult {
 
 function fireWinConfetti() {
   const colors = ["#eab308", "#f59e0b", "#fbbf24", "#ffffff"];
-  confetti({ particleCount: 60, spread: 90, origin: { y: 0.4, x: 0.5 }, colors, startVelocity: 35, gravity: 0.9, scalar: 1.1, ticks: 200 });
+  confetti({ particleCount: 40, spread: 90, origin: { y: 0.4, x: 0.5 }, colors, startVelocity: 35, gravity: 0.9, scalar: 1.1, ticks: 200 });
   setTimeout(() => {
-    confetti({ particleCount: 40, angle: 60, spread: 60, origin: { x: 0, y: 0.5 }, colors, startVelocity: 40 });
-    confetti({ particleCount: 40, angle: 120, spread: 60, origin: { x: 1, y: 0.5 }, colors, startVelocity: 40 });
+    confetti({ particleCount: 20, angle: 60, spread: 60, origin: { x: 0, y: 0.5 }, colors, startVelocity: 40 });
+    confetti({ particleCount: 20, angle: 120, spread: 60, origin: { x: 1, y: 0.5 }, colors, startVelocity: 40 });
   }, 200);
   setTimeout(() => {
-    confetti({ particleCount: 70, spread: 140, origin: { y: 0.35, x: 0.5 }, colors, scalar: 1.2, ticks: 250 });
+    confetti({ particleCount: 50, spread: 140, origin: { y: 0.35, x: 0.5 }, colors, scalar: 1.2, ticks: 250 });
   }, 600);
 }
 
 function fireBackupConfetti() {
   const colors = ["#06b6d4", "#22d3ee", "#ffffff"];
-  confetti({ particleCount: 50, spread: 100, origin: { y: 0.45, x: 0.5 }, colors, startVelocity: 30, gravity: 0.8, ticks: 200 });
+  confetti({ particleCount: 40, spread: 100, origin: { y: 0.45, x: 0.5 }, colors, startVelocity: 30, gravity: 0.8, ticks: 200 });
   setTimeout(() => {
-    confetti({ particleCount: 30, angle: 60, spread: 50, origin: { x: 0, y: 0.6 }, colors });
-    confetti({ particleCount: 30, angle: 120, spread: 50, origin: { x: 1, y: 0.6 }, colors });
+    confetti({ particleCount: 25, angle: 60, spread: 50, origin: { x: 0, y: 0.6 }, colors });
+    confetti({ particleCount: 25, angle: 120, spread: 50, origin: { x: 1, y: 0.6 }, colors });
   }, 250);
 }
 
 function firePhysicalPrizeConfetti() {
   const colors = ["#a855f7", "#d8b4fe", "#c084fc", "#ffffff"];
-  confetti({ particleCount: 80, spread: 120, origin: { y: 0.4, x: 0.5 }, colors, startVelocity: 40, gravity: 0.7, scalar: 1.2, ticks: 300 });
+  confetti({ particleCount: 40, spread: 120, origin: { y: 0.4, x: 0.5 }, colors, startVelocity: 40, gravity: 0.7, scalar: 1.2, ticks: 300 });
   setTimeout(() => {
-    confetti({ particleCount: 50, angle: 55, spread: 70, origin: { x: 0, y: 0.5 }, colors, startVelocity: 45 });
-    confetti({ particleCount: 50, angle: 125, spread: 70, origin: { x: 1, y: 0.5 }, colors, startVelocity: 45 });
+    confetti({ particleCount: 25, angle: 55, spread: 70, origin: { x: 0, y: 0.5 }, colors, startVelocity: 45 });
+    confetti({ particleCount: 25, angle: 125, spread: 70, origin: { x: 1, y: 0.5 }, colors, startVelocity: 45 });
   }, 200);
   setTimeout(() => {
-    confetti({ particleCount: 100, spread: 160, origin: { y: 0.3, x: 0.5 }, colors, scalar: 1.4, ticks: 350 });
+    confetti({ particleCount: 50, spread: 160, origin: { y: 0.3, x: 0.5 }, colors, scalar: 1.4, ticks: 350 });
   }, 500);
 }
 

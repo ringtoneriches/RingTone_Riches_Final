@@ -31,8 +31,15 @@ export default function Testimonials() {
       .then((res) => res.json())
       .then((data: ApiResponse) => {
         const fetchedReviews = data.reviews || [];
-        setReviews(fetchedReviews);
-        setFilteredReviews(fetchedReviews);
+        
+        // OPTION 1: Filter out 3-star and below reviews entirely (if you never want to show them)
+        const highQualityReviews = fetchedReviews.filter(r => {
+          const rating = parseInt(r.rating);
+          return rating >= 4; // Only keep 4 and 5 star reviews
+        });
+        // console.log(highQualityReviews)
+        setReviews(highQualityReviews);
+        setFilteredReviews(highQualityReviews);
         setTotalReviews(data.totalReviews || '0');
         setAverageRating(data.averageRating || 'N/A');
         setLoading(false);
@@ -55,6 +62,8 @@ export default function Testimonials() {
     }
     setCurrentIndex(0);
   }, [filter, reviews]);
+
+
 
   const nextReview = () => {
     setDirection(1);

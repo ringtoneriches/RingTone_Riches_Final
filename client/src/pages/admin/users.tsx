@@ -1351,12 +1351,21 @@ export default function AdminUsers() {
         {/* Edit User Dialog */}
         <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
           <DialogContent className="max-h-[90vh] overflow-y-auto max-w-full sm:max-w-2xl p-4 sm:p-6">
-            <DialogHeader>
-              <DialogTitle className="text-lg sm:text-xl">Edit User</DialogTitle>
-              <DialogDescription className="text-sm">
-                Update user details, credentials, and permissions
-              </DialogDescription>
-            </DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="text-lg sm:text-xl">Edit User</DialogTitle>
+            <DialogDescription className="text-sm">
+              Update user details, credentials, and permissions
+            </DialogDescription>
+            <div className="w-full flex">
+              <Button 
+                onClick={handleUpdate} 
+                disabled={updateMutation.isPending}
+                className="ml-auto w-fit sm:w-auto text-xs sm:text-sm"
+              >
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </DialogHeader>
             <div className="space-y-4">
               <div>
                 <Label className="text-sm sm:text-base">Email</Label>

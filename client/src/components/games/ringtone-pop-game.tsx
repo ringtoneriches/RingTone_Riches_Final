@@ -85,6 +85,14 @@ const BALLOON_COLORS = [
   },
 ];
 
+const getFontSize = (val: string) => {
+  if (!val) return "text-lg";
+  if (val.length < 6) return "text-3xl";
+  if (val.length < 12) return "text-lg";
+  if (val.length < 20) return "text-sm";
+  return "text-xs";
+};
+
 function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }: BalloonProps) {
   const colorScheme = BALLOON_COLORS[index % BALLOON_COLORS.length];
   const [isAnimating, setIsAnimating] = useState(false);
@@ -196,14 +204,16 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }:
               className="absolute top-3 left-4 w-8 h-12 rounded-full opacity-60 blur-sm"
               style={{ background: `linear-gradient(135deg, white 0%, transparent 100%)` }}
             />
-            <span className={`
-  font-black text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] text-center px-2
-  ${value === "R" || (typeof value === 'string' && (value.includes('£') || value.includes('pts')))
-    ? 'text-2xl sm:text-3xl md:text-4xl'
-    : 'text-sm sm:text-base md:text-lg'}
-`}>
-  {value || "?"}
-</span>
+           <span className={`
+              font-black text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] text-center px-2
+              ${value === "R" || (typeof value === 'string' && (value.includes('£') || value.includes('pts')))
+                ? 'text-2xl sm:text-3xl md:text-4xl'
+                : typeof value === 'string' && value.length > 12
+                  ? 'text-xs sm:text-sm'
+                  : 'text-sm sm:text-base md:text-lg'}
+            `}>
+              {value || "?"}
+            </span>
           </div>
         </div>
       </div>
@@ -468,30 +478,15 @@ const formattedValues = values.map((v: number | string, idx: number) => {
   const numVal = typeof v === 'string' ? parseFloat(v) : v;
   
   // For physical prizes - smart formatting for balloons
-  if (gameData.rewardType === "physical") {
-    let prizeName = gameData.prizeName || gameData.rewardValue || "Prize";
-    
-    // Remove common prefixes for cleaner display
-    prizeName = prizeName.replace(/^(Apple |Samsung |Google )/i, "");
-    
-    // Smart truncation based on length
-    if (prizeName.length > 10) {
-      // Try to get first meaningful words
-      const words = prizeName.split(' ');
-      if (words.length > 1) {
-        // "iPhone 14 Pro Max" -> "iPhone..."
-        return words[0] + "…";
-      }
-      // "PlayStation5" -> "PS5" style or truncate
-      if (prizeName.length > 12) {
-        return prizeName.substring(0, 9) + "…";
-      }
-      return prizeName;
-    }
-    
-    // Short names display fully
-    return prizeName;
-  }
+  // For physical prizes - show full name
+if (gameData.rewardType === "physical") {
+  let prizeName = gameData.prizeName || gameData.rewardValue || "Prize";
+  // Remove common prefixes for cleaner display
+  prizeName = prizeName.replace(/^(Apple |Samsung |Google )/i, "");
+  
+  // For very long names (over 15 chars), use a smaller font via CSS class
+  return prizeName;
+}
   
   if (isNaN(numVal)) return String(v);
   

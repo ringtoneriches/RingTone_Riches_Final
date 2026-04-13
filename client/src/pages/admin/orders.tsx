@@ -357,7 +357,7 @@ export default function AdminOrders() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Date:</span>
                 <span className="font-medium text-foreground text-xs">
-                  {new Date(order.createdAt).toLocaleDateString()}
+                   {new Date(order.createdAt).toLocaleString()}
                 </span>
               </div>
             </div>
