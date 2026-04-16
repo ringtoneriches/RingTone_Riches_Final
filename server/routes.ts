@@ -8533,44 +8533,84 @@ app.get("/api/verification/can-withdraw", isAuthenticated, async (req, res) => {
   // });
 
   app.get(
-    "/api/admin/cashflow-transactions",
-    isAuthenticated,
-    isAdmin,
-    async (req, res) => {
-      try {
-        // 1️⃣ CASHFLOW DEPOSITS ONLY (Wallet top-ups)
-        const cashflowDeposits = await db
-          .select({
-            id: transactions.id,
-            userId: transactions.userId,
-            userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
-            userEmail: users.email,
-            type: transactions.type,
-            amount: transactions.amount,
-            description: transactions.description,
-            createdAt: transactions.createdAt,
-            source: sql`'transaction'`,
-            paymentRef: transactions.paymentRef,
-          })
-          .from(transactions)
-          .leftJoin(users, eq(transactions.userId, users.id))
-          .where(sql`${transactions.type} = 'deposit'`);
-
-        // 2️⃣ SORT NEWEST FIRST
-        cashflowDeposits.sort(
-          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-        );
-
-        // 3️⃣ RETURN ONLY DEPOSITS
-        res.json(cashflowDeposits);
-      } catch (error) {
-        console.error("Error fetching cashflow transactions:", error);
-        res
-          .status(500)
-          .json({ message: "Failed to fetch cashflow transactions" });
+  "/api/admin/cashflow-transactions",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      // Pagination params
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
+      const offset = (page - 1) * limit;
+      
+      // Filters
+      const { dateFrom, dateTo, search } = req.query;
+      
+      // 1️⃣ Get ALL deposits first (like your original working code)
+      let cashflowDeposits = await db
+        .select({
+          id: transactions.id,
+          userId: transactions.userId,
+          userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+          userEmail: users.email,
+          type: transactions.type,
+          amount: transactions.amount,
+          description: transactions.description,
+          createdAt: transactions.createdAt,
+          source: sql`'transaction'`,
+          paymentRef: transactions.paymentRef,
+        })
+        .from(transactions)
+        .leftJoin(users, eq(transactions.userId, users.id))
+        .where(sql`${transactions.type} = 'deposit'`);
+      
+      // 2️⃣ Apply filters in JavaScript (like your original working code)
+      let filtered = [...cashflowDeposits];
+      
+      if (dateFrom) {
+        filtered = filtered.filter(tx => new Date(tx.createdAt) >= new Date(dateFrom));
       }
+      if (dateTo) {
+        filtered = filtered.filter(tx => new Date(tx.createdAt) <= new Date(dateTo));
+      }
+      if (search) {
+        const searchLower = search.toLowerCase();
+        filtered = filtered.filter(tx => 
+          (tx.userName?.toLowerCase().includes(searchLower) ||
+           tx.userEmail?.toLowerCase().includes(searchLower) ||
+           tx.description?.toLowerCase().includes(searchLower) ||
+           tx.paymentRef?.toLowerCase().includes(searchLower) ||
+           tx.amount.toString().includes(searchLower))
+        );
+      }
+      
+      // 3️⃣ Sort newest first
+      filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      
+      // 4️⃣ Apply pagination
+      const total = filtered.length;
+      const paginated = filtered.slice(offset, offset + limit);
+      
+      res.json({
+        transactions: paginated,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasMore: offset + limit < total
+        }
+      });
+      
+    } catch (error) {
+      console.error("Error fetching cashflow transactions:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch cashflow transactions",
+        error: error.message 
+      });
     }
-  );
+  }
+);
 
   app.get("/api/user/tickets", isAuthenticated, async (req: any, res) => {
     try {
@@ -14168,91 +14208,117 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
     }
   );
 
-  // Manage users
-  app.get(
-    "/api/admin/users",
-    isAuthenticated,
-    isAdmin,
-    async (req: any, res) => {
-      try {
-        const { dateFrom, dateTo, search } = req.query;
-
-        let query = db.select().from(users);
-
-        // Apply date filtering
-        const conditions = [];
-        if (dateFrom) {
-          conditions.push(gte(users.createdAt, new Date(dateFrom as string)));
-        }
-        if (dateTo) {
-          const endDate = new Date(dateTo as string);
-          endDate.setHours(23, 59, 59, 999);
-          conditions.push(lte(users.createdAt, endDate));
-        }
-
-        // Apply search filter
-        if (search) {
-          const searchTerm = `%${search}%`;
-          conditions.push(
-            or(
-              like(users.email, searchTerm),
-              like(users.firstName, searchTerm),
-              like(users.lastName, searchTerm)
-            )
-          );
-        }
-
-        if (conditions.length > 0) {
-          query = query.where(and(...conditions)) as any;
-        }
-
-        const allUsers = await query.orderBy(desc(users.createdAt));
-
-        res.json(
-          await Promise.all(
-            allUsers.map(async (user) => {
-              // ⭐ Get latest IP
-              const latestIp = await db.query.userIpLogs.findFirst({
-                where: (l, { eq }) => eq(l.userId, user.id),
-                orderBy: (l, { desc }) => desc(l.createdAt),
-              });
-        
-              return {
-                id: user.id,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                balance: user.balance,
-                phoneNumber: user.phoneNumber,
-                ringtonePoints: user.ringtonePoints,
-                isAdmin: user.isAdmin,
-                createdAt: user.createdAt,
-                addressStreet: user.addressStreet,
-                addressCity: user.addressCity,
-                addressPostcode: user.addressPostcode,
-                addressCountry: user.addressCountry,
-                notes: user.notes,
-                selfSuspended: user.selfSuspended,
-             selfSuspensionEndsAt: user.selfSuspensionEndsAt,
-                disabled: user.disabled,
-                disabledAt: user.disabledAt,
-                disabledUntil: user.disabledUntil,
-                dailySpendLimit: user.dailySpendLimit,
-                dailyLimitLastUpdatedAt: user.dailyLimitLastUpdatedAt,
-        
-                // ⭐ NEW FIELD
-                lastIpAddress: latestIp?.ipAddress || null,
-              };
-            })
-          )
-        );
-        
-      } catch (error) {
-        console.error("Error fetching users:", error);
-        res.status(500).json({ message: "Failed to fetch users" });
+app.get(
+  "/api/admin/users",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      // Pagination params
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 30;
+      const offset = (page - 1) * limit;
+      
+      // Filters
+      const { dateFrom, dateTo, search, role } = req.query;
+      
+      // 1️⃣ Get ALL users first (like your original working code)
+      let query = db.select().from(users);
+      
+      // Apply date filters to the query
+      const conditions = [];
+      if (dateFrom) {
+        conditions.push(gte(users.createdAt, new Date(dateFrom as string)));
       }
+      if (dateTo) {
+        const endDate = new Date(dateTo as string);
+        endDate.setHours(23, 59, 59, 999);
+        conditions.push(lte(users.createdAt, endDate));
+      }
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+      
+      let allUsers = await query.orderBy(desc(users.createdAt));
+      
+      // 2️⃣ Apply search filter in JavaScript (like your original)
+      if (search) {
+        const searchLower = (search as string).toLowerCase();
+        allUsers = allUsers.filter(user => 
+          user.email?.toLowerCase().includes(searchLower) ||
+          user.firstName?.toLowerCase().includes(searchLower) ||
+          user.lastName?.toLowerCase().includes(searchLower) ||
+          user.phoneNumber?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      // 3️⃣ Apply role filter
+      if (role === 'admin') {
+        allUsers = allUsers.filter(user => user.isAdmin === true);
+      } else if (role === 'user') {
+        allUsers = allUsers.filter(user => user.isAdmin !== true);
+      }
+      
+      // 4️⃣ Apply pagination
+      const total = allUsers.length;
+      const paginatedUsers = allUsers.slice(offset, offset + limit);
+      
+      // 5️⃣ Get IP addresses for paginated users
+      const usersWithIp = await Promise.all(
+        paginatedUsers.map(async (user) => {
+          const latestIp = await db.query.userIpLogs.findFirst({
+            where: (l, { eq }) => eq(l.userId, user.id),
+            orderBy: (l, { desc }) => desc(l.createdAt),
+          });
+          
+          return {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            balance: user.balance,
+            phoneNumber: user.phoneNumber,
+            ringtonePoints: user.ringtonePoints,
+            isAdmin: user.isAdmin,
+            createdAt: user.createdAt,
+            addressStreet: user.addressStreet,
+            addressCity: user.addressCity,
+            addressPostcode: user.addressPostcode,
+            addressCountry: user.addressCountry,
+            notes: user.notes,
+            selfSuspended: user.selfSuspended,
+            selfSuspensionEndsAt: user.selfSuspensionEndsAt,
+            disabled: user.disabled,
+            disabledAt: user.disabledAt,
+            disabledUntil: user.disabledUntil,
+            dailySpendLimit: user.dailySpendLimit,
+            dailyLimitLastUpdatedAt: user.dailyLimitLastUpdatedAt,
+            lastIpAddress: latestIp?.ipAddress || null,
+          };
+        })
+      );
+      
+      res.json({
+        users: usersWithIp,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasMore: offset + limit < total
+        }
+      });
+      
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch users",
+        error: error.message 
+      });
     }
-  );
+  }
+);
   // Get single user by ID (simple version)
   app.get(
     "/api/admin/users/:id",
