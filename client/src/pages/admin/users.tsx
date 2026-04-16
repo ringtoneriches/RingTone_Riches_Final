@@ -583,144 +583,165 @@ export default function AdminUsers() {
           </div>
         </div>
 
-        {/* Mobile Cards View with Infinite Scroll */}
-        <div className="block md:hidden space-y-3">
-          {allUsers.map((user, index) => {
-            const isLastRow = index === allUsers.length - 1;
-            return (
-              <Card 
-                key={user.id} 
-                ref={isLastRow ? loadMoreRef : null}
-                className="p-4"
-              >
-                {/* Same card content as before */}
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="text-sm font-medium text-foreground">{user.email}</div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {user.firstName} {user.lastName || ""}
-                        </div>
-                      </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        user.isAdmin ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
-                      }`}>
-                        {user.isAdmin ? "Admin" : "User"}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        user.disabled ? "bg-red-500/20 text-red-500" : "bg-green-500/20 text-green-500"
-                      }`}>
-                        {user.disabled ? "Disabled" : "Active"}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1">Phone</div>
-                      <div className="font-medium">{user.phoneNumber || "-"}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1">Cashflow</div>
-                      <div className="font-medium">£{getCashflowTotal(user.id)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1">Balance</div>
-                      <div className="font-medium text-primary">£{parseFloat(user.balance).toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1">Points</div>
-                      <div className="font-medium">{user.ringtonePoints}</div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setLocation(`/admin/users/${user.id}`)}
-                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 text-xs px-2"
-                    >
-                      <FileText className="w-3 h-3 mr-1" />
-                      Audit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEdit(user)}
-                      className="text-xs px-2"
-                    >
-                      <Edit className="w-3 h-3 mr-1" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setUserToDisable(user);
-                        setIsDisableDialogOpen(true);
-                      }}
-                      className={`text-xs px-2 ${
-                        user.disabled 
-                          ? "text-green-600 hover:text-green-700 hover:bg-green-50"
-                          : "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
-                      }`}
-                    >
-                      {user.disabled ? (
-                        <>
-                          <CheckCircle className="w-3 h-3 mr-1" />
-                          Enable
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="w-3 h-3 mr-1" />
-                          Disable
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteUser(user)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs px-2"
-                    >
-                      <Trash2 className="w-3 h-3 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-          
-          {/* Loading indicator */}
-          {isFetchingNextPage && (
-            <Card className="p-8 text-center">
-              <div className="flex justify-center items-center gap-2">
-                <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
-                <span className="text-sm text-muted-foreground">Loading more users...</span>
-              </div>
-            </Card>
-          )}
-          
-          {allUsers.length === 0 && !isLoading && (
-            <Card className="p-8 text-center">
-              <div className="flex flex-col items-center justify-center">
-                <div className="text-base sm:text-lg font-medium">No users found</div>
-                <div className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  Try adjusting your search or filters
+       {/* Mobile Cards View with Infinite Scroll - FIXED */}
+<div className="block md:hidden space-y-3">
+  {/* Add a loading spinner at the top while fetching first page */}
+  {isFetchingNextPage && allUsers.length === 0 && (
+    <Card className="p-8 text-center">
+      <div className="flex justify-center items-center gap-2">
+        <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
+        <span className="text-sm text-muted-foreground">Loading users...</span>
+      </div>
+    </Card>
+  )}
+  
+  {allUsers.map((user, index) => {
+    // Attach observer to last 3 items for better mobile detection
+    const isNearEnd = index >= allUsers.length - 3;
+    return (
+      <Card 
+        key={user.id} 
+        ref={isNearEnd ? loadMoreRef : null}
+        className="p-4"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="text-sm font-medium text-foreground break-all">{user.email}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {user.firstName} {user.lastName || ""}
                 </div>
               </div>
-            </Card>
-          )}
+              <span className={`px-2 py-1 rounded-full text-xs font-medium shrink-0 ml-2 ${
+                user.isAdmin ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
+              }`}>
+                {user.isAdmin ? "Admin" : "User"}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                user.disabled ? "bg-red-500/20 text-red-500" : "bg-green-500/20 text-green-500"
+              }`}>
+                {user.disabled ? "Disabled" : "Active"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {new Date(user.createdAt).toLocaleDateString()}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Phone</div>
+              <div className="font-medium break-all">{user.phoneNumber || "-"}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Cashflow</div>
+              <div className="font-medium">£{getCashflowTotal(user.id)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Balance</div>
+              <div className="font-medium text-primary">£{parseFloat(user.balance).toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Points</div>
+              <div className="font-medium">{user.ringtonePoints}</div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLocation(`/admin/users/${user.id}`)}
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 text-xs px-2"
+            >
+              <FileText className="w-3 h-3 mr-1" />
+              Audit
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleEdit(user)}
+              className="text-xs px-2"
+            >
+              <Edit className="w-3 h-3 mr-1" />
+              Edit
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setUserToDisable(user);
+                setIsDisableDialogOpen(true);
+              }}
+              className={`text-xs px-2 ${
+                user.disabled 
+                  ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                  : "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+              }`}
+            >
+              {user.disabled ? (
+                <>
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Enable
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-3 h-3 mr-1" />
+                  Disable
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDeleteUser(user)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs px-2"
+            >
+              <Trash2 className="w-3 h-3 mr-1" />
+              Delete
+            </Button>
+          </div>
         </div>
+      </Card>
+    );
+  })}
+  
+  {/* Loading indicator at bottom */}
+  {isFetchingNextPage && allUsers.length > 0 && (
+    <Card className="p-4 text-center">
+      <div className="flex justify-center items-center gap-2">
+        <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
+        <span className="text-sm text-muted-foreground">Loading more users...</span>
+      </div>
+    </Card>
+  )}
+  
+  {/* "Load More" button as fallback for mobile */}
+  {hasNextPage && !isFetchingNextPage && allUsers.length > 0 && (
+    <Button
+      variant="outline"
+      onClick={() => fetchNextPage()}
+      className="w-full py-6"
+    >
+      Load More Users ({allUsers.length} of {totalUsers})
+    </Button>
+  )}
+  
+  {allUsers.length === 0 && !isLoading && (
+    <Card className="p-8 text-center">
+      <div className="flex flex-col items-center justify-center">
+        <div className="text-base sm:text-lg font-medium">No users found</div>
+        <div className="text-xs sm:text-sm text-muted-foreground mt-1">
+          Try adjusting your search or filters
+        </div>
+      </div>
+    </Card>
+  )}
+</div>
 
         {/* Desktop Table View with Infinite Scroll */}
         <div className="hidden md:block bg-card border border-border rounded-lg overflow-hidden">
