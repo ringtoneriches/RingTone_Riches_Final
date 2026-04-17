@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query"; // Add useQuery
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import {
   Search,
@@ -38,6 +38,13 @@ interface PaginatedResponse {
     totalPages: number;
     hasMore: boolean;
   };
+}
+
+interface StatsResponse {
+  totalAmount: number;
+  depositTotal: number;
+  transactionCount: number;
+  uniqueUsers: number;
 }
 
 type DateFilter = "all" | "1h" | "24h" | "7d" | "30d" | "custom";
@@ -80,10 +87,30 @@ export default function AdminTransactions() {
         dateFrom = customDateFrom ? new Date(customDateFrom).toISOString() : "";
         dateTo = customDateTo ? new Date(customDateTo).toISOString() : "";
         break;
+      case "all":
+        // Leave empty for all time
+        break;
     }
 
     return { dateFrom, dateTo };
   }, [dateFilter, customDateFrom, customDateTo]);
+
+  // Separate query for stats/totals (only when filters change)
+  const { data: statsData, isLoading: statsLoading } = useQuery<StatsResponse>({
+    queryKey: ["/api/admin/cashflow-transactions/stats", dateFrom, dateTo, debouncedSearch],
+    queryFn: async () => {
+      const url = new URL("/api/admin/cashflow-transactions/stats", window.location.origin);
+      if (dateFrom) url.searchParams.append("dateFrom", dateFrom);
+      if (dateTo) url.searchParams.append("dateTo", dateTo);
+      if (debouncedSearch) url.searchParams.append("search", debouncedSearch);
+      
+      const res = await fetch(url.toString(), { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json();
+    },
+    staleTime: 30000, // 30 seconds
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
 
   // Infinite query for paginated data
   const {
@@ -114,8 +141,8 @@ export default function AdminTransactions() {
       return undefined;
     },
     initialPageParam: 1,
-    staleTime: 30000, // 30 seconds
-    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 30000,
+    refetchInterval: 30000,
   });
 
   // Intersection Observer for infinite scroll
@@ -136,7 +163,7 @@ export default function AdminTransactions() {
     [isFetchingNextPage, hasNextPage, fetchNextPage]
   );
 
-  // Flatten all transactions from all pages
+  // Flatten all transactions from all pages (for display only)
   const allTransactions = useMemo(() => {
     if (!data?.pages) return [];
     return data.pages.flatMap((page) => page.transactions);
@@ -144,27 +171,16 @@ export default function AdminTransactions() {
 
   const totalTransactions = data?.pages[0]?.pagination.total || 0;
 
-  // Calculate analytics from all loaded transactions
-  const analytics = useMemo(() => {
-    if (!allTransactions.length) return null;
+  // Use statsData for analytics (the true totals), not the loaded transactions
+  const analytics = statsData || {
+    totalAmount: 0,
+    depositTotal: 0,
+    uniqueUsers: 0,
+    transactionCount: 0,
+  };
 
-    const totalAmount = allTransactions.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-    const depositTotal = allTransactions
-      .filter(tx => tx.type === "deposit")
-      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-    const uniqueUsers = new Set(allTransactions.map(tx => tx.userEmail).filter(Boolean));
-
-    return {
-      totalAmount,
-      depositTotal,
-      uniqueUsers: uniqueUsers.size,
-      transactionCount: allTransactions.length,
-    };
-  }, [allTransactions]);
-
-  // Export function (exports all data, not just loaded)
+  // Export function
   const handleExportCSV = async () => {
-    // Fetch all data for export (you might want to do this server-side)
     const url = new URL("/api/admin/cashflow-transactions/export", window.location.origin);
     if (dateFrom) url.searchParams.append("dateFrom", dateFrom);
     if (dateTo) url.searchParams.append("dateTo", dateTo);
@@ -173,7 +189,7 @@ export default function AdminTransactions() {
     window.open(url.toString(), '_blank');
   };
 
-  if (isLoading) {
+  if (isLoading || statsLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
@@ -201,7 +217,7 @@ export default function AdminTransactions() {
           </Button>
         </div>
 
-        {/* FILTERS - Same as before */}
+        {/* FILTERS */}
         <Card>
           <CardContent className="pt-4 sm:pt-6 space-y-4">
             <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 items-start sm:items-center">
@@ -258,7 +274,7 @@ export default function AdminTransactions() {
           </CardContent>
         </Card>
 
-        {/* SUMMARY CARDS */}
+        {/* SUMMARY CARDS - Now showing true totals */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
             <CardContent className="p-4 sm:p-6">
@@ -270,12 +286,12 @@ export default function AdminTransactions() {
                 <TrendingUp className="w-5 h-5 text-blue-400 flex-shrink-0" />
               </div>
               <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
-                £{analytics ? Number(analytics.totalAmount || 0).toFixed(2) : '0.00'}
+                £{analytics.totalAmount.toFixed(2)}
               </div>
               <div className="flex items-center gap-2 text-xs sm:text-sm">
                 <div className="flex items-center text-green-500">
                   <ArrowUpRight className="w-3 h-3 mr-1" />
-                  <span>From {analytics ? analytics.transactionCount : 0} txs</span>
+                  <span>From {analytics.transactionCount} txs</span>
                 </div>
               </div>
             </CardContent>
@@ -291,10 +307,10 @@ export default function AdminTransactions() {
                 <CreditCard className="w-5 h-5 text-emerald-400 flex-shrink-0" />
               </div>
               <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
-                £{analytics ? Number(analytics.depositTotal || 0).toFixed(2) : '0.00'}
+                £{analytics.depositTotal.toFixed(2)}
               </div>
               <div className="text-xs sm:text-sm text-muted-foreground">
-                {allTransactions.filter(tx => tx.type === "deposit").length} deposits
+                Total deposits from all users
               </div>
             </CardContent>
           </Card>
@@ -309,10 +325,10 @@ export default function AdminTransactions() {
                 <Users className="w-5 h-5 text-violet-400 flex-shrink-0" />
               </div>
               <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
-                {analytics ? analytics.uniqueUsers : 0}
+                {analytics.uniqueUsers}
               </div>
               <div className="text-xs sm:text-sm text-muted-foreground">
-                Total users who have transacted
+                Unique users who have transacted
               </div>
             </CardContent>
           </Card>
@@ -346,7 +362,6 @@ export default function AdminTransactions() {
 
                   <TableBody>
                     {allTransactions.map((tx, index) => {
-                      // Attach observer to the last row
                       const isLastRow = index === allTransactions.length - 1;
                       return (
                         <TableRow 
@@ -408,7 +423,6 @@ export default function AdminTransactions() {
                       );
                     })}
                     
-                    {/* Loading indicator */}
                     {isFetchingNextPage && (
                       <TableRow>
                         <TableCell colSpan={8} className="text-center py-4">

@@ -8612,6 +8612,77 @@ app.get("/api/verification/can-withdraw", isAuthenticated, async (req, res) => {
   }
 );
 
+// API endpoint: /api/admin/cashflow-transactions/stats
+app.get(
+  "/api/admin/cashflow-transactions/stats",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const { dateFrom, dateTo, search } = req.query;
+      
+      // Get ALL deposits first (same logic as main endpoint)
+      let cashflowDeposits = await db
+        .select({
+          id: transactions.id,
+          userId: transactions.userId,
+          userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+          userEmail: users.email,
+          type: transactions.type,
+          amount: transactions.amount,
+          description: transactions.description,
+          createdAt: transactions.createdAt,
+          source: sql`'transaction'`,
+          paymentRef: transactions.paymentRef,
+        })
+        .from(transactions)
+        .leftJoin(users, eq(transactions.userId, users.id))
+        .where(sql`${transactions.type} = 'deposit'`);
+      
+      // Apply filters in JavaScript (same as main endpoint)
+      let filtered = [...cashflowDeposits];
+      
+      if (dateFrom) {
+        filtered = filtered.filter(tx => new Date(tx.createdAt) >= new Date(dateFrom));
+      }
+      if (dateTo) {
+        filtered = filtered.filter(tx => new Date(tx.createdAt) <= new Date(dateTo));
+      }
+      if (search) {
+        const searchLower = search.toLowerCase();
+        filtered = filtered.filter(tx => 
+          (tx.userName?.toLowerCase().includes(searchLower) ||
+           tx.userEmail?.toLowerCase().includes(searchLower) ||
+           tx.description?.toLowerCase().includes(searchLower) ||
+           tx.paymentRef?.toLowerCase().includes(searchLower) ||
+           tx.amount.toString().includes(searchLower))
+        );
+      }
+      
+      // Calculate stats
+      const totalAmount = filtered.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      const depositTotal = filtered
+        .filter(tx => tx.type === "deposit")
+        .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      const uniqueUsers = new Set(filtered.map(tx => tx.userEmail).filter(Boolean));
+      
+      res.json({
+        totalAmount: Number(totalAmount || 0),
+        depositTotal: Number(depositTotal || 0),
+        transactionCount: filtered.length,
+        uniqueUsers: uniqueUsers.size,
+      });
+      
+    } catch (error) {
+      console.error("Error fetching cashflow stats:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch cashflow stats",
+        error: error.message 
+      });
+    }
+  }
+);
+
   app.get("/api/user/tickets", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;

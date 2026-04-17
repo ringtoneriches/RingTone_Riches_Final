@@ -94,7 +94,7 @@ export default function CheckoutSuccess() {
               variant: "destructive",
             });
           }
-        }, 2000); // 2s delay for webhook
+        }, 5000); // 2s delay for webhook
       }
     };
 
