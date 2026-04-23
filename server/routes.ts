@@ -15995,124 +15995,315 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
 });
 
   // Reveal all Voltz games (batch)
-  app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const { orderId, count, competitionId } = req.body;
+ // Reveal all Voltz games (batch)
+app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, count, competitionId } = req.body;
 
-      if (!orderId || !count || count <= 0 || !competitionId) {
-        return res.status(400).json({ success: false, message: "Valid orderId, count, and competitionId are required" });
+    if (!orderId || !count || count <= 0 || !competitionId) {
+      return res.status(400).json({ success: false, message: "Valid orderId, count, and competitionId are required" });
+    }
+
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({ success: false, message: "No valid Voltz game purchase found" });
+    }
+
+    const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
+    const usedCount = Number(playsUsed[0]?.count || 0);
+    const playsRemaining = order.quantity - usedCount;
+    if (playsRemaining <= 0) {
+      return res.status(400).json({ success: false, message: "No plays remaining" });
+    }
+
+    const playsToProcess = Math.min(count, playsRemaining);
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const [config] = await db.select().from(gameVoltzConfig).where(eq(gameVoltzConfig.id, "active"));
+    const voltzConfig = config || DEFAULT_VOLTZ_CONFIG;
+    if (!voltzConfig.isActive) {
+      return res.status(400).json({ success: false, message: "Ringtone Voltz is currently unavailable" });
+    }
+
+    const prizes = await db.select().from(voltzPrizes).where(eq(voltzPrizes.isActive, true)).orderBy(asc(voltzPrizes.displayOrder));
+
+    if (prizes.length === 0) {
+      return res.status(400).json({ success: false, message: "No prizes configured for Voltz game" });
+    }
+
+    let totalCash = 0;
+    let totalPoints = 0;
+    let freeReplaysWon = 0;
+    const results: any[] = [];
+    const prizeWinCounts = new Map<string, number>();
+    prizes.forEach((p) => prizeWinCounts.set(p.id, p.quantityWon || 0));
+
+    // Helper functions for switch text generation
+    const getPrizeDisplay = (p: typeof prizes[0]) => {
+      if (p.rewardType === "cash") return `£${parseFloat(p.prizeValue || "0").toFixed(2)}`;
+      if (p.rewardType === "points") return `${Math.floor(parseFloat(p.prizeValue || "0"))} PTS`;
+      if (p.rewardType === "physical") {
+        const prizeName = p.prizeName || "Prize";
+        if (prizeName.length > 12) {
+          return prizeName.substring(0, 10) + "…";
+        }
+        return prizeName;
       }
+      return "REPLAY";
+    };
 
-      const order = await storage.getOrder(orderId);
-      if (!order || order.userId !== userId || order.status !== "completed") {
-        return res.status(400).json({ success: false, message: "No valid Voltz game purchase found" });
+    const shuffleArray = <T,>(arr: T[]): T[] => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
       }
+      return arr;
+    };
 
-      const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
-      const usedCount = Number(playsUsed[0]?.count || 0);
-      const playsRemaining = order.quantity - usedCount;
-      if (playsRemaining <= 0) {
-        return res.status(400).json({ success: false, message: "No plays remaining" });
-      }
+    const realPrizes = prizes.filter(p => p.rewardType === "cash" || p.rewardType === "points");
+    const realDisplayValues = [...new Set(realPrizes.map(getPrizeDisplay))];
+    
+    const physicalPrizes = prizes.filter(p => p.rewardType === "physical");
+    const physicalDisplayValues = physicalPrizes.map(p => getPrizeDisplay(p));
 
-      const playsToProcess = Math.min(count, playsRemaining);
-      const user = await storage.getUser(userId);
-      if (!user) return res.status(404).json({ message: "User not found" });
+    const allDisplayValues = [...realDisplayValues, ...physicalDisplayValues];
 
-      const prizes = await db.select().from(voltzPrizes).where(eq(voltzPrizes.isActive, true)).orderBy(asc(voltzPrizes.displayOrder));
-
-      let totalCash = 0;
-      let totalPoints = 0;
-      let freeReplaysWon = 0;
-      const results: any[] = [];
-      const prizeWinCounts = new Map<string, number>();
-      prizes.forEach((p) => prizeWinCounts.set(p.id, p.quantityWon || 0));
-
-      await db.transaction(async (tx) => {
-        for (let i = 0; i < playsToProcess; i++) {
-          const eligiblePrizes = prizes.filter((p) => {
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < playsToProcess; i++) {
+        // Filter eligible prizes including physical prizes
+        const eligiblePrizes = prizes.filter((p) => {
+          if (p.maxWins !== null && (p.rewardType === "cash" || p.rewardType === "points" || p.rewardType === "physical")) {
             const wins = prizeWinCounts.get(p.id) ?? 0;
-            if (p.maxWins !== null && (p.rewardType === "cash" || p.rewardType === "points")) {
-              if (wins >= p.maxWins!) return false;
-            }
-            return true;
-          });
-
-          const finalEligible = eligiblePrizes.length ? eligiblePrizes : prizes.filter((p) => p.rewardType !== "cash" && p.rewardType !== "points");
-          const totalWeight = finalEligible.reduce((sum, p) => sum + p.weight, 0);
-          let random = Math.random() * totalWeight;
-          let selectedPrize = finalEligible[0] || prizes[0];
-          for (const prize of finalEligible) {
-            random -= prize.weight;
-            if (random <= 0) { selectedPrize = prize; break; }
+            if (wins >= p.maxWins!) return false;
           }
+          return true;
+        });
 
-          const rewardType = selectedPrize.rewardType;
-          const isWin = rewardType === "cash" || rewardType === "points";
-          const isFreeReplay = rewardType === "try_again";
-          const isNoWin = rewardType === "no_win";
-          let rewardValue = "0";
-          let outcome: string = "noWin";
+        const finalEligible = eligiblePrizes.length ? eligiblePrizes : prizes.filter((p) => p.rewardType !== "cash" && p.rewardType !== "points" && p.rewardType !== "physical");
+        const totalWeight = finalEligible.reduce((sum, p) => sum + p.weight, 0);
+        let random = Math.random() * totalWeight;
+        let selectedPrize = finalEligible[0] || prizes[0];
+        for (const prize of finalEligible) {
+          random -= prize.weight;
+          if (random <= 0) { 
+            selectedPrize = prize; 
+            break; 
+          }
+        }
 
-          if (isNoWin) {
-            outcome = "noWin";
-          } else if (isFreeReplay) {
-            outcome = "freeReplay";
-            freeReplaysWon++;
-          } else if (isWin) {
-            outcome = "win";
+        const rewardType = selectedPrize.rewardType;
+        const isWin = rewardType === "cash" || rewardType === "points" || rewardType === "physical";
+        const isFreeReplay = rewardType === "try_again";
+        const isNoWin = rewardType === "no_win";
+        let rewardValue = "0";
+        let outcome: string = "noWin";
+
+        if (isNoWin) {
+          outcome = "noWin";
+          rewardValue = "0";
+        } else if (isFreeReplay) {
+          outcome = "freeReplay";
+          rewardValue = "0";
+          freeReplaysWon++;
+        } else if (isWin) {
+          outcome = "win";
+          if (rewardType === "physical") {
+            rewardValue = selectedPrize.prizeName || "Physical Prize";
+          } else {
             const value = parseFloat(selectedPrize.prizeValue || "0");
             rewardValue = value.toString();
             if (rewardType === "cash") totalCash += value;
             if (rewardType === "points") totalPoints += Math.floor(value);
-            prizeWinCounts.set(selectedPrize.id, (prizeWinCounts.get(selectedPrize.id) || 0) + 1);
+          }
+          prizeWinCounts.set(selectedPrize.id, (prizeWinCounts.get(selectedPrize.id) || 0) + 1);
+        }
+
+        // Generate switch texts
+        let switchTexts: string[] = [];
+        if (isWin) {
+          const displayVal = getPrizeDisplay(selectedPrize);
+          switchTexts = [displayVal, displayVal, displayVal];
+        } else if (isFreeReplay) {
+          if (allDisplayValues.length > 0) {
+            const matchVal = allDisplayValues[Math.floor(Math.random() * allDisplayValues.length)];
+            switchTexts = shuffleArray([matchVal, matchVal, "REPLAY"]);
+          } else {
+            switchTexts = ["REPLAY", "REPLAY", "REPLAY"];
+          }
+        } else {
+          if (allDisplayValues.length >= 3) {
+            const pattern = Math.random();
+            if (pattern < 0.5) {
+              const idx1 = Math.floor(Math.random() * allDisplayValues.length);
+              let idx2 = Math.floor(Math.random() * (allDisplayValues.length - 1));
+              if (idx2 >= idx1) idx2++;
+              switchTexts = shuffleArray([allDisplayValues[idx1], allDisplayValues[idx1], allDisplayValues[idx2]]);
+            } else {
+              const shuffled = shuffleArray([...allDisplayValues]);
+              switchTexts = [shuffled[0], shuffled[1], shuffled[2]];
+            }
+          } else if (allDisplayValues.length === 2) {
+            const idx1 = Math.floor(Math.random() * 2);
+            const idx2 = idx1 === 0 ? 1 : 0;
+            switchTexts = shuffleArray([allDisplayValues[idx1], allDisplayValues[idx1], allDisplayValues[idx2]]);
+          } else if (allDisplayValues.length === 1) {
+            switchTexts = shuffleArray([allDisplayValues[0], allDisplayValues[0], "NO MATCH"]);
+          } else {
+            switchTexts = shuffleArray(["NO MATCH", "STATIC", "OVERLOAD"]);
+          }
+        }
+
+        const switchChosen = Math.floor(Math.random() * 3) + 1;
+        
+        // Record usage
+        await tx.insert(voltzUsage).values({ 
+          orderId, 
+          userId, 
+          usedAt: new Date() 
+        });
+
+        // Record win/loss
+        await tx.insert(voltzWins).values({
+          orderId, 
+          userId, 
+          prizeId: selectedPrize.id, 
+          switchChosen,
+          rewardType: isWin ? rewardType : isFreeReplay ? "try_again" : isNoWin ? "no_win" : "lose",
+          rewardValue: rewardType === "physical" ? selectedPrize.prizeName : rewardValue,
+          isWin, 
+          wonAt: new Date(),
+        });
+
+        // Handle win payouts and records
+        if (isWin) {
+          if (rewardType === "cash") {
+            const value = parseFloat(selectedPrize.prizeValue || "0");
             await tx.insert(winners).values({
-              userId, competitionId, prizeDescription: "Ringtone Voltz Win",
-              prizeValue: rewardType === "cash" ? `£${rewardValue} Cash` : `${rewardValue} Points`,
-              isShowcase: false, createdAt: new Date(), updatedAt: new Date(),
+              userId, 
+              competitionId, 
+              prizeDescription: "Ringtone Voltz Win",
+              prizeValue: `£${value.toFixed(2)} Cash`,
+              isShowcase: false, 
+              createdAt: new Date(), 
+              updatedAt: new Date(),
+            });
+          } else if (rewardType === "points") {
+            const pointsValue = Math.floor(parseFloat(selectedPrize.prizeValue || "0"));
+            await tx.insert(winners).values({
+              userId, 
+              competitionId, 
+              prizeDescription: "Ringtone Voltz Win",
+              prizeValue: `${pointsValue} Points`,
+              isShowcase: false, 
+              createdAt: new Date(), 
+              updatedAt: new Date(),
+            });
+          } else if (rewardType === "physical") {
+            // Physical prize winner record
+            await storage.createTransaction({
+              userId,
+              type: "prize",
+              amount: "0",
+              description: `Physical Prize Won: ${selectedPrize.prizeName} - Contact support`,
+            });
+            
+            await tx.insert(winners).values({
+              userId, 
+              competitionId, 
+              prizeDescription: `Physical Prize: ${selectedPrize.prizeName}`,
+              prizeValue: selectedPrize.prizeName,
+              isShowcase: false, 
+              createdAt: new Date(), 
+              updatedAt: new Date(),
             });
           }
-
-          const switchChosen = Math.floor(Math.random() * 3) + 1;
-          await tx.insert(voltzUsage).values({ orderId, userId, usedAt: new Date() });
-          await tx.insert(voltzWins).values({
-            orderId, userId, prizeId: selectedPrize.id, switchChosen,
-            rewardType: isWin ? rewardType : isFreeReplay ? "try_again" : isNoWin ? "no_win" : "lose",
-            rewardValue, isWin, wonAt: new Date(),
-          });
-
-          results.push({ outcome, isWin, isFreeReplay, rewardType, rewardValue, prizeName: selectedPrize.prizeName, switchChosen });
         }
 
-        if (totalCash > 0) {
-          const finalBalance = parseFloat(user.balance || "0") + totalCash;
-          await tx.update(users).set({ balance: finalBalance.toFixed(2), updatedAt: new Date() }).where(eq(users.id, userId));
-          await tx.insert(transactions).values({ userId, type: "prize", amount: totalCash.toFixed(2), description: `Ringtone Voltz Batch Win - £${totalCash.toFixed(2)}`, createdAt: new Date() });
-        }
-        if (totalPoints > 0) {
-          const newPoints = (user.ringtonePoints || 0) + totalPoints;
-          await tx.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
-          await tx.insert(transactions).values({ userId, type: "ringtone_points", amount: totalPoints.toString(), description: `Ringtone Voltz Batch Win - ${totalPoints} pts`, createdAt: new Date() });
-        }
-        if (freeReplaysWon > 0) {
-          await tx.update(orders).set({ quantity: order.quantity + freeReplaysWon }).where(eq(orders.id, orderId));
-        }
+        // Add to results array with full details
+        results.push({ 
+          outcome, 
+          isWin, 
+          isFreeReplay, 
+          rewardType: isWin ? rewardType : isFreeReplay ? "try_again" : "no_win",
+          rewardValue: rewardType === "physical" ? selectedPrize.prizeName : rewardValue,
+          prizeName: selectedPrize.prizeName,
+          prizeId: selectedPrize.id,
+          switchChosen,
+          switchTexts,
+        });
+      }
 
-        for (const [prizeId, count] of prizeWinCounts) {
-          const originalPrize = prizes.find((p) => p.id === prizeId);
-          if (originalPrize && count > (originalPrize.quantityWon || 0)) {
-            await tx.update(voltzPrizes).set({ quantityWon: count }).where(eq(voltzPrizes.id, prizeId));
-          }
-        }
-      });
+      // Apply cash winnings to user balance
+      if (totalCash > 0) {
+        const finalBalance = parseFloat(user.balance || "0") + totalCash;
+        await tx.update(users).set({ 
+          balance: finalBalance.toFixed(2), 
+          updatedAt: new Date() 
+        }).where(eq(users.id, userId));
+        
+        await storage.createTransaction({
+          userId,
+          type: "prize",
+          amount: totalCash.toFixed(2),
+          description: `Ringtone Voltz Batch Win - £${totalCash.toFixed(2)}`,
+        });
+      }
 
-      res.json({ success: true, processed: playsToProcess, results, totalWon: totalCash, freeReplaysWon, playsRemaining: playsRemaining - playsToProcess + freeReplaysWon });
-    } catch (error) {
-      console.error("Error revealing all voltz games:", error);
-      res.status(500).json({ message: "Failed to reveal all voltz games" });
-    }
-  });
+      // Apply points winnings
+      if (totalPoints > 0) {
+        const newPoints = (user.ringtonePoints || 0) + totalPoints;
+        await tx.update(users).set({ 
+          ringtonePoints: newPoints 
+        }).where(eq(users.id, userId));
+        
+        await storage.createTransaction({
+          userId,
+          type: "ringtone_points",
+          amount: totalPoints.toString(),
+          description: `Ringtone Voltz Batch Win - ${totalPoints} pts`,
+        });
+      }
+
+      // Apply free replays
+      if (freeReplaysWon > 0) {
+        await tx.update(orders).set({ 
+          quantity: order.quantity + freeReplaysWon 
+        }).where(eq(orders.id, orderId));
+      }
+
+      // Update prize win counts
+      for (const [prizeId, count] of prizeWinCounts) {
+        const originalPrize = prizes.find((p) => p.id === prizeId);
+        if (originalPrize && count > (originalPrize.quantityWon || 0)) {
+          await tx.update(voltzPrizes).set({ 
+            quantityWon: count 
+          }).where(eq(voltzPrizes.id, prizeId));
+        }
+      }
+    });
+
+    // Calculate final plays remaining
+    const updatedOrder = await storage.getOrder(orderId);
+    const finalPlaysUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
+    const finalUsedCount = Number(finalPlaysUsed[0]?.count || 0);
+    const finalPlaysRemaining = (updatedOrder?.quantity || order.quantity) - finalUsedCount;
+
+    res.json({ 
+      success: true, 
+      processed: playsToProcess, 
+      results,
+      totalWon: totalCash,
+      totalPoints,
+      freeReplaysWon, 
+      playsRemaining: finalPlaysRemaining 
+    });
+  } catch (error) {
+    console.error("Error revealing all voltz games:", error);
+    res.status(500).json({ message: "Failed to reveal all voltz games" });
+  }
+});
 
   // Get Voltz order info
   app.get("/api/voltz-order/:orderId", isAuthenticated, async (req: any, res) => {
