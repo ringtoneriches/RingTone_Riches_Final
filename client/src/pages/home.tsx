@@ -924,100 +924,103 @@ export default function Home() {
      
 
       {isAuthenticated && (
-        <section className="py-24 sm:py-32 relative overflow-hidden" style={{ background: '#070709' }}>
-          <div className="absolute inset-0">
-            <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.1), transparent)' }} />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[200px]" style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.03) 0%, transparent 60%)' }} />
-          </div>
+  <section className="py-16 sm:py-24 md:py-32 relative overflow-hidden" style={{ background: '#070709' }}>
+    {/* Background elements - keep as is */}
+    <div className="absolute inset-0">
+      <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.1), transparent)' }} />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] sm:w-[600px] h-[300px] sm:h-[600px] rounded-full blur-[100px] sm:blur-[200px]" style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.03) 0%, transparent 60%)' }} />
+    </div>
 
-          <div ref={newsletterSection.ref} className={`container mx-auto px-4 relative z-10 transition-all duration-1000 ${newsletterSection.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-            <div className="max-w-lg mx-auto text-center">
-              <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full mb-6 backdrop-blur-sm" style={{
-                background: 'rgba(212,175,55,0.08)',
-                border: '1px solid rgba(212,175,55,0.15)',
-              }}>
-                <Mail className="w-4 h-4 text-amber-400" />
-                <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">VIP Access</span>
-              </div>
-              <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-white mb-4 tracking-tight">
-                {user?.receiveNewsletter ? "You're VIP" : "Get VIP Access"}
-              </h3>
-              <p className="text-white/20 text-sm sm:text-base mb-8">
-                {user?.receiveNewsletter 
-                  ? "You'll be first to hear about exclusive drops and prizes."
-                  : "Early access to new prizes, exclusive offers, and insider tips."}
-              </p>
+    <div ref={newsletterSection.ref} className={`w-full px-5 sm:px-6 md:px-8 mx-auto max-w-7xl relative z-10 transition-all duration-1000 ${newsletterSection.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+      <div className="max-w-lg mx-auto text-center">
+        {/* Badge */}
+        <div className="inline-flex items-center gap-2 px-4 sm:px-5 py-1.5 sm:py-2 rounded-full mb-4 sm:mb-6 backdrop-blur-sm" style={{
+          background: 'rgba(212,175,55,0.08)',
+          border: '1px solid rgba(212,175,55,0.15)',
+        }}>
+          <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+          <span className="text-amber-400 text-[11px] sm:text-xs font-bold uppercase tracking-widest">VIP Access</span>
+        </div>
 
-              {user?.receiveNewsletter ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-center gap-2 text-emerald-400 p-4 rounded-xl" style={{
-                    background: 'rgba(16,185,129,0.06)',
-                    border: '1px solid rgba(16,185,129,0.12)',
-                    boxShadow: '0 0 20px rgba(16,185,129,0.05)',
-                  }}>
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span className="font-medium text-sm">Subscribed with {user.email}</span>
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={handleNewsletterUnsubscribe}
-                    variant="ghost"
-                    className="w-full h-12 text-white/15 hover:text-red-400 font-medium text-sm rounded-xl transition-all"
-                    disabled={newsletterUnsubscribeMutation.isPending}
-                    data-testid="button-newsletter-unsubscribe"
-                  >
-                    {newsletterUnsubscribeMutation.isPending ? (
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
-                        Unsubscribing...
-                      </div>
-                    ) : (
-                      "Unsubscribe"
-                    )}
-                  </Button>
+        <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white mb-3 sm:mb-4 tracking-tight">
+          {user?.receiveNewsletter ? "You're VIP" : "Get VIP Access"}
+        </h3>
+        <p className="text-white/20 text-xs sm:text-sm md:text-base mb-6 sm:mb-8 px-2">
+          {user?.receiveNewsletter 
+            ? "You'll be first to hear about exclusive drops and prizes."
+            : "Early access to new prizes, exclusive offers, and insider tips."}
+        </p>
+
+        {user?.receiveNewsletter ? (
+          <div className="space-y-3 sm:space-y-4 px-2 sm:px-0">
+            <div className="flex items-center justify-center gap-2 text-emerald-400 p-3 sm:p-4 rounded-xl" style={{
+              background: 'rgba(16,185,129,0.06)',
+              border: '1px solid rgba(16,185,129,0.12)',
+              boxShadow: '0 0 20px rgba(16,185,129,0.05)',
+            }}>
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="font-medium text-xs sm:text-sm break-all">Subscribed with {user.email}</span>
+            </div>
+            <Button
+              type="button"
+              onClick={handleNewsletterUnsubscribe}
+              variant="ghost"
+              className="w-full h-10 sm:h-12 text-white/15 hover:text-red-400 font-medium text-xs sm:text-sm rounded-xl transition-all"
+              disabled={newsletterUnsubscribeMutation.isPending}
+              data-testid="button-newsletter-unsubscribe"
+            >
+              {newsletterUnsubscribeMutation.isPending ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+                  Unsubscribing...
                 </div>
               ) : (
-                <form onSubmit={handleNewsletterSubscribe} className="space-y-3">
-                  <div className="flex gap-3">
-                    <div className="relative flex-1">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/12" />
-                      <Input
-                        type="email"
-                        value={newsletterEmail}
-                        onChange={(e) => setNewsletterEmail(e.target.value)}
-                        placeholder={user?.email || "your@email.com"}
-                        className="w-full text-white placeholder:text-white/12 h-14 text-base pl-12 rounded-xl transition-all duration-300"
-                        style={{
-                          background: 'rgba(255,255,255,0.03)',
-                          border: '1px solid rgba(255,255,255,0.06)',
-                        }}
-                        data-testid="input-newsletter-email"
-                        disabled={newsletterSubscribeMutation.isPending}
-                      />
-                    </div>
-                    <Button
-                      type="submit"
-                      className="h-14 px-8 text-[#0a0a0a] font-black rounded-xl transition-all duration-500 hover:scale-[1.03]"
-                      style={{
-                        background: 'linear-gradient(135deg, #f5d742 0%, #d4af37 50%, #b8860b 100%)',
-                        boxShadow: '0 0 25px rgba(212,175,55,0.25), 0 2px 8px rgba(0,0,0,0.2)',
-                      }}
-                      disabled={newsletterSubscribeMutation.isPending}
-                      data-testid="button-newsletter-subscribe"
-                    >
-                      {newsletterSubscribeMutation.isPending ? (
-                        <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                      ) : (
-                        "Join VIP"
-                      )}
-                    </Button>
-                  </div>
-                </form>
+                "Unsubscribe"
               )}
-            </div>
+            </Button>
           </div>
-        </section>
-      )}
+        ) : (
+          <form onSubmit={handleNewsletterSubscribe} className="space-y-3 sm:space-y-4 px-2 sm:px-0">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <div className="relative flex-1 w-full">
+                <Mail className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-white/12" />
+                <Input
+                  type="email"
+                  value={newsletterEmail}
+                  onChange={(e) => setNewsletterEmail(e.target.value)}
+                  placeholder={user?.email || "your@email.com"}
+                  className="w-full text-white placeholder:text-white/12 h-12 sm:h-14 text-sm sm:text-base pl-9 sm:pl-12 rounded-xl transition-all duration-300"
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                  }}
+                  data-testid="input-newsletter-email"
+                  disabled={newsletterSubscribeMutation.isPending}
+                />
+              </div>
+              <Button
+                type="submit"
+                className="h-12 sm:h-14 px-5 sm:px-8 text-[#0a0a0a] font-black rounded-xl transition-all duration-500 hover:scale-[1.03] w-full sm:w-auto"
+                style={{
+                  background: 'linear-gradient(135deg, #f5d742 0%, #d4af37 50%, #b8860b 100%)',
+                  boxShadow: '0 0 25px rgba(212,175,55,0.25), 0 2px 8px rgba(0,0,0,0.2)',
+                }}
+                disabled={newsletterSubscribeMutation.isPending}
+                data-testid="button-newsletter-subscribe"
+              >
+                {newsletterSubscribeMutation.isPending ? (
+                  <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                ) : (
+                  "Join VIP"
+                )}
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  </section>
+)}
 
       <CompactFacebookCTA/>
       <Testimonials/>
