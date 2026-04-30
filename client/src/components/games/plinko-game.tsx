@@ -126,7 +126,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     
     // Initial big burst from center
     confetti({
-      particleCount: 100,
+      particleCount: 50,
       spread: 100,
       origin: { x: 0.5, y: 0.4 },
       colors: goldColors,
@@ -138,7 +138,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     // Sparkle burst
     setTimeout(() => {
       confetti({
-        particleCount: 60,
+        particleCount: 30,
         spread: 360,
         origin: { x: 0.5, y: 0.5 },
         colors: sparkleColors,
@@ -146,7 +146,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
         gravity: 0.5,
         scalar: 0.8,
         shapes: ['circle'],
-        ticks: 200,
+        ticks: 100,
       });
     }, 200);
     
@@ -183,7 +183,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     // Delayed firework bursts
     setTimeout(() => {
       confetti({
-        particleCount: 100,
+        particleCount: 50,
         spread: 70,
         origin: { x: 0.3, y: 0.3 },
         colors: goldColors,
@@ -193,7 +193,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     
     setTimeout(() => {
       confetti({
-        particleCount: 100,
+        particleCount: 50,
         spread: 70,
         origin: { x: 0.7, y: 0.3 },
         colors: goldColors,
@@ -204,7 +204,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     // Final grand burst
     setTimeout(() => {
       confetti({
-        particleCount: 200,
+        particleCount: 100,
         spread: 180,
         origin: { x: 0.5, y: 0.6 },
         colors: [...goldColors, ...celebrationColors],
