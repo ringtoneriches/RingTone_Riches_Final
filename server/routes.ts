@@ -12713,14 +12713,16 @@ app.post(
           (baseConfig as any).prizes ||
           DEFAULT_POP_CONFIG.segments;
 
-        // SOURCE OF TRUTH: popWins table
-        const winStats = await db
-          .select({
-            prizeId: popWins.prizeId,
-            winCount: sql<number>`count(*)`,
-          })
-          .from(popWins)
-          .groupBy(popWins.prizeId);
+       // SOURCE OF TRUTH: popWins table - Global for competition
+const winStats = await db
+  .select({
+    prizeId: popWins.prizeId,
+    winCount: sql<number>`count(*)`,
+  })
+  .from(popWins)
+  .innerJoin(orders, eq(popWins.orderId, orders.id))
+  .where(eq(orders.competitionId, competitionId)) // Add this if you want per-competition stats
+  .groupBy(popWins.prizeId);
 
         const segmentsWithWins = segments.map((seg: any) => {
           const stat = winStats.find((w) => w.prizeId === seg.id);
@@ -13075,19 +13077,23 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
     }
 
-    // 4. Get win counts (BATCHED from cache instead of GROUP BY every time)
-    let segmentWinCounts = popWinCountCache.get(orderId);
-    if (!segmentWinCounts || true) { // Refresh every request for accuracy, but we can optimize
-      const counts = await db
-        .select({ prizeId: popWins.prizeId, count: sql<number>`count(*)` })
-        .from(popWins)
-        .where(eq(popWins.orderId, orderId)) // ← ADD THIS WHERE CLAUSE! Critical!
-        .groupBy(popWins.prizeId);
-      
-      segmentWinCounts = new Map();
-      counts.forEach(c => segmentWinCounts!.set(c.prizeId, Number(c.count)));
-      popWinCountCache.set(orderId, segmentWinCounts);
-    }
+   // 4. Get win counts (BATCHED from cache instead of GROUP BY every time)
+let segmentWinCounts = popWinCountCache.get(competitionId); // Changed from orderId to competitionId
+if (!segmentWinCounts || true) { // Refresh every request for accuracy
+  const counts = await db
+    .select({ 
+      prizeId: popWins.prizeId, 
+      count: sql<number>`count(*)` 
+    })
+    .from(popWins)
+    .innerJoin(orders, eq(popWins.orderId, orders.id))
+    .where(eq(orders.competitionId, competitionId)) // Get ALL orders for this competition
+    .groupBy(popWins.prizeId);
+  
+  segmentWinCounts = new Map();
+  counts.forEach(c => segmentWinCounts!.set(c.prizeId, Number(c.count)));
+  popWinCountCache.set(competitionId, segmentWinCounts); // Cache by competitionId
+}
 
     // Initialize missing segments
     segments.forEach((seg: any) => {
@@ -13217,11 +13223,13 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
     }).catch(e => console.error("Failed to save win record:", e));
 
     // 10. Update cache immediately (optimistic)
-    popPlayCountCache.set(orderId, { count: usedCount + 1, expires: now + 10000 });
-    if (isWin && !isRPrize) {
-      const currentWins = segmentWinCounts.get(selectedSegment.id) || 0;
-      segmentWinCounts.set(selectedSegment.id, currentWins + 1);
-    }
+popPlayCountCache.set(orderId, { count: usedCount + 1, expires: now + 10000 });
+if (isWin && !isRPrize) {
+  const currentWins = segmentWinCounts.get(selectedSegment.id) || 0;
+  segmentWinCounts.set(selectedSegment.id, currentWins + 1);
+  // Update the competition-level cache too
+  popWinCountCache.set(competitionId, segmentWinCounts);
+}
 
     // Set cooldown and send response
     popCooldowns.set(cooldownKey, now);
