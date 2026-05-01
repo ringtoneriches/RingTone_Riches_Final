@@ -12695,7 +12695,7 @@ app.post(
 
   // ========== RINGTONE POP GAME ROUTES ==========
 
-  // Get Ringtone Pop configuration (admin)
+ // Get Ringtone Pop configuration (admin)
   app.get(
     "/api/admin/game-pop-config",
     isAuthenticated,
@@ -12713,16 +12713,14 @@ app.post(
           (baseConfig as any).prizes ||
           DEFAULT_POP_CONFIG.segments;
 
-       // SOURCE OF TRUTH: popWins table - Global for competition
-const winStats = await db
-  .select({
-    prizeId: popWins.prizeId,
-    winCount: sql<number>`count(*)`,
-  })
-  .from(popWins)
-  .innerJoin(orders, eq(popWins.orderId, orders.id))
-  .where(eq(orders.competitionId, competitionId)) // Add this if you want per-competition stats
-  .groupBy(popWins.prizeId);
+        // SOURCE OF TRUTH: popWins table
+        const winStats = await db
+          .select({
+            prizeId: popWins.prizeId,
+            winCount: sql<number>`count(*)`,
+          })
+          .from(popWins)
+          .groupBy(popWins.prizeId);
 
         const segmentsWithWins = segments.map((seg: any) => {
           const stat = winStats.find((w) => w.prizeId === seg.id);
@@ -12742,6 +12740,7 @@ const winStats = await db
       }
     }
   );
+
 
   // Update Ringtone Pop configuration (admin)
   app.put(
@@ -12999,127 +12998,150 @@ const winStats = await db
       }
     }
   );
+const popCooldowns = new Map<string, number>();
+  const POP_COOLDOWN_MS = 3000;
 
-  // Pop game cooldown tracker
-  const popCooldowns = new Map<string, number>();
-  const POP_COOLDOWN_MS = 3000; // 3 seconds between plays
-
-  // Play Ringtone Pop game (user)
-// --- Add these caches at the top of the file ---
-let cachedPopConfig: any = null;
-let cachedPopSegments: any[] = [];
-let lastPopCacheRefresh = 0;
-const POP_CACHE_TTL = 30000; // 30 seconds
-
-// Cache for play counts (replaces COUNT(*) queries)
-const popPlayCountCache = new Map<string, { count: number, expires: number }>();
-const popWinCountCache = new Map<string, Map<string, number>>(); // orderId -> Map<prizeId, count>
-
-async function getPopConfigWithCache() {
-  const now = Date.now();
-  if (!cachedPopConfig || now - lastPopCacheRefresh > POP_CACHE_TTL) {
-    const [config] = await db.select().from(gamePopConfig).where(eq(gamePopConfig.id, "active"));
-    cachedPopConfig = config || DEFAULT_POP_CONFIG;
-    cachedPopSegments = cachedPopConfig.segments || cachedPopConfig.prizes || DEFAULT_POP_CONFIG.segments;
-    lastPopCacheRefresh = now;
-  }
-  return { config: cachedPopConfig, segments: cachedPopSegments };
-}
-
-// --- Optimized route ---
 app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
-  const requestStart = Date.now();
-  
   try {
     const userId = req.user.id;
     const { orderId, competitionId } = req.body;
 
     if (!orderId || !competitionId) {
-      return res.status(400).json({ success: false, message: "Order ID and Competition ID are required" });
+      return res.status(400).json({
+        success: false,
+        message: "Order ID and Competition ID are required",
+      });
     }
 
-    // 1. Cooldown check (fast)
+    // Cooldown
     const cooldownKey = `${userId}-${orderId}`;
     const lastPlayTime = popCooldowns.get(cooldownKey) || 0;
     const now = Date.now();
     if (now - lastPlayTime < POP_COOLDOWN_MS) {
-      return res.status(429).json({ success: false, message: "Please wait a moment before playing again" });
+      return res.status(429).json({
+        success: false,
+        message: "Please wait a moment before playing again",
+      });
     }
+    popCooldowns.set(cooldownKey, now);
 
-    // 2. PARALLELIZE: Order + User + Config + PlayCount
-    const [order, user, { config, segments }] = await Promise.all([
-      storage.getOrder(orderId),
-      storage.getUser(userId),
-      getPopConfigWithCache()
-    ]);
-
+    // Verify order
+    const order = await storage.getOrder(orderId);
     if (!order || order.userId !== userId || order.status !== "completed") {
-      return res.status(400).json({ success: false, message: "No valid pop game purchase found" });
-    }
-    if (!user) return res.status(404).json({ message: "User not found" });
-    if (!config.isActive) {
-      return res.status(400).json({ success: false, message: "Ringtone Pop is currently unavailable" });
-    }
-
-    // 3. Get plays remaining (CACHED to avoid COUNT(*))
-    let usedCount: number;
-    const cachedCount = popPlayCountCache.get(orderId);
-    if (cachedCount && cachedCount.expires > now) {
-      usedCount = cachedCount.count;
-    } else {
-      const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(popUsage).where(eq(popUsage.orderId, orderId));
-      usedCount = Number(playsUsed[0]?.count || 0);
-      popPlayCountCache.set(orderId, { count: usedCount, expires: now + 10000 }); // 10 second cache
+      return res.status(400).json({
+        success: false,
+        message: "No valid pop game purchase found",
+      });
     }
 
+    // Check remaining plays
+    const playsUsed = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(popUsage)
+      .where(eq(popUsage.orderId, orderId));
+
+    const usedCount = Number(playsUsed[0]?.count || 0);
     const playsRemaining = order.quantity - usedCount;
+
     if (playsRemaining <= 0) {
-      return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
+      return res.status(400).json({
+        success: false,
+        message: "No plays remaining in this purchase",
+      });
     }
 
-   // 4. Get win counts (BATCHED from cache instead of GROUP BY every time)
-let segmentWinCounts = popWinCountCache.get(competitionId); // Changed from orderId to competitionId
-if (!segmentWinCounts || true) { // Refresh every request for accuracy
-  const counts = await db
-    .select({ 
-      prizeId: popWins.prizeId, 
-      count: sql<number>`count(*)` 
-    })
-    .from(popWins)
-    .innerJoin(orders, eq(popWins.orderId, orders.id))
-    .where(eq(orders.competitionId, competitionId)) // Get ALL orders for this competition
-    .groupBy(popWins.prizeId);
-  
-  segmentWinCounts = new Map();
-  counts.forEach(c => segmentWinCounts!.set(c.prizeId, Number(c.count)));
-  popWinCountCache.set(competitionId, segmentWinCounts); // Cache by competitionId
-}
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Initialize missing segments
+    // ✅ Load config SAME AS REVEAL-ALL
+    const [config] = await db
+      .select()
+      .from(gamePopConfig)
+      .where(eq(gamePopConfig.id, "active"));
+
+    const popConfig = config || DEFAULT_POP_CONFIG;
+
+    if (!popConfig.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "Ringtone Pop is currently unavailable",
+      });
+    }
+
+    // ✅ Use segments/prizes from config EXACTLY LIKE REVEAL-ALL
+    const segments = (popConfig as any).segments || 
+                     (popConfig as any).prizes || 
+                     DEFAULT_POP_CONFIG.segments;
+
+    if (!segments || segments.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No prizes configured for Pop game",
+      });
+    }
+
+    // ✅ Count ONLY actual wins (isWin = true) - EXACTLY LIKE REVEAL-ALL
+    const counts = await db
+      .select({ prizeId: popWins.prizeId, count: sql<number>`count(*)` })
+      .from(popWins)
+      .where(eq(popWins.isWin, true))
+      .groupBy(popWins.prizeId);
+
+    const segmentWinCounts = new Map<string, number>();
+    counts.forEach((c) => segmentWinCounts.set(c.prizeId, Number(c.count)));
+
+    // Initialize missing segments with 0 wins - LIKE REVEAL-ALL
     segments.forEach((seg: any) => {
-      if (!segmentWinCounts.has(seg.id)) segmentWinCounts.set(seg.id, 0);
+      if (!segmentWinCounts.has(seg.id)) {
+        segmentWinCounts.set(seg.id, 0);
+      }
     });
 
-    // 5. Filter eligible segments
+    // ✅ Find lose segment - EXACTLY LIKE REVEAL-ALL
     const loseSegment = segments.find((s: any) => s.rewardType === "lose");
+    
+    // ✅ Filter eligible segments - EXACTLY LIKE REVEAL-ALL
     const eligibleSegments = segments.filter((seg: any) => {
       const wins = segmentWinCounts.get(seg.id) ?? 0;
-      if (seg.maxWins !== null && (seg.rewardType === "cash" || seg.rewardType === "points" || seg.rewardType === "physical")) {
-        if (wins >= seg.maxWins) return false;
+      if (
+        seg.maxWins !== null &&
+        (seg.rewardType === "cash" ||
+          seg.rewardType === "points" ||
+          seg.rewardType === "physical")
+      ) {
+        if (wins >= seg.maxWins) {
+          return false;
+        }
       }
       return true;
     });
 
-    const finalEligible = eligibleSegments.length ? eligibleSegments : (loseSegment ? [loseSegment] : []);
-    if (!finalEligible.length) {
-      console.error("No eligible segments found");
-      return res.status(500).json({ success: false, message: "Game configuration error" });
+    // ✅ Fallback logic - EXACTLY LIKE REVEAL-ALL
+    let finalEligible;
+    if (eligibleSegments.length > 0) {
+      finalEligible = eligibleSegments;
+    } else {
+      // If no eligible segments (all maxWins reached), use lose segment
+      finalEligible = loseSegment ? [loseSegment] : segments;
     }
 
-    // 6. Weighted random selection
-    const totalProbability = finalEligible.reduce((sum: number, seg: any) => sum + (seg.probability || 0), 0);
+    if (!finalEligible.length) {
+      console.error("No eligible segments found");
+      return res.status(500).json({
+        success: false,
+        message: "Game configuration error",
+      });
+    }
+
+    // ✅ Weighted random selection using probability - LIKE REVEAL-ALL
+    const totalProbability = finalEligible.reduce(
+      (sum: number, seg: any) => sum + (seg.probability || 0),
+      0
+    );
+
     let random = Math.random() * totalProbability;
     let selectedSegment = finalEligible[0];
+
     for (const seg of finalEligible) {
       random -= seg.probability || 0;
       if (random <= 0) {
@@ -13129,136 +13151,197 @@ if (!segmentWinCounts || true) { // Refresh every request for accuracy
     }
 
     if (!selectedSegment) {
-      return res.status(500).json({ success: false, message: "Selection failed" });
+      return res.status(500).json({
+        success: false,
+        message: "Selection failed",
+      });
     }
 
-    // 7. Result logic (optimized with less duplication)
-    const rewardType = selectedSegment.rewardType || "lose";
-    const prizeName = selectedSegment.label || selectedSegment.prizeName || (rewardType === "physical" ? selectedSegment.rewardValue : null) || "Prize";
-    const isRPrize = rewardType === "try_again";
-    const isWin = rewardType === "cash" || rewardType === "points" || rewardType === "physical";
-    
+    // RESULT LOGIC - SAME AS REVEAL-ALL
     let balloonValues: number[] = [];
+    const rewardType = selectedSegment.rewardType || "lose";
+    const prizeName = selectedSegment.label || 
+                     selectedSegment.prizeName || 
+                     (selectedSegment.rewardType === "physical" ? selectedSegment.rewardValue : null) ||
+                     "Prize";
     let rewardValue = "0";
 
-    // 8. Handle each case efficiently
+    const isRPrize = rewardType === "try_again";
+    const isWin =
+      rewardType === "cash" ||
+      rewardType === "points" ||
+      rewardType === "physical";
+
     if (isRPrize) {
-      // Free replay
+      // Try again - show mixed values
       const cashSegments = segments.filter((s: any) => s.rewardType === "cash");
-      const vals = cashSegments.map((s: any) => parseFloat(s.rewardValue?.toString() || "1"));
-      
+      const vals = cashSegments.map((s: any) =>
+        parseFloat(s.rewardValue?.toString() || "1")
+      );
+
       let val1 = vals[Math.floor(Math.random() * vals.length)] || 1;
-      let val2 = vals.length > 1 ? vals[Math.floor(Math.random() * vals.length)] : val1 + 1;
-      while (val2 === val1 && vals.length > 1) val2 = vals[Math.floor(Math.random() * vals.length)];
-      
+      let val2 =
+        vals.length > 1
+          ? vals[Math.floor(Math.random() * vals.length)]
+          : val1 + 1;
+
+      while (val2 === val1 && vals.length > 1) {
+        val2 = vals[Math.floor(Math.random() * vals.length)];
+      }
+
       const rPos = Math.floor(Math.random() * 3);
-      balloonValues = rPos === 0 ? [-1, val1, val2] : rPos === 1 ? [val1, -1, val2] : [val1, val2, -1];
-      
-      // FIRE-AND-FORGET: Update order quantity
-      db.update(orders).set({ quantity: order.quantity + 1 }).where(eq(orders.id, orderId))
-        .catch(err => console.error("Failed to update order quantity:", err));
-      
+      balloonValues =
+        rPos === 0
+          ? [-1, val1, val2]
+          : rPos === 1
+          ? [val1, -1, val2]
+          : [val1, val2, -1];
+
+      rewardValue = "0";
+
+      // Add back the play
+      await db
+        .update(orders)
+        .set({ quantity: order.quantity + 1 })
+        .where(eq(orders.id, orderId));
+
     } else if (isWin) {
       const value = parseFloat(selectedSegment.rewardValue?.toString() || "0");
-      balloonValues = [value, value, value];
-      rewardValue = value.toString();
       
-      // FIRE-AND-FORGET all writes (don't wait for DB)
+      if (rewardType === "physical") {
+        balloonValues = [0, 0, 0];
+        rewardValue = value.toString();
+      } else {
+        balloonValues = [value, value, value];
+        rewardValue = value.toString();
+      }
+
       if (rewardType === "cash") {
         const finalBalance = parseFloat(user.balance || "0") + value;
-        storage.updateUserBalance(userId, finalBalance.toFixed(2)).catch(e => console.error(e));
-        storage.createTransaction({
-          userId, type: "prize", amount: value.toFixed(2), description: `Ringtone Pop Win - £${value}`
-        }).catch(e => console.error(e));
+        await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+        await storage.createTransaction({
+          userId,
+          type: "prize",
+          amount: value.toFixed(2),
+          description: `Ringtone Pop Win - £${value}`,
+        });
+
       } else if (rewardType === "points") {
         const pointsValue = Math.floor(value);
-        db.update(users).set({ ringtonePoints: (user.ringtonePoints || 0) + pointsValue }).where(eq(users.id, userId))
-          .catch(e => console.error(e));
-        storage.createTransaction({
-          userId, type: "ringtone_points", amount: pointsValue.toString(), description: `Ringtone Pop Win - ${pointsValue} pts`
-        }).catch(e => console.error(e));
+        const newPoints = (user.ringtonePoints || 0) + pointsValue;
+        await db
+          .update(users)
+          .set({ ringtonePoints: newPoints })
+          .where(eq(users.id, userId));
+        await storage.createTransaction({
+          userId,
+          type: "ringtone_points",
+          amount: pointsValue.toString(),
+          description: `Ringtone Pop Win - ${pointsValue} pts`,
+        });
+
       } else if (rewardType === "physical") {
-        storage.createTransaction({
-          userId, type: "prize", amount: "0", description: `Physical Prize Won: ${prizeName} - Contact support`
-        }).catch(e => console.error(e));
+        await storage.createTransaction({
+          userId,
+          type: "prize",
+          amount: "0",
+          description: `Physical Prize Won: ${prizeName} - Contact support`,
+        });
       }
-      
-      // Insert winner record (fire-and-forget)
-      const prizeDescriptionText = rewardType === "cash" ? "Ringtone Pop Win" : 
-                                   rewardType === "points" ? "Ringtone Pop Win" : 
-                                   `Physical Prize: ${prizeName}`;
-      const prizeValueText = rewardType === "cash" ? `£${rewardValue} Cash` :
-                             rewardType === "points" ? `${rewardValue} Points` :
-                             prizeName;
-      
-      db.insert(winners).values({
-        userId, competitionId, prizeDescription: prizeDescriptionText, prizeValue: prizeValueText,
-        imageUrl: selectedSegment.imageUrl || null, isShowcase: false,
-        createdAt: new Date(), updatedAt: new Date()
-      }).catch(e => console.error(e));
-      
+
+      // Insert winner - EXACTLY LIKE REVEAL-ALL
+      let prizeDescriptionText = "";
+      let prizeValueText = "";
+
+      if (rewardType === "cash") {
+        prizeDescriptionText = "Ringtone Pop Win";
+        prizeValueText = `£${rewardValue} Cash`;
+      } else if (rewardType === "points") {
+        prizeDescriptionText = "Ringtone Pop Win";
+        prizeValueText = `${rewardValue} Points`;
+      } else if (rewardType === "physical") {
+        prizeDescriptionText = `Physical Prize: ${prizeName}`;
+        prizeValueText = prizeName;
+      }
+
+      await db.insert(winners).values({
+        userId,
+        competitionId,
+        prizeDescription: prizeDescriptionText,
+        prizeValue: prizeValueText,
+        imageUrl: selectedSegment.imageUrl || null,
+        isShowcase: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
     } else {
-      // Lose - generate random non-matching values
-      const cashVals = segments.filter((s: any) => s.rewardType === "cash")
+      // Lose - show non-matching values
+      const cashVals = segments
+        .filter((s: any) => s.rewardType === "cash")
         .map((s: any) => parseFloat(s.rewardValue?.toString() || "1"));
-      
+
       if (cashVals.length >= 2) {
         let v1 = cashVals[Math.floor(Math.random() * cashVals.length)];
         let v2 = cashVals[Math.floor(Math.random() * cashVals.length)];
         let v3 = cashVals[Math.floor(Math.random() * cashVals.length)];
-        if (v1 === v2 && v2 === v3) v3 = cashVals.find(v => v !== v1) || v1 + 1;
+
+        if (v1 === v2 && v2 === v3) {
+          v3 = cashVals.find((v) => v !== v1) || v1 + 1;
+        }
+
         balloonValues = [v1, v2, v3];
       } else {
         balloonValues = [1, 5, 10];
       }
     }
 
-    // 9. Save usage and win records (FIRE-AND-FORGET - don't block response)
-    db.insert(popUsage).values({ orderId, userId, usedAt: new Date() })
-      .catch(e => console.error("Failed to save usage:", e));
-    
-    db.insert(popWins).values({
-      orderId, userId, prizeId: selectedSegment.id || "none", balloonValues, prizeName,
-      rewardType, rewardValue, isWin, wonAt: new Date()
-    }).catch(e => console.error("Failed to save win record:", e));
+    // Save usage
+    await db.insert(popUsage).values({
+      orderId,
+      userId,
+      usedAt: new Date(),
+    });
 
-    // 10. Update cache immediately (optimistic)
-popPlayCountCache.set(orderId, { count: usedCount + 1, expires: now + 10000 });
-if (isWin && !isRPrize) {
-  const currentWins = segmentWinCounts.get(selectedSegment.id) || 0;
-  segmentWinCounts.set(selectedSegment.id, currentWins + 1);
-  // Update the competition-level cache too
-  popWinCountCache.set(competitionId, segmentWinCounts);
-}
+    // ✅ Save win record - SAME AS REVEAL-ALL
+    await db.insert(popWins).values({
+      orderId,
+      userId,
+      competitionId,
+      prizeId: selectedSegment.id || "none",
+      balloonValues,
+      prizeName,
+      rewardType,
+      rewardValue,
+      isWin,
+      wonAt: new Date(),
+    });
 
-    // Set cooldown and send response
-    popCooldowns.set(cooldownKey, now);
-    
-    // Log performance
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] /api/play-pop took ${Date.now() - requestStart}ms`);
-    }
-    
+    // Calculate new plays remaining - SAME LOGIC AS REVEAL-ALL
+    const newPlaysRemaining = isRPrize ? playsRemaining : playsRemaining - 1;
+
+    // ✅ Response format matching reveal-all
     res.json({
       success: true,
       result: {
         balloonValues: rewardType === "physical" ? [0, 0, 0] : balloonValues,
-        isWin, isRPrize, rewardType,
-        rewardValue: rewardType === "physical" ? selectedSegment.label || selectedSegment.prizeName : rewardValue,
+        isWin,
+        isRPrize,
+        rewardType,
+        rewardValue: rewardType === "physical" ? (selectedSegment.label || selectedSegment.prizeName) : rewardValue,
         prizeName: rewardType === "physical" ? (selectedSegment.label || selectedSegment.prizeName) : undefined,
         prizeDescription: rewardType === "physical" ? (selectedSegment.prizeDescription || selectedSegment.label) : undefined,
         isPhysical: rewardType === "physical",
       },
-      playsRemaining: playsRemaining - 1,
+      playsRemaining: newPlaysRemaining,
     });
-    
+
   } catch (error) {
     console.error("Error playing pop game:", error);
     res.status(500).json({ message: "Failed to play pop game" });
   }
 });
 
-  // Reveal all pop games (batch processing)
  // Reveal all pop games (batch processing)
 app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
   try {
@@ -15447,35 +15530,6 @@ app.get(
   const VOLTZ_COOLDOWN_MS = 3000;
 
   // Play Ringtone Voltz game
-// --- Add these outside the route handler for caching ---
-let cachedVoltzConfig: typeof DEFAULT_VOLTZ_CONFIG | null = null;
-let cachedPrizes: any[] | null = null;
-let lastCacheRefresh = 0;
-const CACHE_TTL_MS = 30000; // 30 seconds
-
-async function getVoltzConfigWithCache() {
-  const now = Date.now();
-  if (!cachedVoltzConfig || now - lastCacheRefresh > CACHE_TTL_MS) {
-    const [config] = await db.select().from(gameVoltzConfig).where(eq(gameVoltzConfig.id, "active"));
-    cachedVoltzConfig = config || DEFAULT_VOLTZ_CONFIG;
-    lastCacheRefresh = now;
-  }
-  return cachedVoltzConfig;
-}
-
-async function getPrizesWithCache() {
-  const now = Date.now();
-  if (!cachedPrizes || now - lastCacheRefresh > CACHE_TTL_MS) {
-    cachedPrizes = await db.select()
-      .from(voltzPrizes)
-      .where(eq(voltzPrizes.isActive, true))
-      .orderBy(asc(voltzPrizes.displayOrder));
-    lastCacheRefresh = now;
-  }
-  return cachedPrizes;
-}
-
-// --- Optimized route ---
 app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -15485,48 +15539,42 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ success: false, message: "Order ID and Competition ID are required" });
     }
 
-    // 1. Cooldown check (fast, keep as is)
     const cooldownKey = `${userId}-${orderId}`;
     const lastPlayTime = voltzCooldowns.get(cooldownKey) || 0;
     const now = Date.now();
     if (now - lastPlayTime < VOLTZ_COOLDOWN_MS) {
       return res.status(429).json({ success: false, message: "Please wait a moment before playing again" });
     }
+    voltzCooldowns.set(cooldownKey, now);
 
-    // 2. Fetch order + usage count + user in ONE QUERY with joins (if your ORM supports)
-    // If not, at least parallelize:
-    const [order, user, config] = await Promise.all([
-      storage.getOrder(orderId),
-      storage.getUser(userId),
-      getVoltzConfigWithCache()
-    ]);
-
+    const order = await storage.getOrder(orderId);
     if (!order || order.userId !== userId || order.status !== "completed") {
       return res.status(400).json({ success: false, message: "No valid Voltz game purchase found" });
     }
-    if (!user) return res.status(404).json({ message: "User not found" });
-    if (!config.isActive) {
-      return res.status(400).json({ success: false, message: "Ringtone Voltz is currently unavailable" });
-    }
 
-    // 3. Get usage count (keep separate but fast)
-    const [playsUsedResult] = await db.select({ count: sql<number>`count(*)` })
-      .from(voltzUsage)
-      .where(eq(voltzUsage.orderId, orderId));
-    
-    const usedCount = Number(playsUsedResult?.count || 0);
+    const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
+    const usedCount = Number(playsUsed[0]?.count || 0);
     const playsRemaining = order.quantity - usedCount;
     if (playsRemaining <= 0) {
       return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
     }
 
-    // 4. Get prizes from cache
-    const prizes = await getPrizesWithCache();
-    if (prizes.length === 0) {
-      return res.status(400).json({ success: false, message: "No prizes configured" });
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const [config] = await db.select().from(gameVoltzConfig).where(eq(gameVoltzConfig.id, "active"));
+    const voltzConfig = config || DEFAULT_VOLTZ_CONFIG;
+    if (!voltzConfig.isActive) {
+      return res.status(400).json({ success: false, message: "Ringtone Voltz is currently unavailable" });
     }
 
-    // 5. Heavy logic stays but we optimize the prize selection
+    const prizes = await db.select().from(voltzPrizes).where(eq(voltzPrizes.isActive, true)).orderBy(asc(voltzPrizes.displayOrder));
+
+    if (prizes.length === 0) {
+      return res.status(400).json({ success: false, message: "No prizes configured for Voltz game" });
+    }
+
+    // Include physical prizes in eligible prizes
     const eligiblePrizes = prizes.filter((p) => {
       if (p.maxWins !== null && (p.rewardType === "cash" || p.rewardType === "points" || p.rewardType === "physical")) {
         if ((p.quantityWon || 0) >= p.maxWins!) return false;
@@ -15534,7 +15582,6 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
       return true;
     });
 
-    // Fast prize selection (no changes needed here - it's fine)
     const totalWeight = eligiblePrizes.reduce((sum, p) => sum + p.weight, 0);
     let random = Math.random() * totalWeight;
     let selectedPrize = eligiblePrizes[0] || prizes[0];
@@ -15546,144 +15593,119 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
       }
     }
 
-    // 6. Outcome logic (mostly unchanged, but moved prize display helper inline for speed)
-    const isWin = selectedPrize.rewardType === "cash" || selectedPrize.rewardType === "points" || selectedPrize.rewardType === "physical";
-    const isFreeReplay = selectedPrize.rewardType === "try_again";
-    const isNoWin = selectedPrize.rewardType === "no_win";
-    
-    let outcome: "noWin" | "win" | "freeReplay" = "noWin";
+    const rewardType = selectedPrize.rewardType;
+    const isWin = rewardType === "cash" || rewardType === "points" || rewardType === "physical";
+    const isFreeReplay = rewardType === "try_again";
+    const isNoWin = rewardType === "no_win";
     let rewardValue = "0";
-    
+    let outcome: "noWin" | "win" | "freeReplay" = "noWin";
+
     if (isNoWin) {
       outcome = "noWin";
+      rewardValue = "0";
     } else if (isFreeReplay) {
       outcome = "freeReplay";
+      rewardValue = "0";
     } else if (isWin) {
       outcome = "win";
-      rewardValue = parseFloat(selectedPrize.prizeValue || "0").toString();
+      const value = parseFloat(selectedPrize.prizeValue || "0");
+      rewardValue = value.toString();
     }
 
-    // 7. ⚡ OPTIMIZATION: Precompute display values once, reuse
     const getPrizeDisplay = (p: typeof prizes[0]) => {
       if (p.rewardType === "cash") return `£${parseFloat(p.prizeValue || "0").toFixed(2)}`;
       if (p.rewardType === "points") return `${Math.floor(parseFloat(p.prizeValue || "0"))} PTS`;
       if (p.rewardType === "physical") {
+        // For physical prizes, show a short version or icon + short name
         const prizeName = p.prizeName || "Prize";
-        return prizeName.length > 12 ? prizeName.substring(0, 10) + "…" : prizeName;
+        if (prizeName.length > 12) {
+          return prizeName.substring(0, 10) + "…";
+        }
+        return prizeName;
       }
       return "REPLAY";
     };
 
-    // Precompute display values for all prizes once (not per request ideally, but fine)
+    const shuffleArray = <T,>(arr: T[]): T[] => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    };
+
     const realPrizes = prizes.filter(p => p.rewardType === "cash" || p.rewardType === "points");
     const realDisplayValues = [...new Set(realPrizes.map(getPrizeDisplay))];
+    
+    // Include physical prizes for display values
     const physicalPrizes = prizes.filter(p => p.rewardType === "physical");
-    const physicalDisplayValues = physicalPrizes.map(getPrizeDisplay);
-    const allDisplayValues = [...realDisplayValues, ...physicalDisplayValues];
+    const physicalDisplayValues = physicalPrizes.map(p => getPrizeDisplay(p));
 
-    // 8. Switch texts generation (optimized with early returns)
-    let switchTexts: string[];
+    let switchTexts: string[] = [];
     if (isWin) {
       const displayVal = getPrizeDisplay(selectedPrize);
       switchTexts = [displayVal, displayVal, displayVal];
     } else if (isFreeReplay) {
+      // For free replay, mix real prizes and possibly physical prizes for display
+      const allDisplayValues = [...realDisplayValues, ...physicalDisplayValues];
       if (allDisplayValues.length > 0) {
         const matchVal = allDisplayValues[Math.floor(Math.random() * allDisplayValues.length)];
-        switchTexts = [matchVal, matchVal, "REPLAY"];
-        // Shuffle inline instead of calling shuffleArray for speed
-        for (let i = switchTexts.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [switchTexts[i], switchTexts[j]] = [switchTexts[j], switchTexts[i]];
-        }
+        switchTexts = shuffleArray([matchVal, matchVal, "REPLAY"]);
       } else {
         switchTexts = ["REPLAY", "REPLAY", "REPLAY"];
       }
     } else {
-      // Lose case
+      // For lose, show non-matching values
+      const allDisplayValues = [...realDisplayValues, ...physicalDisplayValues];
       if (allDisplayValues.length >= 3) {
-        if (Math.random() < 0.5) {
+        const pattern = Math.random();
+        if (pattern < 0.5) {
           const idx1 = Math.floor(Math.random() * allDisplayValues.length);
           let idx2 = Math.floor(Math.random() * (allDisplayValues.length - 1));
           if (idx2 >= idx1) idx2++;
-          switchTexts = [allDisplayValues[idx1], allDisplayValues[idx1], allDisplayValues[idx2]];
-          // Shuffle
-          for (let i = switchTexts.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [switchTexts[i], switchTexts[j]] = [switchTexts[j], switchTexts[i]];
-          }
+          switchTexts = shuffleArray([allDisplayValues[idx1], allDisplayValues[idx1], allDisplayValues[idx2]]);
         } else {
-          const shuffled = [...allDisplayValues];
-          for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-          }
+          const shuffled = shuffleArray([...allDisplayValues]);
           switchTexts = [shuffled[0], shuffled[1], shuffled[2]];
         }
       } else if (allDisplayValues.length === 2) {
         const idx1 = Math.floor(Math.random() * 2);
         const idx2 = idx1 === 0 ? 1 : 0;
-        switchTexts = [allDisplayValues[idx1], allDisplayValues[idx1], allDisplayValues[idx2]];
-        for (let i = switchTexts.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [switchTexts[i], switchTexts[j]] = [switchTexts[j], switchTexts[i]];
-        }
+        switchTexts = shuffleArray([allDisplayValues[idx1], allDisplayValues[idx1], allDisplayValues[idx2]]);
       } else if (allDisplayValues.length === 1) {
-        switchTexts = [allDisplayValues[0], allDisplayValues[0], "NO MATCH"];
+        switchTexts = shuffleArray([allDisplayValues[0], allDisplayValues[0], "NO MATCH"]);
       } else {
-        switchTexts = ["NO MATCH", "STATIC", "OVERLOAD"];
+        switchTexts = shuffleArray(["NO MATCH", "STATIC", "OVERLOAD"]);
       }
     }
 
-    // 9. ⚡ CRITICAL: Update plays remaining logic (fixed from original)
-    let newPlaysRemaining = playsRemaining - 1;
+    // Calculate the NEW plays remaining correctly based on outcome
+    let newPlaysRemaining = playsRemaining - 1; // Subtract the used play
     if (isFreeReplay) {
-      newPlaysRemaining = playsRemaining;
+      // If it's a free replay, they get +1 play after using this one
+      newPlaysRemaining = playsRemaining; // Net zero change (used 1, gained 1)
     }
 
-    // 10. ⚡ ASYNC FIRE-AND-FORGET: Don't wait for usage logging
-    // This saves ~20-50ms per request
-    db.insert(voltzUsage).values({
-      orderId,
-      userId,
-      prizeId: selectedPrize.id,
-      outcome,
-      playedAt: new Date(),
-    }).catch(err => console.error("Failed to log usage:", err));
-
-    // Update prize win count if needed (fire and forget)
-    if (isWin && selectedPrize.maxWins !== null) {
-      db.update(voltzPrizes)
-        .set({ quantityWon: sql`${voltzPrizes.quantityWon} + 1` })
-        .where(eq(voltzPrizes.id, selectedPrize.id))
-        .catch(err => console.error("Failed to update prize count:", err));
-    }
-
-    // Set cooldown AFTER successful response
-    voltzCooldowns.set(cooldownKey, now);
-
-    // Send response immediately (don't wait for DB writes)
-    return res.json({
+    res.json({
       success: true,
       result: { 
         outcome, 
         isWin, 
         isFreeReplay, 
-        rewardType: isWin ? selectedPrize.rewardType : isFreeReplay ? "try_again" : "lose", 
-        rewardValue: selectedPrize.rewardType === "physical" ? selectedPrize.prizeName : rewardValue,
-        prizeName: selectedPrize.rewardType === "physical" ? selectedPrize.prizeName : undefined,
+        rewardType: isWin ? rewardType : isFreeReplay ? "try_again" : "lose", 
+        rewardValue: rewardType === "physical" ? selectedPrize.prizeName : rewardValue,
+        prizeName: rewardType === "physical" ? selectedPrize.prizeName : undefined,
         prizeId: selectedPrize.id,
-        isPhysical: selectedPrize.rewardType === "physical",
+        isPhysical: rewardType === "physical",
         switchTexts 
       },
       playsRemaining: newPlaysRemaining,
     });
-
   } catch (error) {
     console.error("Error playing voltz game:", error);
     res.status(500).json({ message: "Failed to play voltz game" });
   }
 });
-
 
 // Add this new endpoint to confirm the game result
 app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => {
