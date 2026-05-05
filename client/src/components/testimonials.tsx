@@ -31,7 +31,7 @@ export default function Testimonials() {
       .then((res) => res.json())
       .then((data: ApiResponse) => {
         const fetchedReviews = data.reviews || [];
-        
+      console.log(data)
         // OPTION 1: Filter out 3-star and below reviews entirely (if you never want to show them)
         const highQualityReviews = fetchedReviews.filter(r => {
           const rating = parseInt(r.rating);
