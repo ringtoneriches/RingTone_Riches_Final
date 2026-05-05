@@ -38,6 +38,39 @@ interface UnifiedBillingProps {
   wheelType?: string;
 }
 
+
+// Add these OUTSIDE your component, near other utility functions
+
+const isInAppBrowser = () => {
+  const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
+  
+  // Check for Facebook
+  if (ua.includes('FBAN') || ua.includes('FBAV')) return true;
+  // Check for Instagram
+  if (ua.includes('Instagram')) return true;
+  // Check for other in-app browsers
+  if (ua.includes('TikTok') || ua.includes('Twitter') || ua.includes('LinkedIn') || 
+      ua.includes('Telegram') || ua.includes('Snapchat')) return true;
+  // Check for Android WebView
+  if (ua.includes('wv') || ua.includes('WebView')) return true;
+  // Check for iOS in-app browser (UIWebView)
+  if (/(iPhone|iPod|iPad).*AppleWebKit(?!.*Safari)/i.test(ua)) return true;
+  
+  return false;
+};
+
+const openInDefaultBrowser = () => {
+  const url = window.location.href;
+  
+  // Force open in device's default browser
+  // This creates a temporary anchor with target="_blank" and rel="noopener"
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.click();
+};
+
 export default function UnifiedBilling({ orderId, orderType, wheelType }: UnifiedBillingProps) {
   const [, setLocation] = useLocation();
   const [selectedMethods, setSelectedMethods] = useState({
@@ -233,42 +266,99 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
 
   // Handle method selection (now allows combinations)
   const handleMethodToggle = (method: 'walletBalance' | 'ringtonePoints' | 'instaplay') => {
-    // Prevent enabling points for instant competitions
-    if (method === 'ringtonePoints' && isPointsDisabled) {
-      toast({
-        title: "Points Not Available",
-        description: "Ringtone Points cannot be used for competitions.",
-        variant: "destructive",
-      });
-      return;
-    }
+  // Prevent enabling points for instant competitions
+  if (method === 'ringtonePoints' && isPointsDisabled) {
+    toast({
+      title: "Points Not Available",
+      description: "Ringtone Points cannot be used for competitions.",
+      variant: "destructive",
+    });
+    return;
+  }
 
-    // Instaplay is always exclusive - if selected, turn off others
-    if (method === 'instaplay') {
+  // Handle Instaplay click
+  if (method === 'instaplay') {
+    // If already selected, deselect it
+    if (selectedMethods.instaplay) {
       setSelectedMethods({
         walletBalance: false,
         ringtonePoints: false,
-        instaplay: !selectedMethods.instaplay
-      });
-      return;
-    }
-
-    // If instaplay is currently selected, turning it off and selecting wallet/points
-    if (selectedMethods.instaplay) {
-      setSelectedMethods({
-        walletBalance: method === 'walletBalance',
-        ringtonePoints: method === 'ringtonePoints',
         instaplay: false
       });
       return;
     }
+    
+    // Check if we're in an in-app browser
+    if (isInAppBrowser()) {
+      // Store the intent to use instaplay
+      localStorage.setItem('autoSelectInstaplay', 'true');
+      
+      // Open in default browser
+      openInDefaultBrowser();
+      
+      // Show toast to inform user
+      toast({
+        title: "Opening Browser",
+        description: "Opening in your default browser for secure payment...",
+      });
+      return;
+    }
+    
+    // Not in-app browser - select instaplay normally
+    setSelectedMethods({
+      walletBalance: false,
+      ringtonePoints: false,
+      instaplay: true
+    });
+    return;
+  }
 
-    // For wallet and points - allow both to be selected together
-    setSelectedMethods(prev => ({
-      ...prev,
-      [method]: !prev[method]
-    }));
-  };
+  // If instaplay is currently selected, deselect it first
+  if (selectedMethods.instaplay) {
+    setSelectedMethods({
+      walletBalance: method === 'walletBalance',
+      ringtonePoints: method === 'ringtonePoints',
+      instaplay: false
+    });
+    return;
+  }
+
+  // For wallet and points - allow both together
+  setSelectedMethods(prev => ({
+    ...prev,
+    [method]: !prev[method]
+  }));
+};
+
+
+// Auto-select instaplay when returning from in-app browser redirect
+useEffect(() => {
+  const autoSelect = localStorage.getItem('autoSelectInstaplay');
+  
+  if (autoSelect === 'true') {
+    // Clear the flag
+    localStorage.removeItem('autoSelectInstaplay');
+    
+    // Auto-select instaplay and agree to terms
+    setSelectedMethods({
+      walletBalance: false,
+      ringtonePoints: false,
+      instaplay: true
+    });
+    
+    setAgreeToTerms(true);
+    
+    // Auto-trigger payment after a short delay
+    const timer = setTimeout(() => {
+      setIsProcessing(true);
+      processPaymentMutation.mutate({
+        useInstaplay: true,
+      });
+    }, 1000); // Give user a moment to see what's happening
+    
+    return () => clearTimeout(timer);
+  }
+}, []); // Run once on mount
 
   // Apply discount mutation
   const applyDiscountMutation = useMutation({

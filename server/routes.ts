@@ -13107,7 +13107,8 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
         seg.maxWins !== null &&
         (seg.rewardType === "cash" ||
           seg.rewardType === "points" ||
-          seg.rewardType === "physical")
+          seg.rewardType === "physical" || 
+          seg.rewardType === "try_again") 
       ) {
         if (wins >= seg.maxWins) {
           return false;
@@ -13448,7 +13449,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
           const wins = segmentWinCounts.get(seg.id) ?? 0;
           if (
             seg.maxWins !== null &&
-            (seg.rewardType === "cash" || seg.rewardType === "points" || seg.rewardType === "physical")
+            (seg.rewardType === "cash" || seg.rewardType === "points" || seg.rewardType === "physical" || seg.rewardType === "try_again") 
           ) {
             if (wins >= seg.maxWins) return false;
           }
