@@ -13053,7 +13053,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
     const user = await storage.getUser(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // ✅ Load config SAME AS REVEAL-ALL
+    // ✅ Load config
     const [config] = await db
       .select()
       .from(gamePopConfig)
@@ -13068,7 +13068,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // ✅ Use segments/prizes from config EXACTLY LIKE REVEAL-ALL
+    // ✅ Use segments/prizes from config
     const segments = (popConfig as any).segments || 
                      (popConfig as any).prizes || 
                      DEFAULT_POP_CONFIG.segments;
@@ -13080,27 +13080,29 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // ✅ Count ONLY actual wins (isWin = true) - EXACTLY LIKE REVEAL-ALL
+    // ✅ Count wins for ALL reward types including try_again
     const counts = await db
       .select({ prizeId: popWins.prizeId, count: sql<number>`count(*)` })
       .from(popWins)
-      .where(eq(popWins.isWin, true))
+      .where(
+        sql`(${popWins.isWin} = true OR ${popWins.rewardType} = 'try_again')`
+      )
       .groupBy(popWins.prizeId);
 
     const segmentWinCounts = new Map<string, number>();
     counts.forEach((c) => segmentWinCounts.set(c.prizeId, Number(c.count)));
 
-    // Initialize missing segments with 0 wins - LIKE REVEAL-ALL
+    // Initialize missing segments with 0 wins
     segments.forEach((seg: any) => {
       if (!segmentWinCounts.has(seg.id)) {
         segmentWinCounts.set(seg.id, 0);
       }
     });
 
-    // ✅ Find lose segment - EXACTLY LIKE REVEAL-ALL
+    // ✅ Find lose segment
     const loseSegment = segments.find((s: any) => s.rewardType === "lose");
     
-    // ✅ Filter eligible segments - EXACTLY LIKE REVEAL-ALL
+    // ✅ Filter eligible segments - includes try_again
     const eligibleSegments = segments.filter((seg: any) => {
       const wins = segmentWinCounts.get(seg.id) ?? 0;
       if (
@@ -13117,7 +13119,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       return true;
     });
 
-    // ✅ Fallback logic - EXACTLY LIKE REVEAL-ALL
+    // ✅ Fallback logic
     let finalEligible;
     if (eligibleSegments.length > 0) {
       finalEligible = eligibleSegments;
@@ -13134,7 +13136,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // ✅ Weighted random selection using probability - LIKE REVEAL-ALL
+    // ✅ Weighted random selection using probability
     const totalProbability = finalEligible.reduce(
       (sum: number, seg: any) => sum + (seg.probability || 0),
       0
@@ -13158,7 +13160,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // RESULT LOGIC - SAME AS REVEAL-ALL
+    // RESULT LOGIC
     let balloonValues: number[] = [];
     const rewardType = selectedSegment.rewardType || "lose";
     const prizeName = selectedSegment.label || 
@@ -13200,12 +13202,9 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
 
       rewardValue = "0";
 
-      // Add back the play
-      await db
-        .update(orders)
-        .set({ quantity: order.quantity + 1 })
-        .where(eq(orders.id, orderId));
-
+      // ❌ REMOVED: No longer incrementing order quantity
+      // The play is preserved by not decrementing playsRemaining
+      
     } else if (isWin) {
       const value = parseFloat(selectedSegment.rewardValue?.toString() || "0");
       
@@ -13250,7 +13249,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
         });
       }
 
-      // Insert winner - EXACTLY LIKE REVEAL-ALL
+      // Insert winner
       let prizeDescriptionText = "";
       let prizeValueText = "";
 
@@ -13304,7 +13303,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       usedAt: new Date(),
     });
 
-    // ✅ Save win record - SAME AS REVEAL-ALL
+    // ✅ Save win record
     await db.insert(popWins).values({
       orderId,
       userId,
@@ -13318,10 +13317,10 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       wonAt: new Date(),
     });
 
-    // Calculate new plays remaining - SAME LOGIC AS REVEAL-ALL
+    // Calculate new plays remaining - try_again doesn't consume a play
     const newPlaysRemaining = isRPrize ? playsRemaining : playsRemaining - 1;
 
-    // ✅ Response format matching reveal-all
+    // ✅ Response format
     res.json({
       success: true,
       result: {
