@@ -113,6 +113,7 @@ import { OTPGenerator } from "./otp";
 import { sendVerificationEmail } from "./emails/verification-email";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
+import { calculateDiscountedTotal } from "./utils/discounts";
 
 const supportUpload = createS3Uploader("support");
 const competitionUpload = createS3Uploader("competitions");
@@ -4406,58 +4407,62 @@ res.json({
       res.status(500).json({ message: "Failed to complete purchase" });
     }
   });
-  // NEW: Create spin wheel order (shows billing page)
+
+
   app.post("/api/create-spin-order", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const { competitionId, quantity = 1 } = req.body; // Now we need competitionId
+  try {
+    const userId = req.user.id;
+    const { competitionId, quantity = 1 } = req.body;
 
-      // Get the competition to get the actual ticket price
-      const competition = await storage.getCompetition(competitionId);
-      if (!competition) {
-        return res.status(404).json({ message: "Competition not found" });
-      }
-
-      const spinCostPerTicket = parseFloat(competition.ticketPrice);
-      const totalAmount = spinCostPerTicket * quantity;
-
-      // Get user's current balances
-      const user = await storage.getUser(userId);
-      const userBalance = parseFloat(user?.balance || "0");
-      const userPoints = user?.ringtonePoints || 0;
-      const pointsValue = userPoints * 0.01; // 1 point = £0.01
-
-      // Create pending order for spins
-      const order = await storage.createOrder({
-        userId,
-        competitionId: competitionId, // Use actual competition ID
-        quantity,
-        totalAmount: totalAmount.toString(),
-        paymentMethod: "pending",
-        status: "pending",
-      });
-
-      res.json({
-        success: true,
-        orderId: order.id,
-        totalAmount,
-        quantity,
-        userBalance: {
-          wallet: userBalance,
-          ringtonePoints: userPoints,
-          pointsValue: pointsValue,
-        },
-        spinCost: spinCostPerTicket,
-        competition: {
-          title: competition.title,
-          type: competition.type,
-        },
-      });
-    } catch (error) {
-      console.error("Error creating spin order:", error);
-      res.status(500).json({ message: "Failed to create spin order" });
+    const competition = await storage.getCompetition(competitionId);
+    if (!competition) {
+      return res.status(404).json({ message: "Competition not found" });
     }
-  });
+
+    const spinCostPerTicket = parseFloat(competition.ticketPrice);
+    
+    // Calculate discount
+    const { originalTotal, discountPercent, discountedTotal, savings } = 
+      calculateDiscountedTotal(spinCostPerTicket, quantity);
+
+    const user = await storage.getUser(userId);
+    const userBalance = parseFloat(user?.balance || "0");
+    const userPoints = user?.ringtonePoints || 0;
+    const pointsValue = userPoints * 0.01;
+
+    const order = await storage.createOrder({
+      userId,
+      competitionId,
+      quantity,
+      totalAmount: discountedTotal.toString(),
+      paymentMethod: "pending",
+      status: "pending",
+    });
+
+    res.json({
+      success: true,
+      orderId: order.id,
+      totalAmount: discountedTotal,
+      originalAmount: originalTotal,
+      discountPercent,
+      savings,
+      quantity,
+      userBalance: {
+        wallet: userBalance,
+        ringtonePoints: userPoints,
+        pointsValue: pointsValue,
+      },
+      spinCost: spinCostPerTicket,
+      competition: {
+        title: competition.title,
+        type: competition.type,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating spin order:", error);
+    res.status(500).json({ message: "Failed to create spin order" });
+  }
+});
 
   // NEW: Process spin wheel payment with multiple options
   app.post("/api/process-spin-payment", isAuthenticated, async (req: any, res) => {
@@ -5556,160 +5561,176 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
     }
   );
 
-  app.post(
-    "/api/create-scratch-order",
-    isAuthenticated,
-    async (req: any, res) => {
-      try {
-        const userId = req.user.id;
-        const { competitionId, quantity = 1 } = req.body;
+  app.post("/api/create-scratch-order", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { competitionId, quantity = 1 } = req.body;
 
-        const competition = await storage.getCompetition(competitionId);
-        if (!competition) {
-          return res.status(404).json({ message: "Competition not found" });
-        }
-
-        const scratchCostPerCard = parseFloat(competition.ticketPrice);
-        const totalAmount = scratchCostPerCard * quantity;
-
-        const user = await storage.getUser(userId);
-        const userBalance = parseFloat(user?.balance || "0");
-        const userPoints = user?.ringtonePoints || 0;
-        const pointsValue = userPoints * 0.01;
-
-        const order = await storage.createOrder({
-          userId,
-          competitionId,
-          quantity,
-          totalAmount: totalAmount.toString(),
-          paymentMethod: "pending",
-          status: "pending",
-        });
-
-        res.json({
-          success: true,
-          orderId: order.id,
-          competitionId: competitionId,
-          totalAmount,
-          quantity,
-          userBalance: {
-            wallet: userBalance,
-            ringtonePoints: userPoints,
-            pointsValue,
-          },
-          scratchCost: scratchCostPerCard,
-          competition: {
-            title: competition.title,
-            type: competition.type,
-          },
-        });
-      } catch (error) {
-        console.error("Error creating scratch order:", error);
-        res.status(500).json({ message: "Failed to create scratch order" });
-      }
+    const competition = await storage.getCompetition(competitionId);
+    if (!competition) {
+      return res.status(404).json({ message: "Competition not found" });
     }
-  );
 
-  // Create Pop Game order
-  app.post("/api/create-pop-order", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const { competitionId, quantity = 1 } = req.body;
+    const scratchCostPerCard = parseFloat(competition.ticketPrice);
+    
+    // Calculate discount
+    const { originalTotal, discountPercent, discountedTotal, savings } = 
+      calculateDiscountedTotal(scratchCostPerCard, quantity);
 
-      const competition = await storage.getCompetition(competitionId);
-      if (!competition) {
-        return res.status(404).json({ message: "Competition not found" });
-      }
+    const user = await storage.getUser(userId);
+    const userBalance = parseFloat(user?.balance || "0");
+    const userPoints = user?.ringtonePoints || 0;
+    const pointsValue = userPoints * 0.01;
 
-      const popCostPerGame = parseFloat(competition.ticketPrice);
-      const totalAmount = popCostPerGame * quantity;
+    const order = await storage.createOrder({
+      userId,
+      competitionId,
+      quantity,
+      totalAmount: discountedTotal.toString(),
+      paymentMethod: "pending",
+      status: "pending",
+    });
 
-      const user = await storage.getUser(userId);
-      const userBalance = parseFloat(user?.balance || "0");
-      const userPoints = user?.ringtonePoints || 0;
-      const pointsValue = userPoints * 0.01;
+    res.json({
+      success: true,
+      orderId: order.id,
+      competitionId: competitionId,
+      totalAmount: discountedTotal,
+      originalAmount: originalTotal,
+      discountPercent,
+      savings,
+      quantity,
+      userBalance: {
+        wallet: userBalance,
+        ringtonePoints: userPoints,
+        pointsValue,
+      },
+      scratchCost: scratchCostPerCard,
+      competition: {
+        title: competition.title,
+        type: competition.type,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating scratch order:", error);
+    res.status(500).json({ message: "Failed to create scratch order" });
+  }
+});
 
-      const order = await storage.createOrder({
-        userId,
-        competitionId,
-        quantity,
-        totalAmount: totalAmount.toString(),
-        paymentMethod: "pending",
-        status: "pending",
-      });
+app.post("/api/create-pop-order", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { competitionId, quantity = 1 } = req.body;
 
-      res.json({
-        success: true,
-        orderId: order.id,
-        competitionId: competitionId,
-        totalAmount,
-        quantity,
-        userBalance: {
-          wallet: userBalance,
-          ringtonePoints: userPoints,
-          pointsValue,
-        },
-        popCost: popCostPerGame,
-        competition: {
-          title: competition.title,
-          type: competition.type,
-        },
-      });
-    } catch (error) {
-      console.error("Error creating pop order:", error);
-      res.status(500).json({ message: "Failed to create pop order" });
+    const competition = await storage.getCompetition(competitionId);
+    if (!competition) {
+      return res.status(404).json({ message: "Competition not found" });
     }
-  });
 
-   app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const { competitionId, quantity = 1 } = req.body;
+    const popCostPerGame = parseFloat(competition.ticketPrice);
+    
+    // Calculate discount
+    const { originalTotal, discountPercent, discountedTotal, savings } = 
+      calculateDiscountedTotal(popCostPerGame, quantity);
 
-      const competition = await storage.getCompetition(competitionId);
-      if (!competition) {
-        return res.status(404).json({ message: "Competition not found" });
-      }
+    const user = await storage.getUser(userId);
+    const userBalance = parseFloat(user?.balance || "0");
+    const userPoints = user?.ringtonePoints || 0;
+    const pointsValue = userPoints * 0.01;
 
-      const voltzCostPerGame = parseFloat(competition.ticketPrice);
-      const totalAmount = voltzCostPerGame * quantity;
+    const order = await storage.createOrder({
+      userId,
+      competitionId,
+      quantity,
+      totalAmount: discountedTotal.toString(),
+      paymentMethod: "pending",
+      status: "pending",
+    });
 
-      const user = await storage.getUser(userId);
-      const userBalance = parseFloat(user?.balance || "0");
-      const userPoints = user?.ringtonePoints || 0;
-      const pointsValue = userPoints * 0.01;
+    res.json({
+      success: true,
+      orderId: order.id,
+      competitionId: competitionId,
+      totalAmount: discountedTotal,
+      originalAmount: originalTotal,
+      discountPercent,
+      savings,
+      quantity,
+      userBalance: {
+        wallet: userBalance,
+        ringtonePoints: userPoints,
+        pointsValue,
+      },
+      popCost: popCostPerGame,
+      competition: {
+        title: competition.title,
+        type: competition.type,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating pop order:", error);
+    res.status(500).json({ message: "Failed to create pop order" });
+  }
+});
 
-      const order = await storage.createOrder({
-        userId,
-        competitionId,
-        quantity,
-        totalAmount: totalAmount.toString(),
-        paymentMethod: "pending",
-        status: "pending",
-      });
+// ==========================================
+// VOLTZ ORDER - Updated with Discount
+// ==========================================
+app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { competitionId, quantity = 1 } = req.body;
 
-      res.json({
-        success: true,
-        orderId: order.id,
-        competitionId: competitionId,
-        totalAmount,
-        quantity,
-        userBalance: {
-          wallet: userBalance,
-          ringtonePoints: userPoints,
-          pointsValue,
-        },
-        voltzCost: voltzCostPerGame,
-        competition: {
-          title: competition.title,
-          type: competition.type,
-        },
-      });
-    } catch (error) {
-      console.error("Error creating voltz order:", error);
-      res.status(500).json({ message: "Failed to create voltz order" });
+    const competition = await storage.getCompetition(competitionId);
+    if (!competition) {
+      return res.status(404).json({ message: "Competition not found" });
     }
-  });
+
+    const voltzCostPerGame = parseFloat(competition.ticketPrice);
+    
+    // Calculate discount
+    const { originalTotal, discountPercent, discountedTotal, savings } = 
+      calculateDiscountedTotal(voltzCostPerGame, quantity);
+
+    const user = await storage.getUser(userId);
+    const userBalance = parseFloat(user?.balance || "0");
+    const userPoints = user?.ringtonePoints || 0;
+    const pointsValue = userPoints * 0.01;
+
+    const order = await storage.createOrder({
+      userId,
+      competitionId,
+      quantity,
+      totalAmount: discountedTotal.toString(),
+      paymentMethod: "pending",
+      status: "pending",
+    });
+
+    res.json({
+      success: true,
+      orderId: order.id,
+      competitionId: competitionId,
+      totalAmount: discountedTotal,
+      originalAmount: originalTotal,
+      discountPercent,
+      savings,
+      quantity,
+      userBalance: {
+        wallet: userBalance,
+        ringtonePoints: userPoints,
+        pointsValue,
+      },
+      voltzCost: voltzCostPerGame,
+      competition: {
+        title: competition.title,
+        type: competition.type,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating voltz order:", error);
+    res.status(500).json({ message: "Failed to create voltz order" });
+  }
+});
 
 
   app.post("/api/process-scratch-payment", isAuthenticated, async (req: any, res) => {
@@ -9596,22 +9617,22 @@ app.post("/api/create-plinko-order", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ message: "Competition ID and quantity are required" });
     }
 
-    // Get competition
     const competition = await storage.getCompetition(competitionId);
     if (!competition || competition.type !== "plinko") {
       return res.status(404).json({ message: "Plinko competition not found" });
     }
 
-    // Calculate total
     const ticketPrice = parseFloat(competition.ticketPrice);
-    const totalAmount = ticketPrice * quantity;
+    
+    // Calculate discount
+    const { originalTotal, discountPercent, discountedTotal, savings } = 
+      calculateDiscountedTotal(ticketPrice, quantity);
 
-    // Create pending order
     const order = await storage.createOrder({
       userId,
       competitionId,
       quantity,
-      totalAmount: totalAmount.toFixed(2),
+      totalAmount: discountedTotal.toFixed(2),
       paymentMethod: "pending",
       status: "pending",
     });
@@ -9619,7 +9640,10 @@ app.post("/api/create-plinko-order", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       orderId: order.id,
-      totalAmount: totalAmount.toFixed(2),
+      totalAmount: discountedTotal.toFixed(2),
+      originalAmount: originalTotal.toFixed(2),
+      discountPercent,
+      savings: savings.toFixed(2),
       quantity,
     });
   } catch (error) {
@@ -13017,17 +13041,24 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
     const cooldownKey = `${userId}-${orderId}`;
     const lastPlayTime = popCooldowns.get(cooldownKey) || 0;
     const now = Date.now();
+
     if (now - lastPlayTime < POP_COOLDOWN_MS) {
       return res.status(429).json({
         success: false,
         message: "Please wait a moment before playing again",
       });
     }
+
     popCooldowns.set(cooldownKey, now);
 
     // Verify order
     const order = await storage.getOrder(orderId);
-    if (!order || order.userId !== userId || order.status !== "completed") {
+
+    if (
+      !order ||
+      order.userId !== userId ||
+      order.status !== "completed"
+    ) {
       return res.status(400).json({
         success: false,
         message: "No valid pop game purchase found",
@@ -13051,9 +13082,15 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
     }
 
     const user = await storage.getUser(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // ✅ Load config
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Load config
     const [config] = await db
       .select()
       .from(gamePopConfig)
@@ -13068,10 +13105,11 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // ✅ Use segments/prizes from config
-    const segments = (popConfig as any).segments || 
-                     (popConfig as any).prizes || 
-                     DEFAULT_POP_CONFIG.segments;
+    // Segments
+    const segments =
+      (popConfig as any).segments ||
+      (popConfig as any).prizes ||
+      DEFAULT_POP_CONFIG.segments;
 
     if (!segments || segments.length === 0) {
       return res.status(400).json({
@@ -13080,9 +13118,12 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // ✅ Count wins for ALL reward types including try_again
+    // Count wins INCLUDING try_again
     const counts = await db
-      .select({ prizeId: popWins.prizeId, count: sql<number>`count(*)` })
+      .select({
+        prizeId: popWins.prizeId,
+        count: sql<number>`count(*)`,
+      })
       .from(popWins)
       .where(
         sql`(${popWins.isWin} = true OR ${popWins.rewardType} = 'try_again')`
@@ -13090,63 +13131,83 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       .groupBy(popWins.prizeId);
 
     const segmentWinCounts = new Map<string, number>();
-    counts.forEach((c) => segmentWinCounts.set(c.prizeId, Number(c.count)));
 
-    // Initialize missing segments with 0 wins
+    counts.forEach((c) => {
+      segmentWinCounts.set(c.prizeId, Number(c.count));
+    });
+
+    // Initialize missing segments
     segments.forEach((seg: any) => {
       if (!segmentWinCounts.has(seg.id)) {
         segmentWinCounts.set(seg.id, 0);
       }
     });
 
-    // ✅ Find lose segment
-    const loseSegment = segments.find((s: any) => s.rewardType === "lose");
-    
-    // ✅ Filter eligible segments - includes try_again
+    // Find lose segment
+    const loseSegment = segments.find(
+      (s: any) => s.rewardType === "lose"
+    );
+
+    // FILTER ELIGIBLE SEGMENTS
     const eligibleSegments = segments.filter((seg: any) => {
       const wins = segmentWinCounts.get(seg.id) ?? 0;
-      if (
+
+      // Convert maxWins safely
+      const maxWins =
+        seg.maxWins !== undefined &&
         seg.maxWins !== null &&
-        (seg.rewardType === "cash" ||
-          seg.rewardType === "points" ||
-          seg.rewardType === "physical" || 
-          seg.rewardType === "try_again") 
-      ) {
-        if (wins >= seg.maxWins) {
-          return false;
-        }
+        seg.maxWins !== ""
+          ? Number(seg.maxWins)
+          : null;
+
+      // Unlimited prize
+      if (maxWins === null) {
+        return true;
       }
+
+      // Prize exhausted
+      if (wins >= maxWins) {
+        console.log(
+          `Prize ${seg.label || seg.id} exhausted (${wins}/${maxWins})`
+        );
+        return false;
+      }
+
       return true;
     });
 
-    // ✅ Fallback logic
+    // Fallback
     let finalEligible;
+
     if (eligibleSegments.length > 0) {
       finalEligible = eligibleSegments;
     } else {
-      // If no eligible segments (all maxWins reached), use lose segment
       finalEligible = loseSegment ? [loseSegment] : segments;
     }
 
     if (!finalEligible.length) {
       console.error("No eligible segments found");
+
       return res.status(500).json({
         success: false,
         message: "Game configuration error",
       });
     }
 
-    // ✅ Weighted random selection using probability
+    // Weighted random selection
     const totalProbability = finalEligible.reduce(
-      (sum: number, seg: any) => sum + (seg.probability || 0),
+      (sum: number, seg: any) =>
+        sum + Number(seg.probability || 0),
       0
     );
 
     let random = Math.random() * totalProbability;
+
     let selectedSegment = finalEligible[0];
 
     for (const seg of finalEligible) {
-      random -= seg.probability || 0;
+      random -= Number(seg.probability || 0);
+
       if (random <= 0) {
         selectedSegment = seg;
         break;
@@ -13162,37 +13223,51 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
 
     // RESULT LOGIC
     let balloonValues: number[] = [];
+
     const rewardType = selectedSegment.rewardType || "lose";
-    const prizeName = selectedSegment.label || 
-                     selectedSegment.prizeName || 
-                     (selectedSegment.rewardType === "physical" ? selectedSegment.rewardValue : null) ||
-                     "Prize";
+
+    const prizeName =
+      selectedSegment.label ||
+      selectedSegment.prizeName ||
+      (selectedSegment.rewardType === "physical"
+        ? selectedSegment.rewardValue
+        : null) ||
+      "Prize";
+
     let rewardValue = "0";
 
     const isRPrize = rewardType === "try_again";
+
     const isWin =
       rewardType === "cash" ||
       rewardType === "points" ||
       rewardType === "physical";
 
+    // TRY AGAIN
     if (isRPrize) {
-      // Try again - show mixed values
-      const cashSegments = segments.filter((s: any) => s.rewardType === "cash");
+      const cashSegments = segments.filter(
+        (s: any) => s.rewardType === "cash"
+      );
+
       const vals = cashSegments.map((s: any) =>
         parseFloat(s.rewardValue?.toString() || "1")
       );
 
-      let val1 = vals[Math.floor(Math.random() * vals.length)] || 1;
+      let val1 =
+        vals[Math.floor(Math.random() * vals.length)] || 1;
+
       let val2 =
         vals.length > 1
           ? vals[Math.floor(Math.random() * vals.length)]
           : val1 + 1;
 
       while (val2 === val1 && vals.length > 1) {
-        val2 = vals[Math.floor(Math.random() * vals.length)];
+        val2 =
+          vals[Math.floor(Math.random() * vals.length)];
       }
 
       const rPos = Math.floor(Math.random() * 3);
+
       balloonValues =
         rPos === 0
           ? [-1, val1, val2]
@@ -13201,13 +13276,14 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
           : [val1, val2, -1];
 
       rewardValue = "0";
+    }
 
-      // ❌ REMOVED: No longer incrementing order quantity
-      // The play is preserved by not decrementing playsRemaining
-      
-    } else if (isWin) {
-      const value = parseFloat(selectedSegment.rewardValue?.toString() || "0");
-      
+    // WIN
+    else if (isWin) {
+      const value = parseFloat(
+        selectedSegment.rewardValue?.toString() || "0"
+      );
+
       if (rewardType === "physical") {
         balloonValues = [0, 0, 0];
         rewardValue = value.toString();
@@ -13216,31 +13292,48 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
         rewardValue = value.toString();
       }
 
+      // CASH
       if (rewardType === "cash") {
-        const finalBalance = parseFloat(user.balance || "0") + value;
-        await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+        const finalBalance =
+          parseFloat(user.balance || "0") + value;
+
+        await storage.updateUserBalance(
+          userId,
+          finalBalance.toFixed(2)
+        );
+
         await storage.createTransaction({
           userId,
           type: "prize",
           amount: value.toFixed(2),
           description: `Ringtone Pop Win - £${value}`,
         });
+      }
 
-      } else if (rewardType === "points") {
+      // POINTS
+      else if (rewardType === "points") {
         const pointsValue = Math.floor(value);
-        const newPoints = (user.ringtonePoints || 0) + pointsValue;
+
+        const newPoints =
+          (user.ringtonePoints || 0) + pointsValue;
+
         await db
           .update(users)
-          .set({ ringtonePoints: newPoints })
+          .set({
+            ringtonePoints: newPoints,
+          })
           .where(eq(users.id, userId));
+
         await storage.createTransaction({
           userId,
           type: "ringtone_points",
           amount: pointsValue.toString(),
           description: `Ringtone Pop Win - ${pointsValue} pts`,
         });
+      }
 
-      } else if (rewardType === "physical") {
+      // PHYSICAL
+      else if (rewardType === "physical") {
         await storage.createTransaction({
           userId,
           type: "prize",
@@ -13249,7 +13342,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
         });
       }
 
-      // Insert winner
+      // Winners table
       let prizeDescriptionText = "";
       let prizeValueText = "";
 
@@ -13274,17 +13367,25 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+    }
 
-    } else {
-      // Lose - show non-matching values
+    // LOSE
+    else {
       const cashVals = segments
         .filter((s: any) => s.rewardType === "cash")
-        .map((s: any) => parseFloat(s.rewardValue?.toString() || "1"));
+        .map((s: any) =>
+          parseFloat(s.rewardValue?.toString() || "1")
+        );
 
       if (cashVals.length >= 2) {
-        let v1 = cashVals[Math.floor(Math.random() * cashVals.length)];
-        let v2 = cashVals[Math.floor(Math.random() * cashVals.length)];
-        let v3 = cashVals[Math.floor(Math.random() * cashVals.length)];
+        let v1 =
+          cashVals[Math.floor(Math.random() * cashVals.length)];
+
+        let v2 =
+          cashVals[Math.floor(Math.random() * cashVals.length)];
+
+        let v3 =
+          cashVals[Math.floor(Math.random() * cashVals.length)];
 
         if (v1 === v2 && v2 === v3) {
           v3 = cashVals.find((v) => v !== v1) || v1 + 1;
@@ -13296,14 +13397,17 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       }
     }
 
-    // Save usage
-    await db.insert(popUsage).values({
-      orderId,
-      userId,
-      usedAt: new Date(),
-    });
+    // SAVE USAGE
+    // try_again does NOT consume play
+    if (!isRPrize) {
+      await db.insert(popUsage).values({
+        orderId,
+        userId,
+        usedAt: new Date(),
+      });
+    }
 
-    // ✅ Save win record
+    // SAVE WIN RECORD
     await db.insert(popWins).values({
       orderId,
       userId,
@@ -13317,28 +13421,54 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       wonAt: new Date(),
     });
 
-    // Calculate new plays remaining - try_again doesn't consume a play
-    const newPlaysRemaining = isRPrize ? playsRemaining : playsRemaining - 1;
+    // Remaining plays
+    const newPlaysRemaining = isRPrize
+      ? playsRemaining
+      : playsRemaining - 1;
 
-    // ✅ Response format
+    // Response
     res.json({
       success: true,
       result: {
-        balloonValues: rewardType === "physical" ? [0, 0, 0] : balloonValues,
+        balloonValues:
+          rewardType === "physical"
+            ? [0, 0, 0]
+            : balloonValues,
+
         isWin,
         isRPrize,
         rewardType,
-        rewardValue: rewardType === "physical" ? (selectedSegment.label || selectedSegment.prizeName) : rewardValue,
-        prizeName: rewardType === "physical" ? (selectedSegment.label || selectedSegment.prizeName) : undefined,
-        prizeDescription: rewardType === "physical" ? (selectedSegment.prizeDescription || selectedSegment.label) : undefined,
+
+        rewardValue:
+          rewardType === "physical"
+            ? selectedSegment.label ||
+              selectedSegment.prizeName
+            : rewardValue,
+
+        prizeName:
+          rewardType === "physical"
+            ? selectedSegment.label ||
+              selectedSegment.prizeName
+            : undefined,
+
+        prizeDescription:
+          rewardType === "physical"
+            ? selectedSegment.prizeDescription ||
+              selectedSegment.label
+            : undefined,
+
         isPhysical: rewardType === "physical",
       },
+
       playsRemaining: newPlaysRemaining,
     });
-
   } catch (error) {
     console.error("Error playing pop game:", error);
-    res.status(500).json({ message: "Failed to play pop game" });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to play pop game",
+    });
   }
 });
 
