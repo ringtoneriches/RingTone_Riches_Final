@@ -335,126 +335,126 @@ export default function AdminTransactions() {
         </div>
 
         {/* TRANSACTIONS TABLE with Infinite Scroll */}
-        <Card>
-          <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="text-lg sm:text-xl">Transaction Details</CardTitle>
-            <CardDescription className="text-sm">
-              Showing {allTransactions.length} of {totalTransactions} transactions
-              {hasNextPage && " - Scroll down to load more"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0 sm:p-6">
-            <div className="border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="whitespace-nowrap">Date</TableHead>
-                      <TableHead className="whitespace-nowrap">User</TableHead>
-                      <TableHead className="hidden sm:table-cell">Email</TableHead>
-                      <TableHead className="whitespace-nowrap">Type</TableHead>
-                      <TableHead className="hidden md:table-cell">Source</TableHead>
-                      <TableHead className="hidden lg:table-cell">Description</TableHead>
-                      <TableHead className="hidden xl:table-cell">Reference</TableHead>
-                      <TableHead className="whitespace-nowrap">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
+      <Card>
+  <CardHeader className="p-3 sm:p-6">
+    <CardTitle className="text-base sm:text-xl">Transaction Details</CardTitle>
+    <CardDescription className="text-xs sm:text-sm">
+      Showing {allTransactions.length} of {totalTransactions} transactions
+      {hasNextPage && " - Scroll down to load more"}
+    </CardDescription>
+  </CardHeader>
+  <CardContent className="p-0 sm:p-6">
+    <div className="border rounded-lg overflow-hidden">
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="whitespace-nowrap text-xs sm:text-sm">Date</TableHead>
+              <TableHead className="whitespace-nowrap text-xs sm:text-sm">User</TableHead>
+              <TableHead className="hidden sm:table-cell">Email</TableHead>
+              <TableHead className="hidden sm:table-cell">Type</TableHead>
+              <TableHead className="hidden md:table-cell">Source</TableHead>
+              <TableHead className="hidden lg:table-cell">Description</TableHead>
+              <TableHead className="hidden xl:table-cell">Reference</TableHead>
+              <TableHead className="whitespace-nowrap text-xs sm:text-sm">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
 
-                  <TableBody>
-                    {allTransactions.map((tx, index) => {
-                      const isLastRow = index === allTransactions.length - 1;
-                      return (
-                        <TableRow 
-                          key={tx.id} 
-                          ref={isLastRow ? loadMoreRef : null}
-                          className="hover:bg-muted/50"
-                        >
-                          <TableCell className="font-medium whitespace-nowrap">
-                            <div className="text-sm">
-                              {new Date(tx.createdAt).toLocaleDateString("en-GB", {
-                                day: "2-digit",
-                                month: "short",
-                              })}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {new Date(tx.createdAt).toLocaleTimeString("en-GB", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </div>
-                          </TableCell>
-                          <TableCell className="max-w-[100px] truncate">
-                            <div className="font-medium">{tx.userName || 'N/A'}</div>
-                            <div className="text-xs text-muted-foreground sm:hidden truncate">
-                              {tx.userEmail || 'N/A'}
-                            </div>
-                          </TableCell>
-                          <TableCell className="hidden sm:table-cell max-w-[150px] truncate">
-                            {tx.userEmail || 'N/A'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant={tx.type === 'deposit' ? 'default' : 'secondary'}
-                              className={`text-xs ${tx.type === 'deposit' 
-                                ? 'bg-green-500/20 text-green-400 border-green-500/30' 
-                                : ''
-                              }`}
-                            >
-                              {tx.type === 'deposit' ? 'Top-Up' : tx.type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            <Badge variant="outline" className="text-xs">
-                              {tx.source || 'Unknown'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell max-w-[200px] truncate">
-                            {tx.description || 'N/A'}
-                          </TableCell>
-                          <TableCell className="hidden xl:table-cell max-w-[150px] truncate">
-                            {tx.paymentRef || 'N/A'}
-                          </TableCell>
-                          <TableCell className="font-bold whitespace-nowrap">
-                            <span className={tx.type === 'deposit' ? 'text-green-400' : 'text-blue-400'}>
-                              £{Number(tx.amount || 0).toFixed(2)}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    
-                    {isFetchingNextPage && (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-4">
-                          <div className="flex justify-center items-center gap-2">
-                            <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
-                            <span className="text-sm text-muted-foreground">Loading more transactions...</span>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    
-                    {!hasNextPage && allTransactions.length > 0 && (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-4 text-muted-foreground text-sm">
-                          No more transactions to load
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    
-                    {allTransactions.length === 0 && !isLoading && (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                          No transactions found for selected filters
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          <TableBody>
+            {allTransactions.map((tx, index) => {
+              const isLastRow = index === allTransactions.length - 1;
+              return (
+                <TableRow 
+                  key={tx.id} 
+                  ref={isLastRow ? loadMoreRef : null}
+                  className="hover:bg-muted/50"
+                >
+                  <TableCell className="font-medium whitespace-nowrap p-2 sm:p-4">
+                    <div className="text-xs sm:text-sm">
+                      {new Date(tx.createdAt).toLocaleDateString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                      })}
+                    </div>
+                    <div className="text-[10px] sm:text-xs text-muted-foreground">
+                      {new Date(tx.createdAt).toLocaleTimeString("en-GB", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </TableCell>
+                  <TableCell className="max-w-[80px] sm:max-w-[100px] truncate p-2 sm:p-4">
+                    <div className="text-xs sm:font-medium truncate">{tx.userName || 'N/A'}</div>
+                    <div className="text-[10px] text-muted-foreground sm:hidden truncate">
+                      {tx.userEmail || 'N/A'}
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell max-w-[150px] truncate">
+                    {tx.userEmail || 'N/A'}
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    <Badge 
+                      variant={tx.type === 'deposit' ? 'default' : 'secondary'}
+                      className={`text-[10px] sm:text-xs hidden sm:table-cell ${tx.type === 'deposit' 
+                        ? 'bg-green-500/20 text-green-400 border-green-500/30' 
+                        : ''
+                      }`}
+                    >
+                      {tx.type === 'deposit' ? 'Top-Up' : tx.type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    <Badge variant="outline" className="text-xs">
+                      {tx.source || 'Unknown'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell max-w-[200px] truncate">
+                    {tx.description || 'N/A'}
+                  </TableCell>
+                  <TableCell className="hidden xl:table-cell max-w-[150px] truncate">
+                    {tx.paymentRef || 'N/A'}
+                  </TableCell>
+                  <TableCell className="font-bold whitespace-nowrap p-2 sm:p-4">
+                    <span className={`text-xs sm:text-sm font-bold ${tx.type === 'deposit' ? 'text-green-400' : 'text-blue-400'}`}>
+                      £{Number(tx.amount || 0).toFixed(2)}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            
+            {isFetchingNextPage && (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-3 sm:py-4">
+                  <div className="flex justify-center items-center gap-2">
+                    <div className="animate-spin w-3 h-3 sm:w-4 sm:h-4 border-2 border-primary border-t-transparent rounded-full" />
+                    <span className="text-xs sm:text-sm text-muted-foreground">Loading more transactions...</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+            
+            {!hasNextPage && allTransactions.length > 0 && (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-3 sm:py-4 text-muted-foreground text-xs sm:text-sm">
+                  No more transactions to load
+                </TableCell>
+              </TableRow>
+            )}
+            
+            {allTransactions.length === 0 && !isLoading && (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-6 sm:py-8 text-muted-foreground text-xs sm:text-sm">
+                  No transactions found for selected filters
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  </CardContent>
+</Card>
       </div>
     </AdminLayout>
   );
