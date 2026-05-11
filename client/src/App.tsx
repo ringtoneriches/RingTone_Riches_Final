@@ -80,7 +80,7 @@ import UserNotifications from "./components/notifications";
 import AdminFAQManager from "./pages/admin/faq-manager";
 import AdminPrizes from "./pages/admin/admin-prizes";
 import AdminCompetitionVideos from "./pages/admin/admin-competition-videos";
-import { initFacebookBrowserWarning } from "./lib/facebook-browser-check";
+import { initFacebookBrowserWarning, initSocialBrowserWarning } from "./lib/facebook-browser-check";
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
  
@@ -176,7 +176,7 @@ function Router() {
 function App() {
 
    useEffect(() => {
-    initFacebookBrowserWarning();
+    initSocialBrowserWarning()
   }, []);
 
   return (
