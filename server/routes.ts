@@ -829,7 +829,8 @@ async function processWalletTopup(
   userId: string,
   pendingPaymentId: string,
   paymentRef: string,
-  amount: number
+  amount: number,
+  shouldCheckReferral: boolean = true
 ) {
   if (amount <= 0) {
     throw new Error("Invalid wallet credit amount");
@@ -857,7 +858,6 @@ async function processWalletTopup(
         FOR UPDATE
       `);
       
-      // Handle the result properly - depending on your Drizzle version
       const pending = Array.isArray(pendingResult) ? pendingResult[0] : pendingResult.rows?.[0];
 
       if (!pending || pending.status !== "pending") {
@@ -865,7 +865,7 @@ async function processWalletTopup(
         return;
       }
 
-      // Insert transaction
+      // Insert transaction - REMOVED status field
       await tx.insert(transactions).values({
         userId,
         type: "deposit",
@@ -873,7 +873,7 @@ async function processWalletTopup(
         paymentRef,
         pendingPaymentId,
         description: `Cashflows wallet top-up £${amount}`,
-        status: "completed",
+        // status: "completed", // ❌ REMOVE THIS LINE if column doesn't exist
         createdAt: new Date(),
       });
 
@@ -896,65 +896,139 @@ async function processWalletTopup(
         userId,
         pendingPaymentId,
         amount,
+        shouldCheckReferral,
       });
-    });
 
-    // Trigger referral bonus OUTSIDE the transaction
-    try {
-      await checkAndAwardReferralBonus(userId, amount);
-    } catch (referralError) {
-      // Log but don't fail the transaction
-      console.error("Referral bonus error:", referralError);
-    }
+      // ✅ Only check referral if shouldCheckReferral is true
+      if (shouldCheckReferral) {
+        await awardReferralBonusInsideTransaction(tx, userId, amount, paymentRef);
+      } else {
+        console.log("Skipping referral check for this topup");
+      }
+    });
   } catch (err) {
     console.error("processWalletTopup FAILED", err);
     throw err;
   }
 }
 
-// Separate function for referral bonus
-async function checkAndAwardReferralBonus(userId: string, amount: number) {
-  const user = await storage.getUser(userId);
-  
-  if (!user || !user.referredBy) return;
-
-  // Check if this is the user's FIRST EVER completed deposit
-  const userTransactions = await storage.getUserTransactions(userId);
-  const completedTopups = userTransactions.filter(
-    (tx) => tx.type === "deposit" && tx.status === "completed"
-  );
-
-  // Count only this transaction? Need to be careful
-  if (completedTopups.length === 1) {
-    const referrer = await storage.getUser(user.referredBy);
-
-    if (referrer) {
-      const bonusAmount = 2.0;
-
-      await db.transaction(async (tx) => {
-        // Add £2 to referrer balance
-        await tx.execute(sql`
-          UPDATE users
-          SET balance = balance + ${bonusAmount}
-          WHERE id = ${referrer.id}
-        `);
-
-        // Create referral transaction
-        await tx.insert(transactions).values({
-          userId: referrer.id,
-          amount: bonusAmount,
-          type: "referral",
-          status: "completed",
-          description: `Referral reward: ${user.email} made their first wallet top-up`,
-          paymentMethod: "bonus",
-          createdAt: new Date(),
-        });
-      });
-
-      console.log(
-        `🎉 Referral bonus awarded: £${bonusAmount} to ${referrer.email} for ${user.email}'s first top-up`
-      );
+// ✅ Fixed function that runs INSIDE the transaction
+async function awardReferralBonusInsideTransaction(
+  tx: any,
+  userId: string,
+  amount: number,
+  paymentRef: string
+) {
+  try {
+    // Get user with referredBy field - Fixed SQL
+    const userResult = await tx.execute<{
+      rows: Array<{ id: string; referred_by: string | null; email: string }>
+    }>(sql`
+      SELECT id, referred_by as "referredBy", email
+      FROM users 
+      WHERE id = ${userId}
+      FOR UPDATE
+    `);
+    
+    const user = Array.isArray(userResult) ? userResult[0] : userResult.rows?.[0];
+    
+    if (!user || !user.referredBy) {
+      console.log("No referrer found for user:", userId);
+      return;
     }
+
+    // ✅ Check if this is FIRST deposit - Fixed to work without status column
+    const transactionsCountResult = await tx.execute<{
+      rows: Array<{ count: string }>
+    }>(sql`
+      SELECT COUNT(*) as count
+      FROM transactions 
+      WHERE user_id = ${userId} 
+      AND type = 'deposit'
+      AND payment_ref != ${paymentRef}
+    `);
+    
+    const previousDeposits = Array.isArray(transactionsCountResult) 
+      ? parseInt(transactionsCountResult[0]?.count || '0')
+      : 0;
+    
+    console.log(`Previous completed deposits for user ${userId}: ${previousDeposits}`);
+    
+    // ✅ Only award if this is the FIRST deposit (previous count = 0)
+    if (previousDeposits === 0) {
+      // ✅ Check minimum deposit amount (e.g., £10 minimum for referral bonus)
+      const MIN_REFERRAL_DEPOSIT = 10;
+      
+      if (amount < MIN_REFERRAL_DEPOSIT) {
+        console.log(`Deposit amount £${amount} is less than minimum £${MIN_REFERRAL_DEPOSIT} for referral bonus`);
+        return;
+      }
+      
+      // Get referrer with FOR UPDATE lock
+      const referrerResult = await tx.execute<{
+        rows: Array<{ id: string; email: string; balance: number }>
+      }>(sql`
+        SELECT id, email, balance
+        FROM users 
+        WHERE id = ${user.referredBy}
+        FOR UPDATE
+      `);
+      
+      const referrer = Array.isArray(referrerResult) ? referrerResult[0] : referrerResult.rows?.[0];
+      
+      if (!referrer) {
+        console.warn("Referrer not found:", user.referredBy);
+        return;
+      }
+      
+      const bonusAmount = 2.0;
+      
+      // ✅ Check if referral bonus already awarded - Fixed to work without status column
+      const existingReferralBonus = await tx.execute<{
+        rows: Array<{ id: string }>
+      }>(sql`
+        SELECT id
+        FROM transactions 
+        WHERE user_id = ${referrer.id} 
+        AND type = 'referral'
+        AND description LIKE ${`%${user.email}%`}
+        LIMIT 1
+      `);
+      
+      const existingBonus = Array.isArray(existingReferralBonus) 
+        ? existingReferralBonus[0] 
+        : existingReferralBonus.rows?.[0];
+      
+      if (existingBonus) {
+        console.log(`Referral bonus already awarded for user ${user.email}`);
+        return;
+      }
+      
+      // Award bonus to referrer
+      await tx.execute(sql`
+        UPDATE users
+        SET balance = balance + ${bonusAmount}
+        WHERE id = ${referrer.id}
+      `);
+      
+      // Create referral transaction - REMOVED status field
+      await tx.insert(transactions).values({
+        userId: referrer.id,
+        amount: bonusAmount,
+        type: "referral",
+        // status: "completed", // ❌ REMOVE THIS LINE
+        description: `Referral reward: ${user.email} made their first wallet top-up of £${amount}`,
+        paymentMethod: "bonus",
+        createdAt: new Date(),
+      });
+      
+      console.log(`✅ Referral bonus awarded: £${bonusAmount} to ${referrer.email} for ${user.email}'s first top-up of £${amount}`);
+    } else {
+      console.log(`Not first deposit. User has ${previousDeposits} previous deposits.`);
+    }
+  } catch (error) {
+    console.error("Error awarding referral bonus:", error);
+    // Don't throw - we don't want to fail the deposit
   }
 }
 
@@ -9049,6 +9123,7 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
       const pending = Array.isArray(pendingResult) ? pendingResult[0] : pendingResult.rows?.[0];
 
       if (pending && pending.status === "pending") {
+        // ✅ This will now handle referral bonus internally
         await processWalletTopup(
           pending.userId,
           pending.id,

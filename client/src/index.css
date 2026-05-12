@@ -1705,3 +1705,16 @@ input[type="range"]::-moz-range-thumb:hover {
     margin-bottom: 1px;
   }
  }
+
+ /* Add to your global CSS for hardware acceleration */
+.mobile-menu-panel {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Faster tap highlights */
+button, a, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}

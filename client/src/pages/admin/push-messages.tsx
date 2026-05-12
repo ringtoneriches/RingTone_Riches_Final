@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
@@ -128,25 +128,39 @@ export default function AdminPushMessages() {
   }, [statsData]);
 
   // Fetch users for selection
-  const { data: users } = useQuery<any[]>({
-    queryKey: ["/api/admin/users"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/users", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch users");
-      return res.json();
-    },
-    enabled: form.targetType === "specific_users",
-  });
-  const filteredUsers = users?.filter((user) => {
-    if (!userSearchTerm) return true;
-    const searchLower = userSearchTerm.toLowerCase();
-    return (
-      user.email?.toLowerCase().includes(searchLower) ||
-      user.firstName?.toLowerCase().includes(searchLower) ||
-      user.lastName?.toLowerCase().includes(searchLower) ||
-      `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchLower)
-    );
-  }) || [];
+  // Fetch users for selection
+const { data: usersData } = useQuery<any>({
+  queryKey: ["/api/admin/users"],
+  queryFn: async () => {
+    const res = await fetch("/api/admin/users", { credentials: "include" });
+    if (!res.ok) throw new Error("Failed to fetch users");
+    const data = await res.json();
+    return data;
+  },
+  enabled: form.targetType === "specific_users",
+});
+
+// Extract users array from response (handles { users: [...] } format)
+const users = useMemo(() => {
+  if (!usersData) return [];
+  if (Array.isArray(usersData)) return usersData;
+  if (usersData.users && Array.isArray(usersData.users)) return usersData.users;
+  if (usersData.data && Array.isArray(usersData.data)) return usersData.data;
+  return [];
+}, [usersData]);
+
+// Filter users based on search term
+const filteredUsers = users.filter((user: any) => {
+  if (!userSearchTerm) return true;
+  const searchLower = userSearchTerm.toLowerCase();
+  return (
+    user.email?.toLowerCase().includes(searchLower) ||
+    user.firstName?.toLowerCase().includes(searchLower) ||
+    user.lastName?.toLowerCase().includes(searchLower) ||
+    `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchLower)
+  );
+});
+  
 
   // Filter messages
   const filteredMessages = messages?.filter((msg) => {
