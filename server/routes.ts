@@ -14462,6 +14462,99 @@ if (search) {
     }
   }
 );
+
+app.get(
+  "/api/admin/users-notification",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { search, role } = req.query;
+      let allUsers = await db.select().from(users).orderBy(desc(users.createdAt));
+      
+      // 2️⃣ Apply search filter in JavaScript (supports "Travis Rawlings" style searches)
+      if (search) {
+        const searchTerm = (search as string).toLowerCase().trim();
+        
+        // Split search into words for partial matching (e.g., "Travis Rawlings" → ["travis", "rawlings"])
+        const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
+        
+        allUsers = allUsers.filter(user => {
+          // Check if full search term matches any single field
+          const fullMatch = 
+            user.email?.toLowerCase().includes(searchTerm) ||
+            user.firstName?.toLowerCase().includes(searchTerm) ||
+            user.lastName?.toLowerCase().includes(searchTerm) ||
+            user.phoneNumber?.toLowerCase().includes(searchTerm);
+          
+          if (fullMatch) return true;
+          
+          // For multi-word searches, check if ALL words match across firstName + lastName
+          if (searchWords.length > 1) {
+            const fullName = `${(user.firstName || '').toLowerCase()} ${(user.lastName || '').toLowerCase()}`;
+            return searchWords.every(word => fullName.includes(word));
+          }
+          
+          return false;
+        });
+      }
+      
+      // 3️⃣ Apply role filter
+      if (role === 'admin') {
+        allUsers = allUsers.filter(user => user.isAdmin === true);
+      } else if (role === 'user') {
+        allUsers = allUsers.filter(user => user.isAdmin !== true);
+      }
+      
+      // 5️⃣ Get IP addresses for all users
+      const usersWithIp = await Promise.all(
+        allUsers.map(async (user) => {
+          const latestIp = await db.query.userIpLogs.findFirst({
+            where: (l, { eq }) => eq(l.userId, user.id),
+            orderBy: (l, { desc }) => desc(l.createdAt),
+          });
+          
+          return {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            balance: user.balance,
+            phoneNumber: user.phoneNumber,
+            ringtonePoints: user.ringtonePoints,
+            isAdmin: user.isAdmin,
+            createdAt: user.createdAt,
+            addressStreet: user.addressStreet,
+            addressCity: user.addressCity,
+            addressPostcode: user.addressPostcode,
+            addressCountry: user.addressCountry,
+            notes: user.notes,
+            selfSuspended: user.selfSuspended,
+            selfSuspensionEndsAt: user.selfSuspensionEndsAt,
+            disabled: user.disabled,
+            disabledAt: user.disabledAt,
+            disabledUntil: user.disabledUntil,
+            dailySpendLimit: user.dailySpendLimit,
+            dailyLimitLastUpdatedAt: user.dailyLimitLastUpdatedAt,
+            lastIpAddress: latestIp?.ipAddress || null,
+          };
+        })
+      );
+      
+      res.json({
+        users: usersWithIp
+      });
+      
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch users",
+        error: error.message 
+      });
+    }
+  }
+);
+
   // Get single user by ID (simple version)
   app.get(
     "/api/admin/users/:id",

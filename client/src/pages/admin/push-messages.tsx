@@ -130,11 +130,12 @@ export default function AdminPushMessages() {
   // Fetch users for selection
   // Fetch users for selection
 const { data: usersData } = useQuery<any>({
-  queryKey: ["/api/admin/users"],
+  queryKey: ["/api/admin/users-notification"],
   queryFn: async () => {
-    const res = await fetch("/api/admin/users", { credentials: "include" });
+    const res = await fetch("/api/admin/users-notification", { credentials: "include" });
     if (!res.ok) throw new Error("Failed to fetch users");
     const data = await res.json();
+    // console.log(data)
     return data;
   },
   enabled: form.targetType === "specific_users",
