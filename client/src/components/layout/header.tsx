@@ -204,12 +204,16 @@ export default function Header() {
               )}
 
               <button
-                ref={menuButtonRef}
-                className="lg:hidden flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all active:scale-95"
-                onClick={toggleMobileMenu}
-                data-testid="button-mobile-menu"
-                aria-label="Menu"
-              >
+                  ref={menuButtonRef}
+                  className="lg:hidden flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all active:scale-95"
+                  onClick={toggleMobileMenu}
+                  data-testid="button-mobile-menu"
+                  aria-label="Menu"
+                  style={{ 
+                    touchAction: 'manipulation',
+                    WebkitTapHighlightColor: 'transparent'
+                  }}
+                >
                 {mobileOpen ? <X className="w-4 h-4 sm:w-5 sm:h-5" /> : <Menu className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
             </div>
@@ -219,13 +223,13 @@ export default function Header() {
 
       {/* Mobile Menu - Optimized for performance */}
       <div 
-        className={`fixed inset-0 z-[9999] lg:hidden transition-all duration-200 ${
+        className={`fixed inset-0 z-[9999] lg:hidden transition-all duration-150 ${
           mobileOpen ? 'visible' : 'invisible pointer-events-none'
         }`}
       >
         {/* Backdrop */}
         <div 
-          className={`absolute inset-0 bg-black/95 backdrop-blur-md transition-opacity duration-200 ${
+          className={`absolute inset-0 bg-black/95 backdrop-blur-md transition-opacity duration-150 ${
             mobileOpen ? 'opacity-100' : 'opacity-0'
           }`}
           onClick={closeMobileMenu}
@@ -233,7 +237,7 @@ export default function Header() {
         
         {/* Menu Panel - Slide from right for faster feel */}
         <div 
-          className={`absolute right-0 top-0 bottom-0 w-full max-w-sm bg-gradient-to-b from-gray-900 to-black shadow-2xl transition-transform duration-200 ${
+          className={`absolute right-0 top-0 bottom-0 w-full max-w-sm bg-gradient-to-b from-gray-900 to-black shadow-2xl transition-transform duration-150 ${
             mobileOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         >

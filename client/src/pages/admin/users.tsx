@@ -1,11 +1,10 @@
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, ChevronUp, ChevronDown, CheckCircle, XCircle, Download, Eye, ArrowLeft, MessageSquare } from "lucide-react";
+import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, CheckCircle, XCircle, Download, Eye, ArrowLeft, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
-import { useDebounce } from "@/hooks/useDebounce";
 import {
   Dialog,
   DialogContent,
@@ -72,7 +71,7 @@ export default function AdminUsers() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth() as { user: User | null };
   const [searchInput, setSearchInput] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [activeSearch, setActiveSearch] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
@@ -102,13 +101,24 @@ export default function AdminUsers() {
   const [ipDialogOpen, setIpDialogOpen] = useState(false);
   const [returnToSupport, setReturnToSupport] = useState<{ ticketId: string; ticketData: string } | null>(null);
 
-  // Debounce search to avoid too many requests
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchInput);
-    }, 500);
-    return () => clearTimeout(timer);
+  // Handle search submit (on button click or Enter key)
+  const handleSearchSubmit = useCallback((e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setActiveSearch(searchInput.trim());
   }, [searchInput]);
+
+  // Handle Enter key press in search input
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearchSubmit();
+    }
+  }, [handleSearchSubmit]);
+
+  // Clear search
+  const handleClearSearch = useCallback(() => {
+    setSearchInput("");
+    setActiveSearch("");
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -118,7 +128,9 @@ export default function AdminUsers() {
     const ticketData = params.get("ticketData");
     
     if (searchParam) {
-      setSearchInput(decodeURIComponent(searchParam));
+      const decoded = decodeURIComponent(searchParam);
+      setSearchInput(decoded);
+      setActiveSearch(decoded);
     }
     
     if (returnTo === "support" && ticketId && ticketData) {
@@ -155,7 +167,7 @@ export default function AdminUsers() {
     return { dateFrom, dateTo };
   }, [dateFilter, customDateFrom, customDateTo]);
 
-  // Fetch cashflow transactions (keep as is)
+  // Fetch cashflow transactions
   const { data: cashflowTransactions = [] } = useQuery<Transaction[]>({
     queryKey: ["/api/admin/users/cashflow-transactions"],
   });
@@ -167,16 +179,15 @@ export default function AdminUsers() {
     hasNextPage,
     isFetchingNextPage,
     isLoading,
-    refetch,
   } = useInfiniteQuery<PaginatedUsersResponse>({
-    queryKey: ["/api/admin/users", dateFrom, dateTo, debouncedSearch, roleFilter],
+    queryKey: ["/api/admin/users", dateFrom, dateTo, activeSearch, roleFilter],
     queryFn: async ({ pageParam = 1 }) => {
       const url = new URL("/api/admin/users", window.location.origin);
       url.searchParams.append("page", pageParam.toString());
       url.searchParams.append("limit", "30");
       if (dateFrom) url.searchParams.append("dateFrom", dateFrom);
       if (dateTo) url.searchParams.append("dateTo", dateTo);
-      if (debouncedSearch) url.searchParams.append("search", debouncedSearch);
+      if (activeSearch) url.searchParams.append("search", activeSearch);
       if (roleFilter !== "all") url.searchParams.append("role", roleFilter);
       
       const res = await fetch(url.toString(), { credentials: "include" });
@@ -224,18 +235,18 @@ export default function AdminUsers() {
     return userTx ? parseFloat(userTx.totalCashflow).toFixed(2) : "0.00";
   };
 
-  // Export function (exports all data via server)
+  // Export function
   const handleExportCSV = async () => {
     const url = new URL("/api/admin/users/export", window.location.origin);
     if (dateFrom) url.searchParams.append("dateFrom", dateFrom);
     if (dateTo) url.searchParams.append("dateTo", dateTo);
-    if (debouncedSearch) url.searchParams.append("search", debouncedSearch);
+    if (activeSearch) url.searchParams.append("search", activeSearch);
     if (roleFilter !== "all") url.searchParams.append("role", roleFilter);
     
     window.open(url.toString(), '_blank');
   };
 
-  // Mutations (same as before)
+  // Mutations
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
       const res = await apiRequest(`/api/admin/users/${id}`, "PUT", data);
@@ -571,177 +582,216 @@ export default function AdminUsers() {
             <option value="user">Users Only</option>
           </select>
           
-          <div className="relative flex-1">
-            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 sm:w-5 sm:h-5" />
-            <Input
-              placeholder="Search users by email, name, or phone number..."
-              value={searchInput}
-              autoComplete="off"
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="pl-8 sm:pl-10 text-sm sm:text-base"
-            />
-          </div>
+          <form onSubmit={handleSearchSubmit} className="relative flex-1 flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 sm:w-5 sm:h-5" />
+              <Input
+                placeholder="Type full name or email, then press Search..."
+                value={searchInput}
+                autoComplete="off"
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                className="pl-8 sm:pl-10 text-sm sm:text-base pr-8"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <XCircle className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <Button 
+              type="submit" 
+              variant="default"
+              size="sm"
+              className="shrink-0"
+            >
+              <Search className="w-4 h-4 mr-1" />
+              Search
+            </Button>
+            {activeSearch && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleClearSearch}
+                className="shrink-0 text-xs"
+              >
+                Clear
+              </Button>
+            )}
+          </form>
         </div>
 
-       {/* Mobile Cards View with Infinite Scroll - FIXED */}
-<div className="block md:hidden space-y-3">
-  {/* Add a loading spinner at the top while fetching first page */}
-  {isFetchingNextPage && allUsers.length === 0 && (
-    <Card className="p-8 text-center">
-      <div className="flex justify-center items-center gap-2">
-        <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
-        <span className="text-sm text-muted-foreground">Loading users...</span>
-      </div>
-    </Card>
-  )}
-  
-  {allUsers.map((user, index) => {
-    // Attach observer to last 3 items for better mobile detection
-    const isNearEnd = index >= allUsers.length - 3;
-    return (
-      <Card 
-        key={user.id} 
-        ref={isNearEnd ? loadMoreRef : null}
-        className="p-4"
-      >
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex justify-between items-start">
-              <div>
-                <div className="text-sm font-medium text-foreground break-all">{user.email}</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {user.firstName} {user.lastName || ""}
+        {/* Active search indicator */}
+        {activeSearch && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-lg">
+            <Search className="w-3 h-3" />
+            <span>
+              Searching for: <strong className="text-foreground">"{activeSearch}"</strong>
+            </span>
+            <span className="text-xs">({totalUsers} results)</span>
+          </div>
+        )}
+
+        {/* Mobile Cards View with Infinite Scroll */}
+        <div className="block md:hidden space-y-3">
+          {isFetchingNextPage && allUsers.length === 0 && (
+            <Card className="p-8 text-center">
+              <div className="flex justify-center items-center gap-2">
+                <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
+                <span className="text-sm text-muted-foreground">Loading users...</span>
+              </div>
+            </Card>
+          )}
+          
+          {allUsers.map((user, index) => {
+            const isNearEnd = index >= allUsers.length - 3;
+            return (
+              <Card 
+                key={user.id} 
+                ref={isNearEnd ? loadMoreRef : null}
+                className="p-4"
+              >
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="text-sm font-medium text-foreground break-all">{user.email}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {user.firstName} {user.lastName || ""}
+                        </div>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium shrink-0 ml-2 ${
+                        user.isAdmin ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
+                      }`}>
+                        {user.isAdmin ? "Admin" : "User"}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        user.disabled ? "bg-red-500/20 text-red-500" : "bg-green-500/20 text-green-500"
+                      }`}>
+                        {user.disabled ? "Disabled" : "Active"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(user.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Phone</div>
+                      <div className="font-medium break-all">{user.phoneNumber || "-"}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Cashflow</div>
+                      <div className="font-medium">£{getCashflowTotal(user.id)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Balance</div>
+                      <div className="font-medium text-primary">£{parseFloat(user.balance).toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Points</div>
+                      <div className="font-medium">{user.ringtonePoints}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLocation(`/admin/users/${user.id}`)}
+                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 text-xs px-2"
+                    >
+                      <FileText className="w-3 h-3 mr-1" />
+                      Audit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(user)}
+                      className="text-xs px-2"
+                    >
+                      <Edit className="w-3 h-3 mr-1" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setUserToDisable(user);
+                        setIsDisableDialogOpen(true);
+                      }}
+                      className={`text-xs px-2 ${
+                        user.disabled 
+                          ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                          : "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+                      }`}
+                    >
+                      {user.disabled ? (
+                        <>
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Enable
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-3 h-3 mr-1" />
+                          Disable
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteUser(user)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs px-2"
+                    >
+                      <Trash2 className="w-3 h-3 mr-1" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+          
+          {isFetchingNextPage && allUsers.length > 0 && (
+            <Card className="p-4 text-center">
+              <div className="flex justify-center items-center gap-2">
+                <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
+                <span className="text-sm text-muted-foreground">Loading more users...</span>
+              </div>
+            </Card>
+          )}
+          
+          {hasNextPage && !isFetchingNextPage && allUsers.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => fetchNextPage()}
+              className="w-full py-6"
+            >
+              Load More Users ({allUsers.length} of {totalUsers})
+            </Button>
+          )}
+          
+          {allUsers.length === 0 && !isLoading && (
+            <Card className="p-8 text-center">
+              <div className="flex flex-col items-center justify-center">
+                <div className="text-base sm:text-lg font-medium">No users found</div>
+                <div className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Try adjusting your search or filters
                 </div>
               </div>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium shrink-0 ml-2 ${
-                user.isAdmin ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
-              }`}>
-                {user.isAdmin ? "Admin" : "User"}
-              </span>
-            </div>
-            
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                user.disabled ? "bg-red-500/20 text-red-500" : "bg-green-500/20 text-green-500"
-              }`}>
-                {user.disabled ? "Disabled" : "Active"}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {new Date(user.createdAt).toLocaleDateString()}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <div className="text-xs text-muted-foreground mb-1">Phone</div>
-              <div className="font-medium break-all">{user.phoneNumber || "-"}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground mb-1">Cashflow</div>
-              <div className="font-medium">£{getCashflowTotal(user.id)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground mb-1">Balance</div>
-              <div className="font-medium text-primary">£{parseFloat(user.balance).toFixed(2)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground mb-1">Points</div>
-              <div className="font-medium">{user.ringtonePoints}</div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation(`/admin/users/${user.id}`)}
-              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 text-xs px-2"
-            >
-              <FileText className="w-3 h-3 mr-1" />
-              Audit
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleEdit(user)}
-              className="text-xs px-2"
-            >
-              <Edit className="w-3 h-3 mr-1" />
-              Edit
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setUserToDisable(user);
-                setIsDisableDialogOpen(true);
-              }}
-              className={`text-xs px-2 ${
-                user.disabled 
-                  ? "text-green-600 hover:text-green-700 hover:bg-green-50"
-                  : "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
-              }`}
-            >
-              {user.disabled ? (
-                <>
-                  <CheckCircle className="w-3 h-3 mr-1" />
-                  Enable
-                </>
-              ) : (
-                <>
-                  <XCircle className="w-3 h-3 mr-1" />
-                  Disable
-                </>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleDeleteUser(user)}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs px-2"
-            >
-              <Trash2 className="w-3 h-3 mr-1" />
-              Delete
-            </Button>
-          </div>
+            </Card>
+          )}
         </div>
-      </Card>
-    );
-  })}
-  
-  {/* Loading indicator at bottom */}
-  {isFetchingNextPage && allUsers.length > 0 && (
-    <Card className="p-4 text-center">
-      <div className="flex justify-center items-center gap-2">
-        <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
-        <span className="text-sm text-muted-foreground">Loading more users...</span>
-      </div>
-    </Card>
-  )}
-  
-  {/* "Load More" button as fallback for mobile */}
-  {hasNextPage && !isFetchingNextPage && allUsers.length > 0 && (
-    <Button
-      variant="outline"
-      onClick={() => fetchNextPage()}
-      className="w-full py-6"
-    >
-      Load More Users ({allUsers.length} of {totalUsers})
-    </Button>
-  )}
-  
-  {allUsers.length === 0 && !isLoading && (
-    <Card className="p-8 text-center">
-      <div className="flex flex-col items-center justify-center">
-        <div className="text-base sm:text-lg font-medium">No users found</div>
-        <div className="text-xs sm:text-sm text-muted-foreground mt-1">
-          Try adjusting your search or filters
-        </div>
-      </div>
-    </Card>
-  )}
-</div>
 
         {/* Desktop Table View with Infinite Scroll */}
         <div className="hidden md:block bg-card border border-border rounded-lg overflow-hidden">
@@ -876,7 +926,6 @@ export default function AdminUsers() {
                   );
                 })}
                 
-                {/* Loading indicator row */}
                 {isFetchingNextPage && (
                   <tr>
                     <td colSpan={10} className="text-center py-4">
@@ -908,7 +957,6 @@ export default function AdminUsers() {
           </p>
         )}
 
-        {/* All Dialogs (same as before) */}
         {/* IP Address Details Dialog */}
         <Dialog open={ipDialogOpen} onOpenChange={setIpDialogOpen}>
           <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
@@ -979,21 +1027,12 @@ export default function AdminUsers() {
         {/* Edit User Dialog */}
         <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
           <DialogContent className="max-h-[90vh] overflow-y-auto max-w-full sm:max-w-2xl p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-lg sm:text-xl">Edit User</DialogTitle>
-            <DialogDescription className="text-sm">
-              Update user details, credentials, and permissions
-            </DialogDescription>
-            <div className="w-full flex">
-              <Button 
-                onClick={handleUpdate} 
-                disabled={updateMutation.isPending}
-                className="ml-auto w-fit sm:w-auto text-xs sm:text-sm"
-              >
-                {updateMutation.isPending ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </DialogHeader>
+            <DialogHeader>
+              <DialogTitle className="text-lg sm:text-xl">Edit User</DialogTitle>
+              <DialogDescription className="text-sm">
+                Update user details, credentials, and permissions
+              </DialogDescription>
+            </DialogHeader>
             <div className="space-y-4">
               <div>
                 <Label className="text-sm sm:text-base">Email</Label>
@@ -1075,7 +1114,6 @@ export default function AdminUsers() {
                   className="text-sm sm:text-base min-h-[80px]"
                 />
               </div>
-              {/* Address Information */}
               {(editingUser?.addressStreet || editingUser?.addressCity || editingUser?.addressPostcode) && (
                 <div className="space-y-3 border-t pt-4">
                   <Label className="text-base font-semibold">Delivery Address</Label>

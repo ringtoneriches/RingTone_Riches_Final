@@ -14369,16 +14369,32 @@ app.get(
       
       let allUsers = await query.orderBy(desc(users.createdAt));
       
-      // 2️⃣ Apply search filter in JavaScript (like your original)
-      if (search) {
-        const searchLower = (search as string).toLowerCase();
-        allUsers = allUsers.filter(user => 
-          user.email?.toLowerCase().includes(searchLower) ||
-          user.firstName?.toLowerCase().includes(searchLower) ||
-          user.lastName?.toLowerCase().includes(searchLower) ||
-          user.phoneNumber?.toLowerCase().includes(searchLower)
-        );
-      }
+      // 2️⃣ Apply search filter in JavaScript (supports "Travis Rawlings" style searches)
+if (search) {
+  const searchTerm = (search as string).toLowerCase().trim();
+  
+  // Split search into words for partial matching (e.g., "Travis Rawlings" → ["travis", "rawlings"])
+  const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
+  
+  allUsers = allUsers.filter(user => {
+    // Check if full search term matches any single field
+    const fullMatch = 
+      user.email?.toLowerCase().includes(searchTerm) ||
+      user.firstName?.toLowerCase().includes(searchTerm) ||
+      user.lastName?.toLowerCase().includes(searchTerm) ||
+      user.phoneNumber?.toLowerCase().includes(searchTerm);
+    
+    if (fullMatch) return true;
+    
+    // For multi-word searches, check if ALL words match across firstName + lastName
+    if (searchWords.length > 1) {
+      const fullName = `${(user.firstName || '').toLowerCase()} ${(user.lastName || '').toLowerCase()}`;
+      return searchWords.every(word => fullName.includes(word));
+    }
+    
+    return false;
+  });
+}
       
       // 3️⃣ Apply role filter
       if (role === 'admin') {
