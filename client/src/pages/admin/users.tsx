@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, CheckCircle, XCircle, Download, Eye, ArrowLeft, MessageSquare } from "lucide-react";
+import { Edit, Trash2, Search, AlertTriangle, Calendar, FileText, CheckCircle, XCircle, Download, Eye, ArrowLeft, MessageSquare, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -66,6 +66,8 @@ interface PaginatedUsersResponse {
 }
 
 type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
+type SortField = "email" | "firstName" | "lastName" | "phoneNumber" | "balance" | "ringtonePoints" | "createdAt" | "disabled" | "lastIpAddress";
+type SortDirection = "asc" | "desc";
 
 export default function AdminUsers() {
   const { toast } = useToast();
@@ -100,6 +102,10 @@ export default function AdminUsers() {
   const [selectedIpUser, setSelectedIpUser] = useState<User | null>(null);
   const [ipDialogOpen, setIpDialogOpen] = useState(false);
   const [returnToSupport, setReturnToSupport] = useState<{ ticketId: string; ticketData: string } | null>(null);
+  
+  // Sort state
+  const [sortField, setSortField] = useState<SortField>("createdAt");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   // Handle search submit (on button click or Enter key)
   const handleSearchSubmit = useCallback((e?: React.FormEvent) => {
@@ -228,11 +234,80 @@ export default function AdminUsers() {
     return data.pages.flatMap((page) => page.users);
   }, [data]);
 
+  // Sort users
+  const sortedUsers = useMemo(() => {
+    if (!allUsers.length) return [];
+    
+    return [...allUsers].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortField) {
+        case "email":
+          comparison = a.email.localeCompare(b.email);
+          break;
+        case "firstName":
+          const firstNameA = a.firstName || "";
+          const firstNameB = b.firstName || "";
+          comparison = firstNameA.localeCompare(firstNameB);
+          break;
+        case "lastName":
+          const lastNameA = a.lastName || "";
+          const lastNameB = b.lastName || "";
+          comparison = lastNameA.localeCompare(lastNameB);
+          break;
+        case "phoneNumber":
+          const phoneA = a.phoneNumber || "";
+          const phoneB = b.phoneNumber || "";
+          comparison = phoneA.localeCompare(phoneB);
+          break;
+        case "balance":
+          comparison = parseFloat(a.balance) - parseFloat(b.balance);
+          break;
+        case "ringtonePoints":
+          comparison = a.ringtonePoints - b.ringtonePoints;
+          break;
+        case "createdAt":
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+        case "disabled":
+          comparison = (a.disabled ? 1 : 0) - (b.disabled ? 1 : 0);
+          break;
+        case "lastIpAddress":
+          const ipA = a.lastIpAddress || "";
+          const ipB = b.lastIpAddress || "";
+          comparison = ipA.localeCompare(ipB);
+          break;
+      }
+      
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [allUsers, sortField, sortDirection]);
+
   const totalUsers = data?.pages[0]?.pagination.total || 0;
 
   const getCashflowTotal = (userId: string) => {
     const userTx = cashflowTransactions.find(tx => tx.userId === userId);
     return userTx ? parseFloat(userTx.totalCashflow).toFixed(2) : "0.00";
+  };
+
+  // Handle sort click
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Get sort icon
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="w-3 h-3 sm:w-4 sm:h-4 ml-1 opacity-50" />;
+    }
+    return sortDirection === "asc" 
+      ? <ArrowUp className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
+      : <ArrowDown className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />;
   };
 
   // Export function
@@ -466,6 +541,19 @@ export default function AdminUsers() {
     }
   };
 
+  // Reusable sortable header component
+  const SortableHeader = ({ field, label }: { field: SortField; label: string }) => (
+    <th 
+      className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center">
+        {label}
+        {getSortIcon(field)}
+      </div>
+    </th>
+  );
+
   if (isLoading) {
     return (
       <AdminLayout>
@@ -637,9 +725,15 @@ export default function AdminUsers() {
           </div>
         )}
 
+        {/* Sort indicator */}
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <ArrowUpDown className="w-3 h-3" />
+          <span>Sorted by: <strong className="text-foreground">{sortField}</strong> ({sortDirection === "asc" ? "ascending" : "descending"})</span>
+        </div>
+
         {/* Mobile Cards View with Infinite Scroll */}
         <div className="block md:hidden space-y-3">
-          {isFetchingNextPage && allUsers.length === 0 && (
+          {isFetchingNextPage && sortedUsers.length === 0 && (
             <Card className="p-8 text-center">
               <div className="flex justify-center items-center gap-2">
                 <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
@@ -648,8 +742,8 @@ export default function AdminUsers() {
             </Card>
           )}
           
-          {allUsers.map((user, index) => {
-            const isNearEnd = index >= allUsers.length - 3;
+          {sortedUsers.map((user, index) => {
+            const isNearEnd = index >= sortedUsers.length - 3;
             return (
               <Card 
                 key={user.id} 
@@ -762,7 +856,7 @@ export default function AdminUsers() {
             );
           })}
           
-          {isFetchingNextPage && allUsers.length > 0 && (
+          {isFetchingNextPage && sortedUsers.length > 0 && (
             <Card className="p-4 text-center">
               <div className="flex justify-center items-center gap-2">
                 <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
@@ -771,17 +865,17 @@ export default function AdminUsers() {
             </Card>
           )}
           
-          {hasNextPage && !isFetchingNextPage && allUsers.length > 0 && (
+          {hasNextPage && !isFetchingNextPage && sortedUsers.length > 0 && (
             <Button
               variant="outline"
               onClick={() => fetchNextPage()}
               className="w-full py-6"
             >
-              Load More Users ({allUsers.length} of {totalUsers})
+              Load More Users ({sortedUsers.length} of {totalUsers})
             </Button>
           )}
           
-          {allUsers.length === 0 && !isLoading && (
+          {sortedUsers.length === 0 && !isLoading && (
             <Card className="p-8 text-center">
               <div className="flex flex-col items-center justify-center">
                 <div className="text-base sm:text-lg font-medium">No users found</div>
@@ -799,21 +893,25 @@ export default function AdminUsers() {
             <table className="w-full min-w-[900px]">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">Email</th>
-                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">Name</th>
-                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">Phone</th>
-                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">Cashflow</th>
-                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">Balance</th>
-                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">Points</th>
-                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">IP Address</th>
-                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">Joined</th>
-                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">Status</th>
-                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">Actions</th>
+                  <SortableHeader field="email" label="Email" />
+                  <SortableHeader field="firstName" label="Name" />
+                  <SortableHeader field="phoneNumber" label="Phone" />
+                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                    Cashflow
+                  </th>
+                  <SortableHeader field="balance" label="Balance" />
+                  <SortableHeader field="ringtonePoints" label="Points" />
+                  <SortableHeader field="lastIpAddress" label="IP Address" />
+                  <SortableHeader field="createdAt" label="Joined" />
+                  <SortableHeader field="disabled" label="Status" />
+                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {allUsers.map((user, index) => {
-                  const isLastRow = index === allUsers.length - 1;
+                {sortedUsers.map((user, index) => {
+                  const isLastRow = index === sortedUsers.length - 1;
                   return (
                     <tr 
                       key={user.id} 
@@ -937,7 +1035,7 @@ export default function AdminUsers() {
                   </tr>
                 )}
                 
-                {allUsers.length === 0 && !isLoading && (
+                {sortedUsers.length === 0 && !isLoading && (
                   <tr>
                     <td colSpan={10} className="text-center py-8 text-muted-foreground">
                       No users found for selected filters
@@ -950,9 +1048,9 @@ export default function AdminUsers() {
         </div>
 
         {/* Stats Footer */}
-        {allUsers.length > 0 && (
+        {sortedUsers.length > 0 && (
           <p className="text-center text-xs sm:text-sm text-muted-foreground">
-            Showing {allUsers.length} of {totalUsers} users
+            Showing {sortedUsers.length} of {totalUsers} users
             {hasNextPage && " - Scroll down to load more"}
           </p>
         )}
@@ -1032,6 +1130,16 @@ export default function AdminUsers() {
               <DialogDescription className="text-sm">
                 Update user details, credentials, and permissions
               </DialogDescription>
+                <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
+              
+              <Button 
+                onClick={handleUpdate} 
+                disabled={updateMutation.isPending}
+                className="w-full sm:w-auto text-sm sm:text-base"
+              >
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
             </DialogHeader>
             <div className="space-y-4">
               <div>
