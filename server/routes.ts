@@ -11009,6 +11009,10 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
 
       // Apply date filtering
       const conditions = [];
+      
+      // Filter out archived competitions at the database level
+      conditions.push(eq(competitions.isActive, true));
+      
       if (dateFrom) {
         conditions.push(gte(tickets.createdAt, new Date(dateFrom as string)));
       }
@@ -11055,6 +11059,7 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
                 id: entry.competitions.id,
                 title: entry.competitions.title,
                 type: entry.competitions.type,
+                isActive: entry.competitions.isActive, // Add this line
               }
             : null,
           isWinner: entry.tickets.isWinner,

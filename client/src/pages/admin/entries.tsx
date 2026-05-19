@@ -47,6 +47,7 @@ interface Entry {
     id: string;
     title: string;
     type: string;
+    isActive: boolean; 
   } | null;
   isWinner: boolean;
   prizeAmount: string;
@@ -157,35 +158,41 @@ export default function AdminEntriesPage() {
     ).values()
   );
 
-  // Client-side filtering for instant search (no reload)
-  const filteredEntries = useMemo(() => {
-    return entries.filter((entry) => {
-      if (!entry.user || !entry.competition) return false;
+
+// Client-side filtering for instant search (no reload)
+const filteredEntries = useMemo(() => {
+  return entries.filter((entry) => {
+    if (!entry.user || !entry.competition) return false;
+    
+    // Filter out archived competitions
+    // Assuming archived competitions have isActive set to false
+    // You may need to check the actual property name from your API
+    if (entry.competition.isActive === false) return false;
+    
+    // Competition filter
+    const matchesCompetition =
+      competitionFilter === "all" || entry.competition.id === competitionFilter;
+    if (!matchesCompetition) return false;
+    
+    // Search filter (instant, client-side)
+    if (searchInput.trim()) {
+      const searchLower = searchInput.toLowerCase().trim();
+      const ticketNumber = entry.ticketNumber?.toLowerCase() || "";
+      const userName = `${entry.user.firstName || ""} ${entry.user.lastName || ""}`.toLowerCase().trim();
+      const email = entry.user.email?.toLowerCase() || "";
+      const competitionTitle = entry.competition.title?.toLowerCase() || "";
       
-      // Competition filter
-      const matchesCompetition =
-        competitionFilter === "all" || entry.competition.id === competitionFilter;
-      if (!matchesCompetition) return false;
-      
-      // Search filter (instant, client-side)
-      if (searchInput.trim()) {
-        const searchLower = searchInput.toLowerCase().trim();
-        const ticketNumber = entry.ticketNumber?.toLowerCase() || "";
-        const userName = `${entry.user.firstName || ""} ${entry.user.lastName || ""}`.toLowerCase().trim();
-        const email = entry.user.email?.toLowerCase() || "";
-        const competitionTitle = entry.competition.title?.toLowerCase() || "";
-        
-        return (
-          ticketNumber.includes(searchLower) ||
-          userName.includes(searchLower) ||
-          email.includes(searchLower) ||
-          competitionTitle.includes(searchLower)
-        );
-      }
-      
-      return true;
-    });
-  }, [entries, competitionFilter, searchInput]);
+      return (
+        ticketNumber.includes(searchLower) ||
+        userName.includes(searchLower) ||
+        email.includes(searchLower) ||
+        competitionTitle.includes(searchLower)
+      );
+    }
+    
+    return true;
+  });
+}, [entries, competitionFilter, searchInput]);
 
   const totalPages = Math.ceil(filteredEntries.length / itemsPerPage);
 const startIndex = (currentPage - 1) * itemsPerPage;
