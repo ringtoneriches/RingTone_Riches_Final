@@ -10,27 +10,21 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import scratchSoundFile from "../../../../attached_assets/assets_sounds_sound_scratch.mp3";
-import BarrierReef from "../../../../attached_assets/Land Mark/Barrier Reef.webp";
-import AngleOfNorth from "../../../../attached_assets/Land Mark/Angel of North.webp";
-import BigBen from "../../../../attached_assets/Land Mark/Big Ben.webp";
-import BuckinghamPalace from "../../../../attached_assets/Land Mark/Buckingham palace.webp";
-import Burj from "../../../../attached_assets/Land Mark/Burj.webp";
-import colosseum from "../../../../attached_assets/Land Mark/colosseum.webp";
-import EiffelTower from "../../../../attached_assets/Land Mark/Eiifel Tow.webp";
-import EmpireState from "../../../../attached_assets/Land Mark/Empire State.webp";
-import GoldenGate from "../../../../attached_assets/Land Mark/Golden Gate.webp";
-import GrandCanyon from "../../../../attached_assets/Land Mark/Grand Canyon.webp";
-import GreatWallOfChina from "../../../../attached_assets/Land Mark/Great Wall of China.webp";
-import MountEverest from "../../../../attached_assets/Land Mark/Mount Ever.webp";
-import NotreDame from "../../../../attached_assets/Land Mark/Notre Dame.webp";
-import PayramidsOfPisa from "../../../../attached_assets/Land Mark/Pyramids of Pisa.webp";
-import StatueOfLiberty from "../../../../attached_assets/Land Mark/Statue Of Liber.webp";
-import StoneH from "../../../../attached_assets/Land Mark/Stone H.webp";
-import TajMahal from "../../../../attached_assets/Land Mark/Taj Ma.webp";
-import TimesSquare from "../../../../attached_assets/Land Mark/Times S.webp";
-import TowerBridge from "../../../../attached_assets/Land Mark/Tower Bridge.webp";
-import TowerOfPisa from "../../../../attached_assets/Land Mark/Tower of Pisa.webp";
-import TryAgain from "../../../../attached_assets/Land Mark/tryAgain.jpg";
+import beach_ball from "../../../../attached_assets/Land Mark/beach_ball.webp";
+import beach_chair from "../../../../attached_assets/Land Mark/beach_chair.webp";
+import coconut from "../../../../attached_assets/Land Mark/coconut.webp";
+import crab from "../../../../attached_assets/Land Mark/crab.webp";
+import hat from "../../../../attached_assets/Land Mark/hat.webp";
+import heat from "../../../../attached_assets/Land Mark/heat.webp";
+import ice_cream from "../../../../attached_assets/Land Mark/ice_cream.webp";
+import palm_tree from "../../../../attached_assets/Land Mark/palm_tree.webp";
+import shirt from "../../../../attached_assets/Land Mark/shirt.webp";
+import sun from "../../../../attached_assets/Land Mark/sun.webp";
+import sun_block from "../../../../attached_assets/Land Mark/sun_block.webp";
+import swim_ring from "../../../../attached_assets/Land Mark/swim_ring.webp";
+import umbrella from "../../../../attached_assets/Land Mark/umbrella.webp";
+import watermelon from "../../../../attached_assets/Land Mark/watermelon.webp";
+import wine_glass from "../../../../attached_assets/Land Mark/wine_glass.webp";
 import scratchBackgroundVideo from "../../../../attached_assets/scratchbg.mp4";
 import confetti from 'canvas-confetti';
 
@@ -54,27 +48,21 @@ const AUTO_CLEAR_THRESHOLD = 0.60; // ✅ Changed from 0.7 to 0.85
 const SAMPLE_GAP = 4;
 
 const landmarkImages = [
-  { name: "Barrier Reef", src: BarrierReef },
-  { name: "Angel of the North", src: AngleOfNorth },
-  { name: "Big Ben", src: BigBen },
-  { name: "Buckingham Palace", src: BuckinghamPalace },
-  { name: "Burj Khalifa", src: Burj },
-  { name: "Colosseum", src: colosseum },
-  { name: "Eiffel Tower", src: EiffelTower },
-  { name: "Empire State", src: EmpireState },
-  { name: "Golden Gate Bridge", src: GoldenGate },
-  { name: "Grand Canyon", src: GrandCanyon },
-  { name: "Great Wall of China", src: GreatWallOfChina },
-  { name: "Mount Everest", src: MountEverest },
-  { name: "Notre Dame", src: NotreDame },
-  { name: "Pyramids of Pisa", src: PayramidsOfPisa },
-  { name: "Statue of Liberty", src: StatueOfLiberty },
-  { name: "Stonehenge", src: StoneH },
-  { name: "Taj Mahal", src: TajMahal },
-  { name: "Times Square", src: TimesSquare },
-  { name: "Tower Bridge", src: TowerBridge },
-  { name: "Tower of Pisa", src: TowerOfPisa },
-  // { name: "Try Again", src: TryAgain },
+  { name: "Beach Ball", src: beach_ball },
+  { name: "Beach Chair", src: beach_chair },
+  { name: "Coconut", src: coconut },
+  { name: "Crab", src: crab },
+  { name: "Hat", src: hat },
+  { name: "Heat", src: heat },
+  { name: "Ice Cream", src: ice_cream },
+  { name: "Palm Tree", src: palm_tree },
+  { name: "Shirt", src: shirt },
+  { name: "Sun", src: sun },
+  { name: "Sun Block", src: sun_block },
+  { name: "Swim Ring", src: swim_ring },
+  { name: "Umbrella", src: umbrella },
+  { name: "Watermelon", src: watermelon },
+  { name: "Wine Glass", src: wine_glass },
 ];
 
 function normalizeName(str: string) {
