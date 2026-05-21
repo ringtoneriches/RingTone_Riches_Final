@@ -10,21 +10,21 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import scratchSoundFile from "../../../../attached_assets/assets_sounds_sound_scratch.mp3";
-import beach_ball from "../../../../attached_assets/Land Mark/beach_ball.webp";
-import beach_chair from "../../../../attached_assets/Land Mark/beach_chair.webp";
-import coconut from "../../../../attached_assets/Land Mark/coconut.webp";
-import crab from "../../../../attached_assets/Land Mark/crab.webp";
-import hat from "../../../../attached_assets/Land Mark/hat.webp";
-import heat from "../../../../attached_assets/Land Mark/heat.webp";
-import ice_cream from "../../../../attached_assets/Land Mark/ice_cream.webp";
-import palm_tree from "../../../../attached_assets/Land Mark/palm_tree.webp";
-import shirt from "../../../../attached_assets/Land Mark/shirt.webp";
-import sun from "../../../../attached_assets/Land Mark/sun.webp";
-import sun_block from "../../../../attached_assets/Land Mark/sun_block.webp";
-import swim_ring from "../../../../attached_assets/Land Mark/swim_ring.webp";
-import umbrella from "../../../../attached_assets/Land Mark/umbrella.webp";
-import watermelon from "../../../../attached_assets/Land Mark/watermelon.webp";
-import wine_glass from "../../../../attached_assets/Land Mark/wine_glass.webp";
+import beach_ball from "../../../../attached_assets/Land Mark/beach_ball.png";
+import beach_chair from "../../../../attached_assets/Land Mark/beach_chair.png";
+import coconut from "../../../../attached_assets/Land Mark/coconut.png";
+import crab from "../../../../attached_assets/Land Mark/crab.png";
+import hat from "../../../../attached_assets/Land Mark/hat.png";
+import heat from "../../../../attached_assets/Land Mark/heat.png";
+import ice_cream from "../../../../attached_assets/Land Mark/ice_cream.png";
+import palm_tree from "../../../../attached_assets/Land Mark/palm_tree.png";
+import shirt from "../../../../attached_assets/Land Mark/shirt.png";
+import sun from "../../../../attached_assets/Land Mark/sun.png";
+import sun_block from "../../../../attached_assets/Land Mark/sun_block.png";
+import swim_ring from "../../../../attached_assets/Land Mark/swim_ring.png";
+import umbrella from "../../../../attached_assets/Land Mark/umbrella.png";
+import watermelon from "../../../../attached_assets/Land Mark/watermelon.png";
+import wine_glass from "../../../../attached_assets/Land Mark/wine_glass.png";
 import scratchBackgroundVideo from "../../../../attached_assets/scratchbg.mp4";
 import confetti from 'canvas-confetti';
 
