@@ -52,6 +52,8 @@ interface User {
   dailySpendLimit: string | null;
   dailyLimitLastUpdatedAt: string | null;
   lastIpAddress?: string | null;
+    selfSuspended?: boolean;        // Add this
+  selfSuspensionEndsAt?: string | null; 
 }
 
 interface PaginatedUsersResponse {
@@ -102,7 +104,7 @@ export default function AdminUsers() {
   const [selectedIpUser, setSelectedIpUser] = useState<User | null>(null);
   const [ipDialogOpen, setIpDialogOpen] = useState(false);
   const [returnToSupport, setReturnToSupport] = useState<{ ticketId: string; ticketData: string } | null>(null);
-  
+  const [isExporting, setIsExporting] = useState(false);
   // Sort state
   const [sortField, setSortField] = useState<SortField>("createdAt");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
@@ -310,16 +312,146 @@ export default function AdminUsers() {
       : <ArrowDown className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />;
   };
 
-  // Export function
-  const handleExportCSV = async () => {
-    const url = new URL("/api/admin/users/export", window.location.origin);
-    if (dateFrom) url.searchParams.append("dateFrom", dateFrom);
-    if (dateTo) url.searchParams.append("dateTo", dateTo);
+  // Replace the entire handleExportCSV function with this:
+const handleExportCSV = useCallback(async () => {
+  if (isExporting) return; // Prevent double clicks
+  
+  setIsExporting(true);
+  try {
+    toast({
+      title: "Preparing Export",
+      description: "Fetching all users for export...",
+    });
+
+    // Fetch all users using the notification endpoint (no pagination)
+    const url = new URL("/api/admin/users-notification", window.location.origin);
     if (activeSearch) url.searchParams.append("search", activeSearch);
     if (roleFilter !== "all") url.searchParams.append("role", roleFilter);
+
+    const response = await fetch(url.toString(), { credentials: "include" });
+    if (!response.ok) {
+      throw new Error("Failed to fetch users for export");
+    }
+
+    const data = await response.json();
+    const allUsers = data.users;
+
+    if (!allUsers || allUsers.length === 0) {
+      toast({
+        title: "No data to export",
+        description: "There are no users to export with the current filters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Get cashflow transactions for all users
+    const cashflowResponse = await fetch("/api/admin/users/cashflow-transactions", { 
+      credentials: "include" 
+    });
+    const cashflowTransactions = cashflowResponse.ok ? await cashflowResponse.json() : [];
+
+    // Define CSV headers
+    const headers = [
+      'Email',
+      'First Name',
+      'Last Name',
+      'Phone',
+      'Balance',
+      'Ringtone Points',
+      'Cashflow Total',
+      'Role',
+      'Status',
+      'Joined Date',
+      'Last IP Address',
+      'Street',
+      'City',
+      'Postcode',
+      'Country',
+      'Disabled Until',
+      'Self Suspended',
+      'Self Suspension Ends',
+      'Daily Spend Limit',
+      'Notes',
+    ];
+
+    // Convert users to CSV rows
+    const rows = allUsers.map((user: any) => {
+      // Calculate cashflow for each user
+      const userTx = cashflowTransactions.find((tx: any) => tx.userId === user.id);
+      const cashflowTotal = userTx ? parseFloat(userTx.totalCashflow).toFixed(2) : "0.00";
+
+      return [
+        user.email || '',
+        user.firstName || '',
+        user.lastName || '',
+        user.phoneNumber || '',
+        parseFloat(user.balance || '0').toFixed(2),
+        (user.ringtonePoints || 0).toString(),
+        cashflowTotal,
+        user.isAdmin ? 'Admin' : 'User',
+        user.disabled ? 'Disabled' : 'Active',
+        user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '',
+        user.lastIpAddress || '',
+        user.addressStreet || '',
+        user.addressCity || '',
+        user.addressPostcode || '',
+        user.addressCountry || '',
+        user.disabledUntil ? new Date(user.disabledUntil).toLocaleDateString() : '',
+        user.selfSuspended ? 'Yes' : 'No',
+        user.selfSuspensionEndsAt ? new Date(user.selfSuspensionEndsAt).toLocaleDateString() : '',
+        user.dailySpendLimit ? `£${parseFloat(user.dailySpendLimit).toFixed(2)}` : 'Not set',
+        user.notes || '',
+      ];
+    });
+
+    // Escape CSV values (wrap in quotes if contains comma, quote, or newline)
+    const escapeCSV = (value: string) => {
+      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+      return value;
+    };
+
+    // Build CSV content with BOM for Excel compatibility
+    const BOM = '\uFEFF';
+    const csvContent = BOM + [
+      headers.join(','),
+      ...rows.map(row => row.map(escapeCSV).join(','))
+    ].join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const downloadUrl = URL.createObjectURL(blob);
     
-    window.open(url.toString(), '_blank');
-  };
+    // Generate filename with current date and user count
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `users_export_${date}_${allUsers.length}_users.csv`;
+    
+    link.setAttribute('href', downloadUrl);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+
+    toast({
+      title: "Export Complete",
+      description: `${allUsers.length} users exported to ${filename}`,
+    });
+  } catch (error: any) {
+    console.error('Export error:', error);
+    toast({
+      title: "Export Failed",
+      description: error.message || "Failed to export users",
+      variant: "destructive",
+    });
+  } finally {
+    setIsExporting(false);
+  }
+}, [activeSearch, roleFilter, toast, isExporting]);
 
   // Mutations
   const updateMutation = useMutation({
@@ -622,15 +754,25 @@ export default function AdminUsers() {
           </div>
           <div className="flex gap-2">
             <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportCSV}
-              className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
-              title="Export Users to CSV"
-            >
-              <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-              Export CSV
-            </Button>
+  variant="outline"
+  size="sm"
+  onClick={handleExportCSV}
+  disabled={isExporting}
+  className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
+  title="Export Users to CSV"
+>
+  {isExporting ? (
+    <>
+      <div className="animate-spin w-3 h-3 sm:w-4 sm:h-4 mr-1 border-2 border-current border-t-transparent rounded-full" />
+      Exporting...
+    </>
+  ) : (
+    <>
+      <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+      Export CSV
+    </>
+  )}
+</Button>
           </div>
         </div>
 
