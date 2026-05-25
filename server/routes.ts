@@ -16913,6 +16913,115 @@ app.patch("/api/prizes/:prizeId/reduce-quantity", isAuthenticated, isAdmin , asy
 });
 
 
+// Add these routes to your server file
+
+// GET ticket settings for a competition
+app.get("/api/competitions/:competitionId/ticket-settings", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { competitionId } = req.params;
+    
+    const [settings] = await db
+      .select()
+      .from(competitionTicketSettings)
+      .where(eq(competitionTicketSettings.competitionId, competitionId));
+    
+    if (!settings) {
+      // Return default settings if none exist
+      return res.json({
+        competitionId,
+        winPercentage: 30,
+        ticketCost: 1,
+        isActive: true
+      });
+    }
+    
+    res.json(settings);
+  } catch (error) {
+    console.error("Error fetching ticket settings:", error);
+    res.status(500).json({ error: "Failed to fetch ticket settings" });
+  }
+});
+
+// CREATE or UPDATE ticket settings
+app.post("/api/competitions/:competitionId/ticket-settings", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { competitionId } = req.params;
+    const { winPercentage, ticketCost, isActive } = req.body;
+    
+    // Check if settings already exist
+    const [existing] = await db
+      .select()
+      .from(competitionTicketSettings)
+      .where(eq(competitionTicketSettings.competitionId, competitionId));
+    
+    let result;
+    
+    if (existing) {
+      // Update existing settings
+      [result] = await db
+        .update(competitionTicketSettings)
+        .set({
+          winPercentage,
+          ticketCost,
+          isActive,
+          updatedAt: new Date(),
+        })
+        .where(eq(competitionTicketSettings.competitionId, competitionId))
+        .returning();
+    } else {
+      // Create new settings
+      [result] = await db
+        .insert(competitionTicketSettings)
+        .values({
+          competitionId,
+          winPercentage,
+          ticketCost,
+          isActive,
+        })
+        .returning();
+    }
+    
+    res.json(result);
+  } catch (error) {
+    console.error("Error saving ticket settings:", error);
+    res.status(500).json({ error: "Failed to save ticket settings" });
+  }
+});
+
+// Get current ticket availability and win rate for users
+app.get("/api/competitions/:competitionId/ticket-info", async (req, res) => {
+  try {
+    const { competitionId } = req.params;
+    
+    // Get ticket settings
+    const [settings] = await db
+      .select()
+      .from(competitionTicketSettings)
+      .where(eq(competitionTicketSettings.competitionId, competitionId));
+    
+    // Get total remaining prizes
+    const prizes = await db
+      .select()
+      .from(competitionPrizes)
+      .where(eq(competitionPrizes.competitionId, competitionId));
+    
+    const totalRemaining = prizes.reduce((sum, prize) => sum + prize.remainingQuantity, 0);
+    const totalPrizes = prizes.reduce((sum, prize) => sum + prize.totalQuantity, 0);
+    
+    res.json({
+      winPercentage: settings?.winPercentage || 30,
+      ticketCost: settings?.ticketCost || 1,
+      isActive: settings?.isActive ?? true,
+      totalRemainingPrizes: totalRemaining,
+      totalPrizes: totalPrizes,
+      prizesAvailable: totalRemaining > 0
+    });
+  } catch (error) {
+    console.error("Error fetching ticket info:", error);
+    res.status(500).json({ error: "Failed to fetch ticket info" });
+  }
+});
+
 const uploadCompetitionVideo = createVideoUploader('competition-videos');
 
 // Get all competitions that have videos (Public route - no auth needed)

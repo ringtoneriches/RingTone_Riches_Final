@@ -13,7 +13,10 @@ import {
   Flame,
   Zap,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Ticket,
+  Percent,
+  Coins
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +34,15 @@ interface Prize {
   remainingQuantity: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface TicketInfo {
+  winPercentage: number;
+  ticketCost: number;
+  isActive: boolean;
+  totalRemainingPrizes: number;
+  totalPrizes: number;
+  prizesAvailable: boolean;
 }
 
 interface UserCompetitionPrizesProps {
@@ -61,6 +73,7 @@ const getPrizeIcon = (prizeName: string, value: number) => {
 const getStockStatus = (remaining: number, total: number) => {
   const percentage = (remaining / total) * 100;
   if (percentage === 0) return { label: "All Claimed", color: "bg-red-500", textColor: "text-red-400", variant: "destructive" };
+  if (percentage < 25) return { label: "Low Stock", color: "bg-yellow-500", textColor: "text-yellow-400", variant: "warning" };
   return { label: "Available", color: "bg-green-500", textColor: "text-green-400", variant: "default" };
 };
 
@@ -93,6 +106,19 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
     enabled: !!competitionId,
   });
 
+  // Fetch ticket info
+  const { data: ticketInfo, isLoading: ticketLoading } = useQuery<TicketInfo>({
+    queryKey: ["/api/competitions", competitionId, "ticket-info"],
+    queryFn: async () => {
+      const res = await fetch(`/api/competitions/${competitionId}/ticket-info`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch ticket info");
+      return res.json();
+    },
+    enabled: !!competitionId,
+  });
+
   // Sort prizes by value (highest first) and filter out zero remaining
   const sortedPrizes = useMemo(() => {
     return [...prizes]
@@ -100,7 +126,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
       .sort((a, b) => b.prizeValue - a.prizeValue);
   }, [prizes]);
 
-  if (isLoading) {
+  if (isLoading || ticketLoading) {
     return (
       <div className="space-y-6">
         <div className="text-center space-y-2">
@@ -154,7 +180,48 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
           Amazing prizes await the winners! Check out what you could win.
         </p>
         
-    
+        {/* Ticket Info Card */}
+        {ticketInfo && (
+          <Card className="max-w-2xl mx-auto bg-gradient-to-r from-blue-500/5 to-purple-500/5 border-blue-500/20">
+            <CardContent className="p-4 sm:p-6">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <Percent className="w-5 h-5 text-green-500" />
+                    <span className="text-sm text-muted-foreground">Win Rate</span>
+                  </div>
+                  <p className="text-2xl font-bold text-green-500">{ticketInfo.winPercentage}%</p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <Coins className="w-5 h-5 text-yellow-500" />
+                    <span className="text-sm text-muted-foreground">Ticket Cost</span>
+                  </div>
+                  <p className="text-2xl font-bold text-yellow-500">{ticketInfo.ticketCost}</p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <Gift className="w-5 h-5 text-blue-500" />
+                    <span className="text-sm text-muted-foreground">Prizes Left</span>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-500">{ticketInfo.totalRemainingPrizes}</p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <Zap className="w-5 h-5 text-purple-500" />
+                    <span className="text-sm text-muted-foreground">Status</span>
+                  </div>
+                  <Badge 
+                    variant={ticketInfo.isActive && ticketInfo.prizesAvailable ? "default" : "destructive"}
+                    className="mt-1"
+                  >
+                    {ticketInfo.isActive && ticketInfo.prizesAvailable ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Prizes Grid with Collapsible Animation */}
@@ -251,15 +318,25 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                   </div>
                 </div>
                 
-                
+                {/* Win Chance Indicator */}
+                {ticketInfo && (
+                  <div className="text-center pt-2">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20">
+                      <Ticket className="w-4 h-4 text-green-500" />
+                      <span className="text-sm text-green-500 font-medium">
+                        {((prize.remainingQuantity / ticketInfo.totalRemainingPrizes) * ticketInfo.winPercentage).toFixed(1)}% chance
+                      </span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
         })}
       </div>
-        {/* Show Prizes Button */}
-        <div className="w-full text-center">
-
+      
+      {/* Show Prizes Button */}
+      <div className="w-full text-center">
         <Button
           onClick={() => setIsOpen(!isOpen)}
           variant="outline"
@@ -277,7 +354,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
             </>
           )}
         </Button>
-        </div>
+      </div>
     </div>
   );
 }

@@ -180,6 +180,21 @@ export const competitionPrizes = pgTable("competition_prizes", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const competitionTicketSettings = pgTable("competition_ticket_settings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+  winPercentage: integer("win_percentage").notNull().default(30),
+  ticketCost: decimal("ticket_cost", { precision: 10, scale: 2 }).notNull().default("1.00"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  // Each competition can only have one ticket settings record
+  uniqueIndex("competition_ticket_settings_competition_id_idx").on(table.competitionId),
+  // Index for faster lookups
+  index("competition_ticket_settings_is_active_idx").on(table.isActive),
+]);
+
 // Wallet transactions
 export const transactions = pgTable("transactions", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -733,6 +748,7 @@ export const insertFaqSchema = createInsertSchema(faqs).omit({
   createdAt: true,
   updatedAt: true,
 });
+export const insertCompetitionTicketSettingsSchema = createInsertSchema(competitionTicketSettings);
 
 
 
@@ -794,6 +810,8 @@ export type PromotionalCampaign = typeof promotionalCampaigns.$inferSelect;
 export type InsertPromotionalCampaign = z.infer<typeof insertPromotionalCampaignSchema>;
 export type CampaignEmail = typeof campaignEmails.$inferSelect;
 export type InsertCampaignEmail = z.infer<typeof insertCampaignEmailSchema>;
+export type CompetitionTicketSettings = typeof competitionTicketSettings.$inferSelect;
+export type InsertCompetitionTicketSettings = z.infer<typeof insertCompetitionTicketSettingsSchema>;
 // Type definitions
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;

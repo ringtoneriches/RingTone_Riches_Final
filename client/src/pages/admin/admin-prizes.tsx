@@ -1,4 +1,3 @@
-// admin-prizes.tsx
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import {
@@ -15,7 +14,11 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
-  Filter
+  Filter,
+  Settings,
+  Percent,
+  Ticket,
+  Coins
 } from "lucide-react";
 import AdminLayout from "@/components/admin/admin-layout";
 import { Button } from "@/components/ui/button";
@@ -49,7 +52,8 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 
 interface Prize {
   id: string;
@@ -70,6 +74,13 @@ interface Competition {
   title: string;
 }
 
+interface TicketSettings {
+  competitionId: string;
+  winPercentage: number;
+  ticketCost: number;
+  isActive: boolean;
+}
+
 export default function AdminPrizes() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -78,7 +89,7 @@ export default function AdminPrizes() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const [isTicketSettingsOpen, setIsTicketSettingsOpen] = useState(false);
   const [selectedPrize, setSelectedPrize] = useState<Prize | null>(null);
   
   // Form state
@@ -87,6 +98,14 @@ export default function AdminPrizes() {
     prizeValue: "",
     totalQuantity: "",
     remainingQuantity: ""
+  });
+
+  // Ticket settings state
+  const [ticketSettings, setTicketSettings] = useState<TicketSettings>({
+    competitionId: "",
+    winPercentage: 30,
+    ticketCost: 1,
+    isActive: true
   });
 
   // Fetch competitions
@@ -103,7 +122,7 @@ export default function AdminPrizes() {
       // Filter to only show specific competition types
       const allowedTypes = ['pop', 'voltz', 'plinko', 'scratch', 'spin'];
       return allCompetitions.filter((comp: Competition) => 
-        allowedTypes.includes(comp.type?.toLowerCase()))
+        allowedTypes.includes(comp.type?.toLowerCase()));
     },
   });
 
@@ -119,6 +138,27 @@ export default function AdminPrizes() {
       return res.json();
     },
     enabled: !!selectedCompetition,
+  });
+
+  // Fetch ticket settings
+  const { data: currentTicketSettings, refetch: refetchTicketSettings } = useQuery<TicketSettings>({
+    queryKey: ["/api/competitions", selectedCompetition, "ticket-settings"],
+    queryFn: async () => {
+      if (!selectedCompetition) return null;
+      const res = await fetch(`/api/competitions/${selectedCompetition}/ticket-settings`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch ticket settings");
+      return res.json();
+    },
+    enabled: !!selectedCompetition,
+  });
+
+  // Update ticket settings when fetched
+  useState(() => {
+    if (currentTicketSettings) {
+      setTicketSettings(currentTicketSettings);
+    }
   });
 
   // Create prize mutation
@@ -209,6 +249,35 @@ export default function AdminPrizes() {
     },
   });
 
+  // Save ticket settings mutation
+  const saveTicketSettingsMutation = useMutation({
+    mutationFn: async (data: TicketSettings) => {
+      const res = await fetch(`/api/competitions/${selectedCompetition}/ticket-settings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to save ticket settings");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/competitions", selectedCompetition, "ticket-settings"] });
+      setIsTicketSettingsOpen(false);
+      toast({
+        title: "Success",
+        description: "Ticket settings updated successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to save ticket settings",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Filter prizes
   const filteredPrizes = useMemo(() => {
     if (!prizes) return [];
@@ -268,9 +337,20 @@ export default function AdminPrizes() {
     });
   };
 
+  const handleTicketSettingsSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveTicketSettingsMutation.mutate({
+      ...ticketSettings,
+      competitionId: selectedCompetition,
+    });
+  };
+
   const getPrizeStatus = (remaining: number) => {
     if (remaining === 0) {
       return { label: "All Claimed", variant: "destructive" };
+    }
+    if (remaining < 5) {
+      return { label: "Low Stock", variant: "warning" };
     }
     return { label: "Available", variant: "default" };
   };
@@ -296,7 +376,7 @@ export default function AdminPrizes() {
               Prize Management
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              Manage competition prizes, quantities, and values
+              Manage competition prizes, quantities, and win rates
             </p>
           </div>
         </div>
@@ -327,14 +407,29 @@ export default function AdminPrizes() {
                 </Select>
               </div>
               {selectedCompetition && (
-                <Button
-                  onClick={() => refetchPrizes()}
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh
-                </Button>
+                <>
+                  <Button
+                    onClick={() => refetchPrizes()}
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Refresh
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (currentTicketSettings) {
+                        setTicketSettings(currentTicketSettings);
+                      }
+                      setIsTicketSettingsOpen(true);
+                    }}
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    Ticket Settings
+                  </Button>
+                </>
               )}
             </div>
           </CardContent>
@@ -342,9 +437,38 @@ export default function AdminPrizes() {
 
         {selectedCompetition && (
           <>
-            {/* Actions Bar - Mobile Optimized */}
+            {/* Ticket Settings Summary Card */}
+            {currentTicketSettings && (
+              <Card className="bg-gradient-to-r from-blue-500/5 to-purple-500/5">
+                <CardContent className="p-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Win Rate</p>
+                      <p className="text-xl font-bold text-green-500">{currentTicketSettings.winPercentage}%</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Ticket Cost</p>
+                      <p className="text-xl font-bold text-yellow-500">{currentTicketSettings.ticketCost}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Status</p>
+                      <Badge variant={currentTicketSettings.isActive ? "default" : "destructive"}>
+                        {currentTicketSettings.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Total Prizes</p>
+                      <p className="text-xl font-bold text-blue-500">
+                        {prizes.reduce((sum, p) => sum + p.remainingQuantity, 0)}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Actions Bar */}
             <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4">
-              {/* Search - Full width on mobile */}
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
@@ -355,7 +479,6 @@ export default function AdminPrizes() {
                 />
               </div>
               
-              {/* Add Prize Button - Responsive */}
               <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="w-full sm:w-auto">
@@ -449,7 +572,7 @@ export default function AdminPrizes() {
               </Dialog>
             </div>
 
-            {/* Prizes Table - Mobile Optimized with Horizontal Scroll */}
+            {/* Prizes Table */}
             <Card>
               <CardHeader className="p-4 sm:p-6">
                 <CardTitle className="text-lg sm:text-xl">Prizes</CardTitle>
@@ -481,7 +604,7 @@ export default function AdminPrizes() {
                   </div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden mx-4 sm:mx-0">
-                    {/* Mobile Card View (Visible on small screens) */}
+                    {/* Mobile Card View */}
                     <div className="block sm:hidden space-y-3 p-3">
                       {filteredPrizes.map((prize) => {
                         const stockStatus = getPrizeStatus(prize.remainingQuantity);
@@ -543,7 +666,7 @@ export default function AdminPrizes() {
                       })}
                     </div>
 
-                    {/* Desktop Table View (Hidden on mobile) */}
+                    {/* Desktop Table View */}
                     <div className="hidden sm:block overflow-x-auto">
                       <Table>
                         <TableHeader>
@@ -629,7 +752,7 @@ export default function AdminPrizes() {
           <Alert className="mx-4 sm:mx-0">
             <AlertCircle className="w-4 h-4" />
             <AlertDescription>
-              Please select a competition from the dropdown above to manage its prizes.
+              Please select a competition from the dropdown above to manage its prizes and ticket settings.
             </AlertDescription>
           </Alert>
         )}
@@ -643,6 +766,138 @@ export default function AdminPrizes() {
           </Alert>
         )}
       </div>
+
+      {/* Ticket Settings Dialog */}
+      <Dialog open={isTicketSettingsOpen} onOpenChange={setIsTicketSettingsOpen}>
+        <DialogContent className="sm:max-w-[500px] w-[95vw] max-h-[90vh] overflow-y-auto">
+          <form onSubmit={handleTicketSettingsSubmit}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Ticket className="w-5 h-5" />
+                Ticket Settings
+              </DialogTitle>
+              <DialogDescription>
+                Configure win rate and ticket costs for instant win games
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-6 py-4">
+              {/* Win Percentage Slider */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Win Rate Percentage</Label>
+                  <Badge variant="outline" className="text-lg font-bold">
+                    {ticketSettings.winPercentage}%
+                  </Badge>
+                </div>
+                <Slider
+                  value={[ticketSettings.winPercentage]}
+                  onValueChange={([value]) => 
+                    setTicketSettings({ ...ticketSettings, winPercentage: value })
+                  }
+                  min={1}
+                  max={100}
+                  step={1}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>1% (Very Rare)</span>
+                  <span>100% (Guaranteed Win)</span>
+                </div>
+                
+                {/* Visual Representation */}
+                <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-green-500 transition-all duration-300"
+                    style={{ width: `${ticketSettings.winPercentage}%` }}
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Players will have a {ticketSettings.winPercentage}% chance to win on each play
+                </p>
+              </div>
+
+              {/* Ticket Cost */}
+              <div className="space-y-2">
+                <Label htmlFor="ticketCost" className="text-base font-semibold">
+                  Ticket Cost
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Coins className="w-5 h-5 text-yellow-500" />
+                  <Input
+                    id="ticketCost"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={ticketSettings.ticketCost}
+                    onChange={(e) => 
+                      setTicketSettings({ 
+                        ...ticketSettings, 
+                        ticketCost: parseFloat(e.target.value) || 0 
+                      })
+                    }
+                    className="w-32"
+                  />
+                  <span className="text-muted-foreground">tokens per play</span>
+                </div>
+              </div>
+
+              {/* Active Status */}
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                <div>
+                  <Label className="text-base font-semibold">Game Status</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Enable or disable this instant win game
+                  </p>
+                </div>
+                <Switch
+                  checked={ticketSettings.isActive}
+                  onCheckedChange={(checked) => 
+                    setTicketSettings({ ...ticketSettings, isActive: checked })
+                  }
+                />
+              </div>
+
+              {/* Prize Pool Summary */}
+              <div className="space-y-2">
+                <Label className="text-base font-semibold">Prize Pool Summary</Label>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="p-2 bg-muted rounded">
+                    <span className="text-muted-foreground">Total Prizes:</span>
+                    <span className="font-bold ml-2">
+                      {prizes.reduce((sum, p) => sum + p.totalQuantity, 0)}
+                    </span>
+                  </div>
+                  <div className="p-2 bg-muted rounded">
+                    <span className="text-muted-foreground">Remaining:</span>
+                    <span className="font-bold ml-2">
+                      {prizes.reduce((sum, p) => sum + p.remainingQuantity, 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsTicketSettingsOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={saveTicketSettingsMutation.isPending}
+              >
+                {saveTicketSettingsMutation.isPending && (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                )}
+                <Save className="w-4 h-4 mr-2" />
+                Save Settings
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
