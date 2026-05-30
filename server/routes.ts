@@ -13198,6 +13198,16 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
+    // ✅ FILTER 1: Only ACTIVE segments (isActive !== false)
+    const activeSegments = segments.filter((seg: any) => seg.isActive !== false);
+
+    if (activeSegments.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No active prizes configured",
+      });
+    }
+
     // Count wins INCLUDING try_again
     const counts = await db
       .select({
@@ -13217,19 +13227,19 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
     });
 
     // Initialize missing segments
-    segments.forEach((seg: any) => {
+    activeSegments.forEach((seg: any) => {
       if (!segmentWinCounts.has(seg.id)) {
         segmentWinCounts.set(seg.id, 0);
       }
     });
 
     // Find lose segment
-    const loseSegment = segments.find(
+    const loseSegment = activeSegments.find(
       (s: any) => s.rewardType === "lose"
     );
 
-    // FILTER ELIGIBLE SEGMENTS
-    const eligibleSegments = segments.filter((seg: any) => {
+    // ✅ FILTER 2: Eligible segments based on maxWins
+    const eligibleSegments = activeSegments.filter((seg: any) => {
       const wins = segmentWinCounts.get(seg.id) ?? 0;
 
       // Convert maxWins safely
@@ -13262,7 +13272,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
     if (eligibleSegments.length > 0) {
       finalEligible = eligibleSegments;
     } else {
-      finalEligible = loseSegment ? [loseSegment] : segments;
+      finalEligible = loseSegment ? [loseSegment] : activeSegments;
     }
 
     if (!finalEligible.length) {
@@ -13301,7 +13311,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // RESULT LOGIC
+    // RESULT LOGIC (rest remains the same)
     let balloonValues: number[] = [];
 
     const rewardType = selectedSegment.rewardType || "lose";
@@ -13325,7 +13335,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
 
     // TRY AGAIN
     if (isRPrize) {
-      const cashSegments = segments.filter(
+      const cashSegments = activeSegments.filter(
         (s: any) => s.rewardType === "cash"
       );
 
@@ -13451,7 +13461,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
 
     // LOSE
     else {
-      const cashVals = segments
+      const cashVals = activeSegments
         .filter((s: any) => s.rewardType === "cash")
         .map((s: any) =>
           parseFloat(s.rewardValue?.toString() || "1")
@@ -13624,6 +13634,16 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       (popConfig as any).prizes ||
       DEFAULT_POP_CONFIG.segments;
 
+    // ✅ FILTER 1: Only ACTIVE segments
+    const activeSegments = segments.filter((seg: any) => seg.isActive !== false);
+
+    if (activeSegments.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No active prizes configured",
+      });
+    }
+
     let totalCash = 0;
     let totalPoints = 0;
     let freeReplaysWon = 0;
@@ -13638,13 +13658,13 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
     const segmentWinCounts = new Map<string, number>();
     counts.forEach((c) => segmentWinCounts.set(c.prizeId, Number(c.count)));
 
-    // Initialize segment counts if missing
-    segments.forEach((seg) => {
+    // Initialize segment counts if missing (only for active segments)
+    activeSegments.forEach((seg) => {
       if (!segmentWinCounts.has(seg.id)) segmentWinCounts.set(seg.id, 0);
     });
 
-    // Find a "lose" segment to use as fallback
-    const loseSegment = segments.find((s) => s.rewardType === "lose");
+    // Find a "lose" segment to use as fallback (from active segments only)
+    const loseSegment = activeSegments.find((s) => s.rewardType === "lose");
 
     // Transaction to process all plays
     await db.transaction(async (tx) => {
@@ -13653,8 +13673,8 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
         let isRPrize = false;
         let isWin = false;
 
-        // Eligible segments: maxWins applies to cash/points/physical
-        const eligibleSegments = segments.filter((seg) => {
+        // ✅ FILTER 2: Eligible segments based on maxWins (only from active segments)
+        const eligibleSegments = activeSegments.filter((seg) => {
           const wins = segmentWinCounts.get(seg.id) ?? 0;
           if (
             seg.maxWins !== null &&
@@ -13682,8 +13702,8 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
             }
           }
         } else {
-          // If no eligible segments (all maxWins reached), use lose segment
-          selectedSegment = loseSegment || segments[0];
+          // If no eligible segments (all maxWins reached), use lose segment from active segments
+          selectedSegment = loseSegment || activeSegments[0];
         }
 
         let balloonValues: number[] = [];
@@ -13698,7 +13718,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
 
         if (isRPrize) {
           // Free Replay - one R symbol + 2 random cash values
-          const cashSegments = segments.filter(
+          const cashSegments = activeSegments.filter(
             (s) => s.rewardType === "cash"
           );
           const availableValues = cashSegments.map((s) =>
@@ -13781,8 +13801,8 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
             updatedAt: new Date(),
           });
         } else {
-          // Lose: generate random non-matching balloon values
-          const cashValues = segments
+          // Lose: generate random non-matching balloon values using ONLY active cash segments
+          const cashValues = activeSegments
             .filter((s) => s.rewardType === "cash")
             .map((s) => parseFloat(s.rewardValue?.toString() || "1"));
           if (cashValues.length >= 2) {
