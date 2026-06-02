@@ -73,6 +73,138 @@ function getApplicableDiscount(quantity: number): number {
   return 0;
 }
 
+// Add this component before the CompetitionPage component definition
+
+// Premium Progress Bar Component for Instant Type
+const InstantProgressBar = ({ competition }: { competition: Competition }) => {
+  const sold = competition.soldTickets ?? 0;
+  const total = competition.maxTickets ?? 0;
+  const remaining = total - sold;
+  const percentage = total > 0 ? (sold / total) * 100 : 0;
+  const isHighDemand = percentage > 70;
+  const isAlmostFull = percentage > 85;
+  
+  return (
+    <div className="relative group">
+      {/* Animated border glow */}
+      <div className="absolute -inset-[2px] bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-2xl opacity-40 group-hover:opacity-70 transition-all duration-500 blur-md"></div>
+      
+      <div className="relative bg-gradient-to-br from-[#0a0a0a] to-[#0f0f0f] rounded-2xl p-6 md:p-8 border border-[#FACC15]/20 overflow-hidden">
+        
+        {/* Background shimmer effect */}
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#FACC15]/5 to-transparent animate-shimmer"></div>
+        </div>
+        
+        {/* Header with title */}
+        
+        
+        {/* Two Column Stats - Large Numbers */}
+       
+        
+        {/* Premium Progress Bar Section */}
+        <div className="space-y-3">
+          <div className="flex justify-between items-end">
+            <div>
+              <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Overall Progress</span>
+              <p className="text-2xl font-bold text-white">{percentage.toFixed(1)}%</p>
+            </div>
+            <div className="text-right">
+              <span className="text-xs text-gray-500">Total Capacity</span>
+              <p className="text-lg font-bold text-[#FACC15]">{total.toLocaleString()} tickets</p>
+            </div>
+          </div>
+          
+          {/* Multi-layer progress bar */}
+          <div className="relative">
+            {/* Background track */}
+            <div className="h-6 bg-black/60 rounded-full overflow-hidden border border-[#FACC15]/20">
+              {/* Main progress fill */}
+              <div 
+                className="relative h-full bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-full transition-all duration-1000 ease-out"
+                style={{ width: `${percentage}%` }}
+              >
+                {/* Animated shimmer overlay */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                
+                {/* Pulsing glow effect */}
+                <div className="absolute inset-0 rounded-full animate-pulse opacity-50" 
+                     style={{ background: "radial-gradient(circle at center, rgba(250,204,21,0.8) 0%, transparent 80%)" }}>
+                </div>
+              </div>
+            </div>
+            
+            {/* Percentage markers */}
+            <div className="absolute inset-0 flex justify-between px-2 pointer-events-none">
+              {[0, 25, 50, 75, 100].map((mark) => (
+                <div key={mark} className="relative">
+                  <div className="w-px h-4 bg-white/20"></div>
+                  <div className="absolute top-7 left-1/2 -translate-x-1/2 text-[10px] text-gray-600 font-medium">
+                    {mark}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Progress message with urgency */}
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#FACC15]/10">
+            <div className="flex items-center gap-2">
+              <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${
+                remaining === 0 ? 'bg-red-500' : remaining < 100 ? 'bg-orange-500' : 'bg-green-500'
+              }`}></div>
+              <span className="text-xs text-gray-400">
+                {remaining === 0 
+                  ? "🏆 All tickets sold! Winner announcement coming soon."
+                  : remaining < 50 
+                  ? `⚡ Hurry! Only ${remaining.toLocaleString()} tickets remaining!`
+                  : `${remaining.toLocaleString()} spots left - Don't miss out!`}
+              </span>
+            </div>
+            
+            {/* Urgency indicator */}
+            {isAlmostFull && remaining > 0 && (
+              <div className="flex items-center gap-2 animate-bounce">
+                <span className="text-sm">⚠️</span>
+                <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
+                  Last Chance!
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Mini visual indicator of ticket distribution */}
+        <div className="mt-6 pt-4 border-t border-[#FACC15]/10">
+          <div className="flex items-center justify-between text-[10px] text-gray-500 mb-2">
+            <span>Ticket Distribution Visual</span>
+            <span>{sold.toLocaleString()} / {total.toLocaleString()} claimed</span>
+          </div>
+          <div className="flex h-2 gap-0.5 overflow-hidden rounded-full">
+            {/* Create mini blocks for visual representation */}
+            {Array.from({ length: 20 }).map((_, i) => {
+              const blockPercentage = (i + 1) * 5;
+              const isFilled = blockPercentage <= percentage;
+              return (
+                <div
+                  key={i}
+                  className={`flex-1 transition-all duration-500 rounded-sm ${
+                    isFilled
+                      ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B]"
+                      : "bg-white/5"
+                  }`}
+                  style={{ transitionDelay: `${i * 20}ms` }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 export default function CompetitionPage() {
   const rangeRef = useRef<HTMLDivElement | null>(null);
   const { id } = useParams();
@@ -523,30 +655,7 @@ export default function CompetitionPage() {
                             £{pricePerTicket.toFixed(2)}
                           </span>
                         </div>
-                        {competition.maxTickets && (
-                          <div className="space-y-2 bg-black/30 rounded-lg p-2.5">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="text-gray-300 text-xs md:text-sm flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#facc15]"></span>
-                                Progress
-                              </span>
-                              <span className="text-xs md:text-sm text-white font-medium">
-                                {competition.soldTickets} / {competition.maxTickets} sold
-                              </span>
-                            </div>
-                            <div className="relative h-3 bg-gray-800/50 rounded-full overflow-hidden border border-[#facc15]/20">
-                              <div
-                                className={`h-full ${gradients.hero} transition-all duration-500 relative`}
-                                style={{ width: `${progressPercentage}%` }}
-                              >
-                                <div className={`absolute inset-0 bg-gradient-to-r ${gradients.shimmer} opacity-50 animate-pulse`}></div>
-                              </div>
-                            </div>
-                            <p className="text-xs text-center font-medium" style={{ color: remainingPercentage < 15 ? "#facc15" : "#9ca3af" }}>
-                              {remainingPercentage < 15 ? "⚡ Less than 15% remaining!" : `${Math.round(remainingPercentage)}% available`}
-                            </p>
-                          </div>
-                        )}
+                       
                       </div>
 
                       <div className="mt-5 md:mt-6 pt-4 border-t border-[#facc15]/20 grid grid-cols-2 gap-3">
@@ -745,6 +854,14 @@ export default function CompetitionPage() {
           </div>
         </div>
       </section>
+
+      {competitionType === "instant" && competition.maxTickets && (
+        <section className="py-6 md:py-8 relative">
+          <div className="container mx-auto px-3 md:px-4 max-w-4xl">
+            <InstantProgressBar competition={competition} />
+          </div>
+        </section>
+      )}
 
       {/* ==========================================
           ENTRY SELECTOR SECTION

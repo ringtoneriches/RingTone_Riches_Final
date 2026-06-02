@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import Slider from "react-slick";
 import { Zap, Shield, Trophy, ChevronRight, Star, Users, Crown, Play, Ticket, RotateCw, Timer, Flame, CheckCircle, Sparkles, ArrowRight, Gift, Gamepad2, Target, Crosshair, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useRef, useMemo, memo, useCallback } from "react";
+import { useState, useRef, useMemo, memo, useCallback, useEffect } from "react";
 import featuredBgVideo from "@assets/generated_videos/featured_gaming_vivid_bg.mp4";
 
 interface FeaturedCompetitionsProps {
@@ -21,16 +21,16 @@ const GameIcon = memo(({ type, className, style }: { type: string; className?: s
 
 GameIcon.displayName = 'GameIcon';
 
-// Memoized color getter
+// Memoized color getter with pre-computed values
 const getGameColor = (type: string) => {
   switch (type) {
-    case "spin": return { accent: '#f59e0b', glow: 'rgba(245,158,11,0.3)', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.4)', label: 'Spin to Win', neon: '#ffb800' };
-    case "scratch": return { accent: '#00ff88', glow: 'rgba(0,255,136,0.3)', bg: 'rgba(0,255,136,0.1)', border: 'rgba(0,255,136,0.35)', label: 'Scratch Card', neon: '#00ff88' };
-    default: return { accent: '#f5d76e', glow: 'rgba(245,215,110,0.3)', bg: 'rgba(245,215,110,0.1)', border: 'rgba(245,215,110,0.35)', label: 'Instant Win', neon: '#f5d76e' };
+    case "spin": return { accent: '#f59e0b', glow: 'rgba(245,158,11,0.2)', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.3)', label: 'Spin to Win', neon: '#ffb800' };
+    case "scratch": return { accent: '#00ff88', glow: 'rgba(0,255,136,0.2)', bg: 'rgba(0,255,136,0.06)', border: 'rgba(0,255,136,0.25)', label: 'Scratch Card', neon: '#00ff88' };
+    default: return { accent: '#f5d76e', glow: 'rgba(245,215,110,0.2)', bg: 'rgba(245,215,110,0.06)', border: 'rgba(245,215,110,0.25)', label: 'Instant Win', neon: '#f5d76e' };
   }
 };
 
-// Memoized competition card component
+// Optimized Competition Card with reduced DOM elements and CSS transforms
 const CompetitionCard = memo(({ competition, onView }: { competition: Competition; onView: (id: string) => void }) => {
   const colors = useMemo(() => getGameColor(competition.type), [competition.type]);
   const soldPercent = useMemo(() => 
@@ -43,27 +43,28 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
   }, [competition.id, onView]);
 
   return (
-    <div key={competition.id} className="relative group">
-      {/* Reduced number of animated elements - removed conic gradients which are expensive */}
+    <div className="relative group px-2">
       <div className="relative z-[1] rounded-2xl sm:rounded-3xl overflow-hidden" style={{
-        background: 'linear-gradient(145deg, rgba(10,12,18,0.97), rgba(6,8,14,0.98), rgba(10,10,16,0.97))',
-        boxShadow: `0 30px 80px rgba(0,0,0,0.7), 0 0 80px ${colors.glow}, 0 0 120px ${colors.glow}`,
+        background: 'linear-gradient(145deg, rgba(10,12,18,0.95), rgba(6,8,14,0.98))',
+        boxShadow: `0 20px 40px rgba(0,0,0,0.5), 0 0 40px ${colors.glow}`,
+        transform: 'translateZ(0)', // Force GPU acceleration
+        willChange: 'transform',
       }}>
-        {/* Reduced overlay elements - removed scanline effect */}
-        <div className="absolute inset-0">
-          <div className="absolute top-0 left-[3%] right-[3%] h-[1px]" style={{ background: `linear-gradient(90deg, transparent, ${colors.neon}88, transparent)` }} />
-          <div className="absolute bottom-0 left-[3%] right-[3%] h-[1px]" style={{ background: `linear-gradient(90deg, transparent, ${colors.neon}33, transparent)` }} />
-        </div>
+        {/* Simplified borders - removed expensive gradients */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          border: `1px solid ${colors.border}`,
+          borderRadius: 'inherit',
+        }} />
 
         <div className="relative z-10 p-4 sm:p-6 lg:p-8">
+          {/* Header section */}
           <div className="flex items-center justify-between gap-2 mb-4 sm:mb-5">
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full relative overflow-hidden" style={{
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full" style={{
                 background: `linear-gradient(135deg, ${colors.neon}, ${colors.accent})`,
-                boxShadow: `0 4px 25px ${colors.glow}`,
               }}>
-                <Crosshair className="w-3 h-3 sm:w-4 sm:h-4 text-[#0a0a0a]" />
-                <span className="text-[10px] sm:text-xs font-black text-[#0a0a0a] uppercase tracking-wider">Featured</span>
+                <Crosshair className="w-3 h-3 sm:w-4 sm:h-4 text-black" />
+                <span className="text-[10px] sm:text-xs font-black text-black uppercase tracking-wider">Featured</span>
               </div>
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-full" style={{
                 background: colors.bg,
@@ -86,70 +87,53 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
                 background: 'rgba(0,255,136,0.08)',
                 border: '1px solid rgba(0,255,136,0.3)',
               }}>
-                <div className="relative">
-                  <div className="w-2 h-2 rounded-full" style={{ background: '#00ff88' }} />
-                  <div className="absolute inset-0 w-2 h-2 rounded-full animate-ping" style={{ background: '#00ff88' }} />
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#00ff88' }}>Live</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-[#00ff88]" />
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#00ff88]">Live</span>
               </div>
             </div>
           </div>
 
+          {/* Main content grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
+            {/* Image section */}
             <div className="relative">
               <div className="relative rounded-xl sm:rounded-2xl overflow-hidden" style={{
-                border: `1.5px solid ${colors.border}`,
-                boxShadow: `0 20px 60px rgba(0,0,0,0.5)`,
+                border: `1px solid ${colors.border}`,
               }}>
                 <div className="relative w-full aspect-[16/10] sm:aspect-[4/3] lg:aspect-[4/3]">
                   <img
-                    src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1200&q=90"}
+                    src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80"}
                     alt={competition.title}
                     loading="lazy"
-                    className="w-full h-98 object-cover"
+                    className="w-full h-full object-cover"
+                    style={{ transform: 'translateZ(0)' }}
                   />
-                  <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(7,7,9,0.15) 0%, transparent 30%, transparent 50%, rgba(7,7,9,0.7) 80%, rgba(7,7,9,0.95) 100%)' }} />
+                  <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(7,7,9,0.2) 0%, transparent 40%, rgba(7,7,9,0.8) 100%)' }} />
 
-                  <div className="absolute top-2.5 sm:top-3 left-2.5 sm:left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg backdrop-blur-xl" style={{
-                    background: 'rgba(0,0,0,0.6)',
-                    border: `1px solid ${colors.border}`,
+                  <div className="absolute top-2.5 sm:top-3 left-2.5 sm:left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg backdrop-blur-md" style={{
+                    background: 'rgba(0,0,0,0.7)',
                   }}>
                     <Target className="w-3 h-3" style={{ color: colors.neon }} />
                     <span className="text-[10px] sm:text-xs font-bold" style={{ color: colors.neon }}>Top Prize</span>
                   </div>
 
                   <div className="absolute top-2.5 sm:top-3 right-2.5 sm:right-3 flex items-center gap-1 px-2 py-1 rounded-lg" style={{
-                    background: 'rgba(0,0,0,0.6)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'rgba(0,0,0,0.7)',
                   }}>
                     <Flame className="w-3 h-3 text-orange-400" />
                     <span className="text-orange-400 text-[10px] font-bold">HOT</span>
                   </div>
-
-                  {competition.type === "instant" && (
-                    <div className="absolute bottom-3 sm:bottom-4 left-3 sm:left-4 right-3 sm:right-4">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-white/90 text-[10px] sm:text-xs font-bold uppercase tracking-wider">Level Progress</span>
-                        <span className="text-[11px] sm:text-xs font-black" style={{ color: colors.neon }}>{Math.round(soldPercent)}%</span>
-                      </div>
-                      <div className="h-2 sm:h-2.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                        <div className="h-full rounded-full" style={{
-                          width: `${soldPercent}%`,
-                          background: `linear-gradient(90deg, ${colors.accent}, ${colors.neon})`,
-                        }} />
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
 
+            {/* Content section */}
             <div className="flex flex-col justify-center">
               <div className="mb-4 sm:mb-5">
-                <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white leading-[1.1] mb-2 sm:mb-3" style={{ textShadow: `0 0 30px ${colors.glow}` }}>
+                <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white leading-tight mb-2 sm:mb-3">
                   {competition.title}
                 </h2>
-                <p className="text-white/65 text-sm sm:text-base leading-relaxed">
+                <p className="text-white/60 text-sm sm:text-base leading-relaxed">
                   Play now for your chance to win this incredible prize. Limited spots remaining!
                 </p>
               </div>
@@ -162,11 +146,14 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
                   { icon: Zap, text: "Quick Wins", color: '#f59e0b' }
                 ].map((chip, i) => (
                   <div key={i} className="flex items-center gap-2 px-3 py-2.5 sm:py-3 rounded-xl" style={{
-                    background: `rgba(${chip.color === '#00ff88' ? '0,255,136' : chip.color === '#f5d76e' ? '245,215,110' : chip.color === '#60a5fa' ? '96,165,250' : '245,158,11'},0.05)`,
-                    border: `1px solid rgba(${chip.color === '#00ff88' ? '0,255,136' : chip.color === '#f5d76e' ? '245,215,110' : chip.color === '#60a5fa' ? '96,165,250' : '245,158,11'},0.15)`,
+                    background: chip.color === '#00ff88' ? 'rgba(0,255,136,0.05)' : 
+                               chip.color === '#f5d76e' ? 'rgba(245,215,110,0.05)' :
+                               chip.color === '#60a5fa' ? 'rgba(96,165,250,0.05)' :
+                               'rgba(245,158,11,0.05)',
+                    border: `1px solid ${chip.color}20`,
                   }}>
                     <chip.icon className="w-4 h-4 flex-shrink-0" style={{ color: chip.color }} />
-                    <span className="text-white/90 text-[10px] sm:text-xs font-bold">{chip.text}</span>
+                    <span className="text-white/80 text-[10px] sm:text-xs font-bold">{chip.text}</span>
                   </div>
                 ))}
               </div>
@@ -176,12 +163,7 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
                   <span className="text-white/40 text-sm line-through font-medium">
                     £{(parseFloat(competition.ticketPrice) * 2).toFixed(2)}
                   </span>
-                  <span className="text-3xl sm:text-4xl font-black" style={{
-                    background: `linear-gradient(135deg, ${colors.neon}, #fff, ${colors.neon})`,
-                    backgroundSize: '200% auto',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                  }}>
+                  <span className="text-3xl sm:text-4xl font-black" style={{ color: colors.neon }}>
                     £{parseFloat(competition.ticketPrice).toFixed(2)}
                   </span>
                   <span className="text-white/55 text-xs sm:text-sm font-medium">per play</span>
@@ -194,7 +176,6 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
                     style={{
                       background: `linear-gradient(135deg, ${colors.neon}, ${colors.accent})`,
                       color: '#0a0a0a',
-                      boxShadow: `0 8px 35px ${colors.glow}`,
                     }}
                   >
                     <Gamepad2 className="w-4 h-4 mr-2" />
@@ -218,8 +199,8 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
             </div>
           </div>
 
-          <div className="mt-5 sm:mt-6 pt-4 relative" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <div className="absolute top-0 left-[10%] right-[10%] h-[1px]" style={{ background: `linear-gradient(90deg, transparent, ${colors.neon}40, transparent)` }} />
+          {/* Footer */}
+          <div className="mt-5 sm:mt-6 pt-4 border-t border-white/5">
             <div className="flex items-center justify-center gap-4 sm:gap-8">
               {[
                 { icon: Zap, text: "Instant Payout", color: '#00ff88' },
@@ -228,7 +209,7 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
               ].map((item, i) => (
                 <div key={i} className="flex items-center gap-1.5 sm:gap-2">
                   <item.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: item.color }} />
-                  <span className="text-white/60 text-[10px] sm:text-xs font-semibold">{item.text}</span>
+                  <span className="text-white/50 text-[10px] sm:text-xs font-semibold">{item.text}</span>
                 </div>
               ))}
             </div>
@@ -241,10 +222,38 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
 
 CompetitionCard.displayName = 'CompetitionCard';
 
+// Static background component with no animations
+const StaticBackground = memo(() => (
+  <div className="absolute inset-0" style={{ zIndex: 0 }}>
+    <video
+      autoPlay
+      muted
+      loop
+      playsInline
+      className="absolute inset-0 w-full h-full object-cover"
+      style={{ opacity: 0.5 }}
+    >
+      <source src={featuredBgVideo} type="video/mp4" />
+    </video>
+    <div className="absolute inset-0" style={{ 
+      zIndex: 2, 
+      background: 'linear-gradient(180deg, rgba(7,7,9,0.85) 0%, rgba(7,7,9,0.4) 30%, rgba(7,7,9,0.3) 70%, rgba(7,7,9,0.85) 100%)' 
+    }} />
+  </div>
+));
+
+StaticBackground.displayName = 'StaticBackground';
+
 export default function FeaturedCompetitions({ competitions }: FeaturedCompetitionsProps) {
   const [, setLocation] = useLocation();
   const [activeSlide, setActiveSlide] = useState(0);
   const sliderRef = useRef<Slider>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Check mobile on mount only
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768);
+  }, []);
 
   // Memoize filtered competitions
   const instantCompetitions = useMemo(() => 
@@ -254,20 +263,22 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
     [competitions]
   );
 
-  // Memoize slider settings to prevent re-renders
+  // Simplified slider settings with reduced animation complexity
   const sliderSettings = useMemo(() => ({
     dots: false,
     infinite: true,
-    speed: 700,
+    speed: 500, // Reduced from 700
     slidesToShow: 1,
     slidesToScroll: 1,
     autoplay: true,
-    autoplaySpeed: 6000,
+    autoplaySpeed: 8000, // Increased for less frequent updates
     arrows: false,
     pauseOnHover: true,
     adaptiveHeight: false,
     beforeChange: (_: number, next: number) => setActiveSlide(next),
-    cssEase: 'cubic-bezier(0.45, 0, 0.15, 1)',
+    cssEase: 'ease-out', // Simpler easing
+    useCSS: true,
+    useTransform: true, // Use CSS transforms for better performance
   }), []);
 
   const handleViewCompetition = useCallback((id: string) => {
@@ -282,54 +293,21 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
   if (!instantCompetitions.length) return null;
 
   return (
-    <div className="w-full relative py-14 sm:py-20 overflow-hidden" style={{ background: '#070709' }}>
-      {/* Simplified background video - added will-change and reduced opacity animations */}
-      <div className="absolute inset-0" style={{ zIndex: 0, willChange: 'transform' }}>
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ opacity: 0.65 }}
-        >
-          <source src={featuredBgVideo} type="video/mp4" />
-        </video>
-
-        <div className="absolute inset-0" style={{ 
-          zIndex: 2, 
-          background: 'linear-gradient(180deg, rgba(7,7,9,0.8) 0%, rgba(7,7,9,0.25) 20%, rgba(7,7,9,0.15) 50%, rgba(7,7,9,0.25) 80%, rgba(7,7,9,0.8) 100%)' 
-        }} />
-
-        <div className="absolute inset-0" style={{ 
-          zIndex: 3, 
-          background: 'radial-gradient(ellipse 140% 100% at 50% 50%, transparent 30%, rgba(7,7,9,0.5) 100%)' 
-        }} />
-
-        {/* Reduced number of background particles - from 35 to 15 */}
-        {[...Array(15)].map((_, i) => (
-          <div key={`ft-p-${i}`} className="absolute rounded-full" style={{
-            width: `${1 + (i % 4)}px`,
-            height: `${1 + (i % 4)}px`,
-            background: i % 5 === 0 ? '#00ff88' : i % 5 === 1 ? '#f5d76e' : i % 5 === 2 ? '#60a5fa' : i % 5 === 3 ? '#ffb800' : 'rgba(255,255,255,0.7)',
-            top: `${2 + (i * 6) % 96}%`,
-            left: `${1 + (i * 6.5) % 98}%`,
-            opacity: 0.4,
-          }} />
-        ))}
-      </div>
+    <div className="w-full relative py-12 sm:py-16 overflow-hidden bg-[#070709]">
+      <StaticBackground />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
         <div className="mb-6 sm:mb-8">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center relative" style={{
-                background: 'linear-gradient(135deg, rgba(0,255,136,0.15), rgba(245,215,110,0.1))',
-                border: '1px solid rgba(0,255,136,0.3)',
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center" style={{
+                background: 'linear-gradient(135deg, rgba(0,255,136,0.1), rgba(245,215,110,0.05))',
+                border: '1px solid rgba(0,255,136,0.2)',
               }}>
-                <Gamepad2 className="w-6 h-6 sm:w-7 sm:h-7" style={{ color: '#00ff88' }} />
+                <Gamepad2 className="w-6 h-6 sm:w-7 sm:h-7 text-[#00ff88]" />
               </div>
-              <div>
+             <div>
                 <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight" style={{
                   background: 'linear-gradient(90deg, #00ff88, #f5d76e, #60a5fa, #00ff88)',
                   backgroundSize: '300% auto',
@@ -339,23 +317,19 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
                 <p className="text-white/50 text-[11px] sm:text-sm font-medium hidden sm:block">Play & win premium prizes instantly</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full" style={{
-                background: 'rgba(0,255,136,0.08)',
-                border: '1px solid rgba(0,255,136,0.3)',
-              }}>
-                <div className="relative">
-                  <div className="w-2 h-2 rounded-full" style={{ background: '#00ff88' }} />
-                  <div className="absolute inset-0 w-2 h-2 rounded-full animate-ping" style={{ background: '#00ff88' }} />
-                </div>
-                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider" style={{ color: '#00ff88' }}>Live</span>
-              </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full" style={{
+              background: 'rgba(0,255,136,0.08)',
+              border: '1px solid rgba(0,255,136,0.3)',
+            }}>
+              <div className="w-1.5 h-1.5 rounded-full bg-[#00ff88]" />
+              <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#00ff88]">Live</span>
             </div>
           </div>
         </div>
 
+        {/* Slider */}
         <div>
-          <Slider ref={sliderRef} {...sliderSettings} className="featured-slider">
+          <Slider ref={sliderRef} {...sliderSettings}>
             {instantCompetitions.map((competition) => (
               <CompetitionCard 
                 key={competition.id} 
@@ -366,30 +340,47 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
           </Slider>
         </div>
 
-        <div className="mt-5 sm:mt-8">
-          <div className="flex items-center justify-center gap-2 sm:gap-3">
-            {instantCompetitions.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => handleSlideChange(i)}
-                className="relative transition-all duration-500 cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 rounded-full p-1"
-                aria-label={`Go to slide ${i + 1}`}
-                aria-current={i === activeSlide ? 'true' : undefined}
-              >
-                <div className={`rounded-full transition-all duration-500 ${
-                  i === activeSlide
-                    ? 'w-8 sm:w-12 h-2 sm:h-2.5'
-                    : 'w-2 sm:w-2.5 h-2 sm:h-2.5 group-hover:w-4'
-                }`} style={{
-                  background: i === activeSlide
-                    ? 'linear-gradient(90deg, #00ff88, #f5d76e, #60a5fa)'
-                    : 'rgba(255,255,255,0.25)',
-                }} />
-              </button>
-            ))}
-          </div>
+        {/* Dots navigation - simplified */}
+        <div className="mt-5 sm:mt-8 flex items-center justify-center gap-2 sm:gap-3">
+          {instantCompetitions.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => handleSlideChange(i)}
+              className="transition-all duration-300 focus:outline-none rounded-full"
+              aria-label={`Go to slide ${i + 1}`}
+            >
+              <div className={`rounded-full transition-all duration-300 ${
+                i === activeSlide
+                  ? 'w-8 sm:w-12 h-1.5'
+                  : 'w-1.5 h-1.5 hover:w-3'
+              }`} style={{
+                background: i === activeSlide
+                  ? 'linear-gradient(90deg, #00ff88, #f5d76e)'
+                  : 'rgba(255,255,255,0.2)',
+              }} />
+            </button>
+          ))}
         </div>
       </div>
+
+      {/* Performance CSS optimizations */}
+      <style jsx>{`
+        .featured-slider {
+          will-change: transform;
+        }
+        .featured-slider .slick-slide {
+          transform: translateZ(0);
+          backface-visibility: hidden;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .featured-slider,
+          .featured-slider * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

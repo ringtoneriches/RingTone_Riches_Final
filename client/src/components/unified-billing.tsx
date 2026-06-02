@@ -79,7 +79,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
 
     switch (orderType) {
       case "scratch":
-        return "The Landmark Loot Purchase";
+        return "Scratch into Summer Purchase";
       case "pop":
         return "Ringtone Pop Purchase";
       case "plinko":
