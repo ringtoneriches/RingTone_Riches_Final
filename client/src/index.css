@@ -1592,6 +1592,63 @@ input[type="range"]::-moz-range-thumb:hover {
   }
 }
 
+/* ── 2050 Hero: gold scan beam sweeping down the hero ── */
+@keyframes scan-beam {
+  0%   { transform: translateY(0);     opacity: 0; }
+  4%   { opacity: 1; }
+  96%  { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+/* ── 2050 Hero: pulsing energy rings around wheel ── */
+@keyframes energy-ring {
+  0%, 100% { transform: scale(1);    opacity: 0.35; }
+  50%       { transform: scale(1.05); opacity: 0.65; }
+}
+
+/* ── 2050 Hero: orbiting particle paths ── */
+@keyframes orbit-slow {
+  from { transform: rotate(0deg)   translateX(175px); }
+  to   { transform: rotate(360deg) translateX(175px); }
+}
+@keyframes orbit-mid {
+  from { transform: rotate(120deg) translateX(205px); }
+  to   { transform: rotate(480deg) translateX(205px); }
+}
+@keyframes orbit-fast {
+  from { transform: rotate(240deg) translateX(148px); }
+  to   { transform: rotate(600deg) translateX(148px); }
+}
+
+@keyframes float-up {
+  0%   { transform: translateY(0) scale(1);       opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 0.45; }
+  100% { transform: translateY(-105vh) scale(0.4); opacity: 0; }
+}
+
+@keyframes nexus-ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@keyframes shimmer-sweep {
+  0%   { transform: translateX(-100%); }
+  55%  { transform: translateX(200%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes fc-float {
+  0%, 100% { transform: translateY(0px) rotate(-2deg); }
+  50%       { transform: translateY(-10px) rotate(2deg); }
+}
+
+@keyframes icon-spin-pop {
+  0%, 100% { transform: rotate(0deg) scale(1);    }
+  25%       { transform: rotate(-12deg) scale(1.2); }
+  75%       { transform: rotate(10deg) scale(1.15); }
+}
+
 .animate-spin-slow {
   animation: spin-slow 30s linear infinite;
 }
@@ -1718,30 +1775,22 @@ button, a, [role="button"] {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-
-
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
+/* ========================================
+   SIGNATURE — "The Sound of Winning"
+   Gold equaliser / soundwave motif
+   ======================================== */
+@keyframes rr-eq {
+  0%, 100% { transform: scaleY(0.32); }
+  50%      { transform: scaleY(1); }
 }
-
-.animate-shimmer {
-  animation: shimmer 2s infinite;
+.rr-eq-bar {
+  transform-origin: bottom;
+  animation: rr-eq 1.2s ease-in-out infinite;
+  will-change: transform;
 }
-
-@keyframes bounce {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-5px);
-  }
+@media (hover: none) and (pointer: coarse) {
+  .rr-eq-bar { animation: none !important; transform: scaleY(0.7) !important; }
 }
-
-.animate-bounce {
-  animation: bounce 1s ease-in-out infinite;
+@media (prefers-reduced-motion: reduce) {
+  .rr-eq-bar { animation: none !important; }
 }

@@ -47,7 +47,7 @@ const targetDate = endDate
 const TimeBox = ({ label, value }: { label: string; value: number }) => (
   <div className="flex flex-col items-center">
     <span className="text-3xl font-bold text-yellow-400">{zeroPad(value)}</span>
-    <span className="text-sm text-gray-400">{label}</span>
+    <span className="text-sm text-white">{label}</span>
   </div>
 );
 

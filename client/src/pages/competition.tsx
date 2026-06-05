@@ -1,1438 +1,796 @@
 import { useParams, useLocation } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useCallback, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import Testimonials from "@/components/testimonials";
 import { Competition, User } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useRef } from "react";
 import CountdownTimer from "./countdownTimer";
-import { Minus, Plus, ChevronLeft, ChevronRight, Sparkles, Zap, Crown } from "lucide-react";
-import useEmblaCarousel from "embla-carousel-react";
+import {
+  Zap, ChevronLeft, ChevronRight, Trophy, Lock, Shield, Star,
+  ArrowRight, BadgeCheck, Users, Clock, Ticket, CreditCard, Plus, Minus,
+  Headphones, CheckCircle2, Coins, Eye, BookOpen, Award,
+} from "lucide-react";
 import UserCompetitionPrizes from "./user-competition-prizes";
 
-// Discount calculation utility - ONLY for game types
-const TICKET_DISCOUNTS: Record<number, number> = {
-  5: 0.10,
-  10: 0.15,
-  15: 0.20,
-};
-
+/* ═══════ CONSTANTS ═══════ */
+const TICKET_DISCOUNTS: Record<number, number> = { 3: 0.05, 5: 0.10, 10: 0.15, 25: 0.10, 50: 0.20 };
 const GAME_TYPES = ["spin", "scratch", "pop", "plinko", "voltz"];
+const BG     = "#0a0800";
+const PANEL  = "#111008";
+const PANEL2 = "#0d0c04";
+const GOLD   = "#FFC300";
+const AMBER  = "#FF8C00";
+const BORDER = "rgba(255,185,0,0.2)";
 
-function calculateDiscountedPrice(basePrice: number, quantity: number) {
-  const originalPrice = basePrice * quantity;
-  
-  const sortedTiers = Object.keys(TICKET_DISCOUNTS)
-    .map(Number)
-    .sort((a, b) => b - a);
-  
-  let discountPercent = 0;
-  for (const tier of sortedTiers) {
-    if (quantity >= tier) {
-      discountPercent = TICKET_DISCOUNTS[tier];
-      break;
-    }
-  }
-  
-  const discountedPrice = originalPrice * (1 - discountPercent);
-  const savings = originalPrice - discountedPrice;
-  
-  return {
-    originalPrice: parseFloat(originalPrice.toFixed(2)),
-    discountPercent: discountPercent * 100,
-    discountedPrice: parseFloat(discountedPrice.toFixed(2)),
-    savings: parseFloat(savings.toFixed(2)),
-  };
-}
-
-function getApplicableDiscount(quantity: number): number {
-  const sortedTiers = Object.keys(TICKET_DISCOUNTS)
-    .map(Number)
-    .sort((a, b) => b - a);
-  
-  for (const tier of sortedTiers) {
-    if (quantity >= tier) {
-      return TICKET_DISCOUNTS[tier] * 100;
-    }
-  }
-  
+function getDiscount(qty: number) {
+  const tiers = Object.keys(TICKET_DISCOUNTS).map(Number).sort((a, b) => b - a);
+  for (const t of tiers) { if (qty >= t) return TICKET_DISCOUNTS[t] * 100; }
   return 0;
 }
+function calcTotal(base: number, qty: number, isGame: boolean) {
+  if (!isGame) return base * qty;
+  const d = getDiscount(qty) / 100;
+  return +(base * qty * (1 - d)).toFixed(2);
+}
+function prizeMoney(title: string) {
+  const m = title.match(/£[\d,]+/); return m ? m[0] : "";
+}
+const FALLBACK = "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=900&h=600";
 
-// Add this component before the CompetitionPage component definition
-
-// Premium Progress Bar Component for Instant Type
-const InstantProgressBar = ({ competition }: { competition: Competition }) => {
-  const sold = competition.soldTickets ?? 0;
-  const total = competition.maxTickets ?? 0;
-  const remaining = total - sold;
-  const percentage = total > 0 ? (sold / total) * 100 : 0;
-  const isHighDemand = percentage > 70;
-  const isAlmostFull = percentage > 85;
-  
+/* ─── Mini card for carousel ─── */
+function MiniCard({ comp, onClick }: { comp: Competition; onClick: () => void }) {
+  const left = comp.maxTickets ? comp.maxTickets - (comp.soldTickets ?? 0) : null;
+  const pv = prizeMoney(comp.title);
+  const prog = comp.maxTickets ? Math.min(100, ((comp.soldTickets ?? 0) / comp.maxTickets) * 100) : 0;
+  const badge = prog > 60 ? { label: "HOT", bg: "linear-gradient(135deg,#C62800,#FF4500)" }
+    : prog < 12 ? { label: "NEW", bg: "linear-gradient(135deg,#006B5E,#00A896)" }
+    : { label: "LIVE", bg: "linear-gradient(135deg,#1255A0,#1976D2)" };
   return (
-    <div className="relative group">
-      {/* Animated border glow */}
-      <div className="absolute -inset-[2px] bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-2xl opacity-40 group-hover:opacity-70 transition-all duration-500 blur-md"></div>
-      
-      <div className="relative bg-gradient-to-br from-[#0a0a0a] to-[#0f0f0f] rounded-2xl p-6 md:p-8 border border-[#FACC15]/20 overflow-hidden">
-        
-        {/* Background shimmer effect */}
-        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#FACC15]/5 to-transparent animate-shimmer"></div>
-        </div>
-        
-        {/* Header with title */}
-        
-        
-        {/* Two Column Stats - Large Numbers */}
-       
-        
-        {/* Premium Progress Bar Section */}
-        <div className="space-y-3">
-          <div className="flex justify-between items-end">
-            <div>
-              <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Overall Progress</span>
-              <p className="text-2xl font-bold text-white">{percentage.toFixed(1)}%</p>
-            </div>
-            <div className="text-right">
-              <span className="text-xs text-gray-500">Total Capacity</span>
-              <p className="text-lg font-bold text-[#FACC15]">{total.toLocaleString()} tickets</p>
-            </div>
+    <div onClick={onClick} className="mc" style={{
+      minWidth: 195, maxWidth: 195, borderRadius: 10, overflow: "hidden", cursor: "pointer",
+      background: PANEL, border: `1px solid ${BORDER}`, flexShrink: 0,
+    }}>
+      <div style={{ position: "relative", height: "200px" }}>
+        <img src={comp.imageUrl || FALLBACK} alt={comp.title}
+          onError={e => { (e.target as HTMLImageElement).src = FALLBACK; }}
+          style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.4s" }}
+          className="mc-img"
+        />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,transparent 40%,rgba(10,8,0,0.95) 100%)" }} />
+        <div style={{ position: "absolute", top: 7, left: 7, padding: "2px 8px", borderRadius: 20, fontSize: 7, fontWeight: 900, color: "#fff", background: badge.bg, letterSpacing: "0.1em" }}>{badge.label}</div>
+      </div>
+      <div style={{ padding: "8px 10px 12px" }}>
+        <div style={{ fontSize: 13, fontWeight: 900, color: GOLD, marginBottom: 1 }}>{pv || "WIN"}</div>
+        <p style={{ fontSize: 8.5, fontWeight: 600, color: "rgba(255,255,255,0.5)", lineHeight: 1.35, marginBottom: 7, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          JUST £{parseFloat(comp.ticketPrice).toFixed(2)} PER ENTRY
+        </p>
+        {comp.maxTickets && (
+          <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.07)", overflow: "hidden", marginBottom: 5 }}>
+            <div style={{ height: "100%", width: `${prog}%`, background: `linear-gradient(90deg,${AMBER},${GOLD})`, borderRadius: 2 }} />
           </div>
-          
-          {/* Multi-layer progress bar */}
-          <div className="relative">
-            {/* Background track */}
-            <div className="h-6 bg-black/60 rounded-full overflow-hidden border border-[#FACC15]/20">
-              {/* Main progress fill */}
-              <div 
-                className="relative h-full bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-full transition-all duration-1000 ease-out"
-                style={{ width: `${percentage}%` }}
-              >
-                {/* Animated shimmer overlay */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                
-                {/* Pulsing glow effect */}
-                <div className="absolute inset-0 rounded-full animate-pulse opacity-50" 
-                     style={{ background: "radial-gradient(circle at center, rgba(250,204,21,0.8) 0%, transparent 80%)" }}>
-                </div>
-              </div>
+        )}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 900, color: GOLD }}>£{parseFloat(comp.ticketPrice).toFixed(2)}</div>
+          </div>
+          {left !== null && (
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.55)" }}>{left.toLocaleString()}</div>
+              <div style={{ fontSize: 7, color: "rgba(255,255,255,0.28)", textTransform: "uppercase", letterSpacing: "0.1em" }}>entries left</div>
             </div>
-            
-            {/* Percentage markers */}
-            <div className="absolute inset-0 flex justify-between px-2 pointer-events-none">
-              {[0, 25, 50, 75, 100].map((mark) => (
-                <div key={mark} className="relative">
-                  <div className="w-px h-4 bg-white/20"></div>
-                  <div className="absolute top-7 left-1/2 -translate-x-1/2 text-[10px] text-gray-600 font-medium">
-                    {mark}%
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          {/* Progress message with urgency */}
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#FACC15]/10">
-            <div className="flex items-center gap-2">
-              <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${
-                remaining === 0 ? 'bg-red-500' : remaining < 100 ? 'bg-orange-500' : 'bg-green-500'
-              }`}></div>
-              <span className="text-xs text-gray-400">
-                {remaining === 0 
-                  ? "🏆 All tickets sold! Winner announcement coming soon."
-                  : remaining < 50 
-                  ? `⚡ Hurry! Only ${remaining.toLocaleString()} tickets remaining!`
-                  : `${remaining.toLocaleString()} spots left - Don't miss out!`}
-              </span>
-            </div>
-            
-            {/* Urgency indicator */}
-            {isAlmostFull && remaining > 0 && (
-              <div className="flex items-center gap-2 animate-bounce">
-                <span className="text-sm">⚠️</span>
-                <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
-                  Last Chance!
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Mini visual indicator of ticket distribution */}
-        <div className="mt-6 pt-4 border-t border-[#FACC15]/10">
-          <div className="flex items-center justify-between text-[10px] text-gray-500 mb-2">
-            <span>Ticket Distribution Visual</span>
-            <span>{sold.toLocaleString()} / {total.toLocaleString()} claimed</span>
-          </div>
-          <div className="flex h-2 gap-0.5 overflow-hidden rounded-full">
-            {/* Create mini blocks for visual representation */}
-            {Array.from({ length: 20 }).map((_, i) => {
-              const blockPercentage = (i + 1) * 5;
-              const isFilled = blockPercentage <= percentage;
-              return (
-                <div
-                  key={i}
-                  className={`flex-1 transition-all duration-500 rounded-sm ${
-                    isFilled
-                      ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B]"
-                      : "bg-white/5"
-                  }`}
-                  style={{ transitionDelay: `${i * 20}ms` }}
-                />
-              );
-            })}
-          </div>
+          )}
         </div>
       </div>
     </div>
   );
-};
+}
 
-
+/* ═══════════════════ MAIN PAGE ═══════════════════ */
 export default function CompetitionPage() {
-  const rangeRef = useRef<HTMLDivElement | null>(null);
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { isAuthenticated, user } = useAuth() as {
-    isAuthenticated: boolean;
-    user: User | null;
-  };
-  const queryClient = useQueryClient();
-  const [quantity, setQuantity] = useState(1);
+  const { isAuthenticated, user } = useAuth() as { isAuthenticated: boolean; user: User | null };
+  const [qty, setQty] = useState(10);
+  const [tab, setTab] = useState<"brief" | "vault" | "howto" | "rules">("brief");
   const [showQuiz, setShowQuiz] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
-  const [isPostalModalOpen, setIsPostalModalOpen] = useState(false);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [isVideoLoading, setIsVideoLoading] = useState(false);
-  
-  // Carousel state
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
-  const [canScrollPrev, setCanScrollPrev] = useState(false);
-  const [canScrollNext, setCanScrollNext] = useState(false);
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [postal, setPostal] = useState(false);
+  const boardRef = useRef<HTMLDivElement>(null);
 
-  const scrollPrev = useCallback(() => emblaApi && emblaApi.scrollPrev(), [emblaApi]);
-  const scrollNext = useCallback(() => emblaApi && emblaApi.scrollNext(), [emblaApi]);
+  const quiz = { q: "You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?", opts: ["7:15am", "7:25am", "7:30am", "7:45am"], ans: "7:30am" };
 
-  const onSelect = useCallback(() => {
-    if (!emblaApi) return;
-    setCanScrollPrev(emblaApi.canScrollPrev());
-    setCanScrollNext(emblaApi.canScrollNext());
-  }, [emblaApi]);
+  const { data: comp, isLoading } = useQuery<Competition>({ queryKey: ["/api/competitions", id], enabled: !!id });
+  const { data: myTickets = [] } = useQuery<any[]>({ queryKey: ["/api/user/tickets"], enabled: isAuthenticated });
+  const { data: allComps = [] } = useQuery<Competition[]>({ queryKey: ["/api/competitions"] });
+  const others = (allComps as Competition[]).filter(c => c.id !== id).slice(0, 16);
 
-  useEffect(() => {
-    if (!emblaApi) return;
-    onSelect();
-    emblaApi.on("select", onSelect);
-    emblaApi.on("reInit", onSelect);
-  }, [emblaApi, onSelect]);
-  
-  const quizQuestion = {
-    question:
-      "You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?",
-    options: ["7:15am", "7:25am", "7:30am", "7:45am"],
-    correct: "7:30am",
-  };
+  const ctype    = comp?.type?.toLowerCase() || "";
+  const isGame   = GAME_TYPES.includes(ctype);
+  const maxT     = comp?.maxTickets ?? 0;
+  const soldT    = comp?.soldTickets ?? 0;
+  const rem      = maxT > 0 ? maxT - soldT : null;
+  const prog     = maxT > 0 ? Math.min(100, (soldT / maxT) * 100) : 0;
+  const soldOut  = maxT > 0 ? soldT >= maxT : false;
+  const almostGone = rem !== null && maxT > 0 ? rem / maxT < 0.15 : false;
+  const isFree   = comp?.title === "💷 £500 FREE GIVEAWAY! 🎉";
+  const myCount  = myTickets.filter((t: any) => t.competitionId === id).length;
+  const canBuy   = isFree ? myCount < 2 : true;
+  const freeLeft = 2 - myCount;
 
-  const handleOpenQuiz = () => {
-    setSelectedAnswer(null);
-    setIsAnswerCorrect(null);
-    setShowQuiz(true);
-  };
+  const price    = comp ? parseFloat(comp.ticketPrice) : 0;
+  const discount = getDiscount(qty);
+  const total    = comp ? calcTotal(price, qty, isGame) : 0;
+  const prizeVal = comp ? prizeMoney(comp.title) : "";
+  const disabled = soldOut || !canBuy;
 
-  const { data: competition, isLoading } = useQuery<Competition>({
-    queryKey: ["/api/competitions", id],
-    enabled: !!id,
+  const daysLeft = (comp as any)?.endDate
+    ? Math.max(0, Math.ceil((new Date((comp as any).endDate).getTime() - Date.now()) / 86400000))
+    : null;
+
+  const buyMut = useMutation({
+    mutationFn: async (data: { competitionId: string; quantity: number }) => {
+      const ep: Record<string, string> = { spin: "/api/create-spin-order", scratch: "/api/create-scratch-order", pop: "/api/create-pop-order", plinko: "/api/create-plinko-order", voltz: "/api/create-voltz-order" };
+      return (await apiRequest(ep[ctype] || "/api/create-competition-order", "POST", data)).json();
+    },
+    onSuccess: (data) => {
+      const rm: Record<string, string> = { spin: `/spin-billing/${data.orderId}/${comp?.wheelType}`, scratch: `/scratch-billing/${data.orderId}`, pop: `/pop-billing/${data.orderId}`, plinko: `/plinko-billing/${data.orderId}`, voltz: `/voltz-billing/${data.orderId}` };
+      setLocation(rm[ctype] || `/checkout/${data.orderId}`);
+    },
+    onError: (err) => {
+      if (isUnauthorizedError(err)) { toast({ title: "Login Required", variant: "destructive" }); setTimeout(() => window.location.href = "/login", 1000); return; }
+      toast({ title: "Error", description: (err as any).message || "Failed", variant: "destructive" });
+    },
   });
 
-  const { data: userTickets = [] } = useQuery<any[]>({
-    queryKey: ["/api/user/tickets"],
-    enabled: isAuthenticated,
-  });
+  const doPurchase = () => {
+    if (!isAuthenticated) { window.location.href = "/login"; return; }
+    if (!comp) return;
+    if (isFree && myCount >= 2) { toast({ title: "Limit Reached", variant: "destructive" }); return; }
+    if (!isGame && rem !== null && rem <= 0) { toast({ title: "Sold Out", variant: "destructive" }); return; }
+    buyMut.mutate({ competitionId: comp.id, quantity: qty });
+  };
+  const openQuiz = () => { setAnswer(null); setShowQuiz(true); };
+  const submitQuiz = () => {
+    if (answer === quiz.ans) { setShowQuiz(false); doPurchase(); }
+    else { toast({ title: "Wrong Answer ❌", variant: "destructive" }); setShowQuiz(false); }
+  };
 
-  const isSoldOut =
-    competition?.maxTickets && competition.maxTickets > 0
-      ? (competition.soldTickets ?? 0) >= competition.maxTickets
-      : false;
-
-  const availableTickets = userTickets.filter(
-    (ticket: any) => ticket.competitionId === id
+  /* ─ LOADING ─ */
+  if (isLoading) return (
+    <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 14 }}>
+      <div style={{ width: 44, height: 44, border: "2px solid rgba(255,185,0,0.15)", borderTopColor: GOLD, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+      <p style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,185,0,0.35)" }}>Loading...</p>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+  if (!comp) return (
+    <div style={{ minHeight: "100vh", background: BG, color: "#fff" }}>
+      <Header />
+      <div style={{ maxWidth: 560, margin: "120px auto", textAlign: "center", padding: "0 20px" }}>
+        <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 16 }}>Competition Not Found</h1>
+        <button onClick={() => setLocation("/")} style={{ padding: "13px 36px", borderRadius: 12, background: GOLD, color: "#000", fontWeight: 900, border: "none", cursor: "pointer" }}>All Competitions</button>
+      </div>
+      <Footer />
+    </div>
   );
 
-  const isFreeGiveaway = competition?.title === "💷 £500 FREE GIVEAWAY! 🎉";
-  const userTicketCount = availableTickets.length;
-  const maxTicketsForGiveaway = 2;
-  const canBuyMore = isFreeGiveaway ? userTicketCount < maxTicketsForGiveaway : true;
-  const remainingTickets = maxTicketsForGiveaway - userTicketCount;
+  const clean    = comp.title.replace(/^WIN\s+/i, "").replace(/[🎁🎄🚰🎮💷📱⚡️🔥💥🏆]/g, "").trim();
+  const mainTitle = clean.split("–")[0].trim().toUpperCase();
 
-  const competitionType = competition?.type?.toLowerCase() || "";
-  const isGameType = GAME_TYPES.includes(competitionType);
+  /* Quick-pick options matching reference */
+  const PICKS = isFree ? [1, 2] : [1, 3, 5, 10, 25, 50];
 
-  const purchaseTicketMutation = useMutation({
-    mutationFn: async (data: { competitionId: string; quantity: number }) => {
-      if (competitionType === "spin") {
-        const response = await apiRequest("/api/create-spin-order", "POST", data);
-        return response.json();
-      } 
-      else if (competitionType === "scratch") {
-        const response = await apiRequest("/api/create-scratch-order", "POST", data);
-        return response.json();
-      }
-      else if (competitionType === "pop") {
-        const response = await apiRequest("/api/create-pop-order", "POST", data);
-        return response.json();
-      }
-      else if (competitionType === "plinko") {
-        const response = await apiRequest("/api/create-plinko-order", "POST", data);
-        return response.json();
-      }
-      else if (competitionType === "voltz") {
-        const response = await apiRequest("/api/create-voltz-order", "POST", data);
-        return response.json();
-      }
-      else {
-        const response = await apiRequest("/api/create-competition-order", "POST", data);
-        return response.json();
-      }
-    },
+  const TABS = [
+    { k: "brief", label: "Mission Brief", icon: Zap },
+    { k: "vault", label: "Prize Vault",   icon: Award },
+    { k: "howto", label: "How to Play",   icon: BookOpen },
+    { k: "rules", label: "Rules",         icon: Eye },
+  ] as const;
 
-    onSuccess: (data) => {
-      if (competitionType === "spin") {
-        setLocation(`/spin-billing/${data.orderId}/${competition?.wheelType}`);
-        return;
-      }
-      if (competitionType === "scratch") {
-        setLocation(`/scratch-billing/${data.orderId}`);
-        return;
-      }
-      if (competitionType === "pop") {
-        setLocation(`/pop-billing/${data.orderId}`);
-        return;
-      }
-      if (competitionType === "plinko") {
-        setLocation(`/plinko-billing/${data.orderId}`);
-        return;
-      }
-      if (competitionType === "voltz") {
-        setLocation(`/voltz-billing/${data.orderId}`);
-        return;
-      }
-      setLocation(`/checkout/${data.orderId}`);
-    },
-
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Login Required",
-          description: "Please login to continue.",
-          variant: "destructive",
-        });
-        setTimeout(() => (window.location.href = "/login"), 1000);
-        return;
-      }
-      toast({
-        title: "Error",
-        description: error.message || "Failed to process purchase",
-        variant: "destructive",
-      });
-    },
-  });
-
-  useEffect(() => {
-    const fetchVideo = async () => {
-      if (!competition || competition.type?.toLowerCase() !== "instant") {
-        return;
-      }
-      setIsVideoLoading(true);
-      try {
-        const response = await fetch(`/api/promo-competitions/${competition.id}/video`, {
-          credentials: "include",
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.video?.url) {
-            setVideoUrl(data.video.url);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching video:", error);
-      } finally {
-        setIsVideoLoading(false);
-      }
-    };
-    fetchVideo();
-  }, [competition]);
-
-  const handlePurchase = () => {
-    if (!isAuthenticated) {
-      window.location.href = "/login";
-      return;
-    }
-    if (!competition) return;
-
-    if (isFreeGiveaway) {
-      if (userTicketCount >= maxTicketsForGiveaway) {
-        toast({
-          title: "Limit Reached",
-          description: `You already have ${userTicketCount} tickets. Maximum ${maxTicketsForGiveaway} tickets allowed.`,
-          variant: "destructive",
-        });
-        return;
-      }
-      if (quantity > remainingTickets) {
-        toast({
-          title: "Limit Exceeded",
-          description: `You can only buy ${remainingTickets} more ticket${remainingTickets > 1 ? 's' : ''} (maximum ${maxTicketsForGiveaway} total)`,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    if (!isGameType) {
-      const competitionRemainingTickets =
-        (competition.maxTickets ?? 0) - (competition.soldTickets ?? 0);
-      if (competitionRemainingTickets <= 0) {
-        toast({
-          title: "Sold Out",
-          description: "All tickets for this competition are sold out.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (quantity > competitionRemainingTickets) {
-        toast({
-          title: "Too Many Tickets",
-          description: `Only ${competitionRemainingTickets} ticket${
-            competitionRemainingTickets > 1 ? "s" : ""
-          } remaining. Please reduce your quantity.`,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    purchaseTicketMutation.mutate({
-      competitionId: competition.id,
-      quantity,
-    });
-  };
-
-  const totalPrice = competition
-    ? parseFloat(competition.ticketPrice) * quantity
-    : 0;
-  const progressPercentage = competition?.maxTickets
-    ? (competition.soldTickets! / competition.maxTickets) * 100
-    : 0;
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div
-          className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
-          aria-label="Loading"
-        />
-      </div>
-    );
-  }
-
-  if (!competition) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <h1 className="text-4xl font-bold mb-4">Competition Not Found</h1>
-          <p className="text-muted-foreground mb-8">
-            The competition you're looking for doesn't exist.
-          </p>
-          <button
-            onClick={() => setLocation("/")}
-            className="bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:opacity-90 transition-opacity"
-          >
-            Back to Competitions
-          </button>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
-
-  const handleSubmitAnswer = () => {
-    if (selectedAnswer === quizQuestion.correct) {
-      setIsAnswerCorrect(true);
-      setShowQuiz(false);
-      handlePurchase();
-    } else {
-      setIsAnswerCorrect(false);
-      toast({
-        title: "Wrong Answer ❌",
-        description: "That's not correct! Try again next time.",
-        variant: "destructive",
-      });
-      setShowQuiz(false);
-    }
-  };
-
-  const scrollToRange = () => {
-    if (!rangeRef.current) return;
-    const top = rangeRef.current.getBoundingClientRect().top + window.scrollY - 180;
-    window.scrollTo({ top, behavior: "smooth" });
-  };
-
-  const getGradientStyles = () => {
-    if (competitionType === "spin") {
-      return {
-        hero: "bg-gradient-to-br from-[#facc15] via-[#d946ef] to-[#facc15]",
-        glow: "shadow-[0_0_60px_rgba(250,204,21,0.5)] shadow-[#facc15]/30",
-        badge: "bg-gradient-to-r from-[#facc15] via-[#d946ef] to-[#facc15]",
-        button: "bg-gradient-to-r from-[#facc15] via-[#d946ef] to-[#facc15] hover:from-[#fbbf24] hover:via-[#c026d3] hover:to-[#fbbf24]",
-        shimmer: "from-[#facc15] via-[#d946ef] to-[#facc15]",
-        accent: "rgba(217, 70, 239, 0.15)"
-      };
-    } else if (competitionType === "scratch") {
-      return {
-        hero: "bg-gradient-to-br from-[#facc15] via-[#22d3ee] to-[#facc15]",
-        glow: "shadow-[0_0_60px_rgba(250,204,21,0.5)] shadow-[#facc15]/30",
-        badge: "bg-gradient-to-r from-[#facc15] via-[#22d3ee] to-[#facc15]",
-        button: "bg-gradient-to-r from-[#facc15] via-[#22d3ee] to-[#facc15] hover:from-[#fbbf24] hover:via-[#06b6d4] hover:to-[#fbbf24]",
-        shimmer: "from-[#facc15] via-[#22d3ee] to-[#facc15]",
-        accent: "rgba(34, 211, 238, 0.15)"
-      };
-    } else {
-      return {
-        hero: "bg-gradient-to-br from-[#facc15] via-[#f59e0b] to-[#d97706]",
-        glow: "shadow-[0_0_60px_rgba(250,204,21,0.5)] shadow-[#facc15]/30",
-        badge: "bg-gradient-to-r from-[#facc15] to-[#f59e0b]",
-        button: "bg-gradient-to-r from-[#facc15] to-[#f59e0b] hover:from-[#fbbf24] hover:to-[#d97706]",
-        shimmer: "from-[#facc15] via-[#fbbf24] to-[#facc15]",
-        accent: "rgba(245, 158, 11, 0.15)"
-      };
-    }
-  };
-
-  const gradients = getGradientStyles();
-
-  const remainingPercentage = competition?.maxTickets
-    ? ((competition.maxTickets - (competition.soldTickets ?? 0)) / competition.maxTickets) * 100
-    : 100;
-  const isAlmostGone = remainingPercentage < 15;
-
-  const pricePerTicket = parseFloat(competition.ticketPrice);
-  
-  // Only calculate discount for game types
-  const { originalPrice, discountPercent, discountedPrice, savings } = 
-    isGameType ? calculateDiscountedPrice(pricePerTicket, quantity) : 
-    { originalPrice: pricePerTicket * quantity, discountPercent: 0, discountedPrice: pricePerTicket * quantity, savings: 0 };
+  /* Panel style */
+  const P: React.CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12 };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div style={{ minHeight: "100vh", background: BG, color: "#fff", fontFamily: "inherit" }}>
       <Header />
 
-      {/* Competition Details */}
-      <section className="py-6 md:py-12 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A]">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-[#facc15]/20 to-transparent rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tl from-[#f59e0b]/20 to-transparent rounded-full blur-3xl animate-pulse" style={{animationDelay: "1.5s"}}></div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full blur-3xl animate-pulse opacity-30" style={{background: gradients.accent, animationDelay: "0.7s"}}></div>
-          
-          <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-[#facc15] rounded-full animate-sparkle-float" style={{animationDelay: "0s"}}></div>
-          <div className="absolute top-1/3 right-1/3 w-1.5 h-1.5 bg-[#fbbf24] rounded-full animate-sparkle-float" style={{animationDelay: "1.2s"}}></div>
-          <div className="absolute bottom-1/4 left-1/2 w-2.5 h-2.5 bg-[#facc15] rounded-full animate-sparkle-float" style={{animationDelay: "2s"}}></div>
-          <div className="absolute top-2/3 left-1/3 w-1 h-1 bg-[#fbbf24] rounded-full animate-sparkle-float" style={{animationDelay: "0.8s"}}></div>
-          <div className="absolute bottom-1/3 right-1/4 w-2 h-2 bg-[#facc15] rounded-full animate-sparkle-float" style={{animationDelay: "1.6s"}}></div>
-        </div>
-        
-        <style>{`
-          @keyframes sparkle-float {
-            0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
-            25% { transform: translateY(-20px) scale(1.2); opacity: 0.7; }
-            50% { transform: translateY(-30px) scale(0.8); opacity: 0.5; }
-            75% { transform: translateY(-15px) scale(1.1); opacity: 0.6; }
-          }
-          .animate-sparkle-float { animation: sparkle-float 6s ease-in-out infinite; }
-          @media (prefers-reduced-motion: reduce) {
-            .animate-sparkle-float, .animate-pulse { animation: none; }
-          }
-        `}</style>
-
-        <div className="container mx-auto px-3 md:px-4 relative z-10">
-          <div className="max-w-6xl mx-auto">
-            <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6 md:gap-12">
-              {/* Left: Competition Image and Details */}
-              <div className="space-y-4 md:space-y-6">
-                <div className="relative group">
-                  <div className="absolute -inset-3 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-3xl blur-2xl opacity-40 group-hover:opacity-60 transition-all duration-700"></div>
-                  
-                  <div className={`relative rounded-2xl overflow-hidden ${gradients.glow} shadow-2xl border-4 border-[#FACC15]/60`}>
-                    <div className="overflow-hidden rounded-xl" ref={emblaRef}>
-                      <div className="flex">
-                        <div className="flex-[0_0_100%] min-w-0">
-                          <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-                            <img
-                              src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"}
-                              alt={competition.title}
-                              className="w-full h-full object-cover"
-                              data-testid={`img-competition-${competition.id}`}
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none z-10"></div>
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(250,204,21,0.05),transparent_60%)] pointer-events-none z-10"></div>
-                            
-                            {isAlmostGone && competition.maxTickets && (
-                              <div className="absolute top-2 md:top-3 right-2 md:right-3 bg-gradient-to-r from-red-600 to-pink-600 text-white px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[10px] md:text-sm font-bold shadow-xl z-20">
-                                ⚡ ALMOST GONE!
-                              </div>
-                            )}
-
-                            <div className="absolute bottom-2 md:bottom-3 left-2 md:left-3 bg-gradient-to-r from-[#FACC15]/95 to-[#F59E0B]/95 backdrop-blur-md text-gray-900 px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[10px] md:text-sm font-bold flex items-center gap-1.5 md:gap-2 shadow-xl z-20">
-                              <span>🔥</span>
-                              <span>Trending</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={scrollPrev}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full z-20 transition-all"
-                      disabled={!canScrollPrev}
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={scrollNext}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full z-20 transition-all"
-                      disabled={!canScrollNext}
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="relative group">
-                  <div className="absolute -inset-0.5 bg-gradient-to-r from-[#facc15] via-[#f59e0b] to-[#facc15] rounded-xl opacity-50 blur group-hover:opacity-75 transition duration-500"></div>
-                  
-                  <div className="relative bg-black/60 backdrop-blur-xl rounded-xl border border-white/10 p-4 md:p-6 shadow-2xl overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-[#facc15]/10 via-[#f59e0b]/5 to-[#d97706]/10 pointer-events-none"></div>
-                    
-                    <div className="relative z-10">
-                      <h3 className="text-lg md:text-2xl font-bold mb-4 md:mb-5 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] bg-clip-text text-transparent">
-                        ✨ Competition Details
-                      </h3>
-                      <div className="space-y-3 md:space-y-4">
-                        <div className="flex justify-between items-center gap-2 bg-black/30 rounded-lg p-2.5">
-                          <span className="text-gray-300 text-xs md:text-sm flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#facc15]"></span>
-                            Type
-                          </span>
-                          <span className={`capitalize font-bold text-xs md:text-sm ${gradients.badge} text-white px-3 py-1.5 rounded-full shadow-lg`}>
-                            {competitionType === "spin" ? "🎡 Spin Wheel" : competitionType === "scratch" ? "🎫 Scratch Card" : competitionType === "pop" ? "🎈 Pop Balloon" : competitionType === "plinko" ? "🎯 Plinko" : competitionType === "voltz" ? "⚡ Voltz" : "🏆 Competition"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center gap-2 bg-black/30 rounded-lg p-2.5">
-                          <span className="text-gray-300 text-xs md:text-sm flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#facc15]"></span>
-                            Price per Entry
-                          </span>
-                          <span className="font-bold text-[#facc15] text-base md:text-lg drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
-                            £{pricePerTicket.toFixed(2)}
-                          </span>
-                        </div>
-                       
-                      </div>
-
-                      <div className="mt-5 md:mt-6 pt-4 border-t border-[#facc15]/20 grid grid-cols-2 gap-3">
-                        {[
-                          { icon: "🔒", label: "Secure Payment" },
-                          { icon: "✓", label: "Fair Draw" },
-                          { icon: "⚡", label: "Quick Entry" },
-                          { icon: "🏆", label: "Real Winners" },
-                        ].map((badge, i) => (
-                          <div key={i} className="relative group/badge">
-                            <div className="absolute inset-0 bg-gradient-to-r from-[#facc15] to-[#f59e0b] rounded-lg opacity-0 group-hover/badge:opacity-20 transition duration-300"></div>
-                            <div className="relative flex flex-col items-center gap-2 text-center bg-gradient-to-br from-[#facc15]/10 to-transparent rounded-lg p-3 border border-[#facc15]/30 hover:border-[#facc15]/60 transition group-hover/badge:scale-105 transform">
-                              <span className="text-2xl">{badge.icon}</span>
-                              <span className="text-[10px] md:text-xs font-bold bg-gradient-to-r from-[#facc15] to-[#f59e0b] bg-clip-text text-transparent">{badge.label}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {competitionType === "instant" && videoUrl && (
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-xl opacity-30 blur group-hover:opacity-50 transition duration-500"></div>
-                    <div className="relative bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-3 overflow-hidden shadow-2xl">
-                      <div className="relative rounded-lg overflow-hidden bg-black">
-                        <video controls className="w-full max-h-[200px] md:max-h-[240px] object-contain" preload="metadata">
-                          <source src={videoUrl} type="video/mp4" />
-                        </video>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Right: Purchase Form */}
-              <div className="space-y-4 md:space-y-6">
-                <div className="relative group">
-                  <div className="absolute -inset-0.5 bg-gradient-to-r from-[#facc15] via-[#f59e0b] to-[#facc15] rounded-xl opacity-30 blur group-hover:opacity-50 transition duration-500"></div>
-                  
-                  <div className="relative bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4 md:p-8 overflow-hidden shadow-2xl">
-                    <div className="absolute inset-0 bg-gradient-to-br from-[#facc15]/5 via-[#f59e0b]/5 to-[#d97706]/5"></div>
-                    
-                    <div className="relative z-10">
-                      <div className="mb-5">
-                        <CountdownTimer endDate={competition.endDate} />
-                      </div>
-                      
-                      <div className="relative mb-4 md:mb-5">
-                        <div className="absolute inset-0 bg-gradient-to-r from-[#FACC15]/20 via-[#F59E0B]/20 to-[#FACC15]/20 blur-2xl"></div>
-                        <h1
-                          className="relative text-2xl sm:text-3xl md:text-4xl lg:text-5xl mt-2 md:mt-3 font-black break-words leading-[1.1] tracking-tight"
-                          style={{ 
-                            wordBreak: "break-word", 
-                            hyphens: "auto",
-                            background: "linear-gradient(135deg, #FACC15 0%, #F59E0B 50%, #FACC15 100%)",
-                            backgroundSize: "200% 100%",
-                            WebkitBackgroundClip: "text",
-                            WebkitTextFillColor: "transparent",
-                            backgroundClip: "text",
-                            filter: "drop-shadow(0 0 24px rgba(250, 204, 21, 0.3))"
-                          }}
-                          data-testid={`heading-${competition.id}`}
-                        >
-                          {competition.title}
-                        </h1>
-                        <div className="h-1 mt-2 md:mt-3 bg-gradient-to-r from-transparent via-[#FACC15] to-transparent rounded-full opacity-60"></div>
-                      </div>
-
-                      {competition.description?.trim() ? (
-                        <div className="mb-4 md:mb-5">
-                          <div className="bg-gradient-to-br from-[#FACC15]/5 to-[#F59E0B]/5 rounded-lg p-3 md:p-4 border border-[#FACC15]/20">
-                            <div className="text-gray-300 text-[11px] md:text-xs whitespace-pre-line leading-relaxed">
-                              {competition.description}
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {isGameType && (
-                        <div className="mb-4 md:mb-5">
-                          <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-lg p-3 md:p-4 border border-green-500/30 shadow-lg">
-                            <div className="flex items-start gap-3">
-                              <div className="flex-shrink-0 mt-0.5">
-                                <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                                  <span className="text-lg">🎯</span>
-                                </div>
-                              </div>
-                              <div className="flex-1">
-                                <h4 className="text-green-400 font-bold text-sm md:text-base mb-1.5">
-                                  💷 £100 Cash Draw Every Month
-                                </h4>
-                                <p className="text-gray-300 text-[11px] md:text-xs leading-relaxed">
-                                  All entries automatically enter our monthly £100 cash draw!
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-3 md:space-y-4">
-                        <div className="flex items-center justify-between text-lg md:text-xl font-bold">
-                          <span className="break-words">£{pricePerTicket.toFixed(2)}</span>
-                          <span className="text-xs text-muted-foreground font-normal">per entry</span>
-                        </div>
-
-                        {/* Total Cost Box - Premium Yellow/Gold */}
-                        <div className="bg-gradient-to-br from-[#facc15] via-[#f59e0b] to-[#d97706] rounded-lg p-3 md:p-4 shadow-xl">
-                          <div className="flex justify-between items-center mb-1.5">
-                            <span className="font-medium text-gray-900 text-sm">Total</span>
-                            <div className="text-right">
-                              {isGameType && discountPercent > 0 && (
-                                <span className="text-xs text-gray-700 line-through block">
-                                  £{originalPrice.toFixed(2)}
-                                </span>
-                              )}
-                              <span className="text-lg md:text-xl font-bold text-gray-900">
-                                £{isGameType ? discountedPrice.toFixed(2) : (pricePerTicket * quantity).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                          {isGameType && discountPercent > 0 && (
-                            <div className="flex items-center justify-center gap-2 mt-1 bg-black/20 rounded-full py-1 px-3">
-                              <Sparkles className="w-3 h-3 text-yellow-300" />
-                              <span className="text-gray-900 text-[10px] md:text-xs font-bold">
-                                {discountPercent}% BUNDLE OFF
-                              </span>
-                              <span className="text-gray-900 text-[10px] md:text-xs font-semibold">
-                                Save £{savings.toFixed(2)}
-                              </span>
-                            </div>
-                          )}
-                          <p className="text-[11px] md:text-xs text-gray-900/90 mt-1.5 font-semibold text-center">
-                            ✓ FREE DIGITAL ENTRY SLIPS
-                          </p>
-                        </div>
-
-                        {availableTickets.length > 0 && !isGameType ? (
-                          <div className="space-y-2.5 md:space-y-3">
-                            <div className="bg-gradient-to-r from-[#facc15]/20 to-[#f59e0b]/20 border border-[#facc15]/30 rounded-lg p-2.5 md:p-3 text-center">
-                              <p className="bg-gradient-to-r from-[#facc15] to-[#f59e0b] bg-clip-text text-transparent font-bold text-xs">
-                                ✅ You have {availableTickets.length} Tickets
-                              </p>
-                            </div>
-                            <button
-                              onClick={scrollToRange}
-                              disabled={isSoldOut || purchaseTicketMutation.isPending}
-                              className={`w-full py-2.5 md:py-3 rounded-lg font-bold text-sm md:text-base transition-all transform hover:scale-105 ${
-                                isSoldOut
-                                  ? "bg-gray-400 text-gray-700 cursor-not-allowed"
-                                  : "bg-gradient-to-r from-[#facc15] to-[#f59e0b] text-gray-900 shadow-lg hover:shadow-xl hover:from-[#fbbf24] hover:to-[#d97706]"
-                              }`}
-                              data-testid="button-purchase"
-                            >
-                              {isSoldOut ? "SOLD OUT" : purchaseTicketMutation.isPending ? "Processing..." : "BUY MORE TICKETS"}
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={scrollToRange}
-                            disabled={isSoldOut || purchaseTicketMutation.isPending}
-                            className={`w-full py-2.5 md:py-3 rounded-lg font-bold text-sm md:text-base transition-all transform hover:scale-105 ${
-                              isSoldOut
-                                ? "bg-gray-400 text-gray-700 cursor-not-allowed"
-                                : "bg-gradient-to-r from-[#facc15] to-[#f59e0b] text-gray-900 shadow-lg hover:shadow-xl hover:from-[#fbbf24] hover:to-[#d97706]"
-                            }`}
-                            data-testid="button-purchase"
-                          >
-                            {isSoldOut ? "SOLD OUT" : purchaseTicketMutation.isPending ? "Processing..." : "BUY NOW 🚀"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {isAuthenticated && user && (
-                  <div className="bg-gradient-to-r from-[#facc15] to-[#f59e0b] rounded-lg p-3 md:p-4 text-center text-gray-900 shadow-lg">
-                    <h3 className="font-bold mb-1.5 text-xs md:text-sm">💰 Your Wallet Balance</h3>
-                    <p className="text-xl md:text-2xl font-bold">
-                      £{parseFloat(user.balance || "0").toFixed(2)}
-                    </p>
-                  </div>
-                )}
-
-                <div className="bg-[#111]/60 backdrop-blur-sm rounded-lg p-2.5 md:p-3 border border-[#facc15]/20">
-                  <div className="flex items-center justify-center gap-1.5 text-[10px]">
-                    <span className="text-[#facc15] text-sm">🔒</span>
-                    <span className="text-[#facc15] font-medium">SSL Secured • Encrypted</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+      {/* ─── BREADCRUMB ─── */}
+      <div style={{ background: "#060500", borderBottom: "1px solid rgba(255,185,0,0.1)" }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", gap: 12, height: 42 }}>
+          <button onClick={() => setLocation("/")} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.2em" }}>
+            <ChevronLeft style={{ width: 12, height: 12 }} />BACK TO ALL COMPETITIONS
+          </button>
+          <span style={{ color: "rgba(255,255,255,0.08)" }}>|</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#00E676", boxShadow: "0 0 8px #00E676", animation: "blink 1.5s ease-in-out infinite" }} />
+            <span style={{ fontSize: 8, fontWeight: 900, color: "#00E676", textTransform: "uppercase", letterSpacing: "0.22em" }}>LIVE DRAW</span>
           </div>
         </div>
-      </section>
+      </div>
 
-      {competitionType === "instant" && competition.maxTickets && (
-        <section className="py-6 md:py-8 relative">
-          <div className="container mx-auto px-3 md:px-4 max-w-4xl">
-            <InstantProgressBar competition={competition} />
-          </div>
-        </section>
-      )}
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "16px 16px 0" }}>
 
-      {/* ==========================================
-          ENTRY SELECTOR SECTION
-          ========================================== */}
-      <section className="py-6 md:py-8 relative overflow-hidden">
-        {/* Premium Dark Background with Gold Accents */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0A] via-[#1a1a1a] to-[#0A0A0A]">
-          {/* Gold Glow Orbs */}
-          <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[#FACC15]/10 rounded-full blur-[100px] animate-pulse"></div>
-          <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-[#F59E0B]/10 rounded-full blur-[100px] animate-pulse" style={{animationDelay: "1s"}}></div>
-          
-          {/* Subtle Grid Pattern */}
-          <div className="absolute inset-0 opacity-[0.03]" style={{
-            backgroundImage: `linear-gradient(rgba(250,204,21,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(250,204,21,0.3) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px'
-          }}></div>
-        </div>
+        {/* ══════════════════════════════════════════
+            ROW 1 — Hero Image (left) + Tabbed Panel (right)
+        ══════════════════════════════════════════ */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }} className="top-g">
 
-        <div ref={rangeRef} className="container mx-auto px-3 md:px-4 text-center max-w-3xl relative z-10">
-          
-          {/* Section Title */}
-          <div className="mb-6 md:mb-8">
-            <div className="inline-flex items-center gap-3 mb-2">
-              <div className="h-px w-8 md:w-12 bg-gradient-to-r from-transparent to-[#FACC15]"></div>
-              <Zap className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15] fill-[#FACC15]" />
-              <h2 className="text-xl md:text-2xl font-black text-white tracking-wider uppercase">
-                Select Entries
-              </h2>
-              <Zap className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15] fill-[#FACC15]" />
-              <div className="h-px w-8 md:w-12 bg-gradient-to-l from-transparent to-[#FACC15]"></div>
-            </div>
-            <p className="text-gray-400 text-xs md:text-sm">Choose your quantity and start playing</p>
-          </div>
+          {/* ── LEFT: Competition Image Card ── */}
+          <div style={{ ...P, position: "relative", overflow: "hidden", minHeight: 360 }}>
+            {/* Gold top accent */}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${GOLD},${AMBER},transparent)`, zIndex: 10 }} />
+            {/* Left gold bar */}
+            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: `linear-gradient(180deg,transparent,${GOLD} 20%,${GOLD} 80%,transparent)`, boxShadow: `0 0 14px rgba(255,185,0,0.5)`, zIndex: 10 }} />
 
-          {/* ========== PREMIUM BUNDLE DISCOUNT SECTION - ONLY FOR GAMES ========== */}
-          {isGameType && (
-            <div className="mb-6 md:mb-8">
-              {/* Gold Border Wrapper */}
-              <div className="relative p-[1px] rounded-2xl bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706]">
-                <div className="relative bg-[#0a0a0a] rounded-2xl overflow-hidden">
-                  
-                  {/* Inner Gold Glow */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/5 via-transparent to-[#F59E0B]/5"></div>
-                  
-                  <div className="relative p-4 md:p-6">
-                    
-                    {/* Header with Crown */}
-                    <div className="flex items-center justify-center gap-2 md:gap-3 mb-5">
-                      <Crown className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15]" />
-                      <h3 className="text-base md:text-lg font-black text-[#FACC15] tracking-wider uppercase">
-                        Bundle & Save
-                      </h3>
-                      <Crown className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15]" />
-                    </div>
+            {/* Background image */}
+            <img src={comp.imageUrl || FALLBACK} alt={comp.title}
+              onError={e => { (e.target as HTMLImageElement).src = FALLBACK; }}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.85 }} />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(10,8,0,0.4) 0%, rgba(10,8,0,0.55) 50%, rgba(10,8,0,0.94) 100%)" }} />
 
-                    {/* Discount Tier Cards */}
-                    <div className="grid grid-cols-3 gap-2 md:gap-4">
-                      {[
-                        { qty: 5, discount: 10, icon: "⭐", label: "STARTER" },
-                        { qty: 10, discount: 15, icon: "🔥", label: "POPULAR" },
-                        { qty: 15, discount: 20, icon: "💎", label: "BEST VALUE" },
-                      ].map((tier) => {
-                        const isSelected = quantity === tier.qty;
-                        const savingsAmount = ((pricePerTicket * tier.qty) * (tier.discount / 100)).toFixed(2);
-                        
-                        return (
-                          <button
-                            key={tier.qty}
-                            onClick={() => setQuantity(tier.qty)}
-                            className={`relative p-3 md:p-4 rounded-xl transition-all duration-300 group ${
-                              isSelected
-                                ? "bg-gradient-to-br from-[#FACC15] to-[#F59E0B] shadow-2xl shadow-[#FACC15]/40 scale-105 z-10"
-                                : "bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-[#FACC15]/30"
-                            }`}
-                          >
-                            {/* Selected Checkmark */}
-                            {isSelected && (
-                              <div className="absolute -top-2 -right-2 w-6 h-6 bg-black rounded-full border-2 border-[#FACC15] flex items-center justify-center shadow-lg">
-                                <span className="text-[#FACC15] text-xs font-black">✓</span>
-                              </div>
-                            )}
-
-                            {/* Tier Icon */}
-                            <div className="text-xl md:text-2xl mb-1">{tier.icon}</div>
-                            
-                            {/* Quantity */}
-                            <div className={`text-sm md:text-base font-bold mb-0.5 ${
-                              isSelected ? "text-gray-900" : "text-white"
-                            }`}>
-                              {tier.qty} {competitionType === "spin" ? "Spins" : competitionType === "scratch" ? "Scratches" : competitionType === "pop" ? "Pops" : competitionType === "plinko" ? "Drops" : "Plays"}
-                            </div>
-                            
-                            {/* Discount Percentage */}
-                            <div className={`text-2xl md:text-3xl font-black mb-1 ${
-                              isSelected ? "text-gray-900" : "text-[#FACC15]"
-                            }`}>
-                              {tier.discount}%
-                            </div>
-                            
-                            {/* OFF Label */}
-                            <div className={`text-[10px] md:text-xs font-semibold mb-2 ${
-                              isSelected ? "text-gray-800" : "text-[#FACC15]/70"
-                            }`}>
-                              OFF
-                            </div>
-
-                            {/* Savings */}
-                            <div className={`text-[10px] md:text-xs py-1 px-2 rounded-full font-semibold ${
-                              isSelected 
-                                ? "bg-black/30 text-gray-900" 
-                                : "bg-[#FACC15]/10 text-[#FACC15]"
-                            }`}>
-                              Save £{savingsAmount}
-                            </div>
-
-                            {/* Label Badge */}
-                            <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] md:text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${
-                              isSelected
-                                ? "bg-black text-[#FACC15]"
-                                : "bg-[#FACC15]/20 text-[#FACC15]/80"
-                            }`}>
-                              {tier.label}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Bottom Info */}
-                    <div className="mt-4 text-center">
-                      <p className="text-[10px] md:text-xs text-gray-500">
-                        Discount automatically applied • Cannot be combined
-                      </p>
-                    </div>
-                  </div>
-                </div>
+            {/* Content */}
+            <div style={{ position: "relative", zIndex: 5, padding: "16px 18px 0" }}>
+              {/* Badge */}
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 20, border: `1px solid rgba(255,185,0,0.35)`, background: "rgba(255,185,0,0.1)", marginBottom: 10 }}>
+                <Star style={{ width: 9, height: 9, color: GOLD, fill: GOLD }} />
+                <span style={{ fontSize: 7.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.24em", color: GOLD }}>FEATURED COMPETITION</span>
               </div>
-            </div>
-          )}
 
-          {/* ========== QUANTITY SELECTOR CARD ========== */}
-          <div className="relative group">
-            {/* Animated Gold Border */}
-            <div className="absolute -inset-[1px] bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-2xl opacity-70 blur-sm group-hover:opacity-100 transition duration-500"></div>
-            
-            <div className="relative bg-[#0a0a0a] rounded-2xl p-5 md:p-8 border border-[#FACC15]/20">
-              
-              {/* Inner Glow */}
-              <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/[0.03] via-transparent to-[#F59E0B]/[0.03] rounded-2xl"></div>
+              {/* Title */}
+              <h1 style={{ fontSize: "clamp(1.5rem, 3.5vw, 2.6rem)", fontWeight: 900, color: "#fff", lineHeight: 1.1, textShadow: "0 2px 20px rgba(0,0,0,0.8)", marginBottom: 8, textTransform: "uppercase" }}>
+                {mainTitle.replace(prizeVal, "").trim() || mainTitle}
+              </h1>
 
-              <div className="relative">
-                
-                {isFreeGiveaway ? (
-                  <div className="space-y-4">
-                    {userTicketCount >= maxTicketsForGiveaway ? (
-                      <div className="bg-[#FACC15]/5 border border-[#FACC15]/20 rounded-xl p-4">
-                        <p className="text-[#FACC15] font-semibold text-sm">✅ You have {userTicketCount} tickets</p>
-                        <p className="text-gray-500 text-xs mt-1">Maximum {maxTicketsForGiveaway} per user</p>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex justify-center gap-3">
-                          {[1, 2].map((num) => (
-                            <button
-                              key={num}
-                              onClick={() => setQuantity(Math.min(num, remainingTickets))}
-                              disabled={num > remainingTickets}
-                              className={`min-w-[100px] px-6 py-3 rounded-xl border-2 font-bold transition-all text-sm ${
-                                quantity === num
-                                  ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 border-transparent shadow-xl shadow-[#FACC15]/30 scale-105"
-                                  : num > remainingTickets
-                                  ? "bg-gray-800/50 text-gray-500 border-gray-700 cursor-not-allowed"
-                                  : "bg-transparent text-white border-[#FACC15]/20 hover:border-[#FACC15]/60"
-                              }`}
-                            >
-                              {num} Ticket{num > 1 ? "s" : ""}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-gray-400 text-xs">
-                          {remainingTickets === 1 ? "1 ticket remaining" : `${remainingTickets} tickets remaining`}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    
-                    {/* Quick Select Pills */}
-                    <div className="flex justify-center gap-2 flex-wrap">
-                      {[1, 3, 5, 10, 15, 25].map((num) => {
-                        const discount = isGameType ? getApplicableDiscount(num) : 0;
-                        const pillPrice = isGameType 
-                          ? (pricePerTicket * num * (1 - discount / 100)) 
-                          : pricePerTicket * num;
-                        
-                        return (
-                          <button
-                            key={num}
-                            onClick={() => setQuantity(num)}
-                            className={`relative min-w-[65px] md:min-w-[75px] px-3 md:px-4 py-2.5 rounded-xl border-2 font-bold transition-all text-xs md:text-sm ${
-                              quantity === num
-                                ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 border-transparent shadow-xl shadow-[#FACC15]/30 scale-105"
-                                : "bg-transparent text-white border-white/10 hover:border-[#FACC15]/40 hover:bg-white/[0.03]"
-                            }`}
-                            data-testid={`button-quantity-${num}`}
-                          >
-                            <div className="text-base md:text-lg font-black">{num}</div>
-                            {isGameType && discount > 0 && (
-                              <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black ${
-                                quantity === num 
-                                  ? "bg-black text-[#FACC15]" 
-                                  : "bg-[#FACC15] text-black"
-                              }`}>
-                                -{discount}%
-                              </div>
-                            )}
-                            <div className={`text-[9px] mt-0.5 font-medium ${
-                              quantity === num ? "text-gray-800" : "text-gray-400"
-                            }`}>
-                              £{pillPrice.toFixed(2)}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Large Quantity Counter */}
-                    <div className="text-center py-2">
-                      <div className="text-5xl md:text-6xl font-black bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] bg-clip-text text-transparent mb-1">
-                        {quantity}
-                      </div>
-                      <div className="text-sm text-gray-400 font-medium uppercase tracking-wider">
-                        {competitionType === "spin" ? `Spin${quantity > 1 ? "s" : ""}` : 
-                         competitionType === "scratch" ? `Scratch Card${quantity > 1 ? "s" : ""}` :
-                         competitionType === "pop" ? `Pop Game${quantity > 1 ? "s" : ""}` :
-                         competitionType === "plinko" ? `Plinko Drop${quantity > 1 ? "s" : ""}` :
-                         competitionType === "voltz" ? `Voltz Game${quantity > 1 ? "s" : ""}` :
-                         `Ticket${quantity > 1 ? "s" : ""}`}
-                      </div>
-                      
-                      {/* Active Discount Badge */}
-                      {isGameType && discountPercent > 0 && (
-                        <div className="inline-flex items-center gap-2 mt-2 px-4 py-1.5 bg-[#FACC15]/10 border border-[#FACC15]/30 rounded-full">
-                          <Sparkles className="w-3.5 h-3.5 text-[#FACC15]" />
-                          <span className="text-[#FACC15] text-xs md:text-sm font-bold">
-                            {discountPercent}% DISCOUNT ACTIVE
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* +/- Controls with Slider */}
-                    <div className="flex items-center gap-4 md:gap-6">
-                      <button
-                        onClick={() => setQuantity((prev) => Math.max(prev - 1, 1))}
-                        disabled={quantity <= 1}
-                        className={`p-3 rounded-xl font-semibold transition-all ${
-                          quantity <= 1
-                            ? "bg-white/[0.03] text-gray-600 cursor-not-allowed border border-white/[0.05]"
-                            : "bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-white hover:scale-110 shadow-lg shadow-[#F59E0B]/30"
-                        }`}
-                        data-testid="button-decrease"
-                      >
-                        <Minus className="w-5 h-5" />
-                      </button>
-
-                      {/* Premium Slider */}
-                      <div className="flex-1 relative">
-                        <input
-                          type="range"
-                          min="1"
-                          max="1000"
-                          value={Math.min(quantity, 1000)}
-                          onChange={(e) => setQuantity(Number(e.target.value))}
-                          className="premium-slider w-full appearance-none cursor-pointer"
-                          data-testid="slider-quantity"
-                          style={{
-                            height: "8px",
-                            borderRadius: "10px",
-                            background: `linear-gradient(to right, #FACC15 ${((Math.min(quantity, 1000) - 1) * 100) / (1000 - 1)}%, rgba(255,255,255,0.1) ${((Math.min(quantity, 1000) - 1) * 100) / (1000 - 1)}%)`,
-                          }}
-                        />
-                      </div>
-
-                      <button
-                        onClick={() => setQuantity((prev) => prev + 1)}
-                        className="p-3 rounded-xl font-semibold transition-all bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 hover:scale-110 shadow-lg shadow-[#FACC15]/30"
-                        data-testid="button-increase"
-                      >
-                        <Plus className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                {/* ========== TOTAL COST BREAKDOWN ========== */}
-                <div className="mt-6">
-                  <div className="p-4 md:p-5 bg-gradient-to-br from-[#FACC15]/5 to-[#F59E0B]/5 rounded-xl border border-[#FACC15]/20">
-                    
-                    {/* Main Total */}
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-sm font-medium uppercase tracking-wider">Total</span>
-                      <div className="text-right">
-                        {isGameType && discountPercent > 0 && (
-                          <span className="text-xs text-gray-500 line-through block mb-0.5">
-                            £{originalPrice.toFixed(2)}
-                          </span>
-                        )}
-                        <span className="text-3xl md:text-4xl font-black bg-gradient-to-r from-[#FACC15] to-[#F59E0B] bg-clip-text text-transparent">
-                          £{isGameType ? discountedPrice.toFixed(2) : (pricePerTicket * quantity).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Discount Breakdown - Only for Games */}
-                    {isGameType && discountPercent > 0 && (
-                      <div className="mt-3 pt-3 border-t border-[#FACC15]/10">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2">
-                            <Crown className="w-4 h-4 text-[#FACC15]" />
-                            <span className="text-[#FACC15] font-semibold text-sm">
-                              Bundle Discount ({discountPercent}%)
-                            </span>
-                          </div>
-                          <span className="text-green-400 font-bold text-base">
-                            -£{savings.toFixed(2)}
-                          </span>
-                        </div>
-                        
-                        {/* Progress to Next Tier */}
-                        <div className="mt-2">
-                          <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-                            <span>5 for 10%</span>
-                            <span>10 for 15%</span>
-                            <span>15 for 20%</span>
-                          </div>
-                          <div className="h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-full transition-all duration-500"
-                              style={{ width: `${Math.min((quantity / 15) * 100, 100)}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Per Entry Price */}
-                    <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
-                      <span>Per entry: £{pricePerTicket.toFixed(2)}</span>
-                      {isGameType && discountPercent > 0 && (
-                        <>
-                          <span className="text-[#FACC15]">→</span>
-                          <span className="text-green-400 font-semibold">
-                            £{(discountedPrice / quantity).toFixed(2)}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ========== CTA BUTTON ========== */}
-          <div className="mt-6 relative group/cta">
-            {/* Glow Effect */}
-            <div className="absolute -inset-2 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-2xl opacity-0 group-hover/cta:opacity-40 blur-xl transition-all duration-500"></div>
-            
-            <button
-              onClick={handleOpenQuiz}
-              disabled={isSoldOut || purchaseTicketMutation.isPending || (isFreeGiveaway && !canBuyMore)}
-              className={`relative w-full px-8 py-4 md:py-5 rounded-xl font-black text-base md:text-lg uppercase tracking-wider transition-all transform ${
-                isSoldOut || (isFreeGiveaway && !canBuyMore)
-                  ? "bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700"
-                  : "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 hover:scale-[1.02] shadow-2xl shadow-[#FACC15]/30 hover:shadow-[#FACC15]/50 active:scale-[0.98]"
-              } disabled:opacity-100`}
-              data-testid="button-purchase"
-            >
-              <span className="relative z-10 flex items-center justify-center gap-3">
-                {isSoldOut ? (
-                  "SOLD OUT"
-                ) : purchaseTicketMutation.isPending ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-gray-900 border-t-transparent rounded-full animate-spin"></div>
-                    Processing...
-                  </>
-                ) : isFreeGiveaway && !canBuyMore ? (
-                  "MAX TICKETS REACHED"
-                ) : (
-                  <>
-                    <Zap className="w-5 h-5 fill-gray-900" />
-                    {competitionType === "spin" ? `BUY ${quantity} SPIN${quantity > 1 ? "S" : ""}` :
-                     competitionType === "scratch" ? `BUY ${quantity} SCRATCH${quantity > 1 ? "ES" : ""}` :
-                     competitionType === "pop" ? `BUY ${quantity} POP GAME${quantity > 1 ? "S" : ""}` :
-                     competitionType === "plinko" ? `BUY ${quantity} PLINKO DROP${quantity > 1 ? "S" : ""}` :
-                     competitionType === "voltz" ? `BUY ${quantity} VOLTZ GAME${quantity > 1 ? "S" : ""}` :
-                     `ENTER NOW`}
-                    <span className="text-sm font-bold opacity-75">
-                      - £{isGameType ? discountedPrice.toFixed(2) : (pricePerTicket * quantity).toFixed(2)}
-                    </span>
-                  </>
-                )}
-              </span>
-              
-              {/* Shimmer Effect */}
-              {!isSoldOut && !purchaseTicketMutation.isPending && !(isFreeGiveaway && !canBuyMore) && (
-                <div className="absolute inset-0 rounded-xl overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover/cta:translate-x-full transition-transform duration-1000"></div>
+              {/* Prize amounts */}
+              {prizeVal && (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+                  {[prizeVal, prizeVal, prizeVal].slice(0, 3).map((v, i) => (
+                    <div key={i} style={{ fontSize: "clamp(1.1rem, 2.5vw, 1.6rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 24px rgba(255,185,0,0.8), 0 0 60px rgba(255,185,0,0.4)` }}>{v}</div>
+                  ))}
                 </div>
               )}
-            </button>
-          </div>
-          
-          {/* Savings Highlight - Only for Games */}
-          {isGameType && discountPercent > 0 && (
-            <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-[#FACC15]/5 border border-[#FACC15]/20 rounded-full">
-              <Sparkles className="w-4 h-4 text-[#FACC15]" />
-              <span className="text-[#FACC15] text-sm font-bold">
-                YOU'RE SAVING £{savings.toFixed(2)}!
-              </span>
             </div>
-          )}
-          
-          {/* Postal Entry */}
-          <div 
-            className="mt-4 text-xs md:text-sm text-gray-400 hover:text-[#FACC15] cursor-pointer transition-colors inline-flex items-center gap-1"
-            onClick={() => setIsPostalModalOpen(true)}
-          >
-            <span>📬</span>
-            <span className="underline underline-offset-4">Free postal entry route</span>
-          </div>
-        </div>
-      </section>
 
-      {/* Add Premium Slider CSS */}
-      <style>{`
-        .premium-slider::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #FACC15, #F59E0B);
-          cursor: pointer;
-          box-shadow: 0 0 30px rgba(250, 204, 21, 0.6), 0 0 60px rgba(250, 204, 21, 0.3);
-          border: 3px solid #0a0a0a;
-          transition: all 0.3s ease;
-        }
-        .premium-slider::-webkit-slider-thumb:hover {
-          transform: scale(1.15);
-          box-shadow: 0 0 40px rgba(250, 204, 21, 0.8), 0 0 80px rgba(250, 204, 21, 0.4);
-        }
-        .premium-slider::-moz-range-thumb {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #FACC15, #F59E0B);
-          cursor: pointer;
-          box-shadow: 0 0 30px rgba(250, 204, 21, 0.6), 0 0 60px rgba(250, 204, 21, 0.3);
-          border: 3px solid #0a0a0a;
-        }
-      `}</style>
-
-      <UserCompetitionPrizes competitionId={competition.id} />
-
-      {/* Call to Action */}
-      <section className="bg-gradient-to-r from-gray-900 via-black to-gray-900 py-12 md:py-16 relative overflow-hidden border-t border-[#FACC15]/20">
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{ 
-            backgroundImage: 'radial-gradient(circle, #FACC15 2px, transparent 2px)',
-            backgroundSize: '40px 40px'
-          }}></div>
-        </div>
-
-        <div className="container mx-auto px-3 md:px-4 text-center relative z-10">
-          <h2 className="text-2xl md:text-4xl font-black text-white mb-3 md:mb-4">
-            View All Competitions
-          </h2>
-          <p className="text-sm md:text-lg text-gray-400 mb-6 md:mb-8 max-w-2xl mx-auto">
-            Your chance to win luxury items for a fraction of the cost at RingTone Riches!
-          </p>
-          <button
-            onClick={() => setLocation("/")}
-            className="bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 px-8 py-4 rounded-xl font-black hover:from-[#FBBF24] hover:to-[#D97706] transition-all transform hover:scale-105 shadow-xl shadow-[#FACC15]/20 text-sm md:text-base uppercase tracking-wider"
-          >
-            🏆 View All Competitions
-          </button>
-        </div>
-      </section>
-
-      {/* Quiz Dialog */}
-      <Dialog open={showQuiz} onOpenChange={setShowQuiz}>
-        <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto rounded-2xl bg-[#0a0a0a] border border-[#FACC15]/20">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-black text-white text-center">
-              Answer to Proceed
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-center text-gray-300 font-medium">{quizQuestion.question}</p>
-            <div className="grid grid-cols-1 gap-2">
-              {quizQuestion.options.map((option) => (
-                <button
-                  key={option}
-                  onClick={() => setSelectedAnswer(option)}
-                  className={`w-full p-3 rounded-xl border-2 font-semibold transition-all ${
-                    selectedAnswer === option
-                      ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 border-transparent"
-                      : "border-white/10 text-white hover:border-[#FACC15]/40 bg-white/[0.02]"
-                  }`}
-                >
-                  {option}
-                </button>
+            {/* Bottom stats bar */}
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 5, borderTop: `1px solid rgba(255,185,0,0.2)`, background: "rgba(10,8,0,0.85)", backdropFilter: "blur(8px)", padding: "10px 18px", display: "flex", alignItems: "center", gap: 0 }}>
+              {[
+                { icon: Users, top: rem !== null ? rem.toLocaleString() : "∞", bot: "ENTRIES LEFT" },
+                { icon: Clock, top: <CountdownTimer endDate={comp.endDate} />, bot: "DRAW ENDS IN" },
+                { icon: Trophy, top: "LIVE", bot: "WINNER DRAW" },
+              ].map((s, i) => (
+                <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", gap: 7, borderRight: i < 2 ? "1px solid rgba(255,185,0,0.15)" : "none", paddingRight: i < 2 ? 12 : 0, paddingLeft: i > 0 ? 12 : 0 }}>
+                  <s.icon style={{ width: 16, height: 16, color: GOLD, flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: "clamp(0.85rem, 1.8vw, 1.1rem)", fontWeight: 900, color: GOLD, lineHeight: 1, textShadow: `0 0 12px rgba(255,185,0,0.6)` }}>{s.top}</div>
+                    <div style={{ fontSize: 7, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em", color: "white", marginTop: 2 }}>{s.bot}</div>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
-          <DialogFooter className="flex justify-center">
-            <Button
-              disabled={!selectedAnswer}
-              onClick={handleSubmitAnswer}
-              className="mt-4 bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 font-bold px-8 py-2.5 rounded-xl hover:from-[#FBBF24] hover:to-[#D97706] disabled:opacity-50"
-            >
-              Submit
+
+          {/* ── RIGHT: Tabbed Info Panel ── */}
+          <div style={{ ...P, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {/* Tab bar */}
+            <div style={{ display: "flex", borderBottom: `1px solid rgba(255,185,0,0.12)`, background: "rgba(255,185,0,0.03)" }}>
+              {TABS.map(t => (
+                <button key={t.k} onClick={() => setTab(t.k as any)}
+                  style={{
+                    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                    padding: "11px 4px", border: "none", cursor: "pointer",
+                    background: tab === t.k ? "rgba(255,185,0,0.1)" : "transparent",
+                    borderBottom: tab === t.k ? `2px solid ${GOLD}` : "2px solid transparent",
+                    color: tab === t.k ? GOLD : "rgba(255,255,255,0.35)",
+                    fontSize: 9, fontWeight: tab === t.k ? 900 : 700, textTransform: "uppercase", letterSpacing: "0.14em",
+                    transition: "all 0.18s",
+                  }}>
+                  <t.icon style={{ width: 11, height: 11 }} />
+                  <span>{t.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            <div style={{ flex: 1, padding: "20px 20px 16px", overflow: "auto" }}>
+              {tab === "brief" && (
+                <div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.2em", color: "rgba(255,255,255,0.3)", marginBottom: 3 }}>WIN UP TO</div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "clamp(1.1rem, 3vw, 1.8rem)", fontWeight: 900, color: "#fff" }}>WIN UP TO</span>
+                      <span style={{ fontSize: "clamp(1.3rem, 3.5vw, 2.2rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 24px rgba(255,185,0,0.6)` }}>{prizeVal || "PRIZE"} CASH</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 3 }}>Instantly + RingTone Points</div>
+                  </div>
+
+                  {/* 6 feature boxes (2×3) */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+                    {[
+                      { icon: Zap,        color: GOLD,      title: "Instant Cash Prizes",       desc: "Winners picked automatically" },
+                      { icon: Trophy,     color: AMBER,     title: "Multiple Prizes",            desc: `Cash prizes from £100 to ${prizeVal || "prize"}` },
+                      { icon: Coins,      color: "#8B5CF6", title: "Bonus RingTone Points",      desc: "Earn points with every entry" },
+                      { icon: Shield,     color: "#00E676", title: "Secure Platform",            desc: "100% encrypted & protected" },
+                      { icon: CheckCircle2, color: "#00CFFF", title: "Fair & Transparent",       desc: "Independent & verifiable draw" },
+                      { icon: Users,      color: "#FF6B6B", title: "Real Winners",              desc: "Thousands of happy winners" },
+                    ].map((f, i) => {
+                      const rgb = f.color === GOLD ? "255,185,0" : f.color === AMBER ? "255,140,0" : f.color === "#8B5CF6" ? "139,92,246" : f.color === "#00E676" ? "0,230,118" : f.color === "#00CFFF" ? "0,207,255" : "255,107,107";
+                      return (
+                        <div key={i} style={{ display: "flex", gap: 8, padding: "9px 11px", borderRadius: 8, background: `rgba(${rgb},0.06)`, border: `1px solid rgba(${rgb},0.18)` }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: `rgba(${rgb},0.12)` }}>
+                            <f.icon style={{ width: 14, height: 14, color: f.color }} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", marginBottom: 1 }}>{f.title}</div>
+                            <div style={{ fontSize: 8, color: "rgba(255,255,255,0.32)", lineHeight: 1.4 }}>{f.desc}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* SSL badge */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(0,230,118,0.05)", border: "1px solid rgba(0,230,118,0.2)" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#00E676", boxShadow: "0 0 8px #00E676" }} />
+                    <span style={{ fontSize: 8.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.18em", color: "#00E676" }}>100% SECURE & SSL ENCRYPTED</span>
+                    <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg,rgba(0,230,118,0.3),transparent)" }} />
+                  </div>
+                </div>
+              )}
+              {tab === "vault" && (
+                <div>
+                  <h3 style={{ fontSize: 14, fontWeight: 900, color: GOLD, marginBottom: 12 }}>🏆 Prize Vault</h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {[
+                      { pos: "1st Prize", val: `${prizeVal || "Main"} Cash`, color: GOLD },
+                      { pos: "2nd Prize", val: "£2,000 Cash", color: "white" },
+                      { pos: "3rd Prize", val: "£1,000 Cash", color: AMBER },
+                      { pos: "4th – 10th Prize", val: "£100 Cash", color: "white" },
+                      { pos: "Bonus", val: "RingTone Points", color: "#8B5CF6" },
+                    ].map((pr, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", borderRadius: 8, background: i === 0 ? "rgba(255,185,0,0.07)" : "rgba(255,255,255,0.02)", border: `1px solid ${i === 0 ? "rgba(255,185,0,0.2)" : "rgba(255,255,255,0.05)"}` }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)" }}>{pr.pos}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <span style={{ fontSize: 11, fontWeight: 900, color: pr.color }}>{pr.val}</span>
+                          <ChevronRight style={{ width: 12, height: 12, color: "rgba(255,255,255,0.2)" }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button style={{ width: "100%", marginTop: 12, padding: "9px 0", borderRadius: 8, border: `1px solid ${BORDER}`, background: "transparent", color: GOLD, fontSize: 10, fontWeight: 900, cursor: "pointer", letterSpacing: "0.12em" }}>
+                    VIEW ALL PRIZES →
+                  </button>
+                </div>
+              )}
+              {tab === "howto" && (
+                <div>
+                  <h3 style={{ fontSize: 14, fontWeight: 900, color: GOLD, marginBottom: 12 }}>📖 How to Play</h3>
+                  {[
+                    { n: "1", t: "Choose your entries", d: "Select the number of entries you want to purchase from our quick-pick options." },
+                    { n: "2", t: "Complete payment", d: "Pay securely using your wallet, card, or RingTone Points." },
+                    { n: "3", t: "Wait for the draw", d: "The winner is selected automatically once all entries are sold or the draw date is reached." },
+                    { n: "4", t: "Claim your prize", d: "Winners are notified instantly and prizes are dispatched within 7 days." },
+                  ].map((s, i) => (
+                    <div key={i} style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,185,0,0.1)", border: `1px solid rgba(255,185,0,0.3)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontWeight: 900, fontSize: 12, color: GOLD }}>{s.n}</div>
+                      <div>
+                        <div style={{ fontSize: 10.5, fontWeight: 800, color: "#fff", marginBottom: 2 }}>{s.t}</div>
+                        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", lineHeight: 1.5 }}>{s.d}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {tab === "rules" && (
+                <div>
+                  <h3 style={{ fontSize: 14, fontWeight: 900, color: GOLD, marginBottom: 12 }}>📋 Competition Rules</h3>
+                  <ul style={{ paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 7 }}>
+                    {[
+                      "Must be 18+ to enter. UK residents only.",
+                      "Maximum one account per household.",
+                      "Each ticket is £" + price.toFixed(2) + " and gives one entry into the draw.",
+                      "Winner drawn automatically once all tickets are sold or draw date is reached.",
+                      "Winner can accept the prize or take a £1,000 cash alternative.",
+                      "RingTone Riches is fully licensed and regulated.",
+                      "Free postal entry available — see postal entry section.",
+                      "Full T&Cs available on our website.",
+                    ].map((r, i) => (
+                      <li key={i} style={{ display: "flex", gap: 8, fontSize: 9.5, color: "white", lineHeight: 1.55 }}>
+                        <span style={{ color: GOLD, flexShrink: 0, marginTop: 1 }}>•</span>{r}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════
+            ROW 2 — 3 columns: Details | Entry Terminal | Prize Vault
+        ══════════════════════════════════════════ */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr 1.2fr", gap: 12, marginBottom: 16 }} className="mid-g">
+
+          {/* ── COMPETITION DETAILS ── */}
+          <div style={{ ...P, overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ padding: "11px 14px", borderBottom: `1px solid rgba(255,185,0,0.1)`, display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(255,185,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Zap style={{ width: 13, height: 13, color: GOLD }} />
+              </div>
+              <span style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(255,255,255,0.55)" }}>COMPETITION DETAILS</span>
+            </div>
+
+            {/* Detail rows */}
+            <div style={{ padding: "4px 0" }}>
+              {[
+                { label: "Type", val: <span style={{ padding: "2px 8px", borderRadius: 20, background: "rgba(255,185,0,0.15)", border: "1px solid rgba(255,185,0,0.3)", color: GOLD, fontSize: 8, fontWeight: 900 }}>{comp.type?.toUpperCase() || "INSTANT"} JACKPOT</span> },
+                { label: "Price per Entry", val: <span style={{ color: AMBER, fontWeight: 900, fontSize: 11 }}>£{price.toFixed(2)}</span> },
+                { label: "Draw Method", val: <span style={{ color: GOLD, fontWeight: 800, fontSize: 10 }}>Automatic</span> },
+                { label: "Winner Announced", val: <span style={{ color: GOLD, fontWeight: 800, fontSize: 10 }}>Live Draw</span> },
+                { label: "Entry Limit", val: <span style={{ color: AMBER, fontWeight: 900, fontSize: 10 }}>{maxT > 0 ? `${maxT.toLocaleString()} Entries` : "Unlimited"}</span> },
+              ].map((row, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 14px", borderBottom: i < 4 ? "1px solid rgba(255,185,0,0.06)" : "none" }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: "white" }}>{row.label}</span>
+                  <div>{row.val}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Payment methods */}
+            <div style={{ padding: "10px 14px", borderTop: "1px solid rgba(255,185,0,0.08)" }}>
+              <div style={{ fontSize: 8, fontWeight: 700, color: "white", textTransform: "uppercase", letterSpacing: "0.18em", marginBottom: 7 }}>Payment Methods</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {["VISA", "MC", "APPLE PAY", "G PAY"].map((pm, i) => (
+                  <div key={i} style={{ padding: "3px 8px", borderRadius: 5, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", fontSize: 7.5, fontWeight: 900, color: "white" }}>{pm}</div>
+                ))}
+              </div>
+            </div>
+
+            {/* Trust badges */}
+            <div style={{ padding: "10px 14px", borderTop: "1px solid rgba(255,185,0,0.08)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {[
+                { icon: Lock,   c: "#00E676", t: "Secure Payment",   s: "256-bit SSL Encryption" },
+                { icon: Shield, c: GOLD,      t: "Fair Draw",        s: "Verified & Audited" },
+              ].map((b, i) => {
+                const rgb = b.c === "#00E676" ? "0,230,118" : "255,185,0";
+                return (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 6px", borderRadius: 8, background: `rgba(${rgb},0.05)`, border: `1px solid rgba(${rgb},0.18)` }}>
+                    <b.icon style={{ width: 18, height: 18, color: b.c }} />
+                    <div style={{ fontSize: 8, fontWeight: 900, color: "#fff", textAlign: "center" }}>{b.t}</div>
+                    <div style={{ fontSize: 7, color: "rgba(255,255,255,0.3)", textAlign: "center", lineHeight: 1.3 }}>{b.s}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── ENTRY TERMINAL ── */}
+          <div style={{ ...P, overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ padding: "11px 16px", borderBottom: `1px solid rgba(255,185,0,0.1)`, display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(255,185,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Ticket style={{ width: 13, height: 13, color: GOLD }} />
+              </div>
+              <span style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(255,255,255,0.55)" }}>ENTRY TERMINAL</span>
+            </div>
+
+            <div style={{ padding: "16px 16px 18px" }}>
+              {isFree ? (
+                <div style={{ marginBottom: 16 }}>
+                  {myCount >= 2 ? (
+                    <div style={{ padding: 14, borderRadius: 10, textAlign: "center", background: "rgba(0,230,118,0.05)", border: "1px solid rgba(0,230,118,0.2)" }}>
+                      <p style={{ fontSize: 13, fontWeight: 900, color: "#00E676" }}>✅ You have {myCount} tickets</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                      {[1, 2].map(n => (
+                        <button key={n} onClick={() => setQty(Math.min(n, freeLeft))} disabled={n > freeLeft}
+                          style={{ minWidth: 100, padding: "11px 18px", borderRadius: 10, fontWeight: 900, fontSize: 13, cursor: n > freeLeft ? "not-allowed" : "pointer", background: qty === n ? `linear-gradient(135deg,#FFE066,${GOLD})` : "rgba(255,255,255,0.04)", color: qty === n ? "#000" : "rgba(255,255,255,0.5)", border: qty === n ? "none" : "1px solid rgba(255,255,255,0.08)" }}>
+                          {n} Ticket{n > 1 ? "s" : ""}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {/* Quick-pick row */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 5, marginBottom: 14 }}>
+                    {PICKS.map(n => {
+                      const d = isGame ? getDiscount(n) : 0;
+                      const pp = (price * n * (1 - d / 100)).toFixed(2);
+                      const on = qty === n;
+                      const isBest = n === 10;
+                      return (
+                        <div key={n} style={{ position: "relative" }}>
+                          {isBest && (
+                            <div style={{ position: "absolute", top: -8, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", padding: "1px 7px", borderRadius: 20, fontSize: 6, fontWeight: 900, background: GOLD, color: "#000", letterSpacing: "0.1em", zIndex: 5 }}>BEST VALUE</div>
+                          )}
+                          <button onClick={() => setQty(n)} data-testid={`button-qty-${n}`}
+                            style={{
+                              width: "100%", padding: isBest ? "10px 4px 8px" : "8px 4px", borderRadius: 8, textAlign: "center",
+                              border: on ? `2px solid ${GOLD}` : `1px solid rgba(255,185,0,0.14)`,
+                              background: on ? "rgba(255,185,0,0.1)" : "rgba(255,255,255,0.025)",
+                              color: on ? GOLD : "white",
+                              cursor: "pointer", transition: "all 0.18s",
+                              transform: on ? "scale(1.04)" : "scale(1)",
+                              boxShadow: on ? `0 0 18px rgba(255,185,0,0.25), 0 4px 14px rgba(0,0,0,0.5)` : "none",
+                            }}>
+                            <div style={{ fontSize: "clamp(0.95rem, 2vw, 1.25rem)", fontWeight: 900, lineHeight: 1 }}>{n}</div>
+                            <div style={{ fontSize: 8, marginTop: 3, color: on ? "rgba(255,185,0,0.65)" : "rgba(255,255,255,0.22)", fontWeight: 700 }}>£{pp}</div>
+                            {d > 0 && <div style={{ fontSize: 6.5, marginTop: 1, color: "#00E676", fontWeight: 900 }}>{d}% OFF</div>}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Slider row */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                    <button onClick={() => setQty(p => Math.max(1, p - 1))} disabled={qty <= 1} data-testid="button-decrease"
+                      style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid rgba(255,185,0,0.2)`, background: "rgba(255,185,0,0.07)", color: GOLD, cursor: qty <= 1 ? "not-allowed" : "pointer", opacity: qty <= 1 ? 0.3 : 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Minus style={{ width: 13, height: 13 }} />
+                    </button>
+                    <div style={{ flex: 1 }}>
+                      <input type="range" min="1" max="100" value={Math.min(qty, 100)} onChange={e => setQty(Number(e.target.value))} data-testid="slider-quantity"
+                        style={{ width: "100%", height: 5, appearance: "none", borderRadius: 10, background: `linear-gradient(to right, ${GOLD} ${((Math.min(qty, 100) - 1) * 100) / 99}%, rgba(255,255,255,0.08) ${((Math.min(qty, 100) - 1) * 100) / 99}%)`, cursor: "pointer", outline: "none" }}
+                        className="rng"
+                      />
+                    </div>
+                    <button onClick={() => setQty(p => p + 1)} data-testid="button-increase"
+                      style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid rgba(255,185,0,0.2)`, background: "rgba(255,185,0,0.07)", color: GOLD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Plus style={{ width: 13, height: 13 }} />
+                    </button>
+                  </div>
+
+                  {/* Counter display */}
+                  <div style={{ textAlign: "center", marginBottom: 12 }}>
+                    <div style={{ fontSize: "clamp(2rem, 5vw, 3rem)", fontWeight: 900, color: GOLD, lineHeight: 1, textShadow: `0 0 30px rgba(255,185,0,0.6)` }}>{qty}</div>
+                    <div style={{ fontSize: 8, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.28em", color: "rgba(255,255,255,0.25)", marginTop: 2 }}>ENTRIES</div>
+                  </div>
+                </>
+              )}
+
+              {/* Total */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 10, background: "rgba(255,185,0,0.04)", border: `1px solid rgba(255,185,0,0.12)`, marginBottom: 12 }}>
+                <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.2em", color: "rgba(255,255,255,0.28)" }}>TOTAL AMOUNT</span>
+                <span style={{ fontSize: "clamp(1.3rem, 3vw, 1.8rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 18px rgba(255,185,0,0.5)` }}>£{total.toFixed(2)}</span>
+              </div>
+
+              {/* ACTIVATE ENTRY CTA */}
+              <button onClick={openQuiz} disabled={disabled || buyMut.isPending} className="cta" data-testid="button-purchase"
+                style={{
+                  width: "100%", padding: "15px 0", borderRadius: 10, border: "none",
+                  background: disabled ? "rgba(255,255,255,0.04)" : `linear-gradient(135deg,#FFE066 0%,${GOLD} 28%,${AMBER} 55%,${GOLD} 82%,#FFE066 100%)`,
+                  backgroundSize: "250% 100%",
+                  color: disabled ? "rgba(255,255,255,0.2)" : "#0a0600",
+                  fontSize: 14, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em",
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  boxShadow: disabled ? "none" : `0 0 36px rgba(255,185,0,0.38), 0 8px 28px rgba(255,140,0,0.28)`,
+                  position: "relative", overflow: "hidden",
+                  animation: disabled ? "none" : "plasma 3.5s ease infinite",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  marginBottom: 10,
+                }}>
+                {!disabled && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(105deg,transparent 25%,rgba(255,255,255,0.28) 50%,transparent 75%)", animation: "shimmer 2.2s ease-in-out infinite" }} />}
+                <span style={{ position: "relative", display: "flex", alignItems: "center", gap: 8 }}>
+                  {soldOut ? "SOLD OUT" : buyMut.isPending
+                    ? (<><div style={{ width: 16, height: 16, border: "2px solid rgba(0,0,0,0.3)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />Processing...</>)
+                    : (isFree && !canBuy) ? "LIMIT REACHED"
+                    : (<><Zap style={{ width: 17, height: 17 }} />ACTIVATE ENTRY — £{total.toFixed(2)}</>)}
+                </span>
+              </button>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                {["Instant Entry", "Secure Payment", "Fair Draw"].map((t, i) => (
+                  <span key={i} style={{ fontSize: 8, fontWeight: 700, color: "rgba(255,255,255,0.22)", letterSpacing: "0.08em" }}>
+                    {i > 0 && <span style={{ margin: "0 3px", color: "rgba(255,255,255,0.12)" }}>•</span>}{t}
+                  </span>
+                ))}
+              </div>
+
+              {myTickets.filter(t => t.competitionId === id).length > 0 && !isGame && (
+                <div style={{ marginTop: 10, padding: "6px 12px", borderRadius: 8, textAlign: "center", background: "rgba(0,230,118,0.04)", border: "1px solid rgba(0,230,118,0.14)" }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 900, color: "#00E676" }}>✅ You hold {myTickets.filter(t => t.competitionId === id).length} ticket(s)</span>
+                </div>
+              )}
+
+              <div style={{ textAlign: "center", marginTop: 8 }}>
+                <button onClick={() => setPostal(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.16)", fontSize: 9, textDecoration: "underline", textUnderlineOffset: 3 }}>
+                  📬 Free postal entry
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── PRIZE VAULT ── */}
+          <div style={{ ...P, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ padding: "11px 14px", borderBottom: `1px solid rgba(255,185,0,0.1)`, display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(255,185,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Star style={{ width: 13, height: 13, color: GOLD, fill: "rgba(255,185,0,0.5)" }} />
+              </div>
+              <span style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(255,255,255,0.55)" }}>PRIZE VAULT</span>
+            </div>
+
+            {/* Prize image */}
+            <div style={{ position: "relative", height: 150, overflow: "hidden" }}>
+              <img src={comp.imageUrl || FALLBACK} alt="" onError={e => { (e.target as HTMLImageElement).src = FALLBACK; }}
+                style={{ width: "100%", height: "100%", objectFit: "cover", filter: "saturate(1.3) brightness(0.65)" }} />
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,transparent 30%,rgba(10,8,0,0.95) 100%)" }} />
+              <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at center, rgba(255,185,0,0.08), transparent 70%)" }} />
+              {prizeVal && (
+                <div style={{ position: "absolute", bottom: 10, left: "50%", transform: "translateX(-50%)", textAlign: "center" }}>
+                  <div style={{ fontSize: "clamp(1.4rem, 3vw, 2rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 28px rgba(255,185,0,0.8)`, whiteSpace: "nowrap" }}>{prizeVal}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Prize list */}
+            <div style={{ flex: 1, padding: "6px 0" }}>
+              {[
+                { pos: "1st Prize",       val: `${prizeVal || "Prize"} Cash`, c: GOLD },
+                { pos: "2nd Prize",       val: "£2,000 Cash",                 c: "white" },
+                { pos: "3rd Prize",       val: "£1,000 Cash",                 c: AMBER },
+                { pos: "4th – 10th",      val: "£100 Cash",                   c: "white" },
+                { pos: "Bonus",           val: "RingTone Points",             c: "#8B5CF6" },
+              ].map((pr, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", borderBottom: i < 4 ? "1px solid rgba(255,185,0,0.05)" : "none" }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: "white" }}>{pr.pos}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontSize: 10, fontWeight: 900, color: pr.c }}>{pr.val}</span>
+                    <ChevronRight style={{ width: 11, height: 11, color: "rgba(255,255,255,0.18)" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ padding: "10px 14px", borderTop: `1px solid rgba(255,185,0,0.08)` }}>
+              <button onClick={() => setTab("vault")} style={{ width: "100%", padding: "8px 0", borderRadius: 8, border: `1px solid ${BORDER}`, background: "transparent", color: GOLD, fontSize: 9, fontWeight: 900, cursor: "pointer", letterSpacing: "0.12em" }}>
+                VIEW ALL PRIZES →
+              </button>
+            </div>
+          </div>
+        </div>
+
+       
+
+        {/* ══════════════════════════════════════════
+            MORE COMPETITIONS
+        ══════════════════════════════════════════ */}
+        {others.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <h3 style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.16em", color: "#fff", margin: 0 }}>MORE COMPETITIONS YOU'LL LOVE</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => setLocation("/")} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: 8, background: "rgba(255,185,0,0.06)", border: `1px solid ${BORDER}`, color: GOLD, fontSize: 8.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.14em", cursor: "pointer" }}>
+                  VIEW ALL COMPETITIONS <ArrowRight style={{ width: 11, height: 11 }} />
+                </button>
+                {[-1, 1].map(dir => (
+                  <button key={dir} onClick={() => boardRef.current?.scrollBy({ left: dir * 215, behavior: "smooth" })}
+                    style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,185,0,0.06)", border: `1px solid ${BORDER}`, color: GOLD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {dir < 0 ? <ChevronLeft style={{ width: 14, height: 14 }} /> : <ChevronRight style={{ width: 14, height: 14 }} />}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div ref={boardRef} style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }} className="board">
+              {others.map(c => (
+                <MiniCard key={c.id} comp={c} onClick={() => setLocation(`/competition/${c.id}`)} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Security bar */}
+      <div style={{ background: "#060500", borderTop: `1px solid rgba(255,185,0,0.1)`, padding: "14px 20px" }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(255,185,0,0.08)", border: `1px solid rgba(255,185,0,0.2)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Shield style={{ width: 18, height: 18, color: GOLD }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.14em", color: "#fff" }}>YOUR SECURITY IS OUR PRIORITY</div>
+              <div style={{ fontSize: 8.5, color: "rgba(255,255,255,0.25)" }}>All data secured with military grade encryption</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(0,207,255,0.08)", border: "1px solid rgba(0,207,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Lock style={{ width: 18, height: 18, color: "#00CFFF" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.14em", color: "#fff" }}>SSL SECURED</div>
+              <div style={{ fontSize: 8.5, color: "rgba(255,255,255,0.25)" }}>256-bit encryption</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <UserCompetitionPrizes competitionId={comp.id} />
+
+      {/* ══ QUIZ ══ */}
+      <Dialog open={showQuiz} onOpenChange={setShowQuiz}>
+        <DialogContent style={{ background: "#0e0a02", border: `1px solid rgba(255,185,0,0.22)`, borderRadius: 20 }} className="w-[90vw] max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle style={{ color: "#fff", textAlign: "center", fontWeight: 900, fontSize: 18 }}>Answer to Proceed</DialogTitle>
+          </DialogHeader>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <p style={{ textAlign: "center", color: "rgba(255,255,255,0.5)", fontSize: 12.5 }}>{quiz.q}</p>
+            {quiz.opts.map(opt => (
+              <button key={opt} onClick={() => setAnswer(opt)}
+                style={{ width: "100%", padding: "11px 16px", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer", background: answer === opt ? `linear-gradient(135deg,#FFE066,${GOLD})` : "rgba(255,255,255,0.03)", color: answer === opt ? "#0a0600" : "#fff", border: answer === opt ? "none" : "1px solid rgba(255,255,255,0.08)", transition: "all 0.15s" }}>
+                {opt}
+              </button>
+            ))}
+          </div>
+          <DialogFooter style={{ justifyContent: "center" }}>
+            <Button disabled={!answer} onClick={submitQuiz}
+              style={{ background: `linear-gradient(135deg,#FFE066,${GOLD})`, color: "#0a0600", fontWeight: 900, padding: "10px 36px", borderRadius: 10, opacity: !answer ? 0.5 : 1 }}>
+              Submit Answer
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Postal Modal */}
-      <Dialog open={isPostalModalOpen} onOpenChange={setIsPostalModalOpen}>
-        <DialogContent className="max-w-lg bg-[#0a0a0a] border border-[#FACC15]/20 rounded-2xl">
+      {/* ══ POSTAL ══ */}
+      <Dialog open={postal} onOpenChange={setPostal}>
+        <DialogContent style={{ background: "#0e0a02", border: `1px solid rgba(255,185,0,0.22)`, borderRadius: 20 }} className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-black text-white text-center">
-              Postal Entry Route
-            </DialogTitle>
+            <DialogTitle style={{ color: "#fff", textAlign: "center", fontWeight: 900, fontSize: 18 }}>📬 Postal Entry Route</DialogTitle>
           </DialogHeader>
           <DialogDescription asChild>
-            <div className="space-y-4 text-sm leading-relaxed text-gray-300">
-              <p>
-                Send an unclosed postcard (standard postcard size is approx 148mm x 105mm)
-                first or second class to:
-              </p>
-              <p className="font-semibold text-white">
-                1 West Havelock Street, South Shields, Tyne and Wear, NE33 5AF.
-              </p>
-              <p>Include the following information:</p>
-              <ul className="list-disc pl-6 space-y-1">
-                <li>The competition you wish to enter</li>
-                <li>Your full name and postal address</li>
-                <li>Your phone number and email address on your RingTone Riches account</li>
-                <li>Your date of birth</li>
-                <li>Your answer to the competition question</li>
-                <li>Incomplete or illegible entries will be disqualified</li>
-                <li>Maximum one entry per household</li>
+            <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 12, lineHeight: 1.65, color: "rgba(255,255,255,0.4)" }}>
+              <p>Send an unclosed postcard (approx 148mm × 105mm) to:</p>
+              <p style={{ fontWeight: 700, color: "#fff", padding: "9px 13px", borderRadius: 9, background: "rgba(255,185,0,0.06)", border: `1px solid rgba(255,185,0,0.18)` }}>1 West Havelock Street, South Shields, Tyne and Wear, NE33 5AF</p>
+              <ul style={{ paddingLeft: 18, display: "flex", flexDirection: "column", gap: 3 }}>
+                {["Competition name", "Full name & postal address", "Phone number & email on account", "Date of birth", "Answer to skill question", "Incomplete entries will be disqualified", "Max one entry per household"].map((item, i) => <li key={i}>{item}</li>)}
               </ul>
-              <p>
-                Your entry will be subject to our{" "}
-                <span className="text-[#FACC15] underline cursor-pointer">terms and conditions</span>.
-              </p>
-              <p className="mt-4 font-semibold text-white">
-                You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?
-              </p>
-              <p>
-                A: 7:15am B: 7:20am C: 7:30am D: 7:45am
-              </p>
+              <div style={{ padding: "9px 13px", borderRadius: 9, background: "rgba(255,255,255,0.018)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <p style={{ color: "#fff", fontWeight: 700, marginBottom: 4 }}>Skill Question:</p>
+                <p style={{ fontSize: 11 }}>You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?</p>
+                <p style={{ color: GOLD, fontSize: 11, marginTop: 4 }}>A: 7:15am &nbsp;B: 7:20am &nbsp;C: 7:30am &nbsp;D: 7:45am</p>
+              </div>
             </div>
           </DialogDescription>
         </DialogContent>
       </Dialog>
+
+      {/* ══ KEYFRAMES ══ */}
+      <style>{`
+        @keyframes spin    { to { transform:rotate(360deg); } }
+        @keyframes blink   { 0%,100%{opacity:1} 50%{opacity:0.18} }
+        @keyframes shimmer { 0%{transform:translateX(-120%)} 100%{transform:translateX(220%)} }
+        @keyframes plasma  { 0%,100%{background-position:0% center} 50%{background-position:100% center} }
+        @keyframes float   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+        .cta:hover:not(:disabled) { transform:translateY(-2px); box-shadow: 0 0 55px rgba(255,185,0,0.55), 0 14px 40px rgba(255,140,0,0.38) !important; }
+        .cta:active:not(:disabled) { transform:translateY(0); }
+        .mc:hover { border-color:rgba(255,185,0,0.4) !important; transform:translateY(-4px); box-shadow:0 12px 28px rgba(0,0,0,0.65) !important; }
+        .mc:hover .mc-img { transform:scale(1.07); }
+        .board::-webkit-scrollbar { height:3px; }
+        .board::-webkit-scrollbar-track { background:rgba(255,255,255,0.018); }
+        .board::-webkit-scrollbar-thumb { background:rgba(255,185,0,0.28); border-radius:2px; }
+        .rng { -webkit-appearance:none; appearance:none; outline:none; }
+        .rng::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:linear-gradient(135deg,#FFE066,${GOLD}); cursor:pointer; box-shadow:0 0 14px rgba(255,185,0,0.7); border:2px solid ${PANEL}; }
+        .rng::-moz-range-thumb { width:20px; height:20px; border-radius:50%; background:linear-gradient(135deg,#FFE066,${GOLD}); cursor:pointer; border:2px solid ${PANEL}; }
+        @media(max-width:900px){
+          .top-g  { grid-template-columns:1fr !important; }
+          .mid-g  { grid-template-columns:1fr !important; }
+          .trust-g{ grid-template-columns:repeat(3,1fr) !important; }
+        }
+        @media(max-width:560px){
+          .trust-g{ grid-template-columns:repeat(2,1fr) !important; }
+        }
+      `}</style>
 
       <Footer />
     </div>
