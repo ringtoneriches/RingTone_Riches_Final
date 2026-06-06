@@ -120,68 +120,77 @@ export default function CompetitionCard({ competition, authenticated = false }: 
     >
       {/* ── Outer neon shell ── */}
       <div style={{
-        borderRadius: 20,
+        borderRadius: "clamp(14px, 3vw, 20px)",
         padding: 2,
         background: hovered
           ? `linear-gradient(145deg, rgba(${tc.rgb},0.9) 0%, rgba(${tc.rgb},0.25) 50%, rgba(${tc.rgb},0.9) 100%)`
           : `linear-gradient(145deg, rgba(${tc.rgb},0.55) 0%, rgba(${tc.rgb},0.08) 50%, rgba(${tc.rgb},0.55) 100%)`,
         boxShadow: hovered
-          ? `0 0 0 1px rgba(${tc.rgb},0.3), 0 0 40px -4px rgba(${tc.rgb},0.7), 0 28px 60px -12px rgba(0,0,0,0.98), inset 0 1px 0 rgba(255,255,255,0.06)`
+          ? `0 0 0 1px rgba(${tc.rgb},0.3), 0 0 40px -4px rgba(${tc.rgb},0.7), 0 28px 60px -12px rgba(0,0,0,0.98)`
           : `0 0 0 1px rgba(${tc.rgb},0.12), 0 0 24px -6px rgba(${tc.rgb},0.35), 0 8px 28px -8px rgba(0,0,0,0.9)`,
-        transform: hovered ? "translateY(-7px) scale(1.025)" : "translateY(0) scale(1)",
-        transition: "transform 0.4s cubic-bezier(.22,1,.36,1), box-shadow 0.4s ease, background 0.4s ease",
+        transform: hovered ? "translateY(-4px) scale(1.02)" : "translateY(0) scale(1)",
+        transition: "transform 0.3s ease, box-shadow 0.3s ease",
       }}>
         {/* ── Inner card ── */}
         <div style={{
-          borderRadius: 18,
+          borderRadius: "clamp(12px, 2.5vw, 18px)",
           background: "linear-gradient(175deg, #0c0c18 0%, #050508 40%, #030306 100%)",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
         }}>
 
-          {/* ══ HEADER ══ */}
+          {/* ══ HEADER - Compact on mobile ══ */}
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "9px 11px",
+            padding: "clamp(5px, 1.5vw, 9px) clamp(7px, 2vw, 11px)",
             background: `linear-gradient(90deg, rgba(${tc.rgb},0.14) 0%, rgba(0,0,0,0) 100%)`,
             borderBottom: `1px solid rgba(${tc.rgb},0.18)`,
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "clamp(4px, 1vw, 6px)" }}>
               <div style={{
-                width: 26, height: 26, borderRadius: 8,
+                width: "clamp(20px, 4vw, 26px)", 
+                height: "clamp(20px, 4vw, 26px)", 
+                borderRadius: "clamp(6px, 1.5vw, 8px)",
                 background: `rgba(${tc.rgb},0.12)`,
                 border: `1px solid rgba(${tc.rgb},0.4)`,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 boxShadow: `0 0 10px rgba(${tc.rgb},0.3)`,
               }}>
-                <tc.Icon style={{ width: 13, height: 13, color: tc.accent }} strokeWidth={2.5} />
+                <tc.Icon style={{ width: "clamp(10px, 2vw, 13px)", height: "clamp(10px, 2vw, 13px)", color: tc.accent }} strokeWidth={2.5} />
               </div>
               <span style={{
-                fontSize: 9.5, fontWeight: 900, letterSpacing: "0.16em",
-                textTransform: "uppercase", color: tc.accent,
-                textShadow: `0 0 16px rgba(${tc.rgb},0.9), 0 0 32px rgba(${tc.rgb},0.4)`,
+                fontSize: "clamp(7px, 1.5vw, 9.5px)", 
+                fontWeight: 900, 
+                letterSpacing: "0.12em",
+                textTransform: "uppercase", 
+                color: tc.accent,
               }}>{tc.label}</span>
             </div>
             <div style={{
-              padding: "3px 9px", borderRadius: 20,
+              padding: "clamp(2px, 0.5vw, 3px) clamp(6px, 1.5vw, 9px)", 
+              borderRadius: 20,
               background: badgeStyle.bg,
               boxShadow: `0 2px 14px ${badgeStyle.shadow}`,
-              fontSize: 7.5, fontWeight: 900, letterSpacing: "0.18em", color: "#fff",
-              textTransform: "uppercase", whiteSpace: "nowrap",
+              fontSize: "clamp(6px, 1.2vw, 7.5px)", 
+              fontWeight: 900, 
+              letterSpacing: "0.12em", 
+              color: "#fff",
+              textTransform: "uppercase", 
+              whiteSpace: "nowrap",
             }}>{tc.badge}</div>
           </div>
 
-          {/* ══ HERO IMAGE ══ */}
-          <div style={{ position: "relative", aspectRatio: "16 / 10", overflow: "hidden", flexShrink: 0 }}>
+          {/* ══ HERO IMAGE - Keep aspect ratio but responsive ══ */}
+          <div style={{ position: "relative", aspectRatio: "4 / 3", overflow: "hidden", flexShrink: 0 }}>
             <img
               src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"}
               alt={competition.title}
               onError={(e) => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"; }}
               style={{
                 width: "100%", height: "100%", objectFit: "cover", display: "block",
-                transform: hovered ? "scale(1.07)" : "scale(1)",
-                transition: "transform 0.7s cubic-bezier(.22,1,.36,1)",
+                transform: hovered ? "scale(1.05)" : "scale(1)",
+                transition: "transform 0.5s ease",
                 filter: "brightness(0.92) saturate(1.15)",
               }}
             />
@@ -192,39 +201,33 @@ export default function CompetitionCard({ competition, authenticated = false }: 
             }} />
             {/* Top neon stripe */}
             <div style={{
-              position: "absolute", top: 0, left: 0, right: 0, height: 2,
+              position: "absolute", top: 0, left: 0, right: 0, height: "clamp(1px, 0.3vw, 2px)",
               background: `linear-gradient(90deg, transparent 0%, rgba(${tc.rgb},1) 30%, rgba(${tc.rgb},1) 70%, transparent 100%)`,
               boxShadow: `0 0 18px rgba(${tc.rgb},0.9)`,
             }} />
-            {/* Left neon edge */}
-            <div style={{
-              position: "absolute", top: 0, bottom: 0, left: 0, width: 2,
-              background: `linear-gradient(180deg, rgba(${tc.rgb},0.9) 0%, transparent 100%)`,
-            }} />
-            {/* Hover shimmer */}
-            {hovered && (
-              <div style={{
-                position: "absolute", inset: 0,
-                background: "linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.07) 50%, transparent 70%)",
-                animation: `shimmer-${uid} 1.6s ease-in-out infinite`,
-              }} />
-            )}
           </div>
 
-          {/* ══ PRIZE BLOCK ══ */}
+          {/* ══ PRIZE BLOCK - Compact ══ */}
           <div style={{
-            textAlign: "center", padding: "11px 14px 8px",
+            textAlign: "center", 
+            padding: "clamp(6px, 1.5vw, 11px) clamp(8px, 2vw, 14px) clamp(4px, 1vw, 8px)",
             background: "linear-gradient(180deg, rgba(3,3,6,0.98) 0%, rgba(6,4,12,0.99) 100%)",
             flexShrink: 0,
           }}>
             <div style={{
-              fontSize: 7.5, fontWeight: 800, letterSpacing: "0.32em",
-              color: "rgba(255,255,255,0.38)", textTransform: "uppercase", marginBottom: 3,
+              fontSize: "clamp(5.5px, 1.2vw, 7.5px)", 
+              fontWeight: 800, 
+              letterSpacing: "0.25em",
+              color: "rgba(255,255,255,0.38)", 
+              textTransform: "uppercase", 
+              marginBottom: "clamp(1px, 0.3vw, 3px)",
             }}>TOP PRIZE</div>
             <div style={{
-              fontSize: "clamp(24px, 5.5vw, 34px)", fontWeight: 900, lineHeight: 1,
+              fontSize: "clamp(18px, 4vw, 34px)", 
+              fontWeight: 900, 
+              lineHeight: 1,
               color: "#ffffff",
-              textShadow: prizeDisplay ? `0 0 24px rgba(${tc.rgb},1), 0 0 60px rgba(${tc.rgb},0.5), 0 0 1px #fff` : "none",
+              textShadow: prizeDisplay ? `0 0 20px rgba(${tc.rgb},1), 0 0 40px rgba(${tc.rgb},0.5)` : "none",
               marginBottom: 2,
               letterSpacing: "-0.01em",
             }}>
@@ -232,215 +235,211 @@ export default function CompetitionCard({ competition, authenticated = false }: 
             </div>
             {prizeDisplay && (
               <div style={{
-                fontSize: 8, fontWeight: 900, letterSpacing: "0.35em",
-                color: tc.accent, textTransform: "uppercase",
-                textShadow: `0 0 10px rgba(${tc.rgb},0.7)`,
-                marginBottom: 6,
+                fontSize: "clamp(6px, 1.2vw, 8px)", 
+                fontWeight: 900, 
+                letterSpacing: "0.25em",
+                color: tc.accent, 
+                textTransform: "uppercase",
+                marginBottom: "clamp(3px, 0.8vw, 6px)",
               }}>CASH</div>
             )}
-            {/* Tagline */}
-            <div style={{
-              fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em",
+            {/* Tagline - Hide on very small screens */}
+            <div  style={{
+              fontSize: "clamp(7px, 1.2vw, 8.5px)", 
+              fontWeight: 800, 
+              letterSpacing: "0.04em",
               color: tc.accent,
-              textShadow: `0 0 20px rgba(${tc.rgb},0.8)`,
               lineHeight: 1.35,
             }}>
               {tc.tagEmoji} WIN UP TO {prizeStr || "BIG PRIZES"} CASH INSTANTLY! {tc.tagEmoji}
             </div>
           </div>
 
-          {/* ══ FEATURE CHIPS ══ */}
-          <div style={{
-            display: "flex", gap: 3, padding: "7px 10px",
-            borderTop: `1px solid rgba(${tc.rgb},0.12)`,
-            borderBottom: `1px solid rgba(${tc.rgb},0.12)`,
-            background: "rgba(0,0,0,0.55)",
-            flexShrink: 0,
-          }}>
-            {tc.chips.map((chip, i) => (
-              <div key={i} style={{
-                flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2.5,
-                padding: "5px 2px", borderRadius: 7,
-                background: `rgba(${tc.rgb},0.07)`,
-                border: `1px solid rgba(${tc.rgb},0.22)`,
-              }}>
-                <CheckCircle style={{ width: 9, height: 9, color: tc.accent, flexShrink: 0 }} />
-                <span style={{
-                  fontSize: 6, fontWeight: 900, textTransform: "uppercase",
-                  letterSpacing: "0.07em", color: "rgba(255,255,255,0.78)", textAlign: "center",
-                  lineHeight: 1.15,
-                }}>{chip}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* ══ ENTRY + ENTRIES LEFT ══ */}
+          {/* ══ ENTRY + ENTRIES LEFT - Compact row ══ */}
           {hasTickets && (
             <div style={{
-              display: "flex", alignItems: "flex-end", justifyContent: "space-between",
-              padding: "8px 12px 4px",
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "space-between",
+              padding: "clamp(4px, 1vw, 8px) clamp(8px, 2vw, 12px)",
               background: "rgba(0,0,0,0.4)",
               flexShrink: 0,
+              gap: "clamp(6px, 1.5vw, 10px)",
             }}>
-              <div>
+              <div style={{ flex: 1 }}>
                 <div style={{
-                  fontSize: 6.5, fontWeight: 800, color: "rgba(255,255,255,0.32)",
-                  textTransform: "uppercase", letterSpacing: "0.2em", marginBottom: 2,
+                  fontSize: "clamp(5px, 1vw, 6.5px)", 
+                  fontWeight: 800, 
+                  color: "rgba(255,255,255,0.32)",
+                  textTransform: "uppercase", 
+                  letterSpacing: "0.15em", 
+                  marginBottom: 1,
                 }}>ENTRY</div>
                 <div style={{
-                  fontSize: 15, fontWeight: 900, lineHeight: 1,
+                  fontSize: "clamp(12px, 2.5vw, 15px)", 
+                  fontWeight: 900, 
+                  lineHeight: 1,
                   color: tc.accent,
-                  textShadow: `0 0 18px rgba(${tc.rgb},0.8)`,
                 }}>
                   {isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
                 </div>
               </div>
-              <div style={{ textAlign: "right" }}>
+              <div style={{ flex: 1, textAlign: "right" }}>
                 <div style={{
-                  fontSize: 6.5, fontWeight: 800, color: "rgba(255,255,255,0.32)",
-                  textTransform: "uppercase", letterSpacing: "0.2em", marginBottom: 2,
-                }}>ENTRIES LEFT</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
-                  <span style={{ fontSize: 15, fontWeight: 900, color: "#ffffff", lineHeight: 1 }}>
+                  fontSize: "clamp(5px, 1vw, 6.5px)", 
+                  fontWeight: 800, 
+                  color: "rgba(255,255,255,0.32)",
+                  textTransform: "uppercase", 
+                  letterSpacing: "0.15em", 
+                  marginBottom: 1,
+                }}>LEFT</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 3, justifyContent: "flex-end" }}>
+                  <span style={{ fontSize: "clamp(12px, 2.5vw, 15px)", fontWeight: 900, color: "#ffffff", lineHeight: 1 }}>
                     {remaining.toLocaleString()}
                   </span>
-                  <Users style={{ width: 11, height: 11, color: "rgba(255,255,255,0.4)" }} />
+                  <Users style={{ width: "clamp(9px, 2vw, 11px)", height: "clamp(9px, 2vw, 11px)", color: "rgba(255,255,255,0.4)" }} />
                 </div>
               </div>
             </div>
           )}
 
-          {/* ══ PROGRESS BAR ══ */}
+          {/* ══ PROGRESS BAR - Compact ══ */}
           {hasTickets && (
-            <div style={{ padding: "5px 12px 8px", flexShrink: 0, background: "rgba(0,0,0,0.4)" }}>
-              {/* Track */}
+            <div style={{ 
+              padding: "clamp(3px, 0.8vw, 5px) clamp(8px, 2vw, 12px) clamp(5px, 1vw, 8px)", 
+              flexShrink: 0, 
+              background: "rgba(0,0,0,0.4)" 
+            }}>
               <div style={{
-                height: 8, borderRadius: 6,
+                height: "clamp(5px, 1vw, 8px)", 
+                borderRadius: 4,
                 background: "rgba(255,255,255,0.07)",
-                overflow: "hidden", position: "relative",
+                overflow: "hidden", 
+                position: "relative",
                 border: "1px solid rgba(255,255,255,0.06)",
               }}>
                 <div style={{
                   position: "absolute", left: 0, top: 0, bottom: 0,
                   width: `${pct}%`,
                   background: tc.bar,
-                  borderRadius: 6,
-                  boxShadow: `0 0 12px rgba(${tc.rgb},0.9), 0 0 24px rgba(${tc.rgb},0.4)`,
-                  transition: "width 0.6s cubic-bezier(.22,1,.36,1)",
-                }}>
-                  {/* Shimmer inside bar */}
-                  <div style={{
-                    position: "absolute", inset: 0,
-                    background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 50%, transparent 100%)",
-                    animation: `bar-shimmer-${uid} 2s ease-in-out infinite`,
-                  }} />
-                </div>
+                  borderRadius: 4,
+                  boxShadow: `0 0 10px rgba(${tc.rgb},0.7)`,
+                  transition: "width 0.5s ease",
+                }} />
               </div>
               <div style={{
                 display: "flex", justifyContent: "flex-end",
-                marginTop: 3,
+                marginTop: "clamp(1px, 0.3vw, 3px)",
               }}>
                 <span style={{
-                  fontSize: 7.5, fontWeight: 900, color: tc.accent,
-                  letterSpacing: "0.1em", textTransform: "uppercase",
-                  textShadow: `0 0 10px rgba(${tc.rgb},0.6)`,
+                  fontSize: "clamp(6px, 1vw, 7.5px)", 
+                  fontWeight: 900, 
+                  color: tc.accent,
+                  letterSpacing: "0.08em", 
+                  textTransform: "uppercase",
                 }}>{Math.round(pct)}% FILLED</span>
               </div>
             </div>
           )}
 
-          {/* ══ FOOTER: COUNTDOWN + ENTER NOW ══ */}
+          {/* ══ FOOTER: COUNTDOWN + ENTER NOW - Compact ══ */}
           <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "8px 10px 10px",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            alignItems: "center",
+            padding: "clamp(5px, 1.2vw, 10px) clamp(6px, 1.5vw, 10px)",
             background: `linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(${tc.rgb},0.06) 100%)`,
             borderTop: `1px solid rgba(${tc.rgb},0.14)`,
             marginTop: "auto",
             flexShrink: 0,
-            gap: 8,
+            gap: "clamp(4px, 1vw, 12px)",
           }}>
-            {/* Countdown */}
-            <div style={{ flexShrink: 0 }}>
+            {/* Countdown - Left */}
+            <div style={{ minWidth: 0 }}>
               <div style={{
-                fontSize: 6, fontWeight: 800, color: "rgba(255,255,255,0.3)",
-                textTransform: "uppercase", letterSpacing: "0.18em", marginBottom: 4,
+                fontSize: "clamp(4px, 0.9vw, 6px)", 
+                fontWeight: 800, 
+                color: "rgba(255,255,255,0.4)",
+                textTransform: "uppercase", 
+                letterSpacing: "0.1em", 
+                marginBottom: "clamp(1px, 0.3vw, 4px)",
               }}>ENDS IN</div>
               {endDate ? (
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 3 }}>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: "clamp(1px, 0.4vw, 3px)", flexWrap: "wrap" }}>
                   {[
-                    { v: cd.d, l: "DAYS" },
-                    { v: cd.h, l: "HRS" },
-                    { v: cd.m, l: "MINS" },
-                    { v: cd.s, l: "SECS" },
+                    { v: cd.d, l: "D" },
+                    { v: cd.h, l: "H" },
+                    { v: cd.m, l: "M" },
+                    { v: cd.s, l: "S" },
                   ].map((u, i) => (
                     <div key={i} style={{ textAlign: "center" }}>
                       <div style={{
-                        fontSize: 15, fontWeight: 900, color: "#fff", lineHeight: 1,
-                        minWidth: 20, fontVariantNumeric: "tabular-nums",
-                        textShadow: "0 0 8px rgba(255,255,255,0.3)",
+                        fontSize: "clamp(7px, 1.8vw, 15px)", 
+                        fontWeight: 900, 
+                        color: "#fff", 
+                        lineHeight: 1,
+                        minWidth: "clamp(10px, 2.5vw, 20px)", 
+                        fontVariantNumeric: "tabular-nums",
                       }}>
                         {String(u.v).padStart(2, "0")}
                       </div>
                       <div style={{
-                        fontSize: 5.5, fontWeight: 700, color: "rgba(255,255,255,0.28)",
-                        textTransform: "uppercase", letterSpacing: "0.05em",
+                        fontSize: "clamp(3px, 0.7vw, 5.5px)", 
+                        fontWeight: 700, 
+                        color: "rgba(255,255,255,0.4)",
+                        textTransform: "uppercase", 
+                        letterSpacing: "0.05em",
                       }}>{u.l}</div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.4)" }}>Draw ongoing</div>
+                <div style={{ 
+                  fontSize: "clamp(5px, 1vw, 9px)", 
+                  fontWeight: 700, 
+                  color: "rgba(255,255,255,0.5)",
+                }}>Draw ongoing</div>
               )}
             </div>
 
-            {/* ENTER NOW */}
+            {/* ENTER NOW - Right */}
             <button
               data-testid={`button-view-competition-${competition.id}`}
               style={{
-                display: "flex", alignItems: "center", gap: 5,
-                padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer",
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center",
+                gap: "clamp(2px, 0.5vw, 5px)",
+                padding: "clamp(6px, 1.5vw, 10px) clamp(8px, 2vw, 14px)", 
+                borderRadius: "clamp(6px, 1.2vw, 10px)", 
+                border: "none", 
+                cursor: "pointer",
                 background: tc.bar,
                 color: "#fff",
-                fontSize: 10, fontWeight: 900, letterSpacing: "0.1em", textTransform: "uppercase",
+                fontSize: "clamp(7px, 1.5vw, 10px)", 
+                fontWeight: 900, 
+                letterSpacing: "0.06em", 
+                textTransform: "uppercase",
                 boxShadow: hovered
-                  ? `0 0 30px rgba(${tc.rgb},0.85), 0 6px 20px rgba(${tc.rgb},0.5), inset 0 1px 0 rgba(255,255,255,0.2)`
-                  : `0 0 18px rgba(${tc.rgb},0.5), 0 4px 14px rgba(${tc.rgb},0.3), inset 0 1px 0 rgba(255,255,255,0.12)`,
-                transition: "all 0.3s ease",
-                position: "relative", overflow: "hidden",
-                whiteSpace: "nowrap", flexShrink: 0,
+                  ? `0 0 25px rgba(${tc.rgb},0.85)`
+                  : `0 0 15px rgba(${tc.rgb},0.5)`,
+                transition: "all 0.2s ease",
+                whiteSpace: "nowrap",
+                width: "100%",
               }}
             >
-              <div style={{
-                position: "absolute", inset: 0,
-                background: "linear-gradient(105deg, transparent 25%, rgba(255,255,255,0.18) 50%, transparent 75%)",
-                animation: `btn-shimmer-${uid} 2.4s ease-in-out infinite`,
-              }} />
-              <span style={{ position: "relative" }}>ENTER NOW</span>
+              ENTER NOW
               <span style={{
-                position: "relative", fontSize: 13, fontWeight: 900,
-                transform: hovered ? "translateX(3px)" : "none",
-                transition: "transform 0.3s",
+                fontSize: "clamp(9px, 1.8vw, 13px)", 
+                fontWeight: 900,
+                transform: hovered ? "translateX(2px)" : "none",
+                transition: "transform 0.2s",
               }}>→</span>
             </button>
           </div>
 
         </div>
       </div>
-
-      <style>{`
-        @keyframes shimmer-${uid} {
-          0%   { transform: translateX(-120%); }
-          100% { transform: translateX(120%); }
-        }
-        @keyframes bar-shimmer-${uid} {
-          0%   { transform: translateX(-120%); }
-          100% { transform: translateX(120%); }
-        }
-        @keyframes btn-shimmer-${uid} {
-          0%, 100% { transform: translateX(-120%); }
-          50%       { transform: translateX(120%); }
-        }
-      `}</style>
     </div>
   );
 }

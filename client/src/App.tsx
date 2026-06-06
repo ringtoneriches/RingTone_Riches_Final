@@ -81,6 +81,8 @@ import AdminFAQManager from "./pages/admin/faq-manager";
 import AdminPrizes from "./pages/admin/admin-prizes";
 import AdminCompetitionVideos from "./pages/admin/admin-competition-videos";
 import { initFacebookBrowserWarning, initSocialBrowserWarning } from "./lib/facebook-browser-check";
+import  AdminTicketManager  from "./pages/admin/AdminTicketManager";
+import AdminTicketManagerPage from "./pages/admin/AdminTicketManagerPage";
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
  
@@ -168,6 +170,7 @@ function Router() {
       <Route path="/admin/faqs" component={AdminFAQManager} />
       <Route path="/admin/prize-table" component={AdminPrizes} />
       <Route path="/admin/promo-video" component={AdminCompetitionVideos} />
+      <Route path="/admin/tickets" component={AdminTicketManagerPage} />
       <Route component={NotFound} />
     </Switch>
   );

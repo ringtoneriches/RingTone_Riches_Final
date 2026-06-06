@@ -35,6 +35,7 @@ import {
   Network,
   MailQuestion,
   Video,
+  TicketCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,6 +98,7 @@ const sidebarGroups = [
     name: "Tools",
     icon: null,
     items: [
+      { name: "Tickets", path: "/admin/tickets", icon: TicketCheck },
       { name: "Past Winners", path: "/admin/past-winners", icon: Award },
       { name: "Promo Video", path: "/admin/promo-video", icon: Video },
       { name: "Prize Table", path: "/admin/prize-table", icon: Award },

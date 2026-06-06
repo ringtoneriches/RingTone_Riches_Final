@@ -12314,6 +12314,96 @@ app.get(
     }
   );
 
+  // Add this route to your admin routes file
+
+// Update only total tickets for active and unarchived competitions
+app.patch(
+  "/api/admin/competitions/:id/tickets",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { maxTickets } = req.body;
+
+      // Validate input
+      if (maxTickets === undefined || maxTickets === null) {
+        return res.status(400).json({ 
+          message: "maxTickets is required" 
+        });
+      }
+
+      if (typeof maxTickets !== "number" || maxTickets < 0) {
+        return res.status(400).json({ 
+          message: "maxTickets must be a positive number" 
+        });
+      }
+
+      // Get existing competition
+      const existing = await db
+        .select()
+        .from(competitions)
+        .where(eq(competitions.id, id))
+        .limit(1);
+
+      const competition = existing[0];
+      if (!competition) {
+        return res.status(404).json({ message: "Competition not found" });
+      }
+
+      // Check if competition is active and not archived
+      if (!competition.isActive) {
+        return res.status(400).json({ 
+          message: "Cannot update tickets for inactive competitions" 
+        });
+      }
+
+      if (competition.isArchived) {
+        return res.status(400).json({ 
+          message: "Cannot update tickets for archived competitions" 
+        });
+      }
+
+      // Check if new max tickets is less than already sold tickets
+      if (maxTickets < (competition.soldTickets || 0)) {
+        return res.status(400).json({ 
+          message: `Cannot reduce max tickets below current sold tickets (${competition.soldTickets})` 
+        });
+      }
+
+      // Update only the maxTickets field
+      const [updatedCompetition] = await db
+        .update(competitions)
+        .set({
+          maxTickets: maxTickets,
+          updatedAt: new Date()
+        })
+        .where(eq(competitions.id, id))
+        .returning();
+
+      // Broadcast real-time update
+      wsManager.broadcast({ 
+        type: "competition_tickets_updated", 
+        competitionId: id,
+        maxTickets: maxTickets,
+        soldTickets: competition.soldTickets
+      });
+
+      res.json({
+        success: true,
+        competition: updatedCompetition,
+        message: `Max tickets updated to ${maxTickets.toLocaleString()}`
+      });
+
+    } catch (error) {
+      console.error("Error updating competition tickets:", error);
+      res.status(500).json({ 
+        message: "Failed to update competition tickets" 
+      });
+    }
+  }
+);
+
   // Draw a winner for a competition
   app.post(
     "/api/admin/competitions/:id/draw-winner",
