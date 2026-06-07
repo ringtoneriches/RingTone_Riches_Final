@@ -116,12 +116,13 @@ export default function CompetitionCard({ competition, authenticated = false }: 
       onClick={() => setLocation(`/competition/${competition.id}`)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ perspective: "900px" }}
+      style={{ perspective: "900px", height: "100%" }}
     >
       {/* ── Outer neon shell ── */}
       <div style={{
         borderRadius: "clamp(14px, 3vw, 20px)",
         padding: 2,
+        height: "100%",
         background: hovered
           ? `linear-gradient(145deg, rgba(${tc.rgb},0.9) 0%, rgba(${tc.rgb},0.25) 50%, rgba(${tc.rgb},0.9) 100%)`
           : `linear-gradient(145deg, rgba(${tc.rgb},0.55) 0%, rgba(${tc.rgb},0.08) 50%, rgba(${tc.rgb},0.55) 100%)`,
@@ -138,6 +139,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
+          height: "100%",
         }}>
 
           {/* ══ HEADER - Compact on mobile ══ */}
@@ -146,6 +148,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
             padding: "clamp(5px, 1.5vw, 9px) clamp(7px, 2vw, 11px)",
             background: `linear-gradient(90deg, rgba(${tc.rgb},0.14) 0%, rgba(0,0,0,0) 100%)`,
             borderBottom: `1px solid rgba(${tc.rgb},0.18)`,
+            flexShrink: 0,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "clamp(4px, 1vw, 6px)" }}>
               <div style={{
@@ -178,7 +181,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               color: "#fff",
               textTransform: "uppercase", 
               whiteSpace: "nowrap",
-            }}>{tc.badge}</div>
+            }}>Live</div>
           </div>
 
           {/* ══ HERO IMAGE - Keep aspect ratio but responsive ══ */}
@@ -196,8 +199,8 @@ export default function CompetitionCard({ competition, authenticated = false }: 
             />
             {/* Bottom fade */}
             <div style={{
-              position: "absolute", inset: 0,
-              background: "linear-gradient(180deg, transparent 25%, rgba(3,3,6,0.6) 70%, rgba(3,3,6,0.99) 100%)",
+              position: "absolute", bottom: 0, left: 0, right: 0, height: "30%",
+              background: "linear-gradient(0deg, rgba(3,3,6,0.95) 0%, transparent 100%)",
             }} />
             {/* Top neon stripe */}
             <div style={{
@@ -207,12 +210,15 @@ export default function CompetitionCard({ competition, authenticated = false }: 
             }} />
           </div>
 
-          {/* ══ PRIZE BLOCK - Compact ══ */}
+          {/* ══ PRIZE BLOCK - Flex grow to push footer down ══ */}
           <div style={{
             textAlign: "center", 
             padding: "clamp(6px, 1.5vw, 11px) clamp(8px, 2vw, 14px) clamp(4px, 1vw, 8px)",
             background: "linear-gradient(180deg, rgba(3,3,6,0.98) 0%, rgba(6,4,12,0.99) 100%)",
-            flexShrink: 0,
+            flex: "1 0 auto",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
           }}>
             <div style={{
               fontSize: "clamp(5.5px, 1.2vw, 7.5px)", 
@@ -233,7 +239,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
             }}>
               {prizeDisplay || competition.title.split(" ").slice(0, 3).join(" ")}
             </div>
-            {prizeDisplay && (
+            {prizeDisplay ? (
               <div style={{
                 fontSize: "clamp(6px, 1.2vw, 8px)", 
                 fontWeight: 900, 
@@ -242,21 +248,31 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 textTransform: "uppercase",
                 marginBottom: "clamp(3px, 0.8vw, 6px)",
               }}>CASH</div>
+            ) : (
+              <div style={{
+                height: "clamp(9px, 2vw, 14px)", // Placeholder height
+                marginBottom: "clamp(3px, 0.8vw, 6px)",
+              }} />
             )}
-            {/* Tagline - Hide on very small screens */}
-            <div  style={{
-              fontSize: "clamp(7px, 1.2vw, 8.5px)", 
-              fontWeight: 800, 
-              letterSpacing: "0.04em",
-              color: tc.accent,
-              lineHeight: 1.35,
-            }}>
-              {tc.tagEmoji} WIN UP TO {prizeStr || "BIG PRIZES"} CASH INSTANTLY! {tc.tagEmoji}
-            </div>
+            {competition.type !== "instant" ? (
+              <div style={{
+                fontSize: "clamp(7px, 1.2vw, 8.5px)", 
+                fontWeight: 800, 
+                letterSpacing: "0.04em",
+                color: tc.accent,
+                lineHeight: 1.35,
+              }}>
+                WIN UP TO {prizeStr || "BIG PRIZES"} CASH INSTANTLY!
+              </div>
+            ) : (
+              <div style={{
+                height: "clamp(9px, 1.6vw, 11px)", // Placeholder for missing text
+              }} />
+            )}
           </div>
 
-          {/* ══ ENTRY + ENTRIES LEFT - Compact row ══ */}
-          {hasTickets && (
+          {/* ══ ENTRY + ENTRIES LEFT - Conditional with placeholder ══ */}
+          {hasTickets ? (
             <div style={{
               display: "flex", 
               alignItems: "center", 
@@ -288,7 +304,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 <div style={{
                   fontSize: "clamp(5px, 1vw, 6.5px)", 
                   fontWeight: 800, 
-                  color: "rgba(255,255,255,0.32)",
+                  color: "white",
                   textTransform: "uppercase", 
                   letterSpacing: "0.15em", 
                   marginBottom: 1,
@@ -297,14 +313,20 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                   <span style={{ fontSize: "clamp(12px, 2.5vw, 15px)", fontWeight: 900, color: "#ffffff", lineHeight: 1 }}>
                     {remaining.toLocaleString()}
                   </span>
-                  <Users style={{ width: "clamp(9px, 2vw, 11px)", height: "clamp(9px, 2vw, 11px)", color: "rgba(255,255,255,0.4)" }} />
+                  <Users style={{ width: "clamp(9px, 2vw, 11px)", height: "clamp(9px, 2vw, 11px)", color: "white" }} />
                 </div>
               </div>
             </div>
+          ) : (
+            /* Placeholder to maintain height when entry section is missing */
+            <div style={{
+              height: "clamp(40px, 8vw, 52px)",
+              flexShrink: 0,
+            }} />
           )}
 
-          {/* ══ PROGRESS BAR - Compact ══ */}
-          {hasTickets && (
+          {/* ══ PROGRESS BAR - Conditional with placeholder ══ */}
+          {hasTickets ? (
             <div style={{ 
               padding: "clamp(3px, 0.8vw, 5px) clamp(8px, 2vw, 12px) clamp(5px, 1vw, 8px)", 
               flexShrink: 0, 
@@ -340,9 +362,15 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 }}>{Math.round(pct)}% FILLED</span>
               </div>
             </div>
+          ) : (
+            /* Placeholder to maintain height when progress bar is missing */
+            <div style={{
+              height: "clamp(18px, 3.5vw, 24px)",
+              flexShrink: 0,
+            }} />
           )}
 
-          {/* ══ FOOTER: COUNTDOWN + ENTER NOW - Compact ══ */}
+          {/* ══ FOOTER: COUNTDOWN + ENTER NOW - Always at bottom ══ */}
           <div style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
@@ -350,7 +378,6 @@ export default function CompetitionCard({ competition, authenticated = false }: 
             padding: "clamp(5px, 1.2vw, 10px) clamp(6px, 1.5vw, 10px)",
             background: `linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(${tc.rgb},0.06) 100%)`,
             borderTop: `1px solid rgba(${tc.rgb},0.14)`,
-            marginTop: "auto",
             flexShrink: 0,
             gap: "clamp(4px, 1vw, 12px)",
           }}>
@@ -398,6 +425,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                   fontSize: "clamp(5px, 1vw, 9px)", 
                   fontWeight: 700, 
                   color: "rgba(255,255,255,0.5)",
+                  lineHeight: 1.2,
                 }}>Draw ongoing</div>
               )}
             </div>
