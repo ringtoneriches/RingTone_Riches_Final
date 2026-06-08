@@ -33,6 +33,7 @@ import {
   AlertCircle,
   Loader2,
   Infinity,
+  Users,
 } from "lucide-react";
 
 interface AdminTicketManagerProps {
@@ -43,14 +44,15 @@ interface AdminTicketManagerProps {
 export default function AdminTicketManager({ competition, onClose }: AdminTicketManagerProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [newMaxTickets, setNewMaxTickets] = useState<number | null>(competition?.maxTickets || null);
+  const [newSoldTickets, setNewSoldTickets] = useState<number>(competition?.soldTickets || 0);
   const [isUnlimited, setIsUnlimited] = useState(!competition?.maxTickets || competition.maxTickets === 0);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [pendingValue, setPendingValue] = useState<number | null>(null);
+  const [pendingMaxTickets, setPendingMaxTickets] = useState<number | null>(null);
+  const [pendingSoldTickets, setPendingSoldTickets] = useState<number>(0);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Guard clause - if no competition, return null
   if (!competition) {
     return null;
   }
@@ -64,11 +66,19 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
 
   // Mutation for updating tickets
   const updateTicketsMutation = useMutation({
-    mutationFn: async (maxTickets: number | null) => {
+    mutationFn: async (data: { maxTickets?: number | null; soldTickets?: number }) => {
+      const body: any = {};
+      if (data.maxTickets !== undefined) {
+        body.maxTickets = data.maxTickets === null ? 0 : data.maxTickets;
+      }
+      if (data.soldTickets !== undefined) {
+        body.soldTickets = data.soldTickets;
+      }
+      
       const response = await apiRequest(
         `/api/admin/competitions/${competition.id}/tickets`,
         "PATCH",
-        { maxTickets: maxTickets === null ? 0 : maxTickets }
+        body
       );
       return response.json();
     },
@@ -95,60 +105,67 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
 
   const handleEditClick = () => {
     setNewMaxTickets(isUnlimitedTickets ? null : currentMaxTickets);
+    setNewSoldTickets(soldTickets);
     setIsUnlimited(isUnlimitedTickets);
     setIsEditing(true);
   };
 
   const handleSaveClick = () => {
-    if (isUnlimited) {
-      setPendingValue(null);
-      setShowConfirmDialog(true);
-      return;
-    }
+    // Check if anything changed
+    const maxChanged = isUnlimited 
+      ? !isUnlimitedTickets 
+      : (newMaxTickets !== currentMaxTickets);
+    const soldChanged = newSoldTickets !== soldTickets;
 
-    if (!newMaxTickets || newMaxTickets === 0) {
-      toast({
-        title: "Invalid Value",
-        description: "Please enter a number greater than 0 or select 'Unlimited'",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (newMaxTickets === currentMaxTickets && !isUnlimited) {
+    if (!maxChanged && !soldChanged) {
       setIsEditing(false);
       return;
     }
 
-    if (newMaxTickets < soldTickets) {
+    // Validate sold tickets
+    if (newSoldTickets < 0) {
       toast({
         title: "Invalid Value",
-        description: `Cannot set max tickets below current sold tickets (${soldTickets.toLocaleString()})`,
+        description: "Sold tickets cannot be negative",
         variant: "destructive",
       });
       return;
     }
 
-    if (newMaxTickets < 0) {
-      toast({
-        title: "Invalid Value",
-        description: "Max tickets cannot be negative",
-        variant: "destructive",
-      });
-      return;
+    // If limited, validate sold against max
+    if (!isUnlimited && newMaxTickets !== null && newMaxTickets > 0) {
+      if (newSoldTickets > newMaxTickets) {
+        toast({
+          title: "Invalid Value",
+          description: `Sold tickets (${newSoldTickets}) cannot exceed max tickets (${newMaxTickets})`,
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
-    setPendingValue(newMaxTickets);
+    setPendingMaxTickets(isUnlimited ? null : newMaxTickets);
+    setPendingSoldTickets(newSoldTickets);
     setShowConfirmDialog(true);
   };
 
   const handleConfirmUpdate = () => {
-    updateTicketsMutation.mutate(pendingValue);
+    const data: any = {};
+    
+    if (pendingMaxTickets !== undefined) {
+      data.maxTickets = pendingMaxTickets;
+    }
+    if (pendingSoldTickets !== undefined) {
+      data.soldTickets = pendingSoldTickets;
+    }
+    
+    updateTicketsMutation.mutate(data);
   };
 
   const handleCancel = () => {
     setIsEditing(false);
     setNewMaxTickets(isUnlimitedTickets ? null : currentMaxTickets);
+    setNewSoldTickets(soldTickets);
     setIsUnlimited(isUnlimitedTickets);
   };
 
@@ -173,8 +190,8 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
     return (soldTickets / currentMaxTickets) * 100;
   };
 
-  // Quick actions
-  const quickActions = [
+  // Quick actions for max tickets
+  const quickMaxActions = [
     { label: "+10%", multiplier: 1.1 },
     { label: "+25%", multiplier: 1.25 },
     { label: "+50%", multiplier: 1.5 },
@@ -188,20 +205,35 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
     },
   ];
 
-  const handleQuickAction = (multiplier?: number, action?: () => void) => {
+  // Quick actions for sold tickets
+  const quickSoldActions = [
+    { label: "+1", value: 1 },
+    { label: "+5", value: 5 },
+    { label: "+10", value: 10 },
+    { label: "-1", value: -1 },
+    { label: "-5", value: -5 },
+  ];
+
+  const handleMaxQuickAction = (multiplier?: number, action?: () => void) => {
     if (action) {
       action();
     } else if (multiplier && newMaxTickets) {
       const newValue = Math.floor(newMaxTickets * multiplier);
-      setNewMaxTickets(Math.max(newValue, soldTickets));
+      setNewMaxTickets(Math.max(newValue, newSoldTickets));
     }
+  };
+
+  const handleSoldQuickAction = (value: number) => {
+    const newValue = newSoldTickets + value;
+    if (newValue < 0) return;
+    if (!isUnlimited && newMaxTickets && newValue > newMaxTickets) return;
+    setNewSoldTickets(newValue);
   };
 
   return (
     <>
       <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-gray-700 w-full max-w-full overflow-hidden">
         <CardHeader className="px-3 sm:px-6 py-3 sm:py-6">
-          {/* Header - Stack on mobile, row on desktop */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
             <div className="min-w-0 flex-1">
               <CardTitle className="text-white flex items-center gap-2 text-base sm:text-lg md:text-xl">
@@ -228,7 +260,7 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
         </CardHeader>
 
         <CardContent className="space-y-4 sm:space-y-6 px-3 sm:px-6 pb-4 sm:pb-6">
-          {/* Stats Grid - 1 col mobile, 3 cols desktop */}
+          {/* Stats Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
             {/* Total Tickets */}
             <div className="bg-gray-800/50 rounded-lg p-3 sm:p-4 border border-gray-700">
@@ -321,10 +353,15 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
           {isEditing && (
             <div className="border-t border-gray-700 pt-4 sm:pt-6 mt-3 sm:mt-4">
               <div className="space-y-4 sm:space-y-5">
-                {/* Ticket Mode Toggle */}
+                {/* MAX TICKETS SECTION */}
                 <div>
-                  <Label className="text-gray-300 mb-2 sm:mb-3 block text-xs sm:text-sm">Ticket Mode</Label>
-                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                  <Label className="text-gray-300 mb-2 sm:mb-3 block text-xs sm:text-sm font-semibold flex items-center gap-2">
+                    <Ticket className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-500" />
+                    Total Ticket Limit
+                  </Label>
+                  
+                  {/* Ticket Mode Toggle */}
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3">
                     <Button
                       onClick={handleUnlimitedToggle}
                       variant={isUnlimited ? "default" : "outline"}
@@ -352,80 +389,103 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
                       Limited
                     </Button>
                   </div>
-                </div>
 
-                {/* Ticket Input - Limited mode */}
-                {!isUnlimited && (
-                  <div>
-                    <Label htmlFor="maxTickets" className="text-gray-300 mb-1.5 sm:mb-2 block text-xs sm:text-sm">
-                      New Total Ticket Limit
-                    </Label>
-                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                      <div className="flex-1">
-                        <Input
-                          id="maxTickets"
-                          type="number"
-                          value={newMaxTickets || ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === "") {
-                              setNewMaxTickets(null);
-                              setIsUnlimited(true);
-                            } else {
-                              setNewMaxTickets(parseInt(val) || 0);
-                              setIsUnlimited(false);
-                            }
-                          }}
-                          min={soldTickets}
-                          className="bg-gray-800 border-gray-600 text-white text-xs sm:text-sm h-9 sm:h-10"
-                          placeholder="Enter max tickets"
-                        />
-                        {newMaxTickets !== null && newMaxTickets < soldTickets && (
-                          <p className="text-red-400 text-[10px] sm:text-xs mt-1 flex items-center gap-1">
-                            <AlertCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
-                            Cannot be less than sold tickets ({soldTickets.toLocaleString()})
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={handleSaveClick}
-                          disabled={updateTicketsMutation.isPending || (!isUnlimited && newMaxTickets !== null && newMaxTickets < soldTickets)}
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 text-xs sm:text-sm flex-1 sm:flex-none"
-                        >
-                          {updateTicketsMutation.isPending ? (
-                            <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
-                          ) : (
-                            <Save className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                          )}
-                          Save
-                        </Button>
-                        <Button
-                          onClick={handleCancel}
-                          variant="outline"
-                          size="sm"
-                          className="border-gray-600 text-gray-300 text-xs sm:text-sm flex-1 sm:flex-none"
-                        >
-                          <X className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                          Cancel
-                        </Button>
+                  {/* Max Ticket Input - Limited mode */}
+                  {!isUnlimited && (
+                    <div>
+                      <Input
+                        id="maxTickets"
+                        type="number"
+                        value={newMaxTickets || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "") {
+                            setNewMaxTickets(null);
+                            setIsUnlimited(true);
+                          } else {
+                            setNewMaxTickets(parseInt(val) || 0);
+                            setIsUnlimited(false);
+                          }
+                        }}
+                        min={newSoldTickets}
+                        className="bg-gray-800 border-gray-600 text-white text-xs sm:text-sm h-9 sm:h-10"
+                        placeholder="Enter max tickets"
+                      />
+                      {newMaxTickets !== null && newMaxTickets < newSoldTickets && (
+                        <p className="text-red-400 text-[10px] sm:text-xs mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                          Cannot be less than sold tickets ({newSoldTickets.toLocaleString()})
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Quick Actions for Max */}
+                  {!isUnlimited && newMaxTickets !== null && (
+                    <div className="mt-2">
+                      <Label className="text-gray-400 mb-1.5 block text-[10px] sm:text-xs">Quick Adjust</Label>
+                      <div className="flex gap-1.5 sm:gap-2 flex-wrap">
+                        {quickMaxActions.map((action, idx) => (
+                          <Button
+                            key={idx}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleMaxQuickAction(action.multiplier, action.action)}
+                            className="border-gray-600 text-gray-300 hover:bg-gray-700 text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5"
+                          >
+                            {action.label}
+                          </Button>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* Quick Actions */}
-                {!isUnlimited && newMaxTickets !== null && (
-                  <div>
-                    <Label className="text-gray-300 mb-1.5 sm:mb-2 block text-xs sm:text-sm">Quick Actions</Label>
+                {/* SOLD TICKETS SECTION */}
+                <div className="border-t border-gray-700 pt-4">
+                  <Label className="text-gray-300 mb-2 sm:mb-3 block text-xs sm:text-sm font-semibold flex items-center gap-2">
+                    <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400" />
+                    Sold Tickets
+                  </Label>
+                  
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                    <div className="flex-1">
+                      <Input
+                        id="soldTickets"
+                        type="number"
+                        value={newSoldTickets}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setNewSoldTickets(Math.max(0, val));
+                        }}
+                        min={0}
+                        max={!isUnlimited && newMaxTickets ? newMaxTickets : undefined}
+                        className="bg-gray-800 border-gray-600 text-white text-xs sm:text-sm h-9 sm:h-10"
+                        placeholder="Enter sold tickets"
+                      />
+                      {!isUnlimited && newMaxTickets && newSoldTickets > newMaxTickets && (
+                        <p className="text-red-400 text-[10px] sm:text-xs mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                          Cannot exceed max tickets ({newMaxTickets.toLocaleString()})
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quick Actions for Sold */}
+                  <div className="mt-2">
+                    <Label className="text-gray-400 mb-1.5 block text-[10px] sm:text-xs">Quick Adjust</Label>
                     <div className="flex gap-1.5 sm:gap-2 flex-wrap">
-                      {quickActions.map((action, idx) => (
+                      {quickSoldActions.map((action, idx) => (
                         <Button
                           key={idx}
                           variant="outline"
                           size="sm"
-                          onClick={() => handleQuickAction(action.multiplier, action.action)}
+                          onClick={() => handleSoldQuickAction(action.value)}
+                          disabled={
+                            (action.value < 0 && newSoldTickets + action.value < 0) ||
+                            (action.value > 0 && !isUnlimited && newMaxTickets && newSoldTickets + action.value > newMaxTickets)
+                          }
                           className="border-gray-600 text-gray-300 hover:bg-gray-700 text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5"
                         >
                           {action.label}
@@ -433,35 +493,33 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
                       ))}
                     </div>
                   </div>
-                )}
+                </div>
 
-                {/* Save button for unlimited mode */}
-                {isUnlimited && (
-                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                    <Button
-                      onClick={handleSaveClick}
-                      disabled={updateTicketsMutation.isPending}
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700 text-xs sm:text-sm w-full sm:w-auto"
-                    >
-                      {updateTicketsMutation.isPending ? (
-                        <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin mr-1.5" />
-                      ) : (
-                        <Save className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5" />
-                      )}
-                      Set as Unlimited
-                    </Button>
-                    <Button
-                      onClick={handleCancel}
-                      variant="outline"
-                      size="sm"
-                      className="border-gray-600 text-gray-300 text-xs sm:text-sm w-full sm:w-auto"
-                    >
-                      <X className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5" />
-                      Cancel
-                    </Button>
-                  </div>
-                )}
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-2">
+                  <Button
+                    onClick={handleSaveClick}
+                    disabled={updateTicketsMutation.isPending}
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-xs sm:text-sm w-full sm:w-auto"
+                  >
+                    {updateTicketsMutation.isPending ? (
+                      <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin mr-1.5" />
+                    ) : (
+                      <Save className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5" />
+                    )}
+                    Save Changes
+                  </Button>
+                  <Button
+                    onClick={handleCancel}
+                    variant="outline"
+                    size="sm"
+                    className="border-gray-600 text-gray-300 text-xs sm:text-sm w-full sm:w-auto"
+                  >
+                    <X className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5" />
+                    Cancel
+                  </Button>
+                </div>
 
                 {/* Info Box */}
                 <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-2.5 sm:p-3">
@@ -470,10 +528,10 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
                     <div className="text-[10px] sm:text-xs text-blue-300">
                       <p className="font-semibold mb-1">Important Notes:</p>
                       <ul className="list-disc list-inside space-y-0.5">
-                        <li>Set to <strong>Unlimited</strong> for no ticket cap</li>
-                        <li>Leave field empty to automatically set as Unlimited</li>
-                        <li>Increasing tickets adds more available entries</li>
-                        <li>Cannot reduce below already sold tickets</li>
+                        <li>Set <strong>Unlimited</strong> for no ticket cap</li>
+                        <li>Edit <strong>Total Tickets</strong> to change capacity</li>
+                        <li>Edit <strong>Sold Tickets</strong> for manual adjustments</li>
+                        <li>Sold tickets cannot exceed total tickets</li>
                         <li>Changes affect new purchases only</li>
                       </ul>
                     </div>
@@ -505,67 +563,47 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
             <AlertDialogTitle className="text-white text-base sm:text-lg">
               Confirm Ticket Update
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-400 text-xs sm:text-sm">
-              {pendingValue === null ? (
-                <>
-                  Are you sure you want to set tickets to{" "}
-                  <span className="font-semibold text-green-400 inline-flex items-center gap-1">
-                    <Infinity className="w-3 h-3 sm:w-4 sm:h-4" />
-                    Unlimited
-                  </span>
-                  ?
-                </>
-              ) : (
-                <>
-                  Are you sure you want to change the max tickets from{" "}
-                  <span className="font-semibold text-white">
+            <AlertDialogDescription className="text-gray-400 text-xs sm:text-sm space-y-2">
+              <p>Are you sure you want to make these changes?</p>
+              
+              <div className="bg-gray-800 rounded-lg p-3 space-y-2">
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400">Total Tickets:</span>
+                  <span className="text-white font-semibold">
                     {isUnlimitedTickets ? (
-                      <span className="inline-flex items-center gap-1">
-                        <Infinity className="w-3 h-3" />
-                        Unlimited
-                      </span>
+                      <span className="text-green-400">Unlimited</span>
                     ) : (
                       currentMaxTickets.toLocaleString()
                     )}
-                  </span>{" "}
-                  to{" "}
-                  <span className="font-semibold text-yellow-500">
-                    {pendingValue.toLocaleString()}
+                    {" → "}
+                    {pendingMaxTickets === null || pendingMaxTickets === 0 ? (
+                      <span className="text-green-400">Unlimited</span>
+                    ) : (
+                      <span className="text-yellow-500">{pendingMaxTickets.toLocaleString()}</span>
+                    )}
                   </span>
-                  ?
-                </>
-              )}
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400">Sold Tickets:</span>
+                  <span className="text-white font-semibold">
+                    {soldTickets.toLocaleString()}
+                    {" → "}
+                    <span className="text-yellow-500">{pendingSoldTickets.toLocaleString()}</span>
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400">New Available:</span>
+                  <span className="text-green-400 font-semibold">
+                    {pendingMaxTickets === null || pendingMaxTickets === 0 ? (
+                      <span>Unlimited</span>
+                    ) : (
+                      (pendingMaxTickets - pendingSoldTickets).toLocaleString()
+                    )}
+                  </span>
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
-          <div className="bg-gray-800 rounded-lg p-2.5 sm:p-3 my-2 sm:my-3">
-            <div className="flex justify-between text-xs sm:text-sm mb-1.5 sm:mb-2">
-              <span className="text-gray-400">Current Available:</span>
-              <span className="text-white font-semibold">
-                {isUnlimitedTickets ? (
-                  <span className="flex items-center gap-1">
-                    <Infinity className="w-3 h-3 text-green-400" />
-                    Unlimited
-                  </span>
-                ) : (
-                  availableTickets.toLocaleString()
-                )}
-              </span>
-            </div>
-            <div className="flex justify-between text-xs sm:text-sm">
-              <span className="text-gray-400">New Available:</span>
-              <span className="font-semibold text-green-400">
-                {pendingValue === null ? (
-                  <span className="flex items-center gap-1">
-                    <Infinity className="w-3 h-3" />
-                    Unlimited
-                  </span>
-                ) : (
-                  `${(pendingValue - soldTickets).toLocaleString()} tickets`
-                )}
-              </span>
-            </div>
-          </div>
           
           <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
             <AlertDialogCancel className="bg-gray-800 text-gray-300 border-gray-700 text-xs sm:text-sm w-full sm:w-auto mt-0">

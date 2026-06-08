@@ -12317,6 +12317,7 @@ app.get(
   // Add this route to your admin routes file
 
 // Update only total tickets for active and unarchived competitions
+// Update tickets for a competition (max tickets and sold tickets)
 app.patch(
   "/api/admin/competitions/:id/tickets",
   isAuthenticated,
@@ -12324,20 +12325,7 @@ app.patch(
   async (req: any, res) => {
     try {
       const { id } = req.params;
-      const { maxTickets } = req.body;
-
-      // Validate input
-      if (maxTickets === undefined || maxTickets === null) {
-        return res.status(400).json({ 
-          message: "maxTickets is required" 
-        });
-      }
-
-      if (typeof maxTickets !== "number" || maxTickets < 0) {
-        return res.status(400).json({ 
-          message: "maxTickets must be a positive number" 
-        });
-      }
+      const { maxTickets, soldTickets } = req.body;
 
       // Get existing competition
       const existing = await db
@@ -12364,35 +12352,87 @@ app.patch(
         });
       }
 
-      // Check if new max tickets is less than already sold tickets
-      if (maxTickets < (competition.soldTickets || 0)) {
+      // Build update object
+      const updateData: any = {
+        updatedAt: new Date()
+      };
+
+      // Validate and add maxTickets if provided
+      if (maxTickets !== undefined && maxTickets !== null) {
+        if (typeof maxTickets !== "number" || maxTickets < 0) {
+          return res.status(400).json({ 
+            message: "maxTickets must be a positive number or 0 for unlimited" 
+          });
+        }
+        
+        // If changing maxTickets, ensure it's not less than current or new sold tickets
+        const relevantSoldTickets = soldTickets !== undefined ? soldTickets : (competition.soldTickets || 0);
+        if (maxTickets > 0 && maxTickets < relevantSoldTickets) {
+          return res.status(400).json({ 
+            message: `Cannot reduce max tickets below sold tickets (${relevantSoldTickets})` 
+          });
+        }
+        
+        updateData.maxTickets = maxTickets;
+      }
+
+      // Validate and add soldTickets if provided
+      if (soldTickets !== undefined && soldTickets !== null) {
+        if (typeof soldTickets !== "number" || soldTickets < 0) {
+          return res.status(400).json({ 
+            message: "soldTickets must be a positive number" 
+          });
+        }
+
+        const relevantMaxTickets = maxTickets !== undefined ? maxTickets : (competition.maxTickets || 0);
+        
+        // If maxTickets is set (not unlimited), sold tickets can't exceed it
+        if (relevantMaxTickets > 0 && soldTickets > relevantMaxTickets) {
+          return res.status(400).json({ 
+            message: `soldTickets (${soldTickets}) cannot exceed maxTickets (${relevantMaxTickets})` 
+          });
+        }
+
+        updateData.soldTickets = soldTickets;
+      }
+
+      // If nothing to update
+      if (Object.keys(updateData).length === 1) { // only updatedAt
         return res.status(400).json({ 
-          message: `Cannot reduce max tickets below current sold tickets (${competition.soldTickets})` 
+          message: "No valid fields to update" 
         });
       }
 
-      // Update only the maxTickets field
+      // Update the competition
       const [updatedCompetition] = await db
         .update(competitions)
-        .set({
-          maxTickets: maxTickets,
-          updatedAt: new Date()
-        })
+        .set(updateData)
         .where(eq(competitions.id, id))
         .returning();
+
+      // Build success message
+      let message = "Tickets updated: ";
+      const changes = [];
+      if (maxTickets !== undefined) {
+        changes.push(`max tickets = ${maxTickets === 0 ? 'Unlimited' : maxTickets.toLocaleString()}`);
+      }
+      if (soldTickets !== undefined) {
+        changes.push(`sold tickets = ${soldTickets.toLocaleString()}`);
+      }
+      message += changes.join(", ");
 
       // Broadcast real-time update
       wsManager.broadcast({ 
         type: "competition_tickets_updated", 
         competitionId: id,
-        maxTickets: maxTickets,
-        soldTickets: competition.soldTickets
+        maxTickets: updatedCompetition.maxTickets,
+        soldTickets: updatedCompetition.soldTickets
       });
 
       res.json({
         success: true,
         competition: updatedCompetition,
-        message: `Max tickets updated to ${maxTickets.toLocaleString()}`
+        message
       });
 
     } catch (error) {

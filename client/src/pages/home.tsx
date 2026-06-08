@@ -50,17 +50,13 @@ export default function Home() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [newsletterEmail, setNewsletterEmail] = useState("");
 
-  const filteredCompetitions = useMemo(() => {
-    if (activeFilter === "all") {
-      if (!isAuthenticated) {
-        return competitions.filter((c) => c.type !== "instant");
-      } else {
-        return competitions;
-      }
-    } else {
-      return competitions.filter((c) => c.type === activeFilter);
-    }
-  }, [competitions, isAuthenticated, activeFilter]);
+ const filteredCompetitions = useMemo(() => {
+  if (activeFilter === "all") {
+    return competitions;
+  } else {
+    return competitions.filter((c) => c.type === activeFilter);
+  }
+}, [competitions, activeFilter]);
 
   const handleFilterChange = (filterType: string) => {
     setActiveFilter(filterType);
