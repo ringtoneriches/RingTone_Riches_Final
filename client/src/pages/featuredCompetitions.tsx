@@ -308,9 +308,16 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
                 <Gamepad2 className="w-6 h-6 sm:w-7 sm:h-7 text-[#00ff88]" />
               </div>
               <div>
-                <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-transparent bg-clip-text" style={{
-                  background: 'linear-gradient(90deg, #00ff88, #f5d76e, #60a5fa)',
-                }}>Featured Games</h2>
+               <h2 
+  className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-transparent bg-clip-text"
+  style={{
+    background: 'linear-gradient(90deg, #00ff88, #f5d76e, #60a5fa)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+  }}
+>
+  Featured Games
+</h2>
                 <p className="text-white/50 text-[11px] sm:text-sm font-medium hidden sm:block">Play & win premium prizes instantly</p>
               </div>
             </div>

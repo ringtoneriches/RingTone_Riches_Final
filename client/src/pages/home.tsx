@@ -196,6 +196,22 @@ export default function Home() {
       badgeColor: "#8b5cf6",
       popular: false
     },
+   {
+  id: competitions.find(c => c.type === "scratch")?.id,
+  Icon: Ticket,
+  title: "Scratch & Win",
+  desc: "Scratch to win",
+  gradient: "linear-gradient(135deg, #22c55e, #4ade80, #16a34a)",
+  glowColor: "rgba(34,197,94,0.35)",
+  borderColor: "rgba(34,197,94,0.5)",
+  bgColor: "rgba(34,197,94,0.08)",
+  iconBg: "linear-gradient(135deg, #22c55e, #4ade80, #16a34a)",
+  prize: "£1,000",
+  filter: "scratch",
+  badge: "HOT",
+  badgeColor: "#22c55e",
+  popular: false
+}
   ];
 
   return (
@@ -299,18 +315,39 @@ export default function Home() {
                     Start Winning Now
                   </Button>
                   <Button 
-                    variant="ghost"
-                    onClick={() => {
-                      const section = document.getElementById("games-section");
-                      if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
-                    className="h-12 px-6 text-sm font-medium rounded-full transition-all duration-300 hover:scale-[1.03] w-full sm:w-auto text-white border border-white/10"
-                    style={{ background: 'rgba(255,255,255,0.03)' }}
-                    data-testid="button-hero-browse"
-                  >
-                    <Sparkles className="w-4 h-4 mr-2 text-amber-400/50" />
-                    Explore Games
-                  </Button>
+  variant="ghost"
+  onClick={() => {
+    const section = document.getElementById("games-section");
+    if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+  }}
+  className="group relative h-12 px-8 text-sm font-bold rounded-full transition-all duration-300 w-full sm:w-auto overflow-hidden"
+  style={{ 
+    background: 'rgba(212, 175, 55, 0.08)',
+    border: '1px solid rgba(212, 175, 55, 0.35)',
+    backdropFilter: 'blur(4px)',
+  }}
+  data-testid="button-hero-browse"
+>
+  {/* Subtle gold glow on hover */}
+  <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+    style={{ 
+      background: 'radial-gradient(circle at center, rgba(212,175,55,0.2), transparent 70%)',
+    }}
+  />
+  
+  {/* Shimmer line on hover */}
+  <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none overflow-hidden">
+    <div className="absolute -inset-full w-full h-full skew-x-[-20deg] bg-gradient-to-r from-transparent via-amber-400/30 to-transparent group-hover:translate-x-full duration-700" />
+  </div>
+  
+  <div className="relative flex items-center justify-center gap-2.5">
+    <Sparkles className="w-4 h-4 text-amber-400/70 group-hover:text-amber-400 group-hover:scale-110 transition-all duration-300" />
+    <span className="text-amber-400/80 group-hover:text-amber-400 font-semibold tracking-wide transition-colors duration-300">
+      Explore Games
+    </span>
+    <ChevronRight className="w-4 h-4 text-amber-400/50 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all duration-300" />
+  </div>
+</Button>
                 </div>
               </div>
 
@@ -345,71 +382,104 @@ export default function Home() {
                   </div>
 
                   {/* Game Cards - REMOVED shimmer effects */}
-                  <div className="p-3 space-y-2">
-                    {gameCards.map((game, index) => (
-                      <button
-                        key={index}
-                        onClick={() => {
-                          if (game.id) {
-                            setLocation(`/competition/${game.id}`);
-                          } else {
-                            handleFilterChange(game.filter);
-                            setTimeout(() => {
-                              const section = document.getElementById("competitions-grid");
-                              if (section) {
-                                const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
-                                window.scrollTo({ top: elementTop - 100, behavior: "smooth" });
-                              }
-                            }, 100);
-                          }
-                        }}
-                        className="group w-full relative rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.02]"
-                        data-testid={`button-game-${game.title.toLowerCase().replace(/\s+/g, '-')}`}
-                        style={{
-                          background: `linear-gradient(135deg, ${game.bgColor}, rgba(10,10,15,0.97))`,
-                          border: `1px solid ${game.borderColor}`,
-                        }}
-                      >
-                        <div className="relative flex items-center gap-3 p-3">
-                          <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center transition-all duration-200 group-hover:scale-110" style={{
-                            background: game.iconBg,
-                          }}>
-                            <game.Icon className="w-5 h-5 text-white" />
-                          </div>
+   <div className="p-2 sm:p-3 space-y-2 sm:space-y-3">
+  {gameCards.map((game, index) => (
+    <button
+      key={index}
+      onClick={() => {
+        if (game.id) {
+          setLocation(`/competition/${game.id}`);
+        } else {
+          handleFilterChange(game.filter);
+          setTimeout(() => {
+            const section = document.getElementById("competitions-grid");
+            if (section) {
+              const elementTop = section.getBoundingClientRect().top + window.pageYOffset;
+              window.scrollTo({ top: elementTop - 100, behavior: "smooth" });
+            }
+          }, 100);
+        }
+      }}
+      className="group w-full relative rounded-xl sm:rounded-2xl transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl active:scale-[0.98]"
+      style={{
+        background: `linear-gradient(135deg, ${game.bgColor}, rgba(8,8,12,0.98))`,
+        border: `1px solid ${game.borderColor}`,
+        boxShadow: `0 8px 20px -6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)`
+      }}
+      data-testid={`button-game-${game.title.toLowerCase().replace(/\s+/g, '-')}`}
+    >
+      {/* Animated gradient overlay on hover */}
+      <div className="absolute inset-0 rounded-xl sm:rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+        style={{
+          background: `radial-gradient(circle at 30% 20%, ${game.borderColor}20, transparent 70%)`
+        }}
+      />
+      
+      {/* Shine effect */}
+      <div className="absolute inset-0 rounded-xl sm:rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none overflow-hidden">
+        <div className="absolute -inset-full w-full h-full skew-x-[-20deg] bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:translate-x-full duration-1000" />
+      </div>
 
-                          <div className="flex-1 text-left min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <h4 className="text-white font-bold text-[13px] truncate">{game.title}</h4>
-                              {game.popular && (
-                                <span className="px-2 py-0.5 text-[7px] font-black uppercase tracking-wider rounded-full text-white" style={{
-                                  background: game.badgeColor,
-                                }}>{game.badge}</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <div className="flex gap-0.5">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star key={i} className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
-                                ))}
-                              </div>
-                              <span className="text-white/20 text-[10px] font-medium">{game.desc}</span>
-                            </div>
-                          </div>
+      <div className="relative flex items-center gap-2 sm:gap-4 p-2 sm:p-4">
+        {/* Icon with glow effect */}
+        <div className="relative">
+          <div className="absolute inset-0 rounded-lg sm:rounded-xl blur-lg sm:blur-xl opacity-60 group-hover:opacity-100 transition-opacity duration-300"
+            style={{ background: game.iconBg }} 
+          />
+          <div className="relative w-10 h-10 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl flex-shrink-0 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:rotate-3"
+            style={{
+              background: `linear-gradient(135deg, ${game.iconBg}, ${game.iconBg}cc)`,
+              boxShadow: `0 4px 12px 0 ${game.borderColor}40`
+            }}>
+            <game.Icon className="w-4 h-4 sm:w-6 sm:h-6 text-white drop-shadow-md" />
+          </div>
+        </div>
 
-                          <div className="text-right flex-shrink-0 mr-1">
-                            <div className="text-[9px] font-bold uppercase tracking-wider mb-0.5 text-white/40">Win up to</div>
-                            <div className="text-xl font-black" style={{
-                              background: game.gradient,
-                              WebkitBackgroundClip: 'text',
-                              WebkitTextFillColor: 'transparent',
-                            }}>{game.prize}</div>
-                          </div>
+        <div className="flex-1 text-left min-w-0">
+          <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
+            <h4 className="text-white font-bold text-xs sm:text-base tracking-tight truncate drop-shadow-sm">{game.title}</h4>
+            {game.popular && (
+              <span className="px-1.5 sm:px-2 py-0.5 text-[6px] sm:text-[8px] font-black uppercase tracking-wider rounded-full text-white shadow-lg animate-pulse"
+                style={{
+                  background: game.badgeColor,
+                  boxShadow: `0 0 8px ${game.badgeColor}`
+                }}>
+                {game.badge}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <div className="flex gap-0.5">
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} className="w-2 h-2 sm:w-3 sm:h-3 text-amber-400 fill-amber-400 drop-shadow-sm" />
+              ))}
+            </div>
+            <span className="text-white/30 text-[8px] sm:text-[10px] font-medium uppercase tracking-wide">{game.desc}</span>
+          </div>
+        </div>
 
-                          <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-white transition-colors" />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+        <div className="text-right flex-shrink-0 mr-0 sm:mr-1">
+          <div className="text-[6px] sm:text-[8px] font-bold uppercase tracking-wider mb-0.5 sm:mb-1 text-white/30">Win up to</div>
+          <div className="text-base sm:text-2xl font-black tracking-tight drop-shadow-md whitespace-nowrap"
+            style={{
+              background: game.gradient,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              textShadow: `0 2px 4px ${game.borderColor}30`
+            }}>
+            {game.prize}
+          </div>
+        </div>
+
+        {/* Animated chevron */}
+        <ChevronRight className="w-3 h-3 sm:w-5 sm:h-5 text-white/30 group-hover:text-white group-hover:translate-x-1 transition-all duration-300" />
+      </div>
+      
+      {/* Bottom accent line */}
+      <div className="absolute bottom-0 left-3 right-3 h-[1px] sm:h-[2px] rounded-full bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+    </button>
+  ))}
+</div>
 
                   {/* View All Button */}
                   <div className="px-3 pb-3">
