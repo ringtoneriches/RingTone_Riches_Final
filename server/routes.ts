@@ -3960,7 +3960,7 @@ res.json({
       await transaction.insert(transactions).values({
         userId,
         type: "purchase",
-        amount: -(Math.round(amount * 100) / 100),
+        amount: Math.round(amount * 100) / 100,
         paymentRef,
         pendingPaymentId,
         orderId,
@@ -8627,22 +8627,24 @@ app.get("/api/verification/can-withdraw", isAuthenticated, async (req, res) => {
   //   }
   // });
 
-  app.get(
+// API endpoint: /api/admin/cashflow-transactions
+app.get(
   "/api/admin/cashflow-transactions",
   isAuthenticated,
   isAdmin,
   async (req, res) => {
     try {
-      // Pagination params
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 20;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
       const offset = (page - 1) * limit;
       
-      // Filters
       const { dateFrom, dateTo, search } = req.query;
       
-      // 1️⃣ Get ALL deposits first (like your original working code)
-      let cashflowDeposits = await db
+      // Get Cashflows transactions:
+      // 1. All deposits (Cashflows top-ups)
+      // 2. All purchases with "Instant play purchase" in description AND has paymentRef
+      // 3. Everything else with a 260-prefixed paymentRef
+      let cashflowTransactions = await db
         .select({
           id: transactions.id,
           userId: transactions.userId,
@@ -8652,39 +8654,59 @@ app.get("/api/verification/can-withdraw", isAuthenticated, async (req, res) => {
           amount: transactions.amount,
           description: transactions.description,
           createdAt: transactions.createdAt,
-          source: sql`'transaction'`,
+          source: sql`'cashflows'`,
           paymentRef: transactions.paymentRef,
         })
         .from(transactions)
         .leftJoin(users, eq(transactions.userId, users.id))
-        .where(sql`${transactions.type} = 'deposit'`);
+        .where(
+          sql`(
+            ${transactions.type} = 'deposit'
+          ) OR (
+            ${transactions.type} = 'purchase' 
+            AND ${transactions.paymentRef} IS NOT NULL 
+            AND ${transactions.paymentRef} != '' 
+            AND ${transactions.paymentRef} != 'N/A'
+            AND ${transactions.description} LIKE '%Instant play purchase%'
+          ) OR (
+            ${transactions.paymentRef} LIKE '260%'
+          )`
+        );
       
-      // 2️⃣ Apply filters in JavaScript (like your original working code)
-      let filtered = [...cashflowDeposits];
+      // Apply filters in JavaScript
+      let filtered = [...cashflowTransactions];
       
       if (dateFrom) {
-        filtered = filtered.filter(tx => new Date(tx.createdAt) >= new Date(dateFrom));
+        const fromDate = new Date(dateFrom as string);
+        filtered = filtered.filter(tx => new Date(tx.createdAt) >= fromDate);
       }
       if (dateTo) {
-        filtered = filtered.filter(tx => new Date(tx.createdAt) <= new Date(dateTo));
+        const toDate = new Date(dateTo as string);
+        toDate.setHours(23, 59, 59, 999); // End of day
+        filtered = filtered.filter(tx => new Date(tx.createdAt) <= toDate);
       }
       if (search) {
-        const searchLower = search.toLowerCase();
+        const searchLower = (search as string).toLowerCase();
         filtered = filtered.filter(tx => 
-          (tx.userName?.toLowerCase().includes(searchLower) ||
-           tx.userEmail?.toLowerCase().includes(searchLower) ||
-           tx.description?.toLowerCase().includes(searchLower) ||
-           tx.paymentRef?.toLowerCase().includes(searchLower) ||
-           tx.amount.toString().includes(searchLower))
+          (tx.userName || '').toLowerCase().includes(searchLower) ||
+          (tx.userEmail || '').toLowerCase().includes(searchLower) ||
+          (tx.description || '').toLowerCase().includes(searchLower) ||
+          (tx.paymentRef || '').toLowerCase().includes(searchLower) ||
+          String(Math.abs(parseFloat(String(tx.amount)) || 0)).includes(searchLower)
         );
       }
       
-      // 3️⃣ Sort newest first
-      filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      // Sort newest first
+      filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       
-      // 4️⃣ Apply pagination
+      // Apply pagination
       const total = filtered.length;
-      const paginated = filtered.slice(offset, offset + limit);
+      const paginated = filtered.slice(offset, offset + limit).map(tx => ({
+        ...tx,
+        amount: Math.abs(parseFloat(String(tx.amount)) || 0) // Always show positive
+      }));
+      
+      console.log(`Cashflows query: ${total} total transactions, showing page ${page} (${paginated.length} items)`);
       
       res.json({
         transactions: paginated,
@@ -8701,11 +8723,13 @@ app.get("/api/verification/can-withdraw", isAuthenticated, async (req, res) => {
       console.error("Error fetching cashflow transactions:", error);
       res.status(500).json({ 
         message: "Failed to fetch cashflow transactions",
-        error: error.message 
+        error: (error as Error).message 
       });
     }
   }
 );
+
+
 
 // API endpoint: /api/admin/cashflow-transactions/stats
 app.get(
@@ -8716,8 +8740,8 @@ app.get(
     try {
       const { dateFrom, dateTo, search } = req.query;
       
-      // Get ALL deposits first (same logic as main endpoint)
-      let cashflowDeposits = await db
+      // Get Cashflows transactions with same inclusive filter
+      let allTransactions = await db
         .select({
           id: transactions.id,
           userId: transactions.userId,
@@ -8727,43 +8751,88 @@ app.get(
           amount: transactions.amount,
           description: transactions.description,
           createdAt: transactions.createdAt,
-          source: sql`'transaction'`,
+          source: sql`'cashflows'`,
           paymentRef: transactions.paymentRef,
         })
         .from(transactions)
         .leftJoin(users, eq(transactions.userId, users.id))
-        .where(sql`${transactions.type} = 'deposit'`);
+        .where(
+          sql`(
+            ${transactions.type} = 'deposit'
+          ) OR (
+            ${transactions.type} = 'purchase' 
+            AND ${transactions.paymentRef} IS NOT NULL 
+            AND ${transactions.paymentRef} != '' 
+            AND ${transactions.paymentRef} != 'N/A'
+            AND ${transactions.description} LIKE '%Instant play purchase%'
+          ) OR (
+            ${transactions.paymentRef} LIKE '260%'
+          )`
+        );
       
-      // Apply filters in JavaScript (same as main endpoint)
-      let filtered = [...cashflowDeposits];
+      // Apply filters
+      let filtered = [...allTransactions];
       
       if (dateFrom) {
-        filtered = filtered.filter(tx => new Date(tx.createdAt) >= new Date(dateFrom));
+        const fromDate = new Date(dateFrom as string);
+        filtered = filtered.filter(tx => new Date(tx.createdAt) >= fromDate);
       }
       if (dateTo) {
-        filtered = filtered.filter(tx => new Date(tx.createdAt) <= new Date(dateTo));
+        const toDate = new Date(dateTo as string);
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(tx => new Date(tx.createdAt) <= toDate);
       }
       if (search) {
-        const searchLower = search.toLowerCase();
+        const searchLower = (search as string).toLowerCase();
         filtered = filtered.filter(tx => 
-          (tx.userName?.toLowerCase().includes(searchLower) ||
-           tx.userEmail?.toLowerCase().includes(searchLower) ||
-           tx.description?.toLowerCase().includes(searchLower) ||
-           tx.paymentRef?.toLowerCase().includes(searchLower) ||
-           tx.amount.toString().includes(searchLower))
+          (tx.userName || '').toLowerCase().includes(searchLower) ||
+          (tx.userEmail || '').toLowerCase().includes(searchLower) ||
+          (tx.description || '').toLowerCase().includes(searchLower) ||
+          (tx.paymentRef || '').toLowerCase().includes(searchLower) ||
+          String(Math.abs(parseFloat(String(tx.amount)) || 0)).includes(searchLower)
         );
       }
       
-      // Calculate stats
-      const totalAmount = filtered.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      // Calculate deposit total
       const depositTotal = filtered
         .filter(tx => tx.type === "deposit")
-        .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-      const uniqueUsers = new Set(filtered.map(tx => tx.userEmail).filter(Boolean));
+        .reduce((sum, tx) => {
+          const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
+          return sum + amount;
+        }, 0);
+      
+      // Calculate instant play purchase total
+      const instantPlayTotal = filtered
+        .filter(tx => tx.type !== "deposit")
+        .reduce((sum, tx) => {
+          const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
+          return sum + amount;
+        }, 0);
+      
+      // Total revenue
+      const totalAmount = depositTotal + instantPlayTotal;
+      
+      // Unique users
+      const uniqueUsers = new Set(
+        filtered
+          .map(tx => tx.userEmail || tx.userId)
+          .filter(Boolean)
+      );
+      
+      console.log('Cashflows Stats:', {
+        totalFiltered: filtered.length,
+        depositCount: filtered.filter(tx => tx.type === 'deposit').length,
+        purchaseCount: filtered.filter(tx => tx.type !== 'deposit').length,
+        depositTotal: depositTotal.toFixed(2),
+        instantPlayTotal: instantPlayTotal.toFixed(2),
+        totalAmount: totalAmount.toFixed(2),
+        uniqueUsers: uniqueUsers.size
+      });
       
       res.json({
-        totalAmount: Number(totalAmount || 0),
-        depositTotal: Number(depositTotal || 0),
+        totalAmount: Number(totalAmount.toFixed(2)),
+        depositTotal: Number(depositTotal.toFixed(2)),
+        instantPlayTotal: Number(instantPlayTotal.toFixed(2)),
         transactionCount: filtered.length,
         uniqueUsers: uniqueUsers.size,
       });
@@ -8772,8 +8841,92 @@ app.get(
       console.error("Error fetching cashflow stats:", error);
       res.status(500).json({ 
         message: "Failed to fetch cashflow stats",
-        error: error.message 
+        error: (error as Error).message 
       });
+    }
+  }
+);
+
+app.get(
+  "/api/admin/cashflow-transactions/debug-null-ref",
+  
+  async (req, res) => {
+    try {
+      // Get ALL deposits with NULL paymentRef
+      const nullRefDeposits = await db
+        .select({
+          id: transactions.id,
+          type: transactions.type,
+          description: transactions.description,
+          paymentRef: transactions.paymentRef,
+          amount: transactions.amount,
+          createdAt: transactions.createdAt,
+        })
+        .from(transactions)
+        .where(
+          sql`${transactions.type} = 'deposit'
+          AND (${transactions.paymentRef} IS NULL 
+               OR ${transactions.paymentRef} = '' 
+               OR ${transactions.paymentRef} = 'N/A')`
+        );
+      
+      // Check which ones have "Ref" or reference pattern in description
+      const withRefInDesc = nullRefDeposits.filter(tx => {
+        const desc = tx.description || '';
+        return desc.includes('Ref') || 
+               desc.includes('ref') ||
+               desc.match(/\d{15,}/) || // Has a long number (like payment ref)
+               desc.toLowerCase().includes('cashflows');
+      });
+      
+      // Extract reference from description where possible
+      const extractedRefs = withRefInDesc.map(tx => {
+        const desc = tx.description || '';
+        // Try to extract patterns like "Ref 260621..." or "Ref 251121..."
+        const refMatch = desc.match(/Ref\s*(\d+)/i);
+        return {
+          description: desc,
+          extractedRef: refMatch ? refMatch[1] : null,
+          amount: tx.amount,
+          createdAt: tx.createdAt,
+        };
+      });
+      
+      // Group by description pattern
+      const descPatterns = {};
+      nullRefDeposits.forEach(tx => {
+        const desc = tx.description || 'N/A';
+        descPatterns[desc] = (descPatterns[desc] || 0) + 1;
+      });
+      
+      // Sort patterns by count
+      const sortedPatterns = Object.entries(descPatterns)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 30);
+      
+      // Count how many have Cashflows-like descriptions
+      const cashflowsLike = nullRefDeposits.filter(tx => 
+        (tx.description || '').toLowerCase().includes('cashflows') ||
+        (tx.description || '').toLowerCase().includes('top-up') ||
+        (tx.description || '').toLowerCase().includes('top up') ||
+        (tx.description || '').match(/Ref\s*\d{15,}/i)
+      );
+      
+      res.json({
+        totalNullRefDeposits: nullRefDeposits.length,
+        withRefInDesc: withRefInDesc.length,
+        cashflowsLikeCount: cashflowsLike.length,
+        totalAmountOfCashflowsLike: cashflowsLike.reduce((sum, tx) => sum + Math.abs(parseFloat(String(tx.amount)) || 0), 0).toFixed(2),
+        sampleCashflowsLike: cashflowsLike.slice(0, 20),
+        extractedRefs: extractedRefs.filter(r => r.extractedRef).slice(0, 20),
+        topDescriptionPatterns: sortedPatterns,
+        // What would be added to your current total
+        wouldAddToTransactions: cashflowsLike.length,
+        wouldAddToRevenue: cashflowsLike.reduce((sum, tx) => sum + Math.abs(parseFloat(String(tx.amount)) || 0), 0).toFixed(2),
+      });
+      
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
   }
 );
