@@ -83,6 +83,8 @@ import AdminCompetitionVideos from "./pages/admin/admin-competition-videos";
 import { initFacebookBrowserWarning, initSocialBrowserWarning } from "./lib/facebook-browser-check";
 import  AdminTicketManager  from "./pages/admin/AdminTicketManager";
 import AdminTicketManagerPage from "./pages/admin/AdminTicketManagerPage";
+import AddPastWinnerPage from "./pages/admin/winners";
+import AdminAddWinner from "./pages/admin/winners";
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
  
@@ -171,6 +173,7 @@ function Router() {
       <Route path="/admin/prize-table" component={AdminPrizes} />
       <Route path="/admin/promo-video" component={AdminCompetitionVideos} />
       <Route path="/admin/tickets" component={AdminTicketManagerPage} />
+      <Route path="/admin/winners" component={AdminAddWinner} />
       <Route component={NotFound} />
     </Switch>
   );

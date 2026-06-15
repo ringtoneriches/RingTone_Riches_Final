@@ -74,6 +74,7 @@ const sidebarGroups = [
     items: [
       { name: "Competitions", path: "/admin/competitions", icon: Trophy },
       { name: "Entries", path: "/admin/entries", icon: Ticket },
+      { name: "Winners", path: "/admin/winners", icon: Trophy },
     ],
   },
   {
