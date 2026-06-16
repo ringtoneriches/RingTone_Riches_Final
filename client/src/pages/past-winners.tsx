@@ -148,7 +148,7 @@ export default function PastWinners() {
               Celebrating the elite few who've claimed extraordinary prizes
             </p>
             
-            {sortedWinners.length > 0 && (
+            {/* {sortedWinners.length > 0 && (
               <div className="flex justify-center gap-8 pt-4">
                 <div className="text-center">
                   <div className="text-3xl font-bold text-amber-400">{sortedWinners.length}</div>
@@ -160,7 +160,7 @@ export default function PastWinners() {
                   <div className="text-xs text-gray-400 uppercase tracking-wider">Total Value</div>
                 </div>
               </div>
-            )}
+            )} */}
           </div>
         </div>
       </section>
