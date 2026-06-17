@@ -264,7 +264,7 @@ export default function Register() {
                 />
               </div>
               <div>
-                <Label htmlFor="redeemCode" className="text-white">Redeem Code</Label>
+                <Label htmlFor="redeemCode" className="text-white">Prize/Redeem Code</Label>
                 <Input
                   id="redeemCode"
                   value={formData.redeemCode}
