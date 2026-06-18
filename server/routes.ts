@@ -4138,7 +4138,7 @@ res.json({
   
 
   // Ticket purchase route
-  app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
+ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const {
@@ -4170,11 +4170,44 @@ res.json({
   
       const compType = competition.type;
       
+      // -------------------------
+      // 2️⃣ CHECK 24-HOUR TICKET CAP (INSTANT ONLY)
+      // -------------------------
+      if (compType === "instant") {
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        
+        // Count tickets purchased by this user in the last 24 hours for this competition
+        const recentTickets = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(tickets)
+          .where(
+            and(
+              eq(tickets.userId, userId),
+              eq(tickets.competitionId, competitionId),
+              sql`${tickets.createdAt} >= ${twentyFourHoursAgo}`
+            )
+          );
+        
+        const ticketsInLast24h = Number(recentTickets[0]?.count || 0);
+        const DAILY_TICKET_CAP = 250;
+        
+        // Check if this purchase would exceed the cap
+        if (ticketsInLast24h + quantity > DAILY_TICKET_CAP) {
+          const remainingTickets = DAILY_TICKET_CAP - ticketsInLast24h;
+          return res.status(400).json({
+            message: `Daily ticket limit reached. You can only purchase ${remainingTickets} more ticket(s) in the next 24 hours. You've already purchased ${ticketsInLast24h} tickets for this competition.`,
+            dailyLimit: DAILY_TICKET_CAP,
+            purchasedToday: ticketsInLast24h,
+            remainingToday: Math.max(0, remainingTickets)
+          });
+        }
+      }
+      
       // Total already includes discount if applied
       const totalAmount = Number(order.totalAmount);
   
       // -------------------------
-      // 2️⃣ SOLD-OUT LOGIC (INSTANT ONLY)
+      // 3️⃣ SOLD-OUT LOGIC (INSTANT ONLY)
       // -------------------------
       if (compType === "instant") {
         const soldTickets = Number(competition.soldTickets || 0);
@@ -4193,7 +4226,7 @@ res.json({
       }
   
       // -------------------------
-      // 3️⃣ USER BALANCE + POINTS
+      // 4️⃣ USER BALANCE + POINTS
       // -------------------------
       const [user] = await db.select().from(users).where(eq(users.id, userId));
       const walletBalance = Number(user?.balance || "0");
@@ -4207,7 +4240,7 @@ res.json({
       const paymentBreakdown = [];
   
       // -------------------------
-      // 4️⃣ APPLY WALLET
+      // 5️⃣ APPLY WALLET
       // -------------------------
       if (useWalletBalance) {
         walletUsed = Math.min(walletBalance, remainingAmount);
@@ -4237,7 +4270,7 @@ res.json({
       }
   
       // -------------------------
-      // 5️⃣ APPLY POINTS - SIMPLE, NO DISCOUNT LOGIC
+      // 6️⃣ APPLY POINTS - SIMPLE, NO DISCOUNT LOGIC
       // -------------------------
       if (useRingtonePoints && remainingAmount > 0) {
         const availablePoints = ringtonePoints;
@@ -4292,7 +4325,7 @@ res.json({
       }
   
       // -------------------------
-      // 6️⃣ CASHFLOWS NEEDED?
+      // 7️⃣ CASHFLOWS NEEDED?
       // -------------------------
       if (remainingAmount > 0) {
         cashflowsUsed = remainingAmount;
@@ -4357,7 +4390,7 @@ res.json({
       }
   
       // -------------------------
-      // 7️⃣ FULLY PAID — COMPLETE ORDER
+      // 8️⃣ FULLY PAID — COMPLETE ORDER
       // -------------------------
       let paymentMethodText = "Discount";
       if (walletUsed > 0 && pointsUsed > 0) {
