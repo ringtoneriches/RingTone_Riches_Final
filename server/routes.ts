@@ -1,5 +1,6 @@
 import type { Express, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import bcrypt from 'bcrypt';
 import Stripe from "stripe";
 import multer from "multer";
 import path from "path";
@@ -11465,34 +11466,59 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
   });
 
   app.post("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const { userId, competitionId, prizeDescription, prizeValue, imageUrl } =
-        req.body;
+  try {
+    const { firstName, lastName, competitionId, prizeDescription, prizeValue, imageUrl } = req.body;
 
-      if (!userId || !prizeDescription || !prizeValue) {
-        return res
-          .status(400)
-          .json({
-            message: "userId, prizeDescription, and prizeValue are required",
-          });
-      }
-
-      const winner = await storage.createWinner({
-        userId,
-        competitionId:
-          competitionId === null || competitionId === "" ? null : competitionId,
-        prizeDescription,
-        prizeValue,
-        imageUrl: imageUrl === null || imageUrl === "" ? null : imageUrl,
-        isShowcase: true, // Manual admin entries are showcase winners
+    // Validate required fields
+    if (!firstName || !lastName || !prizeDescription || !prizeValue) {
+      return res.status(400).json({
+        message: "firstName, lastName, prizeDescription, and prizeValue are required",
       });
-
-      res.json(winner);
-    } catch (error) {
-      console.error("Error creating winner:", error);
-      res.status(500).json({ message: "Failed to create winner" });
     }
-  });
+
+    // Step 1: Create a temporary user
+    const tempEmail = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${Date.now()}@temp.com`;
+    const tempPassword = "temporary123";
+    
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    // Check if user already exists with this email
+    let user = await db.query.users.findFirst({
+      where: (u, { eq }) => eq(u.email, tempEmail),
+    });
+
+    if (!user) {
+      // Create new user
+      const newUser = await db.insert(users).values({
+        firstName,
+        lastName,
+        email: tempEmail,
+        password: hashedPassword,
+        isAdmin: false,
+        createdAt: new Date(),
+        balance: 0,
+        ringtonePoints: 0,
+      }).returning();
+      
+      user = newUser[0];
+    }
+
+    // Step 2: Create the winner linked to the user
+    const winner = await storage.createWinner({
+      userId: user.id,
+      competitionId: competitionId || null,
+      prizeDescription,
+      prizeValue,
+      imageUrl: imageUrl || null,
+      isShowcase: true,
+    });
+
+    res.json(winner);
+  } catch (error) {
+    console.error("Error creating winner:", error);
+    res.status(500).json({ message: "Failed to create winner" });
+  }
+});
 
   app.patch(
     "/api/admin/winners/:id",

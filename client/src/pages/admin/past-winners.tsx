@@ -761,7 +761,7 @@ const winners = useMemo(() => {
         <div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Past Winners Management</h1>
         </div>
-        <Button
+        {/* <Button
           onClick={() => {
             setEditingWinner(undefined);
             setDialogOpen(true);
@@ -771,7 +771,7 @@ const winners = useMemo(() => {
         >
           <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
           Add Winner
-        </Button>
+        </Button> */}
       </div>
   
       {/* Date Filters */}

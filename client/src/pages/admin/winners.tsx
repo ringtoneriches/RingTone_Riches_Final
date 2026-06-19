@@ -1,10 +1,10 @@
 import AdminLayout from "@/components/admin/admin-layout";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, ArrowLeft, Save } from "lucide-react";
+import { Upload, Save, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,46 +16,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-} from "@/components/ui/command";
-import { ChevronsUpDown, Check, Info } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
 interface WinnerFormData {
-  userId: string;
+  firstName: string;
+  lastName: string;
   competitionId: string;
   prizeDescription: string;
   prizeValue: string;
   imageUrl: string;
   isShowcase: boolean;
-}
-
-interface WinnerPayload {
-  userId: string;
-  competitionId: string | null;
-  prizeDescription: string;
-  prizeValue: string;
-  imageUrl: string | null;
-  isShowcase?: boolean;
-}
-
-interface User {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
 }
 
 interface Competition {
@@ -67,34 +38,21 @@ export default function AdminAddWinner() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [openUserSelect, setOpenUserSelect] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   
   const [form, setForm] = useState<WinnerFormData>({
-    userId: "",
+    firstName: "",
+    lastName: "",
     competitionId: "",
     prizeDescription: "",
     prizeValue: "",
     imageUrl: "",
-    isShowcase: true, // Default to showing in showcase
+    isShowcase: true,
   });
 
-  // Fetch users for selection
-  const { data: usersResponse, isLoading: isLoadingUsers } = useQuery<{ users: User[], pagination: any }>({
-  queryKey: ["/api/admin/users"],
-  queryFn: async () => {
-    const url = new URL("/api/admin/users", window.location.origin);
-    url.searchParams.append("limit", "9999"); // Fetch all users for dropdown
-    const res = await fetch(url.toString());
-    return res.json();
-  },
-});
-
-const users = usersResponse?.users || [];
-
   // Fetch competitions for selection
-  const { data: competitions = [], isLoading: isLoadingCompetitions } = useQuery<Competition[]>({
+  const { data: competitions = [] } = useQuery<Competition[]>({
     queryKey: ["/api/competitions"],
   });
 
@@ -133,37 +91,62 @@ const users = usersResponse?.users || [];
   };
 
   const handleSubmit = async () => {
-    if (!form.userId || !form.prizeDescription || !form.prizeValue) {
+    // Trim values
+    const firstName = form.firstName.trim();
+    const lastName = form.lastName.trim();
+    const prizeDescription = form.prizeDescription.trim();
+    const prizeValue = form.prizeValue.trim();
+
+    if (!firstName || !lastName || !prizeDescription || !prizeValue) {
       toast({
         variant: "destructive",
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields (First Name, Last Name, Prize Description, and Prize Value)",
       });
       return;
     }
 
     setSaving(true);
     try {
-      const payload: WinnerPayload = {
-        ...form,
+      // Create winner with firstName and lastName directly
+      const payload = {
+        firstName,
+        lastName,
         competitionId: form.competitionId || null,
+        prizeDescription,
+        prizeValue,
         imageUrl: form.imageUrl || null,
-        isShowcase: form.isShowcase,
       };
 
-      await apiRequest("/api/admin/winners", "POST", payload);
+      console.log("Creating winner with payload:", payload);
+
+      const response = await fetch("/api/admin/winners", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
       
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to add winner");
+      }
+      
+      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ["/api/admin/winners"] });
       queryClient.invalidateQueries({ queryKey: ["/api/winners"] });
       
       toast({
         title: "Success",
-        description: "Winner added successfully",
+        description: `Winner ${firstName} ${lastName} added successfully`,
       });
       
       // Reset form
       setForm({
-        userId: "",
+        firstName: "",
+        lastName: "",
         competitionId: "",
         prizeDescription: "",
         prizeValue: "",
@@ -174,6 +157,7 @@ const users = usersResponse?.users || [];
       // Navigate back to winners list
       setLocation("/admin/past-winners");
     } catch (error: any) {
+      console.error("Error adding winner:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -202,70 +186,38 @@ const users = usersResponse?.users || [];
         {/* Main Form Card */}
         <Card className="p-6">
           <div className="space-y-6">
-            {/* Winner Selection Section */}
+            {/* Winner Details Section */}
             <div>
               <h2 className="text-lg font-semibold mb-4">Winner Details</h2>
               <div className="space-y-4">
-                {/* User Selection */}
+                {/* First Name */}
                 <div>
-                  <Label className="text-sm font-medium">
-                    Select Winner <span className="text-red-500">*</span>
+                  <Label htmlFor="firstName" className="text-sm font-medium">
+                    First Name <span className="text-red-500">*</span>
                   </Label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Choose the user who won
-                  </p>
-                  <Popover open={openUserSelect} onOpenChange={setOpenUserSelect}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={openUserSelect}
-                        className="w-full justify-between"
-                      >
-                        {form.userId
-                          ? users.find((u) => u.id === form.userId)?.firstName +
-                            " " +
-                            users.find((u) => u.id === form.userId)?.lastName
-                          : "Select a user..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0">
-                      <Command>
-                        <CommandInput placeholder="Search user by name or email..." />
-                        <CommandEmpty>
-                          {isLoadingUsers ? "Loading users..." : "No user found."}
-                        </CommandEmpty>
-                        <CommandGroup className="max-h-64 overflow-y-auto">
-                          {users.map((user) => (
-                            <CommandItem
-                              key={user.id}
-                              value={`${user.firstName} ${user.lastName} ${user.email}`}
-                              onSelect={() => {
-                                setForm({ ...form, userId: user.id });
-                                setOpenUserSelect(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  form.userId === user.id ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              <div className="flex flex-col">
-                                <span className="font-medium">
-                                  {user.firstName} {user.lastName}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {user.email}
-                                </span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                  <Input
+                    id="firstName"
+                    value={form.firstName}
+                    onChange={(e) =>
+                      setForm({ ...form, firstName: e.target.value })
+                    }
+                    placeholder="e.g., John"
+                  />
+                </div>
+
+                {/* Last Name */}
+                <div>
+                  <Label htmlFor="lastName" className="text-sm font-medium">
+                    Last Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="lastName"
+                    value={form.lastName}
+                    onChange={(e) =>
+                      setForm({ ...form, lastName: e.target.value })
+                    }
+                    placeholder="e.g., Smith"
+                  />
                 </div>
 
                 {/* Competition Selection */}
@@ -274,9 +226,6 @@ const users = usersResponse?.users || [];
                     Competition
                     <span className="text-muted-foreground font-normal ml-2">(Optional)</span>
                   </Label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Link this win to a specific competition
-                  </p>
                   <Select
                     value={form.competitionId || "none"}
                     onValueChange={(value) =>
@@ -307,13 +256,11 @@ const users = usersResponse?.users || [];
               <div className="space-y-4">
                 {/* Prize Description */}
                 <div>
-                  <Label className="text-sm font-medium">
+                  <Label htmlFor="prizeDescription" className="text-sm font-medium">
                     Prize Description <span className="text-red-500">*</span>
                   </Label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Describe what the winner won
-                  </p>
                   <Textarea
+                    id="prizeDescription"
                     value={form.prizeDescription}
                     onChange={(e) =>
                       setForm({ ...form, prizeDescription: e.target.value })
@@ -325,13 +272,11 @@ const users = usersResponse?.users || [];
 
                 {/* Prize Value */}
                 <div>
-                  <Label className="text-sm font-medium">
+                  <Label htmlFor="prizeValue" className="text-sm font-medium">
                     Prize Value <span className="text-red-500">*</span>
                   </Label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    The value of the prize (e.g., £50,000 or 10,000 Ringtones)
-                  </p>
                   <Input
+                    id="prizeValue"
                     value={form.prizeValue}
                     onChange={(e) =>
                       setForm({ ...form, prizeValue: e.target.value })
@@ -343,9 +288,6 @@ const users = usersResponse?.users || [];
                 {/* Prize Image */}
                 <div>
                   <Label className="text-sm font-medium">Prize Image</Label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Upload an image of the prize or enter a URL
-                  </p>
                   <div className="space-y-3">
                     <Input
                       value={form.imageUrl}
@@ -433,7 +375,7 @@ const users = usersResponse?.users || [];
               <Button
                 type="button"
                 onClick={handleSubmit}
-                disabled={saving || !form.userId || !form.prizeDescription || !form.prizeValue}
+                disabled={saving || !form.firstName.trim() || !form.lastName.trim() || !form.prizeDescription.trim() || !form.prizeValue.trim()}
                 className="flex-1"
                 size="lg"
               >
