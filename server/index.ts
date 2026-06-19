@@ -12,6 +12,7 @@ import { load } from 'cheerio';
 import puppeteer from "puppeteer";
 import { startCrons } from "./cron";
 import { getBrowser } from "./pupeteerBrowser";
+import { socialPreviewMiddleware } from "./social-preview";
   dotenv.config();
 
 
@@ -21,6 +22,7 @@ app.disable("etag");
 setupCustomAuth(app)
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(socialPreviewMiddleware);
 
 // Serve uploaded files from attached_assets directory
 app.use("/attached_assets", express.static("attached_assets"));
