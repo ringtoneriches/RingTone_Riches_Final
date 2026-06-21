@@ -59,10 +59,17 @@ export default function CompetitionCard({ competition, authenticated = false }: 
   const pct = maxT > 0 ? Math.min(100, (soldT / maxT) * 100) : 0;
   const hasTickets = maxT > 0;
   const remaining = maxT - soldT;
+  const isSoldOut = remaining <= 0 && maxT > 0;
+  
+  // ── Check if competition has expired ──
+  const endDate = (competition as any).endDate ? new Date((competition as any).endDate) : null;
+  const isExpired = endDate ? endDate.getTime() < Date.now() : false;
+  const isClosed = isSoldOut || isExpired;
+
   const isFree = competition.ticketPrice === "0.00";
-  const isAlmostGone = pct > 85;
-  const isHot = pct > 60;
-  const isNew = pct < 12;
+  const isAlmostGone = pct > 85 && !isClosed;
+  const isHot = pct > 60 && !isClosed;
+  const isNew = pct < 12 && !isClosed;
 
   // ── Type config ──
   type TypeCfg = {
@@ -89,6 +96,8 @@ export default function CompetitionCard({ competition, authenticated = false }: 
 
   // ── Badge color ──
   const badgeStyle = (() => {
+    if (isExpired) return { bg: "#555555", shadow: "rgba(85,85,85,0.8)" };
+    if (isSoldOut) return { bg: "#666666", shadow: "rgba(100,100,100,0.8)" };
     const b = tc.badge;
     if (b === "SELLING FAST") return { bg: "#C62828", shadow: "rgba(198,40,40,0.8)" };
     if (b === "HOT")          return { bg: "linear-gradient(135deg,#FF6B00,#FFB800)", shadow: "rgba(255,107,0,0.75)" };
@@ -104,33 +113,73 @@ export default function CompetitionCard({ competition, authenticated = false }: 
   const prizeDisplay = prizeNum ? (prizeNum >= 1000 ? `£${prizeNum.toLocaleString("en-GB")}` : `£${prizeNum.toFixed(0)}`) : null;
   const prizeStr = prizeNum ? (prizeNum >= 1000 ? `£${(prizeNum / 1000).toFixed(prizeNum % 1000 === 0 ? 0 : 1)}K` : `£${prizeNum.toFixed(0)}`) : null;
 
-  const endDate = (competition as any).endDate ? new Date((competition as any).endDate) : null;
   const cd = useCountdown(endDate);
 
-  const uid = competition.id.slice(0, 8);
+  // ── Get status message ──
+  const getStatusMessage = () => {
+    if (isExpired) return { 
+      overlay: "EXPIRED", 
+      overlaySub: "This competition has ended",
+      badge: "EXPIRED",
+      button: "EXPIRED",
+      color: "#888888"
+    };
+    if (isSoldOut) return { 
+      overlay: "SOLD OUT", 
+      overlaySub: "No tickets remaining",
+      badge: "SOLD OUT",
+      button: "SOLD OUT",
+      color: "#ff4444"
+    };
+    return {
+      overlay: null,
+      overlaySub: null,
+      badge: tc.badge,
+      button: "ENTER NOW",
+      color: tc.accent
+    };
+  };
+
+  const status = getStatusMessage();
+  // const isClosed = isExpired || isSoldOut;
 
   return (
     <div
       className="group cursor-pointer"
       data-testid={`card-competition-${competition.id}`}
-      onClick={() => setLocation(`/competition/${competition.id}`)}
+      onClick={() => {
+        if (!isClosed) {
+          setLocation(`/competition/${competition.id}`);
+        }
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ perspective: "900px", height: "100%" }}
+      style={{ 
+        perspective: "900px", 
+        height: "100%",
+        opacity: isClosed ? 0.6 : 1,
+        cursor: isClosed ? "not-allowed" : "pointer",
+        pointerEvents: isClosed ? "none" : "auto",
+      }}
     >
       {/* ── Outer neon shell ── */}
       <div style={{
         borderRadius: "clamp(14px, 3vw, 20px)",
         padding: 2,
         height: "100%",
-        background: hovered
-          ? `linear-gradient(145deg, rgba(${tc.rgb},0.9) 0%, rgba(${tc.rgb},0.25) 50%, rgba(${tc.rgb},0.9) 100%)`
-          : `linear-gradient(145deg, rgba(${tc.rgb},0.55) 0%, rgba(${tc.rgb},0.08) 50%, rgba(${tc.rgb},0.55) 100%)`,
-        boxShadow: hovered
-          ? `0 0 0 1px rgba(${tc.rgb},0.3), 0 0 40px -4px rgba(${tc.rgb},0.7), 0 28px 60px -12px rgba(0,0,0,0.98)`
-          : `0 0 0 1px rgba(${tc.rgb},0.12), 0 0 24px -6px rgba(${tc.rgb},0.35), 0 8px 28px -8px rgba(0,0,0,0.9)`,
-        transform: hovered ? "translateY(-4px) scale(1.02)" : "translateY(0) scale(1)",
+        background: isClosed 
+          ? "linear-gradient(145deg, rgba(100,100,100,0.3) 0%, rgba(100,100,100,0.05) 50%, rgba(100,100,100,0.3) 100%)"
+          : hovered
+            ? `linear-gradient(145deg, rgba(${tc.rgb},0.9) 0%, rgba(${tc.rgb},0.25) 50%, rgba(${tc.rgb},0.9) 100%)`
+            : `linear-gradient(145deg, rgba(${tc.rgb},0.55) 0%, rgba(${tc.rgb},0.08) 50%, rgba(${tc.rgb},0.55) 100%)`,
+        boxShadow: isClosed
+          ? `0 0 0 1px rgba(100,100,100,0.15), 0 0 20px -6px rgba(0,0,0,0.9)`
+          : hovered
+            ? `0 0 0 1px rgba(${tc.rgb},0.3), 0 0 40px -4px rgba(${tc.rgb},0.7), 0 28px 60px -12px rgba(0,0,0,0.98)`
+            : `0 0 0 1px rgba(${tc.rgb},0.12), 0 0 24px -6px rgba(${tc.rgb},0.35), 0 8px 28px -8px rgba(0,0,0,0.9)`,
+        transform: hovered && !isClosed ? "translateY(-4px) scale(1.02)" : "translateY(0) scale(1)",
         transition: "transform 0.3s ease, box-shadow 0.3s ease",
+        filter: isClosed ? "grayscale(0.5) brightness(0.5)" : "none",
       }}>
         {/* ── Inner card ── */}
         <div style={{
@@ -140,14 +189,63 @@ export default function CompetitionCard({ competition, authenticated = false }: 
           display: "flex",
           flexDirection: "column",
           height: "100%",
+          position: "relative",
         }}>
+          
+          {/* ── CLOSED OVERLAY (SOLD OUT or EXPIRED) ── */}
+          {isClosed && (
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(0,0,0,0.7)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 10,
+              backdropFilter: "blur(2px)",
+            }}>
+              <div style={{
+                background: "rgba(0,0,0,0.9)",
+                padding: "clamp(10px, 3vw, 20px) clamp(14px, 4vw, 30px)",
+                borderRadius: "clamp(8px, 2vw, 14px)",
+                border: `2px solid ${isExpired ? 'rgba(136,136,136,0.3)' : 'rgba(255,68,68,0.3)'}`,
+                textAlign: "center",
+                transform: "rotate(-8deg)",
+                boxShadow: "0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(255,255,255,0.05)",
+              }}>
+                <div style={{
+                  fontSize: "clamp(18px, 5vw, 40px)",
+                  fontWeight: 900,
+                  color: isExpired ? "#888888" : "#ff4444",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  textShadow: isExpired ? "none" : "0 0 30px rgba(255,68,68,0.5)",
+                  lineHeight: 1,
+                }}>
+                  {status.overlay}
+                </div>
+                <div style={{
+                  fontSize: "clamp(6px, 1.5vw, 10px)",
+                  color: "rgba(255,255,255,0.4)",
+                  fontWeight: 700,
+                  letterSpacing: "0.2em",
+                  marginTop: "clamp(2px, 0.5vw, 6px)",
+                  textTransform: "uppercase",
+                }}>
+                  {status.overlaySub}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ══ HEADER - Compact on mobile ══ */}
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
             padding: "clamp(5px, 1.5vw, 9px) clamp(7px, 2vw, 11px)",
-            background: `linear-gradient(90deg, rgba(${tc.rgb},0.14) 0%, rgba(0,0,0,0) 100%)`,
-            borderBottom: `1px solid rgba(${tc.rgb},0.18)`,
+            background: isClosed 
+              ? "linear-gradient(90deg, rgba(100,100,100,0.14) 0%, rgba(0,0,0,0) 100%)"
+              : `linear-gradient(90deg, rgba(${tc.rgb},0.14) 0%, rgba(0,0,0,0) 100%)`,
+            borderBottom: `1px solid rgba(${isClosed ? '100,100,100' : tc.rgb},0.18)`,
             flexShrink: 0,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "clamp(4px, 1vw, 6px)" }}>
@@ -155,33 +253,39 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 width: "clamp(20px, 4vw, 26px)", 
                 height: "clamp(20px, 4vw, 26px)", 
                 borderRadius: "clamp(6px, 1.5vw, 8px)",
-                background: `rgba(${tc.rgb},0.12)`,
-                border: `1px solid rgba(${tc.rgb},0.4)`,
+                background: isClosed ? `rgba(100,100,100,0.12)` : `rgba(${tc.rgb},0.12)`,
+                border: `1px solid ${isClosed ? 'rgba(100,100,100,0.4)' : `rgba(${tc.rgb},0.4)`}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: `0 0 10px rgba(${tc.rgb},0.3)`,
+                boxShadow: isClosed ? "none" : `0 0 10px rgba(${tc.rgb},0.3)`,
               }}>
-                <tc.Icon style={{ width: "clamp(10px, 2vw, 13px)", height: "clamp(10px, 2vw, 13px)", color: tc.accent }} strokeWidth={2.5} />
+                <tc.Icon style={{ 
+                  width: "clamp(10px, 2vw, 13px)", 
+                  height: "clamp(10px, 2vw, 13px)", 
+                  color: isClosed ? "#666666" : tc.accent 
+                }} strokeWidth={2.5} />
               </div>
               <span style={{
                 fontSize: "clamp(7px, 1.5vw, 9.5px)", 
                 fontWeight: 900, 
                 letterSpacing: "0.12em",
                 textTransform: "uppercase", 
-                color: tc.accent,
+                color: isClosed ? "#666666" : tc.accent,
               }}>{tc.label}</span>
             </div>
             <div style={{
               padding: "clamp(2px, 0.5vw, 3px) clamp(6px, 1.5vw, 9px)", 
               borderRadius: 20,
-              background: badgeStyle.bg,
-              boxShadow: `0 2px 14px ${badgeStyle.shadow}`,
+              background: isClosed ? "#555555" : badgeStyle.bg,
+              boxShadow: isClosed ? "none" : `0 2px 14px ${badgeStyle.shadow}`,
               fontSize: "clamp(6px, 1.2vw, 7.5px)", 
               fontWeight: 900, 
               letterSpacing: "0.12em", 
               color: "#fff",
               textTransform: "uppercase", 
               whiteSpace: "nowrap",
-            }}>Live</div>
+            }}>
+              {status.badge}
+            </div>
           </div>
 
           {/* ══ HERO IMAGE - Keep aspect ratio but responsive ══ */}
@@ -192,9 +296,9 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               onError={(e) => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"; }}
               style={{
                 width: "100%", height: "100%", objectFit: "cover", display: "block",
-                transform: hovered ? "scale(1.05)" : "scale(1)",
+                transform: hovered && !isClosed ? "scale(1.05)" : "scale(1)",
                 transition: "transform 0.5s ease",
-                filter: "brightness(0.92) saturate(1.15)",
+                filter: isClosed ? "brightness(0.6) saturate(0.3)" : "brightness(0.92) saturate(1.15)",
               }}
             />
             {/* Bottom fade */}
@@ -205,8 +309,10 @@ export default function CompetitionCard({ competition, authenticated = false }: 
             {/* Top neon stripe */}
             <div style={{
               position: "absolute", top: 0, left: 0, right: 0, height: "clamp(1px, 0.3vw, 2px)",
-              background: `linear-gradient(90deg, transparent 0%, rgba(${tc.rgb},1) 30%, rgba(${tc.rgb},1) 70%, transparent 100%)`,
-              boxShadow: `0 0 18px rgba(${tc.rgb},0.9)`,
+              background: isClosed 
+                ? "linear-gradient(90deg, transparent 0%, #666666 30%, #666666 70%, transparent 100%)"
+                : `linear-gradient(90deg, transparent 0%, rgba(${tc.rgb},1) 30%, rgba(${tc.rgb},1) 70%, transparent 100%)`,
+              boxShadow: isClosed ? "none" : `0 0 18px rgba(${tc.rgb},0.9)`,
             }} />
           </div>
 
@@ -232,8 +338,8 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               fontSize: "clamp(18px, 4vw, 34px)", 
               fontWeight: 900, 
               lineHeight: 1,
-              color: "#ffffff",
-              textShadow: prizeDisplay ? `0 0 20px rgba(${tc.rgb},1), 0 0 40px rgba(${tc.rgb},0.5)` : "none",
+              color: isClosed ? "#666666" : "#ffffff",
+              textShadow: prizeDisplay && !isClosed ? `0 0 20px rgba(${tc.rgb},1), 0 0 40px rgba(${tc.rgb},0.5)` : "none",
               marginBottom: 2,
               letterSpacing: "-0.01em",
             }}>
@@ -244,7 +350,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 fontSize: "clamp(6px, 1.2vw, 8px)", 
                 fontWeight: 900, 
                 letterSpacing: "0.25em",
-                color: tc.accent, 
+                color: isClosed ? "#666666" : tc.accent, 
                 textTransform: "uppercase",
                 marginBottom: "clamp(3px, 0.8vw, 6px)",
               }}>CASH</div>
@@ -259,7 +365,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 fontSize: "clamp(7px, 1.2vw, 8.5px)", 
                 fontWeight: 800, 
                 letterSpacing: "0.04em",
-                color: tc.accent,
+                color: isClosed ? "#666666" : tc.accent,
                 lineHeight: 1.35,
               }}>
                 WIN UP TO {prizeStr || "BIG PRIZES"} CASH INSTANTLY!
@@ -295,7 +401,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                   fontSize: "clamp(12px, 2.5vw, 15px)", 
                   fontWeight: 900, 
                   lineHeight: 1,
-                  color: tc.accent,
+                  color: isClosed ? "#666666" : tc.accent,
                 }}>
                   {isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
                 </div>
@@ -310,10 +416,15 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                   marginBottom: 1,
                 }}>LEFT</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 3, justifyContent: "flex-end" }}>
-                  <span style={{ fontSize: "clamp(12px, 2.5vw, 15px)", fontWeight: 900, color: "#ffffff", lineHeight: 1 }}>
+                  <span style={{ 
+                    fontSize: "clamp(12px, 2.5vw, 15px)", 
+                    fontWeight: 900, 
+                    color: isClosed ? "#666666" : "#ffffff", 
+                    lineHeight: 1 
+                  }}>
                     {remaining.toLocaleString()}
                   </span>
-                  <Users style={{ width: "clamp(9px, 2vw, 11px)", height: "clamp(9px, 2vw, 11px)", color: "white" }} />
+                  <Users style={{ width: "clamp(9px, 2vw, 11px)", height: "clamp(9px, 2vw, 11px)", color: isClosed ? "#666666" : "white" }} />
                 </div>
               </div>
             </div>
@@ -343,9 +454,9 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 <div style={{
                   position: "absolute", left: 0, top: 0, bottom: 0,
                   width: `${pct}%`,
-                  background: tc.bar,
+                  background: isClosed ? "#666666" : tc.bar,
                   borderRadius: 4,
-                  boxShadow: `0 0 10px rgba(${tc.rgb},0.7)`,
+                  boxShadow: isClosed ? "none" : `0 0 10px rgba(${tc.rgb},0.7)`,
                   transition: "width 0.5s ease",
                 }} />
               </div>
@@ -356,7 +467,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 <span style={{
                   fontSize: "clamp(6px, 1vw, 7.5px)", 
                   fontWeight: 900, 
-                  color: tc.accent,
+                  color: isClosed ? "#666666" : tc.accent,
                   letterSpacing: "0.08em", 
                   textTransform: "uppercase",
                 }}>{Math.round(pct)}% FILLED</span>
@@ -376,12 +487,14 @@ export default function CompetitionCard({ competition, authenticated = false }: 
             gridTemplateColumns: "1fr 1fr",
             alignItems: "center",
             padding: "clamp(5px, 1.2vw, 10px) clamp(6px, 1.5vw, 10px)",
-            background: `linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(${tc.rgb},0.06) 100%)`,
-            borderTop: `1px solid rgba(${tc.rgb},0.14)`,
+            background: isClosed 
+              ? "linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(100,100,100,0.06) 100%)"
+              : `linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(${tc.rgb},0.06) 100%)`,
+            borderTop: `1px solid rgba(${isClosed ? '100,100,100' : tc.rgb},0.14)`,
             flexShrink: 0,
             gap: "clamp(4px, 1vw, 12px)",
           }}>
-            {/* Countdown - Left */}
+            {/* Countdown / Status - Left */}
             <div style={{ minWidth: 0 }}>
               <div style={{
                 fontSize: "clamp(4px, 0.9vw, 6px)", 
@@ -390,8 +503,32 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 textTransform: "uppercase", 
                 letterSpacing: "0.1em", 
                 marginBottom: "clamp(1px, 0.3vw, 4px)",
-              }}>ENDS IN</div>
-              {endDate ? (
+              }}>
+                {isExpired ? "COMPETITION ENDED" : isSoldOut ? "ALL SOLD OUT" : "ENDS IN"}
+              </div>
+              {isExpired ? (
+                <div style={{ 
+                  fontSize: "clamp(7px, 1.8vw, 15px)", 
+                  fontWeight: 900, 
+                  color: "#888888",
+                  lineHeight: 1.2,
+                }}>
+                  <span style={{ display: "block", fontSize: "clamp(5px, 1vw, 8px)", color: "rgba(255,255,255,0.3)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                    Draw Complete
+                  </span>
+                </div>
+              ) : isSoldOut ? (
+                <div style={{ 
+                  fontSize: "clamp(7px, 1.8vw, 15px)", 
+                  fontWeight: 900, 
+                  color: "#666666",
+                  lineHeight: 1.2,
+                }}>
+                  <span style={{ display: "block", fontSize: "clamp(5px, 1vw, 8px)", color: "rgba(255,255,255,0.3)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                    No tickets remaining
+                  </span>
+                </div>
+              ) : endDate ? (
                 <div style={{ display: "flex", alignItems: "flex-end", gap: "clamp(1px, 0.4vw, 3px)", flexWrap: "wrap" }}>
                   {[
                     { v: cd.d, l: "D" },
@@ -430,9 +567,10 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               )}
             </div>
 
-            {/* ENTER NOW - Right */}
+            {/* ENTER NOW / STATUS - Right */}
             <button
               data-testid={`button-view-competition-${competition.id}`}
+              disabled={isClosed}
               style={{
                 display: "flex", 
                 alignItems: "center", 
@@ -441,28 +579,33 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 padding: "clamp(6px, 1.5vw, 10px) clamp(8px, 2vw, 14px)", 
                 borderRadius: "clamp(6px, 1.2vw, 10px)", 
                 border: "none", 
-                cursor: "pointer",
-                background: tc.bar,
-                color: "#fff",
+                cursor: isClosed ? "not-allowed" : "pointer",
+                background: isClosed ? "#444444" : tc.bar,
+                color: isClosed ? "#888888" : "#fff",
                 fontSize: "clamp(7px, 1.5vw, 10px)", 
                 fontWeight: 900, 
                 letterSpacing: "0.06em", 
                 textTransform: "uppercase",
-                boxShadow: hovered
-                  ? `0 0 25px rgba(${tc.rgb},0.85)`
-                  : `0 0 15px rgba(${tc.rgb},0.5)`,
+                boxShadow: isClosed 
+                  ? "none"
+                  : hovered
+                    ? `0 0 25px rgba(${tc.rgb},0.85)`
+                    : `0 0 15px rgba(${tc.rgb},0.5)`,
                 transition: "all 0.2s ease",
                 whiteSpace: "nowrap",
                 width: "100%",
+                opacity: isClosed ? 0.6 : 1,
               }}
             >
-              ENTER NOW
-              <span style={{
-                fontSize: "clamp(9px, 1.8vw, 13px)", 
-                fontWeight: 900,
-                transform: hovered ? "translateX(2px)" : "none",
-                transition: "transform 0.2s",
-              }}>→</span>
+              {status.button}
+              {!isClosed && (
+                <span style={{
+                  fontSize: "clamp(9px, 1.8vw, 13px)", 
+                  fontWeight: 900,
+                  transform: hovered ? "translateX(2px)" : "none",
+                  transition: "transform 0.2s",
+                }}>→</span>
+              )}
             </button>
           </div>
 
