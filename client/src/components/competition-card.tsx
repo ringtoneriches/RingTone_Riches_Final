@@ -4,6 +4,9 @@ import { Sparkles, Zap, Target, Trophy, RotateCw, Users, CheckCircle, Gift } fro
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
+import pop from "../../public/pop.jpeg"
+import voltz from "../../public/voltz.jpeg"
+import scratch from "../../public/scratch.jpeg"
 
 interface CompetitionCardProps {
   competition: Competition;
@@ -290,8 +293,14 @@ export default function CompetitionCard({ competition, authenticated = false }: 
 
           {/* ══ HERO IMAGE - Keep aspect ratio but responsive ══ */}
           <div style={{ position: "relative", aspectRatio: "4 / 3", overflow: "hidden", flexShrink: 0 }}>
-            <img
-              src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"}
+             <img
+    src={
+      competition.imageUrl || 
+      (competition.type === "pop" ? pop : 
+       competition.type === "voltz" ? voltz : 
+       competition.type === "scratch" ? scratch : 
+       "https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600")
+    }
               alt={competition.title}
               onError={(e) => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"; }}
               style={{
