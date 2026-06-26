@@ -780,6 +780,7 @@ export default function AdminRingtoneVoltzSettings() {
                                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">/ {prize.maxWins ?? "∞"}</p>
                                 </div>
                               </div>
+                              
 
                               <div className="relative h-1.5 rounded-full bg-black/30 overflow-hidden">
                                 <div

@@ -113,8 +113,21 @@ export default function CompetitionCard({ competition, authenticated = false }: 
   const prizeNum = competition.prizeAmount
     ? parseFloat(competition.prizeAmount)
     : (() => { const m = competition.title.match(/£([\d,]+)/); return m ? parseFloat(m[1].replace(/,/g, "")) : null; })();
-  const prizeDisplay = prizeNum ? (prizeNum >= 1000 ? `£${prizeNum.toLocaleString("en-GB")}` : `£${prizeNum.toFixed(0)}`) : null;
-  const prizeStr = prizeNum ? (prizeNum >= 1000 ? `£${(prizeNum / 1000).toFixed(prizeNum % 1000 === 0 ? 0 : 1)}K` : `£${prizeNum.toFixed(0)}`) : null;
+
+  // Check if title contains "mystery" (case insensitive)
+  const isMysteryPrize = competition.title.toLowerCase().includes("mystery");
+
+  // Determine prize display
+  let prizeDisplay = null;
+  let prizeStr = null;
+
+  if (isMysteryPrize) {
+    prizeDisplay = "MYSTERY PRIZE";
+    prizeStr = "MYSTERY";
+  } else if (prizeNum) {
+    prizeDisplay = prizeNum >= 1000 ? `£${prizeNum.toLocaleString("en-GB")}` : `£${prizeNum.toFixed(0)}`;
+    prizeStr = prizeNum >= 1000 ? `£${(prizeNum / 1000).toFixed(prizeNum % 1000 === 0 ? 0 : 1)}K` : `£${prizeNum.toFixed(0)}`;
+  }
 
   const cd = useCountdown(endDate);
 
@@ -144,7 +157,6 @@ export default function CompetitionCard({ competition, authenticated = false }: 
   };
 
   const status = getStatusMessage();
-  // const isClosed = isExpired || isSoldOut;
 
   return (
     <div
@@ -347,14 +359,15 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               fontSize: "clamp(18px, 4vw, 34px)", 
               fontWeight: 900, 
               lineHeight: 1,
-              color: isClosed ? "#666666" : "#ffffff",
-              textShadow: prizeDisplay && !isClosed ? `0 0 20px rgba(${tc.rgb},1), 0 0 40px rgba(${tc.rgb},0.5)` : "none",
+              color: isClosed ? "#666666" : isMysteryPrize ? "#FFD700" : "#ffffff",
+              textShadow: !isClosed && !isMysteryPrize ? `0 0 20px rgba(${tc.rgb},1), 0 0 40px rgba(${tc.rgb},0.5)` : 
+                          !isClosed && isMysteryPrize ? "0 0 20px rgba(255,215,0,0.8), 0 0 40px rgba(255,215,0,0.4)" : "none",
               marginBottom: 2,
-              letterSpacing: "-0.01em",
+              letterSpacing: isMysteryPrize ? "0.05em" : "-0.01em",
             }}>
               {prizeDisplay || competition.title.split(" ").slice(0, 3).join(" ")}
             </div>
-            {prizeDisplay ? (
+            {prizeDisplay && !isMysteryPrize ? (
               <div style={{
                 fontSize: "clamp(6px, 1.2vw, 8px)", 
                 fontWeight: 900, 
@@ -363,13 +376,22 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 textTransform: "uppercase",
                 marginBottom: "clamp(3px, 0.8vw, 6px)",
               }}>CASH</div>
+            ) : isMysteryPrize ? (
+              <div style={{
+                fontSize: "clamp(6px, 1.2vw, 8px)", 
+                fontWeight: 900, 
+                letterSpacing: "0.25em",
+                color: isClosed ? "#666666" : "#FFD700", 
+                textTransform: "uppercase",
+                marginBottom: "clamp(3px, 0.8vw, 6px)",
+              }}>🎁 SURPRISE</div>
             ) : (
               <div style={{
-                height: "clamp(9px, 2vw, 14px)", // Placeholder height
+                height: "clamp(9px, 2vw, 14px)",
                 marginBottom: "clamp(3px, 0.8vw, 6px)",
               }} />
             )}
-            {competition.type !== "instant" ? (
+            {competition.type !== "instant" && !isMysteryPrize ? (
               <div style={{
                 fontSize: "clamp(7px, 1.2vw, 8.5px)", 
                 fontWeight: 800, 
@@ -379,9 +401,19 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               }}>
                 WIN UP TO {prizeStr || "BIG PRIZES"} CASH INSTANTLY!
               </div>
+            ) : isMysteryPrize ? (
+              <div style={{
+                fontSize: "clamp(7px, 1.2vw, 8.5px)", 
+                fontWeight: 800, 
+                letterSpacing: "0.04em",
+                color: isClosed ? "#666666" : "#FFD700",
+                lineHeight: 1.35,
+              }}>
+                🎲 MYSTERY PRIZE AWAITS!
+              </div>
             ) : (
               <div style={{
-                height: "clamp(9px, 1.6vw, 11px)", // Placeholder for missing text
+                height: "clamp(9px, 1.6vw, 11px)",
               }} />
             )}
           </div>
@@ -438,7 +470,6 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               </div>
             </div>
           ) : (
-            /* Placeholder to maintain height when entry section is missing */
             <div style={{
               height: "clamp(40px, 8vw, 52px)",
               flexShrink: 0,
@@ -483,7 +514,6 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               </div>
             </div>
           ) : (
-            /* Placeholder to maintain height when progress bar is missing */
             <div style={{
               height: "clamp(18px, 3.5vw, 24px)",
               flexShrink: 0,

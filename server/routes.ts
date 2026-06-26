@@ -16249,55 +16249,149 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ success: false, message: "Ringtone Voltz is currently unavailable" });
     }
 
+    // --- GET ALL ACTIVE PRIZES ---
     const prizes = await db.select().from(voltzPrizes).where(eq(voltzPrizes.isActive, true)).orderBy(asc(voltzPrizes.displayOrder));
 
     if (prizes.length === 0) {
       return res.status(400).json({ success: false, message: "No prizes configured for Voltz game" });
     }
 
-    // Include physical prizes in eligible prizes
-    const eligiblePrizes = prizes.filter((p) => {
-      if (p.maxWins !== null && (p.rewardType === "cash" || p.rewardType === "points" || p.rewardType === "physical")) {
-        if ((p.quantityWon || 0) >= p.maxWins!) return false;
-      }
-      return true;
-    });
+    // --- FIX: PROPER WEIGHTED SELECTION ---
+    // Step 1: Determine if player wins based on winProbability
+    const winProbability = parseFloat(voltzConfig.winProbability) || 10;
+    const winRoll = Math.random() * 100;
+    const isWinner = winRoll < winProbability;
 
-    const totalWeight = eligiblePrizes.reduce((sum, p) => sum + p.weight, 0);
-    let random = Math.random() * totalWeight;
-    let selectedPrize = eligiblePrizes[0] || prizes[0];
-    for (const prize of eligiblePrizes) {
-      random -= prize.weight;
-      if (random <= 0) {
-        selectedPrize = prize;
-        break;
-      }
-    }
-
-    const rewardType = selectedPrize.rewardType;
-    const isWin = rewardType === "cash" || rewardType === "points" || rewardType === "physical";
-    const isFreeReplay = rewardType === "try_again";
-    const isNoWin = rewardType === "no_win";
-    let rewardValue = "0";
+    let selectedPrize = null;
     let outcome: "noWin" | "win" | "freeReplay" = "noWin";
+    let rewardType = "no_win";
+    let rewardValue = "0";
+    let isWin = false;
+    let isFreeReplay = false;
+    let isNoWin = true;
 
-    if (isNoWin) {
-      outcome = "noWin";
-      rewardValue = "0";
-    } else if (isFreeReplay) {
-      outcome = "freeReplay";
-      rewardValue = "0";
-    } else if (isWin) {
-      outcome = "win";
-      const value = parseFloat(selectedPrize.prizeValue || "0");
-      rewardValue = value.toString();
+    if (isWinner) {
+      // --- WINNING PRIZES (cash, points, physical) ---
+      // Filter to winning prizes and check maxWins
+      const winPrizes = prizes.filter(p => 
+        (p.rewardType === "cash" || p.rewardType === "points" || p.rewardType === "physical") &&
+        (p.maxWins === null || (p.quantityWon || 0) < p.maxWins)
+      );
+
+      if (winPrizes.length > 0) {
+        // --- WEIGHTED RANDOM SELECTION (THIS IS THE FIX) ---
+        const totalWeight = winPrizes.reduce((sum, p) => sum + p.weight, 0);
+        let randomWeight = Math.random() * totalWeight;
+        
+        for (const prize of winPrizes) {
+          randomWeight -= prize.weight;
+          if (randomWeight <= 0) {
+            selectedPrize = prize;
+            break;
+          }
+        }
+        
+        // Fallback if selection failed
+        if (!selectedPrize) {
+          selectedPrize = winPrizes[0];
+        }
+
+        // --- SET WIN VALUES ---
+        isWin = true;
+        isNoWin = false;
+        outcome = "win";
+        rewardType = selectedPrize.rewardType;
+        rewardValue = selectedPrize.prizeValue || "0";
+        
+        // For physical, use prize name as value display
+        if (rewardType === "physical") {
+          rewardValue = selectedPrize.prizeName || "Physical Prize";
+        }
+      } else {
+        // No winning prizes available
+        isNoWin = true;
+        outcome = "noWin";
+        rewardType = "no_win";
+        rewardValue = "0";
+        
+        // Check if there's a "no_win" prize
+        const noWinPrizes = prizes.filter(p => p.rewardType === "no_win");
+        if (noWinPrizes.length > 0) {
+          selectedPrize = noWinPrizes[0];
+        }
+      }
+    } else {
+      // --- LOST THE WIN ROLL - Check for free replay or no win ---
+      const freeReplayProbability = parseFloat(voltzConfig.freeReplayProbability) || 5;
+      const freeRoll = Math.random() * 100;
+      
+      const freeReplayPrizes = prizes.filter(p => 
+        p.rewardType === "try_again" &&
+        (p.maxWins === null || (p.quantityWon || 0) < p.maxWins)
+      );
+
+      if (freeRoll < freeReplayProbability && freeReplayPrizes.length > 0) {
+        // --- WEIGHTED SELECTION FOR FREE REPLAY ---
+        const totalWeight = freeReplayPrizes.reduce((sum, p) => sum + p.weight, 0);
+        let randomWeight = Math.random() * totalWeight;
+        
+        for (const prize of freeReplayPrizes) {
+          randomWeight -= prize.weight;
+          if (randomWeight <= 0) {
+            selectedPrize = prize;
+            break;
+          }
+        }
+        
+        if (!selectedPrize) {
+          selectedPrize = freeReplayPrizes[0];
+        }
+
+        isFreeReplay = true;
+        isNoWin = false;
+        outcome = "freeReplay";
+        rewardType = "try_again";
+        rewardValue = "0";
+      } else {
+        // --- NO WIN ---
+        isNoWin = true;
+        outcome = "noWin";
+        rewardType = "no_win";
+        rewardValue = "0";
+        
+        // Check if there's a "no_win" prize
+        const noWinPrizes = prizes.filter(p => p.rewardType === "no_win");
+        if (noWinPrizes.length > 0) {
+          selectedPrize = noWinPrizes[0];
+        }
+      }
     }
 
+    // --- FALLBACK: If no prize selected, create a default ---
+    if (!selectedPrize) {
+      isNoWin = true;
+      outcome = "noWin";
+      rewardType = "no_win";
+      rewardValue = "0";
+      selectedPrize = {
+        id: "no-win",
+        prizeName: "No Win",
+        prizeValue: "0",
+        rewardType: "no_win",
+        weight: 0,
+        maxWins: null,
+        quantityWon: 0,
+        isActive: true,
+        displayOrder: 999,
+        imageUrl: null,
+      };
+    }
+
+    // --- GET ALL PRIZE DISPLAY VALUES FOR THE SWITCHES ---
     const getPrizeDisplay = (p: typeof prizes[0]) => {
       if (p.rewardType === "cash") return `£${parseFloat(p.prizeValue || "0").toFixed(2)}`;
       if (p.rewardType === "points") return `${Math.floor(parseFloat(p.prizeValue || "0"))} PTS`;
       if (p.rewardType === "physical") {
-        // For physical prizes, show a short version or icon + short name
         const prizeName = p.prizeName || "Prize";
         if (prizeName.length > 12) {
           return prizeName.substring(0, 10) + "…";
@@ -16315,20 +16409,18 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
       return arr;
     };
 
-    const realPrizes = prizes.filter(p => p.rewardType === "cash" || p.rewardType === "points");
-    const realDisplayValues = [...new Set(realPrizes.map(getPrizeDisplay))];
-    
-    // Include physical prizes for display values
-    const physicalPrizes = prizes.filter(p => p.rewardType === "physical");
-    const physicalDisplayValues = physicalPrizes.map(p => getPrizeDisplay(p));
-
+    // --- BUILD SWITCH TEXTS ---
     let switchTexts: string[] = [];
-    if (isWin) {
+    const realPrizes = prizes.filter(p => p.rewardType === "cash" || p.rewardType === "points");
+    const physicalPrizes = prizes.filter(p => p.rewardType === "physical");
+    const allDisplayValues = [...realPrizes.map(getPrizeDisplay), ...physicalPrizes.map(getPrizeDisplay)];
+
+    if (isWin && selectedPrize) {
+      // WIN: Show the winning value on all switches
       const displayVal = getPrizeDisplay(selectedPrize);
       switchTexts = [displayVal, displayVal, displayVal];
     } else if (isFreeReplay) {
-      // For free replay, mix real prizes and possibly physical prizes for display
-      const allDisplayValues = [...realDisplayValues, ...physicalDisplayValues];
+      // FREE REPLAY: Mix real prizes with "REPLAY"
       if (allDisplayValues.length > 0) {
         const matchVal = allDisplayValues[Math.floor(Math.random() * allDisplayValues.length)];
         switchTexts = shuffleArray([matchVal, matchVal, "REPLAY"]);
@@ -16336,51 +16428,43 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
         switchTexts = ["REPLAY", "REPLAY", "REPLAY"];
       }
     } else {
-      // For lose, show non-matching values
-      const allDisplayValues = [...realDisplayValues, ...physicalDisplayValues];
+      // NO WIN: Show 3 different values that don't match
       if (allDisplayValues.length >= 3) {
-        const pattern = Math.random();
-        if (pattern < 0.5) {
-          const idx1 = Math.floor(Math.random() * allDisplayValues.length);
-          let idx2 = Math.floor(Math.random() * (allDisplayValues.length - 1));
-          if (idx2 >= idx1) idx2++;
-          switchTexts = shuffleArray([allDisplayValues[idx1], allDisplayValues[idx1], allDisplayValues[idx2]]);
-        } else {
-          const shuffled = shuffleArray([...allDisplayValues]);
-          switchTexts = [shuffled[0], shuffled[1], shuffled[2]];
-        }
+        const shuffled = shuffleArray([...allDisplayValues]);
+        switchTexts = [shuffled[0], shuffled[1], shuffled[2]];
       } else if (allDisplayValues.length === 2) {
-        const idx1 = Math.floor(Math.random() * 2);
-        const idx2 = idx1 === 0 ? 1 : 0;
-        switchTexts = shuffleArray([allDisplayValues[idx1], allDisplayValues[idx1], allDisplayValues[idx2]]);
+        switchTexts = shuffleArray([allDisplayValues[0], allDisplayValues[0], allDisplayValues[1]]);
       } else if (allDisplayValues.length === 1) {
         switchTexts = shuffleArray([allDisplayValues[0], allDisplayValues[0], "NO MATCH"]);
       } else {
-        switchTexts = shuffleArray(["NO MATCH", "STATIC", "OVERLOAD"]);
+        switchTexts = shuffleArray(["£5", "£10", "£25"]);
       }
     }
 
-    // Calculate the NEW plays remaining correctly based on outcome
-    let newPlaysRemaining = playsRemaining - 1; // Subtract the used play
-    if (isFreeReplay) {
-      // If it's a free replay, they get +1 play after using this one
-      newPlaysRemaining = playsRemaining; // Net zero change (used 1, gained 1)
-    }
-
+    // --- RETURN IMMEDIATE RESULT (NO CONFIRMATION NEEDED) ---
     res.json({
       success: true,
       result: { 
         outcome, 
         isWin, 
         isFreeReplay, 
-        rewardType: isWin ? rewardType : isFreeReplay ? "try_again" : "lose", 
-        rewardValue: rewardType === "physical" ? selectedPrize.prizeName : rewardValue,
-        prizeName: rewardType === "physical" ? selectedPrize.prizeName : undefined,
-        prizeId: selectedPrize.id,
+        rewardType: rewardType, 
+        rewardValue: rewardValue,
+        prizeName: selectedPrize?.prizeName || null,
+        prizeId: selectedPrize?.id || null,
         isPhysical: rewardType === "physical",
-        switchTexts 
+        switchTexts,
+        // Debug info - remove in production
+        _debug: {
+          winProbability,
+          winRoll,
+          isWinner,
+          totalWeight: prizes.reduce((sum, p) => sum + p.weight, 0),
+          selectedWeight: selectedPrize?.weight || 0,
+        }
       },
-      playsRemaining: newPlaysRemaining,
+      playsRemaining: playsRemaining - 1,
+      // Note: Free replay will add a play in the confirmation step
     });
   } catch (error) {
     console.error("Error playing voltz game:", error);
@@ -16388,11 +16472,10 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
   }
 });
 
-// Add this new endpoint to confirm the game result
 app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
-    const { orderId, result } = req.body;
+    const { orderId, result, switchChosen } = req.body;
 
     if (!orderId || !result) {
       return res.status(400).json({ success: false, message: "Order ID and result are required" });
@@ -16409,101 +16492,102 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
     // Start a transaction to ensure data consistency
     await db.transaction(async (tx) => {
       // Record the usage
-      await tx.insert(voltzUsage).values({ orderId, userId, usedAt: new Date() });
+      await tx.insert(voltzUsage).values({ 
+        orderId, 
+        userId, 
+        usedAt: new Date() 
+      });
 
       if (result.outcome === "win") {
-        // Update user balance/points or handle physical prize
+        // --- HANDLE WIN ---
         if (result.rewardType === "cash") {
-          const finalBalance = parseFloat(user.balance || "0") + parseFloat(result.rewardValue);
+          const cashValue = parseFloat(result.rewardValue);
+          const finalBalance = parseFloat(user.balance || "0") + cashValue;
           await tx.update(users).set({ balance: finalBalance.toFixed(2) }).where(eq(users.id, userId));
           
-          // Use storage.createTransaction instead of direct insert
           await storage.createTransaction({
             userId,
             type: "prize",
-            amount: result.rewardValue,
-            description: `Ringtone Voltz Win - £${result.rewardValue}`,
+            amount: cashValue.toFixed(2),
+            description: `Ringtone Voltz Win - £${cashValue.toFixed(2)}`,
+          });
+          
+          // Record winner
+          await tx.insert(winners).values({
+            userId, 
+            competitionId: order.competitionId, 
+            prizeDescription: "Ringtone Voltz Win",
+            prizeValue: `£${cashValue.toFixed(2)} Cash`,
+            isShowcase: false, 
+            createdAt: new Date(), 
+            updatedAt: new Date(),
           });
         } else if (result.rewardType === "points") {
           const pointsValue = Math.floor(parseFloat(result.rewardValue));
           const newPoints = (user.ringtonePoints || 0) + pointsValue;
           await tx.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
           
-          // Use storage.createTransaction instead of direct insert
           await storage.createTransaction({
             userId,
             type: "ringtone_points",
             amount: pointsValue.toString(),
             description: `Ringtone Voltz Win - ${pointsValue} pts`,
           });
+          
+          // Record winner
+          await tx.insert(winners).values({
+            userId, 
+            competitionId: order.competitionId, 
+            prizeDescription: "Ringtone Voltz Win",
+            prizeValue: `${pointsValue} Points`,
+            isShowcase: false, 
+            createdAt: new Date(), 
+            updatedAt: new Date(),
+          });
         } else if (result.rewardType === "physical") {
-          // Physical prize - use storage.createTransaction with "0" as string (matching Pop game)
+          // Physical prize
           await storage.createTransaction({
             userId,
             type: "prize",
             amount: "0",
             description: `Physical Prize Won: ${result.prizeName} - Contact support`,
           });
+          
+          // Record winner
+          await tx.insert(winners).values({
+            userId, 
+            competitionId: order.competitionId, 
+            prizeDescription: `Physical Prize: ${result.prizeName}`,
+            prizeValue: result.prizeName,
+            isShowcase: false, 
+            createdAt: new Date(), 
+            updatedAt: new Date(),
+          });
         }
-
-        // Record winner with proper formatting for physical prizes
-        let prizeDescriptionText = "";
-        let prizeValueText = "";
-
-        if (result.rewardType === "cash") {
-          prizeDescriptionText = "Ringtone Voltz Win";
-          prizeValueText = `£${result.rewardValue} Cash`;
-        } else if (result.rewardType === "points") {
-          prizeDescriptionText = "Ringtone Voltz Win";
-          prizeValueText = `${result.rewardValue} Points`;
-        } else if (result.rewardType === "physical") {
-          prizeDescriptionText = `Physical Prize: ${result.prizeName}`;
-          prizeValueText = result.prizeName;
-        }
-
-        await tx.insert(winners).values({
-          userId, 
-          competitionId: order.competitionId, 
-          prizeDescription: prizeDescriptionText,
-          prizeValue: prizeValueText,
-          isShowcase: false, 
-          createdAt: new Date(), 
-          updatedAt: new Date(),
-        });
 
         // Update prize count
-        if (result.prizeId) {
+        if (result.prizeId && result.prizeId !== "no-win") {
           await tx.update(voltzPrizes)
             .set({ quantityWon: sql`${voltzPrizes.quantityWon} + 1` })
             .where(eq(voltzPrizes.id, result.prizeId));
-        } else if (result.rewardType === "physical") {
-          const [physicalPrize] = await tx.select()
-            .from(voltzPrizes)
-            .where(eq(voltzPrizes.prizeName, result.prizeName))
-            .limit(1);
-          
-          if (physicalPrize) {
-            await tx.update(voltzPrizes)
-              .set({ quantityWon: sql`${voltzPrizes.quantityWon} + 1` })
-              .where(eq(voltzPrizes.id, physicalPrize.id));
-          }
         }
+
       } else if (result.outcome === "freeReplay") {
-        // Add free replay to order
+        // --- FREE REPLAY: Add an extra play to the order ---
         await tx.update(orders)
           .set({ quantity: order.quantity + 1 })
           .where(eq(orders.id, orderId));
       }
 
-      // Record the win in voltzWins
+      // --- RECORD THE WIN IN voltzWins ---
       await tx.insert(voltzWins).values({
         orderId, 
         userId, 
         prizeId: result.prizeId || null,
-        switchChosen: result.switchChosen || 1,
+        switchChosen: switchChosen || 1,
         rewardType: result.outcome === "win" ? result.rewardType : 
                     result.outcome === "freeReplay" ? "try_again" : "no_win",
-        rewardValue: result.rewardValue || "0",
+        rewardValue: result.outcome === "win" ? result.rewardValue : "0",
         isWin: result.outcome === "win",
         wonAt: new Date(),
       });
