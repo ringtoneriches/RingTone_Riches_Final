@@ -66,7 +66,7 @@ const sidebarGroups = [
       { name: "Ringtone Plinko", path: "/admin/plinko", icon: Target },
       { name: "Ringtone Voltz", path: "/admin/voltz", icon: Zap },
     ],
-    protected: true, // Add protection flag for Games tab
+    protected: true,
   },
   {
     name: "Competitions",
@@ -103,7 +103,7 @@ const sidebarGroups = [
       { name: "Past Winners", path: "/admin/past-winners", icon: Award },
       { name: "Promo Video", path: "/admin/promo-video", icon: Video },
       { name: "Prize Table", path: "/admin/prize-table", icon: Award },
-      { name: "Users", path: "/admin/users", icon: Users, protected: true }, // Users sub-tab protected
+      { name: "Users", path: "/admin/users", icon: Users, protected: true },
       { name: "Transactions", path: "/admin/transactions", icon: Euro },
       { name: "Orders", path: "/admin/orders", icon: ShoppingCart },
       { name: "Support", path: "/admin/support", icon: MessageSquare, hasNotification: true, notificationType: "support" },
@@ -117,8 +117,8 @@ const sidebarGroups = [
 
 // Define PIN codes
 const PROTECTED_PINS = {
-  GAMES: "4545", // PIN for Games tab
-  USERS: "4545", // PIN for Users sub-tab
+  GAMES: "4545",
+  USERS: "4545",
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -164,7 +164,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return saved ? JSON.parse(saved) : {};
     } catch (e) {
       console.error("Failed to parse adminUnlockTimers", e);
-      localStorage.removeItem("adminUnlockTimers"); // reset bad data
+      localStorage.removeItem("adminUnlockTimers");
       return {};
     }
   });
@@ -195,7 +195,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return res.json();
     },
     onSuccess: () => {
-      // Clear all unlocked items on logout
       localStorage.removeItem("adminUnlockedGroups");
       localStorage.removeItem("adminUnlockedItems");
       localStorage.removeItem("adminUnlockTimers");
@@ -261,15 +260,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           }
         });
         
-        // Remove expired timers
         const newTimers = { ...unlockTimers };
         expired.forEach(([key]) => delete newTimers[key]);
         setUnlockTimers(newTimers);
       }
     };
 
-    const timer = setInterval(checkTimers, 60000); // Check every minute
-    checkTimers(); // Check immediately on mount
+    const timer = setInterval(checkTimers, 60000);
+    checkTimers();
 
     return () => clearInterval(timer);
   }, [unlockTimers, toast]);
@@ -341,16 +339,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   const handleItemClick = (itemName: string, itemPath: string, isProtected?: boolean) => {
-    // Check if item is protected and not unlocked
     if (isProtected && !unlockedItems.includes(itemPath)) {
       setUnlockingItem({ type: 'item', name: itemName, path: itemPath });
       setPinInput("");
       setPinError("");
       setShowPinDialog(true);
-      return; // Don't navigate yet
+      return;
     }
     
-    // If unlocked or not protected, navigate
     setLocation(itemPath);
     setSidebarOpen(false);
   };
@@ -375,7 +371,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     if (pinInput === correctPin) {
       const now = Date.now();
-      const unlockDuration = 30 * 60 * 1000; // 30 minutes in milliseconds
+      const unlockDuration = 30 * 60 * 1000;
       const expiryTime = now + unlockDuration;
 
       if (unlockingItem.type === 'group') {
@@ -420,7 +416,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       });
     }
     
-    // If we're currently on a locked page, redirect to dashboard
     if (location === identifier) {
       setLocation("/admin");
     }
@@ -441,7 +436,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   };
 
-  // Calculate if Tools tab should be illuminated
   const hasToolsNotifications = () => {
     const supportCount = supportUnreadData?.count ?? 0;
     const withdrawalCount = withdrawalUnreadData?.count ?? 0;
@@ -453,180 +447,191 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!user || !user.isAdmin) return null;
 
   return (
-    <div className="flex min-h-screen -mt-20">
+    <div className="flex h-screen -mt-24 overflow-hidden">
+      {/* Sidebar - Fixed position, independent scroll */}
       <aside
-        className={`fixed overflow-y-scroll sm:overflow-y-auto lg:static inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-300 ${
+        className={`fixed lg:sticky top-0 left-0 z-50 w-64 h-screen bg-card border-r border-border transform transition-transform duration-300 flex flex-col ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
-        <div className="flex flex-col h-full">
-          <div className="p-6 border-b border-border flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-primary">Admin Panel</h1>
-            <button className="lg:hidden" onClick={() => setSidebarOpen(false)}><X /></button>
-          </div>
+        {/* Sidebar Header - Fixed at top */}
+        <div className="p-6 border-b border-border flex justify-between items-center shrink-0">
+          <h1 className="text-2xl font-bold text-primary">Admin Panel</h1>
+          <button className="lg:hidden" onClick={() => setSidebarOpen(false)}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-          <nav className="flex-1 p-4 space-y-2">
-            <Link href="/admin">
-              <div className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer ${
-                location === "/admin" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}>
-                <LayoutDashboard className="w-5 h-5" />
-                <span>Dashboard</span>
-              </div>
-            </Link>
+        {/* Navigation - Scrollable middle section */}
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <Link href="/admin">
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer ${
+              location === "/admin" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}>
+              <LayoutDashboard className="w-5 h-5" />
+              <span>Dashboard</span>
+            </div>
+          </Link>
 
-            {sidebarGroups.map(group => {
-              const isGroupUnlocked = unlockedGroups.includes(group.name);
-              const isGroupProtected = group.protected;
-              const showToolsNotification = group.name === "Tools" && hasToolsNotifications();
-              
-              return (
-                <div key={group.name}>
-                  <button
-                    className={`flex items-center justify-between w-full px-4 py-2 text-lg font-medium text-muted-foreground hover:bg-muted rounded-lg ${
-                      showToolsNotification ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse' : ''
-                    }`}
-                    onClick={() => handleGroupClick(group.name)}
-                  >
-                    <div className="flex items-center gap-2">
-                      {isGroupProtected && !isGroupUnlocked && (
-                        <Lock className="w-3 h-3 text-yellow-500" />
-                      )}
-                      {isGroupProtected && isGroupUnlocked && (
-                        <Unlock className="w-3 h-3 text-green-500" />
-                      )}
-                      {group.name}
-                      {showToolsNotification && (
-                        <span className="ml-2 inline-flex items-center justify-center w-2 h-2">
-                          <span className="absolute inline-flex h-3 w-3 rounded-full bg-red-600 opacity-75 animate-ping"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600"></span>
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {isGroupProtected && isGroupUnlocked && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleManualLock('group', group.name);
-                          }}
-                          title="Lock this tab"
-                        >
-                          <Lock className="w-3 h-3" />
-                        </Button>
-                      )}
-                      {isGroupProtected && !isGroupUnlocked && (
-                        <span className="text-xs text-yellow-500">Locked</span>
-                      )}
-                      <ArrowDown className={`w-4 h-4 transition-transform ${openGroups[group.name] ? "rotate-180" : ""}`} />
-                    </div>
-                  </button>
-                  
-                  {openGroups[group.name] && (isGroupUnlocked || !isGroupProtected) && (
-                    <div className="ml-4 mt-1 space-y-1">
-                      {group.items.map(item => {
-                        const Icon = item.icon;
-                        let unreadCount = 0;
-                        if (item.notificationType === "support") unreadCount = supportUnreadData?.count ?? 0;
-                        if (item.notificationType === "withdrawals") unreadCount = withdrawalUnreadData?.count ?? 0;
-                        if (item.notificationType === "verification") unreadCount = verificationUnreadData?.count ?? 0;
-
-                        const isItemUnlocked = unlockedItems.includes(item.path);
-                        const isItemProtected = item.protected;
-                        const canAccess = isItemUnlocked || !isItemProtected;
-
-                        return (
-                          <div
-                            key={item.path}
-                            className={`flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer ${
-                              location === item.path ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                            } ${!canAccess ? "opacity-60" : ""}`}
-                            onClick={() => handleItemClick(item.name, item.path, isItemProtected)}
-                          >
-                            <div className="flex items-center gap-2">
-                              {isItemProtected && !isItemUnlocked && (
-                                <Lock className="w-3 h-3 text-yellow-500" />
-                              )}
-                              {isItemProtected && isItemUnlocked && (
-                                <Unlock className="w-3 h-3 text-green-500" />
-                              )}
-                              <Icon className="w-4 h-4" />
-                              <span className="text-md">{item.name}</span>
-                            </div>
-                            <div className="ml-auto flex items-center gap-2">
-                              {unreadCount > 0 && (
-                                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-red-500 rounded-full">
-                                  {unreadCount > 99 ? "99+" : unreadCount}
-                                </span>
-                              )}
-                              {isItemProtected && isItemUnlocked && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleManualLock('item', item.path);
-                                  }}
-                                  title="Lock this access"
-                                >
-                                  <Lock className="w-3 h-3" />
-                                </Button>
-                              )}
-                              {isItemProtected && !isItemUnlocked && (
-                                <span className="text-xs text-yellow-500">Locked</span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
-
-          <div className="p-4 border-t border-border space-y-2">
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => logoutMutation.mutate()}
-              data-testid="button-logout"
-            >
-              Logout
-            </Button>
+          {sidebarGroups.map(group => {
+            const isGroupUnlocked = unlockedGroups.includes(group.name);
+            const isGroupProtected = group.protected;
+            const showToolsNotification = group.name === "Tools" && hasToolsNotifications();
             
-            {/* Quick lock all button */}
-            {(unlockedGroups.length > 0 || unlockedItems.length > 0) && (
-              <Button
-                variant="ghost"
-                className="w-full text-xs"
-                onClick={() => {
-                  setUnlockedGroups([]);
-                  setUnlockedItems([]);
-                  setUnlockTimers({});
-                  toast({
-                    title: "All Tabs Locked",
-                    description: "All unlocked sections have been re-locked.",
-                  });
-                }}
-              >
-                <Lock className="w-3 h-3 mr-2" />
-                Lock All Protected Tabs
-              </Button>
-            )}
-          </div>
+            return (
+              <div key={group.name}>
+                <button
+                  className={`flex items-center justify-between w-full px-4 py-2 text-lg font-medium text-muted-foreground hover:bg-muted rounded-lg ${
+                    showToolsNotification ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse' : ''
+                  }`}
+                  onClick={() => handleGroupClick(group.name)}
+                >
+                  <div className="flex items-center gap-2">
+                    {isGroupProtected && !isGroupUnlocked && (
+                      <Lock className="w-3 h-3 text-yellow-500" />
+                    )}
+                    {isGroupProtected && isGroupUnlocked && (
+                      <Unlock className="w-3 h-3 text-green-500" />
+                    )}
+                    {group.name}
+                    {showToolsNotification && (
+                      <span className="ml-2 inline-flex items-center justify-center w-2 h-2">
+                        <span className="absolute inline-flex h-3 w-3 rounded-full bg-red-600 opacity-75 animate-ping"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600"></span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {isGroupProtected && isGroupUnlocked && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleManualLock('group', group.name);
+                        }}
+                        title="Lock this tab"
+                      >
+                        <Lock className="w-3 h-3" />
+                      </Button>
+                    )}
+                    {isGroupProtected && !isGroupUnlocked && (
+                      <span className="text-xs text-yellow-500">Locked</span>
+                    )}
+                    <ArrowDown className={`w-4 h-4 transition-transform ${openGroups[group.name] ? "rotate-180" : ""}`} />
+                  </div>
+                </button>
+                
+                {openGroups[group.name] && (isGroupUnlocked || !isGroupProtected) && (
+                  <div className="ml-4 mt-1 space-y-1">
+                    {group.items.map(item => {
+                      const Icon = item.icon;
+                      let unreadCount = 0;
+                      if (item.notificationType === "support") unreadCount = supportUnreadData?.count ?? 0;
+                      if (item.notificationType === "withdrawals") unreadCount = withdrawalUnreadData?.count ?? 0;
+                      if (item.notificationType === "verification") unreadCount = verificationUnreadData?.count ?? 0;
+
+                      const isItemUnlocked = unlockedItems.includes(item.path);
+                      const isItemProtected = item.protected;
+                      const canAccess = isItemUnlocked || !isItemProtected;
+
+                      return (
+                        <div
+                          key={item.path}
+                          className={`flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer ${
+                            location === item.path ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                          } ${!canAccess ? "opacity-60" : ""}`}
+                          onClick={() => handleItemClick(item.name, item.path, isItemProtected)}
+                        >
+                          <div className="flex items-center gap-2">
+                            {isItemProtected && !isItemUnlocked && (
+                              <Lock className="w-3 h-3 text-yellow-500" />
+                            )}
+                            {isItemProtected && isItemUnlocked && (
+                              <Unlock className="w-3 h-3 text-green-500" />
+                            )}
+                            <Icon className="w-4 h-4" />
+                            <span className="text-md">{item.name}</span>
+                          </div>
+                          <div className="ml-auto flex items-center gap-2">
+                            {unreadCount > 0 && (
+                              <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-red-500 rounded-full">
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                              </span>
+                            )}
+                            {isItemProtected && isItemUnlocked && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleManualLock('item', item.path);
+                                }}
+                                title="Lock this access"
+                              >
+                                <Lock className="w-3 h-3" />
+                              </Button>
+                            )}
+                            {isItemProtected && !isItemUnlocked && (
+                              <span className="text-xs text-yellow-500">Locked</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        {/* Sidebar Footer - Fixed at bottom */}
+        <div className="p-4 border-t border-border space-y-2 shrink-0">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => logoutMutation.mutate()}
+            data-testid="button-logout"
+          >
+            Logout
+          </Button>
+          
+          {(unlockedGroups.length > 0 || unlockedItems.length > 0) && (
+            <Button
+              variant="ghost"
+              className="w-full text-xs"
+              onClick={() => {
+                setUnlockedGroups([]);
+                setUnlockedItems([]);
+                setUnlockTimers({});
+                toast({
+                  title: "All Tabs Locked",
+                  description: "All unlocked sections have been re-locked.",
+                });
+              }}
+            >
+              <Lock className="w-3 h-3 mr-2" />
+              Lock All Protected Tabs
+            </Button>
+          )}
         </div>
       </aside>
 
-      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
+          onClick={() => setSidebarOpen(false)} 
+        />
+      )}
 
-      <div className="flex-1 flex flex-col min-h-screen">
-        <header className="bg-card border-b border-border p-4 lg:px-8">
+      {/* Main content area - Scrolls independently */}
+      <div className="flex-1 flex flex-col min-w-0 ">
+        {/* Header - Sticky at top */}
+        <header className="bg-card border-b border-border p-4 lg:px-8 shrink-0 sticky top-0 z-30">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -678,7 +683,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           </div>
         </header>
-        <main className="flex-1 p-4 lg:p-8">{children}</main>
+
+        {/* Main content - Scrollable */}
+        <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
+          {children}
+        </main>
       </div>
 
       {/* Maintenance Confirmation Dialog */}

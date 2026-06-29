@@ -176,6 +176,8 @@ export const competitionPrizes = pgTable("competition_prizes", {
   prizeValue: decimal("prize_value", { precision: 10, scale: 2 }).notNull(),
   totalQuantity: integer("total_quantity").notNull(),
   remainingQuantity: integer("remaining_quantity").notNull(),
+  gameType: varchar("game_type", { length: 50 }),
+  gamePrizeId: varchar("game_prize_id", { length: 255 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

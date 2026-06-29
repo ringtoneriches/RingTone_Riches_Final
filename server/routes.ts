@@ -115,6 +115,7 @@ import { sendVerificationEmail } from "./emails/verification-email";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { calculateDiscountedTotal } from "./utils/discounts";
+import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
 
 const supportUpload = createS3Uploader("support");
 const competitionUpload = createS3Uploader("competitions");
@@ -4941,6 +4942,7 @@ res.json({
   const SPIN_COOLDOWN_MS = 3000; // 3 seconds minimum between spins
 
   // SERVER-SIDE: Spin wheel play route with probability and max wins enforcement
+// SERVER-SIDE: Spin wheel play route with probability and max wins enforcement
 app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -5142,43 +5144,109 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         imageUrl: null,
         isShowcase: false,
       });
-   // In the points prize section of /api/play-spin-wheel:
-} else if (
-  selectedSegment.rewardType === "points" &&
-  selectedSegment.rewardValue
-) {
-  const points =
-    typeof selectedSegment.rewardValue === "number"
-      ? Math.floor(selectedSegment.rewardValue)
-      : parseInt(String(selectedSegment.rewardValue));
 
-  if (isNaN(points) || points < 0) {
-    return res.status(500).json({
-      success: false,
-      message: "Invalid points prize configuration",
-    });
-  }
+      // 🚀 AUTO-SYNC PRIZE TO PRIZE TABLE
+      const maxWins = selectedSegment.maxWins !== undefined && 
+                      selectedSegment.maxWins !== null && 
+                      selectedSegment.maxWins !== "" 
+                        ? Number(selectedSegment.maxWins) 
+                        : null;
+      
+      await syncSpinPrize(
+        competitionId,
+        selectedSegment.id,
+        selectedSegment.label,
+        amount,
+        'cash',     // ✅ ADD rewardType
+        maxWins     // ✅ ADD maxWins
+      );
+      
+    } else if (
+      selectedSegment.rewardType === "points" &&
+      selectedSegment.rewardValue
+    ) {
+      const points =
+        typeof selectedSegment.rewardValue === "number"
+          ? Math.floor(selectedSegment.rewardValue)
+          : parseInt(String(selectedSegment.rewardValue));
 
-  const newPoints = (user.ringtonePoints || 0) + points;
-  await storage.updateUserRingtonePoints(userId, newPoints);
+      if (isNaN(points) || points < 0) {
+        return res.status(500).json({
+          success: false,
+          message: "Invalid points prize configuration",
+        });
+      }
 
-  // FIX: Use "ringtone_points" type for points prizes, not "prize"
-  await storage.createTransaction({
-    userId,
-    type: "ringtone_points", // Changed from "prize" to "ringtone_points"
-    amount: points.toString(), // This is points amount (no decimal)
-    description: `Spin Wheel ${wheelType} Prize - ${points} Ringtones`,
-  });
+      const newPoints = (user.ringtonePoints || 0) + points;
+      await storage.updateUserRingtonePoints(userId, newPoints);
 
-  await storage.createWinner({
-    userId,
-    competitionId,
-    prizeDescription: selectedSegment.label,
-    prizeValue: `${points} Ringtones`,
-    imageUrl: null,
-    isShowcase: false,
-  });
-}
+      await storage.createTransaction({
+        userId,
+        type: "ringtone_points",
+        amount: points.toString(),
+        description: `Spin Wheel ${wheelType} Prize - ${points} Ringtones`,
+      });
+
+      await storage.createWinner({
+        userId,
+        competitionId,
+        prizeDescription: selectedSegment.label,
+        prizeValue: `${points} Ringtones`,
+        imageUrl: null,
+        isShowcase: false,
+      });
+
+      // 🚀 AUTO-SYNC PRIZE TO PRIZE TABLE
+      const maxWins = selectedSegment.maxWins !== undefined && 
+                      selectedSegment.maxWins !== null && 
+                      selectedSegment.maxWins !== "" 
+                        ? Number(selectedSegment.maxWins) 
+                        : null;
+      
+      await syncSpinPrize(
+        competitionId,
+        selectedSegment.id,
+        selectedSegment.label,
+        points,
+        'points',   // ✅ ADD rewardType
+        maxWins     // ✅ ADD maxWins
+      );
+    } else if (
+      selectedSegment.rewardType === "physical" &&
+      selectedSegment.rewardValue
+    ) {
+      // 🚀 Handle physical prizes too
+      await storage.createTransaction({
+        userId,
+        type: "prize",
+        amount: "0",
+        description: `Physical Prize Won: ${selectedSegment.label} - Contact support`,
+      });
+
+      await storage.createWinner({
+        userId,
+        competitionId,
+        prizeDescription: `Physical Prize: ${selectedSegment.label}`,
+        prizeValue: selectedSegment.label,
+        imageUrl: null,
+        isShowcase: false,
+      });
+
+      const maxWins = selectedSegment.maxWins !== undefined && 
+                      selectedSegment.maxWins !== null && 
+                      selectedSegment.maxWins !== "" 
+                        ? Number(selectedSegment.maxWins) 
+                        : null;
+      
+      await syncSpinPrize(
+        competitionId,
+        selectedSegment.id,
+        selectedSegment.label,
+        0,           // Physical prizes have no monetary value
+        'physical',  // ✅ ADD rewardType
+        maxWins      // ✅ ADD maxWins
+      );
+    }
 
     // Return full segment payload for frontend animation
     res.json({
@@ -5199,6 +5267,8 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
             ? parseFloat(String(selectedSegment.rewardValue))
             : selectedSegment.rewardType === "points"
             ? `${selectedSegment.rewardValue} Ringtones`
+            : selectedSegment.rewardType === "physical"
+            ? selectedSegment.label
             : 0,
         type:
           selectedSegment.rewardType === "lose"
@@ -5215,8 +5285,8 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
   }
 });
 
-  // Reveal All Spins - Batch process remaining spins
- app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
+
+app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
     const { orderId, count, competitionId } = req.body;
@@ -5266,6 +5336,14 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
     const results = [];
     let totalCash = 0;
     let totalPoints = 0;
+    const prizeSyncs: Array<{
+      competitionId: string;
+      segmentId: string;
+      label: string;
+      value: number;
+      rewardType: string;
+      maxWins: number | null;
+    }> = []; // ✅ Updated type
 
     await db.transaction(async (tx) => {
       // ✅ LOAD WHEEL CONFIG BASED ON TYPE
@@ -5369,8 +5447,6 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           const currentBalance = parseFloat(user.balance || "0");
           user.balance = (currentBalance + amount).toFixed(2);
 
-          await tx.update(users);
-
           await tx
             .update(users)
             .set({ balance: user.balance })
@@ -5398,49 +5474,118 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
 
           prizeAmount = amount;
           prizeType = "cash";
-       // In the points prize section of /api/reveal-all-spins:
-} else if (
-  selectedSegment.rewardType === "points" &&
-  selectedSegment.rewardValue
-) {
-  const points =
-    typeof selectedSegment.rewardValue === "number"
-      ? Math.floor(selectedSegment.rewardValue)
-      : parseInt(String(selectedSegment.rewardValue));
-  totalPoints += points;
 
-  const currentPoints = user.ringtonePoints || 0;
-  user.ringtonePoints = currentPoints + points;
+          // ✅ Track for auto-sync with full params
+          prizeSyncs.push({
+            competitionId,
+            segmentId: selectedSegment.id,
+            label: selectedSegment.label,
+            value: amount,
+            rewardType: 'cash',
+            maxWins: selectedSegment.maxWins !== undefined && 
+                     selectedSegment.maxWins !== null && 
+                     selectedSegment.maxWins !== "" 
+                       ? Number(selectedSegment.maxWins) 
+                       : null
+          });
 
-  await tx
-    .update(users)
-    .set({ ringtonePoints: user.ringtonePoints })
-    .where(eq(users.id, userId));
+        } else if (
+          selectedSegment.rewardType === "points" &&
+          selectedSegment.rewardValue
+        ) {
+          const points =
+            typeof selectedSegment.rewardValue === "number"
+              ? Math.floor(selectedSegment.rewardValue)
+              : parseInt(String(selectedSegment.rewardValue));
+          totalPoints += points;
 
-  // FIX: Use "ringtone_points" type instead of "prize"
-  await tx.insert(transactions).values({
-    id: crypto.randomUUID(),
-    userId,
-    type: "ringtone_points", // Changed from "prize" to "ringtone_points"
-    amount: points.toString(),
-    description: `Spin Wheel Prize - ${points} Ringtones`,
-    createdAt: new Date(),
-  });
+          const currentPoints = user.ringtonePoints || 0;
+          user.ringtonePoints = currentPoints + points;
 
-  await tx.insert(winners).values({
-    id: crypto.randomUUID(),
-    userId,
-    competitionId,
-    prizeDescription: selectedSegment.label,
-    prizeValue: `${points} Ringtones`,
-    imageUrl: null,
-    isShowcase: false,
-    createdAt: new Date(),
-  });
+          await tx
+            .update(users)
+            .set({ ringtonePoints: user.ringtonePoints })
+            .where(eq(users.id, userId));
 
-  prizeAmount = `${points} Ringtones`;
-  prizeType = "points";
-}
+          await tx.insert(transactions).values({
+            id: crypto.randomUUID(),
+            userId,
+            type: "ringtone_points",
+            amount: points.toString(),
+            description: `Spin Wheel Prize - ${points} Ringtones`,
+            createdAt: new Date(),
+          });
+
+          await tx.insert(winners).values({
+            id: crypto.randomUUID(),
+            userId,
+            competitionId,
+            prizeDescription: selectedSegment.label,
+            prizeValue: `${points} Ringtones`,
+            imageUrl: null,
+            isShowcase: false,
+            createdAt: new Date(),
+          });
+
+          prizeAmount = `${points} Ringtones`;
+          prizeType = "points";
+
+          // ✅ Track for auto-sync with full params
+          prizeSyncs.push({
+            competitionId,
+            segmentId: selectedSegment.id,
+            label: selectedSegment.label,
+            value: points,
+            rewardType: 'points',
+            maxWins: selectedSegment.maxWins !== undefined && 
+                     selectedSegment.maxWins !== null && 
+                     selectedSegment.maxWins !== "" 
+                       ? Number(selectedSegment.maxWins) 
+                       : null
+          });
+
+        } else if (
+          selectedSegment.rewardType === "physical" &&
+          selectedSegment.rewardValue
+        ) {
+          // ✅ Handle physical prizes
+          await tx.insert(transactions).values({
+            id: crypto.randomUUID(),
+            userId,
+            type: "prize",
+            amount: "0",
+            description: `Physical Prize Won: ${selectedSegment.label} - Contact support`,
+            createdAt: new Date(),
+          });
+
+          await tx.insert(winners).values({
+            id: crypto.randomUUID(),
+            userId,
+            competitionId,
+            prizeDescription: `Physical Prize: ${selectedSegment.label}`,
+            prizeValue: selectedSegment.label,
+            imageUrl: null,
+            isShowcase: false,
+            createdAt: new Date(),
+          });
+
+          prizeAmount = selectedSegment.label;
+          prizeType = "physical";
+
+          // ✅ Track for auto-sync with full params
+          prizeSyncs.push({
+            competitionId,
+            segmentId: selectedSegment.id,
+            label: selectedSegment.label,
+            value: 0,
+            rewardType: 'physical',
+            maxWins: selectedSegment.maxWins !== undefined && 
+                     selectedSegment.maxWins !== null && 
+                     selectedSegment.maxWins !== "" 
+                       ? Number(selectedSegment.maxWins) 
+                       : null
+          });
+        }
 
         results.push({
           segmentId: selectedSegment.id,
@@ -5487,6 +5632,28 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
     });
 
     // --------------------------------------
+    // 🚀 AUTO-SYNC PRIZES (Outside transaction)
+    // --------------------------------------
+    if (prizeSyncs.length > 0) {
+      for (const sync of prizeSyncs) {
+        try {
+          await syncSpinPrize(
+            sync.competitionId,
+            sync.segmentId,
+            sync.label,
+            sync.value,
+            sync.rewardType,  // ✅ Pass rewardType
+            sync.maxWins       // ✅ Pass maxWins
+          );
+          console.log(`✅ Synced prize: ${sync.label} (${sync.rewardType})`);
+        } catch (err) {
+          console.error(`Failed to sync prize ${sync.label}:`, err);
+          // Continue - don't fail the whole batch
+        }
+      }
+    }
+
+    // --------------------------------------
     // DONE
     // --------------------------------------
     res.json({
@@ -5496,6 +5663,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         totalCash,
         totalPoints,
         spinsProcessed: results.length,
+        prizesSynced: prizeSyncs.length,
       },
       spinsRemaining: spinsRemaining - results.length,
     });
@@ -6203,303 +6371,61 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
     }
   });
 
-  // 🛡️ SERVER-SIDE: Scratch card play with probability and max wins enforcement
-  app.post(
-    "/api/play-scratch-carddd",
-    isAuthenticated,
-    async (req: any, res) => {
-      try {
-        const userId = req.user.id;
-        const { orderId, competitionId } = req.body;
+ app.post(
+  "/api/play-scratch-carddd",
+  isAuthenticated,
+  async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { orderId, competitionId } = req.body;
 
-        if (!orderId) {
-          return res.status(400).json({
-            success: false,
-            message: "Order ID is required",
-          });
-        }
-
-            if (!competitionId) {
-      return res.status(400).json({
-        success: false,
-        message: "Competition ID is required",
-      });
-    }
-
-
-
-        // Verify valid completed order
-        const order = await storage.getOrder(orderId);
-        if (!order || order.userId !== userId || order.status !== "completed") {
-          return res.status(400).json({
-            success: false,
-            message: "No valid scratch card purchase found",
-          });
-        }
-
-        // Check cards remaining
-        const used = await storage.getScratchCardsUsed(orderId);
-        const remaining = order.quantity - used;
-
-        if (remaining <= 0) {
-          return res.status(400).json({
-            success: false,
-            message: "No scratch cards remaining in this purchase",
-          });
-        }
-
-        // Get user
-        const user = await storage.getUser(userId);
-        if (!user) {
-          return res.status(404).json({ message: "User not found" });
-        }
-
-        // 🛡️ ATOMIC TRANSACTION: Prevent race conditions and ensure maxWins cannot be bypassed
-        let selectedPrize;
-        let prizeResponse = { type: "none", value: "0" };
-
-        try {
-          await db.transaction(async (tx) => {
-            // 🔒 Lock and fetch eligible prizes (FOR UPDATE ensures atomic check)
-            const allPrizes = await tx
-              .select()
-              .from(scratchCardImages)
-              .where(eq(scratchCardImages.isActive, true))
-              .for("update");
-
-            if (!allPrizes || allPrizes.length === 0) {
-              throw new Error("No prizes configured");
-            }
-
-            // Filter prizes that haven't reached maxWins
-            const eligiblePrizes = allPrizes.filter((prize) => {
-              if (!prize.weight || prize.weight <= 0) return false;
-              if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins)
-                return false;
-              return true;
-            });
-
-            if (eligiblePrizes.length === 0) {
-              throw new Error("No prizes available");
-            }
-
-            // Weighted random selection
-            const totalWeight = eligiblePrizes.reduce(
-              (sum, prize) => sum + prize.weight,
-              0
-            );
-            if (totalWeight <= 0) {
-              throw new Error("Invalid prize weights");
-            }
-
-            let random = Math.random() * totalWeight;
-            selectedPrize = eligiblePrizes[0];
-
-            for (const prize of eligiblePrizes) {
-              random -= prize.weight;
-              if (random <= 0) {
-                selectedPrize = prize;
-                break;
-              }
-            }
-
-            // 🔒 Record scratch card usage INSIDE transaction (atomic operation)
-            await tx.insert(scratchCardUsage).values({
-              orderId,
-              userId,
-              usedAt: new Date(),
-            });
-
-            // ✅ Only update win count and record win for ACTUAL prizes (not try_again or lose)
-            if (
-              selectedPrize.rewardType !== "try_again" &&
-              selectedPrize.rewardType !== "lose"
-            ) {
-              // Update prize win count atomically
-              await tx
-                .update(scratchCardImages)
-                .set({ quantityWon: selectedPrize.quantityWon + 1 })
-                .where(eq(scratchCardImages.id, selectedPrize.id));
-
-              // Record the win
-              await tx.insert(scratchCardWins).values({
-                userId,
-                prizeId: selectedPrize.id,
-                rewardType: selectedPrize.rewardType as any,
-                rewardValue: String(selectedPrize.rewardValue),
-              });
-            }
-          });
-        } catch (error: any) {
-          console.error("Transaction error in scratch card:", error);
-          return res.status(400).json({
-            success: false,
-            message: error.message || "Failed to process scratch card",
-          });
-        }
-
-        // 🎯 Award prize based on type (outside transaction for non-critical updates)
-        if (selectedPrize.rewardType === "cash" && selectedPrize.rewardValue) {
-          const amount =
-            typeof selectedPrize.rewardValue === "number"
-              ? selectedPrize.rewardValue
-              : parseFloat(String(selectedPrize.rewardValue));
-
-          if (isNaN(amount) || amount < 0) {
-            return res.status(500).json({
-              success: false,
-              message: "Invalid cash prize configuration",
-            });
-          }
-
-          const finalBalance = parseFloat(user.balance || "0") + amount;
-          await storage.updateUserBalance(userId, finalBalance.toFixed(2));
-
-          await storage.createTransaction({
-            userId,
-            type: "prize",
-            amount: amount.toFixed(2),
-            description: `Scratch Card Prize - £${amount}`,
-          });
-
-          await storage.createWinner({
-            userId,
-            competitionId,
-            prizeDescription: "Scratch Card Prize",
-            prizeValue: `£${amount}`,
-            imageUrl: null,
-            isShowcase: false,
-          });
-
-          prizeResponse = { type: "cash", value: amount.toFixed(2) };
-        } else if (
-          selectedPrize.rewardType === "points" &&
-          selectedPrize.rewardValue
-        ) {
-          const points =
-            typeof selectedPrize.rewardValue === "number"
-              ? selectedPrize.rewardValue
-              : parseInt(String(selectedPrize.rewardValue));
-
-          if (isNaN(points) || points < 0) {
-            return res.status(500).json({
-              success: false,
-              message: "Invalid points prize configuration",
-            });
-          }
-
-          const newPoints = (user.ringtonePoints || 0) + points;
-          await storage.updateUserRingtonePoints(userId, newPoints);
-
-          await storage.createTransaction({
-            userId,
-            type: "prize",
-            amount: points.toString(),
-            description: `Scratch Card Prize - ${points} Ringtones`,
-          });
-
-          await storage.createWinner({
-            userId,
-            competitionId,
-            prizeDescription: "Scratch Card Prize",
-            prizeValue: `${points} Ringtones`,
-            imageUrl: null,
-            isShowcase: false,
-          });
-
-          prizeResponse = { type: "points", value: points.toString() };
-        } else if (selectedPrize.rewardType === "physical") {
-          // Physical prize - just record the win
-          await storage.createWinner({
-            userId,
-            competitionId,
-            prizeDescription: `Scratch Card Prize - ${selectedPrize.label}`,
-            prizeValue: selectedPrize.label,
-            imageUrl: null,
-            isShowcase: false,
-          });
-
-          prizeResponse = { type: "physical", value: selectedPrize.label };
-        }
-        // else: lose or try_again returns { type: "none", value: "0" }
-
-        res.json({
-          success: true,
-          prize: prizeResponse,
-          prizeLabel: selectedPrize.label,
-          remainingCards: remaining - 1,
-          orderId: order.id,
+      if (!orderId) {
+        return res.status(400).json({
+          success: false,
+          message: "Order ID is required",
         });
-      } catch (error) {
-        console.error("Error playing scratch card:", error);
-        res.status(500).json({ message: "Failed to play scratch card" });
       }
-    }
-  );
 
-  // Reveal All Scratch Cards - Batch process remaining scratch cards
-  app.post(
-    "/api/reveal-all-scratch-cards",
-    isAuthenticated,
-    async (req: any, res) => {
+      if (!competitionId) {
+        return res.status(400).json({
+          success: false,
+          message: "Competition ID is required",
+        });
+      }
+
+      // Verify valid completed order
+      const order = await storage.getOrder(orderId);
+      if (!order || order.userId !== userId || order.status !== "completed") {
+        return res.status(400).json({
+          success: false,
+          message: "No valid scratch card purchase found",
+        });
+      }
+
+      // Check cards remaining
+      const used = await storage.getScratchCardsUsed(orderId);
+      const remaining = order.quantity - used;
+
+      if (remaining <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No scratch cards remaining in this purchase",
+        });
+      }
+
+      // Get user
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // 🛡️ ATOMIC TRANSACTION: Prevent race conditions and ensure maxWins cannot be bypassed
+      let selectedPrize;
+      let prizeResponse = { type: "none", value: "0" };
+
       try {
-        const userId = req.user.id;
-        const { orderId, count , competitionId} = req.body;
-
-        if (!orderId || !count || count <= 0) {
-          return res.status(400).json({
-            success: false,
-            message: "Valid orderId and count are required",
-          });
-        }
-
-        // Process all remaining scratch cards (no cap)
-        const batchSize = count;
-
-        // Verify valid completed order
-        const order = await storage.getOrder(orderId);
-        if (!order || order.userId !== userId || order.status !== "completed") {
-          return res.status(400).json({
-            success: false,
-            message: "No valid scratch card purchase found",
-          });
-        }
-
-        // Check cards remaining
-        const cardsUsed = await storage.getScratchCardsUsed(orderId);
-        const cardsRemaining = order.quantity - cardsUsed;
-
-        if (cardsRemaining <= 0) {
-          return res.status(400).json({
-            success: false,
-            message: "No scratch cards remaining in this purchase",
-          });
-        }
-
-        // Actual cards to process (safety check to prevent over-processing)
-        const cardsToProcess = Math.min(batchSize, cardsRemaining);
-
-        if (cardsToProcess <= 0 || cardsToProcess > cardsRemaining) {
-          return res.status(400).json({
-            success: false,
-            message: "Invalid number of cards to process",
-          });
-        }
-
-        // Get user
-        const user = await storage.getUser(userId);
-        if (!user) {
-          return res.status(404).json({ message: "User not found" });
-        }
-
-        // OPTIMIZED: Process all scratch cards with batch operations
-        const results: Array<{ prize: { type: string; value: string } }> = [];
-        let totalCash = 0;
-        let totalPoints = 0;
-
-        // Use a single transaction for all database operations
         await db.transaction(async (tx) => {
-          // Fetch all active prizes once
+          // 🔒 Lock and fetch eligible prizes (FOR UPDATE ensures atomic check)
           const allPrizes = await tx
             .select()
             .from(scratchCardImages)
@@ -6510,229 +6436,585 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
             throw new Error("No prizes configured");
           }
 
-          // Track win counts during this batch
-          const prizeWinCounts = new Map<string, number>();
-          allPrizes.forEach((prize) => {
-            prizeWinCounts.set(prize.id, prize.quantityWon || 0);
+          // Filter prizes that haven't reached maxWins
+          const eligiblePrizes = allPrizes.filter((prize) => {
+            if (!prize.weight || prize.weight <= 0) return false;
+            if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins)
+              return false;
+            return true;
           });
 
-          // Pre-select all prizes using weighted random selection
-          const selectedPrizes = [];
-          for (let i = 0; i < cardsToProcess; i++) {
-            // Filter eligible prizes based on current win counts
-            const eligiblePrizes = allPrizes.filter((prize) => {
-              if (!prize.weight || prize.weight <= 0) return false;
-              const currentWins = prizeWinCounts.get(prize.id) || 0;
-              if (prize.maxWins !== null && currentWins >= prize.maxWins)
-                return false;
-              return true;
-            });
+          if (eligiblePrizes.length === 0) {
+            throw new Error("No prizes available");
+          }
 
-            if (eligiblePrizes.length === 0) {
-              selectedPrizes.push(null);
-              continue;
-            }
+          // Weighted random selection
+          const totalWeight = eligiblePrizes.reduce(
+            (sum, prize) => sum + prize.weight,
+            0
+          );
+          if (totalWeight <= 0) {
+            throw new Error("Invalid prize weights");
+          }
 
-            // Weighted random selection
-            const totalWeight = eligiblePrizes.reduce(
-              (sum, prize) => sum + prize.weight,
-              0
-            );
-            let random = Math.random() * totalWeight;
-            let selectedPrize = eligiblePrizes[0];
+          let random = Math.random() * totalWeight;
+          selectedPrize = eligiblePrizes[0];
 
-            for (const prize of eligiblePrizes) {
-              random -= prize.weight;
-              if (random <= 0) {
-                selectedPrize = prize;
-                break;
-              }
-            }
-
-            selectedPrizes.push(selectedPrize);
-
-            // Update win count for next iteration
-            if (selectedPrize.rewardType !== "try_again") {
-              prizeWinCounts.set(
-                selectedPrize.id,
-                (prizeWinCounts.get(selectedPrize.id) || 0) + 1
-              );
+          for (const prize of eligiblePrizes) {
+            random -= prize.weight;
+            if (random <= 0) {
+              selectedPrize = prize;
+              break;
             }
           }
 
-          // Batch insert all scratch card usages
-          const usageValues = Array.from({ length: cardsToProcess }, () => ({
+          // 🔒 Record scratch card usage INSIDE transaction (atomic operation)
+          await tx.insert(scratchCardUsage).values({
             orderId,
             userId,
             usedAt: new Date(),
-          }));
-          await tx.insert(scratchCardUsage).values(usageValues);
+          });
 
-          // Batch update prize win counts and batch insert win records
-          const prizeUpdates = new Map<string, number>();
-          const winRecords = [];
+          // ✅ Only update win count and record win for ACTUAL prizes (not try_again or lose)
+          if (
+            selectedPrize.rewardType !== "try_again" &&
+            selectedPrize.rewardType !== "lose"
+          ) {
+            // Update prize win count atomically
+            await tx
+              .update(scratchCardImages)
+              .set({ quantityWon: selectedPrize.quantityWon + 1 })
+              .where(eq(scratchCardImages.id, selectedPrize.id));
 
-          for (const selectedPrize of selectedPrizes) {
-            if (!selectedPrize || selectedPrize.rewardType === "try_again")
-              continue;
-
-            prizeUpdates.set(
-              selectedPrize.id,
-              (prizeUpdates.get(selectedPrize.id) || 0) + 1
-            );
-
-            winRecords.push({
+            // Record the win
+            await tx.insert(scratchCardWins).values({
               userId,
               prizeId: selectedPrize.id,
               rewardType: selectedPrize.rewardType as any,
               rewardValue: String(selectedPrize.rewardValue),
             });
           }
-
-          // Update all prize win counts in batch
-          for (const [prizeId, increment] of prizeUpdates.entries()) {
-            const prize = allPrizes.find((p) => p.id === prizeId);
-            if (prize) {
-              await tx
-                .update(scratchCardImages)
-                .set({ quantityWon: (prize.quantityWon || 0) + increment })
-                .where(eq(scratchCardImages.id, prizeId));
-            }
-          }
-
-          // Batch insert all win records
-          if (winRecords.length > 0) {
-            await tx.insert(scratchCardWins).values(winRecords);
-          }
-
-          // Process each selected prize for user rewards and results
-          for (const selectedPrize of selectedPrizes) {
-            let prizeResponse = { type: "none", value: "0" };
-
-            if (!selectedPrize) {
-              results.push({ prize: prizeResponse });
-              continue;
-            }
-
-            // Award prize based on type
-            if (
-              selectedPrize.rewardType === "cash" &&
-              selectedPrize.rewardValue
-            ) {
-              const amount = parseFloat(String(selectedPrize.rewardValue));
-
-              // 🔒 CRITICAL: Update balance using tx (not global db)
-              // Track cumulative total for response
-              totalCash += amount;
-
-              // Get current balance from user object and add this prize
-              const currentBalance = parseFloat(user.balance || "0");
-              user.balance = (currentBalance + amount).toFixed(2); // Update user object for next iteration
-
-              await tx
-                .update(users)
-                .set({ balance: user.balance })
-                .where(eq(users.id, userId));
-
-              await tx.insert(transactions).values({
-                id: crypto.randomUUID(),
-                userId,
-                type: "prize",
-                amount: amount.toFixed(2),
-                description: `Scratch Card Prize - £${amount}`,
-                createdAt: new Date(),
-              });
-
-              await tx.insert(winners).values({
-                id: crypto.randomUUID(),
-                userId,
-                competitionId,
-                prizeDescription: "Scratch Card Prize",
-                prizeValue: `£${amount}`,
-                imageUrl: null,
-                isShowcase: false,
-                createdAt: new Date(),
-              });
-
-              prizeResponse = { type: "cash", value: amount.toFixed(2) };
-            } else if (
-              selectedPrize.rewardType === "points" &&
-              selectedPrize.rewardValue
-            ) {
-              const points = parseInt(String(selectedPrize.rewardValue));
-
-              // 🔒 CRITICAL: Update points using tx (not global db)
-              // Track cumulative total for response
-              totalPoints += points;
-
-              // Get current points from user object and add this prize
-              const currentPoints = user.ringtonePoints || 0;
-              user.ringtonePoints = currentPoints + points; // Update user object for next iteration
-
-              await tx
-                .update(users)
-                .set({ ringtonePoints: user.ringtonePoints })
-                .where(eq(users.id, userId));
-
-              await tx.insert(transactions).values({
-                id: crypto.randomUUID(),
-                userId,
-                type: "prize",
-                amount: points.toString(),
-                description: `Scratch Card Prize - ${points} Ringtones`,
-                createdAt: new Date(),
-              });
-
-              await tx.insert(winners).values({
-                id: crypto.randomUUID(),
-                userId,
-                competitionId,
-                prizeDescription: "Scratch Card Prize",
-                prizeValue: `${points} Ringtones`,
-                imageUrl: null,
-                isShowcase: false,
-                createdAt: new Date(),
-              });
-
-              prizeResponse = { type: "points", value: points.toString() };
-            } else if (selectedPrize.rewardType === "physical") {
-              await tx.insert(winners).values({
-                id: crypto.randomUUID(),
-                userId,
-                competitionId,
-                prizeDescription: `Scratch Card Prize - ${selectedPrize.imageName}`,
-                prizeValue: selectedPrize.imageName,
-                imageUrl: null,
-                isShowcase: false,
-                createdAt: new Date(),
-              });
-
-              prizeResponse = {
-                type: "physical",
-                value: selectedPrize.imageName,
-              };
-            }
-
-            results.push({ prize: prizeResponse });
-          }
         });
-
-        res.json({
-          success: true,
-          scratches: results,
-          summary: {
-            totalCash,
-            totalPoints,
-            scratchesProcessed: results.length,
-          },
-          cardsRemaining: cardsRemaining - results.length,
+      } catch (error: any) {
+        console.error("Transaction error in scratch card:", error);
+        return res.status(400).json({
+          success: false,
+          message: error.message || "Failed to process scratch card",
         });
-      } catch (error) {
-        console.error("Error revealing all scratch cards:", error);
-        res.status(500).json({ message: "Failed to reveal all scratch cards" });
       }
+
+      // Get maxWins from selected prize
+      const maxWins = selectedPrize.maxWins !== undefined && 
+                      selectedPrize.maxWins !== null && 
+                      selectedPrize.maxWins !== "" 
+                        ? Number(selectedPrize.maxWins) 
+                        : null;
+
+      // 🎯 Award prize based on type (outside transaction for non-critical updates)
+      if (selectedPrize.rewardType === "cash" && selectedPrize.rewardValue) {
+        const amount =
+          typeof selectedPrize.rewardValue === "number"
+            ? selectedPrize.rewardValue
+            : parseFloat(String(selectedPrize.rewardValue));
+
+        if (isNaN(amount) || amount < 0) {
+          return res.status(500).json({
+            success: false,
+            message: "Invalid cash prize configuration",
+          });
+        }
+
+        const finalBalance = parseFloat(user.balance || "0") + amount;
+        await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+
+        await storage.createTransaction({
+          userId,
+          type: "prize",
+          amount: amount.toFixed(2),
+          description: `Scratch Card Prize - £${amount}`,
+        });
+
+        await storage.createWinner({
+          userId,
+          competitionId,
+          prizeDescription: "Scratch Card Prize",
+          prizeValue: `£${amount}`,
+          imageUrl: null,
+          isShowcase: false,
+        });
+
+        prizeResponse = { type: "cash", value: amount.toFixed(2) };
+
+        // 🚀 AUTO-SYNC PRIZE TO PRIZE TABLE
+        await syncScratchPrize(
+          competitionId,
+          selectedPrize.id,
+          selectedPrize.label || "Scratch Prize",
+          amount,
+          'cash',     // ✅ ADD rewardType
+          maxWins     // ✅ ADD maxWins
+        );
+
+      } else if (
+        selectedPrize.rewardType === "points" &&
+        selectedPrize.rewardValue
+      ) {
+        const points =
+          typeof selectedPrize.rewardValue === "number"
+            ? selectedPrize.rewardValue
+            : parseInt(String(selectedPrize.rewardValue));
+
+        if (isNaN(points) || points < 0) {
+          return res.status(500).json({
+            success: false,
+            message: "Invalid points prize configuration",
+          });
+        }
+
+        const newPoints = (user.ringtonePoints || 0) + points;
+        await storage.updateUserRingtonePoints(userId, newPoints);
+
+        await storage.createTransaction({
+          userId,
+          type: "ringtone_points",
+          amount: points.toString(),
+          description: `Scratch Card Prize - ${points} Ringtones`,
+        });
+
+        await storage.createWinner({
+          userId,
+          competitionId,
+          prizeDescription: "Scratch Card Prize",
+          prizeValue: `${points} Ringtones`,
+          imageUrl: null,
+          isShowcase: false,
+        });
+
+        prizeResponse = { type: "points", value: points.toString() };
+
+        // 🚀 AUTO-SYNC PRIZE TO PRIZE TABLE
+        await syncScratchPrize(
+          competitionId,
+          selectedPrize.id,
+          selectedPrize.label || "Scratch Prize",
+          points,
+          'points',   // ✅ ADD rewardType
+          maxWins     // ✅ ADD maxWins
+        );
+
+      } else if (selectedPrize.rewardType === "physical") {
+        // Physical prize - just record the win
+        await storage.createWinner({
+          userId,
+          competitionId,
+          prizeDescription: `Scratch Card Prize - ${selectedPrize.label}`,
+          prizeValue: selectedPrize.label,
+          imageUrl: null,
+          isShowcase: false,
+        });
+
+        prizeResponse = { type: "physical", value: selectedPrize.label };
+
+        // 🚀 AUTO-SYNC PHYSICAL PRIZE TO PRIZE TABLE
+        await syncScratchPrize(
+          competitionId,
+          selectedPrize.id,
+          selectedPrize.label || "Physical Prize",
+          0,           // Physical prizes have no monetary value
+          'physical',  // ✅ ADD rewardType
+          maxWins      // ✅ ADD maxWins
+        );
+      }
+      // else: lose or try_again returns { type: "none", value: "0" }
+
+      res.json({
+        success: true,
+        prize: prizeResponse,
+        prizeLabel: selectedPrize.label,
+        remainingCards: remaining - 1,
+        orderId: order.id,
+      });
+    } catch (error) {
+      console.error("Error playing scratch card:", error);
+      res.status(500).json({ message: "Failed to play scratch card" });
     }
-  );
+  }
+);
+
+
+app.post(
+  "/api/reveal-all-scratch-cards",
+  isAuthenticated,
+  async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { orderId, count, competitionId } = req.body;
+
+      if (!orderId || !count || count <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid orderId and count are required",
+        });
+      }
+
+      if (!competitionId) {
+        return res.status(400).json({
+          success: false,
+          message: "Competition ID is required",
+        });
+      }
+
+      // Process all remaining scratch cards (no cap)
+      const batchSize = count;
+
+      // Verify valid completed order
+      const order = await storage.getOrder(orderId);
+      if (!order || order.userId !== userId || order.status !== "completed") {
+        return res.status(400).json({
+          success: false,
+          message: "No valid scratch card purchase found",
+        });
+      }
+
+      // Check cards remaining
+      const cardsUsed = await storage.getScratchCardsUsed(orderId);
+      const cardsRemaining = order.quantity - cardsUsed;
+
+      if (cardsRemaining <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No scratch cards remaining in this purchase",
+        });
+      }
+
+      // Actual cards to process (safety check to prevent over-processing)
+      const cardsToProcess = Math.min(batchSize, cardsRemaining);
+
+      if (cardsToProcess <= 0 || cardsToProcess > cardsRemaining) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid number of cards to process",
+        });
+      }
+
+      // Get user
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // OPTIMIZED: Process all scratch cards with batch operations
+      const results: Array<{ prize: { type: string; value: string } }> = [];
+      let totalCash = 0;
+      let totalPoints = 0;
+      const prizeSyncs: Array<{
+        competitionId: string;
+        prizeId: string;
+        label: string;
+        value: number;
+        rewardType: string;
+        maxWins: number | null;
+      }> = []; // ✅ Updated type
+
+      // Use a single transaction for all database operations
+      await db.transaction(async (tx) => {
+        // Fetch all active prizes once
+        const allPrizes = await tx
+          .select()
+          .from(scratchCardImages)
+          .where(eq(scratchCardImages.isActive, true))
+          .for("update");
+
+        if (!allPrizes || allPrizes.length === 0) {
+          throw new Error("No prizes configured");
+        }
+
+        // Track win counts during this batch
+        const prizeWinCounts = new Map<string, number>();
+        allPrizes.forEach((prize) => {
+          prizeWinCounts.set(prize.id, prize.quantityWon || 0);
+        });
+
+        // Pre-select all prizes using weighted random selection
+        const selectedPrizes = [];
+        for (let i = 0; i < cardsToProcess; i++) {
+          // Filter eligible prizes based on current win counts
+          const eligiblePrizes = allPrizes.filter((prize) => {
+            if (!prize.weight || prize.weight <= 0) return false;
+            const currentWins = prizeWinCounts.get(prize.id) || 0;
+            if (prize.maxWins !== null && currentWins >= prize.maxWins)
+              return false;
+            return true;
+          });
+
+          if (eligiblePrizes.length === 0) {
+            selectedPrizes.push(null);
+            continue;
+          }
+
+          // Weighted random selection
+          const totalWeight = eligiblePrizes.reduce(
+            (sum, prize) => sum + prize.weight,
+            0
+          );
+          let random = Math.random() * totalWeight;
+          let selectedPrize = eligiblePrizes[0];
+
+          for (const prize of eligiblePrizes) {
+            random -= prize.weight;
+            if (random <= 0) {
+              selectedPrize = prize;
+              break;
+            }
+          }
+
+          selectedPrizes.push(selectedPrize);
+
+          // Update win count for next iteration
+          if (selectedPrize.rewardType !== "try_again") {
+            prizeWinCounts.set(
+              selectedPrize.id,
+              (prizeWinCounts.get(selectedPrize.id) || 0) + 1
+            );
+          }
+        }
+
+        // Batch insert all scratch card usages
+        const usageValues = Array.from({ length: cardsToProcess }, () => ({
+          orderId,
+          userId,
+          usedAt: new Date(),
+        }));
+        await tx.insert(scratchCardUsage).values(usageValues);
+
+        // Batch update prize win counts and batch insert win records
+        const prizeUpdates = new Map<string, number>();
+        const winRecords = [];
+
+        for (const selectedPrize of selectedPrizes) {
+          if (!selectedPrize || selectedPrize.rewardType === "try_again")
+            continue;
+
+          prizeUpdates.set(
+            selectedPrize.id,
+            (prizeUpdates.get(selectedPrize.id) || 0) + 1
+          );
+
+          winRecords.push({
+            userId,
+            prizeId: selectedPrize.id,
+            rewardType: selectedPrize.rewardType as any,
+            rewardValue: String(selectedPrize.rewardValue),
+          });
+        }
+
+        // Update all prize win counts in batch
+        for (const [prizeId, increment] of prizeUpdates.entries()) {
+          const prize = allPrizes.find((p) => p.id === prizeId);
+          if (prize) {
+            await tx
+              .update(scratchCardImages)
+              .set({ quantityWon: (prize.quantityWon || 0) + increment })
+              .where(eq(scratchCardImages.id, prizeId));
+          }
+        }
+
+        // Batch insert all win records
+        if (winRecords.length > 0) {
+          await tx.insert(scratchCardWins).values(winRecords);
+        }
+
+        // Process each selected prize for user rewards and results
+        for (const selectedPrize of selectedPrizes) {
+          let prizeResponse = { type: "none", value: "0" };
+
+          if (!selectedPrize) {
+            results.push({ prize: prizeResponse });
+            continue;
+          }
+
+          // Get maxWins for sync
+          const maxWins = selectedPrize.maxWins !== undefined && 
+                          selectedPrize.maxWins !== null && 
+                          selectedPrize.maxWins !== "" 
+                            ? Number(selectedPrize.maxWins) 
+                            : null;
+
+          // Award prize based on type
+          if (
+            selectedPrize.rewardType === "cash" &&
+            selectedPrize.rewardValue
+          ) {
+            const amount = parseFloat(String(selectedPrize.rewardValue));
+
+            // 🔒 CRITICAL: Update balance using tx (not global db)
+            // Track cumulative total for response
+            totalCash += amount;
+
+            // Get current balance from user object and add this prize
+            const currentBalance = parseFloat(user.balance || "0");
+            user.balance = (currentBalance + amount).toFixed(2);
+
+            await tx
+              .update(users)
+              .set({ balance: user.balance })
+              .where(eq(users.id, userId));
+
+            await tx.insert(transactions).values({
+              id: crypto.randomUUID(),
+              userId,
+              type: "prize",
+              amount: amount.toFixed(2),
+              description: `Scratch Card Prize - £${amount}`,
+              createdAt: new Date(),
+            });
+
+            await tx.insert(winners).values({
+              id: crypto.randomUUID(),
+              userId,
+              competitionId,
+              prizeDescription: "Scratch Card Prize",
+              prizeValue: `£${amount}`,
+              imageUrl: null,
+              isShowcase: false,
+              createdAt: new Date(),
+            });
+
+            prizeResponse = { type: "cash", value: amount.toFixed(2) };
+
+            // ✅ Track for auto-sync with full params
+            prizeSyncs.push({
+              competitionId,
+              prizeId: selectedPrize.id,
+              label: selectedPrize.label || "Scratch Prize",
+              value: amount,
+              rewardType: 'cash',
+              maxWins: maxWins
+            });
+
+          } else if (
+            selectedPrize.rewardType === "points" &&
+            selectedPrize.rewardValue
+          ) {
+            const points = parseInt(String(selectedPrize.rewardValue));
+
+            // 🔒 CRITICAL: Update points using tx (not global db)
+            // Track cumulative total for response
+            totalPoints += points;
+
+            // Get current points from user object and add this prize
+            const currentPoints = user.ringtonePoints || 0;
+            user.ringtonePoints = currentPoints + points;
+
+            await tx
+              .update(users)
+              .set({ ringtonePoints: user.ringtonePoints })
+              .where(eq(users.id, userId));
+
+            await tx.insert(transactions).values({
+              id: crypto.randomUUID(),
+              userId,
+              type: "ringtone_points",
+              amount: points.toString(),
+              description: `Scratch Card Prize - ${points} Ringtones`,
+              createdAt: new Date(),
+            });
+
+            await tx.insert(winners).values({
+              id: crypto.randomUUID(),
+              userId,
+              competitionId,
+              prizeDescription: "Scratch Card Prize",
+              prizeValue: `${points} Ringtones`,
+              imageUrl: null,
+              isShowcase: false,
+              createdAt: new Date(),
+            });
+
+            prizeResponse = { type: "points", value: points.toString() };
+
+            // ✅ Track for auto-sync with full params
+            prizeSyncs.push({
+              competitionId,
+              prizeId: selectedPrize.id,
+              label: selectedPrize.label || "Scratch Prize",
+              value: points,
+              rewardType: 'points',
+              maxWins: maxWins
+            });
+
+          } else if (selectedPrize.rewardType === "physical") {
+            await tx.insert(winners).values({
+              id: crypto.randomUUID(),
+              userId,
+              competitionId,
+              prizeDescription: `Scratch Card Prize - ${selectedPrize.imageName || selectedPrize.label}`,
+              prizeValue: selectedPrize.imageName || selectedPrize.label,
+              imageUrl: null,
+              isShowcase: false,
+              createdAt: new Date(),
+            });
+
+            prizeResponse = {
+              type: "physical",
+              value: selectedPrize.imageName || selectedPrize.label,
+            };
+
+            // ✅ Track for auto-sync with full params
+            prizeSyncs.push({
+              competitionId,
+              prizeId: selectedPrize.id,
+              label: selectedPrize.label || "Physical Prize",
+              value: 0,
+              rewardType: 'physical',
+              maxWins: maxWins
+            });
+          }
+
+          results.push({ prize: prizeResponse });
+        }
+      });
+
+      // --------------------------------------
+      // 🚀 AUTO-SYNC PRIZES (Outside transaction)
+      // --------------------------------------
+      if (prizeSyncs.length > 0) {
+        // Sync each prize
+        for (const sync of prizeSyncs) {
+          try {
+            await syncScratchPrize(
+              sync.competitionId,
+              sync.prizeId,
+              sync.label,
+              sync.value,
+              sync.rewardType,  // ✅ Pass rewardType
+              sync.maxWins       // ✅ Pass maxWins
+            );
+            console.log(`✅ Synced scratch prize: ${sync.label} (${sync.rewardType})`);
+          } catch (err) {
+            console.error(`Failed to sync scratch prize ${sync.label}:`, err);
+            // Continue - don't fail the whole batch
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        scratches: results,
+        summary: {
+          totalCash,
+          totalPoints,
+          scratchesProcessed: results.length,
+          prizesSynced: prizeSyncs.length,
+        },
+        cardsRemaining: cardsRemaining - results.length,
+      });
+    } catch (error) {
+      console.error("Error revealing all scratch cards:", error);
+      res.status(500).json({ message: "Failed to reveal all scratch cards" });
+    }
+  }
+);
 
   app.post(
     "/api/scratch-session/start",
@@ -9958,212 +10240,257 @@ async function getPlinkoPrizesWithCache() {
 }
 
 // --- Optimized Route ---
-app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
-  const requestStart = Date.now();
-  
+app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
-    const { orderId, competitionId } = req.body;
+    const { orderId, count, competitionId } = req.body;
 
-    if (!orderId || !competitionId) {
-      return res.status(400).json({ success: false, message: "Order ID and Competition ID are required" });
+    if (!orderId || !count || count <= 0 || !competitionId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Valid orderId, count, and competitionId are required" 
+      });
     }
 
-    // 1. Cooldown check
-    const cooldownKey = `${userId}-${orderId}`;
-    const lastPlayTime = plinkoCooldowns.get(cooldownKey) || 0;
-    const now = Date.now();
-    if (now - lastPlayTime < PLINKO_COOLDOWN_MS) {
-      return res.status(429).json({ success: false, message: "Please wait a moment before playing again" });
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({ 
+        success: false, 
+        message: "No valid Plinko game purchase found" 
+      });
     }
 
-    // 2. PARALLELIZE all initial queries
-    const [order, user, config, allPrizes] = await Promise.all([
-      storage.getOrder(orderId),
-      storage.getUser(userId),
+    const playsUsed = await db.select({ count: sql<number>`count(*)` })
+      .from(plinkoUsage)
+      .where(eq(plinkoUsage.orderId, orderId));
+    const usedCount = Number(playsUsed[0]?.count || 0);
+    const playsRemaining = order.quantity - usedCount;
+
+    if (playsRemaining <= 0) {
+      return res.status(400).json({ success: false, message: "No plays remaining" });
+    }
+
+    const playsToProcess = Math.min(count, playsRemaining);
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const [config, allPrizes] = await Promise.all([
       getPlinkoConfigWithCache(),
       getPlinkoPrizesWithCache()
     ]);
 
-    // Validation checks
-    if (!order || order.userId !== userId || order.status !== "completed") {
-      return res.status(400).json({ success: false, message: "No valid Plinko game purchase found" });
-    }
-    if (!user) return res.status(404).json({ message: "User not found" });
     if (!config.isActive) {
-      return res.status(400).json({ success: false, message: "Ringtone Plinko is currently unavailable" });
-    }
-    if (!allPrizes.length) {
-      return res.status(400).json({ success: false, message: "No prizes available" });
+      return res.status(400).json({ success: false, message: "Plinko is currently unavailable" });
     }
 
-    // 3. Get plays remaining (CACHED)
-    let usedCount: number;
-    const cachedCount = plinkoPlayCountCache.get(orderId);
-    if (cachedCount && cachedCount.expires > now) {
-      usedCount = cachedCount.count;
-    } else {
-      const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(plinkoUsage).where(eq(plinkoUsage.orderId, orderId));
-      usedCount = Number(playsUsed[0]?.count || 0);
-      plinkoPlayCountCache.set(orderId, { count: usedCount, expires: now + 10000 });
-    }
+    let totalCash = 0;
+    let totalPoints = 0;
+    let totalFreePlays = 0;
+    const results: any[] = [];
+    const prizeSyncs: Array<{
+      competitionId: string;
+      prizeId: string;
+      name: string;
+      value: number;
+      rewardType: string;
+      maxWins: number | null;
+    }> = [];
 
-    const playsRemaining = order.quantity - usedCount;
-    if (playsRemaining <= 0) {
-      return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
-    }
+    await db.transaction(async (tx) => {
+      const prizeWinCounts = new Map<string, number>();
+      allPrizes.forEach(p => prizeWinCounts.set(p.id, p.quantityWon || 0));
 
-    // 4. Filter eligible prizes (check maxWins from cache)
-    const eligiblePrizes = allPrizes.filter(prize => {
-      if (prize.maxWins !== null && prize.quantityWon !== null && prize.quantityWon >= prize.maxWins) {
-        return false;
+      for (let i = 0; i < playsToProcess; i++) {
+        // Filter eligible prizes
+        const eligiblePrizes = allPrizes.filter(prize => {
+          const currentWins = prizeWinCounts.get(prize.id) || 0;
+          if (prize.maxWins !== null && currentWins >= prize.maxWins) return false;
+          return true;
+        });
+
+        if (eligiblePrizes.length === 0) break;
+
+        // Weighted random selection
+        const totalProbability = eligiblePrizes.reduce(
+          (sum, p) => sum + parseFloat(p.probability || "0"), 0
+        );
+        let random = Math.random() * totalProbability;
+        let selectedPrize = eligiblePrizes[0];
+
+        for (const prize of eligiblePrizes) {
+          random -= parseFloat(prize.probability || "0");
+          if (random <= 0) {
+            selectedPrize = prize;
+            break;
+          }
+        }
+
+        const rewardType = selectedPrize.rewardType;
+        const prizeValue = parseFloat(selectedPrize.prizeValue || "0");
+        const isWin = rewardType === "cash" || rewardType === "points" || rewardType === "physical";
+        const isFreePlay = rewardType === "free_play";
+
+        // Record usage
+        await tx.insert(plinkoUsage).values({ orderId, userId });
+
+        if (isWin) {
+          // Update win count
+          prizeWinCounts.set(selectedPrize.id, (prizeWinCounts.get(selectedPrize.id) || 0) + 1);
+
+          if (rewardType === "cash") {
+            totalCash += prizeValue;
+            
+            await tx.insert(winners).values({
+              userId, competitionId,
+              prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
+              prizeValue: `£${prizeValue}`,
+              prizeType: 'cash',
+              createdAt: new Date(), updatedAt: new Date()
+            });
+
+          } else if (rewardType === "points") {
+            totalPoints += prizeValue;
+            
+            await tx.insert(winners).values({
+              userId, competitionId,
+              prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
+              prizeValue: `${prizeValue} Points`,
+              prizeType: 'points',
+              createdAt: new Date(), updatedAt: new Date()
+            });
+
+          } else if (rewardType === "physical") {
+            await tx.insert(winners).values({
+              userId, competitionId,
+              prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
+              prizeValue: selectedPrize.prizeName,
+              prizeType: 'physical',
+              createdAt: new Date(), updatedAt: new Date()
+            });
+          }
+
+          // Track for sync
+          const maxWins = selectedPrize.maxWins !== undefined && 
+                          selectedPrize.maxWins !== null && 
+                          selectedPrize.maxWins !== "" 
+                            ? Number(selectedPrize.maxWins) 
+                            : null;
+
+          prizeSyncs.push({
+            competitionId,
+            prizeId: selectedPrize.id,
+            name: selectedPrize.prizeName,
+            value: rewardType === "physical" ? 0 : prizeValue,
+            rewardType,
+            maxWins
+          });
+
+        } else if (isFreePlay) {
+          totalFreePlays++;
+        }
+
+        // Record win
+        await tx.insert(plinkoWins).values({
+          orderId, userId,
+          prizeId: selectedPrize.id,
+          slotIndex: selectedPrize.slotIndex,
+          rewardType,
+          rewardValue: isWin ? prizeValue.toString() : isFreePlay ? "1" : "0",
+          isWin
+        });
+
+        results.push({
+          slotIndex: selectedPrize.slotIndex,
+          prizeName: selectedPrize.prizeName,
+          prizeValue: isWin ? prizeValue : 0,
+          rewardType,
+          isWin: isWin || isFreePlay,
+        });
       }
-      return true;
+
+      // Update all prize win counts
+      for (const [prizeId, count] of prizeWinCounts) {
+        const originalPrize = allPrizes.find(p => p.id === prizeId);
+        if (originalPrize && count > (originalPrize.quantityWon || 0)) {
+          await tx.update(plinkoPrizes)
+            .set({ quantityWon: count })
+            .where(eq(plinkoPrizes.id, prizeId));
+        }
+      }
+
+      // Update user balance
+      if (totalCash > 0) {
+        const finalBalance = parseFloat(user.balance || "0") + totalCash;
+        await tx.update(users)
+          .set({ balance: finalBalance.toFixed(2), updatedAt: new Date() })
+          .where(eq(users.id, userId));
+        
+        await tx.insert(transactions).values({
+          userId, type: "prize",
+          amount: totalCash.toFixed(2),
+          description: `Plinko Batch Win - £${totalCash.toFixed(2)}`,
+          createdAt: new Date()
+        });
+      }
+
+      // Update user points
+      if (totalPoints > 0) {
+        const newPoints = (user.ringtonePoints || 0) + totalPoints;
+        await tx.update(users)
+          .set({ ringtonePoints: newPoints })
+          .where(eq(users.id, userId));
+        
+        await tx.insert(transactions).values({
+          userId, type: "ringtone_points",
+          amount: totalPoints.toString(),
+          description: `Plinko Batch Win - ${totalPoints} pts`,
+          createdAt: new Date()
+        });
+      }
+
+      // Apply free replays
+      if (totalFreePlays > 0) {
+        await tx.update(orders)
+          .set({ quantity: order.quantity + totalFreePlays })
+          .where(eq(orders.id, orderId));
+      }
     });
 
-    if (!eligiblePrizes.length) {
-      return res.status(400).json({ success: false, message: "No prizes available at this time" });
-    }
-
-    // 5. Weighted random selection (same as before but optimized)
-    const totalProbability = eligiblePrizes.reduce((sum, prize) => sum + parseFloat(prize.probability || "0"), 0);
-    let random = Math.random() * totalProbability;
-    let selectedPrize = eligiblePrizes[0];
-    
-    for (const prize of eligiblePrizes) {
-      random -= parseFloat(prize.probability || "0");
-      if (random <= 0) {
-        selectedPrize = prize;
-        break;
+    // 🚀 AUTO-SYNC PRIZES (Outside transaction)
+    if (prizeSyncs.length > 0) {
+      for (const sync of prizeSyncs) {
+        try {
+          await syncPlinkoPrize(
+            sync.competitionId,
+            sync.prizeId,
+            sync.name,
+            sync.value,
+            sync.rewardType,
+            sync.maxWins
+          );
+          console.log(`✅ Synced plinko prize: ${sync.name} (${sync.rewardType})`);
+        } catch (err) {
+          console.error(`Failed to sync plinko prize ${sync.name}:`, err);
+        }
       }
     }
 
-    const slotIndex = selectedPrize.slotIndex;
-    const rewardType = selectedPrize.rewardType;
-    const prizeValue = parseFloat(selectedPrize.prizeValue || "0");
-    const isWin = rewardType === "cash" || rewardType === "points";
-    const isFreePlay = rewardType === "free_play";
-    
-    let rewardValueStr = "0";
-    let segmentFreePlay = false;
-    let totalFreePlays = 0;
-
-    // 6. FIRE-AND-FORGET: Record usage (don't wait)
-    db.insert(plinkoUsage).values({ orderId, userId })
-      .catch(err => console.error("Failed to record plinko usage:", err));
-
-    // 7. Process prize with fire-and-forget writes
-    if (isWin) {
-      rewardValueStr = prizeValue.toString();
-      
-      if (rewardType === "cash") {
-        const finalBalance = parseFloat(user.balance || "0") + prizeValue;
-        storage.updateUserBalance(userId, finalBalance.toFixed(2)).catch(e => console.error(e));
-        storage.createTransaction({
-          userId, type: "prize", amount: prizeValue.toFixed(2),
-          description: `Ringtone Plinko Win - £${prizeValue}`, status: "completed"
-        }).catch(e => console.error(e));
-      } else if (rewardType === "points") {
-        const newPoints = (user.ringtonePoints || 0) + prizeValue;
-        db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId))
-          .catch(e => console.error(e));
-        storage.createTransaction({
-          userId, type: "prize", amount: `${prizeValue}.00`,
-          description: `Ringtone Plinko Win - ${prizeValue} Points`, status: "completed"
-        }).catch(e => console.error(e));
-      }
-      
-      // Increment quantityWon (fire-and-forget)
-      db.update(plinkoPrizes)
-        .set({ quantityWon: (selectedPrize.quantityWon || 0) + 1 })
-        .where(eq(plinkoPrizes.id, selectedPrize.id))
-        .catch(e => console.error(e));
-        
-    } else if (isFreePlay) {
-      segmentFreePlay = true;
-      rewardValueStr = "1";
-      totalFreePlays++;
-      
-      // Fire-and-forget: Increase order quantity
-      db.update(orders).set({ quantity: order.quantity + 1 }).where(eq(orders.id, orderId))
-        .catch(e => console.error(e));
-      
-      db.update(plinkoPrizes)
-        .set({ quantityWon: (selectedPrize.quantityWon || 0) + 1 })
-        .where(eq(plinkoPrizes.id, selectedPrize.id))
-        .catch(e => console.error(e));
-    } else {
-      rewardValueStr = "0";
-      db.update(plinkoPrizes)
-        .set({ quantityWon: (selectedPrize.quantityWon || 0) + 1 })
-        .where(eq(plinkoPrizes.id, selectedPrize.id))
-        .catch(e => console.error(e));
-    }
-
-    // 8. Record win (fire-and-forget)
-    db.insert(plinkoWins).values({
-      orderId, userId, prizeId: selectedPrize.id, slotIndex,
-      rewardType, rewardValue: rewardValueStr, isWin
-    }).catch(e => console.error(e));
-
-    // 9. Add to winners table (fire-and-forget)
-    if (isWin) {
-      const displayPrizeValue = rewardType === "cash" ? `£${prizeValue}` : `${prizeValue} Points`;
-      db.insert(winners).values({
-        userId, competitionId,
-        prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
-        prizeValue: displayPrizeValue,
-        prizeType: rewardType,
-        createdAt: new Date(), updatedAt: new Date()
-      }).catch(e => console.error(e));
-    }
-
-    // 10. Random Free Replay (configurable chance)
-    const freeReplayChance = parseFloat(config.freeReplayProbability || "5.00") / 100;
-    const gotFreeReplay = Math.random() < freeReplayChance;
-    
-    if (gotFreeReplay) {
-      totalFreePlays++;
-      db.update(orders).set({ quantity: order.quantity + 1 }).where(eq(orders.id, orderId))
-        .catch(e => console.error(e));
-    }
-
-    // 11. Update cache
-    plinkoPlayCountCache.set(orderId, { count: usedCount + 1, expires: now + 10000 });
-    
-    // 12. Set cooldown and send response
-    plinkoCooldowns.set(cooldownKey, now);
-    
-    // Get fresh balance for response (fire a quick query or use optimistic)
-    const [updatedUser] = await Promise.all([
-      storage.getUser(userId), // Single query for fresh data
-    ]);
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] /api/play-plinko took ${Date.now() - requestStart}ms`);
-    }
-    
     res.json({
       success: true,
-      slotIndex,
-      prizeName: selectedPrize.prizeName,
-      prizeValue: rewardValueStr,
-      rewardType,
-      isWin: isWin || isFreePlay,
-      color: selectedPrize.color,
-      freeReplay: gotFreeReplay,
-      segmentFreePlay,
-      playsRemaining: playsRemaining - 1 + totalFreePlays,
-      newBalance: updatedUser?.balance || user.balance,
-      newPoints: updatedUser?.ringtonePoints || user.ringtonePoints,
+      processed: playsToProcess,
+      results,
+      totalWon: totalCash,
+      totalPoints,
+      totalFreePlays,
+      prizesSynced: prizeSyncs.length,
+      playsRemaining: playsRemaining - playsToProcess + totalFreePlays,
     });
-    
+
   } catch (error) {
-    console.error("Error playing Plinko:", error);
-    res.status(500).json({ message: "Failed to play Plinko" });
+    console.error("Error revealing all plinko games:", error);
+    res.status(500).json({ message: "Failed to reveal all plinko games" });
   }
 });
-
 // ----------------------------------------
 // ENDPOINT 3: Get Plinko Order Info
 // ----------------------------------------
@@ -10526,6 +10853,7 @@ app.get("/api/plinko-config", async (req, res) => {
 // and returns a summary of all results.
 // Request body: { orderId: string, competitionId: string }
 // Returns: { success: true, results: [...], totalCashWon, totalPointsWon, freeReplaysGranted }
+
 app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -10584,6 +10912,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
     let totalCashWon = 0;
     let totalPointsWon = 0;
     let freeReplaysGranted = 0;
+    const prizeSyncs = []; // Track prizes to sync
 
     // Process all remaining plays
     while (playsRemaining > 0) {
@@ -10630,6 +10959,14 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
           .update(plinkoPrizes)
           .set({ quantityWon: selectedPrize.quantityWon })
           .where(eq(plinkoPrizes.id, selectedPrize.id));
+
+        // Track for auto-sync
+        prizeSyncs.push({
+          competitionId,
+          prizeId: selectedPrize.id,
+          name: selectedPrize.prizeName,
+          value: prizeValue
+        });
       }
 
       // Record win/loss
@@ -10689,11 +11026,32 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
       await db.update(users).set({ ringtonePoints: currentPoints + totalPointsWon }).where(eq(users.id, userId));
       await storage.createTransaction({
         userId,
-        type: "prize",
-        amount: "0.00",
+        type: "ringtone_points",
+        amount: totalPointsWon.toString(),
         description: `Ringtone Plinko Reveal All - ${totalPointsWon} Points`,
         status: "completed",
       });
+    }
+
+    // --------------------------------------
+    // 🚀 AUTO-SYNC PRIZES (Outside transaction)
+    // --------------------------------------
+    if (prizeSyncs.length > 0) {
+      // Sync each prize
+      for (const sync of prizeSyncs) {
+        try {
+          await syncPlinkoPrize(
+            sync.competitionId,
+            sync.prizeId,
+            sync.name,
+            sync.value
+          );
+          console.log(`✅ Synced plinko prize: ${sync.name}`);
+        } catch (err) {
+          console.error(`Failed to sync plinko prize ${sync.name}:`, err);
+          // Continue - don't fail the whole batch
+        }
+      }
     }
 
     // Get updated user
@@ -10705,6 +11063,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
       totalCashWon,
       totalPointsWon,
       freeReplaysGranted,
+      prizesSynced: prizeSyncs.length,
       newBalance: updatedUser?.balance || user.balance,
       newPoints: updatedUser?.ringtonePoints || user.ringtonePoints,
     });
@@ -13447,6 +13806,7 @@ app.post(
 const popCooldowns = new Map<string, number>();
   const POP_COOLDOWN_MS = 3000;
 
+
 app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -13653,7 +14013,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // RESULT LOGIC (rest remains the same)
+    // RESULT LOGIC
     let balloonValues: number[] = [];
 
     const rewardType = selectedSegment.rewardType || "lose";
@@ -13740,7 +14100,22 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
           amount: value.toFixed(2),
           description: `Ringtone Pop Win - £${value}`,
         });
-      }
+
+       const maxWins = selectedSegment.maxWins !== undefined && 
+                  selectedSegment.maxWins !== null && 
+                  selectedSegment.maxWins !== "" 
+                    ? Number(selectedSegment.maxWins) 
+                    : null;
+  
+  await syncPopPrize(
+    competitionId,
+    selectedSegment.id || "unknown",
+    prizeName,
+    value,
+    'cash',  // ← ADD rewardType
+    maxWins
+  );
+}
 
       // POINTS
       else if (rewardType === "points") {
@@ -13762,7 +14137,22 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
           amount: pointsValue.toString(),
           description: `Ringtone Pop Win - ${pointsValue} pts`,
         });
-      }
+
+         const maxWins = selectedSegment.maxWins !== undefined && 
+                  selectedSegment.maxWins !== null && 
+                  selectedSegment.maxWins !== "" 
+                    ? Number(selectedSegment.maxWins) 
+                    : null;
+  
+  await syncPopPrize(
+    competitionId,
+    selectedSegment.id || "unknown",
+    prizeName,
+    pointsValue,
+    'points',  // ← ADD rewardType
+    maxWins
+  );
+}
 
       // PHYSICAL
       else if (rewardType === "physical") {
@@ -13772,7 +14162,22 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
           amount: "0",
           description: `Physical Prize Won: ${prizeName} - Contact support`,
         });
-      }
+
+      const maxWins = selectedSegment.maxWins !== undefined && 
+                  selectedSegment.maxWins !== null && 
+                  selectedSegment.maxWins !== "" 
+                    ? Number(selectedSegment.maxWins) 
+                    : null;
+  
+  await syncPopPrize(
+    competitionId,
+    selectedSegment.id || "unknown",
+    prizeName,
+    0,
+    'physical',  // ← ADD rewardType
+    maxWins
+  );
+}
 
       // Winners table
       let prizeDescriptionText = "";
@@ -13904,7 +14309,7 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
   }
 });
 
- // Reveal all pop games (batch processing)
+// Reveal all pop games (batch processing)
 app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -13990,6 +14395,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
     let totalPoints = 0;
     let freeReplaysWon = 0;
     const results: any[] = [];
+    const prizeSyncs = []; // Track prizes to sync
 
     // Count existing wins for all segments from popWins table
     const counts = await db
@@ -14101,7 +14507,6 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
           );
           
           if (rewardType === "physical") {
-            // For physical prizes, use placeholder values (0) for balloons
             balloonValues = [0, 0, 0];
             rewardValue = value.toString();
           } else {
@@ -14116,6 +14521,20 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
             selectedSegment.id,
             (segmentWinCounts.get(selectedSegment.id) || 0) + 1
           );
+
+          // Track for auto-sync
+        prizeSyncs.push({
+  competitionId,
+  segmentId: selectedSegment.id || "unknown",
+  name: prizeName,
+  value: rewardType === "physical" ? 0 : value,
+  rewardType: rewardType,  // ← ADD rewardType
+  maxWins: selectedSegment.maxWins !== undefined && 
+           selectedSegment.maxWins !== null && 
+           selectedSegment.maxWins !== "" 
+             ? Number(selectedSegment.maxWins) 
+             : null
+});
 
           // Create winner entry with proper physical prize info
           let prizeDescriptionText = "";
@@ -14233,6 +14652,28 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       }
     });
 
+    // --------------------------------------
+    // 🚀 AUTO-SYNC PRIZES (Outside transaction)
+    // --------------------------------------
+    if (prizeSyncs.length > 0) {
+      // Sync each prize
+    for (const sync of prizeSyncs) {
+  try {
+    await syncPopPrize(
+      sync.competitionId,
+      sync.segmentId,
+      sync.name,
+      sync.value,
+      sync.rewardType,  // ← Pass rewardType
+      sync.maxWins
+    );
+    console.log(`✅ Synced pop prize: ${sync.name}`);
+  } catch (err) {
+    console.error(`Failed to sync pop prize ${sync.name}:`, err);
+  }
+}
+    }
+
     res.json({
       success: true,
       processed: playsToProcess,
@@ -14240,6 +14681,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       totalWon: totalCash,
       totalPoints: totalPoints,
       freeReplaysWon,
+      prizesSynced: prizeSyncs.length,
       playsRemaining: playsRemaining - playsToProcess + freeReplaysWon,
     });
   } catch (error) {
@@ -16522,6 +16964,20 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
             createdAt: new Date(), 
             updatedAt: new Date(),
           });
+
+          // 🚀 AUTO-SYNC PRIZE
+          const prizeToSync = await db.select().from(voltzPrizes).where(eq(voltzPrizes.id, result.prizeId)).limit(1);
+          if (prizeToSync.length > 0) {
+            await syncVoltzPrize(
+              order.competitionId,
+              result.prizeId,
+              prizeToSync[0].prizeName || `Cash Prize`,
+              cashValue,
+              'cash',
+              prizeToSync[0].maxWins
+            );
+          }
+
         } else if (result.rewardType === "points") {
           const pointsValue = Math.floor(parseFloat(result.rewardValue));
           const newPoints = (user.ringtonePoints || 0) + pointsValue;
@@ -16544,6 +17000,20 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
             createdAt: new Date(), 
             updatedAt: new Date(),
           });
+
+          // 🚀 AUTO-SYNC PRIZE
+          const prizeToSync = await db.select().from(voltzPrizes).where(eq(voltzPrizes.id, result.prizeId)).limit(1);
+          if (prizeToSync.length > 0) {
+            await syncVoltzPrize(
+              order.competitionId,
+              result.prizeId,
+              prizeToSync[0].prizeName || `Points Prize`,
+              pointsValue,
+              'points',
+              prizeToSync[0].maxWins
+            );
+          }
+
         } else if (result.rewardType === "physical") {
           // Physical prize
           await storage.createTransaction({
@@ -16563,6 +17033,19 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
             createdAt: new Date(), 
             updatedAt: new Date(),
           });
+
+          // 🚀 AUTO-SYNC PRIZE
+          const prizeToSync = await db.select().from(voltzPrizes).where(eq(voltzPrizes.id, result.prizeId)).limit(1);
+          if (prizeToSync.length > 0) {
+            await syncVoltzPrize(
+              order.competitionId,
+              result.prizeId,
+              prizeToSync[0].prizeName || result.prizeName,
+              0,
+              'physical',
+              prizeToSync[0].maxWins
+            );
+          }
         }
 
         // Update prize count
@@ -16609,7 +17092,6 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
   }
 });
 
-  // Reveal all Voltz games (batch)
  // Reveal all Voltz games (batch)
 app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
   try {
@@ -16653,6 +17135,7 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
     let freeReplaysWon = 0;
     const results: any[] = [];
     const prizeWinCounts = new Map<string, number>();
+    const prizeSyncs: any[] = []; // 🚀 Track prizes to sync
     prizes.forEach((p) => prizeWinCounts.set(p.id, p.quantityWon || 0));
 
     // Helper functions for switch text generation
@@ -16733,6 +17216,16 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
             if (rewardType === "points") totalPoints += Math.floor(value);
           }
           prizeWinCounts.set(selectedPrize.id, (prizeWinCounts.get(selectedPrize.id) || 0) + 1);
+
+          // 🚀 Track for sync
+          prizeSyncs.push({
+            competitionId,
+            prizeId: selectedPrize.id,
+            prizeName: selectedPrize.prizeName,
+            prizeValue: rewardType === "physical" ? 0 : parseFloat(selectedPrize.prizeValue || "0"),
+            rewardType: rewardType,
+            maxWins: selectedPrize.maxWins
+          });
         }
 
         // Generate switch texts
@@ -16899,6 +17392,25 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
       }
     });
 
+    // 🚀 AUTO-SYNC PRIZES (Outside transaction)
+    if (prizeSyncs.length > 0) {
+      for (const sync of prizeSyncs) {
+        try {
+          await syncVoltzPrize(
+            sync.competitionId,
+            sync.prizeId,
+            sync.prizeName,
+            sync.prizeValue,
+            sync.rewardType,
+            sync.maxWins
+          );
+          console.log(`✅ Synced voltz prize: ${sync.prizeName}`);
+        } catch (err) {
+          console.error(`Failed to sync voltz prize ${sync.prizeName}:`, err);
+        }
+      }
+    }
+
     // Calculate final plays remaining
     const updatedOrder = await storage.getOrder(orderId);
     const finalPlaysUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
@@ -16911,7 +17423,8 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
       results,
       totalWon: totalCash,
       totalPoints,
-      freeReplaysWon, 
+      freeReplaysWon,
+      prizesSynced: prizeSyncs.length, // 🚀 Show sync count
       playsRemaining: finalPlaysRemaining 
     });
   } catch (error) {

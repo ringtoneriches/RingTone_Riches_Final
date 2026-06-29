@@ -1,8 +1,8 @@
 // server/services/prize-sync.ts
 
+import { competitionPrizes } from "@shared/schema";
 import { db } from "../db";
-import { competitionPrizes } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 interface PrizeSyncParams {
   competitionId: string;
@@ -10,7 +10,9 @@ interface PrizeSyncParams {
   gamePrizeId: string;
   prizeName: string;
   prizeValue: number | string;
+  rewardType: string; // 'cash', 'points', 'physical', 'try_again'
   quantity?: number;
+  maxWins?: number | null;
 }
 
 export async function syncPrizeWin(params: PrizeSyncParams) {
@@ -21,57 +23,100 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
       gamePrizeId, 
       prizeName, 
       prizeValue,
-      quantity = 1 
+      rewardType,
+      quantity = 1,
+      maxWins = null
     } = params;
 
     const prizeValueNum = typeof prizeValue === 'string' ? parseFloat(prizeValue) : prizeValue;
 
-    // 1. Try to find existing prize by gamePrizeId and gameType
-    let [existingPrize] = await db.select()
-      .from(competitionPrizes)
-      .where(
-        and(
-          eq(competitionPrizes.competitionId, competitionId),
-          eq(competitionPrizes.gameType, gameType),
-          eq(competitionPrizes.gamePrizeId, gamePrizeId)
-        )
-      );
+    // Try multiple matching strategies in order:
+    let existingPrize = null;
 
-    // 2. If not found, try by prize name (fallback)
+    // STRATEGY 1: Exact match by gamePrizeId
+    if (!existingPrize) {
+      [existingPrize] = await db.select()
+        .from(competitionPrizes)
+        .where(
+          and(
+            eq(competitionPrizes.competitionId, competitionId),
+            eq(competitionPrizes.gameType, gameType),
+            eq(competitionPrizes.gamePrizeId, gamePrizeId)
+          )
+        );
+    }
+
+    // STRATEGY 2: Match by prize name AND value (admin might have named it differently)
     if (!existingPrize && prizeName) {
       [existingPrize] = await db.select()
         .from(competitionPrizes)
         .where(
           and(
             eq(competitionPrizes.competitionId, competitionId),
-            eq(competitionPrizes.prizeName, prizeName)
+            eq(competitionPrizes.prizeName, prizeName),
+            // Also match by approximate value (for cash/points)
+            prizeValueNum > 0 
+              ? sql`ABS(${competitionPrizes.prizeValue} - ${prizeValueNum}) < 0.01`
+              : eq(competitionPrizes.prizeValue, 0)
+          )
+        );
+    }
+
+    // STRATEGY 3: Match by value only (last resort for cash/points prizes)
+    if (!existingPrize && prizeValueNum > 0 && rewardType !== 'physical') {
+      [existingPrize] = await db.select()
+        .from(competitionPrizes)
+        .where(
+          and(
+            eq(competitionPrizes.competitionId, competitionId),
+            eq(competitionPrizes.gameType, gameType),
+            sql`ABS(${competitionPrizes.prizeValue} - ${prizeValueNum}) < 0.01`
+          )
+        );
+    }
+
+    // STRATEGY 4: For physical prizes, match by name containing similar words
+    if (!existingPrize && rewardType === 'physical' && prizeName) {
+      [existingPrize] = await db.select()
+        .from(competitionPrizes)
+        .where(
+          and(
+            eq(competitionPrizes.competitionId, competitionId),
+            eq(competitionPrizes.gameType, gameType),
+            sql`LOWER(${competitionPrizes.prizeName}) LIKE LOWER(${'%' + prizeName + '%'})`
           )
         );
     }
 
     if (existingPrize) {
-      // --- UPDATE EXISTING PRIZE ---
+      // --- UPDATE EXISTING PRIZE (DECREMENT REMAINING) ---
       const newRemaining = Math.max(0, existingPrize.remainingQuantity - quantity);
       
       const [updatedPrize] = await db.update(competitionPrizes)
         .set({
           remainingQuantity: newRemaining,
+          // Also update gamePrizeId if it was missing (helps future matches)
+          gamePrizeId: existingPrize.gamePrizeId || gamePrizeId,
           updatedAt: new Date(),
         })
         .where(eq(competitionPrizes.id, existingPrize.id))
         .returning();
+
+      console.log(`✅ Prize "${existingPrize.prizeName}" updated: ${existingPrize.remainingQuantity} → ${newRemaining} remaining (matched by: ${existingPrize.prizeName})`);
 
       return {
         success: true,
         action: 'updated',
         prize: updatedPrize,
         remaining: newRemaining,
-        message: `Prize "${prizeName}" updated: ${newRemaining} remaining`
+        message: `Prize "${existingPrize.prizeName}" updated: ${newRemaining} remaining`
       };
     } else {
-      // --- CREATE NEW PRIZE AUTOMATICALLY ---
-      // Only create if we have a name and value
-      if (!prizeName || prizeValue === undefined || prizeValue === null || prizeValue === "") {
+      // --- NO EXISTING PRIZE FOUND - CREATE NEW ONE ---
+      // This only happens if admin hasn't added this prize manually
+      
+      if (!prizeName || prizeValue === undefined || prizeValue === null) {
+        console.warn(`⚠️ Skipping prize creation - missing name/value`);
         return {
           success: false,
           action: 'skipped',
@@ -79,25 +124,34 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
         };
       }
 
+      // Use maxWins as totalQuantity, or high number for unlimited
+      const totalQuantity = maxWins !== null && maxWins !== undefined 
+        ? maxWins 
+        : 999999;
+
+      const prizeValueFinal = prizeValueNum || 0;
+
       const [newPrize] = await db.insert(competitionPrizes).values({
         id: crypto.randomUUID(),
         competitionId,
         prizeName: prizeName,
-        prizeValue: prizeValueNum || 0,
-        totalQuantity: 100, // Default total quantity
-        remainingQuantity: 99, // One was just won
+        prizeValue: prizeValueFinal,
+        totalQuantity: totalQuantity,
+        remainingQuantity: totalQuantity - quantity,
         gameType: gameType,
         gamePrizeId: gamePrizeId,
         createdAt: new Date(),
         updatedAt: new Date(),
       }).returning();
 
+      console.log(`🆕 Prize "${prizeName}" auto-created with ${totalQuantity} total, ${totalQuantity - quantity} remaining`);
+
       return {
         success: true,
         action: 'created',
         prize: newPrize,
-        remaining: 99,
-        message: `New prize "${prizeName}" auto-created with 99 remaining`
+        remaining: totalQuantity - quantity,
+        message: `New prize "${prizeName}" auto-created`
       };
     }
   } catch (error) {
@@ -111,62 +165,116 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
 }
 
 // Game-specific sync functions
-export async function syncPopPrize(competitionId: string, prizeId: string, prizeName: string, prizeValue: string | number) {
+export async function syncPopPrize(
+  competitionId: string, 
+  prizeId: string, 
+  prizeName: string, 
+  prizeValue: string | number,
+  rewardType: string,
+  maxWins?: number | null
+) {
   return syncPrizeWin({
     competitionId,
     gameType: 'pop',
     gamePrizeId: prizeId,
     prizeName,
     prizeValue,
+    rewardType,
+    maxWins,
   });
 }
 
-export async function syncVoltzPrize(competitionId: string, prizeId: string, prizeName: string, prizeValue: string | number) {
+export async function syncVoltzPrize(
+  competitionId: string, 
+  prizeId: string, 
+  prizeName: string, 
+  prizeValue: string | number,
+  rewardType: string,
+  maxWins?: number | null
+) {
   return syncPrizeWin({
     competitionId,
     gameType: 'voltz',
     gamePrizeId: prizeId,
     prizeName,
     prizeValue,
+    rewardType,
+    maxWins,
   });
 }
 
-export async function syncPlinkoPrize(competitionId: string, prizeId: string, prizeName: string, prizeValue: string | number) {
+export async function syncPlinkoPrize(
+  competitionId: string, 
+  prizeId: string, 
+  prizeName: string, 
+  prizeValue: string | number,
+  rewardType: string,
+  maxWins?: number | null
+) {
   return syncPrizeWin({
     competitionId,
     gameType: 'plinko',
     gamePrizeId: prizeId,
     prizeName,
     prizeValue,
+    rewardType,
+    maxWins,
   });
 }
 
-export async function syncScratchPrize(competitionId: string, prizeId: string, prizeName: string, prizeValue: string | number) {
+export async function syncScratchPrize(
+  competitionId: string, 
+  prizeId: string, 
+  prizeName: string, 
+  prizeValue: string | number,
+  rewardType: string,
+  maxWins?: number | null
+) {
   return syncPrizeWin({
     competitionId,
     gameType: 'scratch',
     gamePrizeId: prizeId,
     prizeName,
     prizeValue,
+    rewardType,
+    maxWins,
   });
 }
 
-export async function syncSpinPrize(competitionId: string, prizeId: string, prizeName: string, prizeValue: string | number) {
+export async function syncSpinPrize(
+  competitionId: string, 
+  prizeId: string, 
+  prizeName: string, 
+  prizeValue: string | number,
+  rewardType: string,
+  maxWins?: number | null
+) {
   return syncPrizeWin({
     competitionId,
     gameType: 'spin',
     gamePrizeId: prizeId,
     prizeName,
     prizeValue,
+    rewardType,
+    maxWins,
   });
 }
 
-export async function syncWheelPrize(competitionId: string, prizeId: string, prizeName: string, prizeValue: string | number) {
+export async function syncWheelPrize(
+  competitionId: string, 
+  prizeId: string, 
+  prizeName: string, 
+  prizeValue: string | number,
+  rewardType: string,
+  maxWins?: number | null
+) {
   return syncPrizeWin({
     competitionId,
     gameType: 'wheel',
     gamePrizeId: prizeId,
     prizeName,
     prizeValue,
+    rewardType,
+    maxWins,
   });
 }

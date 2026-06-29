@@ -1,3 +1,5 @@
+// src/components/admin/AdminPrizes.tsx
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import {
@@ -18,7 +20,11 @@ import {
   Settings,
   Percent,
   Ticket,
-  Coins
+  Coins,
+  Zap,
+  Target,
+  Sparkles,
+  RotateCw
 } from "lucide-react";
 import AdminLayout from "@/components/admin/admin-layout";
 import { Button } from "@/components/ui/button";
@@ -62,6 +68,8 @@ interface Prize {
   prizeValue: number;
   totalQuantity: number;
   remainingQuantity: number;
+  gameType?: string;
+  gamePrizeId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -355,6 +363,18 @@ export default function AdminPrizes() {
     return { label: "Available", variant: "default" };
   };
 
+  const getGameTypeIcon = (gameType?: string) => {
+    switch (gameType) {
+      case 'pop': return <Sparkles className="w-3 h-3" />;
+      case 'voltz': return <Zap className="w-3 h-3" />;
+      case 'plinko': return <Target className="w-3 h-3" />;
+      case 'scratch': return <Gift className="w-3 h-3" />;
+      case 'spin': return <RotateCw className="w-3 h-3" />;
+      case 'wheel': return <RotateCw className="w-3 h-3" />;
+      default: return null;
+    }
+  };
+
   if (competitionsLoading) {
     return (
       <AdminLayout>
@@ -376,7 +396,7 @@ export default function AdminPrizes() {
               Prize Management
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              Manage competition prizes, quantities, and win rates
+              Manage competition prizes, quantities, and auto-sync from games
             </p>
           </div>
         </div>
@@ -396,11 +416,12 @@ export default function AdminPrizes() {
                   <SelectContent>
                     {competitions.map((comp) => (
                       <SelectItem key={comp.id} value={comp.id}>
-                        {!comp.title.toLowerCase().includes("festive spin") && (
                         <div className="flex items-center justify-between gap-2">
-                            <span>{comp.title}</span>
+                          <span>{comp.title}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {comp.type}
+                          </Badge>
                         </div>
-                        )}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -578,6 +599,7 @@ export default function AdminPrizes() {
                 <CardTitle className="text-lg sm:text-xl">Prizes</CardTitle>
                 <CardDescription>
                   Showing {filteredPrizes.length} of {prizes.length} prizes
+                  {filteredPrizes.some(p => p.gameType) && " (Auto-synced from games)"}
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
@@ -604,70 +626,8 @@ export default function AdminPrizes() {
                   </div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden mx-4 sm:mx-0">
-                    {/* Mobile Card View */}
-                    <div className="block sm:hidden space-y-3 p-3">
-                      {filteredPrizes.map((prize) => {
-                        const stockStatus = getPrizeStatus(prize.remainingQuantity);
-                        return (
-                          <Card key={prize.id} className="p-4">
-                            <div className="space-y-3">
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-2 flex-1">
-                                  <Trophy className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-                                  <h3 className="font-semibold text-base break-words flex-1">
-                                    {prize.prizeName}
-                                  </h3>
-                                </div>
-                                <Badge variant={stockStatus.variant as any}>
-                                  {stockStatus.label}
-                                </Badge>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2 text-sm">
-                                <div>
-                                  <p className="text-muted-foreground">Value</p>
-                                  <p className="font-bold text-green-500">
-                                    £{typeof prize.prizeValue === 'number' 
-                                      ? prize.prizeValue.toFixed(2) 
-                                      : Number(prize.prizeValue || 0).toFixed(2)}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-muted-foreground">Total</p>
-                                  <p className="font-medium">{prize.totalQuantity}</p>
-                                </div>
-                                <div>
-                                  <p className="text-muted-foreground">Remaining</p>
-                                  <p className="font-medium">{prize.remainingQuantity}</p>
-                                </div>
-                              </div>
-                              <div className="flex gap-2 pt-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="flex-1"
-                                  onClick={() => handleEdit(prize)}
-                                >
-                                  <Edit className="w-4 h-4 mr-2" />
-                                  Edit
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  className="flex-1"
-                                  onClick={() => handleDelete(prize)}
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Delete
-                                </Button>
-                              </div>
-                            </div>
-                          </Card>
-                        );
-                      })}
-                    </div>
-
                     {/* Desktop Table View */}
-                    <div className="hidden sm:block overflow-x-auto">
+                    <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -675,6 +635,7 @@ export default function AdminPrizes() {
                             <TableHead className="whitespace-nowrap">Value</TableHead>
                             <TableHead className="whitespace-nowrap">Total</TableHead>
                             <TableHead className="whitespace-nowrap">Remaining</TableHead>
+                            <TableHead className="whitespace-nowrap">Game</TableHead>
                             <TableHead className="whitespace-nowrap">Status</TableHead>
                             <TableHead className="whitespace-nowrap">Actions</TableHead>
                           </TableRow>
@@ -699,6 +660,16 @@ export default function AdminPrizes() {
                                 </TableCell>
                                 <TableCell>{prize.totalQuantity}</TableCell>
                                 <TableCell>{prize.remainingQuantity}</TableCell>
+                                <TableCell>
+                                  {prize.gameType ? (
+                                    <Badge variant="outline" className="flex items-center gap-1">
+                                      {getGameTypeIcon(prize.gameType)}
+                                      <span className="capitalize">{prize.gameType}</span>
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">Manual</span>
+                                  )}
+                                </TableCell>
                                 <TableCell>
                                   <Badge
                                     variant={
