@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, Trash2, Save, Eye, EyeOff, Sparkles, AlertCircle, RotateCcw, Settings, Gift, Coins, Music, Repeat, X, ChevronUp, ChevronDown, Package } from "lucide-react";
+import { Plus, Trash2, Save, Eye, EyeOff, Sparkles, AlertCircle, RotateCcw, Settings, Gift, Coins, Music, Repeat, X, ChevronUp, ChevronDown, Package, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface PopSegment {
   id: string;
@@ -164,6 +170,66 @@ export default function AdminRingtonePop() {
     setHasChanges(true);
   };
 
+  // NEW: Auto-distribute remaining probability
+  const distributeRemainingProbability = (targetSegmentId?: string) => {
+    const activeSegs = segments.filter(seg => seg.isActive !== false);
+    if (activeSegs.length === 0) {
+      toast({
+        title: "No Active Segments",
+        description: "Please activate at least one segment",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const currentTotal = activeSegs.reduce((sum, seg) => sum + (Number(seg.probability) || 0), 0);
+    const remaining = 100 - currentTotal;
+
+    if (Math.abs(remaining) < 0.01) {
+      toast({
+        title: "Already at 100%",
+        description: "Probability total is already 100%",
+      });
+      return;
+    }
+
+    // If target segment specified, add all remaining to it
+    if (targetSegmentId) {
+      setSegments(segments.map(seg => {
+        if (seg.id === targetSegmentId) {
+          const currentProb = Number(seg.probability) || 0;
+          const newProb = Math.max(0, currentProb + remaining);
+          return { ...seg, probability: newProb };
+        }
+        return seg;
+      }));
+      setHasChanges(true);
+      
+      const targetSeg = segments.find(s => s.id === targetSegmentId);
+      toast({
+        title: "Distribution Complete",
+        description: `Added ${remaining.toFixed(2)}% to "${targetSeg?.label || 'segment'}"`,
+      });
+      return;
+    }
+
+    // Otherwise, distribute equally among active segments
+    const equalShare = remaining / activeSegs.length;
+    setSegments(segments.map(seg => {
+      if (seg.isActive !== false) {
+        const currentProb = Number(seg.probability) || 0;
+        return { ...seg, probability: Math.max(0, currentProb + equalShare) };
+      }
+      return seg;
+    }));
+    setHasChanges(true);
+    
+    toast({
+      title: "Distribution Complete",
+      description: `Distributed ${remaining.toFixed(2)}% equally among ${activeSegs.length} active segment${activeSegs.length > 1 ? 's' : ''}`,
+    });
+  };
+
   const activeSegments = segments.filter(seg => seg.isActive !== false);
   const totalProbability = activeSegments.reduce(
     (sum, seg) => sum + (Number(seg.probability) || 0),
@@ -173,28 +239,28 @@ export default function AdminRingtonePop() {
   const probabilityDiff = totalProbability - 100;
 
   const handleSave = () => {
-  if (Math.abs(totalProbability - 100) > 0.01) {
-    toast({
-      title: "Fix Probability First",
-      description: `Active segments total must be 100%. Currently ${totalProbability.toFixed(2)}%`,
-      variant: "destructive",
-    });
-    return;
-  }
+    if (Math.abs(totalProbability - 100) > 0.01) {
+      toast({
+        title: "Fix Probability First",
+        description: `Active segments total must be 100%. Currently ${totalProbability.toFixed(2)}%`,
+        variant: "destructive",
+      });
+      return;
+    }
 
-  const cleanSegments = segments.map(({ currentWins, rewardValue, probability, ...rest }) => ({
-    ...rest,
-    rewardValue: rest.rewardType === "physical" 
-      ? rewardValue  // Keep as string for physical prizes (e.g., "iPhone 14")
-      : rewardValue === "" 
-        ? 0 
-        : parseFloat(rewardValue as string), // Convert to number for cash/points
-    probability: probability === "" ? 0 : parseFloat(probability as string),
-    isActive: rest.isActive !== false,
-  }));
+    const cleanSegments = segments.map(({ currentWins, rewardValue, probability, ...rest }) => ({
+      ...rest,
+      rewardValue: rest.rewardType === "physical" 
+        ? rewardValue
+        : rewardValue === "" 
+          ? 0 
+          : parseFloat(rewardValue as string),
+      probability: probability === "" ? 0 : parseFloat(probability as string),
+      isActive: rest.isActive !== false,
+    }));
 
-  updateConfigMutation.mutate({ segments: cleanSegments, isVisible, isActive });
-};
+    updateConfigMutation.mutate({ segments: cleanSegments, isVisible, isActive });
+  };
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -283,17 +349,55 @@ export default function AdminRingtonePop() {
 
         {/* Probability Warning */}
         {!isValid && (
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
-            <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
-            <div className="text-sm">
-              <span className="font-medium text-red-400">Probability Error: </span>
-              <span className="text-muted-foreground">
-                Total is {totalProbability.toFixed(2)}%. 
-                {probabilityDiff > 0 
-                  ? ` Remove ${probabilityDiff.toFixed(2)}% to fix.`
-                  : ` Add ${Math.abs(probabilityDiff).toFixed(2)}% to fix.`
-                }
-              </span>
+          <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+              <div className="text-sm">
+                <span className="font-medium text-red-400">Probability Error: </span>
+                <span className="text-muted-foreground">
+                  Total is {totalProbability.toFixed(2)}%. 
+                  {probabilityDiff > 0 
+                    ? ` Remove ${probabilityDiff.toFixed(2)}% to fix.`
+                    : ` Add ${Math.abs(probabilityDiff).toFixed(2)}% to fix.`
+                  }
+                </span>
+              </div>
+            </div>
+            
+            {/* NEW: Quick Fix Buttons */}
+            <div className="flex items-center gap-2 shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10 gap-2"
+                  >
+                    <Wand2 className="w-4 h-4" />
+                    Auto-Fix
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => distributeRemainingProbability()}>
+                    Distribute evenly to all
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    // Find first active segment
+                    const firstActive = segments.find(s => s.isActive !== false);
+                    if (firstActive) distributeRemainingProbability(firstActive.id);
+                  }}>
+                    Add all to first prize
+                  </DropdownMenuItem>
+                  {segments.filter(s => s.isActive !== false).map(seg => (
+                    <DropdownMenuItem 
+                      key={seg.id}
+                      onClick={() => distributeRemainingProbability(seg.id)}
+                    >
+                      Add to "{seg.label}"
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         )}
@@ -465,48 +569,46 @@ export default function AdminRingtonePop() {
                       />
                       
                      {/* Value and Probability Row */}
-<div className={`grid ${seg.rewardType === "physical" ? "grid-cols-1" : "grid-cols-2"} gap-2 mb-2`}>
-  
-  {/* VALUE INPUT (HIDE FOR PHYSICAL) */}
-  {seg.rewardType !== "physical" && (
-    <div>
-      <Label className="text-xs text-muted-foreground">
-        {seg.rewardType === "cash" ? "£ Amount" : 
-         seg.rewardType === "points" ? "Points" : "Value"}
-      </Label>
-      <Input
-        type="number"
-        step="0.01"
-        value={
-          seg.rewardType === "lose" || seg.rewardType === "try_again"
-            ? ""
-            : seg.rewardValue ?? ""
-        }
-        onChange={(e) => updateSegment(seg.id, "rewardValue", e.target.value)}
-        disabled={seg.rewardType === "lose" || seg.rewardType === "try_again"}
-        placeholder="-"
-        className="h-8 text-sm"
-        data-testid={`input-value-${index}`}
-      />
-    </div>
-  )}
+                      <div className={`grid ${seg.rewardType === "physical" ? "grid-cols-1" : "grid-cols-2"} gap-2 mb-2`}>
+                        {/* VALUE INPUT (HIDE FOR PHYSICAL) */}
+                        {seg.rewardType !== "physical" && (
+                          <div>
+                            <Label className="text-xs text-muted-foreground">
+                              {seg.rewardType === "cash" ? "£ Amount" : 
+                               seg.rewardType === "points" ? "Points" : "Value"}
+                            </Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={
+                                seg.rewardType === "lose" || seg.rewardType === "try_again"
+                                  ? ""
+                                  : seg.rewardValue ?? ""
+                              }
+                              onChange={(e) => updateSegment(seg.id, "rewardValue", e.target.value)}
+                              disabled={seg.rewardType === "lose" || seg.rewardType === "try_again"}
+                              placeholder="-"
+                              className="h-8 text-sm"
+                              data-testid={`input-value-${index}`}
+                            />
+                          </div>
+                        )}
 
-  {/* PROBABILITY (ALWAYS SHOW) */}
-  <div>
-    <Label className="text-xs text-muted-foreground">Probability %</Label>
-    <Input
-      type="number"
-      step="0.01"
-      min="0"
-      max="100"
-      value={seg.probability ?? ""}
-      onChange={(e) => updateSegment(seg.id, "probability", e.target.value)}
-      className="h-8 text-sm"
-      data-testid={`input-probability-${index}`}
-    />
-  </div>
-
-</div>
+                        {/* PROBABILITY (ALWAYS SHOW) */}
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Probability %</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={seg.probability ?? ""}
+                            onChange={(e) => updateSegment(seg.id, "probability", e.target.value)}
+                            className="h-8 text-sm"
+                            data-testid={`input-probability-${index}`}
+                          />
+                        </div>
+                      </div>
 
                       {/* Max Wins Row */}
                       <div className="flex items-center justify-between">

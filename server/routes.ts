@@ -671,6 +671,38 @@ const DEFAULT_VOLTZ_CONFIG = {
   isVisible: true,
 };
 
+async function checkDailyTicketCap(userId: string, competitionId: string, quantity: number, gameType: string) {
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  
+  const recentTickets = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(tickets)
+    .where(
+      and(
+        eq(tickets.userId, userId),
+        eq(tickets.competitionId, competitionId),
+        sql`${tickets.createdAt} >= ${twentyFourHoursAgo}`
+      )
+    );
+  
+  const ticketsInLast24h = Number(recentTickets[0]?.count || 0);
+  const DAILY_TICKET_CAP = 250;
+  
+  if (ticketsInLast24h + quantity > DAILY_TICKET_CAP) {
+    const remainingTickets = DAILY_TICKET_CAP - ticketsInLast24h;
+    return {
+      exceeded: true,
+      message: `Daily ${gameType} ticket limit reached. You can only purchase ${remainingTickets} more ticket(s) in the next 24 hours. You've already purchased ${ticketsInLast24h} tickets for this competition.`,
+      dailyLimit: DAILY_TICKET_CAP,
+      purchasedToday: ticketsInLast24h,
+      remainingToday: Math.max(0, remainingTickets)
+    };
+  }
+  
+  return { exceeded: false };
+}
+
+
 // const uploadDir = path.join(process.cwd(), "attached_assets", "competitions");
 // if (!fs.existsSync(uploadDir)) {
 //   fs.mkdirSync(uploadDir, { recursive: true });

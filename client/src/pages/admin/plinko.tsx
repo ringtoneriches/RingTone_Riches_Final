@@ -13,6 +13,7 @@
 // - Set free replay probability percentage
 // - Toggle game visibility and active status
 // - Real-time probability total validation (must equal 100%)
+// - AUTO-FIX: One-click probability distribution to reach 100%
 // - Sticky controls that stay visible when scrolling
 //
 // API ENDPOINTS USED:
@@ -29,7 +30,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Save, Eye, EyeOff, Target, AlertCircle, RotateCcw, Settings, Gift, Coins, Ban, Repeat, ArrowUp, ArrowDown } from "lucide-react";
+import { Save, Eye, EyeOff, Target, AlertCircle, RotateCcw, Settings, Gift, Coins, Ban, Repeat, ArrowUp, ArrowDown, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface PlinkoPrize {
   id: string;
@@ -156,6 +163,66 @@ export default function AdminPlinko() {
     setHasChanges(true);
   };
 
+  // NEW: Auto-distribute remaining probability for Plinko
+  const distributeRemainingProbability = (targetSlotIndex?: number) => {
+    const activePrizes = prizes.filter(p => p.isActive !== false);
+    if (activePrizes.length === 0) {
+      toast({
+        title: "No Active Prizes",
+        description: "Please activate at least one prize slot",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const currentTotal = activePrizes.reduce((sum, p) => sum + (parseFloat(String(p.probability)) || 0), 0);
+    const remaining = 100 - currentTotal;
+
+    if (Math.abs(remaining) < 0.01) {
+      toast({
+        title: "Already at 100%",
+        description: "Probability total is already 100%",
+      });
+      return;
+    }
+
+    // If target slot specified, add all remaining to it
+    if (targetSlotIndex !== undefined) {
+      setPrizes(prizes.map(p => {
+        if (p.slotIndex === targetSlotIndex) {
+          const currentProb = parseFloat(String(p.probability)) || 0;
+          const newProb = Math.max(0, currentProb + remaining);
+          return { ...p, probability: parseFloat(newProb.toFixed(2)) };
+        }
+        return p;
+      }));
+      setHasChanges(true);
+      
+      const targetPrize = prizes.find(p => p.slotIndex === targetSlotIndex);
+      toast({
+        title: "Distribution Complete",
+        description: `Added ${remaining.toFixed(2)}% to "${targetPrize?.prizeName || 'prize'}"`,
+      });
+      return;
+    }
+
+    // Otherwise, distribute equally among active prizes
+    const equalShare = remaining / activePrizes.length;
+    setPrizes(prizes.map(p => {
+      if (p.isActive !== false) {
+        const currentProb = parseFloat(String(p.probability)) || 0;
+        return { ...p, probability: parseFloat((currentProb + equalShare).toFixed(2)) };
+      }
+      return p;
+    }));
+    setHasChanges(true);
+    
+    toast({
+      title: "Distribution Complete",
+      description: `Distributed ${remaining.toFixed(2)}% equally among ${activePrizes.length} active prize${activePrizes.length > 1 ? 's' : ''}`,
+    });
+  };
+
   const totalProbability = prizes.reduce((sum, p) => sum + (parseFloat(String(p.probability)) || 0), 0);
   const probabilityValid = Math.abs(totalProbability - 100) < 0.01;
 
@@ -205,37 +272,79 @@ export default function AdminPlinko() {
               {/* Probability status - always visible */}
               <div className="flex items-center gap-2">
                 {!probabilityValid && (
-                  <Badge variant="destructive" className="flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    Probability must equal 100%
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="destructive" className="flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {totalProbability < 100 ? `Need ${(100 - totalProbability).toFixed(2)}%` : `Over by ${(totalProbability - 100).toFixed(2)}%`}
+                    </Badge>
+                    
+                    {/* NEW: Auto-Fix Button */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 gap-2"
+                        >
+                          <Wand2 className="w-4 h-4" />
+                          Auto-Fix
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800">
+                        <DropdownMenuItem 
+                          onClick={() => distributeRemainingProbability()}
+                          className="hover:bg-zinc-800 cursor-pointer"
+                        >
+                          Distribute evenly to all
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            // Find first active prize
+                            const firstActive = prizes.find(p => p.isActive !== false);
+                            if (firstActive) distributeRemainingProbability(firstActive.slotIndex);
+                          }}
+                          className="hover:bg-zinc-800 cursor-pointer"
+                        >
+                          Add all to first prize
+                        </DropdownMenuItem>
+                        {prizes.filter(p => p.isActive !== false).map(p => (
+                          <DropdownMenuItem 
+                            key={p.slotIndex}
+                            onClick={() => distributeRemainingProbability(p.slotIndex)}
+                            className="hover:bg-zinc-800 cursor-pointer"
+                          >
+                            Add to "{p.prizeName}"
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 )}
                 <Badge variant={probabilityValid ? "default" : "destructive"} className={probabilityValid ? "bg-green-500/20 text-green-400 border-green-500/30" : ""}>
                   Total: {totalProbability.toFixed(2)}%
                 </Badge>
               </div>
-                  <div className="flex gap-2">
-
-              <Button
-                variant="outline"
-                onClick={() => setResetConfirmOpen(true)}
-                className="border-red-500/30 text-red-400"
-                data-testid="button-reset-wins"
-              >
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Reset Wins
-              </Button>
-              
-              <Button
-                onClick={() => updateConfigMutation.mutate({ prizes, isVisible, isActive, freeReplayProbability })}
-                disabled={!hasChanges || !probabilityValid}
-                className="bg-gradient-to-r from-purple-600 to-amber-600"
-                data-testid="button-save-changes"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                Save Changes
-              </Button>
-                  </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setResetConfirmOpen(true)}
+                  className="border-red-500/30 text-red-400"
+                  data-testid="button-reset-wins"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Reset Wins
+                </Button>
+                
+                <Button
+                  onClick={() => updateConfigMutation.mutate({ prizes, isVisible, isActive, freeReplayProbability })}
+                  disabled={!hasChanges || !probabilityValid}
+                  className="bg-gradient-to-r from-purple-600 to-amber-600"
+                  data-testid="button-save-changes"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -255,9 +364,18 @@ export default function AdminPlinko() {
           <TabsContent value="prizes" className="space-y-4">
             <Card className="bg-zinc-900/50 border-zinc-800">
               <CardHeader className="pb-3">
-                <div>
-                  <CardTitle className="text-xl text-white">Prize Slots (8 Total)</CardTitle>
-                  <CardDescription>Configure the 8 prize slots at the bottom of the Plinko board</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-xl text-white">Prize Slots (8 Total)</CardTitle>
+                    <CardDescription>Configure the 8 prize slots at the bottom of the Plinko board</CardDescription>
+                  </div>
+                  {/* Quick indicator */}
+                  {!probabilityValid && (
+                    <Badge variant="destructive" className="flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      Fix required
+                    </Badge>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -273,30 +391,48 @@ export default function AdminPlinko() {
                             />
                             <span className="text-sm font-medium text-gray-300">Slot {prize.slotIndex + 1}</span>
                           </div>
-                          {getRewardBadge(prize.rewardType)}
+                          <div className="flex items-center gap-1">
+                            {getRewardBadge(prize.rewardType)}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                const newStatus = !prize.isActive;
+                                updatePrize(prize.slotIndex, "isActive", newStatus);
+                                toast({ 
+                                  title: newStatus ? "Prize Activated" : "Prize Deactivated",
+                                  description: newStatus ? "This prize will appear in the game" : "This prize is hidden"
+                                });
+                              }}
+                              className="h-6 w-6 text-gray-400 hover:text-white"
+                              data-testid={`button-toggle-${index}`}
+                            >
+                              {prize.isActive === false ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            </Button>
+                          </div>
                         </div>
 
-                        {/* <div className="flex items-center gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-6 w-6"
-            onClick={() => movePrize(index, "up")}
-            disabled={index === 0}
-          >
-            <ArrowUp className="w-4 h-4" />
-          </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            onClick={() => movePrize(index, "up")}
+                            disabled={index === 0}
+                          >
+                            <ArrowUp className="w-4 h-4" />
+                          </Button>
 
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-6 w-6"
-            onClick={() => movePrize(index, "down")}
-            disabled={index === prizes.length - 1}
-          >
-            <ArrowDown className="w-4 h-4" />
-          </Button>
-        </div> */}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            onClick={() => movePrize(index, "down")}
+                            disabled={index === prizes.length - 1}
+                          >
+                            <ArrowDown className="w-4 h-4" />
+                          </Button>
+                        </div>
 
                         <div className="space-y-2">
                           <Label className="text-xs text-gray-400">Prize Name</Label>
@@ -326,9 +462,12 @@ export default function AdminPlinko() {
                           <Input
                             type="number"
                             step="0.01"
+                            min="0"
+                            max="100"
                             value={prize.probability}
                             onChange={(e) => updatePrize(prize.slotIndex, "probability", parseFloat(e.target.value) || 0)}
                             className="bg-zinc-900 border-zinc-700 h-8 text-sm"
+                            data-testid={`input-probability-${index}`}
                           />
                         </div>
 
