@@ -15,6 +15,9 @@ interface PrizeSyncParams {
   maxWins?: number | null;
 }
 
+// ✅ Configuration: Prize types to skip syncing
+const SKIP_REWARD_TYPES = ['points', 'try_again']; // Add any types you want to skip
+
 export async function syncPrizeWin(params: PrizeSyncParams) {
   try {
     const { 
@@ -27,6 +30,17 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
       quantity = 1,
       maxWins = null
     } = params;
+
+    // ✅ SKIP POINTS AND OTHER NON-CASH PRIZES
+    if (SKIP_REWARD_TYPES.includes(rewardType)) {
+      console.log(`⏭️ Skipping ${rewardType} prize sync: "${prizeName}" (${prizeValue})`);
+      return {
+        success: true,
+        action: 'skipped',
+        message: `${rewardType} prizes are not synced to competition prizes table`,
+        reason: 'non-cash-reward'
+      };
+    }
 
     const prizeValueNum = typeof prizeValue === 'string' ? parseFloat(prizeValue) : prizeValue;
 
@@ -46,7 +60,7 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
         );
     }
 
-    // STRATEGY 2: Match by prize name AND value (admin might have named it differently)
+    // STRATEGY 2: Match by prize name AND value
     if (!existingPrize && prizeName) {
       [existingPrize] = await db.select()
         .from(competitionPrizes)
@@ -54,7 +68,6 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
           and(
             eq(competitionPrizes.competitionId, competitionId),
             eq(competitionPrizes.prizeName, prizeName),
-            // Also match by approximate value (for cash/points)
             prizeValueNum > 0 
               ? sql`ABS(${competitionPrizes.prizeValue} - ${prizeValueNum}) < 0.01`
               : eq(competitionPrizes.prizeValue, 0)
@@ -62,7 +75,7 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
         );
     }
 
-    // STRATEGY 3: Match by value only (last resort for cash/points prizes)
+    // STRATEGY 3: Match by value only (last resort for cash prizes)
     if (!existingPrize && prizeValueNum > 0 && rewardType !== 'physical') {
       [existingPrize] = await db.select()
         .from(competitionPrizes)
@@ -95,14 +108,13 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
       const [updatedPrize] = await db.update(competitionPrizes)
         .set({
           remainingQuantity: newRemaining,
-          // Also update gamePrizeId if it was missing (helps future matches)
           gamePrizeId: existingPrize.gamePrizeId || gamePrizeId,
           updatedAt: new Date(),
         })
         .where(eq(competitionPrizes.id, existingPrize.id))
         .returning();
 
-      console.log(`✅ Prize "${existingPrize.prizeName}" updated: ${existingPrize.remainingQuantity} → ${newRemaining} remaining (matched by: ${existingPrize.prizeName})`);
+      console.log(`✅ Prize "${existingPrize.prizeName}" updated: ${existingPrize.remainingQuantity} → ${newRemaining} remaining`);
 
       return {
         success: true,
@@ -113,7 +125,6 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
       };
     } else {
       // --- NO EXISTING PRIZE FOUND - CREATE NEW ONE ---
-      // This only happens if admin hasn't added this prize manually
       
       if (!prizeName || prizeValue === undefined || prizeValue === null) {
         console.warn(`⚠️ Skipping prize creation - missing name/value`);
@@ -164,7 +175,7 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
   }
 }
 
-// Game-specific sync functions
+// Game-specific sync functions remain the same...
 export async function syncPopPrize(
   competitionId: string, 
   prizeId: string, 

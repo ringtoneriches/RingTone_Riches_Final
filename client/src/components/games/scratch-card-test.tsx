@@ -993,7 +993,8 @@ function checkPercentScratched(force = false) {
       credentials: "include",
       body: JSON.stringify({ 
         orderId,
-        count: remainingCount
+        count: remainingCount,
+        competitionId: competitionId || id
       }),
     });
 

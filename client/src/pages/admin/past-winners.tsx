@@ -145,9 +145,17 @@ function WinnerForm({
   const [uploading, setUploading] = useState(false);
   const [openUserSelect, setOpenUserSelect] = useState(false);
   // Fetch users for selection
-  const { data: users = [] } = useQuery<User[]>({
-    queryKey: ["/api/admin/users"],
-  });
+ const { data: usersData = [] } = useQuery<any>({
+  queryKey: ["/api/admin/users"],
+});
+
+// Normalize users data to always be an array
+const users = useMemo(() => {
+  if (Array.isArray(usersData)) return usersData;
+  if (usersData?.users && Array.isArray(usersData.users)) return usersData.users;
+  if (usersData?.data && Array.isArray(usersData.data)) return usersData.data;
+  return [];
+}, [usersData]);
 
   // Fetch competitions for selection
   const { data: competitions = [] } = useQuery<Competition[]>({
