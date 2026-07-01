@@ -82,7 +82,7 @@ const CompactFacebookCTA = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-white group-hover:text-yellow-50 transition-colors">
-                    Join 1K+ Members
+                    Join 10K+ Members
                   </h3>
                 {/* <h3 className="text-xl font-bold text-white group-hover:text-yellow-50 transition-colors">
                 {loading ? (

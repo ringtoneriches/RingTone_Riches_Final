@@ -272,50 +272,57 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => clearInterval(timer);
   }, [unlockTimers, toast]);
 
-  const enableMaintenance = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("/api/admin/maintenance/on", "POST");
-      const data = await res.json();
-      return data;
-    },
-    onSuccess: async () => {
-      toast({
-        title: "Maintenance Enabled",
-        description: "The site is now in maintenance mode. All users will see a maintenance page.",
-      });
-      await refetchMaintenance();
-      setShowMaintenanceDialog(false);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to enable maintenance mode",
-        variant: "destructive",
-      });
-    },
-  });
+// In your AdminLayout component, update the mutations
+const enableMaintenance = useMutation({
+  mutationFn: async () => {
+    const res = await apiRequest("/api/admin/maintenance/on", "POST");
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || "Failed to enable maintenance mode");
+    }
+    return res.json();
+  },
+  onSuccess: async () => {
+    toast({
+      title: "Maintenance Enabled",
+      description: "The site is now in maintenance mode.",
+    });
+    await refetchMaintenance();
+    setShowMaintenanceDialog(false);
+  },
+  onError: (error: Error) => {
+    toast({
+      title: "Error",
+      description: error.message,
+      variant: "destructive",
+    });
+  },
+});
 
-  const disableMaintenance = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("/api/admin/maintenance/off", "POST");
-      const data = await res.json();
-      return data;
-    },
-    onSuccess: async () => {
-      toast({
-        title: "Maintenance Disabled",
-        description: "The site is live again.",
-      });
-      await refetchMaintenance();
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to disable maintenance mode",
-        variant: "destructive",
-      });
-    },
-  });
+const disableMaintenance = useMutation({
+  mutationFn: async () => {
+    const res = await apiRequest("/api/admin/maintenance/off", "POST");
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || "Failed to disable maintenance mode");
+    }
+    return res.json();
+  },
+  onSuccess: async () => {
+    toast({
+      title: "Maintenance Disabled",
+      description: "The site is live again.",
+    });
+    await refetchMaintenance();
+  },
+  onError: (error: Error) => {
+    toast({
+      title: "Error",
+      description: error.message,
+      variant: "destructive",
+    });
+  },
+});
 
   const handleEnableMaintenance = () => {
     setShowMaintenanceDialog(true);

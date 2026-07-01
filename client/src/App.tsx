@@ -81,13 +81,13 @@ import AdminFAQManager from "./pages/admin/faq-manager";
 import AdminPrizes from "./pages/admin/admin-prizes";
 import AdminCompetitionVideos from "./pages/admin/admin-competition-videos";
 import { initFacebookBrowserWarning, initSocialBrowserWarning } from "./lib/facebook-browser-check";
-import  AdminTicketManager  from "./pages/admin/AdminTicketManager";
+import AdminTicketManager from "./pages/admin/AdminTicketManager";
 import AdminTicketManagerPage from "./pages/admin/AdminTicketManagerPage";
 import AddPastWinnerPage from "./pages/admin/winners";
 import AdminAddWinner from "./pages/admin/winners";
+
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
- 
   return <Home />;
 }
 
@@ -117,7 +117,7 @@ function Router() {
       <Route path="/spin/:competitionId/:orderId" component={SpinGamePage} />
       <Route path="/pop/:competitionId/:orderId" component={PopGamePage} />
       <Route path="/plinko/:competitionId/:orderId" component={PlinkoGamePage} />
-       <Route path="/voltz/:competitionId/:orderId" component={VoltzGamePage} />
+      <Route path="/voltz/:competitionId/:orderId" component={VoltzGamePage} />
 
       {/* Authenticated routes - always registered, auth checked in component */}
       <Route path="/instant" component={instant} />
@@ -159,7 +159,6 @@ function Router() {
       <Route path="/admin/well-being" component={AdminWellbeing} />
       <Route path="/admin/ringtone-pop/settings" component={AdminRingtonePop} />
       <Route path="/admin/add-ringtone-pop" component={AdminPopBalloon} />
-      <Route path="/admin/users/:id" component={UserAuditPage} />
       <Route path="/admin/intelligence" component={Intelligence} />
       <Route path="/admin/discount" component={AdminDiscountCodes} />
       <Route path="/admin/plinko" component={AdminPlinkoBalloon} />
@@ -180,9 +179,8 @@ function Router() {
 }
 
 function App() {
-
-   useEffect(() => {
-    initSocialBrowserWarning()
+  useEffect(() => {
+    initSocialBrowserWarning();
   }, []);
 
   return (
@@ -197,13 +195,17 @@ function AppWithMaintenance() {
   const { user, isLoading: authLoading } = useAuth();
   const [showSourceModal, setShowSourceModal] = useState(false);
   const [hasCheckedSource, setHasCheckedSource] = useState(false);
-  
- const [showBalloonPop, setShowBalloonPop] = useState(false);
+  const [showBalloonPop, setShowBalloonPop] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch maintenance status with polling every 3 seconds
   const { data: maintenanceData, isLoading: maintenanceLoading } = useQuery({
     queryKey: ["/api/maintenance"],
     queryFn: () => fetch("/api/maintenance").then((res) => res.json()),
+    refetchInterval: 3000, // Check every 3 seconds
+    staleTime: 0, // Always consider data stale
+    refetchOnWindowFocus: true, // Refetch when window gets focus
+    refetchOnMount: true, // Refetch when component mounts
   });
 
   // Check if user needs to provide registration source
@@ -216,21 +218,20 @@ function AppWithMaintenance() {
       if (!res.ok) throw new Error("Failed to fetch source status");
       return res.json();
     },
-    enabled: !!user && !hasCheckedSource,
+    enabled: !!user && !hasCheckedSource && !maintenanceData?.maintenanceMode,
     staleTime: 0
   });
 
-   useEffect(() => {
-    // Check if user has seen the balloon before
+  // Handle balloon pop visibility
+  useEffect(() => {
     const hasSeenBalloon = localStorage.getItem('hasSeenBalloonPop');
     
-    // Don't show on admin routes
     const isAdminRoute = location.startsWith("/admin");
     const isAuthRoute = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password"]
       .some(route => location.startsWith(route));
     
-    if (!hasSeenBalloon && !isAdminRoute && !isAuthRoute && !maintenanceLoading) {
-      // Small delay to ensure everything is loaded
+    // Don't show balloon during maintenance
+    if (!hasSeenBalloon && !isAdminRoute && !isAuthRoute && !maintenanceLoading && !maintenanceData?.maintenanceMode) {
       const timer = setTimeout(() => {
         setShowBalloonPop(true);
         setIsLoading(false);
@@ -240,20 +241,16 @@ function AppWithMaintenance() {
     } else {
       setIsLoading(false);
     }
-  }, [location, maintenanceLoading]);
+  }, [location, maintenanceLoading, maintenanceData?.maintenanceMode]);
 
-
-  // Show modal when user logs in and needs to provide source
+  // Show registration source modal
   useEffect(() => {
-    if (sourceStatus?.needsToProvide && !hasCheckedSource && !sourceLoading) {
+    if (sourceStatus?.needsToProvide && !hasCheckedSource && !sourceLoading && !maintenanceData?.maintenanceMode) {
+      const lastAsked = localStorage.getItem(`registration_source_asked_${user?.id}`);
+      
+      const shouldShow = !lastAsked || 
+        (Date.now() - parseInt(lastAsked) > 7 * 24 * 60 * 60 * 1000);
 
-      const lastAsked = localStorage.getItem(`registration_source_asked_${user.id}`);
-    
-    // If we never asked OR it's been more than 7 days since last ask
-    const shouldShow = !lastAsked || 
-      (Date.now() - parseInt(lastAsked) > 7 * 24 * 60 * 60 * 1000);
-
-      // Don't show on admin pages or certain routes
       const excludedRoutes = [
         "/admin",
         "/login",
@@ -264,48 +261,106 @@ function AppWithMaintenance() {
       ];
       
       const isExcludedRoute = excludedRoutes.some(route => location.startsWith(route));
-    
-    if (shouldShow && !isExcludedRoute) {
-      // Small delay to ensure page is loaded
-      const timer = setTimeout(() => {
-        setShowSourceModal(true);
-      }, 1000);
       
-      return () => clearTimeout(timer);
+      if (shouldShow && !isExcludedRoute) {
+        const timer = setTimeout(() => {
+          setShowSourceModal(true);
+        }, 1000);
+        
+        return () => clearTimeout(timer);
+      }
     }
-    }
-  }, [sourceStatus, location, sourceLoading, hasCheckedSource]);
+  }, [sourceStatus, location, sourceLoading, hasCheckedSource, maintenanceData?.maintenanceMode, user?.id]);
 
-  if (maintenanceLoading) return null;
+  // Force refetch maintenance status on route change
+  useEffect(() => {
+    if (!maintenanceLoading) {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance"] });
+    }
+  }, [location]);
+
+  // Show loading state
+  if (maintenanceLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   const isAdminUser = user?.isAdmin === true;
   const isAdminRoute = location.startsWith("/admin");
+  
+  // Public routes that should still be accessible during maintenance
+  const publicRoutes = [
+    "/login", 
+    "/register", 
+    "/verify-email", 
+    "/forgot-password", 
+    "/reset-password",
+    "/termsAndConditions",
+    "/play-responsible",
+    "/privacy-policy",
+    "/be-aware",
+    "/admin/login" // Allow admin login even during maintenance
+  ];
+  
+  const isPublicRoute = publicRoutes.some(route => location.startsWith(route));
 
-  // If maintenance ON → only admin can bypass
-  if (maintenanceData?.maintenanceMode && !isAdminUser && !isAdminRoute) {
-    return <MaintenancePage />;
+  // If maintenance is ON and user is not admin and not on public route
+  if (maintenanceData?.maintenanceMode && !isAdminUser && !isPublicRoute) {
+    return (
+      <>
+        <style>{`
+          body { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+          }
+          #root { 
+            height: 100vh; 
+          }
+        `}</style>
+        <MaintenancePage />
+      </>
+    );
   }
 
- const handleBalloonComplete = () => {
+  const handleBalloonComplete = () => {
     setShowBalloonPop(false);
-    // Set localStorage so it never shows again on this browser
     localStorage.setItem('hasSeenBalloonPop', 'true');
   };
+
+  // Check if we should show maintenance banner for admin
+  const showMaintenanceBanner = maintenanceData?.maintenanceMode && isAdminUser;
 
   return (
     <TooltipProvider>
       <Toaster />
       <ScrollToTop />
-      <div className="pt-20 lg:pt-24"/> 
-     <PremiumBalloonPop
-        isOpen={showBalloonPop}
-        onComplete={handleBalloonComplete}
-      />
+      
+      {/* Maintenance banner for admin users */}
+      {showMaintenanceBanner && (
+        <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 z-[100] font-bold text-sm">
+          ⚠️ MAINTENANCE MODE ACTIVE - Site is not visible to regular users ⚠️
+        </div>
+      )}
+      
+      {/* Adjust top padding based on maintenance banner */}
+      <div className={showMaintenanceBanner ? "pt-20 lg:pt-28" : "pt-20 lg:pt-24"}/>
+      
+      {/* Only show balloon pop when not in maintenance */}
+      {!maintenanceData?.maintenanceMode && (
+        <PremiumBalloonPop
+          isOpen={showBalloonPop}
+          onComplete={handleBalloonComplete}
+        />
+      )}
 
       <Router />
       
-    
-      {user && (
+      {/* Only show registration source modal when not in maintenance */}
+      {user && !maintenanceData?.maintenanceMode && (
         <RegistrationSourceModal
           isOpen={showSourceModal}
           onClose={() => {
@@ -321,6 +376,5 @@ function AppWithMaintenance() {
     </TooltipProvider>
   );
 }
-
 
 export default App;

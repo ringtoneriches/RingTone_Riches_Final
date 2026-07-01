@@ -1,24 +1,25 @@
-import maintenanceDsk from "../../../attached_assets/Maintainence/maintainceDsk.jpeg";
-import maintenanceMbl from "../../../attached_assets/Maintainence/maintainceMbl.jpeg";
+// pages/MaintenancePage.jsx
+import { AlertTriangle } from "lucide-react";
 
 export default function MaintenancePage() {
   return (
-    <div className="h-screen w-screen flex items-center justify-center bg-black">
-      
-      {/* Desktop Image */}
-      <img
-        src={maintenanceDsk}
-        alt="Maintenance Desktop"
-        className="hidden md:block w-full h-full object-cover"
-      />
-
-      {/* Mobile Image */}
-      <img
-        src={maintenanceMbl}
-        alt="Maintenance Mobile"
-        className="block md:hidden w-full h-full object-cover"
-      />
-
+    <div className="fixed inset-0 z-[9999] bg-background flex items-center justify-center">
+      <div className="text-center space-y-6 p-8 max-w-lg mx-auto">
+        <div className="animate-bounce">
+          <AlertTriangle className="w-20 h-20 text-yellow-500 mx-auto" />
+        </div>
+        <h1 className="text-4xl font-bold text-foreground">Under Maintenance</h1>
+        <p className="text-xl text-muted-foreground">
+          We're currently performing scheduled maintenance to improve your experience. 
+          We'll be back shortly.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Thank you for your patience!
+        </p>
+        <div className="animate-pulse mt-8">
+          <div className="w-48 h-2 bg-muted rounded mx-auto"></div>
+        </div>
+      </div>
     </div>
   );
 }

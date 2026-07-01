@@ -16068,7 +16068,7 @@ app.get(
   app.get("/api/maintenance", async (req, res) => {
     try {
       const [settings] = await db.select().from(platformSettings).limit(1);
-
+      console.log("Maintenance check - settings:", settings);
       res.json({
         maintenanceMode: settings?.maintenanceMode || false,
       });
@@ -16077,34 +16077,68 @@ app.get(
       res.json({ maintenanceMode: false });
     }
   });
-
-  app.post(
-    "/api/admin/maintenance/on",
-    isAuthenticated,
-    isAdmin,
-    async (req, res) => {
-      const [updated] = await db
-        .update(platformSettings)
-        .set({ maintenanceMode: true, updatedAt: new Date() })
-        .returning();
+// Fix the maintenance endpoints
+app.post(
+  "/api/admin/maintenance/on",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      // Check if settings exist first
+      const [existingSettings] = await db.select().from(platformSettings).limit(1);
+      
+      let updated;
+      if (existingSettings) {
+        [updated] = await db
+          .update(platformSettings)
+          .set({ maintenanceMode: true, updatedAt: new Date() })
+          .where(eq(platformSettings.id, existingSettings.id))
+          .returning();
+      } else {
+        // Create initial settings if none exist
+        [updated] = await db
+          .insert(platformSettings)
+          .values({ maintenanceMode: true, updatedAt: new Date() })
+          .returning();
+      }
 
       res.json({ message: "Maintenance mode enabled", settings: updated });
+    } catch (err) {
+      console.error("Error enabling maintenance:", err);
+      res.status(500).json({ message: "Failed to enable maintenance mode" });
     }
-  );
+  }
+);
 
-  app.post(
-    "/api/admin/maintenance/off",
-    isAuthenticated,
-    isAdmin,
-    async (req, res) => {
-      const [updated] = await db
-        .update(platformSettings)
-        .set({ maintenanceMode: false, updatedAt: new Date() })
-        .returning();
+app.post(
+  "/api/admin/maintenance/off",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const [existingSettings] = await db.select().from(platformSettings).limit(1);
+      
+      let updated;
+      if (existingSettings) {
+        [updated] = await db
+          .update(platformSettings)
+          .set({ maintenanceMode: false, updatedAt: new Date() })
+          .where(eq(platformSettings.id, existingSettings.id))
+          .returning();
+      } else {
+        [updated] = await db
+          .insert(platformSettings)
+          .values({ maintenanceMode: false, updatedAt: new Date() })
+          .returning();
+      }
 
       res.json({ message: "Maintenance mode disabled", settings: updated });
+    } catch (err) {
+      console.error("Error disabling maintenance:", err);
+      res.status(500).json({ message: "Failed to disable maintenance mode" });
     }
-  );
+  }
+);
 
   // ==================== SUPPORT TICKET ROUTES ====================
 
