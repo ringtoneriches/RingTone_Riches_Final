@@ -1156,15 +1156,15 @@ export default function CompetitionPage() {
                         <input
                           type="range"
                           min="1"
-                          max="1000"
-                          value={Math.min(quantity, 1000)}
+                          max="500"
+                          value={Math.min(quantity, 500)}
                           onChange={(e) => setQuantity(Number(e.target.value))}
                           className="premium-slider w-full appearance-none cursor-pointer"
                           data-testid="slider-quantity"
                           style={{
                             height: "8px",
                             borderRadius: "10px",
-                            background: `linear-gradient(to right, #FACC15 ${((Math.min(quantity, 1000) - 1) * 100) / (1000 - 1)}%, rgba(255,255,255,0.1) ${((Math.min(quantity, 1000) - 1) * 100) / (1000 - 1)}%)`,
+                            background: `linear-gradient(to right, #FACC15 ${((Math.min(quantity, 500) - 1) * 100) / (500 - 1)}%, rgba(255,255,255,0.1) ${((Math.min(quantity, 500) - 1) * 100) / (500 - 1)}%)`,
                           }}
                         />
                       </div>
