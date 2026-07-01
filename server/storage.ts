@@ -775,6 +775,7 @@ async recordSpinUsage(orderId: string, userId: string): Promise<void> {
           id: 'active',
           commissionRate: '0.00',
           minimumTopUp: '10.00',
+          maxTicketsPerOrder:250,
         })
         .returning();
       return newSettings;

@@ -9,6 +9,7 @@ import {
   Settings2,
   Loader2,
   ExternalLink,
+  TicketIcon,
 } from "lucide-react";
 import {
   Card,
@@ -37,6 +38,8 @@ type PlatformSettings = {
   signupBonusEnabled: boolean;
   signupBonusCash: string;
   signupBonusPoints: number;
+  maxTicketsPerOrder: number;
+  maintenanceMode: boolean;
   updatedAt: Date;
 };
 
@@ -55,6 +58,7 @@ export default function AdminSettings() {
   const [signupBonusEnabled, setSignupBonusEnabled] = useState(false);
   const [signupBonusCash, setSignupBonusCash] = useState("0.00");
   const [signupBonusPoints, setSignupBonusPoints] = useState("0");
+  const [maxTicketsPerOrder, setMaxTicketsPerOrder] = useState("500");
 
   const [newUsername, setNewUsername] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -78,6 +82,7 @@ export default function AdminSettings() {
       setSignupBonusEnabled(settings.signupBonusEnabled || false);
       setSignupBonusCash(settings.signupBonusCash || "0.00");
       setSignupBonusPoints(String(settings.signupBonusPoints || 0));
+      setMaxTicketsPerOrder(String(settings.maxTicketsPerOrder || 500));
     }
   }, [settings]);
 
@@ -88,6 +93,7 @@ export default function AdminSettings() {
       signupBonusEnabled: boolean;
       signupBonusCash: string;
       signupBonusPoints: number;
+      maxTicketsPerOrder: number;
     }) => {
       return await apiRequest("/api/admin/settings", "PUT", data);
     },
@@ -114,6 +120,7 @@ export default function AdminSettings() {
       signupBonusEnabled,
       signupBonusCash,
       signupBonusPoints: parseInt(signupBonusPoints) || 0,
+      maxTicketsPerOrder: parseInt(maxTicketsPerOrder) || 500,
     });
   };
 
@@ -272,6 +279,58 @@ export default function AdminSettings() {
           </TabsList>
 
           <TabsContent value="general" className="space-y-6">
+            {/* Ticket Purchase Limits Card */}
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TicketIcon className="w-5 h-5 text-yellow-400" />
+                  Ticket Purchase Limits
+                </CardTitle>
+                <CardDescription>
+                  Configure maximum tickets per purchase
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="max-tickets">Maximum Tickets Per Order</Label>
+                  <Input
+                    id="max-tickets"
+                    type="number"
+                    placeholder="500"
+                    value={maxTicketsPerOrder}
+                    onChange={(e) => setMaxTicketsPerOrder(e.target.value)}
+                    min="1"
+                    max="10000"
+                    step="1"
+                    data-testid="input-max-tickets"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum number of tickets a user can purchase in a single order. This affects the slider on competition pages.
+                  </p>
+                </div>
+                
+                {/* Preview */}
+                <div className="p-4 bg-yellow-400/5 border border-yellow-400/20 rounded-lg">
+                  <p className="text-sm font-medium text-foreground mb-2">Preview</p>
+                  <p className="text-sm text-muted-foreground">
+                    Users will be able to select between <span className="text-yellow-400 font-bold">1</span> and <span className="text-yellow-400 font-bold">{maxTicketsPerOrder || 500}</span> tickets per order on competition pages.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <Button
+                    onClick={handleSave}
+                    disabled={saveSettingsMutation.isPending}
+                    className="bg-yellow-400 hover:bg-yellow-500 text-black"
+                    data-testid="button-save-settings"
+                  >
+                    {saveSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Signup Bonus Card */}
             <Card className="border-border bg-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

@@ -15651,6 +15651,18 @@ app.get(
     }
   );
 
+app.get("/api/public/max-tickets", async (req, res) => {
+  try {
+    const settings = await storage.getPlatformSettings();
+    res.json({
+      maxTicketsPerOrder: settings?.maxTicketsPerOrder ,
+    });
+  } catch (err) {
+    console.error("Error fetching max tickets:", err);
+    res.json({ maxTicketsPerOrder: 250 });
+  }
+});
+
   // Platform settings endpoints
   app.get(
     "/api/admin/settings",

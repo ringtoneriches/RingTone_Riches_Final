@@ -280,6 +280,14 @@ export default function CompetitionPage() {
 
   const competitionType = competition?.type?.toLowerCase() || "";
   const isGameType = GAME_TYPES.includes(competitionType);
+  // Add this query in your CompetitionPage component
+const { data: ticketSettings } = useQuery({
+  queryKey: ["/api/public/max-tickets"],
+  queryFn: () => fetch("/api/public/max-tickets").then((res) => res.json()),
+});
+
+// Get the max tickets value
+const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
 
   const purchaseTicketMutation = useMutation({
     mutationFn: async (data: { competitionId: string; quantity: number }) => {
@@ -1156,15 +1164,15 @@ export default function CompetitionPage() {
                         <input
                           type="range"
                           min="1"
-                          max="500"
-                          value={Math.min(quantity, 500)}
+                          max={maxTicketsAllowed}
+                          value={Math.min(quantity, maxTicketsAllowed)}
                           onChange={(e) => setQuantity(Number(e.target.value))}
                           className="premium-slider w-full appearance-none cursor-pointer"
                           data-testid="slider-quantity"
                           style={{
                             height: "8px",
                             borderRadius: "10px",
-                            background: `linear-gradient(to right, #FACC15 ${((Math.min(quantity, 500) - 1) * 100) / (500 - 1)}%, rgba(255,255,255,0.1) ${((Math.min(quantity, 500) - 1) * 100) / (500 - 1)}%)`,
+                            background: `linear-gradient(to right, #FACC15 ${((Math.min(quantity, maxTicketsAllowed) - 1) * 100) / (maxTicketsAllowed - 1)}%, rgba(255,255,255,0.1) ${((Math.min(quantity, maxTicketsAllowed) - 1) * 100) / (maxTicketsAllowed - 1)}%)`,
                           }}
                         />
                       </div>
