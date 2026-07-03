@@ -85,6 +85,7 @@ import AdminTicketManager from "./pages/admin/AdminTicketManager";
 import AdminTicketManagerPage from "./pages/admin/AdminTicketManagerPage";
 import AddPastWinnerPage from "./pages/admin/winners";
 import AdminAddWinner from "./pages/admin/winners";
+import ScratchCardPrizeConfig from "./pages/admin/scratch-card-prizes";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();

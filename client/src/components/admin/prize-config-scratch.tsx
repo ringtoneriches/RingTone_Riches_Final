@@ -477,12 +477,14 @@ export default function PrizeConfigScratch({
                     <Label>Weight (Probability) - 0 = disabled</Label>
                     <Input
                       type="number"
-                      min="0"
+                       step="0.01"
+                        min="0"
+                        max="100"
                       value={editingImage.weight}
                       onChange={(e) =>
                         setEditingImage({
                           ...editingImage,
-                          weight: e.target.value !== "" ? parseInt(e.target.value) : 0,
+                          weight: e.target.value !== "" ? parseFloat(e.target.value) : 0,
                         })
                       }
                       placeholder="100"

@@ -24,7 +24,10 @@ import {
   Zap,
   Target,
   Sparkles,
-  RotateCw
+  RotateCw,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from "lucide-react";
 import AdminLayout from "@/components/admin/admin-layout";
 import { Button } from "@/components/ui/button";
@@ -89,6 +92,8 @@ interface TicketSettings {
   isActive: boolean;
 }
 
+type SortDirection = 'asc' | 'desc';
+
 export default function AdminPrizes() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -99,6 +104,9 @@ export default function AdminPrizes() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isTicketSettingsOpen, setIsTicketSettingsOpen] = useState(false);
   const [selectedPrize, setSelectedPrize] = useState<Prize | null>(null);
+  
+  // Sorting state - only for prize name
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -286,15 +294,33 @@ export default function AdminPrizes() {
     },
   });
 
-  // Filter prizes
-  const filteredPrizes = useMemo(() => {
-    if (!prizes) return [];
-    return prizes.filter((prize) =>
-      prize.prizeName.toLowerCase().includes(search.toLowerCase()) ||
-      prize.prizeValue.toString().includes(search) ||
-      prize.totalQuantity.toString().includes(search)
-    );
-  }, [prizes, search]);
+  // Toggle sort direction
+  const toggleSort = () => {
+    setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+  };
+
+// Filter and sort prizes - only sort by prize name with natural sort
+const filteredAndSortedPrizes = useMemo(() => {
+  if (!prizes) return [];
+  
+  // First filter
+  let filtered = prizes.filter((prize) =>
+    prize.prizeName.toLowerCase().includes(search.toLowerCase()) ||
+    prize.prizeValue.toString().includes(search) ||
+    prize.totalQuantity.toString().includes(search)
+  );
+
+  // Natural sort by prize name (handles numbers correctly: £1, £5, £10, £25)
+  filtered.sort((a, b) => {
+    const comparison = a.prizeName.localeCompare(b.prizeName, undefined, { 
+      numeric: true,      // This enables natural numeric sorting
+      sensitivity: 'base' // This makes it case-insensitive
+    });
+    return sortDirection === 'asc' ? comparison : -comparison;
+  });
+
+  return filtered;
+}, [prizes, search, sortDirection]);
 
   const resetForm = () => {
     setFormData({
@@ -355,12 +381,12 @@ export default function AdminPrizes() {
 
   const getPrizeStatus = (remaining: number) => {
     if (remaining === 0) {
-      return { label: "All Claimed", variant: "destructive" };
+      return { label: "All Claimed", variant: "destructive" as const };
     }
     if (remaining < 5) {
-      return { label: "Low Stock", variant: "warning" };
+      return { label: "Low Stock", variant: "warning" as const };
     }
-    return { label: "Available", variant: "default" };
+    return { label: "Available", variant: "default" as const };
   };
 
   const getGameTypeIcon = (gameType?: string) => {
@@ -500,114 +526,120 @@ export default function AdminPrizes() {
                 />
               </div>
               
-              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="w-full sm:w-auto">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Prize
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px] w-[95vw] max-h-[90vh] overflow-y-auto">
-                  <form onSubmit={handleCreateSubmit}>
-                    <DialogHeader>
-                      <DialogTitle>Add New Prize</DialogTitle>
-                      <DialogDescription>
-                        Create a new prize for this competition
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="prizeName">Prize Name</Label>
-                        <Input
-                          id="prizeName"
-                          placeholder="e.g., MacBook Pro, Gaming Chair, etc."
-                          value={formData.prizeName}
-                          onChange={(e) =>
-                            setFormData({ ...formData, prizeName: e.target.value })
-                          }
-                          required
-                        />
+              <div className="flex gap-2">
+                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Prize
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px] w-[95vw] max-h-[90vh] overflow-y-auto">
+                    <form onSubmit={handleCreateSubmit}>
+                      <DialogHeader>
+                        <DialogTitle>Add New Prize</DialogTitle>
+                        <DialogDescription>
+                          Create a new prize for this competition
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="prizeName">Prize Name</Label>
+                          <Input
+                            id="prizeName"
+                            placeholder="e.g., MacBook Pro, Gaming Chair, etc."
+                            value={formData.prizeName}
+                            onChange={(e) =>
+                              setFormData({ ...formData, prizeName: e.target.value })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="prizeValue">Prize Value (£)</Label>
+                          <Input
+                            id="prizeValue"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={formData.prizeValue}
+                            onChange={(e) =>
+                              setFormData({ ...formData, prizeValue: e.target.value })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="totalQuantity">Total Quantity</Label>
+                          <Input
+                            id="totalQuantity"
+                            type="number"
+                            placeholder="Number of prizes available"
+                            value={formData.totalQuantity}
+                            onChange={(e) =>
+                              setFormData({ ...formData, totalQuantity: e.target.value })
+                            }
+                            required
+                            min="1"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="remainingQuantity">Remaining Quantity</Label>
+                          <Input
+                            id="remainingQuantity"
+                            type="number"
+                            placeholder="Number of prizes remaining"
+                            value={formData.remainingQuantity}
+                            onChange={(e) =>
+                              setFormData({ ...formData, remainingQuantity: e.target.value })
+                            }
+                            required
+                          />
+                        </div>
                       </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="prizeValue">Prize Value (£)</Label>
-                        <Input
-                          id="prizeValue"
-                          type="number"
-                          step="0.01"
-                          placeholder="0.00"
-                          value={formData.prizeValue}
-                          onChange={(e) =>
-                            setFormData({ ...formData, prizeValue: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="totalQuantity">Total Quantity</Label>
-                        <Input
-                          id="totalQuantity"
-                          type="number"
-                          placeholder="Number of prizes available"
-                          value={formData.totalQuantity}
-                          onChange={(e) =>
-                            setFormData({ ...formData, totalQuantity: e.target.value })
-                          }
-                          required
-                          min="1"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="remainingQuantity">Remaining Quantity</Label>
-                        <Input
-                          id="remainingQuantity"
-                          type="number"
-                          placeholder="Number of prizes remaining"
-                          value={formData.remainingQuantity}
-                          onChange={(e) =>
-                            setFormData({ ...formData, remainingQuantity: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-0">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setIsCreateDialogOpen(false);
-                          resetForm();
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={createMutation.isPending}>
-                        {createMutation.isPending && (
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        )}
-                        Create Prize
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+                      <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setIsCreateDialogOpen(false);
+                            resetForm();
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={createMutation.isPending}>
+                          {createMutation.isPending && (
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          )}
+                          Create Prize
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
 
             {/* Prizes Table */}
             <Card>
               <CardHeader className="p-4 sm:p-6">
-                <CardTitle className="text-lg sm:text-xl">Prizes</CardTitle>
-                <CardDescription>
-                  Showing {filteredPrizes.length} of {prizes.length} prizes
-                  {filteredPrizes.some(p => p.gameType) && " (Auto-synced from games)"}
-                </CardDescription>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-lg sm:text-xl">Prizes</CardTitle>
+                    <CardDescription>
+                      Showing {filteredAndSortedPrizes.length} of {prizes.length} prizes
+                      {filteredAndSortedPrizes.some(p => p.gameType) && " (Auto-synced from games)"}
+                    </CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 {prizesLoading ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
                   </div>
-                ) : filteredPrizes.length === 0 ? (
+                ) : filteredAndSortedPrizes.length === 0 ? (
                   <div className="text-center py-12 px-4">
                     <Package className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
                     <p className="text-muted-foreground">
@@ -626,12 +658,23 @@ export default function AdminPrizes() {
                   </div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden mx-4 sm:mx-0">
-                    {/* Desktop Table View */}
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="whitespace-nowrap">Prize Name</TableHead>
+                            <TableHead 
+                              className="whitespace-nowrap cursor-pointer hover:bg-muted/50 transition-colors select-none"
+                              onClick={toggleSort}
+                            >
+                              <div className="flex items-center gap-2">
+                                Prize Name
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="w-4 h-4 text-primary" />
+                                ) : (
+                                  <ArrowDown className="w-4 h-4 text-primary" />
+                                )}
+                              </div>
+                            </TableHead>
                             <TableHead className="whitespace-nowrap">Value</TableHead>
                             <TableHead className="whitespace-nowrap">Total</TableHead>
                             <TableHead className="whitespace-nowrap">Remaining</TableHead>
@@ -641,7 +684,7 @@ export default function AdminPrizes() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredPrizes.map((prize) => {
+                          {filteredAndSortedPrizes.map((prize) => {
                             const stockStatus = getPrizeStatus(prize.remainingQuantity);
                             return (
                               <TableRow key={prize.id}>

@@ -471,7 +471,7 @@ export const scratchCardImages = pgTable("scratch_card_images", {
   imageKey: varchar("image_key").notNull(), // e.g., "barrier_reef", "big_ben"
   rewardType: varchar("reward_type", { enum: ["cash", "points", "physical", "try_again"] }).notNull(),
   rewardValue: varchar("reward_value").notNull(), // Cash amount, points, or prize description
-  weight: integer("weight").notNull().default(10), // For weighted random selection
+  weight: decimal("weight", { precision: 10, scale: 2 }).notNull(), // For weighted random selection
   maxWins: integer("max_wins"), // null = unlimited
   quantityWon: integer("quantity_won").default(0),
   isActive: boolean("is_active").default(true),
