@@ -805,6 +805,9 @@ export default function TermsAndConditions() {
                 entries without refund where it reasonably suspects any of the
                 above conduct.
               </p>
+              <p>
+                17.3 If the platform identifies this coordinated mass-purchasing—frequently flagged as suspicious bot activity or multi-accounting—they can cancel all involved accounts and void the tickets.To understand how these platforms operate, it helps to know the specific rules:Fair Usage Policies: Most competitions or draws limit the number of tickets a single individual or household can buy to prevent hoarding.Bot and Account Restrictions: Creating multiple accounts to circumvent these limits is a direct breach of most platforms' ToS, leading to permanent bans.Price Gouging and Resale Rules: In the UK, aggressive measures—including strict price caps—are enforced by the Competition and Markets Authority (CMA) to stop bulk-buying.Prize Competitions: If this refers to a skill-based prize draw, organizers retain total discretion to cancel tickets if they suspect a syndicate is attempting to artificially manipulate the odds or exhaust the prize pool.
+              </p>
             </div>
           </section>
 
