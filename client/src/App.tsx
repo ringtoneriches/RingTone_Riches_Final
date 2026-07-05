@@ -258,7 +258,8 @@ function AppWithMaintenance() {
         "/register",
         "/verify-email",
         "/forgot-password",
-        "/reset-password"
+        "/reset-password",
+        "/admin/login"
       ];
       
       const isExcludedRoute = excludedRoutes.some(route => location.startsWith(route));
