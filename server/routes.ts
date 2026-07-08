@@ -8118,6 +8118,112 @@ app.post(
       }
     }
   );
+
+  // BULK CREATE DISCOUNT CODES
+app.post(
+  "/api/admin/discount-codes/bulk",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const { codes } = req.body;
+
+      if (!codes || !Array.isArray(codes) || codes.length === 0) {
+        return res.status(400).json({ error: "Codes array is required" });
+      }
+
+      if (codes.length > 100) {
+        return res.status(400).json({ error: "Maximum 100 codes per bulk creation" });
+      }
+
+      const results = {
+        successful: [],
+        failed: [],
+        total: codes.length,
+      };
+
+      // Validate all codes first
+      const validationErrors = [];
+      codes.forEach((code, index) => {
+        const errors = [];
+        if (!code.code || typeof code.code !== "string") {
+          errors.push("Code is required");
+        }
+        if (!["cash", "points", "percentage"].includes(code.type)) {
+          errors.push("Invalid type");
+        }
+        if (!code.value || code.value <= 0) {
+          errors.push("Value must be greater than 0");
+        }
+        if (code.type === "percentage" && code.value > 100) {
+          errors.push("Percentage cannot exceed 100");
+        }
+        if (!code.maxUses || code.maxUses <= 0) {
+          errors.push("Max uses must be at least 1");
+        }
+
+        if (errors.length > 0) {
+          validationErrors.push({ index, code: code.code, errors });
+        }
+      });
+
+      if (validationErrors.length > 0) {
+        return res.status(400).json({
+          error: "Validation failed",
+          validationErrors,
+        });
+      }
+
+      // Process codes in batches
+      for (const codeData of codes) {
+        try {
+          const formattedCode = codeData.code.trim().toUpperCase();
+
+          // Check if code already exists
+          const existing = await db
+            .select()
+            .from(discountCodes)
+            .where(eq(discountCodes.code, formattedCode))
+            .limit(1);
+
+          if (existing.length > 0) {
+            results.failed.push({
+              code: formattedCode,
+              reason: "Code already exists",
+            });
+            continue;
+          }
+
+          const [newCode] = await db
+            .insert(discountCodes)
+            .values({
+              code: formattedCode,
+              type: codeData.type,
+              value: codeData.value,
+              maxUses: codeData.maxUses,
+              expiresAt: codeData.expiresAt ? new Date(codeData.expiresAt) : null,
+              usesCount: 0,
+              isActive: codeData.isActive ?? true,
+            })
+            .returning();
+
+          results.successful.push(newCode);
+        } catch (error) {
+          console.error(`Error creating code ${codeData.code}:`, error);
+          results.failed.push({
+            code: codeData.code,
+            reason: "Database error",
+          });
+        }
+      }
+
+      res.json(results);
+    } catch (err) {
+      console.error("Error in bulk creation:", err);
+      res.status(500).json({ error: "Failed to create discount codes" });
+    }
+  }
+);
   
   // GET ALL DISCOUNT CODES
   app.get(
@@ -15145,6 +15251,193 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       }
     }
   );
+
+  app.post(
+  "/api/admin/users/bulk-add-points",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { userIds, points, reason } = req.body;
+
+      // Validate inputs
+      if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).json({ 
+          error: "Please select at least one user" 
+        });
+      }
+
+      if (!points || typeof points !== 'number' || points <= 0) {
+        return res.status(400).json({ 
+          error: "Points must be a positive number" 
+        });
+      }
+
+      if (points > 1000000) {
+        return res.status(400).json({ 
+          error: "Maximum 1,000,000 points per transaction" 
+        });
+      }
+
+      const results = {
+        successful: [] as any[],
+        failed: [] as any[],
+        total: userIds.length,
+        pointsAdded: points,
+      };
+
+      // Process each user
+      for (const userId of userIds) {
+        try {
+          // Get current user
+          const [user] = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1);
+
+          if (!user) {
+            results.failed.push({
+              userId,
+              reason: "User not found",
+            });
+            continue;
+          }
+
+          // Update ringtone points
+          const newPoints = (user.ringtonePoints || 0) + points;
+
+          const [updatedUser] = await db
+            .update(users)
+            .set({
+              ringtonePoints: newPoints,
+              updatedAt: new Date(),
+            })
+            .where(eq(users.id, userId))
+            .returning();
+
+          // Log the transaction (optional - create a points_transactions table if needed)
+          // await db.insert(pointsTransactions).values({
+          //   userId: userId,
+          //   points: points,
+          //   type: 'admin_add',
+          //   reason: reason || 'Admin bulk addition',
+          //   adminId: req.user.id,
+          //   createdAt: new Date(),
+          // });
+
+          results.successful.push({
+            userId: updatedUser.id,
+            email: updatedUser.email,
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+            previousPoints: user.ringtonePoints || 0,
+            newPoints: newPoints,
+            pointsAdded: points,
+          });
+
+        } catch (error) {
+          console.error(`Error adding points to user ${userId}:`, error);
+          results.failed.push({
+            userId,
+            reason: "Database error",
+          });
+        }
+      }
+
+      console.log(
+        `Admin ${req.user.email} added ${points} ringtone points to ${results.successful.length} users`
+      );
+
+      res.json(results);
+
+    } catch (error) {
+      console.error("Error in bulk add points:", error);
+      res.status(500).json({ 
+        error: "Failed to add points",
+        message: error.message 
+      });
+    }
+  }
+);
+
+// GET ALL USERS FOR BULK POINTS
+app.get(
+  "/api/admin/users/bulk-points-list",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { search } = req.query;
+      
+      console.log("Bulk points API called. Search:", search);
+      
+      // Simple query - get ALL users first
+      const allUsers = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          ringtonePoints: users.ringtonePoints,
+          isAdmin: users.isAdmin,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .orderBy(desc(users.createdAt));
+      
+      console.log(`Total users found in database: ${allUsers.length}`);
+      
+      // Filter by search if provided
+      let filteredUsers = allUsers;
+      if (search && typeof search === 'string' && search.trim()) {
+        const searchTerm = search.toLowerCase().trim();
+        filteredUsers = allUsers.filter(user => {
+          const fullName = `${user.firstName || ''} ${user.lastName || ''}`.toLowerCase();
+          const email = (user.email || '').toLowerCase();
+          
+          return fullName.includes(searchTerm) || email.includes(searchTerm);
+        });
+        console.log(`Filtered to ${filteredUsers.length} users matching "${searchTerm}"`);
+      }
+      
+      // Send response
+      res.json({
+        users: filteredUsers,
+        total: filteredUsers.length
+      });
+      
+    } catch (error: any) {
+      console.error("Error in bulk-points-list:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch users",
+        error: error.message || "Unknown error"
+      });
+    }
+  }
+);
+
+// Optional: Get points transaction history for a user
+app.get(
+  "/api/admin/users/:id/points-history",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // If you create a points_transactions table, query it here
+      // For now, return empty array
+      res.json({
+        userId: id,
+        transactions: [],
+      });
+    } catch (error) {
+      console.error("Error fetching points history:", error);
+      res.status(500).json({ error: "Failed to fetch points history" });
+    }
+  }
+);
 
 app.get(
   "/api/admin/users",

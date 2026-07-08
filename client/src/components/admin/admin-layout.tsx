@@ -36,6 +36,7 @@ import {
   MailQuestion,
   Video,
   TicketCheck,
+  Gift,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,7 @@ const sidebarGroups = [
       { name: "Ringtone Pop", path: "/admin/add-ringtone-pop", icon: Sparkles },
       { name: "Ringtone Plinko", path: "/admin/plinko", icon: Target },
       { name: "Ringtone Voltz", path: "/admin/voltz", icon: Zap },
+      
       // { name: "Ringtone Slot", path: "/admin/slot", icon: Zap },
       // { name: "Ringtone Royal", path: "/admin/royal", icon: Zap },
     ],
@@ -102,6 +104,7 @@ const sidebarGroups = [
     icon: null,
     items: [
       { name: "Tickets", path: "/admin/tickets", icon: TicketCheck },
+      { name: "Bulk Add Points", path: "/admin/bulk-points", icon: Gift },
       { name: "Past Winners", path: "/admin/past-winners", icon: Award },
       { name: "Promo Video", path: "/admin/promo-video", icon: Video },
       { name: "Prize Table", path: "/admin/prize-table", icon: Award },

@@ -6,6 +6,63 @@ export const TICKET_DISCOUNTS: Record<number, number> = {
   15: 0.20, // 20% off for 15 tickets
 };
 
+export function generateRandomCode(length: number = 8): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+export function generateBulkCodes(
+  count: number,
+  options: {
+    prefix?: string;
+    suffix?: string;
+    length?: number;
+    type: "cash" | "points" | "percentage";
+    value: number;
+    maxUses: number;
+    expiresAt?: string;
+  }
+): Array<{
+  code: string;
+  type: "cash" | "points" | "percentage";
+  value: number;
+  maxUses: number;
+  expiresAt?: string;
+}> {
+  const codes = [];
+  const usedCodes = new Set<string>();
+
+  for (let i = 0; i < count; i++) {
+    let code: string;
+    let attempts = 0;
+    
+    do {
+      const randomPart = generateRandomCode(options.length || 8);
+      code = `${options.prefix || ''}${randomPart}${options.suffix || ''}`;
+      attempts++;
+      
+      if (attempts > 100) {
+        throw new Error('Unable to generate unique codes');
+      }
+    } while (usedCodes.has(code));
+
+    usedCodes.add(code);
+    codes.push({
+      code,
+      type: options.type,
+      value: options.value,
+      maxUses: options.maxUses,
+      expiresAt: options.expiresAt,
+    });
+  }
+
+  return codes;
+}
+
 export function calculateDiscount(quantity: number): {
   discountPercent: number;
   discountMultiplier: number;

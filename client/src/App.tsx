@@ -93,6 +93,7 @@ import AdminSlotMachine from "./pages/admin/slot-machine";
 import AdminRoyalReels from "./pages/admin/royal-reels";
 import AdminRoyalReelsSettings from "./pages/admin/admin-royal-reels";
 import AdminSlotMachineSettings from "./pages/admin/admin-slot-machine";
+import AdminBulkPoints from "./pages/admin/admin-bulk-points";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -189,6 +190,7 @@ function Router() {
       <Route path="/admin/royal" component={AdminRoyalReels} />
       <Route path="/admin/royal-reels/settings" component={AdminRoyalReelsSettings} />
       <Route path="/admin/slot-machine/settings" component={AdminSlotMachineSettings} />
+      <Route path="/admin/bulk-points" component={AdminBulkPoints } />
       <Route component={NotFound} />
     </Switch>
   );
