@@ -40,7 +40,7 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
       maxWins = null
     } = params;
 
-    // ✅ ONLY SYNC CASH PRIZES - skip everything else
+    // ✅ ONLY SYNC CASH PRIZES
     if (rewardType !== 'cash') {
       console.log(`⏭️ Skipping ${rewardType} prize sync: "${prizeName}"`);
       return {
@@ -52,34 +52,28 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
     }
 
     const prizeValueNum = typeof prizeValue === 'string' ? parseFloat(prizeValue) : prizeValue;
-    const cleanedGameName = cleanPrizeName(prizeName);
 
-    // 🔍 MATCHING STRATEGY: Find existing prize by name (cleaned) AND value
+    // 🔍 MATCH BY COMPETITION + VALUE ONLY (ignore gameType)
     let existingPrize = null;
 
-    // Get all prizes for this competition and game type
     const allPrizes = await db.select()
       .from(competitionPrizes)
       .where(
-        and(
-          eq(competitionPrizes.competitionId, competitionId),
-          eq(competitionPrizes.gameType, gameType)
-        )
+        eq(competitionPrizes.competitionId, competitionId)
+        // ❌ REMOVE gameType filter
       );
 
-    // Try to find a match by cleaning both names and comparing
+    // Find by value
     for (const prize of allPrizes) {
-      const cleanedDbName = cleanPrizeName(prize.prizeName);
       const dbValue = Number(prize.prizeValue);
       
-      // Check if names match (ignoring emojis/icons) AND values match
-      if (cleanedDbName === cleanedGameName && Math.abs(dbValue - prizeValueNum) < 0.01) {
+      if (Math.abs(dbValue - prizeValueNum) < 0.01) {
         existingPrize = prize;
         break;
       }
     }
 
-    // If found, JUST DECREMENT the remaining quantity
+    // If found, decrement
     if (existingPrize) {
       const newRemaining = Math.max(0, existingPrize.remainingQuantity - quantity);
       
@@ -98,17 +92,16 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
         action: 'updated',
         prize: updatedPrize,
         remaining: newRemaining,
-        message: `Prize "${existingPrize.prizeName}" decremented: ${newRemaining} remaining`
+        message: `Prize "${existingPrize.prizeName}" decremented`
       };
     }
 
-    // ❌ PRIZE NOT FOUND - DO NOT CREATE, just log and skip
-    console.log(`⚠️ Prize "${prizeName}" (value: £${prizeValueNum}) not found in competition prizes. Manual creation required.`);
+    console.log(`⚠️ Prize with value £${prizeValueNum} not found in competition ${competitionId}`);
     
     return {
       success: false,
       action: 'skipped',
-      message: `Prize "${prizeName}" not found in competition prizes. Please add it manually in admin panel.`,
+      message: `Prize with value £${prizeValueNum} not found. Please add it manually.`,
       reason: 'not-found'
     };
 

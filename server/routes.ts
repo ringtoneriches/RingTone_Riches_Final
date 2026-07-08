@@ -75,7 +75,13 @@ import {
   pushNotifications,
   pushDeliveries,
   faqs,
-  competitionPrizes
+  competitionPrizes,
+  royalWins,
+  royalPrizes,
+  royalUsage,
+  gameRoyalConfig,
+  gameSlotConfig,
+  slotUsage
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -18178,6 +18184,1236 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch video' });
   }
 });
+
+
+
+
+ // ═══════════════════ SLOT MACHINE ROUTES ═══════════════════
+
+  app.post("/api/create-slot-order", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { competitionId, quantity = 1 } = req.body;
+      const competition = await storage.getCompetition(competitionId);
+      if (!competition) return res.status(404).json({ message: "Competition not found" });
+      const slotCostPerSpin = parseFloat(competition.ticketPrice);
+      const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(slotCostPerSpin, quantity);
+      const user = await storage.getUser(userId);
+      const userBalance = parseFloat(user?.balance || "0");
+      const userPoints = user?.ringtonePoints || 0;
+      const order = await storage.createOrder({
+        userId, competitionId, quantity,
+        totalAmount: discountedTotal.toString(),
+        paymentMethod: "pending", status: "pending",
+      });
+      res.json({
+        success: true, orderId: order.id, competitionId,
+        totalAmount: discountedTotal, originalAmount: originalTotal,
+        discountPercent, savings, quantity,
+        userBalance: { wallet: userBalance, ringtonePoints: userPoints, pointsValue: userPoints * 0.01 },
+        slotCost: slotCostPerSpin,
+        competition: { title: competition.title, type: competition.type },
+      });
+    } catch (error) {
+      console.error("Error creating slot order:", error);
+      res.status(500).json({ message: "Failed to create slot order" });
+    }
+  });
+
+  app.post("/api/process-slot-payment", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { orderId, useWalletBalance = false, useRingtonePoints = false, useInstaplay = false } = req.body;
+      const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+      if (!order || order.userId !== userId) return res.status(404).json({ message: "Order not found" });
+      if (order.status !== "pending") return res.status(400).json({ message: "Order already processed" });
+      const [competition] = await db.select().from(competitions).where(eq(competitions.id, order.competitionId));
+      if (!competition || competition.type !== "slot") return res.status(400).json({ message: "Invalid competition type" });
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+
+      if (useInstaplay) {
+        const totalAmount = Number(order.totalAmount);
+        const session = await cashflows.createCompetitionPaymentSession(totalAmount, {
+          orderId, competitionId: order.competitionId, userId,
+          quantity: order.quantity.toString(), paymentType: "instant_play", gameType: "slot",
+        });
+        if (!session.hostedPageUrl) return res.status(500).json({ message: "Failed to create payment session" });
+        await db.insert(pendingPayments).values({
+          userId, orderId: order.id, paymentJobReference: session.paymentJobReference,
+          paymentType: "instant_play", amount: totalAmount.toString(),
+          metadata: { competitionId: competition.id, competitionTitle: competition.title, gameType: "slot", quantity: order.quantity },
+          status: "pending", createdAt: new Date(),
+        });
+        await db.update(orders).set({ paymentMethod: "instaplay", cashflowsAmount: totalAmount.toString(), updatedAt: new Date() }).where(eq(orders.id, orderId));
+        return res.json({ success: true, redirectUrl: session.hostedPageUrl, sessionId: session.paymentJobReference, paymentType: "instaplay" });
+      }
+
+      const totalAmount = Number(order.totalAmount);
+      let remainingAmount = totalAmount;
+      let walletUsed = 0, pointsUsed = 0;
+      const paymentBreakdown: any[] = [];
+
+      if (useWalletBalance) {
+        const walletBalance = Number(user?.balance) || 0;
+        const walletAmount = Math.min(walletBalance, remainingAmount);
+        if (walletAmount > 0) {
+          walletUsed = walletAmount;
+          remainingAmount -= walletUsed;
+          paymentBreakdown.push({ method: "wallet", amount: walletUsed, description: `Wallet: £${walletUsed.toFixed(2)}` });
+        }
+      }
+      if (useRingtonePoints && remainingAmount > 0) {
+        const availablePoints = user?.ringtonePoints || 0;
+        const pointsNeeded = Math.ceil(remainingAmount * 100);
+        if (availablePoints < pointsNeeded) {
+          if (walletUsed > 0) {
+            const curr = Number(user?.balance) || 0;
+            await db.update(users).set({ balance: (curr + walletUsed).toString() }).where(eq(users.id, userId));
+          }
+          return res.status(400).json({ message: `Insufficient points. You need ${pointsNeeded} points.`, remainingAmount, pointsNeeded });
+        }
+        const pointsAmount = pointsNeeded * 0.01;
+        pointsUsed = pointsNeeded;
+        remainingAmount -= pointsAmount;
+        paymentBreakdown.push({ method: "ringtone_points", amount: pointsAmount, pointsUsed: pointsNeeded, description: `Points: £${pointsAmount.toFixed(2)} (${pointsNeeded} pts)` });
+      }
+      if (remainingAmount > 0.01) return res.json({ success: false, message: "Card payment required", remainingAmount, requiresCashflows: true });
+
+      if (walletUsed > 0) await db.update(users).set({ balance: (Number(user?.balance || "0") - walletUsed).toString() }).where(eq(users.id, userId));
+      if (pointsUsed > 0) await db.update(users).set({ ringtonePoints: (user?.ringtonePoints || 0) - pointsUsed }).where(eq(users.id, userId));
+
+      let paymentMethodText = "Discount";
+      if (walletUsed > 0 && pointsUsed > 0) paymentMethodText = "Wallet+Points";
+      else if (walletUsed > 0) paymentMethodText = "Wallet";
+      else if (pointsUsed > 0) paymentMethodText = "Points";
+
+      await db.update(orders).set({
+        status: "completed", paymentMethod: paymentMethodText,
+        walletAmount: walletUsed.toString(), pointsAmount: pointsUsed.toString(),
+        cashflowsAmount: "0", paymentBreakdown: JSON.stringify(paymentBreakdown), updatedAt: new Date(),
+      }).where(eq(orders.id, orderId));
+      await db.update(competitions).set({ soldTickets: (competition.soldTickets || 0) + order.quantity, updatedAt: new Date() }).where(eq(competitions.id, competition.id));
+      await db.insert(transactions).values({ userId, type: "purchase", amount: totalAmount.toFixed(2), description: `Slot Machine Purchase - ${order.quantity} spins`, orderId, createdAt: new Date() });
+
+      const slotTickets = [];
+      for (let i = 0; i < order.quantity; i++) {
+        const ticketNumber = `SLT-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`;
+        const [ticket] = await db.insert(tickets).values({ userId, competitionId: order.competitionId, orderId: order.id, ticketNumber, isWinner: false, createdAt: new Date() }).returning();
+        slotTickets.push(ticket);
+      }
+
+      if (user?.email) {
+        sendOrderConfirmationEmail(user.email, {
+          orderId: order.id, userName: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Customer",
+          orderType: "slot", itemName: competition.title, quantity: order.quantity,
+          totalAmount: order.totalAmount, orderDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+          paymentMethod: paymentMethodText, ticketNumbers: slotTickets.map(t => t.ticketNumber),
+        }).catch(err => console.error("Failed to send Slot confirmation email:", err));
+      }
+
+      res.json({ success: true, message: "Slot machine purchase complete!", competitionId: order.competitionId, orderId: order.id, quantity: order.quantity, paymentBreakdown });
+    } catch (error) {
+      console.error("Error processing slot payment:", error);
+      res.status(500).json({ message: "Failed to process slot payment" });
+    }
+  });
+
+  app.get("/api/slot-order/:orderId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { orderId } = req.params;
+      const order = await storage.getOrder(orderId);
+      if (!order || order.userId !== userId) return res.status(404).json({ message: "Order not found" });
+      const user = await storage.getUser(userId);
+      const competition = await storage.getCompetition(order.competitionId);
+      const slotCost = parseFloat(competition?.ticketPrice || "1");
+      const [slotCfg] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
+      const creditsPerSpin = slotCfg?.creditsPerSpin || 20;
+      const totalCredits = order.quantity * creditsPerSpin;
+      const history = await db.select().from(slotUsage).where(eq(slotUsage.orderId, orderId)).orderBy(desc(slotUsage.usedAt));
+      res.json({
+        order: { id: order.id, competitionId: order.competitionId, quantity: order.quantity, totalAmount: order.totalAmount, status: order.status },
+        user: { balance: user?.balance || "0", ringtonePoints: user?.ringtonePoints || 0 },
+        competition, slotCost, totalCredits, creditsPerSpin, history,
+      });
+    } catch (error) {
+      console.error("Error fetching slot order:", error);
+      res.status(500).json({ message: "Failed to fetch slot order" });
+    }
+  });
+
+  app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { orderId, isWin, coinsWon, coinsSpent, spinNumber } = req.body;
+      if (!orderId) return res.status(400).json({ message: "Order ID required" });
+      const order = await storage.getOrder(orderId);
+      if (!order || order.userId !== userId || order.status !== "completed") return res.status(400).json({ message: "No valid slot order found" });
+      await db.insert(slotUsage).values({ orderId, userId, isWin: !!isWin, coinsWon: coinsWon || 0, coinsSpent: coinsSpent || 0, spinNumber: spinNumber || 1 });
+      if (isWin && coinsWon > 0) {
+        const cashValue = parseFloat((coinsWon * 0.01).toFixed(2));
+        if (cashValue >= 1) {
+          const user = await storage.getUser(userId);
+          const newBalance = parseFloat(user?.balance || "0") + cashValue;
+          await db.update(users).set({ balance: newBalance.toFixed(2) }).where(eq(users.id, userId));
+          await storage.createTransaction({ userId, type: "prize", amount: cashValue.toFixed(2), description: `Slot Machine Win - £${cashValue.toFixed(2)}` });
+        }
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error recording slot spin:", error);
+      res.status(500).json({ message: "Failed to record spin" });
+    }
+  });
+
+  app.get("/api/slot-config", async (req, res) => {
+    try {
+      const [config] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
+      res.json({ isVisible: config?.isVisible ?? true, isActive: config?.isActive ?? true, creditsPerSpin: config?.creditsPerSpin || 20 });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch slot config" });
+    }
+  });
+
+  // ═══════════════════ END SLOT MACHINE ROUTES ═══════════════════
+
+  // ════════════════════ ROYAL REELS ROUTES ════════════════════
+
+  const ROYAL_SYMBOLS_ALL = [
+    "crown","trophy","diamond","bar","seven","dice","star",
+    "orange","cherry","strawberry","banana","grape","bell","apple","tomato","coin",
+    "points1000","points500","points100"
+  ];
+
+  const DEFAULT_ROYAL_PRIZES = [
+    { prizeName:"Crown Jackpot", symbolKey:"crown",     prizeValue:"5000.00", rewardType:"cash" as const, weight:1,  maxWins:1,    displayOrder:1  },
+    { prizeName:"Trophy",        symbolKey:"trophy",    prizeValue:"2500.00", rewardType:"cash" as const, weight:2,  maxWins:2,    displayOrder:2  },
+    { prizeName:"Diamond",       symbolKey:"diamond",   prizeValue:"1000.00", rewardType:"cash" as const, weight:3,  maxWins:5,    displayOrder:3  },
+    { prizeName:"Bar",           symbolKey:"bar",       prizeValue:"750.00",  rewardType:"cash" as const, weight:4,  maxWins:5,    displayOrder:4  },
+    { prizeName:"Lucky 7",       symbolKey:"seven",     prizeValue:"500.00",  rewardType:"cash" as const, weight:5,  maxWins:10,   displayOrder:5  },
+    { prizeName:"Dice",          symbolKey:"dice",      prizeValue:"250.00",  rewardType:"cash" as const, weight:8,  maxWins:20,   displayOrder:6  },
+    { prizeName:"Star",          symbolKey:"star",      prizeValue:"100.00",  rewardType:"cash" as const, weight:12, maxWins:50,   displayOrder:7  },
+    { prizeName:"Orange",        symbolKey:"orange",    prizeValue:"80.00",   rewardType:"cash" as const, weight:15, maxWins:null, displayOrder:8  },
+    { prizeName:"Cherry",        symbolKey:"cherry",    prizeValue:"50.00",   rewardType:"cash" as const, weight:20, maxWins:null, displayOrder:9  },
+    { prizeName:"Strawberry",    symbolKey:"strawberry",prizeValue:"50.00",   rewardType:"cash" as const, weight:20, maxWins:null, displayOrder:10 },
+    { prizeName:"Banana",        symbolKey:"banana",    prizeValue:"25.00",   rewardType:"cash" as const, weight:25, maxWins:null, displayOrder:11 },
+    { prizeName:"Grape",         symbolKey:"grape",     prizeValue:"5.00",    rewardType:"cash" as const, weight:35, maxWins:null, displayOrder:12 },
+    { prizeName:"Bell",          symbolKey:"bell",      prizeValue:"4.00",    rewardType:"cash" as const, weight:40, maxWins:null, displayOrder:13 },
+    { prizeName:"Apple",         symbolKey:"apple",     prizeValue:"3.00",    rewardType:"cash" as const, weight:45, maxWins:null, displayOrder:14 },
+    { prizeName:"Tomato",        symbolKey:"tomato",    prizeValue:"2.00",    rewardType:"cash" as const, weight:50, maxWins:null, displayOrder:15 },
+    { prizeName:"Coin",          symbolKey:"coin",      prizeValue:"1.00",    rewardType:"cash" as const, weight:60, maxWins:null, displayOrder:16 },
+    { prizeName:"1000 Points",   symbolKey:"points1000",prizeValue:"1000.00", rewardType:"points" as const,weight:5, maxWins:null,displayOrder:17 },
+    { prizeName:"500 Points",    symbolKey:"points500", prizeValue:"500.00",  rewardType:"points" as const,weight:10,maxWins:null,displayOrder:18 },
+    { prizeName:"100 Points",    symbolKey:"points100", prizeValue:"100.00",  rewardType:"points" as const,weight:20,maxWins:null,displayOrder:19 },
+    { prizeName:"No Win",        symbolKey:"no_win",    prizeValue:"0.00",    rewardType:"no_win" as const,weight:2000,maxWins:null,displayOrder:20},
+  ];
+
+  const buildRoyalGrid = (winSymbol: string | null, isWin: boolean, allSymbols: string[]) => {
+    const grid: string[] = [];
+    if (isWin && winSymbol) {
+      const positions = [0,1,2,3,4,5,6,7,8];
+      const shuffled = positions.sort(() => Math.random() - 0.5);
+      const winPositions = shuffled.slice(0,3);
+      const losers = allSymbols.filter(s => s !== winSymbol && s !== "no_win");
+      for (let i = 0; i < 9; i++) {
+        if (winPositions.includes(i)) {
+          grid[i] = winSymbol;
+        } else {
+          grid[i] = losers[Math.floor(Math.random() * losers.length)] || "coin";
+        }
+      }
+    } else {
+      // No 3-of-a-kind — pick 9 symbols with max 2 of any kind
+      const pool = [...allSymbols.filter(s => s !== "no_win")];
+      const usedCounts: Record<string,number> = {};
+      let attempts = 0;
+      while (grid.length < 9 && attempts < 100) {
+        attempts++;
+        const sym = pool[Math.floor(Math.random() * pool.length)];
+        if ((usedCounts[sym] || 0) < 2) {
+          grid.push(sym);
+          usedCounts[sym] = (usedCounts[sym] || 0) + 1;
+        }
+      }
+      while (grid.length < 9) grid.push("coin");
+    }
+    return grid;
+  };
+
+  app.get("/api/royal-config", async (req, res) => {
+    try {
+      const [config] = await db.select().from(gameRoyalConfig).where(eq(gameRoyalConfig.id, "active"));
+      res.json({ isVisible: config?.isVisible ?? true, isActive: config?.isActive ?? true, replayChance: config?.replayChance ?? "5.00" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch royal config" });
+    }
+  });
+
+  app.post("/api/create-royal-order", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { competitionId, quantity = 1 } = req.body;
+      const competition = await storage.getCompetition(competitionId);
+      if (!competition) return res.status(404).json({ message: "Competition not found" });
+      const costPerPlay = parseFloat(competition.ticketPrice);
+      const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(costPerPlay, quantity);
+      const user = await storage.getUser(userId);
+      const order = await storage.createOrder({
+        userId, competitionId, quantity,
+        totalAmount: discountedTotal.toString(),
+        paymentMethod: "pending", status: "pending",
+      });
+      res.json({
+        success: true, orderId: order.id, competitionId,
+        totalAmount: discountedTotal, originalAmount: originalTotal,
+        discountPercent, savings, quantity,
+        userBalance: { wallet: parseFloat(user?.balance || "0"), ringtonePoints: user?.ringtonePoints || 0, pointsValue: (user?.ringtonePoints || 0) * 0.01 },
+        royalCost: costPerPlay,
+        competition: { title: competition.title, type: competition.type },
+      });
+    } catch (error) {
+      console.error("Error creating royal order:", error);
+      res.status(500).json({ message: "Failed to create royal order" });
+    }
+  });
+
+  app.post("/api/process-royal-payment", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { orderId, useWalletBalance = false, useRingtonePoints = false, useInstaplay = false } = req.body;
+      const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+      if (!order || order.userId !== userId) return res.status(404).json({ message: "Order not found" });
+      if (order.status !== "pending") return res.status(400).json({ message: "Order already processed" });
+      const [competition] = await db.select().from(competitions).where(eq(competitions.id, order.competitionId));
+      if (!competition || competition.type !== "royal") return res.status(400).json({ message: "Invalid competition type" });
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+
+      if (useInstaplay) {
+        const totalAmount = Number(order.totalAmount);
+        const session = await cashflows.createCompetitionPaymentSession(totalAmount, {
+          orderId, competitionId: order.competitionId, userId,
+          quantity: order.quantity.toString(), paymentType: "instant_play", gameType: "royal",
+        });
+        if (!session.hostedPageUrl) return res.status(500).json({ message: "Failed to create payment session" });
+        await db.insert(pendingPayments).values({
+          userId, orderId: order.id, paymentJobReference: session.paymentJobReference,
+          paymentType: "instant_play", amount: totalAmount.toString(),
+          metadata: { competitionId: competition.id, competitionTitle: competition.title, gameType: "royal", quantity: order.quantity },
+          status: "pending", createdAt: new Date(),
+        });
+        await db.update(orders).set({ paymentMethod: "instaplay", cashflowsAmount: totalAmount.toString(), updatedAt: new Date() }).where(eq(orders.id, orderId));
+        return res.json({ success: true, redirectUrl: session.hostedPageUrl, sessionId: session.paymentJobReference, paymentType: "instaplay" });
+      }
+
+      const totalAmount = Number(order.totalAmount);
+      let remainingAmount = totalAmount;
+      let walletUsed = 0, pointsUsed = 0;
+      const paymentBreakdown: any[] = [];
+
+      if (useWalletBalance) {
+        const walletBalance = Number(user?.balance) || 0;
+        const walletAmount = Math.min(walletBalance, remainingAmount);
+        if (walletAmount > 0) {
+          walletUsed = walletAmount;
+          remainingAmount -= walletUsed;
+          paymentBreakdown.push({ method: "wallet", amount: walletUsed, description: `Wallet: £${walletUsed.toFixed(2)}` });
+        }
+      }
+      if (useRingtonePoints && remainingAmount > 0) {
+        const availablePoints = user?.ringtonePoints || 0;
+        const pointsNeeded = Math.ceil(remainingAmount * 100);
+        if (availablePoints < pointsNeeded) {
+          if (walletUsed > 0) {
+            const curr = Number(user?.balance) || 0;
+            await db.update(users).set({ balance: (curr + walletUsed).toString() }).where(eq(users.id, userId));
+          }
+          return res.status(400).json({ message: `Insufficient points. You need ${pointsNeeded} points.`, remainingAmount, pointsNeeded });
+        }
+        const pointsAmount = pointsNeeded * 0.01;
+        pointsUsed = pointsNeeded;
+        remainingAmount -= pointsAmount;
+        paymentBreakdown.push({ method: "ringtone_points", amount: pointsAmount, pointsUsed: pointsNeeded, description: `Points: £${pointsAmount.toFixed(2)} (${pointsNeeded} pts)` });
+      }
+      if (remainingAmount > 0.01) return res.json({ success: false, message: "Card payment required", remainingAmount, requiresCashflows: true });
+
+      if (walletUsed > 0) await db.update(users).set({ balance: (Number(user?.balance || "0") - walletUsed).toString() }).where(eq(users.id, userId));
+      if (pointsUsed > 0) await db.update(users).set({ ringtonePoints: (user?.ringtonePoints || 0) - pointsUsed }).where(eq(users.id, userId));
+
+      let paymentMethodText = "Discount";
+      if (walletUsed > 0 && pointsUsed > 0) paymentMethodText = "Wallet+Points";
+      else if (walletUsed > 0) paymentMethodText = "Wallet";
+      else if (pointsUsed > 0) paymentMethodText = "Points";
+
+      await db.update(orders).set({
+        status: "completed", paymentMethod: paymentMethodText,
+        walletAmount: walletUsed.toString(), pointsAmount: pointsUsed.toString(),
+        cashflowsAmount: "0", paymentBreakdown: JSON.stringify(paymentBreakdown), updatedAt: new Date(),
+      }).where(eq(orders.id, orderId));
+      await db.update(competitions).set({ soldTickets: (competition.soldTickets || 0) + order.quantity, updatedAt: new Date() }).where(eq(competitions.id, competition.id));
+      await db.insert(transactions).values({ userId, type: "purchase", amount: totalAmount.toFixed(2), description: `Royal Reels Purchase - ${order.quantity} games`, orderId, createdAt: new Date() });
+
+      const royalTickets = [];
+      for (let i = 0; i < order.quantity; i++) {
+        const ticketNumber = `RYL-${orderId.slice(0,8).toUpperCase()}-${(i+1).toString().padStart(3,"0")}`;
+        const [ticket] = await db.insert(tickets).values({ userId, competitionId: order.competitionId, orderId: order.id, ticketNumber, isWinner: false, createdAt: new Date() }).returning();
+        royalTickets.push(ticket);
+      }
+
+      if (user?.email) {
+        sendOrderConfirmationEmail(user.email, {
+          orderId: order.id, userName: `${user.firstName||""} ${user.lastName||""}`.trim() || "Customer",
+          orderType: "royal", itemName: competition.title, quantity: order.quantity,
+          totalAmount: order.totalAmount, orderDate: new Date().toLocaleDateString("en-GB", { day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit" }),
+          paymentMethod: paymentMethodText, ticketNumbers: royalTickets.map(t => t.ticketNumber),
+        }).catch(err => console.error("Failed to send Royal confirmation email:", err));
+      }
+
+      res.json({ success: true, message: "Royal Reels purchase complete!", competitionId: order.competitionId, orderId: order.id, quantity: order.quantity, paymentBreakdown });
+    } catch (error) {
+      console.error("Error processing royal payment:", error);
+      res.status(500).json({ message: "Failed to process royal payment" });
+    }
+  });
+
+  app.get("/api/royal-order/:orderId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { orderId } = req.params;
+      const order = await storage.getOrder(orderId);
+      if (!order || order.userId !== userId) return res.status(404).json({ message: "Order not found" });
+      const user = await storage.getUser(userId);
+      const competition = await storage.getCompetition(order.competitionId);
+      const usageRows = await db.select({ count: sql<number>`count(*)` }).from(royalUsage).where(eq(royalUsage.orderId, orderId));
+      const usedCount = Number(usageRows[0]?.count || 0);
+      const playsRemaining = order.quantity - usedCount;
+      const history = await db.select().from(royalUsage).where(eq(royalUsage.orderId, orderId)).orderBy(desc(royalUsage.usedAt));
+      const creditsPerGame = 100;
+      const totalCredits = order.quantity * creditsPerGame;
+      const mappedHistory = history.map(h => ({
+        id: h.id,
+        isWin: h.isWin,
+        isRoyalReplay: h.isRoyalReplay,
+        coinsWon: h.isWin ? Math.round(parseFloat(h.rewardValue || "0") * 100) : 0,
+        coinsSpent: creditsPerGame,
+        usedAt: h.usedAt,
+      }));
+      res.json({ order: { id: order.id, competitionId: order.competitionId, quantity: order.quantity, totalAmount: order.totalAmount, status: order.status }, user: { balance: user?.balance || "0", ringtonePoints: user?.ringtonePoints || 0 }, competition, playsRemaining, creditsPerGame, totalCredits, history: mappedHistory });
+    } catch (error) {
+      console.error("Error fetching royal order:", error);
+      res.status(500).json({ message: "Failed to fetch royal order" });
+    }
+  });
+
+  app.post("/api/record-royal-spin", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { orderId, isWin, coinsWon, coinsSpent, spinNumber, isRoyalReplay } = req.body;
+      if (!orderId) return res.status(400).json({ message: "Order ID required" });
+      const order = await storage.getOrder(orderId);
+      if (!order || order.userId !== userId || order.status !== "completed") return res.status(400).json({ message: "No valid Royal Reels order found" });
+      const cashValue = isWin && coinsWon > 0 ? parseFloat((coinsWon * 0.01).toFixed(2)) : 0;
+      await db.insert(royalUsage).values({
+        orderId,
+        userId,
+        isWin: !!isWin,
+        isRoyalReplay: !!isRoyalReplay,
+        rewardType: isWin ? "cash" : "no_win",
+        rewardValue: cashValue.toFixed(2),
+      });
+      if (isWin && cashValue >= 1) {
+        const user = await storage.getUser(userId);
+        const newBalance = parseFloat(user?.balance || "0") + cashValue;
+        await db.update(users).set({ balance: newBalance.toFixed(2) }).where(eq(users.id, userId));
+        await storage.createTransaction({ userId, type: "prize", amount: cashValue.toFixed(2), description: `Royal Reels Win - £${cashValue.toFixed(2)}` });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error recording royal spin:", error);
+      res.status(500).json({ message: "Failed to record royal spin" });
+    }
+  });
+
+  const royalCooldowns = new Map<string, number>();
+  const ROYAL_COOLDOWN_MS = 2000;
+
+  app.post("/api/play-royal", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { orderId, competitionId } = req.body;
+      if (!orderId || !competitionId) return res.status(400).json({ success: false, message: "Order ID and Competition ID are required" });
+
+      const cooldownKey = `${userId}-${orderId}`;
+      const lastPlay = royalCooldowns.get(cooldownKey) || 0;
+      if (Date.now() - lastPlay < ROYAL_COOLDOWN_MS) return res.status(429).json({ success: false, message: "Please wait before playing again" });
+      royalCooldowns.set(cooldownKey, Date.now());
+
+      const order = await storage.getOrder(orderId);
+      if (!order || order.userId !== userId || order.status !== "completed") return res.status(400).json({ success: false, message: "No valid Royal Reels purchase found" });
+
+      const usageRows = await db.select({ count: sql<number>`count(*)` }).from(royalUsage).where(eq(royalUsage.orderId, orderId));
+      const usedCount = Number(usageRows[0]?.count || 0);
+      if (usedCount >= order.quantity) return res.status(400).json({ success: false, message: "No plays remaining" });
+      const playsRemaining = order.quantity - usedCount;
+
+      const [config] = await db.select().from(gameRoyalConfig).where(eq(gameRoyalConfig.id, "active"));
+      if (config && !config.isActive) return res.status(400).json({ success: false, message: "Royal Reels is currently unavailable" });
+
+      // Ensure prizes exist
+      let prizes = await db.select().from(royalPrizes).where(eq(royalPrizes.isActive, true)).orderBy(asc(royalPrizes.displayOrder));
+      if (prizes.length === 0) {
+        await db.insert(royalPrizes).values(DEFAULT_ROYAL_PRIZES);
+        prizes = await db.select().from(royalPrizes).where(eq(royalPrizes.isActive, true)).orderBy(asc(royalPrizes.displayOrder));
+      }
+
+      const eligiblePrizes = prizes.filter(p => {
+        if (p.maxWins !== null && p.rewardType !== "no_win") {
+          if ((p.quantityWon || 0) >= p.maxWins!) return false;
+        }
+        return true;
+      });
+
+      const totalWeight = eligiblePrizes.reduce((s, p) => s + p.weight, 0);
+      let rand = Math.random() * totalWeight;
+      let selectedPrize = eligiblePrizes[0] || prizes[prizes.length - 1];
+      for (const p of eligiblePrizes) {
+        rand -= p.weight;
+        if (rand <= 0) { selectedPrize = p; break; }
+      }
+
+      const isWin = selectedPrize.rewardType === "cash" || selectedPrize.rewardType === "points";
+      const rewardValue = isWin ? selectedPrize.prizeValue : "0";
+      const winSymbol = isWin ? selectedPrize.symbolKey : null;
+
+      // Royal Replay check (separate from prize outcome)
+      const replayChancePct = parseFloat(config?.replayChance?.toString() || "5.00");
+      const royalReplay = Math.random() * 100 < replayChancePct;
+
+      const symbols = buildRoyalGrid(winSymbol, isWin, ROYAL_SYMBOLS_ALL);
+      const newPlaysRemaining = playsRemaining - 1 + (royalReplay ? 1 : 0);
+
+      res.json({
+        success: true,
+        result: { isWin, rewardType: selectedPrize.rewardType, rewardValue, prizeId: selectedPrize.id, prizeName: selectedPrize.prizeName, winSymbol, symbols, royalReplay },
+        playsRemaining: newPlaysRemaining,
+      });
+    } catch (error) {
+      console.error("Error playing Royal Reels:", error);
+      res.status(500).json({ message: "Failed to play Royal Reels" });
+    }
+  });
+
+  app.post("/api/confirm-royal-result", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { orderId, result } = req.body;
+      if (!orderId || !result) return res.status(400).json({ success: false, message: "Order ID and result are required" });
+
+      const order = await storage.getOrder(orderId);
+      if (!order || order.userId !== userId) return res.status(400).json({ success: false, message: "Order not found" });
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      await db.transaction(async (tx) => {
+        await tx.insert(royalUsage).values({
+          orderId, userId,
+          isWin: result.isWin || false,
+          isRoyalReplay: result.royalReplay || false,
+          prizeId: result.prizeId || null,
+          rewardType: result.rewardType || "no_win",
+          rewardValue: result.rewardValue || "0",
+          symbols: result.symbols || [],
+          usedAt: new Date(),
+        });
+
+        if (result.royalReplay) {
+          await tx.insert(royalUsage).values({
+            orderId, userId,
+            isWin: false, isRoyalReplay: true,
+            prizeId: null, rewardType: "replay",
+            rewardValue: "0", symbols: [],
+            usedAt: new Date(Date.now() - 1),
+          });
+        }
+
+        if (result.isWin && result.rewardValue && parseFloat(result.rewardValue) > 0) {
+          if (result.rewardType === "cash") {
+            const winAmount = parseFloat(result.rewardValue);
+            const newBal = parseFloat(user.balance || "0") + winAmount;
+            await tx.update(users).set({ balance: newBal.toFixed(2) }).where(eq(users.id, userId));
+            await tx.insert(transactions).values({ userId, type: "prize", amount: winAmount.toFixed(2), description: `Royal Reels Win - ${result.prizeName || "£"+winAmount.toFixed(2)}`, orderId, createdAt: new Date() });
+          } else if (result.rewardType === "points") {
+            const pts = Math.floor(parseFloat(result.rewardValue));
+            await tx.update(users).set({ ringtonePoints: (user.ringtonePoints || 0) + pts }).where(eq(users.id, userId));
+          }
+          if (result.prizeId) {
+            await tx.update(royalPrizes).set({ quantityWon: sql`quantity_won + 1`, updatedAt: new Date() }).where(eq(royalPrizes.id, result.prizeId));
+          }
+          await tx.insert(royalWins).values({
+            orderId, userId, prizeId: result.prizeId || "unknown",
+            rewardType: result.rewardType, rewardValue: result.rewardValue,
+            symbolKey: result.winSymbol || "coin", isWin: true, wonAt: new Date(),
+          });
+        }
+      });
+
+      const historyEntry = {
+        id: `${orderId}-${Date.now()}`,
+        isWin: result.isWin || false,
+        isRoyalReplay: result.royalReplay || false,
+        rewardType: result.rewardType || "no_win",
+        rewardValue: result.rewardValue || "0",
+        prizeName: result.prizeName || null,
+        symbolKey: result.winSymbol || null,
+        usedAt: new Date().toISOString(),
+      };
+
+      res.json({ success: true, historyEntry });
+    } catch (error) {
+      console.error("Error confirming Royal result:", error);
+      res.status(500).json({ message: "Failed to confirm Royal result" });
+    }
+  });
+
+
+// ═══════════════════ SLOT MACHINE ADMIN ROUTES ═══════════════════
+
+// Get Slot Machine configuration (admin)
+app.get(
+  "/api/admin/game-slot-config",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const [config] = await db
+        .select()
+        .from(gameSlotConfig)
+        .where(eq(gameSlotConfig.id, "active"));
+
+      // Get usage statistics
+      const slotStats = await db
+        .select({
+          totalSpins: sql<number>`count(*)`,
+          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
+          totalCoinsWon: sql<number>`coalesce(sum(coins_won), 0)`,
+          totalCoinsSpent: sql<number>`coalesce(sum(coins_spent), 0)`,
+          uniquePlayers: sql<number>`count(distinct user_id)`,
+        })
+        .from(slotUsage);
+
+      const stats = slotStats[0] || {
+        totalSpins: 0,
+        totalWins: 0,
+        totalCoinsWon: 0,
+        totalCoinsSpent: 0,
+        uniquePlayers: 0,
+      };
+
+      // Get recent orders
+      const recentOrders = await db
+        .select({
+          id: orders.id,
+          userId: orders.userId,
+          quantity: orders.quantity,
+          totalAmount: orders.totalAmount,
+          status: orders.status,
+          createdAt: orders.createdAt,
+        })
+        .from(orders)
+        .innerJoin(competitions, eq(orders.competitionId, competitions.id))
+        .where(eq(competitions.type, "slot"))
+        .orderBy(desc(orders.createdAt))
+        .limit(20);
+
+      res.json({
+        config: config || {
+          id: "active",
+          isVisible: true,
+          isActive: true,
+          creditsPerSpin: 20,
+        },
+        stats,
+        recentOrders,
+      });
+    } catch (error) {
+      console.error("Error fetching slot config:", error);
+      res.status(500).json({ message: "Failed to fetch slot config" });
+    }
+  }
+);
+
+// Update Slot Machine configuration (admin)
+app.put(
+  "/api/admin/game-slot-config",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { isVisible, isActive, creditsPerSpin } = req.body;
+
+      // Validate credits per spin
+      if (creditsPerSpin !== undefined) {
+        const credits = Number(creditsPerSpin);
+        if (isNaN(credits) || credits < 1 || credits > 1000) {
+          return res.status(400).json({
+            message: "Credits per spin must be between 1 and 1000",
+          });
+        }
+      }
+
+      const [existing] = await db
+        .select()
+        .from(gameSlotConfig)
+        .where(eq(gameSlotConfig.id, "active"));
+
+      let saved;
+
+      if (existing) {
+        [saved] = await db
+          .update(gameSlotConfig)
+          .set({
+            isVisible: isVisible !== undefined ? isVisible : existing.isVisible,
+            isActive: isActive !== undefined ? isActive : existing.isActive,
+            creditsPerSpin:
+              creditsPerSpin !== undefined
+                ? creditsPerSpin
+                : existing.creditsPerSpin,
+            updatedAt: new Date(),
+          })
+          .where(eq(gameSlotConfig.id, "active"))
+          .returning();
+      } else {
+        [saved] = await db
+          .insert(gameSlotConfig)
+          .values({
+            id: "active",
+            isVisible: isVisible ?? true,
+            isActive: isActive ?? true,
+            creditsPerSpin: creditsPerSpin || 20,
+          })
+          .returning();
+      }
+
+      res.json(saved);
+    } catch (error) {
+      console.error("Error updating slot config:", error);
+      res.status(500).json({ message: "Failed to update slot config" });
+    }
+  }
+);
+
+// Get Slot Machine statistics (admin)
+app.get(
+  "/api/admin/slot-stats",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { period = "all" } = req.query;
+
+      let dateFilter = sql``;
+      if (period === "today") {
+        dateFilter = sql`and date(slot_usage.used_at) = current_date`;
+      } else if (period === "week") {
+        dateFilter = sql`and slot_usage.used_at >= current_date - interval '7 days'`;
+      } else if (period === "month") {
+        dateFilter = sql`and slot_usage.used_at >= current_date - interval '30 days'`;
+      }
+
+      // Overall stats
+      const overallStats = await db
+        .select({
+          totalSpins: sql<number>`count(*)`,
+          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
+          totalCoinsWon: sql<number>`coalesce(sum(coins_won), 0)`,
+          totalCoinsSpent: sql<number>`coalesce(sum(coins_spent), 0)`,
+          totalRevenue: sql<number>`coalesce(sum(case when is_win then coins_won * 0.01 else 0 end), 0)`,
+          uniquePlayers: sql<number>`count(distinct user_id)`,
+        })
+        .from(slotUsage)
+        .where(dateFilter);
+
+      // Daily breakdown (last 30 days)
+      const dailyStats = await db
+        .select({
+          date: sql<string>`date(slot_usage.used_at)`,
+          spins: sql<number>`count(*)`,
+          wins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
+          coinsWon: sql<number>`coalesce(sum(coins_won), 0)`,
+          players: sql<number>`count(distinct user_id)`,
+        })
+        .from(slotUsage)
+        .groupBy(sql`date(slot_usage.used_at)`)
+        .orderBy(desc(sql`date(slot_usage.used_at)`))
+        .limit(30);
+
+      // Top players
+      const topPlayers = await db
+        .select({
+          userId: slotUsage.userId,
+          totalSpins: sql<number>`count(*)`,
+          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
+          totalCoinsWon: sql<number>`coalesce(sum(coins_won), 0)`,
+        })
+        .from(slotUsage)
+        .groupBy(slotUsage.userId)
+        .orderBy(desc(sql`total_coins_won`))
+        .limit(10);
+
+      res.json({
+        overall: overallStats[0],
+        daily: dailyStats,
+        topPlayers,
+      });
+    } catch (error) {
+      console.error("Error fetching slot stats:", error);
+      res.status(500).json({ message: "Failed to fetch slot stats" });
+    }
+  }
+);
+
+// ═══════════════════ ROYAL REELS ADMIN ROUTES ═══════════════════
+
+// Get Royal Reels configuration (admin)
+app.get(
+  "/api/admin/game-royal-config",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const [config] = await db
+        .select()
+        .from(gameRoyalConfig)
+        .where(eq(gameRoyalConfig.id, "active"));
+
+      // Get prizes with win counts
+      const prizes = await db
+        .select()
+        .from(royalPrizes)
+        .orderBy(asc(royalPrizes.displayOrder));
+
+      const winStats = await db
+        .select({
+          prizeId: royalWins.prizeId,
+          winCount: sql<number>`count(*)`,
+        })
+        .from(royalWins)
+        .groupBy(royalWins.prizeId);
+
+      const prizesWithWins = prizes.map((prize) => {
+        const stat = winStats.find((w) => w.prizeId === prize.id);
+        return {
+          ...prize,
+          currentWins: Number(stat?.winCount ?? 0),
+        };
+      });
+
+      // Get usage statistics
+      const royalStats = await db
+        .select({
+          totalPlays: sql<number>`count(*)`,
+          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
+          totalReplays: sql<number>`sum(case when is_royal_replay = true then 1 else 0 end)`,
+          totalRewards: sql<number>`coalesce(sum(reward_value::numeric), 0)`,
+          uniquePlayers: sql<number>`count(distinct user_id)`,
+        })
+        .from(royalUsage);
+
+      const stats = royalStats[0] || {
+        totalPlays: 0,
+        totalWins: 0,
+        totalReplays: 0,
+        totalRewards: 0,
+        uniquePlayers: 0,
+      };
+
+      // Get recent orders
+      const recentOrders = await db
+        .select({
+          id: orders.id,
+          userId: orders.userId,
+          quantity: orders.quantity,
+          totalAmount: orders.totalAmount,
+          status: orders.status,
+          createdAt: orders.createdAt,
+        })
+        .from(orders)
+        .innerJoin(competitions, eq(orders.competitionId, competitions.id))
+        .where(eq(competitions.type, "royal"))
+        .orderBy(desc(orders.createdAt))
+        .limit(20);
+
+      res.json({
+        config: config || {
+          id: "active",
+          isVisible: true,
+          isActive: true,
+          replayChance: "5.00",
+        },
+        prizes: prizesWithWins,
+        stats,
+        recentOrders,
+      });
+    } catch (error) {
+      console.error("Error fetching royal config:", error);
+      res.status(500).json({ message: "Failed to fetch royal config" });
+    }
+  }
+);
+
+// Update Royal Reels configuration (admin)
+app.put(
+  "/api/admin/game-royal-config",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { isVisible, isActive, replayChance } = req.body;
+
+      // Validate replay chance
+      if (replayChance !== undefined) {
+        const chance = Number(replayChance);
+        if (isNaN(chance) || chance < 0 || chance > 100) {
+          return res.status(400).json({
+            message: "Replay chance must be between 0 and 100",
+          });
+        }
+      }
+
+      const [existing] = await db
+        .select()
+        .from(gameRoyalConfig)
+        .where(eq(gameRoyalConfig.id, "active"));
+
+      let saved;
+
+      if (existing) {
+        [saved] = await db
+          .update(gameRoyalConfig)
+          .set({
+            isVisible: isVisible !== undefined ? isVisible : existing.isVisible,
+            isActive: isActive !== undefined ? isActive : existing.isActive,
+            replayChance:
+              replayChance !== undefined
+                ? replayChance.toString()
+                : existing.replayChance,
+            updatedAt: new Date(),
+          })
+          .where(eq(gameRoyalConfig.id, "active"))
+          .returning();
+      } else {
+        [saved] = await db
+          .insert(gameRoyalConfig)
+          .values({
+            id: "active",
+            isVisible: isVisible ?? true,
+            isActive: isActive ?? true,
+            replayChance: replayChance?.toString() || "5.00",
+          })
+          .returning();
+      }
+
+      res.json(saved);
+    } catch (error) {
+      console.error("Error updating royal config:", error);
+      res.status(500).json({ message: "Failed to update royal config" });
+    }
+  }
+);
+
+// Get Royal Reels prizes (admin)
+app.get(
+  "/api/admin/royal-prizes",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const prizes = await db
+        .select()
+        .from(royalPrizes)
+        .orderBy(asc(royalPrizes.displayOrder));
+
+      const winStats = await db
+        .select({
+          prizeId: royalWins.prizeId,
+          winCount: sql<number>`count(*)`,
+        })
+        .from(royalWins)
+        .groupBy(royalWins.prizeId);
+
+      const prizesWithWins = prizes.map((prize) => {
+        const stat = winStats.find((w) => w.prizeId === prize.id);
+        return {
+          ...prize,
+          currentWins: Number(stat?.winCount ?? 0),
+        };
+      });
+
+      res.json(prizesWithWins);
+    } catch (error) {
+      console.error("Error fetching royal prizes:", error);
+      res.status(500).json({ message: "Failed to fetch royal prizes" });
+    }
+  }
+);
+
+// Create Royal Reels prize (admin)
+app.post(
+  "/api/admin/royal-prizes",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const {
+        prizeName,
+        symbolKey,
+        prizeValue,
+        rewardType,
+        weight,
+        maxWins,
+        isActive,
+        displayOrder,
+      } = req.body;
+
+      // Validate required fields
+      if (!prizeName || !symbolKey || !prizeValue || !rewardType) {
+        return res.status(400).json({
+          message:
+            "Missing required fields: prizeName, symbolKey, prizeValue, rewardType",
+        });
+      }
+
+      // Validate reward type
+      if (!["cash", "points", "no_win"].includes(rewardType)) {
+        return res.status(400).json({
+          message: "rewardType must be 'cash', 'points', or 'no_win'",
+        });
+      }
+
+      const [created] = await db
+        .insert(royalPrizes)
+        .values({
+          prizeName,
+          symbolKey,
+          prizeValue: prizeValue.toString(),
+          rewardType,
+          weight: weight || 10,
+          maxWins: maxWins || null,
+          isActive: isActive ?? true,
+          displayOrder: displayOrder || 0,
+          quantityWon: 0,
+        })
+        .returning();
+
+      res.json(created);
+    } catch (error) {
+      console.error("Error creating royal prize:", error);
+      res.status(500).json({ message: "Failed to create royal prize" });
+    }
+  }
+);
+
+// Update Royal Reels prize (admin)
+app.put(
+  "/api/admin/royal-prizes/:id",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        prizeName,
+        symbolKey,
+        prizeValue,
+        rewardType,
+        weight,
+        maxWins,
+        isActive,
+        displayOrder,
+      } = req.body;
+
+      // Validate reward type if provided
+      if (rewardType && !["cash", "points", "no_win"].includes(rewardType)) {
+        return res.status(400).json({
+          message: "rewardType must be 'cash', 'points', or 'no_win'",
+        });
+      }
+
+      const [updated] = await db
+        .update(royalPrizes)
+        .set({
+          prizeName,
+          symbolKey,
+          prizeValue: prizeValue?.toString(),
+          rewardType,
+          weight,
+          maxWins,
+          isActive,
+          displayOrder,
+          updatedAt: new Date(),
+        })
+        .where(eq(royalPrizes.id, id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ message: "Prize not found" });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating royal prize:", error);
+      res.status(500).json({ message: "Failed to update royal prize" });
+    }
+  }
+);
+
+// Delete Royal Reels prize (admin)
+app.delete(
+  "/api/admin/royal-prizes/:id",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { id } = req.params;
+
+      // Check if prize has wins
+      const [winCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(royalWins)
+        .where(eq(royalWins.prizeId, id));
+
+      if (winCount && winCount.count > 0) {
+        return res.status(400).json({
+          message: `Cannot delete prize with ${winCount.count} wins. Deactivate it instead.`,
+        });
+      }
+
+      await db.delete(royalPrizes).where(eq(royalPrizes.id, id));
+
+      res.json({ message: "Prize deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting royal prize:", error);
+      res.status(500).json({ message: "Failed to delete royal prize" });
+    }
+  }
+);
+
+// Reset Royal Reels prize win counts (admin)
+app.post(
+  "/api/admin/royal-prizes/reset-wins",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      // Reset quantityWon in royal prizes
+      await db
+        .update(royalPrizes)
+        .set({ quantityWon: 0, updatedAt: new Date() });
+
+      // Optionally clear win history
+      const { clearHistory = false } = req.body;
+      if (clearHistory) {
+        await db.delete(royalWins);
+      }
+
+      res.json({
+        message: clearHistory
+          ? "Royal Reels win counts and history reset successfully"
+          : "Royal Reels win counts reset successfully",
+      });
+    } catch (error) {
+      console.error("Error resetting royal wins:", error);
+      res.status(500).json({ message: "Failed to reset royal wins" });
+    }
+  }
+);
+
+// Get Royal Reels statistics (admin)
+app.get(
+  "/api/admin/royal-stats",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { period = "all" } = req.query;
+
+      let dateFilter = sql``;
+      if (period === "today") {
+        dateFilter = sql`and date(royal_usage.used_at) = current_date`;
+      } else if (period === "week") {
+        dateFilter = sql`and royal_usage.used_at >= current_date - interval '7 days'`;
+      } else if (period === "month") {
+        dateFilter = sql`and royal_usage.used_at >= current_date - interval '30 days'`;
+      }
+
+      // Overall stats
+      const overallStats = await db
+        .select({
+          totalPlays: sql<number>`count(*)`,
+          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
+          totalReplays: sql<number>`sum(case when is_royal_replay = true then 1 else 0 end)`,
+          totalRewards: sql<number>`coalesce(sum(reward_value::numeric), 0)`,
+          totalCashPrizes: sql<number>`sum(case when reward_type = 'cash' then 1 else 0 end)`,
+          totalPointsPrizes: sql<number>`sum(case when reward_type = 'points' then 1 else 0 end)`,
+          uniquePlayers: sql<number>`count(distinct user_id)`,
+        })
+        .from(royalUsage)
+        .where(dateFilter);
+
+      // Prize breakdown
+      const prizeBreakdown = await db
+        .select({
+          prizeId: royalUsage.prizeId,
+          prizeName: royalPrizes.prizeName,
+          winCount: sql<number>`count(*)`,
+          totalValue: sql<number>`coalesce(sum(reward_value::numeric), 0)`,
+        })
+        .from(royalUsage)
+        .leftJoin(royalPrizes, eq(royalUsage.prizeId, royalPrizes.id))
+        .where(sql`${royalUsage.isWin} = true`)
+        .groupBy(royalUsage.prizeId, royalPrizes.prizeName)
+        .orderBy(desc(sql`total_value`));
+
+      // Daily breakdown (last 30 days)
+      const dailyStats = await db
+        .select({
+          date: sql<string>`date(royal_usage.used_at)`,
+          plays: sql<number>`count(*)`,
+          wins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
+          replays: sql<number>`sum(case when is_royal_replay = true then 1 else 0 end)`,
+          totalRewards: sql<number>`coalesce(sum(reward_value::numeric), 0)`,
+          players: sql<number>`count(distinct user_id)`,
+        })
+        .from(royalUsage)
+        .groupBy(sql`date(royal_usage.used_at)`)
+        .orderBy(desc(sql`date(royal_usage.used_at)`))
+        .limit(30);
+
+      // Top players
+      const topPlayers = await db
+        .select({
+          userId: royalUsage.userId,
+          totalPlays: sql<number>`count(*)`,
+          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
+          totalRewards: sql<number>`coalesce(sum(reward_value::numeric), 0)`,
+        })
+        .from(royalUsage)
+        .groupBy(royalUsage.userId)
+        .orderBy(desc(sql`total_rewards`))
+        .limit(10);
+
+      res.json({
+        overall: overallStats[0],
+        prizeBreakdown,
+        daily: dailyStats,
+        topPlayers,
+      });
+    } catch (error) {
+      console.error("Error fetching royal stats:", error);
+      res.status(500).json({ message: "Failed to fetch royal stats" });
+    }
+  }
+);
 
 
   const httpServer = createServer(app);

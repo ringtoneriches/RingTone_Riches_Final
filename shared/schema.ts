@@ -111,7 +111,7 @@ export const competitions = pgTable("competitions", {
   title: text("title").notNull(),
   description: text("description"),
   imageUrl: text("image_url"),
-  type: varchar("type", { enum: ["spin", "scratch", "instant", "pop", "plinko","voltz"] }).notNull(),
+  type: varchar("type", { enum: ["spin", "scratch", "instant", "pop", "plinko","voltz","slot","royal"] }).notNull(),
   ticketPrice: decimal("ticket_price", { precision: 10, scale: 2 }).notNull(),
   maxTickets: integer("max_tickets"),
   soldTickets: integer("sold_tickets").default(0),
@@ -644,6 +644,80 @@ export const voltzWins = pgTable("voltz_wins", {
   wonAt: timestamp("won_at").defaultNow(),
 });
 
+// Slot Machine game config
+export const gameSlotConfig = pgTable("game_slot_config", {
+  id: varchar("id").primaryKey().default("active"),
+  isActive: boolean("is_active").default(true),
+  isVisible: boolean("is_visible").default(true),
+  pricePerSpin: decimal("price_per_spin", { precision: 10, scale: 2 }).default("0.20"),
+  creditsPerSpin: integer("credits_per_spin").default(20),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Track slot machine sessions per order
+export const slotUsage = pgTable("slot_usage", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").notNull().references(() => orders.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  coinsSpent: integer("coins_spent").default(0),
+  coinsWon: integer("coins_won").default(0),
+  isWin: boolean("is_win").default(false),
+  spinNumber: integer("spin_number").default(1),
+  usedAt: timestamp("used_at").defaultNow(),
+});
+
+// ═══════ ROYAL REELS GAME ═══════
+
+export const gameRoyalConfig = pgTable("game_royal_config", {
+  id: varchar("id").primaryKey().default("active"),
+  isActive: boolean("is_active").default(true),
+  isVisible: boolean("is_visible").default(true),
+  replayChance: decimal("replay_chance", { precision: 5, scale: 2 }).default("5.00"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const royalPrizes = pgTable("royal_prizes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  prizeName: varchar("prize_name").notNull(),
+  symbolKey: varchar("symbol_key").notNull(),
+  prizeValue: decimal("prize_value", { precision: 10, scale: 2 }).notNull(),
+  rewardType: varchar("reward_type", { enum: ["cash", "points", "no_win"] }).notNull(),
+  weight: integer("weight").notNull().default(10),
+  maxWins: integer("max_wins"),
+  quantityWon: integer("quantity_won").default(0),
+  isActive: boolean("is_active").default(true),
+  displayOrder: integer("display_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const royalUsage = pgTable("royal_usage", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").notNull().references(() => orders.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  isWin: boolean("is_win").default(false),
+  isRoyalReplay: boolean("is_royal_replay").default(false),
+  prizeId: text("prize_id"),
+  rewardType: varchar("reward_type").default("no_win"),
+  rewardValue: text("reward_value").default("0"),
+  symbols: jsonb("symbols"),
+  usedAt: timestamp("used_at").defaultNow(),
+});
+
+export const royalWins = pgTable("royal_wins", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: uuid("order_id").references(() => orders.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  prizeId: text("prize_id").notNull(),
+  rewardType: varchar("reward_type").notNull(),
+  rewardValue: text("reward_value").notNull(),
+  symbolKey: varchar("symbol_key").notNull(),
+  isWin: boolean("is_win").default(false),
+  wonAt: timestamp("won_at").defaultNow(),
+});
+
 // Promotional campaigns for marketing
 export const promotionalCampaigns = pgTable("promotional_campaigns", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -718,6 +792,8 @@ export const insertPlinkoWinSchema = createInsertSchema(plinkoWins).omit({ id: t
 export const insertGameVoltzConfigSchema = createInsertSchema(gameVoltzConfig);
 export const insertVoltzPrizeSchema = createInsertSchema(voltzPrizes).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertVoltzWinSchema = createInsertSchema(voltzWins).omit({ id: true, wonAt: true });
+export const insertGameSlotConfigSchema = createInsertSchema(gameSlotConfig);
+export const insertSlotUsageSchema = createInsertSchema(slotUsage).omit({ id: true, usedAt: true });
 export const insertScratchCardImageSchema = createInsertSchema(scratchCardImages).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPlatformSettingsSchema = createInsertSchema(platformSettings);
 export const insertSpinWinSchema = createInsertSchema(spinWins).omit({ id: true, wonAt: true });
@@ -805,6 +881,18 @@ export type InsertVoltzPrize = z.infer<typeof insertVoltzPrizeSchema>;
 export type VoltzUsage = typeof voltzUsage.$inferInsert;
 export type VoltzWin = typeof voltzWins.$inferSelect;
 export type InsertVoltzWin = z.infer<typeof insertVoltzWinSchema>;
+export type GameSlotConfig = typeof gameSlotConfig.$inferSelect;
+export const insertGameRoyalConfigSchema = createInsertSchema(gameRoyalConfig);
+export const insertRoyalPrizeSchema = createInsertSchema(royalPrizes).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertRoyalUsageSchema = createInsertSchema(royalUsage).omit({ id: true, usedAt: true });
+export const insertRoyalWinSchema = createInsertSchema(royalWins).omit({ id: true, wonAt: true });
+export type GameRoyalConfig = typeof gameRoyalConfig.$inferSelect;
+export type RoyalPrize = typeof royalPrizes.$inferSelect;
+export type RoyalUsage = typeof royalUsage.$inferSelect;
+export type RoyalWin = typeof royalWins.$inferSelect;
+export type InsertGameSlotConfig = z.infer<typeof insertGameSlotConfigSchema>;
+export type SlotUsage = typeof slotUsage.$inferSelect;
+export type InsertSlotUsage = z.infer<typeof insertSlotUsageSchema>;
 export type PlatformSettings = typeof platformSettings.$inferSelect;
 export type InsertPlatformSettings = z.infer<typeof insertPlatformSettingsSchema>;
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect;

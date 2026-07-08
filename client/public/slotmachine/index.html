@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slot Machine</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0a0800;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        #game-container canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    
+    <!-- Load Phaser from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    
+    <!-- Load game scripts -->
+    <script src="/slotmachine/js/mkutils.js"></script>
+    <script src="/slotmachine/js/phaser.js"></script>
+    <script src="/slotmachine/js/popups.js"></script>
+    <script src="/slotmachine/js/slot_classes.js"></script>
+    <script src="/slotmachine/js/state_machine.js"></script>
+    
+    <!-- Load config files -->
+    <script src="/slotmachine/js/slotConfigYellow3x1.js"></script>
+    <script src="/slotmachine/js/slotConfigRed3x1.js"></script>
+    <script src="/slotmachine/js/slotConfigViolet3x1.js"></script>
+    <script src="/slotmachine/js/slotConfigYellow3x3_20L.js"></script>
+    <script src="/slotmachine/js/slotConfigRed3x3_20L.js"></script>
+    <script src="/slotmachine/js/slotConfigViolet3x3_20L.js"></script>
+    <script src="/slotmachine/js/slotConfigRoyal.js"></script>
+    
+    <!-- Load main game -->
+    <script src="/slotmachine/js/slotGame.js"></script>
+    
+    <script>
+        // Get competition type from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const competitionType = urlParams.get('type') || 'slot';
+        const orderId = urlParams.get('orderId');
+        const competitionId = urlParams.get('competitionId');
+        const playsRemaining = parseInt(urlParams.get('playsRemaining')) || 0;
+        
+        // Store competition type globally for the game to access
+        window.competitionType = competitionType;
+        window.orderId = orderId;
+        window.competitionId = competitionId;
+        window.playsRemaining = playsRemaining;
+        
+        console.log('🎯 Competition type from URL:', competitionType);
+        console.log('📦 Order ID:', orderId);
+        console.log('🏆 Competition ID:', competitionId);
+        console.log('🔄 Plays remaining:', playsRemaining);
+        
+        // Flag to track if game is ready
+        let gameReady = false;
+        let gameInitialized = false;
+
+        // Handle messages from parent window
+        window.addEventListener('message', function(event) {
+            // Allow messages from same origin
+            if (event.origin !== window.location.origin) return;
+            
+            const data = event.data;
+            if (!data || typeof data !== 'object') return;
+            
+            console.log('📨 Message received from parent:', data);
+            
+            if (data.type === 'initGame') {
+                // Update plays remaining if needed
+                if (data.playsRemaining !== undefined) {
+                    window.playsRemaining = data.playsRemaining;
+                    console.log('🔄 Updated plays remaining:', window.playsRemaining);
+                }
+                
+                // If game is already initialized, update it
+                if (window.slotGame && window.slotGame.scene && window.slotGame.scene.scenes) {
+                    const slotScene = window.slotGame.scene.scenes.find(s => s.scene.key === 'SlotGame');
+                    if (slotScene && slotScene.updatePlaysRemaining) {
+                        slotScene.updatePlaysRemaining(data.playsRemaining);
+                    }
+                }
+            }
+        });
+        
+        // Wait for game to be fully loaded and send ready message
+        function checkGameReady() {
+            if (window.slotGame && window.slotGame.scene && window.slotGame.scene.scenes) {
+                const slotScene = window.slotGame.scene.scenes.find(s => s.scene.key === 'SlotGame');
+                if (slotScene && slotScene.sys && slotScene.sys.settings && slotScene.sys.settings.status === 'running') {
+                    if (!gameReady) {
+                        gameReady = true;
+                        console.log('✅ Game is ready, sending message to parent');
+                        window.parent.postMessage({
+                            type: 'gameReady',
+                            competitionType: window.competitionType,
+                            playsRemaining: window.playsRemaining
+                        }, '*');
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Check every 500ms until game is ready
+        let checkInterval = setInterval(() => {
+            if (checkGameReady()) {
+                clearInterval(checkInterval);
+            }
+        }, 500);
+
+        // Also check after 5 seconds as a fallback
+        setTimeout(() => {
+            if (!gameReady) {
+                console.warn('⚠️ Game not ready after 5 seconds, forcing ready state');
+                window.parent.postMessage({
+                    type: 'gameReady',
+                    competitionType: window.competitionType,
+                    playsRemaining: window.playsRemaining
+                }, '*');
+                gameReady = true;
+            }
+        }, 5000);
+
+        console.log('🎰 Slot machine initializing...');
+    </script>
+</body>
+</html>

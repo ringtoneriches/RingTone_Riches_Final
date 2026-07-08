@@ -1,6 +1,15 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resend: Resend | null = null;
+function getResend(): Resend {
+  if (!resend) {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error("RESEND_API_KEY is not set");
+    }
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
 
 const FROM_EMAIL = "support@ringtoneriches.co.uk";
 const BRAND_NAME = "Ringtone Riches";
@@ -16,7 +25,7 @@ const LOGO_URL =
 export interface OrderConfirmationPayload {
   orderId: string;
   userName: string;
-  orderType: "competition" | "spin" | "scratch" | "pop";
+  orderType: "competition" | "spin" | "scratch" | "pop" | "royal" | "slot";
   itemName: string;
   quantity: number;
   totalAmount: string;
@@ -232,7 +241,7 @@ export async function sendOrderConfirmationEmail(
   `;
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: `${BRAND_NAME} <${FROM_EMAIL}>`,
       to: [to],
       subject: `Order Confirmation #${orderData.orderId} - ${BRAND_NAME}`,
@@ -382,7 +391,7 @@ export async function sendWelcomeEmail(
   `;
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: `${BRAND_NAME} <${FROM_EMAIL}>`,
       to: [to],
       subject: `Welcome to ${BRAND_NAME} - Let's Get Started! 🎉`,
@@ -542,7 +551,7 @@ export async function sendPromotionalEmail(
   `;
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: `${BRAND_NAME} <${FROM_EMAIL}>`,
       to: [to],
       subject: campaign.subject,
@@ -671,7 +680,7 @@ export async function sendPasswordResetEmail(
   `;
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: `${BRAND_NAME} <${FROM_EMAIL}>`,
       to: [to],
       subject: "Reset Your Password",
@@ -835,7 +844,7 @@ export async function sendTopupConfirmationEmail(
   `;
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: `${BRAND_NAME} <${FROM_EMAIL}>`,
       to: [to],
       subject: `Wallet Top-up Confirmation - £${topupData.amount} Added - ${BRAND_NAME}`,

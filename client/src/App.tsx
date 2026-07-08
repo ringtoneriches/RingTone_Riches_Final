@@ -80,12 +80,19 @@ import UserNotifications from "./components/notifications";
 import AdminFAQManager from "./pages/admin/faq-manager";
 import AdminPrizes from "./pages/admin/admin-prizes";
 import AdminCompetitionVideos from "./pages/admin/admin-competition-videos";
-import { initFacebookBrowserWarning, initSocialBrowserWarning } from "./lib/facebook-browser-check";
+import { initSocialBrowserWarning } from "./lib/facebook-browser-check";
 import AdminTicketManager from "./pages/admin/AdminTicketManager";
 import AdminTicketManagerPage from "./pages/admin/AdminTicketManagerPage";
 import AddPastWinnerPage from "./pages/admin/winners";
 import AdminAddWinner from "./pages/admin/winners";
-import ScratchCardPrizeConfig from "./pages/admin/scratch-card-prizes";
+import SlotGamePage from "./pages/slotGamePage";
+import SlotBilling from "./pages/slotBilling";
+import RoyalGamePage from "./pages/royalGamePage";
+import RoyalBilling from "./pages/royalBilling";
+import AdminSlotMachine from "./pages/admin/slot-machine";
+import AdminRoyalReels from "./pages/admin/royal-reels";
+import AdminRoyalReelsSettings from "./pages/admin/admin-royal-reels";
+import AdminSlotMachineSettings from "./pages/admin/admin-slot-machine";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -119,6 +126,8 @@ function Router() {
       <Route path="/pop/:competitionId/:orderId" component={PopGamePage} />
       <Route path="/plinko/:competitionId/:orderId" component={PlinkoGamePage} />
       <Route path="/voltz/:competitionId/:orderId" component={VoltzGamePage} />
+      <Route path="/slot/:competitionId/:orderId" component={SlotGamePage} />
+       <Route path="/royal/:competitionId/:orderId" component={RoyalGamePage} />
 
       {/* Authenticated routes - always registered, auth checked in component */}
       <Route path="/instant" component={instant} />
@@ -139,6 +148,8 @@ function Router() {
       <Route path="/pop-billing/:orderId" component={PopBilling} />
       <Route path="/plinko-billing/:orderId" component={PlinkoBilling} />
       <Route path="/voltz-billing/:orderId" component={VoltzBilling} />
+       <Route path="/slot-billing/:orderId" component={SlotBilling} />
+      <Route path="/royal-billing/:orderId" component={RoyalBilling} />
 
       {/* Admin routes - always registered, auth checked in component */}
       <Route path="/admin/login" component={AdminLogin} />
@@ -174,6 +185,10 @@ function Router() {
       <Route path="/admin/promo-video" component={AdminCompetitionVideos} />
       <Route path="/admin/tickets" component={AdminTicketManagerPage} />
       <Route path="/admin/winners" component={AdminAddWinner} />
+      <Route path="/admin/slot" component={AdminSlotMachine} />
+      <Route path="/admin/royal" component={AdminRoyalReels} />
+      <Route path="/admin/royal-reels/settings" component={AdminRoyalReelsSettings} />
+      <Route path="/admin/slot-machine/settings" component={AdminSlotMachineSettings} />
       <Route component={NotFound} />
     </Switch>
   );
