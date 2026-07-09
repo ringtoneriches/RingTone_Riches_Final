@@ -17971,6 +17971,471 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
   });
 
 
+// CREATE GUEST ORDER
+app.post("/api/guest/create-order", async (req: any, res) => {
+  try {
+    const { 
+      guestName, 
+      guestEmail, 
+      guestPhone, 
+      competitionId, 
+      gameType, 
+      quantity 
+    } = req.body;
+
+    // Validate required fields
+    if (!guestName || !guestEmail || !competitionId || !gameType || !quantity) {
+      return res.status(400).json({ 
+        message: "Missing required fields" 
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(guestEmail)) {
+      return res.status(400).json({ 
+        message: "Invalid email address" 
+      });
+    }
+
+    // Get competition
+    const [competition] = await db
+      .select()
+      .from(competitions)
+      .where(eq(competitions.id, competitionId));
+
+    if (!competition) {
+      return res.status(404).json({ message: "Competition not found" });
+    }
+
+    // Calculate total amount
+    const ticketPrice = Number(competition.ticketPrice);
+    const totalAmount = ticketPrice * quantity;
+
+    // Generate order reference
+    const orderRef = `GSTR-${nanoid(8).toUpperCase()}`;
+
+    // Create guest order
+    const [guestOrder] = await db.insert(guestOrders).values({
+      guestName,
+      guestEmail,
+      guestPhone,
+      competitionId,
+      gameType,
+      quantity,
+      totalAmount: totalAmount.toFixed(2),
+      orderReference: orderRef,
+      status: "pending",
+      paymentStatus: "pending",
+      paymentMethod: "instaplay",
+      createdAt: new Date(),
+    }).returning();
+
+    res.json({
+      success: true,
+      orderId: guestOrder.id,
+      orderReference: orderRef,
+      totalAmount: totalAmount.toFixed(2),
+      message: "Guest order created successfully"
+    });
+
+  } catch (error) {
+    console.error("Error creating guest order:", error);
+    res.status(500).json({ 
+      message: "Failed to create guest order",
+      error: error.message 
+    });
+  }
+});
+
+// PROCESS GUEST PAYMENT (Instaplay)
+app.post("/api/guest/process-payment", async (req: any, res) => {
+  try {
+    const { orderId } = req.body;
+
+    // Get guest order
+    const [guestOrder] = await db
+      .select()
+      .from(guestOrders)
+      .where(eq(guestOrders.id, orderId));
+
+    if (!guestOrder) {
+      return res.status(404).json({ message: "Guest order not found" });
+    }
+
+    if (guestOrder.status !== "pending") {
+      return res.status(400).json({ message: "Order already processed" });
+    }
+
+    // Create Cashflows payment session
+    const session = await cashflows.createCompetitionPaymentSession(
+      Number(guestOrder.totalAmount),
+      {
+        orderId: guestOrder.id,
+        competitionId: guestOrder.competitionId,
+        isGuest: 'true',
+        guestEmail: guestOrder.guestEmail,
+        guestName: guestOrder.guestName,
+        quantity: guestOrder.quantity.toString(),
+        paymentType: 'guest_instant_play',
+        gameType: guestOrder.gameType
+      }
+    );
+
+    if (!session.hostedPageUrl) {
+      return res.status(500).json({ message: "Failed to create payment session" });
+    }
+
+    // Create pending payment
+    await db.insert(guestPendingPayments).values({
+      guestOrderId: guestOrder.id,
+      paymentJobReference: session.paymentJobReference,
+      amount: guestOrder.totalAmount.toString(),
+      metadata: {
+        competitionId: guestOrder.competitionId,
+        gameType: guestOrder.gameType,
+        quantity: guestOrder.quantity,
+        guestEmail: guestOrder.guestEmail,
+        guestName: guestOrder.guestName,
+      },
+      status: 'pending',
+      createdAt: new Date()
+    });
+
+    res.json({
+      success: true,
+      redirectUrl: session.hostedPageUrl,
+      sessionId: session.paymentJobReference,
+      message: "Redirecting to payment..."
+    });
+
+  } catch (error) {
+    console.error("Error processing guest payment:", error);
+    res.status(500).json({ 
+      message: "Failed to process guest payment",
+      error: error.message 
+    });
+  }
+});
+
+// GUEST PAYMENT WEBHOOK HANDLER
+app.post("/api/guest/webhook", async (req, res) => {
+  console.log("GUEST WEBHOOK HIT", req.body);
+
+  const { paymentJobReference, paymentReference } = req.body;
+
+  // Always reply immediately
+  res.status(200).json({ received: true });
+
+  try {
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Find pending payment
+    const [pendingPayment] = await db
+      .select()
+      .from(guestPendingPayments)
+      .where(eq(guestPendingPayments.paymentJobReference, paymentJobReference));
+
+    if (!pendingPayment) {
+      console.warn("No guest pending payment found:", paymentJobReference);
+      return;
+    }
+
+    if (pendingPayment.status !== "pending") {
+      console.log("Guest payment already processed:", pendingPayment.status);
+      return;
+    }
+
+    // Check payment status
+    const payment = await cashflows.getPaymentStatus(
+      paymentJobReference,
+      paymentReference ?? undefined
+    );
+
+    const { status, paidAmount } = normalizeCashflowsStatus(payment);
+
+    if (status === "PENDING") return;
+
+    if (status === "FAILED") {
+      await db.update(guestPendingPayments)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(eq(guestPendingPayments.id, pendingPayment.id));
+
+      await db.update(guestOrders)
+        .set({ status: 'failed', paymentStatus: 'failed', updatedAt: new Date() })
+        .where(eq(guestOrders.id, pendingPayment.guestOrderId));
+
+      return;
+    }
+
+    if (status === "PAID" && paidAmount > 0) {
+      // Process the guest order
+      await processGuestOrder(
+        pendingPayment.guestOrderId,
+        paymentReference ?? paymentJobReference,
+        paidAmount
+      );
+    }
+
+  } catch (err) {
+    console.error("Guest webhook error:", err);
+  }
+});
+
+// Process guest order after successful payment
+async function processGuestOrder(
+  guestOrderId: string, 
+  paymentRef: string, 
+  paidAmount: number
+) {
+  return await db.transaction(async (tx) => {
+    // Get guest order
+    const [guestOrder] = await tx
+      .select()
+      .from(guestOrders)
+      .where(eq(guestOrders.id, guestOrderId));
+
+    if (!guestOrder) {
+      throw new Error("Guest order not found");
+    }
+
+    // Update guest order
+    await tx.update(guestOrders)
+      .set({
+        status: 'completed',
+        paymentStatus: 'paid',
+        paymentReference: paymentRef,
+        updatedAt: new Date()
+      })
+      .where(eq(guestOrders.id, guestOrderId));
+
+    // Update pending payment
+    await tx.update(guestPendingPayments)
+      .set({
+        status: 'completed',
+        paymentReference: paymentRef,
+        updatedAt: new Date()
+      })
+      .where(eq(guestPendingPayments.guestOrderId, guestOrderId));
+
+    // Get competition
+    const [competition] = await tx
+      .select()
+      .from(competitions)
+      .where(eq(competitions.id, guestOrder.competitionId));
+
+    // Update competition sold tickets
+    if (competition) {
+      await tx.update(competitions)
+        .set({ 
+          soldTickets: (competition.soldTickets || 0) + guestOrder.quantity,
+          updatedAt: new Date()
+        })
+        .where(eq(competitions.id, guestOrder.competitionId));
+    }
+
+    // Generate tickets
+    const ticketNumbers = [];
+    for (let i = 0; i < guestOrder.quantity; i++) {
+      let ticketNumber;
+      switch (guestOrder.gameType) {
+        case 'pop':
+          ticketNumber = `POP-G-${nanoid(8).toUpperCase()}`;
+          break;
+        case 'scratch':
+          ticketNumber = `SCR-G-${nanoid(8).toUpperCase()}`;
+          break;
+        case 'spin':
+          ticketNumber = `SPN-G-${nanoid(8).toUpperCase()}`;
+          break;
+        default:
+          ticketNumber = `GST-G-${nanoid(8).toUpperCase()}`;
+      }
+
+      const [ticket] = await tx.insert(guestTickets).values({
+        guestOrderId: guestOrder.id,
+        ticketNumber,
+        competitionId: guestOrder.competitionId,
+        isWinner: false,
+        createdAt: new Date(),
+      }).returning();
+
+      ticketNumbers.push(ticket.ticketNumber);
+    }
+
+    // Update order with ticket numbers
+    await tx.update(guestOrders)
+      .set({ ticketNumbers: JSON.stringify(ticketNumbers) })
+      .where(eq(guestOrders.id, guestOrderId));
+
+    // Send confirmation email (non-blocking)
+    if (guestOrder.guestEmail) {
+      sendGuestOrderConfirmation(guestOrder.guestEmail, {
+        orderId: guestOrder.id,
+        orderReference: guestOrder.orderReference,
+        guestName: guestOrder.guestName,
+        gameType: guestOrder.gameType,
+        itemName: competition?.title || `${guestOrder.gameType} Game`,
+        quantity: guestOrder.quantity,
+        totalAmount: guestOrder.totalAmount,
+        orderDate: new Date().toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        paymentMethod: "Card Payment",
+        ticketNumbers: ticketNumbers,
+      }).catch(err => 
+        console.error("Failed to send guest confirmation email:", err)
+      );
+    }
+
+    return { success: true, ticketNumbers };
+  });
+}
+
+// Email helper for guest orders
+async function sendGuestOrderConfirmation(
+  email: string, 
+  orderDetails: {
+    orderId: string;
+    orderReference: string;
+    guestName: string;
+    gameType: string;
+    itemName: string;
+    quantity: number;
+    totalAmount: string;
+    orderDate: string;
+    paymentMethod: string;
+    ticketNumbers: string[];
+  }
+) {
+  // Use your existing email service
+  // This is a placeholder - integrate with your email provider
+  console.log("Sending guest order confirmation to:", email);
+  console.log("Order details:", orderDetails);
+  
+  // You can use your existing sendOrderConfirmationEmail function
+  // with a flag for guest orders
+}
+
+// ADMIN: Get all guest orders
+app.get(
+  "/api/admin/guest-orders",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { search, status, dateFrom, dateTo } = req.query;
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 30;
+      const offset = (page - 1) * limit;
+
+      let query = db
+        .select()
+        .from(guestOrders)
+        .orderBy(desc(guestOrders.createdAt));
+
+      // Apply filters
+      const conditions = [];
+      
+      if (status) {
+        conditions.push(eq(guestOrders.status, status as string));
+      }
+      
+      if (dateFrom) {
+        conditions.push(gte(guestOrders.createdAt, new Date(dateFrom as string)));
+      }
+      
+      if (dateTo) {
+        const endDate = new Date(dateTo as string);
+        endDate.setHours(23, 59, 59, 999);
+        conditions.push(lte(guestOrders.createdAt, endDate));
+      }
+
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+
+      let allOrders = await query;
+
+      // Apply search filter
+      if (search) {
+        const searchTerm = (search as string).toLowerCase();
+        allOrders = allOrders.filter(order => 
+          order.guestName?.toLowerCase().includes(searchTerm) ||
+          order.guestEmail?.toLowerCase().includes(searchTerm) ||
+          order.orderReference?.toLowerCase().includes(searchTerm) ||
+          order.guestPhone?.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      const total = allOrders.length;
+      const paginatedOrders = allOrders.slice(offset, offset + limit);
+
+      res.json({
+        orders: paginatedOrders,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasMore: offset + limit < total
+        }
+      });
+
+    } catch (error) {
+      console.error("Error fetching guest orders:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch guest orders",
+        error: error.message 
+      });
+    }
+  }
+);
+
+// ADMIN: Get single guest order
+app.get(
+  "/api/admin/guest-orders/:id",
+  isAuthenticated,
+  isAdmin,
+  async (req: any, res) => {
+    try {
+      const { id } = req.params;
+
+      const [order] = await db
+        .select()
+        .from(guestOrders)
+        .where(eq(guestOrders.id, id));
+
+      if (!order) {
+        return res.status(404).json({ message: "Guest order not found" });
+      }
+
+      // Get tickets
+      const tickets = await db
+        .select()
+        .from(guestTickets)
+        .where(eq(guestTickets.guestOrderId, id));
+
+      res.json({
+        order,
+        tickets
+      });
+
+    } catch (error) {
+      console.error("Error fetching guest order:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch guest order",
+        error: error.message 
+      });
+    }
+  }
+);
+
+
 
 // <------ FAQ ROUTES ------>
 

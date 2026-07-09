@@ -460,13 +460,13 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
             </div>
 
             {/* Bonus banner */}
-            <div style={{ margin: "0 14px 14px", padding: "10px 14px", borderRadius: 10, background: "rgba(139,92,246,0.07)", border: "1px solid rgba(139,92,246,0.2)", display: "flex", alignItems: "center", gap: 9 }}>
+            {/* <div style={{ margin: "0 14px 14px", padding: "10px 14px", borderRadius: 10, background: "rgba(139,92,246,0.07)", border: "1px solid rgba(139,92,246,0.2)", display: "flex", alignItems: "center", gap: 9 }}>
               <span style={{ fontSize: 16 }}>🎁</span>
               <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.7)" }}>
                 <strong style={{ color: GOLD }}>BONUS</strong> — You will earn{" "}
                 <strong style={{ color: "#8B5CF6" }}>{bonusPoints} RingTone Points</strong> with this entry!
               </span>
-            </div>
+            </div> */}
           </div>
 
           {/* PAYMENT TERMINAL */}
@@ -687,7 +687,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
                 { icon: "🥇", label: prizeVal ? `${prizeVal} Cash` : "Top Prize", badge: "TOP PRIZE",         color: GOLD,            badgeBg: "rgba(255,185,0,0.12)", badgeBorder: "rgba(255,185,0,0.3)" },
                 { icon: "🥈", label: "£5,000 Cash",                               badge: null,                color: "rgba(255,255,255,0.65)" },
                 { icon: "🥉", label: "£1,000 Cash",                               badge: null,                color: AMBER },
-                { icon: "⭐", label: "Bonus RingTone Points",                     badge: "Extra rewards",     color: "#8B5CF6",       badgeBg: "rgba(139,92,246,0.1)", badgeBorder: "rgba(139,92,246,0.25)" },
+                // { icon: "⭐", label: "Bonus RingTone Points",                     badge: "Extra rewards",     color: "#8B5CF6",       badgeBg: "rgba(139,92,246,0.1)", badgeBorder: "rgba(139,92,246,0.25)" },
               ].map((w, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderBottom: i < 3 ? `1px solid rgba(255,185,0,0.06)` : "none" }}>
                   <span style={{ fontSize: 18, flexShrink: 0 }}>{w.icon}</span>

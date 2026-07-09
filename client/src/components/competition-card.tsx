@@ -354,7 +354,7 @@ export default function CompetitionCard({ competition, authenticated = false }: 
               color: "rgba(255,255,255,0.38)", 
               textTransform: "uppercase", 
               marginBottom: "clamp(1px, 0.3vw, 3px)",
-            }}>TOP PRIZE</div>
+            }}>PRIZES</div>
             <div style={{
               fontSize: "clamp(18px, 4vw, 34px)", 
               fontWeight: 900, 

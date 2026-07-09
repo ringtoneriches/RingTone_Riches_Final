@@ -197,6 +197,63 @@ export const competitionTicketSettings = pgTable("competition_ticket_settings", 
   index("competition_ticket_settings_is_active_idx").on(table.isActive),
 ]);
 
+// Fix guest orders table - change varchar to uuid
+export const guestOrders = pgTable(
+  "guest_orders",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    guestName: varchar("guest_name").notNull(),
+    guestEmail: varchar("guest_email").notNull(),
+    guestPhone: varchar("guest_phone"),
+    competitionId: uuid("competition_id").notNull(),
+    gameType: varchar("game_type").notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
+    status: varchar("status").notNull().default("pending"),
+    paymentMethod: varchar("payment_method").default("instaplay"),
+    paymentReference: varchar("payment_reference"),
+    paymentStatus: varchar("payment_status").default("pending"),
+    orderReference: varchar("order_reference").unique(),
+    prizeAmount: decimal("prize_amount", { precision: 10, scale: 2 }),
+    prizeType: varchar("prize_type"),
+    isWinner: boolean("is_winner").default(false),
+    ticketNumbers: text("ticket_numbers"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    // Move the indexes here!
+    index("guest_orders_email_idx").on(table.guestEmail),
+    index("guest_orders_ref_idx").on(table.orderReference),
+    index("guest_orders_status_idx").on(table.status),
+    index("guest_orders_created_idx").on(table.createdAt),
+  ]
+);
+
+// Fix guest tickets table
+export const guestTickets = pgTable("guest_tickets", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`), // Changed to uuid
+  guestOrderId: uuid("guest_order_id").references(() => guestOrders.id),
+  ticketNumber: varchar("ticket_number").notNull(),
+  competitionId: uuid("competition_id").notNull(), // Match competitions.id type
+  isWinner: boolean("is_winner").default(false),
+  prizeAmount: decimal("prize_amount", { precision: 10, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Fix guest pending payments table
+export const guestPendingPayments = pgTable("guest_pending_payments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`), // Changed to uuid
+  guestOrderId: uuid("guest_order_id").references(() => guestOrders.id),
+  paymentJobReference: text("payment_job_reference").notNull(), // Changed to text for consistency
+  paymentReference: varchar("payment_reference"),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Changed to decimal
+  status: varchar("status").default("pending"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Wallet transactions
 export const transactions = pgTable("transactions", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -829,7 +886,29 @@ export const insertFaqSchema = createInsertSchema(faqs).omit({
 });
 export const insertCompetitionTicketSettingsSchema = createInsertSchema(competitionTicketSettings);
 
+// Guest order schemas
+export const insertGuestOrderSchema = createInsertSchema(guestOrders).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true,
+  paymentReference: true,
+  paymentStatus: true,
+  prizeAmount: true,
+  prizeType: true,
+  isWinner: true,
+  ticketNumbers: true,
+});
 
+export const insertGuestTicketSchema = createInsertSchema(guestTickets).omit({ 
+  id: true, 
+  createdAt: true 
+});
+
+export const insertGuestPendingPaymentSchema = createInsertSchema(guestPendingPayments).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true 
+});
 
 
 // Types
@@ -912,7 +991,23 @@ export type RedeemCodeRedemption = typeof redeemCodeRedemptions.$inferSelect;
 export type InsertRedeemCodeRedemption = z.infer<typeof insertRedeemCodeRedemptionSchema>;
 export type Faq = typeof faqs.$inferSelect;
 export type InsertFaq = z.infer<typeof insertFaqSchema>;
+export type GuestOrder = typeof guestOrders.$inferSelect;
+export type InsertGuestOrder = z.infer<typeof insertGuestOrderSchema>;
+export type GuestTicket = typeof guestTickets.$inferSelect;
+export type InsertGuestTicket = z.infer<typeof insertGuestTicketSchema>;
+export type GuestPendingPayment = typeof guestPendingPayments.$inferSelect;
+export type InsertGuestPendingPayment = z.infer<typeof insertGuestPendingPaymentSchema>;
 
+export const guestCheckoutSchema = z.object({
+  guestName: z.string().min(2, "Name must be at least 2 characters").max(100),
+  guestEmail: z.string().email("Please enter a valid email address"),
+  guestPhone: z.string().optional(),
+  competitionId: z.string().uuid("Invalid competition ID"),
+  gameType: z.enum(["pop", "scratch", "spin", "plinko", "voltz", "slot", "royal"]),
+  quantity: z.number().int().min(1).max(100),
+});
+
+export type GuestCheckout = z.infer<typeof guestCheckoutSchema>;
 // Registration and login schemas
 export const registerUserSchema = createInsertSchema(users).pick({
   firstName: true,
