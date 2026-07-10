@@ -83,6 +83,7 @@ export async function socialPreviewMiddleware(
 <head>
   <meta charset="UTF-8" />
   <title>${escapeHtml(title)}</title>
+  <meta property="fb:app_id" content="488978370856533" />
   <meta property="og:title" content="${escapeHtml(title)}" />
   <meta property="og:description" content="${escapeHtml(description)}" />
   <meta property="og:image" content="${image}" />
