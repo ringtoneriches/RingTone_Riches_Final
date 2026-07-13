@@ -153,10 +153,11 @@ const InstantProgressBar = ({ competition }: { competition: Competition }) => {
 };
 
 // Discount calculation utility - ONLY for game types
+// NEW DISCOUNT SCHEME: 10 plays: 2%, 20 plays: 5%, 50 plays: 10%
 const TICKET_DISCOUNTS: Record<number, number> = {
-  5: 0.10,
-  10: 0.15,
-  15: 0.20,
+  10: 0.02,  // 2% off for 10 plays
+  20: 0.05,  // 5% off for 20 plays
+  50: 0.10,  // 10% off for 50 plays
 };
 
 const GAME_TYPES = ["spin", "scratch", "pop", "plinko", "voltz"];
@@ -947,12 +948,12 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                       <Crown className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15]" />
                     </div>
 
-                    {/* Discount Tier Cards */}
+                    {/* Discount Tier Cards - UPDATED WITH NEW SCHEME */}
                     <div className="grid grid-cols-3 gap-2 md:gap-4">
                       {[
-                        { qty: 5, discount: 10, icon: "⭐", label: "STARTER" },
-                        { qty: 10, discount: 15, icon: "🔥", label: "POPULAR" },
-                        { qty: 15, discount: 20, icon: "💎", label: "BEST VALUE" },
+                        { qty: 10, discount: 2, icon: "⭐", label: "STARTER" },
+                        { qty: 20, discount: 5, icon: "🔥", label: "POPULAR" },
+                        { qty: 50, discount: 10, icon: "💎", label: "BEST VALUE" },
                       ].map((tier) => {
                         const isSelected = quantity === tier.qty;
                         const savingsAmount = ((pricePerTicket * tier.qty) * (tier.discount / 100)).toFixed(2);
@@ -1080,9 +1081,9 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                 ) : (
                   <div className="space-y-6">
                     
-                    {/* Quick Select Pills */}
+                    {/* Quick Select Pills - UPDATED WITH NEW VALUES */}
                     <div className="flex justify-center gap-2 flex-wrap">
-                      {[1, 3, 5, 10, 15, 25].map((num) => {
+                      {[1, 5, 10, 20, 30, 50].map((num) => {
                         const discount = isGameType ? getApplicableDiscount(num) : 0;
                         const pillPrice = isGameType 
                           ? (pricePerTicket * num * (1 - discount / 100)) 
@@ -1207,7 +1208,7 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                       </div>
                     </div>
 
-                    {/* Discount Breakdown - Only for Games */}
+                    {/* Discount Breakdown - Only for Games - UPDATED TIERS */}
                     {isGameType && discountPercent > 0 && (
                       <div className="mt-3 pt-3 border-t border-[#FACC15]/10">
                         <div className="flex items-center justify-between gap-2 mb-2">
@@ -1222,17 +1223,17 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                           </span>
                         </div>
                         
-                        {/* Progress to Next Tier */}
+                        {/* Progress to Next Tier - UPDATED WITH NEW VALUES */}
                         <div className="mt-2">
                           <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-                            <span>5 for 10%</span>
-                            <span>10 for 15%</span>
-                            <span>15 for 20%</span>
+                            <span>10 for 2%</span>
+                            <span>20 for 5%</span>
+                            <span>50 for 10%</span>
                           </div>
                           <div className="h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-full transition-all duration-500"
-                              style={{ width: `${Math.min((quantity / 15) * 100, 100)}%` }}
+                              style={{ width: `${Math.min((quantity / 50) * 100, 100)}%` }}
                             ></div>
                           </div>
                         </div>

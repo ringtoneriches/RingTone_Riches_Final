@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Crown, Sparkles, Gem, Star, Calendar, Award, Trophy, SortAsc, SortDesc, TrendingUp, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crown, Sparkles, Gem, Star, Calendar, Award, Trophy, SortAsc, SortDesc, TrendingUp, Clock, Coins } from "lucide-react";
 
 interface Winner {
   id: string;
@@ -26,13 +26,50 @@ interface Winner {
   } | null;
 }
 
-type SortOption = 'newest' | 'oldest' | 'highest-value';
+// Helper to extract cash value from prizeValue
+const extractCashValue = (prizeValue: string): number => {
+  const match = prizeValue.match(/£\s*([\d,.]+)/);
+  if (match) {
+    return parseFloat(match[1].replace(/,/g, ''));
+  }
+  return 0;
+};
+
+// Helper to extract points from prizeValue
+const extractPoints = (prizeValue: string): number => {
+  // If it contains £, it's cash only
+  if (prizeValue.includes('£')) {
+    return 0;
+  }
+  // Try to extract numbers (for points like "10,000 Ringtones")
+  const match = prizeValue.match(/([\d,.]+)/);
+  if (match) {
+    return parseFloat(match[1].replace(/,/g, ''));
+  }
+  return 0;
+};
+
+// Helper to get display text for points
+const getPointsDisplay = (prizeValue: string): string => {
+  if (prizeValue.includes('£')) {
+    return '';
+  }
+  // Extract the unit/description after the number
+  const parts = prizeValue.match(/([\d,.]+)\s*(.+)/);
+  if (parts && parts[2]) {
+    return parts[2].trim();
+  }
+  return 'pts';
+};
+
+type SortOption = 'newest' | 'oldest' | 'highest-value' | 'highest-points';
 
 export default function PastWinners() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const itemsPerPage = 9;
 
+  // Keep showcase=true filter - only show admin-approved winners
   const { data: winnersData = [], isLoading, error } = useQuery<Winner[]>({
     queryKey: ["/api/winners", "showcase"],
     queryFn: async () => {
@@ -43,7 +80,7 @@ export default function PastWinners() {
       return json.map((item: any) => ({
         id: item.id,
         prizeDescription: item.prizeDescription,
-        prizeValue: item.prizeValue?.replace("£", "") ?? "0",
+        prizeValue: item.prizeValue || "0",
         imageUrl: item.imageUrl || "",
         createdAt: item.createdAt,
         updatedAt: item.updatedAt || item.createdAt,
@@ -78,9 +115,17 @@ export default function PastWinners() {
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
       case 'highest-value':
-        return [...showcaseWinners].sort((a, b) => 
-          parseFloat(b.prizeValue) - parseFloat(a.prizeValue)
-        );
+        return [...showcaseWinners].sort((a, b) => {
+          const aValue = extractCashValue(a.prizeValue);
+          const bValue = extractCashValue(b.prizeValue);
+          return bValue - aValue;
+        });
+      case 'highest-points':
+        return [...showcaseWinners].sort((a, b) => {
+          const aPoints = extractPoints(a.prizeValue);
+          const bPoints = extractPoints(b.prizeValue);
+          return bPoints - aPoints;
+        });
       default:
         return showcaseWinners;
     }
@@ -147,20 +192,6 @@ export default function PastWinners() {
             <p className="text-xl text-gray-300 max-w-2xl mx-auto font-light">
               Celebrating the elite few who've claimed extraordinary prizes
             </p>
-            
-            {/* {sortedWinners.length > 0 && (
-              <div className="flex justify-center gap-8 pt-4">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-amber-400">{sortedWinners.length}</div>
-                  <div className="text-xs text-gray-400 uppercase tracking-wider">Luxury Winners</div>
-                </div>
-                <div className="w-px h-12 bg-gradient-to-b from-transparent via-amber-500 to-transparent" />
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-amber-400">£{(sortedWinners.reduce((sum, w) => sum + parseFloat(w.prizeValue), 0) / 1000).toFixed(0)}k+</div>
-                  <div className="text-xs text-gray-400 uppercase tracking-wider">Total Value</div>
-                </div>
-              </div>
-            )} */}
           </div>
         </div>
       </section>
@@ -169,7 +200,7 @@ export default function PastWinners() {
       <section className="relative z-10 -mt-8">
         <div className="container mx-auto px-4">
           <div className="flex justify-center">
-            <div className="inline-flex bg-black/60 backdrop-blur-md rounded-full border border-amber-500/20 p-1">
+            <div className="inline-flex bg-black/60 backdrop-blur-md rounded-full border border-amber-500/20 p-1 flex-wrap justify-center">
               <button
                 onClick={() => handleSortChange('newest')}
                 className={`group relative px-6 py-2 rounded-full transition-all duration-300 ${
@@ -208,7 +239,21 @@ export default function PastWinners() {
               >
                 <div className="flex items-center gap-2">
                   <TrendingUp className={`w-4 h-4 ${sortBy === 'highest-value' ? 'text-white' : 'group-hover:text-amber-400'}`} />
-                  <span className="font-medium">Highest Value</span>
+                  <span className="font-medium">Highest Cash</span>
+                </div>
+              </button>
+              
+              <button
+                onClick={() => handleSortChange('highest-points')}
+                className={`group relative px-6 py-2 rounded-full transition-all duration-300 ${
+                  sortBy === 'highest-points'
+                    ? 'bg-gradient-to-r from-amber-500 to-purple-600 text-white'
+                    : 'text-gray-400 hover:text-amber-400'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Coins className={`w-4 h-4 ${sortBy === 'highest-points' ? 'text-white' : 'group-hover:text-amber-400'}`} />
+                  <span className="font-medium">Highest Points</span>
                 </div>
               </button>
             </div>
@@ -253,118 +298,152 @@ export default function PastWinners() {
                 <div className="text-sm text-amber-400/60 flex items-center gap-2">
                   <Sparkles className="w-3 h-3" />
                   <span>
-                    Sorting by: {sortBy === 'newest' ? 'Newest First' : sortBy === 'oldest' ? 'Oldest First' : 'Highest Value'}
+                    Sorting by: {sortBy === 'newest' ? 'Newest First' : sortBy === 'oldest' ? 'Oldest First' : sortBy === 'highest-value' ? 'Highest Cash' : 'Highest Points'}
                   </span>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
-                {paginatedWinners.map((winner, index) => (
-                  <div
-                    key={winner.id}
-                    className="group relative animate-fade-in-up"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500 to-purple-600 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition duration-500" />
-                    
-                    <div className="relative bg-gradient-to-br from-gray-900 to-black rounded-2xl border border-amber-500/20 overflow-hidden hover:border-amber-500/40 transition-all duration-500">
-                      
-                      {/* Position Indicator for Sorting */}
-                      {sortBy === 'highest-value' && index === 0 && (
-                        <div className="absolute top-4 left-4 z-20">
-                          <div className="bg-gradient-to-r from-amber-500 to-purple-600 px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg">
-                            <Crown className="w-3 h-3 text-white" />
-                            <span className="text-white text-xs font-bold">TOP PRIZE</span>
-                          </div>
-                        </div>
-                      )}
+                {paginatedWinners.map((winner, index) => {
+                  const cashValue = extractCashValue(winner.prizeValue);
+                  const points = extractPoints(winner.prizeValue);
+                  const pointsDisplay = getPointsDisplay(winner.prizeValue);
 
-                      {sortBy === 'newest' && index === 0 && (
-                        <div className="absolute top-4 left-4 z-20">
-                          <div className="bg-gradient-to-r from-amber-500 to-purple-600 px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg">
-                            <Sparkles className="w-3 h-3 text-white" />
-                            <span className="text-white text-xs font-bold">FRESH VICTORY</span>
-                          </div>
-                        </div>
-                      )}
+                  return (
+                    <div
+                      key={winner.id}
+                      className="group relative animate-fade-in-up"
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500 to-purple-600 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition duration-500" />
                       
-                      {/* Value Badge */}
-                      <div className="absolute top-4 right-4 z-20">
-                        <div className="bg-gradient-to-r from-amber-500/90 to-purple-600/90 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
-                          <Star className="w-3 h-3 text-white fill-current" />
-                          <span className="text-white font-bold text-sm">£{parseFloat(winner.prizeValue).toLocaleString()}</span>
-                        </div>
-                      </div>
+                      <div className="relative bg-gradient-to-br from-gray-900 to-black rounded-2xl border border-amber-500/20 overflow-hidden hover:border-amber-500/40 transition-all duration-500">
+                        
+                        {/* Position Indicators */}
+                        {sortBy === 'highest-value' && index === 0 && (
+                          <div className="absolute top-4 left-4 z-20">
+                            <div className="bg-gradient-to-r from-amber-500 to-purple-600 px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg">
+                              <Crown className="w-3 h-3 text-white" />
+                              <span className="text-white text-xs font-bold">TOP CASH PRIZE</span>
+                            </div>
+                          </div>
+                        )}
 
-                      {/* Image Container */}
-                      <div className="relative overflow-hidden h-64">
-                        {winner.imageUrl ? (
-                          <>
-                            <img
-                              src={winner.imageUrl}
-                              alt={winner.prizeDescription}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-60" />
-                          </>
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-gray-800 to-black flex items-center justify-center">
-                            <Award className="w-20 h-20 text-amber-500/20" />
+                        {sortBy === 'highest-points' && index === 0 && (
+                          <div className="absolute top-4 left-4 z-20">
+                            <div className="bg-gradient-to-r from-blue-500 to-cyan-600 px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg">
+                              <Coins className="w-3 h-3 text-white" />
+                              <span className="text-white text-xs font-bold">TOP POINTS</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {sortBy === 'newest' && index === 0 && (
+                          <div className="absolute top-4 left-4 z-20">
+                            <div className="bg-gradient-to-r from-amber-500 to-purple-600 px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg">
+                              <Sparkles className="w-3 h-3 text-white" />
+                              <span className="text-white text-xs font-bold">FRESH VICTORY</span>
+                            </div>
                           </div>
                         )}
                         
-                        <div className="absolute bottom-4 left-4 z-10">
-                          <Crown className="w-8 h-8 text-amber-400/40" />
-                        </div>
-                      </div>
+                        {/* Value Badges - Show BOTH cash and points if they exist */}
+                        <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
+                          {/* Cash Value */}
+                          {cashValue > 0 && (
+                            <div className="bg-gradient-to-r from-amber-500/90 to-purple-600/90 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
+                              <Star className="w-3 h-3 text-white fill-current" />
+                              <span className="text-white font-bold text-sm">£{cashValue.toLocaleString()}</span>
+                            </div>
+                          )}
+                          
+                          {/* Points */}
+                          {points > 0 && (
+                            <div className="bg-gradient-to-r from-blue-500/90 to-cyan-600/90 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
+                              <Coins className="w-3 h-3 text-white" />
+                              <span className="text-white font-bold text-sm">{points.toLocaleString()} {pointsDisplay}</span>
+                            </div>
+                          )}
 
-                      {/* Content */}
-                      <div className="p-6 space-y-4">
-                        <div>
-                          <h3 className="font-playfair text-xl font-bold text-white mb-2 line-clamp-2 group-hover:text-amber-400 transition-colors">
-                            {winner.prizeDescription}
-                          </h3>
-                          {winner.competition && (
-                            <div className="flex items-center gap-2 text-gray-400 text-sm">
-                              <Calendar className="w-3 h-3" />
-                              <span>{winner.competition.title}</span>
+                          {/* Fallback if neither cash nor points detected */}
+                          {cashValue === 0 && points === 0 && (
+                            <div className="bg-gradient-to-r from-gray-500/90 to-gray-600/90 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
+                              <Award className="w-3 h-3 text-white" />
+                              <span className="text-white font-bold text-sm">{winner.prizeValue}</span>
                             </div>
                           )}
                         </div>
 
-                        <div className="pt-4 border-t border-amber-500/20">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Winner</p>
-                              <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-purple-600 flex items-center justify-center">
-                                  <span className="text-white text-xs font-bold">
-                                    {winner.user?.firstName?.charAt(0)}{winner.user?.lastName?.charAt(0)}
-                                  </span>
+                        {/* Image Container */}
+                        <div className="relative overflow-hidden h-64">
+                          {winner.imageUrl ? (
+                            <>
+                              <img
+                                src={winner.imageUrl}
+                                alt={winner.prizeDescription}
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-60" />
+                            </>
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-gray-800 to-black flex items-center justify-center">
+                              <Award className="w-20 h-20 text-amber-500/20" />
+                            </div>
+                          )}
+                          
+                          <div className="absolute bottom-4 left-4 z-10">
+                            <Crown className="w-8 h-8 text-amber-400/40" />
+                          </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-6 space-y-4">
+                          <div>
+                            <h3 className="font-playfair text-xl font-bold text-white mb-2 line-clamp-2 group-hover:text-amber-400 transition-colors">
+                              {winner.prizeDescription}
+                            </h3>
+                            {winner.competition && (
+                              <div className="flex items-center gap-2 text-gray-400 text-sm">
+                                <Calendar className="w-3 h-3" />
+                                <span>{winner.competition.title}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pt-4 border-t border-amber-500/20">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Winner</p>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-purple-600 flex items-center justify-center">
+                                    <span className="text-white text-xs font-bold">
+                                      {winner.user?.firstName?.charAt(0)}{winner.user?.lastName?.charAt(0)}
+                                    </span>
+                                  </div>
+                                  <p className="font-semibold text-white">
+                                    {winner.user?.firstName} {winner.user?.lastName?.charAt(0)}.
+                                  </p>
                                 </div>
-                                <p className="font-semibold text-white">
-                                  {winner.user?.firstName} {winner.user?.lastName?.charAt(0)}.
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-gray-500">Victory Date</p>
+                                <p className="text-sm text-amber-400 font-medium">
+                                  {new Date(winner.createdAt).toLocaleDateString('en-GB', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric'
+                                  })}
                                 </p>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <p className="text-xs text-gray-500">Victory Date</p>
-                              <p className="text-sm text-amber-400 font-medium">
-                                {new Date(winner.createdAt).toLocaleDateString('en-GB', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric'
-                                })}
-                              </p>
-                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="absolute inset-0 bg-gradient-to-t from-amber-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-amber-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* LUXURY PAGINATION */}

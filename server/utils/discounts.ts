@@ -1,9 +1,17 @@
 // server/utils/discounts.ts
 
+// OLD DISCOUNTS - Replace these:
+// export const TICKET_DISCOUNTS: Record<number, number> = {
+//   5: 0.10,  // 10% off for 5 tickets
+//   10: 0.15, // 15% off for 10 tickets
+//   15: 0.20, // 20% off for 15 tickets
+// };
+
+// NEW DISCOUNTS - Add these:
 export const TICKET_DISCOUNTS: Record<number, number> = {
-  5: 0.10,  // 10% off for 5 tickets
-  10: 0.15, // 15% off for 10 tickets
-  15: 0.20, // 20% off for 15 tickets
+  10: 0.02,  // 2% off for 10 plays
+  20: 0.05,  // 5% off for 20 plays
+  50: 0.10,  // 10% off for 50 plays
 };
 
 export function generateRandomCode(length: number = 8): string {
