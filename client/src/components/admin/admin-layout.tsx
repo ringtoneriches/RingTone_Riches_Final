@@ -67,7 +67,7 @@ const sidebarGroups = [
       { name: "Ringtone Plinko", path: "/admin/plinko", icon: Target },
       { name: "Ringtone Voltz", path: "/admin/voltz", icon: Zap },
       
-      // { name: "Ringtone Slot", path: "/admin/slot", icon: Zap },
+      { name: "Ringtone Slot", path: "/admin/slot", icon: Zap },
       // { name: "Ringtone Royal", path: "/admin/royal", icon: Zap },
     ],
     protected: true,

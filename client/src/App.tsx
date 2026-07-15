@@ -188,8 +188,8 @@ function Router() {
       <Route path="/admin/winners" component={AdminAddWinner} />
       <Route path="/admin/slot" component={AdminSlotMachine} />
       <Route path="/admin/royal" component={AdminRoyalReels} />
-      <Route path="/admin/royal-reels/settings" component={AdminRoyalReelsSettings} />
-      <Route path="/admin/slot-machine/settings" component={AdminSlotMachineSettings} />
+      {/* <Route path="/admin/royal-reels/settings" component={AdminRoyalReelsSettings} />
+      <Route path="/admin/slot-machine/settings" component={AdminSlotMachineSettings} /> */}
       <Route path="/admin/bulk-points" component={AdminBulkPoints } />
       <Route component={NotFound} />
     </Switch>

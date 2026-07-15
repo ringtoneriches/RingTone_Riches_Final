@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style type="text/css">
+        body {
+            background-image: url("png/Background_2.png");
+            background-color: #0d0005;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+            padding: 0px;
+            margin: 0px;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            margin: 0;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+    <script src="js/phaser.js"></script>
+</head>
+<body>
+    <script src="js/slotConfigRoyalReels.js"></script>
+    <script src="js/mkutils.js"></script>
+    <script src="js/popups.js"></script>
+    <script src="js/state_machine.js"></script>
+    <script src="js/slot_classes.js"></script>
+    <script src="js/slotGame.js"></script>
+    <script>
+        // Override loadSceneConfig to use the Royal Reels config
+        // This runs AFTER slotGame.js defines the class but BEFORE window.onload fires
+        (function() {
+            var _orig = SlotGame.prototype.loadSceneConfig;
+            SlotGame.prototype.loadSceneConfig = function() {
+                slotConfig = slotConfigRoyalReels;
+                try {
+                    var params = new URLSearchParams(window.location.search);
+                    var credits = parseInt(params.get('credits') || '0');
+                    if (credits > 0) slotConfig.defaultCoins = credits;
+                } catch(e) {}
+            };
+        })();
+    </script>
+</body>
+</html>

@@ -1,7 +1,5 @@
-class PreSpinState
-{
-    constructor(scene, stateMachine)
-    {
+class PreSpinState {
+    constructor(scene, stateMachine) {
         this.stateMachine = stateMachine;
         this.stateObject = scene;
         this.slotControls = scene.slotControls;
@@ -10,23 +8,22 @@ class PreSpinState
         this.guiController;
         this.slotPlayer = scene.slotPlayer;;
         this.subState = null;
+        // const fx = logo.postFX.addShine(0.5, 0.2, 5);
+
     }
 
-    enterFrom(oldState)
-    {
+    enterFrom(oldState) {
         console.log(this.toString() + ' - Enter From: ' + oldState.toString());
 
-        if (this.spinButton !== null)
-        {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.add(this.longPressSpin_Click, this);
             this.spinButton.clickEvent.add(this.spin_Click, this);
             this.spinButton.pointerDownEvent.add(this.spin_PointerDown, this);
             this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown, this);
         }
 
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
+        if (this.autoSpinButton !== null) {
+            // this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
         }
 
         this.slotControls.setControlActivity(false, false, false);      // activity, spinButtonAcivity, autoSpinButtonAcivity
@@ -34,23 +31,22 @@ class PreSpinState
         this.stateObject.winController.resetWin();
         this.stateObject.isFreeSpin = false;
 
-        if(this.stateObject.isCascadeSpin) // first cascade spin
+        if (this.stateObject.isCascadeSpin) // first cascade spin
         {
             this.stateMachine.changeState(this.stateObject.spinState);
             return;
         }
 
-        if (!this.slotControls.isAnyLineSelected())
-        {
-            var mess = this.stateObject.guiController.showMessage('', 'Please select a any line.', this, ()=>{this.stateObject.guiController.closePopUp(mess);});
+        if (!this.slotControls.isAnyLineSelected()) {
+            var mess = this.stateObject.guiController.showMessage('', 'Please select a any line.', this, () => { this.stateObject.guiController.closePopUp(mess); });
             this.stateMachine.changeState(this.stateObject.iddleState);
             return;
         }
 
-        if (this.slotControls.getTotalBet() > this.slotPlayer.coins)
-        {
-            var mess = this.stateObject.guiController.showMessage('Sorry!', 'You have no money.', this, ()=>{this.stateObject.guiController.closePopUp(mess);});
-            if(this.slotControls.auto) this.slotControls.resetAutoSpinsMode();
+        if (this.slotControls.getTotalBet() > this.slotPlayer.coins) {
+            var mess = this.stateObject.guiController.showNegativeMessage('Sorry!', 'You have no money.', this, () => { this.stateObject.guiController.closePopUp(mess); });
+
+            if (this.slotControls.auto) this.slotControls.resetAutoSpinsMode();
             this.stateMachine.changeState(this.stateObject.iddleState);
             return;
         }
@@ -60,70 +56,58 @@ class PreSpinState
         this.stateMachine.changeState(this.stateObject.spinState);
     }
 
-    exitTo(newState)
-    {
-        if (this.spinButton !== null)
-        {
-            this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
-            this.spinButton.clickEvent.remove(this.spin_Click);
-            this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
-            this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
+    exitTo(newState) {
+        // exitTo can be called after Win/Lose/cascade transitions; guard against undefined MKEvent wrappers.
+        if (this.spinButton !== null && this.spinButton !== undefined) {
+            if (this.spinButton.longPressClickEvent) this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
+            if (this.spinButton.clickEvent) this.spinButton.clickEvent.remove(this.spin_Click);
+            if (this.spinButton.pointerDownEvent) this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
+            if (this.spinButton.longPointerDownEvent) this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
+        if (this.autoSpinButton !== null && this.autoSpinButton !== undefined) {
+            if (this.autoSpinButton.clickEvent) this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
         }
     }
 
     //region input
-    spin_PointerDown()
-    {
+    spin_PointerDown() {
 
     }
 
-    spin_LongPointerDown()
-    {
+    spin_LongPointerDown() {
 
     }
 
-    longPressSpin_Click()
-    {
-          
-    }
-
-    spin_Click()
-    {
+    longPressSpin_Click() {
 
     }
 
-    autoSpin_Click()
-    {
+    spin_Click() {
+
+    }
+
+    autoSpin_Click() {
 
     }
     //endregion input
 
     //region old
-    handleInput()
-    {
+    handleInput() {
         handleInput();
     }
 
-    physicsUpdate()
-    {
+    physicsUpdate() {
 
     }
     //endregion old
 
-    toString()
-    {
+    toString() {
         return 'PreSpinState';
     }
 }
 
-class SpinState
-{
-    constructor(scene, stateMachine)
-    {
+class SpinState {
+    constructor(scene, stateMachine) {
         this.stateMachine = stateMachine;
         this.stateObject = scene;
         this.slotControls = scene.slotControls;
@@ -135,68 +119,58 @@ class SpinState
         this.subState = null;
     }
 
-     enterFrom(oldState)
-     {
+    enterFrom(oldState) {
         console.log(this.toString() + ' - Enter From: ' + oldState.toString());
         if (this.stateObject.isCascadeSpin) this.subState = this.cascadeSpinState; // first cascade spins
         else if (this.slotControls.hasFreeSpin()) this.subState = this.freeSpinState;
         else if (this.slotControls.auto) this.subState = this.autoSpinState;
         else if (this.slotControls.useManualStop()) this.subState = this.endLessSpinState;
         else this.subState = this.normalSpinState;
-        console.log('Spin Substate: ' +  this.subState.toString());
+        console.log('Spin Substate: ' + this.subState.toString());
         this.subState.enterFrom(oldState);
-     }
+    }
 
-     exitTo(newState)
-     {
+    exitTo(newState) {
         this.subState.exitTo(newState);
         this.subState = null;
-     }
+    }
 
-     //region old
-     handleInput()
-     {
-    
-     }
+    //region old
+    handleInput() {
 
-     physicsUpdate()
-     {
-   
-     }
-     //endregion old
+    }
 
-     toString()
-     {
-         return (this.subState !== null) ? this.subState.toString() : 'SpinState';
-     }
+    physicsUpdate() {
+
+    }
+    //endregion old
+
+    toString() {
+        return (this.subState !== null) ? this.subState.toString() : 'SpinState';
+    }
 }
 
-class AutoSpinState
-{
+class AutoSpinState {
 
-    constructor(scene,  stateMachine)
-     {
+    constructor(scene, stateMachine) {
         this.stateMachine = stateMachine;
         this.stateObject = scene;
         this.slotControls = scene.slotControls;
         this.spinButton = this.slotControls.slotSpinButton;
         this.autoSpinButton = this.slotControls.slotAutoSpinButton;
-     }
+    }
 
-     enterFrom(oldState)
-     {
+    enterFrom(oldState) {
         console.log(this.toString() + " - Enter From: " + oldState.toString());
 
-        if (this.spinButton !== null)
-        {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.add(this.longPressSpin_Click, this);
             this.spinButton.clickEvent.add(this.spin_Click, this);
             this.spinButton.pointerDownEvent.add(this.spin_PointerDown, this);
             this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown, this);
         }
 
-        if (this.autoSpinButton !== null)
-        {
+        if (this.autoSpinButton !== null) {
             this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
         }
 
@@ -205,68 +179,56 @@ class AutoSpinState
         console.log(this.toString() + " - run auto spin");
         this.slotControls.applyBet();
         this.stateObject.runSlot();
-     }
+    }
 
-    exitTo(newState)
-    {
-        if (this.spinButton !== null)
-        {
-            this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
-            this.spinButton.clickEvent.remove(this.spin_Click);
-            this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
-            this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
+    exitTo(newState) {
+        // Guard against undefined spin event wrappers during win -> next-state transitions.
+        if (this.spinButton !== null && this.spinButton !== undefined) {
+            if (this.spinButton.longPressClickEvent) this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
+            if (this.spinButton.clickEvent) this.spinButton.clickEvent.remove(this.spin_Click);
+            if (this.spinButton.pointerDownEvent) this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
+            if (this.spinButton.longPointerDownEvent) this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
+        if (this.autoSpinButton !== null && this.autoSpinButton !== undefined) {
+            if (this.autoSpinButton.clickEvent) this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
         }
     }
 
-     //region input
-    spin_PointerDown()
-    {
+    //region input
+    spin_PointerDown() {
     }
 
-    spin_LongPointerDown()
-    {
+    spin_LongPointerDown() {
     }
 
-    longPressSpin_Click()
-    {
+    longPressSpin_Click() {
         this.slotControls.resetAutoSpinsMode();
     }
 
-    spin_Click()
-    {
+    spin_Click() {
         this.slotControls.resetAutoSpinsMode();
     }
 
-    autoSpin_Click()
-    {
+    autoSpin_Click() {
         this.slotControls.resetAutoSpinsMode();
     }
     //endregion input
 
     //region old
-    handleInput()
-    {
+    handleInput() {
     }
 
-    physicsUpdate()
-    {
+    physicsUpdate() {
     }
     //endregion old
 
-    toString()
-    {
+    toString() {
         return "AutoSpinState";
     }
- }
+}
 
-class NormalSpinState
-{
-    constructor(scene, stateMachine)
-    {
+class NormalSpinState {
+    constructor(scene, stateMachine) {
         this.stateMachine = stateMachine;
         this.stateObject = scene;
         this.slotControls = scene.slotControls;
@@ -277,99 +239,82 @@ class NormalSpinState
 
     }
 
-    enterFrom(oldState)
-    {
+    enterFrom(oldState) {
         console.log(this.toString() + ' - Enter From: ' + oldState.toString());
-        if (this.spinButton !== null)
-        {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.add(this.longPressSpin_Click);
             this.spinButton.clickEvent.add(this.spin_Click);
             this.spinButton.pointerDownEvent.add(this.spin_PointerDown);
             this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown);
         }
 
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.add(this.autoSpin_Click);
+        if (this.autoSpinButton !== null) {
+            // this.autoSpinButton.clickEvent.add(this.autoSpin_Click);
         }
 
         this.slotControls.setSpinButtonText('SPIN');
-        this.slotControls.setControlActivity(false, false,false);       // activity, spinButtonAcivity, autoSpinButtonAcivity
+        this.slotControls.setControlActivity(false, false, false);       // activity, spinButtonAcivity, autoSpinButtonAcivity
         console.log(this.toString() + '  - run normal spin');
         this.slotControls.applyBet();
         this.stateObject.runSlot();
     }
 
-    exitTo(newState)
-    {
-        if (this.spinButton !== null)
-        {
+    exitTo(newState) {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
             this.spinButton.clickEvent.remove(this.spin_Click);
             this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
             this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
+        if (this.autoSpinButton !== null) {
+            // this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
         }
     }
 
     // region input
-    spin_PointerDown()
-    {
+    spin_PointerDown() {
 
     }
 
-    spin_LongPointerDown()
-    {
+    spin_LongPointerDown() {
 
     }
 
-    longPressSpin_Click()
-    {
-          
-    }
-
-    spin_Click()
-    {
+    longPressSpin_Click() {
 
     }
 
-    autoSpin_Click()
-    {
+    spin_Click() {
+
+    }
+
+    autoSpin_Click() {
 
     }
     //endregion input
 
 
     //region old
-    handleInput()
-    {
+    handleInput() {
 
     }
 
-    physicsUpdate()
-    {
+    physicsUpdate() {
 
     }
     //endregion old
 
-    toString()
-    {
+    toString() {
         return 'NormalSpinState';
     }
 
-    calcWinHandler(win)
-    {
-        if (win) this.stateMachine.changeState(this.stateObject.winState);  else this.stateMachine.changeState(this.stateObject.looseState); 
+    calcWinHandler(win) {
+        if (win) this.stateMachine.changeState(this.stateObject.winState); else this.stateMachine.changeState(this.stateObject.looseState);
     }
 }
 
-class IddleState
-{
-    constructor(scene, stateMachine) 
-    {
+class IddleState {
+    constructor(scene, stateMachine) {
         this.stateMachine = stateMachine;
         this.stateObject = scene;
         this.slotControls = scene.slotControls;
@@ -377,67 +322,55 @@ class IddleState
         this.autoSpinButton = this.slotControls.slotAutoSpinButton;
     }
 
-    enterFrom(oldState)
-    {
+    enterFrom(oldState) {
         console.log(this.toString() + ' - enter from: ' + ((oldState === null) ? 'null' : oldState.toString()));
-        if (this.spinButton !== null)
-        {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.add(this.longPressSpin_Click, this);
             this.spinButton.clickEvent.add(this.spin_Click, this);
             this.spinButton.pointerDownEvent.add(this.spin_PointerDown, this);
             this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown, this);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
+        if (this.autoSpinButton !== null) {
+            // this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
         }
 
         this.slotControls.setControlActivity(true, true, true);     // activity, spinButtonAcivity, autoSpinButtonAcivity
         this.slotControls.setSpinButtonText('SPIN');
     }
 
-    exitTo(newState)
-    {
+    exitTo(newState) {
         console.log(this.toString() + ' - Exit To: ' + newState.toString());
-        if (this.spinButton !== null)
-        {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
             this.spinButton.clickEvent.remove(this.spin_Click);
             this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
             this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
+        if (this.autoSpinButton !== null) {
+            // this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
         }
     }
 
     //region input
-    spin_PointerDown()
-    {
+    spin_PointerDown() {
     }
 
-    spin_LongPointerDown()
-    {
+    spin_LongPointerDown() {
     }
 
-    longPressSpin_Click()
-    {
-        if (this.slotControls.holdToAutoSpin)
-        {
+    longPressSpin_Click() {
+        if (this.slotControls.holdToAutoSpin) {
             this.slotControls.setAutoSpinsMode();
         }
         this.stateMachine.changeState(this.stateObject.preSpinState);
     }
 
-    spin_Click()
-    {
+    spin_Click() {
         console.log(this.toString() + " - Spin Click");
         this.stateMachine.changeState(this.stateObject.preSpinState);
     }
 
-    autoSpin_Click()
-    {
+    autoSpin_Click() {
         console.log(this.toString() + " - Auto Spin Click");
         this.slotControls.setAutoSpinsMode();
         this.stateMachine.changeState(this.stateObject.preSpinState);
@@ -445,25 +378,20 @@ class IddleState
     //endregion input
 
     //region old
-    handleInput()
-    {
+    handleInput() {
     }
 
-    physicsUpdate()
-    {
+    physicsUpdate() {
     }
     //endregion old
 
-    toString()
-    {
+    toString() {
         return 'IddleState';
     }
 }
 
-class FreeSpinState 
-{
-    constructor(scene, stateMachine)
-    {
+class FreeSpinState {
+    constructor(scene, stateMachine) {
         this.stateMachine = stateMachine;
         this.stateObject = scene;
         this.slotControls = scene.slotControls;
@@ -471,19 +399,16 @@ class FreeSpinState
         this.autoSpinButton = this.slotControls.slotAutoSpinButton;
     }
 
-    enterFrom(oldState)
-    {
+    enterFrom(oldState) {
         console.log(this.toString() + " - Enter From: " + oldState.toString());
-        if (this.spinButton !== null)
-        {
-            this.spinButton.longPressClickEvent.add(this.longPressSpin_Click, this);
-            this.spinButton.clickEvent.add(this.spin_Click, this);
-            this.spinButton.pointerDownEvent.add(this.spin_PointerDown, this);
-            this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown, this);
+        if (this.spinButton !== null && this.spinButton !== undefined) {
+            if (this.spinButton.longPressClickEvent) this.spinButton.longPressClickEvent.add(this.longPressSpin_Click, this);
+            if (this.spinButton.clickEvent) this.spinButton.clickEvent.add(this.spin_Click, this);
+            if (this.spinButton.pointerDownEvent) this.spinButton.pointerDownEvent.add(this.spin_PointerDown, this);
+            if (this.spinButton.longPointerDownEvent) this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown, this);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
+        if (this.autoSpinButton !== null && this.autoSpinButton !== undefined) {
+            if (this.autoSpinButton.clickEvent) this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
         }
         this.slotControls.setControlActivity(false, this.slotControls.auto, false);      // activity, spinButtonAcivity, autoSpinButtonAcivity
         console.log(this.toString() + "  - run free spin");
@@ -493,47 +418,44 @@ class FreeSpinState
         this.slotControls.setSpinButtonText(this.slotControls.freeSpins.toString());
     }
 
-    exitTo(newState)
-    {
+
+    exitTo(newState) {
         console.log(this.toString() + " - Exit To: " + newState.toString());
-        if (this.spinButton !== null)
-        {
-            this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
-            this.spinButton.clickEvent.remove(this.spin_Click);
-            this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
-            this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
+        // Guard against undefined MKEvent wrappers during win -> next-state transitions.
+        if (this.spinButton !== null && this.spinButton !== undefined) {
+            if (this.spinButton.longPressClickEvent) this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
+            if (this.spinButton.clickEvent) this.spinButton.clickEvent.remove(this.spin_Click);
+            if (this.spinButton.pointerDownEvent) this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
+            if (this.spinButton.longPointerDownEvent) this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
+        // IMPORTANT: autoSpinButton can be null (or not constructed) during some transitions.
+        if (this.autoSpinButton !== null && this.autoSpinButton !== undefined) {
+            if (this.autoSpinButton.clickEvent) this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
         }
     }
+
+
 
     //region input
-    spin_PointerDown()
-    {
+    spin_PointerDown() {
     }
 
-    spin_LongPointerDown()
-    {
+    spin_LongPointerDown() {
     }
 
-    longPressSpin_Click()
-    {
+    longPressSpin_Click() {
         this.slotControls.resetAutoSpinsMode();
         // and diisable input
         this.slotControls.setControlActivity(false, false, false);      // activity, spinButtonAcivity, autoSpinButtonAcivity
     }
 
-    spin_Click()
-    {
+    spin_Click() {
         this.slotControls.resetAutoSpinsMode();
         // and diisable input
         this.slotControls.setControlActivity(false, false, false);      // activity, spinButtonAcivity, autoSpinButtonAcivity
     }
 
-    autoSpin_Click()
-    {
+    autoSpin_Click() {
         this.slotControls.resetAutoSpinsMode();
         // and diisable input
         this.slotControls.setControlActivity(false, false, false);      // activity, spinButtonAcivity, autoSpinButtonAcivity
@@ -541,26 +463,21 @@ class FreeSpinState
     //endregion input
 
     //region old
-    handleInput()
-    {
+    handleInput() {
     }
 
-    physicsUpdate()
-    {
+    physicsUpdate() {
     }
     //endregion old
 
-    toString()
-    {
+    toString() {
         return "FreeSpinState";
     }
 }
 
 // not used in this version
-class EndLessSpinState
-{
-    constructor(scene, stateMachine)
-    {
+class EndLessSpinState {
+    constructor(scene, stateMachine) {
         this.stateMachine = stateMachine;
         this.stateObject = scene;
         this.slotControls = scene.slotControls;
@@ -568,18 +485,15 @@ class EndLessSpinState
         this.autoSpinButton = this.slotControls.slotAutoSpinButton;
     }
 
-    enterFrom(oldState)
-    {
+    enterFrom(oldState) {
         console.log(this.toString() + " - Enter From: " + oldState.toString());
-        if (this.spinButton !== null)
-        {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.add(this.longPressSpin_Click, this);
             this.spinButton.clickEvent.add(this.spin_Click, this);
             this.spinButton.pointerDownEvent.add(this.spin_PointerDown, this);
             this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown, this);
         }
-        if (this.autoSpinButton !== null)
-        {
+        if (this.autoSpinButton !== null) {
             this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
         }
         this.slotControls.setSpinButtonText("STOP");
@@ -590,71 +504,58 @@ class EndLessSpinState
         this.stateObject.runSlotEndLess();
     }
 
-    exitTo(newState)
-    {
+    exitTo(newState) {
         console.log(this.toString() + " - Exit To: " + newState.toString());
-        if (this.spinButton !== null)
-        {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
             this.spinButton.clickEvent.remove(this.spin_Click);
             this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
             this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
         }
-        if (this.autoSpinButton !== null)
-        {
+        if (this.autoSpinButton !== null) {
             this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
         }
     }
 
     //region input
-    spin_PointerDown()
-    {
+    spin_PointerDown() {
     }
 
-    spin_LongPointerDown()
-    {
+    spin_LongPointerDown() {
     }
 
-    longPressSpin_Click()
-    {
+    longPressSpin_Click() {
         this.stateObject.stopSlot();
         this.slotControls.setControlActivity(false, false, false);      // activity, spinButtonAcivity, autoSpinButtonAcivity
         this.slotControls.setSpinButtonText("SPIN");
     }
 
-    spin_Click()
-    {
+    spin_Click() {
         this.stateObject.stopSlot();
         this.slotControls.setControlActivity(false, false, false);      // activity, spinButtonAcivity, autoSpinButtonAcivity
         this.slotControls.setSpinButtonText("SPIN");
     }
 
-    autoSpin_Click()
-    {       
+    autoSpin_Click() {
     }
     //endregion input
 
     //region old
-    handleInput()
-    {
+    handleInput() {
     }
 
-    physicsUpdate()
-    {
+    physicsUpdate() {
     }
     //endregion old
 
-    toString()
-    {
+    toString() {
         return "EndlessSpinState";
     }
 }
 
 // not used in this version
-class CascadeSpinState
-{
-    constructor(scene, stateMachine)
-    {
+class CascadeSpinState {
+    constructor(scene, stateMachine) {
         this.stateMachine = stateMachine;
         this.stateObject = scene;
         this.slotControls = scene.slotControls;
@@ -663,18 +564,15 @@ class CascadeSpinState
         this.guiController;
     }
 
-    enterFrom(oldState)
-    {
+    enterFrom(oldState) {
         console.log(this.toString() + " - Enter From: " + oldState.toString());
-        if (this.spinButton !== null)
-        {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.add(this.longPressSpin_Click, this);
             this.spinButton.clickEvent.add(this.spin_Click, this);
             this.spinButton.pointerDownEvent.add(this.spin_PointerDown, this);
             this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown, this);
         }
-        if (this.autoSpinButton !== null)
-        {
+        if (this.autoSpinButton !== null) {
             this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
         }
 
@@ -684,63 +582,50 @@ class CascadeSpinState
         this.stateObject.runCascadeSpin();  // run cascade spin
     }
 
-    exitTo(newState)
-    {
-        if (this.spinButton !== null)
-        {
-            this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
-            this.spinButton.clickEvent.remove(this.spin_Click);
-            this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
-            this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
+    exitTo(newState) {
+        if (this.spinButton !== null && this.spinButton !== undefined) {
+            if (this.spinButton.longPressClickEvent) this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
+            if (this.spinButton.clickEvent) this.spinButton.clickEvent.remove(this.spin_Click);
+            if (this.spinButton.pointerDownEvent) this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
+            if (this.spinButton.longPointerDownEvent) this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
+        if (this.autoSpinButton !== null && this.autoSpinButton !== undefined) {
+            if (this.autoSpinButton.clickEvent) this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
         }
     }
 
     //region input
-    spin_PointerDown()
-    {
+    spin_PointerDown() {
     }
 
-    spin_LongPointerDown()
-    {
+    spin_LongPointerDown() {
     }
 
-    longPressSpin_Click()
-    {        
+    longPressSpin_Click() {
     }
 
-    spin_Click()
-    {
+    spin_Click() {
     }
 
-    autoSpin_Click()
-    {
+    autoSpin_Click() {
     }
     //endregion input
 
     //region old
-    handleInput()
-    {
+    handleInput() {
     }
 
-    physicsUpdate()
-    {
+    physicsUpdate() {
     }
     //endregion old
 
-    toString()
-    {
+    toString() {
         return "CascadeSpinState";
     }
 }
 
-class WinState 
-{
-    constructor(scene, stateMachine)
-    {
+class WinState {
+    constructor(scene, stateMachine) {
         this.stateMachine = stateMachine;
         this.stateObject = scene;
         this.slotControls = scene.slotControls;
@@ -748,76 +633,63 @@ class WinState
         this.autoSpinButton = this.slotControls.slotAutoSpinButton;
     }
 
-    enterFrom(oldState)
-    {
+    enterFrom(oldState) {
         console.log(this.toString() + " - Enter From: " + oldState.toString());
-        if (this.spinButton !== null)
-        {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.add(this.longPressSpin_Click, this);
             this.spinButton.clickEvent.add(this.spin_Click, this);
             this.spinButton.pointerDownEvent.add(this.spin_PointerDown, this);
             this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown, this);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
+        if (this.autoSpinButton !== null) {
+            // this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
         }
         this.slotControls.setSpinButtonText(this.slotControls.freeSpins > 0 ? this.slotControls.freeSpins : "SPIN");
 
         // control activity
         this.slotControls.setControlActivity(false, this.slotControls.auto, false);                                 // activity, spinButtonAcivity, autoSpinButtonAcivity
-        if(this.stateObject.isCascadeSpin) this.stateObject.winShow(() => {this.stateMachine.changeState(this.stateObject.preSpinState);});            // winshow -> prespin state -> cascade spin
-        else this.stateObject.winShow(() => {this.stateMachine.changeState(this.stateObject.freeInputWinState);});
+        if (this.stateObject.isCascadeSpin) this.stateObject.winShow(() => { this.stateMachine.changeState(this.stateObject.preSpinState); });            // winshow -> prespin state -> cascade spin
+        else this.stateObject.winShow(() => { this.stateMachine.changeState(this.stateObject.freeInputWinState); });
     }
 
-    exitTo(newState)
-    {
-        if (this.spinButton !== null)
-        {
-            this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
-            this.spinButton.clickEvent.remove(this.spin_Click);
-            this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
-            this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
+    exitTo(newState) {
+        // Guard against undefined spin event wrappers when popup closes triggers a state change.
+        if (this.spinButton !== null && this.spinButton !== undefined) {
+            if (this.spinButton.longPressClickEvent) this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
+            if (this.spinButton.clickEvent) this.spinButton.clickEvent.remove(this.spin_Click);
+            if (this.spinButton.pointerDownEvent) this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
+            if (this.spinButton.longPointerDownEvent) this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
+        if (this.autoSpinButton !== null && this.autoSpinButton !== undefined) {
+            if (this.autoSpinButton.clickEvent) this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
         }
     }
 
     //region input
-    spin_PointerDown()
-    {
+    spin_PointerDown() {
     }
 
-    spin_LongPointerDown()
-    {
+    spin_LongPointerDown() {
     }
 
-    longPressSpin_Click()
-    {
-        if (this.slotControls.auto)
-        {
+    longPressSpin_Click() {
+        if (this.slotControls.auto) {
             this.slotControls.resetAutoSpinsMode();
             this.slotControls.setControlActivity(false, this.slotControls.auto, false); // activity, spinButtonAcivity, autoSpinButtonAcivity
             return;
         }
     }
 
-    spin_Click()
-    {
-        if (this.slotControls.auto)
-        {
+    spin_Click() {
+        if (this.slotControls.auto) {
             this.slotControls.resetAutoSpinsMode();
             this.slotControls.setControlActivity(false, this.slotControls.auto, false); // activity, spinButtonAcivity, autoSpinButtonAcivity
             return;
         }
     }
 
-    autoSpin_Click()
-    {
-        if (this.slotControls.auto)
-        {
+    autoSpin_Click() {
+        if (this.slotControls.auto) {
             this.slotControls.resetAutoSpinsMode();
             this.slotControls.setControlActivity(false, this.slotControls.auto, false);      // activity, spinButtonAcivity, autoSpinButtonAcivity
             return;
@@ -826,25 +698,20 @@ class WinState
     //endregion input
 
     //region old
-    handleInput()
-    {
+    handleInput() {
     }
 
-    physicsUpdate()
-    {
+    physicsUpdate() {
     }
     //endregion old
 
-    toString()
-    {
+    toString() {
         return "WinState";
     }
 }
 
-class LoseState
-{
-    constructor(scene, stateMachine)
-    {
+class LoseState {
+    constructor(scene, stateMachine) {
         this.stateMachine = stateMachine;
         this.stateObject = scene;
         this.slotControls = scene.slotControls;
@@ -854,131 +721,105 @@ class LoseState
         this.slotPlayer = scene.slotPlayer;;
     }
 
-    enterFrom(oldState)
-    {
+    enterFrom(oldState) {
         console.log(this.toString() + ' - Enter From: ' + oldState.toString());
 
-        if (this.spinButton !== null)
-        {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.add(this.longPressSpin_Click, this);
             this.spinButton.clickEvent.add(this.spin_Click, this);
             this.spinButton.pointerDownEvent.add(this.spin_PointerDown, this);
             this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown, this);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
+        if (this.autoSpinButton !== null) {
+            // this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
         }
 
         this.slotControls.setSpinButtonText(this.slotControls.freeSpins > 0 ? this.slotControls.freeSpins : 'SPIN');
 
         this.setInputActivity();
-        this.stateObject.loseShow((needSpin) =>
-        {
+        this.stateObject.loseShow((needSpin) => {
             if (needSpin) this.stateMachine.changeState(this.stateObject.preSpinState);
-            else
-            {
+            else {
             }
         });
     }
 
-    exitTo(newState)
-    {
-        if (this.spinButton !== null)
-        {
+    exitTo(newState) {
+        if (this.spinButton !== null) {
             this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
             this.spinButton.clickEvent.remove(this.spin_Click);
             this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
             this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
+        if (this.autoSpinButton !== null) {
+            // this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
         }
     }
 
     //region input
-    spin_PointerDown()
-    {
+    spin_PointerDown() {
     }
 
-    spin_LongPointerDown()
-    {
+    spin_LongPointerDown() {
     }
 
-    longPressSpin_Click()
-    {
-        if (this.slotControls.auto)
-        {
+    longPressSpin_Click() {
+        if (this.slotControls.auto) {
             this.slotControls.resetAutoSpinsMode();
             this.setInputActivity();
         }
-        else if (this.slotControls.holdToAutoSpin)
-        {
+        else if (this.slotControls.holdToAutoSpin) {
             this.slotControls.setAutoSpinsMode();
             this.stateMachine.changeState(this.stateObject.preSpinState);
         }
     }
 
-    spin_Click()
-    {
-        if (this.slotControls.auto)
-        {
+    spin_Click() {
+        if (this.slotControls.auto) {
             this.slotControls.resetAutoSpinsMode();
             this.setInputActivity();
         }
-        else
-        {
+        else {
             this.stateMachine.changeState(this.stateObject.preSpinState);
         }
     }
 
-    autoSpin_Click()
-    {
-        if (this.slotControls.auto)
-        {
+    autoSpin_Click() {
+        if (this.slotControls.auto) {
             this.slotControls.resetAutoSpinsMode();
             this.setInputActivity();
         }
-        else
-        {
+        else {
             this.slotControls.setAutoSpinsMode();
             this.stateMachine.changeState(this.stateObject.preSpinState);
         }
     }
     //endregion input
 
-    setInputActivity()
-    {
+    setInputActivity() {
         if (this.slotControls.hasFreeSpin() && this.slotControls.autoPlayFreeSpins) this.slotControls.setControlActivity(false, false, false);        // activity, spinButtonAcivity, autoSpinButtonAcivity
         else if (this.slotControls.hasFreeSpin() && !this.slotControls.autoPlayFreeSpins) this.slotControls.setControlActivity(false, true, false);   // activity, spinButtonAcivity, autoSpinButtonAcivity
-        else if (this.slotControls.auto)
-        {
+        else if (this.slotControls.auto) {
             this.slotControls.setControlActivity(false, true, true);    // activity, spinButtonAcivity, autoSpinButtonAcivity
         }
         else this.slotControls.setControlActivity(true, true, true);     // activity, spinButtonAcivity, autoSpinButtonAcivity
     }
 
     //region old
-    handleInput()
-    {
+    handleInput() {
     }
 
-    physicsUpdate()
-    {
+    physicsUpdate() {
     }
     //endregion old
 
-    toString()
-    {
+    toString() {
         return 'LooseState';
     }
 }
 
-class FreeInputWinState
-{
-    constructor(scene, stateMachine)
-    {
+class FreeInputWinState {
+    constructor(scene, stateMachine) {
         this.stateMachine = stateMachine;
         this.stateObject = scene;
         this.slotControls = scene.slotControls;
@@ -986,124 +827,104 @@ class FreeInputWinState
         this.autoSpinButton = this.slotControls.slotAutoSpinButton;
     }
 
-    enterFrom(oldState)
-    {
+    enterFrom(oldState) {
         console.log(this.toString() + ' - Enter From: ' + oldState.toString());
 
-        if (this.spinButton !== null)
-        {
-            this.spinButton.longPressClickEvent.add(this.longPressSpin_Click, this);
-            this.spinButton.clickEvent.add(this.spin_Click, this);
-            this.spinButton.pointerDownEvent.add(this.spin_PointerDown, this);
-            this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown, this);
+        // Guard against partially-constructed UI wrappers during popup close transitions.
+        if (this.spinButton !== null && this.spinButton !== undefined) {
+            if (this.spinButton.longPressClickEvent) this.spinButton.longPressClickEvent.add(this.longPressSpin_Click, this);
+            if (this.spinButton.clickEvent) this.spinButton.clickEvent.add(this.spin_Click, this);
+            if (this.spinButton.pointerDownEvent) this.spinButton.pointerDownEvent.add(this.spin_PointerDown, this);
+            if (this.spinButton.longPointerDownEvent) this.spinButton.longPointerDownEvent.add(this.spin_LongPointerDown, this);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
+        if (this.autoSpinButton !== null && this.autoSpinButton !== undefined) {
+            if (this.autoSpinButton.clickEvent) this.autoSpinButton.clickEvent.add(this.autoSpin_Click, this);
         }
 
         this.slotControls.setSpinButtonText(this.slotControls.freeSpins > 0 ? this.slotControls.freeSpins : 'SPIN');
         this.setInputActivity();
-        this.stateObject.freeInputWinShow((needSpin)=> { if (needSpin) this.stateMachine.changeState(this.stateObject.preSpinState); });
+        this.stateObject.freeInputWinShow((needSpin) => { if (needSpin) this.stateMachine.changeState(this.stateObject.preSpinState); });
     }
 
-    exitTo(newState)
-    {
-        if (this.spinButton !== null)
-        {
-            this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
-            this.spinButton.clickEvent.remove(this.spin_Click);
-            this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
-            this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
+
+    exitTo(newState) {
+        // Guard against undefined spin/auto button wrappers during popup close transitions.
+        if (this.spinButton !== null && this.spinButton !== undefined) {
+            if (this.spinButton.longPressClickEvent) this.spinButton.longPressClickEvent.remove(this.longPressSpin_Click);
+            if (this.spinButton.clickEvent) this.spinButton.clickEvent.remove(this.spin_Click);
+            if (this.spinButton.pointerDownEvent) this.spinButton.pointerDownEvent.remove(this.spin_PointerDown);
+            if (this.spinButton.longPointerDownEvent) this.spinButton.longPointerDownEvent.remove(this.spin_LongPointerDown);
         }
-        if (this.autoSpinButton !== null)
-        {
-            this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
+        if (this.autoSpinButton !== null && this.autoSpinButton !== undefined) {
+            if (this.autoSpinButton.clickEvent) this.autoSpinButton.clickEvent.remove(this.autoSpin_Click);
         }
     }
+
 
     //region input
-    spin_PointerDown()
-    {
+    spin_PointerDown() {
     }
 
-    spin_LongPointerDown()
-    {
+    spin_LongPointerDown() {
     }
 
-    longPressSpin_Click()
-    {
-        if (this.slotControls.auto)
-        {
+    longPressSpin_Click() {
+        if (this.slotControls.auto) {
             this.slotControls.resetAutoSpinsMode();
             this.setInputActivity();
         }
-        else if (this.slotControls.holdToAutoSpin)
-        {
+        else if (this.slotControls.holdToAutoSpin) {
             this.slotControls.setAutoSpinsMode();
             this.stateMachine.changeState(this.stateObject.preSpinState);
         }
     }
 
-    spin_Click()
-    {
-        if (this.slotControls.auto)
-        {
+    spin_Click() {
+        if (this.slotControls.auto) {
             this.slotControls.resetAutoSpinsMode();
             this.setInputActivity();
         }
-        else
-        {
+        else {
             this.stateMachine.changeState(this.stateObject.preSpinState);
         }
     }
 
-    autoSpin_Click()
-    {
-        if (this.slotControls.auto)
-        {
+    autoSpin_Click() {
+        if (this.slotControls.auto) {
             this.slotControls.resetAutoSpinsMode();
             this.setInputActivity();
         }
-        else
-        {
+        else {
             this.slotControls.setAutoSpinsMode();
             this.stateMachine.changeState(this.stateObject.preSpinState);
         }
     }
     //endregion input
 
-    setInputActivity()
-    {
+    setInputActivity() {
         if (this.slotControls.hasFreeSpin() && this.slotControls.autoPlayFreeSpins) this.slotControls.setControlActivity(false, false, false);        // activity, spinButtonAcivity, autoSpinButtonAcivity
         else if (this.slotControls.hasFreeSpin() && !this.slotControls.autoPlayFreeSpins) this.slotControls.setControlActivity(false, true, false);   // activity, spinButtonAcivity, autoSpinButtonAcivity
-        else if (this.slotControls.auto)
-        {
+        else if (this.slotControls.auto) {
             this.slotControls.setControlActivity(false, true, true);    // activity, spinButtonAcivity, autoSpinButtonAcivity
         }
         else this.slotControls.setControlActivity(true, true, true);     // activity, spinButtonAcivity, autoSpinButtonAcivity
     }
 
     //region old
-    handleInput()
-    {
+    handleInput() {
     }
 
-    physicsUpdate()
-    {
+    physicsUpdate() {
     }
     //endregion old
 
-    toString()
-    {
+    toString() {
         return 'FreeInputWinState';
     }
 }
 
-class SpinButton
-{
-    constructor (scene, spriteNormal, spriteHover, isSwitch)
-    {
+class SpinButton {
+    constructor(scene, spriteNormal, spriteHover, isSwitch) {
         this.spriteNormal = spriteNormal;
         this.spriteHover = spriteHover;
         this.scene = scene;
@@ -1114,22 +935,29 @@ class SpinButton
         this.longPointerDownEvent = new MKEvent();;
         this.isSwitch = isSwitch;
     }
-    
-    create(offsetX, offsetY, originX, originY)
-    { 
+
+    create(offsetX, offsetY, originX, originY) {
         this.offsetX = offsetX;
         this.offsetY = offsetY;
         this.originX = originX;
         this.originY = originY;
 
         this.posX = this.scene.centerX + this.offsetX;
-        this.posY = this.scene.centerY + this.offsetY;
+        this.posY = this.scene.centerY + this.offsetY - 38;
 
-        this.button = this.scene.add.sprite(this.posX, this.posY, this.spriteNormal).setOrigin(originX, originY);    
-        this.button.on('pointerdown', this.pointerDown,this);
-        this.button.on('pointerup', this.pointerUp,this);
-        this.button.on('pointerover', this.pointerOver,this);
-        this.button.on('pointerout', this.pointerOut,this);
+        this.button = this.scene.add.sprite(this.posX, this.posY, this.spriteNormal).setOrigin(originX, originY).setScale(.9)
+        // Phaser postFX shaders are optional; guard to avoid crashes if plugin isn't available.
+        if (this.button.postFX && this.button.postFX.addShine) {
+            this.fx = this.button.postFX.addShine(0.5, 0.2, 5);
+        } else {
+            this.fx = null;
+        }
+
+
+        this.button.on('pointerdown', this.pointerDown, this);
+        this.button.on('pointerup', this.pointerUp, this);
+        this.button.on('pointerover', this.pointerOver, this);
+        this.button.on('pointerout', this.pointerOut, this);
         this.button.setInteractive();
         this.interactable = true;
         this.pressed = false;
@@ -1141,85 +969,76 @@ class SpinButton
         this.timeoutID = -1;
     }
 
-    pointerUp() 
-    {
-        if(this.timeoutID !== -1) clearTimeout(this.timeoutID);             // remove timer if exist
+    pointerUp() {
+        if (this.timeoutID !== -1) clearTimeout(this.timeoutID);             // remove timer if exist
         this.up = true;
-    
-        if(!this.pDown) return;
+
+        if (!this.pDown) return;
         this.pDown = false;     // reset pdown
 
-        if(!this.interactable) return;
-        if(!this.isSwitch) this.pressed = false;     
+        if (!this.interactable) return;
+        if (!this.isSwitch) this.pressed = false;
 
-        this.button.setTexture( this.pressed ? this.spriteHover : this.spriteNormal);
-        if (this.longPress)
-        {
+        this.button.setTexture(this.pressed ? this.spriteHover : this.spriteNormal);
+        if (this.longPress) {
             this.longPress = false;
             this.longPressClickEvent.invoke();
         }
-        else
-        {
+        else {
             this.clickEvent.invoke();
         }
     }
 
-    pointerDown() 
-    {  
-        if(this.timeoutID !== -1) clearTimeout(this.timeoutID);         // remove timer 
+    pointerDown() {
+        if (this.timeoutID !== -1) clearTimeout(this.timeoutID);         // remove timer 
         this.longPress = false;
         this.up = false;
         this.pDown = true;
-        if(!this.interactable) return;
-        if(this.isSwitch) this.pressed = !this.pressed;  
+        if (!this.interactable) return;
+        if (this.isSwitch) this.pressed = !this.pressed;
         this.button.setTexture(this.spriteHover); //         console.log('button down', arguments);
-        this.pointerDownEvent.invoke();      
+        this.pointerDownEvent.invoke();
 
         this.timeoutID = setTimeout(() => {
             this.longPress = true;
             this.longPointerDownEvent.invoke();
-          },  this.longPressTime);
+        }, this.longPressTime);
     }
 
-    pointerOver() 
-    {
-        if(!this.interactable) return;
-       // this.button.setTexture(this.spriteHover);
+    pointerOver() {
+        if (!this.interactable) return;
+        // this.button.setTexture(this.spriteHover);
     }
 
-    pointerOut() 
-    {   
-        if(this.timeoutID !== -1) clearTimeout(this.timeoutID);         // remove timer
-        if(!this.interactable) return;
-       // this.button.setTexture(this.spriteNormal);
-    }  
-    
-    setInteractable(interactable){
+    pointerOut() {
+        if (this.timeoutID !== -1) clearTimeout(this.timeoutID);         // remove timer
+        if (!this.interactable) return;
+        // this.button.setTexture(this.spriteNormal);
+    }
+
+    setInteractable(interactable) {
         this.interactable = interactable;
     }
 
-    addClickEvent(action, context)
-    {
+    addClickEvent(action, context) {
         this.clickEvent.add(action, context);
     }
 
-    release()
-    {
+    release() {
         this.pressed = false;
-        this.button.setTexture( this.pressed ? this.spriteHover : this.spriteNormal);
+        this.button.setTexture(this.pressed ? this.spriteHover : this.spriteNormal);
     }
 
-    setPressed()
-    {
+    setPressed() {
         this.pressed = true;
-        this.button.setTexture( this.pressed ? this.spriteHover : this.spriteNormal);
+        this.button.setTexture(this.pressed ? this.spriteHover : this.spriteNormal);
     }
 
-    setDepth(depth){
+    setDepth(depth) {
         this.button.depth = depth;
     }
 
-    setSpinModeText(auto){
+    setSpinModeText(auto) {
 
     }
 }

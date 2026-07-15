@@ -160,7 +160,7 @@ const TICKET_DISCOUNTS: Record<number, number> = {
   50: 0.10,  // 10% off for 50 plays
 };
 
-const GAME_TYPES = ["spin", "scratch", "pop", "plinko", "voltz"];
+const GAME_TYPES = ["spin", "scratch", "pop", "plinko", "voltz" , "slot" , "royal"];
 
 function calculateDiscountedPrice(basePrice: number, quantity: number) {
   const originalPrice = basePrice * quantity;
@@ -312,6 +312,14 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
         const response = await apiRequest("/api/create-voltz-order", "POST", data);
         return response.json();
       }
+      else if (competitionType === "slot") {
+        const response = await apiRequest("/api/create-slot-order", "POST", data);
+        return response.json();
+      }
+      else if (competitionType === "royal") {
+        const response = await apiRequest("/api/create-royal-order", "POST", data);
+        return response.json();
+      }
       else {
         const response = await apiRequest("/api/create-competition-order", "POST", data);
         return response.json();
@@ -337,6 +345,14 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
       }
       if (competitionType === "voltz") {
         setLocation(`/voltz-billing/${data.orderId}`);
+        return;
+      }
+      if (competitionType === "slot") {
+        setLocation(`/slot-billing/${data.orderId}`);
+        return;
+      }
+      if (competitionType === "royal") {
+        setLocation(`/royal-billing/${data.orderId}`);
         return;
       }
       setLocation(`/checkout/${data.orderId}`);
@@ -648,7 +664,7 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                             Type
                           </span>
                           <span className={`capitalize font-bold text-xs md:text-sm ${gradients.badge} text-white px-3 py-1.5 rounded-full shadow-lg`}>
-                            {competitionType === "spin" ? "🎡 Spin Wheel" : competitionType === "scratch" ? "🎫 Scratch Card" : competitionType === "pop" ? "🎈 Pop Balloon" : competitionType === "plinko" ? "🎯 Plinko" : competitionType === "voltz" ? "⚡ Voltz" : "🏆 Competition"}
+                            {competitionType === "spin" ? "🎡 Spin Wheel" : competitionType === "scratch" ? "🎫 Scratch Card" : competitionType === "pop" ? "🎈 Pop Balloon" : competitionType === "plinko" ? "🎯 Plinko" : competitionType === "voltz" ? "⚡ Voltz" : competitionType === "slot" ? "Slot" : competitionType === "royal" ? "Royal" : "🏆 Competition"}
                           </span>
                         </div>
                         <div className="flex justify-between items-center gap-2 bg-black/30 rounded-lg p-2.5">
@@ -982,7 +998,7 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                             <div className={`text-sm md:text-base font-bold mb-0.5 ${
                               isSelected ? "text-gray-900" : "text-white"
                             }`}>
-                              {tier.qty} {competitionType === "spin" ? "Spins" : competitionType === "scratch" ? "Scratches" : competitionType === "pop" ? "Pops" : competitionType === "plinko" ? "Drops" : "Plays"}
+                              {tier.qty} {competitionType === "spin" ? "Spins" : competitionType === "scratch" ? "Scratches" : competitionType === "pop" ? "Pops" : competitionType === "plinko" ? "Drops" :  competitionType === "slot" ? "Slots" :  competitionType === "royal" ? "Royal" : "Plays"}
                             </div>
                             
                             {/* Discount Percentage */}
@@ -1131,6 +1147,8 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                          competitionType === "pop" ? `Pop Game${quantity > 1 ? "s" : ""}` :
                          competitionType === "plinko" ? `Plinko Drop${quantity > 1 ? "s" : ""}` :
                          competitionType === "voltz" ? `Voltz Game${quantity > 1 ? "s" : ""}` :
+                         competitionType === "slot" ? `Slot Game${quantity > 1 ? "s" : ""}` :
+                         competitionType === "royal" ? `Royal Game${quantity > 1 ? "s" : ""}` :
                          `Ticket${quantity > 1 ? "s" : ""}`}
                       </div>
                       
@@ -1291,6 +1309,8 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                      competitionType === "pop" ? `BUY ${quantity} POP GAME${quantity > 1 ? "S" : ""}` :
                      competitionType === "plinko" ? `BUY ${quantity} PLINKO DROP${quantity > 1 ? "S" : ""}` :
                      competitionType === "voltz" ? `BUY ${quantity} VOLTZ GAME${quantity > 1 ? "S" : ""}` :
+                     competitionType === "slot" ? `BUY ${quantity} SLOT GAME${quantity > 1 ? "S" : ""}` :
+                     competitionType === "royal" ? `BUY ${quantity} ROYAL GAME${quantity > 1 ? "S" : ""}` :
                      `ENTER NOW`}
                     <span className="text-sm font-bold opacity-75">
                       - £{isGameType ? discountedPrice.toFixed(2) : (pricePerTicket * quantity).toFixed(2)}

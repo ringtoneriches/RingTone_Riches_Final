@@ -1,417 +1,114 @@
-import AdminLayout from "@/components/admin/admin-layout";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Plus, Edit, Upload, Settings, Archive, ArchiveRestore } from "lucide-react";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import AdminLayout from "@/components/admin/admin-layout";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Competition } from "@shared/schema";
-import { Textarea } from "@/components/ui/textarea";
-import { Link } from "wouter";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Coins, TrendingUp, Activity, CheckCircle, XCircle, Save, RotateCcw, Edit2, Trophy, Percent } from "lucide-react";
 
-interface CompetitionFormData {
-  title: string;
-  description: string;
-  imageUrl: string;
-  type: "slot";
-  ticketPrice: string;
-  maxTickets: string;
-  ringtonePoints: string;
-  endDate?: string;
+interface SlotConfig {
+  isVisible: boolean;
+  isActive: boolean;
+  creditsPerSpin: number;
+  pricePerSpin: string;
 }
 
-function CompetitionForm({
-  data,
-  onSubmit,
-  onCancel,
-  isLoading,
-}: {
-  data?: Competition;
-  onSubmit: (formData: CompetitionFormData) => void;
-  onCancel: () => void;
-  isLoading: boolean;
-}) {
-  const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [form, setForm] = useState<CompetitionFormData>({
-    title: data?.title || "",
-    description: data?.description || "",
-    imageUrl: data?.imageUrl || "",
-    type: "slot",
-    ticketPrice: data?.ticketPrice || "1.00",
-    maxTickets: data?.maxTickets?.toString() || "",
-    ringtonePoints: data?.ringtonePoints?.toString() || "0",
-    endDate: data?.endDate
-      ? new Date(data.endDate).toISOString().slice(0, 16)
-      : "",
-  });
-  const [uploading, setUploading] = useState(false);
-
-  const handleImageUpload = async (file: File) => {
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-
-      const response = await fetch("/api/upload/competition-image", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Upload failed");
-      }
-
-      const { imagePath } = await response.json();
-      setForm({ ...form, imageUrl: imagePath });
-      toast({
-        title: "Success",
-        description: "Image uploaded successfully",
-      });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Upload failed",
-        description: error.message,
-      });
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 sm:pr-2">
-      <div>
-        <Label>Title</Label>
-        <Input
-          value={form.title}
-          onChange={(e) => setForm({ ...form, title: e.target.value })}
-          placeholder="Slot Machine Game Title"
-          data-testid="input-title"
-        />
-      </div>
-
-      <div>
-        <Label>Description</Label>
-        <Textarea
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-          placeholder="Description for slot machine game..."
-          rows={4}
-          data-testid="textarea-description"
-        />
-      </div>
-
-      <div>
-        <Label>Game Image</Label>
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  handleImageUpload(file);
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = "";
-                  }
-                }
-              }}
-              disabled={uploading}
-              className="hidden"
-              data-testid="input-image-upload"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              disabled={uploading}
-              onClick={() => fileInputRef.current?.click()}
-              data-testid="button-select-image"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {uploading ? "Uploading..." : "Select Image"}
-            </Button>
-          </div>
-          {form.imageUrl && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <img
-                src={form.imageUrl}
-                alt="Preview"
-                className="h-20 w-20 object-cover rounded border"
-              />
-              <span className="truncate">{form.imageUrl.split("/").slice(-1)[0]}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <Label>Game Type</Label>
-        <div className="w-full p-2 border border-border rounded-md bg-muted text-foreground">
-          Slot Machine Game
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          Uses credits per spin from slot machine settings. Each spin = {20} credits (configurable in settings)
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-        <div>
-          <Label>Price per Spin (£)</Label>
-          <Input
-            type="number"
-            step="0.01"
-            value={form.ticketPrice}
-            onChange={(e) =>
-              setForm({ ...form, ticketPrice: e.target.value })
-            }
-            data-testid="input-ticketPrice"
-          />
-        </div>
-
-        <div>
-          <Label>Max Spins (Optional)</Label>
-          <Input
-            type="number"
-            value={form.maxTickets}
-            onChange={(e) => setForm({ ...form, maxTickets: e.target.value })}
-            placeholder="Leave empty for unlimited"
-            data-testid="input-maxTickets"
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Leave empty if spins should be unlimited
-          </p>
-        </div>
-
-        <div>
-          <Label>Ringtone Points Reward</Label>
-          <Input
-            type="number"
-            value={form.ringtonePoints}
-            onChange={(e) =>
-              setForm({ ...form, ringtonePoints: e.target.value })
-            }
-            data-testid="input-ringtonePoints"
-          />
-        </div>
-      </div>
-
-      <div>
-        <Label>End Date & Time (Optional)</Label>
-        <Input
-          type="datetime-local"
-          value={form.endDate || ""}
-          onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-          placeholder="Select end date and time"
-          data-testid="input-endDate"
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          Leave empty for no end date
-        </p>
-      </div>
-
-      <DialogFooter className="mt-6">
-        <Button
-          variant="outline"
-          onClick={onCancel}
-          disabled={isLoading}
-          data-testid="button-cancel"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={() => onSubmit(form)}
-          disabled={isLoading}
-          data-testid="button-save"
-        >
-          {isLoading ? "Saving..." : "Save Slot Game"}
-        </Button>
-      </DialogFooter>
-    </div>
-  );
+interface SlotPrize {
+  id: string;
+  symbol: string;
+  pay: number;
+  isEuro: boolean;
+  maxWins: number | null;
+  enabled: boolean;
 }
+
+interface SlotStats {
+  totalSpins: number;
+  totalWins: number;
+  totalCoinsWon: number;
+  totalCoinsSpent: number;
+  recentSpins: Array<{ id: string; isWin: boolean; coinsWon: number; coinsSpent: number; spinNumber: number; usedAt: string }>;
+}
+
+const SYMBOL_EMOJI: Record<string, string> = {
+  coin: "🪙", tomato: "🍅", apple: "🍎", bell: "🔔", grape: "🍇",
+  banana: "🍌", cherry: "🍒", strawberry: "🍓", orange: "🍊",
+  star: "⭐", dice: "🎲", seven: "7️⃣", bar: "📊", diamond: "💎",
+  trophy: "🏆", crown: "👑", pts100: "🎯", pts500: "🎯", pts750: "🎯", pts1000: "🎯",
+};
 
 export default function AdminSlotMachine() {
   const { toast } = useToast();
-  const [editingCompetition, setEditingCompetition] =
-    useState<Competition | null>(null);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [archiveConfirm, setArchiveConfirm] = useState<string | null>(null);
-  const [unarchiveConfirm, setUnarchiveConfirm] = useState<string | null>(null);
-  const [showArchivedModal, setShowArchivedModal] = useState(false);
 
-  const { data: allCompetitions, isLoading } = useQuery<Competition[]>({
-    queryKey: ["/api/admin/competitions"],
-  });
+  const { data: config, isLoading: configLoading } = useQuery<SlotConfig>({ queryKey: ["/api/slot-config"] });
+  const { data: stats, isLoading: statsLoading } = useQuery<SlotStats>({ queryKey: ["/api/admin/slot-stats"] });
+  const { data: prizesData, isLoading: prizesLoading } = useQuery<SlotPrize[]>({ queryKey: ["/api/slot-prizes"] });
 
-  // Filter competitions by type and status
-  const competitions = allCompetitions?.filter((c) => c.type === "slot") || [];
-  const activeCompetitions = competitions.filter((c) => c.isActive);
-  const archivedCompetitions = competitions.filter((c) => !c.isActive);
+  const [form, setForm] = useState<Partial<SlotConfig>>({});
+  const [prizes, setPrizes] = useState<SlotPrize[]>([]);
+  const [editingPrize, setEditingPrize] = useState<string | null>(null);
+  const [prizeEdits, setPrizeEdits] = useState<Partial<SlotPrize>>({});
+  const [prizesChanged, setPrizesChanged] = useState(false);
 
-  const createMutation = useMutation({
-    mutationFn: async (formData: CompetitionFormData) => {
-      const payload: any = {
-        ...formData,
-        type: "slot",
-        ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
-        maxTickets: formData.maxTickets ? parseInt(formData.maxTickets) : null,
-        ringtonePoints: parseInt(formData.ringtonePoints),
-      };
+  useEffect(() => {
+    if (prizesData) { setPrizes(prizesData); setPrizesChanged(false); }
+  }, [prizesData]);
 
-      if (formData.endDate) {
-        payload.endDate = new Date(formData.endDate).toISOString();
-      }
+  const effective = { ...config, ...form } as SlotConfig;
 
-      const res = await apiRequest("/api/admin/competitions", "POST", payload);
-      return res.json();
-    },
+  const saveConfigMutation = useMutation({
+    mutationFn: () => apiRequest("/api/admin/slot-config", "PUT", form),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/competitions"] });
-      setCreateDialogOpen(false);
-      toast({ title: "Slot Machine game created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/slot-config"] });
+      setForm({});
+      toast({ title: "Saved", description: "Game settings updated." });
     },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to create slot machine game",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+    onError: () => toast({ title: "Error", description: "Failed to save settings.", variant: "destructive" }),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async ({
-      id,
-      data,
-    }: {
-      id: string;
-      data: CompetitionFormData;
-    }) => {
-      const payload: any = {
-        ...data,
-        type: "slot",
-        ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
-        maxTickets: data.maxTickets ? parseInt(data.maxTickets) : null,
-        ringtonePoints: parseInt(data.ringtonePoints),
-      };
-
-      if (data.endDate) {
-        payload.endDate = new Date(data.endDate).toISOString();
-      }
-
-      const res = await apiRequest(
-        `/api/admin/competitions/${id}`,
-        "PUT",
-        payload,
-      );
-      return res.json();
-    },
+  const savePrizesMutation = useMutation({
+    mutationFn: () => apiRequest("/api/admin/slot-prizes", "PUT", { prizes }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/competitions"] });
-      setEditingCompetition(null);
-      toast({ title: "Slot Machine game updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/slot-prizes"] });
+      setPrizesChanged(false);
+      toast({ title: "Prizes Saved", description: "Prize configuration updated successfully." });
     },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to update slot machine game",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+    onError: () => toast({ title: "Error", description: "Failed to save prizes.", variant: "destructive" }),
   });
 
-  const archiveMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiRequest(`/api/admin/competitions/${id}/archive`, "POST");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/competitions"] });
-      setArchiveConfirm(null);
-      toast({ title: "Slot Machine game archived successfully" });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to archive slot machine game",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  const startEdit = (prize: SlotPrize) => {
+    setEditingPrize(prize.id);
+    setPrizeEdits({ pay: prize.pay, maxWins: prize.maxWins, enabled: prize.enabled });
+  };
 
-  const unarchiveMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiRequest(`/api/admin/competitions/${id}/unarchive`, "POST");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/competitions"] });
-      setUnarchiveConfirm(null);
-      toast({ title: "Slot Machine game unarchived successfully" });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to unarchive slot machine game",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  const confirmEdit = (id: string) => {
+    setPrizes(prev => prev.map(p => p.id === id ? { ...p, ...prizeEdits } : p));
+    setEditingPrize(null);
+    setPrizesChanged(true);
+  };
 
-  const updateDisplayOrderMutation = useMutation({
-    mutationFn: async ({
-      id,
-      displayOrder,
-    }: {
-      id: string;
-      displayOrder: number;
-    }) => {
-      const res = await apiRequest(
-        `/api/admin/competitions/${id}/display-order`,
-        "PATCH",
-        {
-          displayOrder,
-        },
-      );
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions"] });
-      toast({ title: "Display order updated successfully" });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to update display order",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  const cancelEdit = () => { setEditingPrize(null); setPrizeEdits({}); };
 
-  if (isLoading) {
+  const togglePrize = (id: string, enabled: boolean) => {
+    setPrizes(prev => prev.map(p => p.id === id ? { ...p, enabled } : p));
+    setPrizesChanged(true);
+  };
+
+  const winRate = stats && stats.totalSpins > 0 ? ((stats.totalWins / stats.totalSpins) * 100).toFixed(1) : "0.0";
+  const cashPrizes = prizes.filter(p => p.isEuro && p.enabled);
+  const pointsPrizes = prizes.filter(p => !p.isEuro && p.enabled);
+
+  if (configLoading) {
     return (
       <AdminLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+          <div className="text-gray-400">Loading slot configuration...</div>
         </div>
       </AdminLayout>
     );
@@ -419,402 +116,376 @@ export default function AdminSlotMachine() {
 
   return (
     <AdminLayout>
-      <div className="space-y-4 md:space-y-6">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
           <div>
-            <h1
-              className="text-2xl md:text-3xl font-bold text-foreground"
-              data-testid="heading-slot-machine"
-            >
-              Slot Machine Games
-            </h1>
-            <p className="text-sm md:text-base text-muted-foreground mt-1">
-              Manage your slot machine games
-            </p>
+            <h1 className="text-2xl font-bold text-white">🎰 Slot Machine</h1>
+            <p className="text-gray-400 text-sm mt-1">Configure prizes, probabilities, and monitor performance</p>
           </div>
-          
-          <div className="flex flex-col sm:flex-row gap-2">
-            {/* View Archived Button */}
-            {archivedCompetitions.length > 0 && (
-              <Button
-                variant="outline"
-                onClick={() => setShowArchivedModal(true)}
-                className="gap-2"
-                data-testid="button-view-archived"
-              >
-                <Archive className="w-4 h-4" />
-                View Archived ({archivedCompetitions.length})
-              </Button>
-            )}
-            
-            <div className="flex gap-2">
-              <Link to="/admin/slot-machine/settings">
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  data-testid="button-slot-settings"
-                >
-                  <Settings className="w-4 h-4" />
-                  Slot Settings
-                </Button>
-              </Link>
-              <Button
-                onClick={() => setCreateDialogOpen(true)}
-                data-testid="button-create-slot"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create Slot Game
-              </Button>
-            </div>
-          </div>
+          <Badge variant={effective.isActive ? "default" : "secondary"} className={effective.isActive ? "bg-green-600" : ""}>
+            {effective.isActive ? "Active" : "Inactive"}
+          </Badge>
         </div>
 
-        {/* Active Competitions Section */}
-        <div className="space-y-4">
-          <div className="grid gap-4">
-            {activeCompetitions.length === 0 ? (
-              <div className="text-center py-12 border border-dashed rounded-lg">
-                <p className="text-muted-foreground mb-4">
-                  No active slot machine games yet
-                </p>
+        {/* Stats row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: "Total Spins", value: stats?.totalSpins ?? "—", icon: Activity, color: "text-blue-400" },
+            { label: "Total Wins", value: stats?.totalWins ?? "—", icon: TrendingUp, color: "text-green-400" },
+            { label: "Win Rate", value: `${winRate}%`, icon: Percent, color: "text-yellow-400" },
+            { label: "Credits Won", value: stats?.totalCoinsWon?.toLocaleString() ?? "—", icon: Coins, color: "text-purple-400" },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label} className="bg-zinc-900 border-zinc-800">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Icon className={`w-8 h-8 ${color}`} />
+                <div>
+                  <div className="text-xs text-gray-400">{label}</div>
+                  <div className="text-xl font-bold text-white">{statsLoading ? "…" : value}</div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Settings + Recent Spins */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card className="bg-zinc-900 border-zinc-800">
+            <CardHeader>
+              <CardTitle className="text-white">Game Settings</CardTitle>
+              <CardDescription>Control visibility, access, and credit values</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-white font-medium">Visible on site</Label>
+                  <p className="text-xs text-gray-400">Show the slot machine to players</p>
+                </div>
+                <Switch
+                  checked={effective.isVisible ?? true}
+                  onCheckedChange={(v) => setForm(f => ({ ...f, isVisible: v }))}
+                  data-testid="switch-slot-visible"
+                />
               </div>
-            ) : (
-              activeCompetitions.map((competition) => (
-                <div
-                  key={competition.id}
-                  className="bg-card border border-border rounded-lg p-6 hover:shadow-lg transition-shadow"
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-white font-medium">Game active</Label>
+                  <p className="text-xs text-gray-400">Allow players to spin</p>
+                </div>
+                <Switch
+                  checked={effective.isActive ?? true}
+                  onCheckedChange={(v) => setForm(f => ({ ...f, isActive: v }))}
+                  data-testid="switch-slot-active"
+                />
+              </div>
+              <Separator className="border-zinc-700" />
+              <div className="space-y-2">
+                <Label className="text-white font-medium">Credits per spin</Label>
+                <p className="text-xs text-gray-400">Credits each spin costs inside the game</p>
+                <Input
+                  type="number" min={1}
+                  value={effective.creditsPerSpin ?? 20}
+                  onChange={(e) => setForm(f => ({ ...f, creditsPerSpin: parseInt(e.target.value) || 20 }))}
+                  className="bg-zinc-800 border-zinc-700 text-white w-40"
+                  data-testid="input-slot-credits-per-spin"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white font-medium">Price per spin (£)</Label>
+                <p className="text-xs text-gray-400">Real money cost per spin</p>
+                <Input
+                  type="number" min={0.01} step={0.01}
+                  value={effective.pricePerSpin ?? "0.20"}
+                  onChange={(e) => setForm(f => ({ ...f, pricePerSpin: e.target.value }))}
+                  className="bg-zinc-800 border-zinc-700 text-white w-40"
+                  data-testid="input-slot-price-per-spin"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button
+                  onClick={() => saveConfigMutation.mutate()}
+                  disabled={saveConfigMutation.isPending || Object.keys(form).length === 0}
+                  className="bg-yellow-500 hover:bg-yellow-400 text-black font-semibold"
+                  data-testid="button-slot-save"
                 >
-                  <div className="flex items-start flex-col sm:flex-row justify-between">
-                    <div className="flex gap-4 flex-col sm:flex-row flex-1">
-                      {competition.imageUrl && (
-                        <img
-                          src={competition.imageUrl}
-                          alt={competition.title}
-                          className="w-full h-48 sm:w-24 sm:h-24 object-cover rounded-lg"
-                        />
-                      )}
-                      <div className="flex-1">
-                        <div className="flex items-center flex-col sm:flex-row gap-2 mb-2">
-                          <h3 className="text-xl font-bold text-foreground">
-                            {competition.title}
-                          </h3>
-                          <div>
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-500">
-                              SLOT MACHINE
-                            </span>
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-500 ml-1">
-                              ACTIVE
-                            </span>
-                          </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          {competition.description}
-                        </p>
-                        <div className="flex gap-6 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">Price: </span>
-                            <span className="font-medium text-primary">
-                              £{parseFloat(competition.ticketPrice).toFixed(2)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Sold: </span>
-                            <span className="font-medium text-foreground">
-                              {competition.soldTickets || 0}{" "}
-                              {competition.maxTickets
-                                ? `/ ${competition.maxTickets}`
-                                : ""}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Status: </span>
-                            <span className="font-medium text-green-500">
-                              Active
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className="text-muted-foreground">
-                            Display Order:{" "}
-                          </span>
-                          <Input
-                            type="number"
-                            min="0"
-                            defaultValue={competition.displayOrder ?? 999}
-                            onBlur={(e) => {
-                              const parsedValue = parseInt(e.target.value);
-                              const newOrder = isNaN(parsedValue)
-                                ? 999
-                                : parsedValue;
-                              const currentOrder =
-                                competition.displayOrder ?? 999;
-                              if (newOrder !== currentOrder) {
-                                updateDisplayOrderMutation.mutate({
-                                  id: competition.id,
-                                  displayOrder: newOrder,
-                                });
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                const parsedValue = parseInt(
-                                  (e.target as HTMLInputElement).value,
-                                );
-                                const newOrder = isNaN(parsedValue)
-                                  ? 999
-                                  : parsedValue;
-                                const currentOrder =
-                                  competition.displayOrder ?? 999;
-                                if (newOrder !== currentOrder) {
-                                  updateDisplayOrderMutation.mutate({
-                                    id: competition.id,
-                                    displayOrder: newOrder,
-                                  });
-                                }
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
-                            className="w-24"
-                            data-testid={`input-display-order-${competition.id}`}
-                          />
+                  <Save className="w-4 h-4 mr-2" />
+                  {saveConfigMutation.isPending ? "Saving…" : "Save Settings"}
+                </Button>
+                {Object.keys(form).length > 0 && (
+                  <Button variant="outline" onClick={() => setForm({})} className="border-zinc-700 text-gray-300" data-testid="button-slot-reset">
+                    <RotateCcw className="w-4 h-4 mr-2" /> Reset
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-zinc-900 border-zinc-800">
+            <CardHeader>
+              <CardTitle className="text-white">Recent Spins</CardTitle>
+              <CardDescription>Last 20 spin results across all players</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {statsLoading ? (
+                <div className="text-gray-400 text-sm">Loading…</div>
+              ) : !stats?.recentSpins?.length ? (
+                <div className="text-gray-400 text-sm">No spins recorded yet.</div>
+              ) : (
+                <div className="space-y-1 max-h-96 overflow-y-auto">
+                  {stats.recentSpins.map((spin) => (
+                    <div key={spin.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-zinc-800/50">
+                      <div className="flex items-center gap-2">
+                        {spin.isWin
+                          ? <CheckCircle className="w-4 h-4 text-green-400" />
+                          : <XCircle className="w-4 h-4 text-red-400" />}
+                        <span className="text-sm text-gray-300">Spin #{spin.spinNumber}</span>
+                      </div>
+                      <div className="text-right">
+                        {spin.isWin
+                          ? <span className="text-green-400 text-sm font-medium">+{spin.coinsWon} credits</span>
+                          : <span className="text-gray-500 text-sm">No win</span>
+                        }
+                        <div className="text-xs text-gray-500">
+                          {new Date(spin.usedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                         </div>
                       </div>
                     </div>
-
-                    <div className="flex flex-row gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setEditingCompetition(competition)}
-                        data-testid={`button-edit-${competition.id}`}
-                        className="gap-1"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setArchiveConfirm(competition.id)}
-                        className="gap-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50"
-                        data-testid={`button-archive-${competition.id}`}
-                      >
-                        <Archive className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))
-            )}
-          </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Archived Games Modal */}
-        <Dialog open={showArchivedModal} onOpenChange={setShowArchivedModal}>
-          <DialogContent className="max-w-7xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Archive className="w-5 h-5" />
-                Archived Slot Machine Games ({archivedCompetitions.length})
-              </DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-4 py-4">
-              {archivedCompetitions.length === 0 ? (
-                <div className="text-center py-8">
-                  <Archive className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No archived slot machine games</p>
-                </div>
-              ) : (
-                archivedCompetitions.map((competition) => (
-                  <div
-                    key={competition.id}
-                    className="bg-card border border-border rounded-lg p-6 opacity-90"
-                  >
-                    <div className="flex items-start flex-col sm:flex-row justify-between">
-                      <div className="flex gap-4 flex-col sm:flex-row flex-1">
-                        {competition.imageUrl && (
-                          <img
-                            src={competition.imageUrl}
-                            alt={competition.title}
-                            className="w-full h-48 sm:w-20 sm:h-20 object-cover rounded-lg"
-                          />
-                        )}
-                        <div className="flex-1">
-                          <div className="flex items-center flex-col sm:flex-row gap-2 mb-2">
-                            <h3 className="text-lg font-bold text-foreground">
-                              {competition.title}
-                            </h3>
-                            <div>
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-500">
-                                SLOT MACHINE
-                              </span>
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-500 ml-1">
-                                ARCHIVED
-                              </span>
-                            </div>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-3">
-                            {competition.description}
-                          </p>
-                          <div className="flex flex-wrap gap-4 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">Price: </span>
-                              <span className="font-medium text-primary">
-                                £{parseFloat(competition.ticketPrice).toFixed(2)}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Sold: </span>
-                              <span className="font-medium text-foreground">
-                                {competition.soldTickets || 0}{" "}
-                                {competition.maxTickets
-                                  ? `/ ${competition.maxTickets}`
-                                  : ""}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Status: </span>
-                              <span className="font-medium text-red-500">
-                                Inactive (Archived)
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setUnarchiveConfirm(competition.id);
-                          }}
-                          className="gap-1 text-green-500 hover:text-green-600 hover:bg-green-50"
-                          data-testid={`button-unarchive-modal-${competition.id}`}
-                        >
-                          <ArchiveRestore className="w-4 h-4" />
-                          Unarchive
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
+        {/* Prize Management */}
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-yellow-400" />
+                  Prize Management
+                </CardTitle>
+                <CardDescription>Set the payout amount for each winning symbol combination (3x match)</CardDescription>
+              </div>
+              <div className="flex items-center gap-3">
+                {prizesChanged && (
+                  <span className="text-xs text-yellow-400 font-medium">● Unsaved changes</span>
+                )}
+                <Button
+                  onClick={() => savePrizesMutation.mutate()}
+                  disabled={savePrizesMutation.isPending || !prizesChanged}
+                  className="bg-yellow-500 hover:bg-yellow-400 text-black font-semibold"
+                  data-testid="button-prizes-save"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {savePrizesMutation.isPending ? "Saving…" : "Save Prizes"}
+                </Button>
+                {prizesChanged && (
+                  <Button variant="outline" onClick={() => { setPrizes(prizesData || []); setPrizesChanged(false); }} className="border-zinc-700 text-gray-300">
+                    <RotateCcw className="w-4 h-4 mr-2" /> Discard
+                  </Button>
+                )}
+              </div>
             </div>
-            
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowArchivedModal(false)}
-              >
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </CardHeader>
+          <CardContent>
+            {prizesLoading ? (
+              <div className="text-gray-400 text-sm py-8 text-center">Loading prizes…</div>
+            ) : (
+              <>
+                {/* Cash prizes */}
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-sm font-bold text-yellow-400 uppercase tracking-widest">💷 Cash Prizes (3x Match)</span>
+                    <span className="text-xs text-gray-500 bg-zinc-800 px-2 py-0.5 rounded">{cashPrizes.length} active</span>
+                  </div>
+                  <div className="rounded-xl border border-zinc-800 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-800 bg-zinc-800/50">
+                          <th className="text-left py-2.5 px-4 text-xs font-bold uppercase tracking-widest text-gray-400">Symbol</th>
+                          <th className="text-left py-2.5 px-4 text-xs font-bold uppercase tracking-widest text-gray-400">Payout (£)</th>
+                          <th className="text-left py-2.5 px-4 text-xs font-bold uppercase tracking-widest text-gray-400">Max Wins</th>
+                          <th className="text-left py-2.5 px-4 text-xs font-bold uppercase tracking-widest text-gray-400">Enabled</th>
+                          <th className="py-2.5 px-4"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {prizes.filter(p => p.isEuro).map((prize, i) => {
+                          const isEditing = editingPrize === prize.id;
+                          return (
+                            <tr key={prize.id} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? "" : "bg-zinc-800/20"} ${!prize.enabled ? "opacity-40" : ""}`}>
+                              <td className="py-2.5 px-4 text-white font-medium">
+                                <span className="mr-2">{SYMBOL_EMOJI[prize.id] || "🎰"}</span>
+                                {prize.symbol}
+                              </td>
+                              <td className="py-2.5 px-4">
+                                {isEditing ? (
+                                  <Input
+                                    type="number" min={0} step={0.01}
+                                    value={prizeEdits.pay ?? prize.pay}
+                                    onChange={(e) => setPrizeEdits(f => ({ ...f, pay: parseFloat(e.target.value) || 0 }))}
+                                    className="bg-zinc-800 border-zinc-700 text-white w-28 h-8 text-sm"
+                                    data-testid={`input-prize-pay-${prize.id}`}
+                                  />
+                                ) : (
+                                  <span className="text-green-400 font-bold">£{prize.pay.toLocaleString()}</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-4">
+                                {isEditing ? (
+                                  <Input
+                                    type="number" min={0} placeholder="∞ unlimited"
+                                    value={prizeEdits.maxWins ?? ""}
+                                    onChange={(e) => setPrizeEdits(f => ({ ...f, maxWins: e.target.value ? parseInt(e.target.value) : null }))}
+                                    className="bg-zinc-800 border-zinc-700 text-white w-28 h-8 text-sm"
+                                    data-testid={`input-prize-maxwins-${prize.id}`}
+                                  />
+                                ) : (
+                                  <span className="text-gray-400">{prize.maxWins ?? "∞ unlimited"}</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <Switch
+                                  checked={prize.enabled}
+                                  onCheckedChange={(v) => togglePrize(prize.id, v)}
+                                  data-testid={`switch-prize-${prize.id}`}
+                                />
+                              </td>
+                              <td className="py-2.5 px-4 text-right">
+                                {isEditing ? (
+                                  <div className="flex gap-2 justify-end">
+                                    <Button size="sm" onClick={() => confirmEdit(prize.id)} className="h-7 bg-green-600 hover:bg-green-500 text-white text-xs">✓ Apply</Button>
+                                    <Button size="sm" variant="outline" onClick={cancelEdit} className="h-7 border-zinc-700 text-gray-300 text-xs">Cancel</Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    size="sm" variant="ghost"
+                                    onClick={() => startEdit(prize)}
+                                    className="h-7 text-gray-400 hover:text-yellow-400"
+                                    data-testid={`button-edit-prize-${prize.id}`}
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create New Slot Machine Game</DialogTitle>
-            </DialogHeader>
-            <CompetitionForm
-              onSubmit={(data) => createMutation.mutate(data)}
-              onCancel={() => setCreateDialogOpen(false)}
-              isLoading={createMutation.isPending}
-            />
-          </DialogContent>
-        </Dialog>
+                {/* Points prizes */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-sm font-bold text-purple-400 uppercase tracking-widest">🎯 Points Prizes (3x Match)</span>
+                    <span className="text-xs text-gray-500 bg-zinc-800 px-2 py-0.5 rounded">{pointsPrizes.length} active</span>
+                  </div>
+                  <div className="rounded-xl border border-zinc-800 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-800 bg-zinc-800/50">
+                          <th className="text-left py-2.5 px-4 text-xs font-bold uppercase tracking-widest text-gray-400">Symbol</th>
+                          <th className="text-left py-2.5 px-4 text-xs font-bold uppercase tracking-widest text-gray-400">Points Award</th>
+                          <th className="text-left py-2.5 px-4 text-xs font-bold uppercase tracking-widest text-gray-400">Max Wins</th>
+                          <th className="text-left py-2.5 px-4 text-xs font-bold uppercase tracking-widest text-gray-400">Enabled</th>
+                          <th className="py-2.5 px-4"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {prizes.filter(p => !p.isEuro).map((prize, i) => {
+                          const isEditing = editingPrize === prize.id;
+                          return (
+                            <tr key={prize.id} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? "" : "bg-zinc-800/20"} ${!prize.enabled ? "opacity-40" : ""}`}>
+                              <td className="py-2.5 px-4 text-white font-medium">
+                                <span className="mr-2">{SYMBOL_EMOJI[prize.id] || "🎯"}</span>
+                                {prize.symbol}
+                              </td>
+                              <td className="py-2.5 px-4">
+                                {isEditing ? (
+                                  <Input
+                                    type="number" min={0}
+                                    value={prizeEdits.pay ?? prize.pay}
+                                    onChange={(e) => setPrizeEdits(f => ({ ...f, pay: parseInt(e.target.value) || 0 }))}
+                                    className="bg-zinc-800 border-zinc-700 text-white w-28 h-8 text-sm"
+                                    data-testid={`input-prize-pts-${prize.id}`}
+                                  />
+                                ) : (
+                                  <span className="text-purple-400 font-bold">{prize.pay.toLocaleString()} pts</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-4">
+                                {isEditing ? (
+                                  <Input
+                                    type="number" min={0} placeholder="∞ unlimited"
+                                    value={prizeEdits.maxWins ?? ""}
+                                    onChange={(e) => setPrizeEdits(f => ({ ...f, maxWins: e.target.value ? parseInt(e.target.value) : null }))}
+                                    className="bg-zinc-800 border-zinc-700 text-white w-28 h-8 text-sm"
+                                    data-testid={`input-prize-pts-maxwins-${prize.id}`}
+                                  />
+                                ) : (
+                                  <span className="text-gray-400">{prize.maxWins ?? "∞ unlimited"}</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <Switch
+                                  checked={prize.enabled}
+                                  onCheckedChange={(v) => togglePrize(prize.id, v)}
+                                  data-testid={`switch-prize-pts-${prize.id}`}
+                                />
+                              </td>
+                              <td className="py-2.5 px-4 text-right">
+                                {isEditing ? (
+                                  <div className="flex gap-2 justify-end">
+                                    <Button size="sm" onClick={() => confirmEdit(prize.id)} className="h-7 bg-green-600 hover:bg-green-500 text-white text-xs">✓ Apply</Button>
+                                    <Button size="sm" variant="outline" onClick={cancelEdit} className="h-7 border-zinc-700 text-gray-300 text-xs">Cancel</Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    size="sm" variant="ghost"
+                                    onClick={() => startEdit(prize)}
+                                    className="h-7 text-gray-400 hover:text-yellow-400"
+                                    data-testid={`button-edit-pts-prize-${prize.id}`}
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
-        <Dialog
-          open={!!editingCompetition}
-          onOpenChange={(open) => !open && setEditingCompetition(null)}
-        >
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Edit Slot Machine Game</DialogTitle>
-            </DialogHeader>
-            {editingCompetition && (
-              <CompetitionForm
-                data={editingCompetition}
-                onSubmit={(data) =>
-                  updateMutation.mutate({
-                    id: editingCompetition.id,
-                    data,
-                  })
-                }
-                onCancel={() => setEditingCompetition(null)}
-                isLoading={updateMutation.isPending}
-              />
+                <p className="text-xs text-gray-500 mt-4">
+                  * Prize amounts are the payout for a 3-symbol match on any active payline. Changes apply to new spins after saving.
+                </p>
+              </>
             )}
-          </DialogContent>
-        </Dialog>
+          </CardContent>
+        </Card>
 
-        {/* Archive Confirmation Dialog */}
-        <Dialog
-          open={!!archiveConfirm}
-          onOpenChange={(open) => !open && setArchiveConfirm(null)}
-        >
-          <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
-            <DialogHeader>
-              <DialogTitle>Archive Slot Machine Game</DialogTitle>
-            </DialogHeader>
-            <p className="text-muted-foreground">
-              Are you sure you want to archive this slot machine game? Archived games will become inactive and won't be shown on the frontend.
-            </p>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setArchiveConfirm(null)}
-                disabled={archiveMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() =>
-                  archiveConfirm && archiveMutation.mutate(archiveConfirm)
-                }
-                disabled={archiveMutation.isPending}
-              >
-                {archiveMutation.isPending ? "Archiving..." : "Archive"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Unarchive Confirmation Dialog */}
-        <Dialog
-          open={!!unarchiveConfirm}
-          onOpenChange={(open) => !open && setUnarchiveConfirm(null)}
-        >
-          <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
-            <DialogHeader>
-              <DialogTitle>Unarchive Slot Machine Game</DialogTitle>
-            </DialogHeader>
-            <p className="text-muted-foreground">
-              Are you sure you want to unarchive this slot machine game? The game will become active and will be shown on the frontend.
-            </p>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setUnarchiveConfirm(null)}
-                disabled={unarchiveMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="default"
-                onClick={() =>
-                  unarchiveConfirm && unarchiveMutation.mutate(unarchiveConfirm)
-                }
-                disabled={unarchiveMutation.isPending}
-              >
-                {unarchiveMutation.isPending ? "Unarchiving..." : "Unarchive"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* Live Preview */}
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader>
+            <CardTitle className="text-white">Live Preview</CardTitle>
+            <CardDescription>The slot machine game as players see it (demo mode)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg overflow-hidden border border-zinc-700" style={{ height: 480 }}>
+              <iframe
+                src="/slotmachine/index.html?credits=1000"
+                className="w-full h-full border-0"
+                title="Slot Machine Preview"
+                data-testid="iframe-slot-preview"
+              />
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </AdminLayout>
   );

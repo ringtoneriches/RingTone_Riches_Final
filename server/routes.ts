@@ -18946,7 +18946,7 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
 
 
 
- // ═══════════════════ SLOT MACHINE ROUTES ═══════════════════
+   // ═══════════════════ SLOT MACHINE ROUTES ═══════════════════
 
   app.post("/api/create-slot-order", isAuthenticated, async (req: any, res) => {
     try {
@@ -19127,9 +19127,110 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
   app.get("/api/slot-config", async (req, res) => {
     try {
       const [config] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
-      res.json({ isVisible: config?.isVisible ?? true, isActive: config?.isActive ?? true, creditsPerSpin: config?.creditsPerSpin || 20 });
+      res.json({ isVisible: config?.isVisible ?? true, isActive: config?.isActive ?? true, creditsPerSpin: config?.creditsPerSpin || 20, pricePerSpin: config?.pricePerSpin || "0.20" });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch slot config" });
+    }
+  });
+
+  app.put("/api/admin/slot-config", isAdmin, async (req: any, res) => {
+    try {
+      const { isVisible, isActive, creditsPerSpin, pricePerSpin } = req.body;
+      const [existing] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
+      if (existing) {
+        await db.update(gameSlotConfig).set({
+          isVisible: isVisible ?? existing.isVisible,
+          isActive: isActive ?? existing.isActive,
+          creditsPerSpin: creditsPerSpin ?? existing.creditsPerSpin,
+          pricePerSpin: pricePerSpin ?? existing.pricePerSpin,
+          updatedAt: new Date(),
+        }).where(eq(gameSlotConfig.id, "active"));
+      } else {
+        await db.insert(gameSlotConfig).values({
+          id: "active", isVisible: isVisible ?? true, isActive: isActive ?? true,
+          creditsPerSpin: creditsPerSpin ?? 20, pricePerSpin: pricePerSpin ?? "0.20",
+        });
+      }
+      const [updated] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
+      res.json({ success: true, isVisible: updated.isVisible, isActive: updated.isActive, creditsPerSpin: updated.creditsPerSpin, pricePerSpin: updated.pricePerSpin });
+    } catch (error) {
+      console.error("Error updating slot config:", error);
+      res.status(500).json({ message: "Failed to update slot config" });
+    }
+  });
+
+  app.get("/api/admin/slot-stats", isAdmin, async (req: any, res) => {
+    try {
+      const totalSpins = await db.select({ count: sql<number>`count(*)` }).from(slotUsage);
+      const wins = await db.select({ count: sql<number>`count(*)` }).from(slotUsage).where(eq(slotUsage.isWin, true));
+      const totalCoinsWon = await db.select({ sum: sql<number>`coalesce(sum(coins_won), 0)` }).from(slotUsage);
+      const totalCoinsSpent = await db.select({ sum: sql<number>`coalesce(sum(coins_spent), 0)` }).from(slotUsage);
+      const recentSpins = await db.select({ id: slotUsage.id, isWin: slotUsage.isWin, coinsWon: slotUsage.coinsWon, coinsSpent: slotUsage.coinsSpent, spinNumber: slotUsage.spinNumber, usedAt: slotUsage.usedAt })
+        .from(slotUsage).orderBy(desc(slotUsage.usedAt)).limit(20);
+      res.json({
+        totalSpins: Number(totalSpins[0]?.count || 0),
+        totalWins: Number(wins[0]?.count || 0),
+        totalCoinsWon: Number(totalCoinsWon[0]?.sum || 0),
+        totalCoinsSpent: Number(totalCoinsSpent[0]?.sum || 0),
+        recentSpins,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch slot stats" });
+    }
+  });
+
+  // ─── Prize config routes ────────────────────────────────────────────────
+  const DEFAULT_SLOT_PRIZES = [
+    { id: "coin",        symbol: "Coin",        pay: 1,    isEuro: true,  maxWins: null, enabled: true },
+    { id: "tomato",      symbol: "Tomato",      pay: 2,    isEuro: true,  maxWins: null, enabled: true },
+    { id: "apple",       symbol: "Apple",       pay: 3,    isEuro: true,  maxWins: null, enabled: true },
+    { id: "bell",        symbol: "Bell",        pay: 4,    isEuro: true,  maxWins: null, enabled: true },
+    { id: "grape",       symbol: "Grape",       pay: 5,    isEuro: true,  maxWins: null, enabled: true },
+    { id: "banana",      symbol: "Banana",      pay: 25,   isEuro: true,  maxWins: null, enabled: true },
+    { id: "cherry",      symbol: "Cherry",      pay: 50,   isEuro: true,  maxWins: null, enabled: true },
+    { id: "strawberry",  symbol: "Strawberry",  pay: 50,   isEuro: true,  maxWins: null, enabled: true },
+    { id: "orange",      symbol: "Orange",      pay: 80,   isEuro: true,  maxWins: null, enabled: true },
+    { id: "star",        symbol: "Star",        pay: 100,  isEuro: true,  maxWins: null, enabled: true },
+    { id: "dice",        symbol: "Dice",        pay: 250,  isEuro: true,  maxWins: null, enabled: true },
+    { id: "seven",       symbol: "Seven (7)",   pay: 500,  isEuro: true,  maxWins: null, enabled: true },
+    { id: "bar",         symbol: "BAR",         pay: 750,  isEuro: true,  maxWins: null, enabled: true },
+    { id: "diamond",     symbol: "Diamond",     pay: 1000, isEuro: true,  maxWins: null, enabled: true },
+    { id: "trophy",      symbol: "Trophy",      pay: 2500, isEuro: true,  maxWins: null, enabled: true },
+    { id: "crown",       symbol: "Crown",       pay: 5000, isEuro: true,  maxWins: null, enabled: true },
+    { id: "pts100",      symbol: "100 Points",  pay: 100,  isEuro: false, maxWins: null, enabled: true },
+    { id: "pts500",      symbol: "500 Points",  pay: 500,  isEuro: false, maxWins: null, enabled: true },
+    { id: "pts750",      symbol: "750 Points",  pay: 750,  isEuro: false, maxWins: null, enabled: true },
+    { id: "pts1000",     symbol: "1000 Points", pay: 1000, isEuro: false, maxWins: null, enabled: true },
+  ];
+
+  app.get("/api/slot-prizes", async (_req, res) => {
+    try {
+      const [config] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
+      if (config?.prizesConfig) {
+        res.json(JSON.parse(config.prizesConfig));
+      } else {
+        res.json(DEFAULT_SLOT_PRIZES);
+      }
+    } catch {
+      res.json(DEFAULT_SLOT_PRIZES);
+    }
+  });
+
+  app.put("/api/admin/slot-prizes", isAdmin, async (req: any, res) => {
+    try {
+      const { prizes } = req.body;
+      if (!Array.isArray(prizes)) return res.status(400).json({ message: "prizes must be an array" });
+      const prizesConfig = JSON.stringify(prizes);
+      const [existing] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
+      if (existing) {
+        await db.update(gameSlotConfig).set({ prizesConfig, updatedAt: new Date() }).where(eq(gameSlotConfig.id, "active"));
+      } else {
+        await db.insert(gameSlotConfig).values({ id: "active", prizesConfig });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error saving slot prizes:", error);
+      res.status(500).json({ message: "Failed to save prizes" });
     }
   });
 
@@ -19533,645 +19634,7 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
     }
   });
 
-
-// ═══════════════════ SLOT MACHINE ADMIN ROUTES ═══════════════════
-
-// Get Slot Machine configuration (admin)
-app.get(
-  "/api/admin/game-slot-config",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const [config] = await db
-        .select()
-        .from(gameSlotConfig)
-        .where(eq(gameSlotConfig.id, "active"));
-
-      // Get usage statistics
-      const slotStats = await db
-        .select({
-          totalSpins: sql<number>`count(*)`,
-          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
-          totalCoinsWon: sql<number>`coalesce(sum(coins_won), 0)`,
-          totalCoinsSpent: sql<number>`coalesce(sum(coins_spent), 0)`,
-          uniquePlayers: sql<number>`count(distinct user_id)`,
-        })
-        .from(slotUsage);
-
-      const stats = slotStats[0] || {
-        totalSpins: 0,
-        totalWins: 0,
-        totalCoinsWon: 0,
-        totalCoinsSpent: 0,
-        uniquePlayers: 0,
-      };
-
-      // Get recent orders
-      const recentOrders = await db
-        .select({
-          id: orders.id,
-          userId: orders.userId,
-          quantity: orders.quantity,
-          totalAmount: orders.totalAmount,
-          status: orders.status,
-          createdAt: orders.createdAt,
-        })
-        .from(orders)
-        .innerJoin(competitions, eq(orders.competitionId, competitions.id))
-        .where(eq(competitions.type, "slot"))
-        .orderBy(desc(orders.createdAt))
-        .limit(20);
-
-      res.json({
-        config: config || {
-          id: "active",
-          isVisible: true,
-          isActive: true,
-          creditsPerSpin: 20,
-        },
-        stats,
-        recentOrders,
-      });
-    } catch (error) {
-      console.error("Error fetching slot config:", error);
-      res.status(500).json({ message: "Failed to fetch slot config" });
-    }
-  }
-);
-
-// Update Slot Machine configuration (admin)
-app.put(
-  "/api/admin/game-slot-config",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const { isVisible, isActive, creditsPerSpin } = req.body;
-
-      // Validate credits per spin
-      if (creditsPerSpin !== undefined) {
-        const credits = Number(creditsPerSpin);
-        if (isNaN(credits) || credits < 1 || credits > 1000) {
-          return res.status(400).json({
-            message: "Credits per spin must be between 1 and 1000",
-          });
-        }
-      }
-
-      const [existing] = await db
-        .select()
-        .from(gameSlotConfig)
-        .where(eq(gameSlotConfig.id, "active"));
-
-      let saved;
-
-      if (existing) {
-        [saved] = await db
-          .update(gameSlotConfig)
-          .set({
-            isVisible: isVisible !== undefined ? isVisible : existing.isVisible,
-            isActive: isActive !== undefined ? isActive : existing.isActive,
-            creditsPerSpin:
-              creditsPerSpin !== undefined
-                ? creditsPerSpin
-                : existing.creditsPerSpin,
-            updatedAt: new Date(),
-          })
-          .where(eq(gameSlotConfig.id, "active"))
-          .returning();
-      } else {
-        [saved] = await db
-          .insert(gameSlotConfig)
-          .values({
-            id: "active",
-            isVisible: isVisible ?? true,
-            isActive: isActive ?? true,
-            creditsPerSpin: creditsPerSpin || 20,
-          })
-          .returning();
-      }
-
-      res.json(saved);
-    } catch (error) {
-      console.error("Error updating slot config:", error);
-      res.status(500).json({ message: "Failed to update slot config" });
-    }
-  }
-);
-
-// Get Slot Machine statistics (admin)
-app.get(
-  "/api/admin/slot-stats",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const { period = "all" } = req.query;
-
-      let dateFilter = sql``;
-      if (period === "today") {
-        dateFilter = sql`and date(slot_usage.used_at) = current_date`;
-      } else if (period === "week") {
-        dateFilter = sql`and slot_usage.used_at >= current_date - interval '7 days'`;
-      } else if (period === "month") {
-        dateFilter = sql`and slot_usage.used_at >= current_date - interval '30 days'`;
-      }
-
-      // Overall stats
-      const overallStats = await db
-        .select({
-          totalSpins: sql<number>`count(*)`,
-          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
-          totalCoinsWon: sql<number>`coalesce(sum(coins_won), 0)`,
-          totalCoinsSpent: sql<number>`coalesce(sum(coins_spent), 0)`,
-          totalRevenue: sql<number>`coalesce(sum(case when is_win then coins_won * 0.01 else 0 end), 0)`,
-          uniquePlayers: sql<number>`count(distinct user_id)`,
-        })
-        .from(slotUsage)
-        .where(dateFilter);
-
-      // Daily breakdown (last 30 days)
-      const dailyStats = await db
-        .select({
-          date: sql<string>`date(slot_usage.used_at)`,
-          spins: sql<number>`count(*)`,
-          wins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
-          coinsWon: sql<number>`coalesce(sum(coins_won), 0)`,
-          players: sql<number>`count(distinct user_id)`,
-        })
-        .from(slotUsage)
-        .groupBy(sql`date(slot_usage.used_at)`)
-        .orderBy(desc(sql`date(slot_usage.used_at)`))
-        .limit(30);
-
-      // Top players
-      const topPlayers = await db
-        .select({
-          userId: slotUsage.userId,
-          totalSpins: sql<number>`count(*)`,
-          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
-          totalCoinsWon: sql<number>`coalesce(sum(coins_won), 0)`,
-        })
-        .from(slotUsage)
-        .groupBy(slotUsage.userId)
-        .orderBy(desc(sql`total_coins_won`))
-        .limit(10);
-
-      res.json({
-        overall: overallStats[0],
-        daily: dailyStats,
-        topPlayers,
-      });
-    } catch (error) {
-      console.error("Error fetching slot stats:", error);
-      res.status(500).json({ message: "Failed to fetch slot stats" });
-    }
-  }
-);
-
-// ═══════════════════ ROYAL REELS ADMIN ROUTES ═══════════════════
-
-// Get Royal Reels configuration (admin)
-app.get(
-  "/api/admin/game-royal-config",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const [config] = await db
-        .select()
-        .from(gameRoyalConfig)
-        .where(eq(gameRoyalConfig.id, "active"));
-
-      // Get prizes with win counts
-      const prizes = await db
-        .select()
-        .from(royalPrizes)
-        .orderBy(asc(royalPrizes.displayOrder));
-
-      const winStats = await db
-        .select({
-          prizeId: royalWins.prizeId,
-          winCount: sql<number>`count(*)`,
-        })
-        .from(royalWins)
-        .groupBy(royalWins.prizeId);
-
-      const prizesWithWins = prizes.map((prize) => {
-        const stat = winStats.find((w) => w.prizeId === prize.id);
-        return {
-          ...prize,
-          currentWins: Number(stat?.winCount ?? 0),
-        };
-      });
-
-      // Get usage statistics
-      const royalStats = await db
-        .select({
-          totalPlays: sql<number>`count(*)`,
-          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
-          totalReplays: sql<number>`sum(case when is_royal_replay = true then 1 else 0 end)`,
-          totalRewards: sql<number>`coalesce(sum(reward_value::numeric), 0)`,
-          uniquePlayers: sql<number>`count(distinct user_id)`,
-        })
-        .from(royalUsage);
-
-      const stats = royalStats[0] || {
-        totalPlays: 0,
-        totalWins: 0,
-        totalReplays: 0,
-        totalRewards: 0,
-        uniquePlayers: 0,
-      };
-
-      // Get recent orders
-      const recentOrders = await db
-        .select({
-          id: orders.id,
-          userId: orders.userId,
-          quantity: orders.quantity,
-          totalAmount: orders.totalAmount,
-          status: orders.status,
-          createdAt: orders.createdAt,
-        })
-        .from(orders)
-        .innerJoin(competitions, eq(orders.competitionId, competitions.id))
-        .where(eq(competitions.type, "royal"))
-        .orderBy(desc(orders.createdAt))
-        .limit(20);
-
-      res.json({
-        config: config || {
-          id: "active",
-          isVisible: true,
-          isActive: true,
-          replayChance: "5.00",
-        },
-        prizes: prizesWithWins,
-        stats,
-        recentOrders,
-      });
-    } catch (error) {
-      console.error("Error fetching royal config:", error);
-      res.status(500).json({ message: "Failed to fetch royal config" });
-    }
-  }
-);
-
-// Update Royal Reels configuration (admin)
-app.put(
-  "/api/admin/game-royal-config",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const { isVisible, isActive, replayChance } = req.body;
-
-      // Validate replay chance
-      if (replayChance !== undefined) {
-        const chance = Number(replayChance);
-        if (isNaN(chance) || chance < 0 || chance > 100) {
-          return res.status(400).json({
-            message: "Replay chance must be between 0 and 100",
-          });
-        }
-      }
-
-      const [existing] = await db
-        .select()
-        .from(gameRoyalConfig)
-        .where(eq(gameRoyalConfig.id, "active"));
-
-      let saved;
-
-      if (existing) {
-        [saved] = await db
-          .update(gameRoyalConfig)
-          .set({
-            isVisible: isVisible !== undefined ? isVisible : existing.isVisible,
-            isActive: isActive !== undefined ? isActive : existing.isActive,
-            replayChance:
-              replayChance !== undefined
-                ? replayChance.toString()
-                : existing.replayChance,
-            updatedAt: new Date(),
-          })
-          .where(eq(gameRoyalConfig.id, "active"))
-          .returning();
-      } else {
-        [saved] = await db
-          .insert(gameRoyalConfig)
-          .values({
-            id: "active",
-            isVisible: isVisible ?? true,
-            isActive: isActive ?? true,
-            replayChance: replayChance?.toString() || "5.00",
-          })
-          .returning();
-      }
-
-      res.json(saved);
-    } catch (error) {
-      console.error("Error updating royal config:", error);
-      res.status(500).json({ message: "Failed to update royal config" });
-    }
-  }
-);
-
-// Get Royal Reels prizes (admin)
-app.get(
-  "/api/admin/royal-prizes",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const prizes = await db
-        .select()
-        .from(royalPrizes)
-        .orderBy(asc(royalPrizes.displayOrder));
-
-      const winStats = await db
-        .select({
-          prizeId: royalWins.prizeId,
-          winCount: sql<number>`count(*)`,
-        })
-        .from(royalWins)
-        .groupBy(royalWins.prizeId);
-
-      const prizesWithWins = prizes.map((prize) => {
-        const stat = winStats.find((w) => w.prizeId === prize.id);
-        return {
-          ...prize,
-          currentWins: Number(stat?.winCount ?? 0),
-        };
-      });
-
-      res.json(prizesWithWins);
-    } catch (error) {
-      console.error("Error fetching royal prizes:", error);
-      res.status(500).json({ message: "Failed to fetch royal prizes" });
-    }
-  }
-);
-
-// Create Royal Reels prize (admin)
-app.post(
-  "/api/admin/royal-prizes",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const {
-        prizeName,
-        symbolKey,
-        prizeValue,
-        rewardType,
-        weight,
-        maxWins,
-        isActive,
-        displayOrder,
-      } = req.body;
-
-      // Validate required fields
-      if (!prizeName || !symbolKey || !prizeValue || !rewardType) {
-        return res.status(400).json({
-          message:
-            "Missing required fields: prizeName, symbolKey, prizeValue, rewardType",
-        });
-      }
-
-      // Validate reward type
-      if (!["cash", "points", "no_win"].includes(rewardType)) {
-        return res.status(400).json({
-          message: "rewardType must be 'cash', 'points', or 'no_win'",
-        });
-      }
-
-      const [created] = await db
-        .insert(royalPrizes)
-        .values({
-          prizeName,
-          symbolKey,
-          prizeValue: prizeValue.toString(),
-          rewardType,
-          weight: weight || 10,
-          maxWins: maxWins || null,
-          isActive: isActive ?? true,
-          displayOrder: displayOrder || 0,
-          quantityWon: 0,
-        })
-        .returning();
-
-      res.json(created);
-    } catch (error) {
-      console.error("Error creating royal prize:", error);
-      res.status(500).json({ message: "Failed to create royal prize" });
-    }
-  }
-);
-
-// Update Royal Reels prize (admin)
-app.put(
-  "/api/admin/royal-prizes/:id",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const { id } = req.params;
-      const {
-        prizeName,
-        symbolKey,
-        prizeValue,
-        rewardType,
-        weight,
-        maxWins,
-        isActive,
-        displayOrder,
-      } = req.body;
-
-      // Validate reward type if provided
-      if (rewardType && !["cash", "points", "no_win"].includes(rewardType)) {
-        return res.status(400).json({
-          message: "rewardType must be 'cash', 'points', or 'no_win'",
-        });
-      }
-
-      const [updated] = await db
-        .update(royalPrizes)
-        .set({
-          prizeName,
-          symbolKey,
-          prizeValue: prizeValue?.toString(),
-          rewardType,
-          weight,
-          maxWins,
-          isActive,
-          displayOrder,
-          updatedAt: new Date(),
-        })
-        .where(eq(royalPrizes.id, id))
-        .returning();
-
-      if (!updated) {
-        return res.status(404).json({ message: "Prize not found" });
-      }
-
-      res.json(updated);
-    } catch (error) {
-      console.error("Error updating royal prize:", error);
-      res.status(500).json({ message: "Failed to update royal prize" });
-    }
-  }
-);
-
-// Delete Royal Reels prize (admin)
-app.delete(
-  "/api/admin/royal-prizes/:id",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const { id } = req.params;
-
-      // Check if prize has wins
-      const [winCount] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(royalWins)
-        .where(eq(royalWins.prizeId, id));
-
-      if (winCount && winCount.count > 0) {
-        return res.status(400).json({
-          message: `Cannot delete prize with ${winCount.count} wins. Deactivate it instead.`,
-        });
-      }
-
-      await db.delete(royalPrizes).where(eq(royalPrizes.id, id));
-
-      res.json({ message: "Prize deleted successfully" });
-    } catch (error) {
-      console.error("Error deleting royal prize:", error);
-      res.status(500).json({ message: "Failed to delete royal prize" });
-    }
-  }
-);
-
-// Reset Royal Reels prize win counts (admin)
-app.post(
-  "/api/admin/royal-prizes/reset-wins",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      // Reset quantityWon in royal prizes
-      await db
-        .update(royalPrizes)
-        .set({ quantityWon: 0, updatedAt: new Date() });
-
-      // Optionally clear win history
-      const { clearHistory = false } = req.body;
-      if (clearHistory) {
-        await db.delete(royalWins);
-      }
-
-      res.json({
-        message: clearHistory
-          ? "Royal Reels win counts and history reset successfully"
-          : "Royal Reels win counts reset successfully",
-      });
-    } catch (error) {
-      console.error("Error resetting royal wins:", error);
-      res.status(500).json({ message: "Failed to reset royal wins" });
-    }
-  }
-);
-
-// Get Royal Reels statistics (admin)
-app.get(
-  "/api/admin/royal-stats",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const { period = "all" } = req.query;
-
-      let dateFilter = sql``;
-      if (period === "today") {
-        dateFilter = sql`and date(royal_usage.used_at) = current_date`;
-      } else if (period === "week") {
-        dateFilter = sql`and royal_usage.used_at >= current_date - interval '7 days'`;
-      } else if (period === "month") {
-        dateFilter = sql`and royal_usage.used_at >= current_date - interval '30 days'`;
-      }
-
-      // Overall stats
-      const overallStats = await db
-        .select({
-          totalPlays: sql<number>`count(*)`,
-          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
-          totalReplays: sql<number>`sum(case when is_royal_replay = true then 1 else 0 end)`,
-          totalRewards: sql<number>`coalesce(sum(reward_value::numeric), 0)`,
-          totalCashPrizes: sql<number>`sum(case when reward_type = 'cash' then 1 else 0 end)`,
-          totalPointsPrizes: sql<number>`sum(case when reward_type = 'points' then 1 else 0 end)`,
-          uniquePlayers: sql<number>`count(distinct user_id)`,
-        })
-        .from(royalUsage)
-        .where(dateFilter);
-
-      // Prize breakdown
-      const prizeBreakdown = await db
-        .select({
-          prizeId: royalUsage.prizeId,
-          prizeName: royalPrizes.prizeName,
-          winCount: sql<number>`count(*)`,
-          totalValue: sql<number>`coalesce(sum(reward_value::numeric), 0)`,
-        })
-        .from(royalUsage)
-        .leftJoin(royalPrizes, eq(royalUsage.prizeId, royalPrizes.id))
-        .where(sql`${royalUsage.isWin} = true`)
-        .groupBy(royalUsage.prizeId, royalPrizes.prizeName)
-        .orderBy(desc(sql`total_value`));
-
-      // Daily breakdown (last 30 days)
-      const dailyStats = await db
-        .select({
-          date: sql<string>`date(royal_usage.used_at)`,
-          plays: sql<number>`count(*)`,
-          wins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
-          replays: sql<number>`sum(case when is_royal_replay = true then 1 else 0 end)`,
-          totalRewards: sql<number>`coalesce(sum(reward_value::numeric), 0)`,
-          players: sql<number>`count(distinct user_id)`,
-        })
-        .from(royalUsage)
-        .groupBy(sql`date(royal_usage.used_at)`)
-        .orderBy(desc(sql`date(royal_usage.used_at)`))
-        .limit(30);
-
-      // Top players
-      const topPlayers = await db
-        .select({
-          userId: royalUsage.userId,
-          totalPlays: sql<number>`count(*)`,
-          totalWins: sql<number>`sum(case when is_win = true then 1 else 0 end)`,
-          totalRewards: sql<number>`coalesce(sum(reward_value::numeric), 0)`,
-        })
-        .from(royalUsage)
-        .groupBy(royalUsage.userId)
-        .orderBy(desc(sql`total_rewards`))
-        .limit(10);
-
-      res.json({
-        overall: overallStats[0],
-        prizeBreakdown,
-        daily: dailyStats,
-        topPlayers,
-      });
-    } catch (error) {
-      console.error("Error fetching royal stats:", error);
-      res.status(500).json({ message: "Failed to fetch royal stats" });
-    }
-  }
-);
+  // ════════════════════ END ROYAL REELS ROUTES ════════════════════
 
 
   const httpServer = createServer(app);
