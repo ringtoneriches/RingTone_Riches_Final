@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Crown, Sparkles, Gem, Star, Calendar, Award, Trophy, SortAsc, SortDesc, TrendingUp, Clock, Coins } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crown, Sparkles, Gem, Star, Calendar, Award, Trophy, SortAsc, SortDesc, TrendingUp, Clock, Coins, Share2 } from "lucide-react";
 
 interface Winner {
   id: string;
@@ -63,6 +63,26 @@ const getPointsDisplay = (prizeValue: string): string => {
 };
 
 type SortOption = 'newest' | 'oldest' | 'highest-value' | 'highest-points';
+
+// Facebook Share Function
+const shareToFacebook = (winner: Winner) => {
+  const url = window.location.href;
+  const fullName = winner.user ? `${winner.user.firstName} ${winner.user.lastName}` : 'A Winner';
+  const prize = winner.prizeDescription || 'an amazing prize';
+  
+  // Create share text
+  const shareText = `🏆 ${fullName} just won ${prize}! Check out our past winners at ${url}`;
+  
+  // Facebook share URL
+  const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(shareText)}`;
+  
+  // Open in new window
+  window.open(
+    facebookShareUrl,
+    'facebook-share-dialog',
+    'width=626,height=436'
+  );
+};
 
 export default function PastWinners() {
   const [currentPage, setCurrentPage] = useState(1);
@@ -308,6 +328,7 @@ export default function PastWinners() {
                   const cashValue = extractCashValue(winner.prizeValue);
                   const points = extractPoints(winner.prizeValue);
                   const pointsDisplay = getPointsDisplay(winner.prizeValue);
+                  const fullName = winner.user ? `${winner.user.firstName} ${winner.user.lastName}` : 'Anonymous Winner';
 
                   return (
                     <div
@@ -398,18 +419,29 @@ export default function PastWinners() {
 
                         {/* Content */}
                         <div className="p-6 space-y-4">
-                          <div>
-                            <h3 className="font-playfair text-xl font-bold text-white mb-2 line-clamp-2 group-hover:text-amber-400 transition-colors">
-                              {winner.prizeDescription}
-                            </h3>
-                            {winner.competition && (
-                              <div className="flex items-center gap-2 text-gray-400 text-sm">
-                                <Calendar className="w-3 h-3" />
-                                <span>{winner.competition.title}</span>
-                              </div>
-                            )}
-                          </div>
 
+                         <div className="flex items-start justify-between gap-4">
+  <div className="flex-1">
+    <h3 className="font-playfair text-xl font-bold text-white mb-2 line-clamp-2 group-hover:text-amber-400 transition-colors">
+      {winner.prizeDescription}
+    </h3>
+    {winner.competition && (
+      <div className="flex items-center gap-2 text-gray-400 text-sm">
+        <Calendar className="w-3 h-3" />
+        <span>{winner.competition.title}</span>
+      </div>
+    )}
+  </div>
+
+  {/* Share Button - Facebook */}
+  <button
+    onClick={() => shareToFacebook(winner)}
+    className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-full transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-blue-500/30"
+    title="Share on Facebook"
+  >
+    <Share2 className="w-4 h-4" />
+  </button>
+</div>
                           <div className="pt-4 border-t border-amber-500/20">
                             <div className="flex items-center justify-between">
                               <div>
@@ -421,7 +453,7 @@ export default function PastWinners() {
                                     </span>
                                   </div>
                                   <p className="font-semibold text-white">
-                                    {winner.user?.firstName} {winner.user?.lastName?.charAt(0)}.
+                                    {fullName}
                                   </p>
                                 </div>
                               </div>
@@ -436,6 +468,7 @@ export default function PastWinners() {
                                 </p>
                               </div>
                             </div>
+                           
                           </div>
                         </div>
 

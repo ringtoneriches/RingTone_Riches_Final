@@ -6,23 +6,22 @@ import { eq, and, sql } from "drizzle-orm";
 
 interface PrizeSyncParams {
   competitionId: string;
-  gameType: 'pop' | 'voltz' | 'plinko' | 'scratch' | 'spin' | 'wheel';
+  gameType: 'pop' | 'voltz' | 'plinko' | 'scratch' | 'spin' | 'wheel' | 'slot';  // ← ADD 'slot' here
   gamePrizeId: string;
   prizeName: string;
   prizeValue: number | string;
-  rewardType: string; // 'cash', 'points', 'physical', 'try_again'
+  rewardType: string;
   quantity?: number;
   maxWins?: number | null;
 }
 
 // ✅ Configuration: Prize types to skip syncing
-const SKIP_REWARD_TYPES = ['points', 'try_again', 'physical']; // Skip non-cash prizes
+const SKIP_REWARD_TYPES = ['points', 'try_again', 'physical'];
 
-// Helper: Clean prize name (remove emojis, special chars, extra spaces)
 function cleanPrizeName(name: string): string {
   return name
-    .replace(/[^\w\s£$€]/g, '') // Remove emojis and special characters
-    .replace(/\s+/g, ' ')        // Normalize spaces
+    .replace(/[^\w\s£$€]/g, '')
+    .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
 }
@@ -42,7 +41,7 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
 
     // ✅ ONLY SYNC CASH PRIZES
     if (rewardType !== 'cash') {
-      console.log(`⏭️ Skipping ${rewardType} prize sync: "${prizeName}"`);
+      console.log(`⏭️ Skipping ${rewardType} prize sync for ${gameType}: "${prizeName}"`);
       return {
         success: true,
         action: 'skipped',
@@ -53,17 +52,15 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
 
     const prizeValueNum = typeof prizeValue === 'string' ? parseFloat(prizeValue) : prizeValue;
 
-    // 🔍 MATCH BY COMPETITION + VALUE ONLY (ignore gameType)
+    // 🔍 MATCH BY COMPETITION + VALUE ONLY
     let existingPrize = null;
 
     const allPrizes = await db.select()
       .from(competitionPrizes)
       .where(
         eq(competitionPrizes.competitionId, competitionId)
-        // ❌ REMOVE gameType filter
       );
 
-    // Find by value
     for (const prize of allPrizes) {
       const dbValue = Number(prize.prizeValue);
       
@@ -73,7 +70,6 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
       }
     }
 
-    // If found, decrement
     if (existingPrize) {
       const newRemaining = Math.max(0, existingPrize.remainingQuantity - quantity);
       
@@ -85,7 +81,7 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
         .where(eq(competitionPrizes.id, existingPrize.id))
         .returning();
 
-      console.log(`✅ Prize "${existingPrize.prizeName}" decremented: ${existingPrize.remainingQuantity} → ${newRemaining} remaining`);
+      console.log(`✅ [${gameType}] Prize "${existingPrize.prizeName}" decremented: ${existingPrize.remainingQuantity} → ${newRemaining} remaining`);
 
       return {
         success: true,
@@ -96,7 +92,7 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
       };
     }
 
-    console.log(`⚠️ Prize with value £${prizeValueNum} not found in competition ${competitionId}`);
+    console.log(`⚠️ [${gameType}] Prize with value £${prizeValueNum} not found in competition ${competitionId}`);
     
     return {
       success: false,
@@ -115,7 +111,8 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
   }
 }
 
-// Game-specific sync functions (keep these the same)
+// ─── EXISTING GAME SYNC FUNCTIONS ───
+
 export async function syncPopPrize(
   competitionId: string, 
   prizeId: string, 
@@ -192,6 +189,7 @@ export async function syncScratchPrize(
   });
 }
 
+// ─── SPIN WHEEL (the wheel game) ───
 export async function syncSpinPrize(
   competitionId: string, 
   prizeId: string, 
@@ -202,7 +200,27 @@ export async function syncSpinPrize(
 ) {
   return syncPrizeWin({
     competitionId,
-    gameType: 'spin',
+    gameType: 'spin',  // ← This is the WHEEL game
+    gamePrizeId: prizeId,
+    prizeName,
+    prizeValue,
+    rewardType,
+    maxWins,
+  });
+}
+
+// ─── SLOT MACHINE (the slot game) ───
+export async function syncSlotPrize(
+  competitionId: string, 
+  prizeId: string, 
+  prizeName: string, 
+  prizeValue: string | number,
+  rewardType: string,
+  maxWins?: number | null
+) {
+  return syncPrizeWin({
+    competitionId,
+    gameType: 'slot',  // ← This is the SLOT MACHINE game
     gamePrizeId: prizeId,
     prizeName,
     prizeValue,

@@ -708,6 +708,7 @@ export const gameSlotConfig = pgTable("game_slot_config", {
   isVisible: boolean("is_visible").default(true),
   pricePerSpin: decimal("price_per_spin", { precision: 10, scale: 2 }).default("0.20"),
   creditsPerSpin: integer("credits_per_spin").default(20),
+  prizesConfig: text("prizes_config"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

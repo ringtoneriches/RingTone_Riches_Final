@@ -766,104 +766,199 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
     }
   }, [balls, onPlayComplete, isMuted, prizes]);
 
-  const dropBall = async () => {
-    if (isDropping || localPlaysRemaining <= 0) return;
+ const dropBall = async () => {
+  console.log("🔵 [DROP BALL] Started");
+  console.log("🔵 [DROP BALL] State:", { 
+    isDropping, 
+    localPlaysRemaining, 
+    orderId, 
+    competitionId 
+  });
+  
+  if (isDropping || localPlaysRemaining <= 0) {
+    console.log("🔴 [DROP BALL] Blocked - isDropping:", isDropping, "playsRemaining:", localPlaysRemaining);
+    return;
+  }
+  
+  console.log("🟢 [DROP BALL] Starting drop process...");
+  
+  setBalls([]);
+  setShowResultPopup(false);
+  setCurrentResult(null);
+  setIsDropping(true);
+  resultShownRef.current = false;
+  pendingResultRef.current = null;
+  pendingBallIdRef.current = null;
+  resetPegHitCounts();
+  onDropStart?.();
+  
+  try {
+    console.log("📤 [FETCH] Sending request to /api/play-plinko");
+    console.log("📤 [FETCH] Request body:", JSON.stringify({
+      orderId,
+      competitionId,
+    }, null, 2));
     
-    setBalls([]);
-    setShowResultPopup(false);
-    setCurrentResult(null);
-    setIsDropping(true);
-    resultShownRef.current = false;
-    pendingResultRef.current = null;
-    pendingBallIdRef.current = null;
-    resetPegHitCounts();
-    onDropStart?.();
+    const startTime = Date.now();
     
-    try {
-      const response = await apiRequest("/api/play-plinko", "POST", {
+    const response = await fetch("/api/play-plinko", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
         orderId,
         competitionId,
-      });
-      
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.message || "Failed to play");
-      }
-  
-      // 🎯 ADD THIS CHECK FOR FREE REPLAY
-      if (result.freeReplay) {
-        // Show free play notification
-        toast({
-          title: "🎉 FREE REPLAY!",
-          description: "You got a free replay! Your play count wasn't deducted.",
-          variant: "default",
-          duration: 3000,
-        });
-      }
-      
-      // // Debug logging
-      // console.log("📊 DEBUG - Server response:", {
-      //   freeReplay: result.freeReplay,
-      //   playsRemaining: result.playsRemaining,
-      //   localPlaysRemaining: localPlaysRemaining,
-      //   playCountSame: result.playsRemaining === localPlaysRemaining,
-      //   prizeName: result.prizeName,
-      //   isWin: result.isWin
-      // });
-      
-      if (result.freeReplay) {
-        console.log("🎉 FREE REPLAY DETECTED!");
-      }
-      
-      // DON'T set currentResult here - wait until ball lands
-      // This prevents history from showing before ball reaches the slot
-      pendingResultRef.current = result;
-      
-      // Get target slot from server result (probability-controlled)
-      const targetSlot = result.slotIndex;
-      
-      const newBallId = ballIdRef.current++;
-      pendingBallIdRef.current = newBallId;
-      
-      // PRE-SIMULATION: Find drop position that naturally lands in target slot
-      // This keeps 100% real physics while controlling outcome
-      const pegs = getPegPositions();
-      const dropResult = findDropPosition(targetSlot, pegs);
-      
-      // Store seed for deterministic replay
-      foundSeedRef.current = dropResult.seed;
-      
-      // Start ball at the calculated position with matching seed
-      // Physics will naturally take it to target (100% real, no correction)
-      const newBall: Ball = {
-        id: newBallId,
-        x: dropResult.x,
-        y: 25,
-        vx: 0,
-        vy: 0,
-        isAnimating: true,
-        landed: false,
-        landedSlot: null,
-        targetSlot: targetSlot,
-        seed: dropResult.seed,
-        currentSeed: dropResult.seed,
-        frame: 0,
-        hitPegId: null,
-      };
-      
-      setBalls([newBall]);
-      
-    } catch (error) {  // ← The error was here - missing closing brace before this line
-      console.error("Error playing Plinko:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to play. Please try again.",
-        variant: "destructive",
-      });
-      setIsDropping(false);
+      }),
+    });
+
+    const endTime = Date.now();
+    console.log(`📥 [FETCH] Response received in ${endTime - startTime}ms`);
+    console.log("📥 [FETCH] Response status:", response.status, response.statusText);
+    console.log("📥 [FETCH] Response headers:", Object.fromEntries(response.headers.entries()));
+    console.log("📥 [FETCH] Response OK?", response.ok);
+    console.log("📥 [FETCH] Response URL:", response.url);
+    console.log("📥 [FETCH] Response type:", response.type);
+    console.log("📥 [FETCH] Response redirected?", response.redirected);
+
+    // Get response as text FIRST to inspect it
+    console.log("📄 [FETCH] Reading response body as text...");
+    const responseText = await response.text();
+    console.log("📄 [FETCH] Response text length:", responseText.length);
+    console.log("📄 [FETCH] Response text (first 1000 chars):");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log(responseText.substring(0, 1000));
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    
+    // Check if response is empty
+    if (!responseText || responseText.trim() === "") {
+      console.error("🔴 [FETCH] Response is EMPTY!");
+      throw new Error("Server returned empty response");
     }
-  };
+
+    // Check if response is HTML
+    if (responseText.trim().startsWith("<!DOCTYPE") || responseText.trim().startsWith("<html")) {
+      console.error("🔴 [FETCH] Response is HTML, not JSON!");
+      console.error("🔴 [FETCH] HTML content (first 500 chars):", responseText.substring(0, 500));
+      
+      // Try to extract error message from HTML
+      const titleMatch = responseText.match(/<title>([^<]*)<\/title>/);
+      const h1Match = responseText.match(/<h1>([^<]*)<\/h1>/);
+      const errorMessage = titleMatch?.[1] || h1Match?.[1] || "Server returned HTML error page";
+      
+      throw new Error(`Server error: ${errorMessage} (Status: ${response.status})`);
+    }
+
+    // Try to parse as JSON
+    console.log("🔄 [FETCH] Attempting to parse JSON...");
+    let result;
+    try {
+      result = JSON.parse(responseText);
+      console.log("✅ [FETCH] JSON parsed successfully!");
+      console.log("📊 [FETCH] Result:", JSON.stringify(result, null, 2));
+    } catch (parseError) {
+      console.error("🔴 [FETCH] Failed to parse JSON!");
+      console.error("🔴 [FETCH] Parse error:", parseError);
+      console.error("🔴 [FETCH] Response text that failed to parse:", responseText);
+      throw new Error(`Invalid JSON response from server. Status: ${response.status}. Response starts with: ${responseText.substring(0, 100)}`);
+    }
+    
+    // Check if response indicates success
+    if (!result.success) {
+      console.error("🔴 [FETCH] Server returned success: false");
+      console.error("🔴 [FETCH] Error message:", result.message);
+      throw new Error(result.message || "Failed to play");
+    }
+
+    console.log("✅ [DROP BALL] Server request successful!");
+    console.log("📊 [DROP BALL] Result data:", {
+      slotIndex: result.slotIndex,
+      prizeName: result.prizeName,
+      rewardType: result.rewardType,
+      rewardValue: result.rewardValue,
+      isWin: result.isWin,
+      freeReplay: result.freeReplay,
+      playsRemaining: result.playsRemaining
+    });
+
+    // 🎯 ADD THIS CHECK FOR FREE REPLAY
+    if (result.freeReplay) {
+      console.log("🎉 [DROP BALL] FREE REPLAY GRANTED!");
+      toast({
+        title: "🎉 FREE REPLAY!",
+        description: "You got a free replay! Your play count wasn't deducted.",
+        variant: "default",
+        duration: 3000,
+      });
+    }
+    
+    if (result.freeReplay) {
+      console.log("🎉 FREE REPLAY DETECTED!");
+    }
+    
+    // DON'T set currentResult here - wait until ball lands
+    // This prevents history from showing before ball reaches the slot
+    pendingResultRef.current = result;
+    
+    // Get target slot from server result (probability-controlled)
+    const targetSlot = result.slotIndex;
+    console.log("🎯 [DROP BALL] Target slot:", targetSlot);
+    
+    const newBallId = ballIdRef.current++;
+    pendingBallIdRef.current = newBallId;
+    
+    // PRE-SIMULATION: Find drop position that naturally lands in target slot
+    console.log("🔬 [DROP BALL] Finding drop position for target slot...");
+    const pegs = getPegPositions();
+    const dropResult = findDropPosition(targetSlot, pegs);
+    console.log("🔬 [DROP BALL] Drop position found:", { x: dropResult.x, seed: dropResult.seed });
+    
+    // Store seed for deterministic replay
+    foundSeedRef.current = dropResult.seed;
+    
+    // Start ball at the calculated position with matching seed
+    const newBall: Ball = {
+      id: newBallId,
+      x: dropResult.x,
+      y: 25,
+      vx: 0,
+      vy: 0,
+      isAnimating: true,
+      landed: false,
+      landedSlot: null,
+      targetSlot: targetSlot,
+      seed: dropResult.seed,
+      currentSeed: dropResult.seed,
+      frame: 0,
+      hitPegId: null,
+    };
+    
+    console.log("🏀 [DROP BALL] Creating new ball:", newBall);
+    setBalls([newBall]);
+    console.log("✅ [DROP BALL] Ball dropped successfully!");
+    
+  } catch (error) {
+    console.error("❌ [DROP BALL] Error caught in try/catch!");
+    console.error("❌ [DROP BALL] Error type:", typeof error);
+    console.error("❌ [DROP BALL] Error constructor:", error?.constructor?.name);
+    console.error("❌ [DROP BALL] Error message:", error instanceof Error ? error.message : String(error));
+    console.error("❌ [DROP BALL] Error stack:", error instanceof Error ? error.stack : "No stack trace");
+    
+    // Log the full error object
+    if (error) {
+      console.error("❌ [DROP BALL] Full error object:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    }
+    
+    toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to play. Please try again.",
+      variant: "destructive",
+    });
+    setIsDropping(false);
+    console.log("🔴 [DROP BALL] Drop failed, state reset");
+  }
+};
 
   const closeResultPopup = () => {
     setShowResultPopup(false);

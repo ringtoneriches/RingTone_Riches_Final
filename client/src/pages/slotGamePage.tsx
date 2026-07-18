@@ -1,32 +1,46 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { useAuth } from "@/hooks/useAuth";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, Clock, ChevronDown } from "lucide-react";
+import SlotGame from "@/components/games/slot-game"; // Import the SlotGame component
+import SlotGameComponent from "@/components/games/slot-game";
+
+interface SlotSpinResult {
+  isWin: boolean;
+  coinsWon: number;
+  prizeType: string;
+  prizeName: string;
+  spinsRemaining: number;
+  newEntry: {
+    id: string;
+    isWin: boolean;
+    coinsWon: number;
+    coinsSpent: number;
+    spinNumber: number;
+    usedAt: string;
+  };
+}
 
 const GOLD = "#FFD700";
 const AMBER = "#FF8C00";
-const GOLD2 = "#FFC300";
 
 // ─── Confetti ──────────────────────────────────────────────────────────────
 const CONFETTI_COLORS = ["#FFD700","#FF6B35","#E63946","#06D6A0","#9B59B6","#FF3FA4","#FFE066","#2ECC71","#3498DB","#E74C3C","#F39C12","#1ABC9C"];
 
 function Confetti({ active }: { active: boolean }) {
-  const pieces = useMemo(() =>
-    Array.from({ length: 110 }, (_, i) => ({
-      id: i,
-      left: Math.random() * 100,
-      delay: Math.random() * 1.8,
-      duration: 2.8 + Math.random() * 2.4,
-      color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-      size: 7 + Math.random() * 11,
-      isCircle: Math.random() > 0.4,
-    }))
-  , []);
+  const pieces = Array.from({ length: 110 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    delay: Math.random() * 1.8,
+    duration: 2.8 + Math.random() * 2.4,
+    color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+    size: 7 + Math.random() * 11,
+    isCircle: Math.random() > 0.4,
+  }));
   if (!active) return null;
   return (
     <div className="fixed inset-0 pointer-events-none z-[60] overflow-hidden">
@@ -44,44 +58,266 @@ function Confetti({ active }: { active: boolean }) {
   );
 }
 
+// ─── Floating Coins ────────────────────────────────────────────────────────
+function FloatingCoins({ active }: { active: boolean }) {
+  const coins = Array.from({ length: 12 }, (_, i) => ({
+    id: i,
+    left: 5 + Math.random() * 90,
+    delay: Math.random() * 2,
+    duration: 2.2 + Math.random() * 1.8,
+    size: 18 + Math.random() * 22,
+  }));
+  if (!active) return null;
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[58] overflow-hidden">
+      {coins.map(c => (
+        <img key={c.id} src="/slot_win_coins.png" alt="" style={{
+          position: "absolute", left: `${c.left}%`, top: "-40px",
+          width: c.size, height: c.size, objectFit: "contain",
+          animation: `confettiFall ${c.duration}s ${c.delay}s ease-in forwards`,
+          opacity: 0,
+          filter: "drop-shadow(0 0 4px rgba(255,200,0,0.7))",
+        }} />
+      ))}
+    </div>
+  );
+}
+
 // ─── Win Overlay ───────────────────────────────────────────────────────────
-function WinOverlay({ show, coinsWon, onDismiss }: { show: boolean; coinsWon: number; onDismiss: () => void }) {
+function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show: boolean; coinsWon: number; prizeType: "cash" | "points"; prizeName: string; onDismiss: () => void }) {
+  const winLabel = coinsWon >= 1000 ? "JACKPOT WIN! 🎉" : coinsWon >= 500 ? "BIG WIN! 🔥" : "AMAZING WIN!";
+  const isCash = prizeType === "cash";
+  const DOTS = 5;
+
   return (
     <>
       <Confetti active={show} />
-      <div onClick={onDismiss} style={{
-        position: "fixed", inset: 0, zIndex: 55, display: "flex", alignItems: "center", justifyContent: "center",
-        background: "rgba(0,0,0,0.55)", backdropFilter: show ? "blur(4px)" : "none",
+      <FloatingCoins active={show} />
+
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 55,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: show ? "rgba(2,0,10,0.88)" : "rgba(0,0,0,0)",
+        backdropFilter: show ? "blur(8px)" : "none",
         opacity: show ? 1 : 0,
-        transform: show ? "scale(1)" : "scale(0.92)",
-        transition: "transform 0.45s cubic-bezier(0.34,1.56,0.64,1), opacity 0.35s ease",
+        transition: "opacity 0.4s ease",
         pointerEvents: show ? "all" : "none",
+        padding: "16px",
       }}>
         <div style={{
-          position: "relative", padding: "42px 52px", borderRadius: 32, textAlign: "center", overflow: "hidden",
-          background: "linear-gradient(145deg,rgba(12,4,30,0.98),rgba(20,6,45,0.98))",
-          border: "1.5px solid rgba(255,200,0,0.4)",
-          boxShadow: "0 0 0 1px rgba(255,200,0,0.15), 0 0 80px rgba(255,160,0,0.25), 0 0 160px rgba(140,40,255,0.15), 0 40px 120px rgba(0,0,0,0.9)",
-          maxWidth: 420,
+          position: "relative",
+          maxWidth: 360,
+          width: "100%",
+          animation: show ? "winCardPop 0.6s cubic-bezier(0.34,1.56,0.64,1) both" : "none",
         }}>
-          <div style={{ position: "absolute", top: -30, left: "50%", transform: "translateX(-50%)", width: 200, height: 80, background: "rgba(255,200,0,0.15)", filter: "blur(30px)", borderRadius: "50%", pointerEvents: "none" }} />
-          <div style={{ position: "absolute", bottom: -20, left: "50%", transform: "translateX(-50%)", width: 300, height: 60, background: "rgba(120,40,255,0.1)", filter: "blur(25px)", borderRadius: "50%", pointerEvents: "none" }} />
-          <div style={{ fontSize: 56, marginBottom: 10, animation: "winPop 0.6s ease-out" }}>🏆</div>
           <div style={{
-            fontSize: 38, fontWeight: 900, marginBottom: 6, letterSpacing: 2,
-            background: "linear-gradient(180deg,#FFE566 0%,#FFD700 40%,#FF9500 100%)",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-            animation: "winPop 0.5s 0.1s ease-out both",
-          }}>YOU WON!</div>
-          <div style={{
-            fontSize: 52, fontWeight: 900, letterSpacing: 1, marginBottom: 18,
-            background: "linear-gradient(180deg,#FFFFFF 0%,#FFE566 60%,#FF9500 100%)",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-            filter: "drop-shadow(0 0 20px rgba(255,200,0,0.5))",
-            animation: "winPop 0.5s 0.2s ease-out both",
-          }}>+{coinsWon.toLocaleString()}</div>
-          <div style={{ fontSize: 12, color: "rgba(220,180,255,0.6)", letterSpacing: 1 }}>Credits added to your balance</div>
-          <div style={{ marginTop: 22, fontSize: 11, color: "rgba(200,150,255,0.4)" }}>Tap anywhere to continue</div>
+            position: "relative",
+            borderRadius: 28,
+            overflow: "hidden",
+            background: "linear-gradient(165deg,#0e0025 0%,#08001a 55%,#050010 100%)",
+            border: "2px solid #c9922a",
+            boxShadow: [
+              "0 0 0 1px rgba(255,200,0,0.15)",
+              "0 0 55px rgba(180,80,255,0.2)",
+              "0 0 120px rgba(120,40,200,0.15)",
+              "inset 0 1px 0 rgba(255,210,0,0.1)",
+              "0 60px 160px rgba(0,0,0,0.99)",
+            ].join(", "),
+          }}>
+            <button onClick={onDismiss} style={{
+              position: "absolute", top: 14, right: 14, zIndex: 20,
+              width: 32, height: 32, borderRadius: "50%",
+              border: "1.5px solid rgba(200,140,255,0.45)",
+              background: "rgba(30,5,60,0.85)",
+              color: "#C084FC", cursor: "pointer", fontSize: 14, fontWeight: 900,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              lineHeight: 1,
+            }}>✕</button>
+
+            <div style={{
+              position: "relative",
+              display: "flex", flexDirection: "column", alignItems: "center",
+              padding: "32px 32px 8px",
+              background: "linear-gradient(180deg,#1a0040 0%,#0e0028 100%)",
+              overflow: "hidden",
+            }}>
+              <div style={{
+                position: "absolute", inset: 0,
+                background: "radial-gradient(ellipse 85% 75% at 50% 85%, rgba(255,180,0,0.22) 0%, rgba(140,40,255,0.14) 45%, transparent 75%)",
+                pointerEvents: "none",
+              }} />
+              <div style={{
+                position: "absolute", bottom: -10, left: "50%", transform: "translateX(-50%)",
+                width: 340, height: 210,
+                background: [
+                  "conic-gradient(from 255deg at 50% 100%,",
+                  "transparent 0deg, rgba(255,200,0,0.13) 6deg, transparent 13deg,",
+                  "transparent 43deg, rgba(255,180,0,0.10) 50deg, transparent 57deg,",
+                  "transparent 87deg, rgba(255,160,0,0.09) 94deg, transparent 101deg,",
+                  "transparent 131deg, rgba(255,200,0,0.08) 138deg, transparent 145deg)",
+                ].join(""),
+                pointerEvents: "none",
+              }} />
+              <img
+                src="/slot_win_trophy_nobg.png"
+                alt="Trophy"
+                style={{
+                  width: 160, height: 160, objectFit: "contain",
+                  display: "block",
+                  position: "relative", zIndex: 2,
+                  filter: [
+                    "drop-shadow(0 0 36px rgba(255,215,0,0.85))",
+                    "drop-shadow(0 0 14px rgba(255,215,0,0.55))",
+                    "drop-shadow(0 14px 22px rgba(0,0,0,0.75))",
+                  ].join(" "),
+                  animation: "trophyBounce 2.5s ease-in-out infinite",
+                }}
+              />
+            </div>
+
+            <div style={{
+              position: "relative", padding: "12px 20px 10px",
+              background: "linear-gradient(135deg,#7a5408,#5c3c07,#7a5408)",
+              borderTop: "2px solid #DAA520",
+              borderBottom: "2px solid #DAA520",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              overflow: "hidden",
+            }}>
+              <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 18, background: "linear-gradient(90deg,rgba(60,0,100,0.8),transparent)" }} />
+              <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 18, background: "linear-gradient(270deg,rgba(60,0,100,0.8),transparent)" }} />
+              {Array.from({ length: DOTS }).map((_, i) => (
+                <div key={`l${i}`} style={{
+                  width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                  background: "#FFE566", boxShadow: "0 0 8px #FFD700, 0 0 3px #FFF",
+                  animation: `dotBlink 1.3s ${i * 0.15}s ease-in-out infinite`,
+                }} />
+              ))}
+              <span style={{
+                fontWeight: 900, fontSize: 32, letterSpacing: 4, margin: "0 8px",
+                color: "#FFE566",
+                textShadow: "0 0 25px rgba(255,200,0,1), 2px 2px 0 rgba(0,0,0,0.7)",
+                fontFamily: "'Impact','Arial Black',sans-serif",
+              }}>YOU WON!</span>
+              {Array.from({ length: DOTS }).map((_, i) => (
+                <div key={`r${i}`} style={{
+                  width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                  background: "#FFE566", boxShadow: "0 0 8px #FFD700, 0 0 3px #FFF",
+                  animation: `dotBlink 1.3s ${(DOTS - i) * 0.15}s ease-in-out infinite`,
+                }} />
+              ))}
+            </div>
+
+            <div style={{
+              padding: "18px 28px 28px",
+              background: "linear-gradient(180deg,#0c0020,#060012)",
+              textAlign: "center",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginBottom: 14 }}>
+                <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg,transparent,rgba(255,200,0,0.4))" }} />
+                <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: "#FCD34D", textTransform: "uppercase", whiteSpace: "nowrap" }}>★ Congratulations ★</span>
+                <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg,rgba(255,200,0,0.4),transparent)" }} />
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 14 }}>
+                <img src="/slot_win_coins_nobg.png" alt="" style={{
+                  width: 72, height: 72, objectFit: "contain", flexShrink: 0,
+                  filter: "drop-shadow(0 0 14px rgba(255,200,0,0.75))",
+                  animation: "floatCoin 3s ease-in-out infinite",
+                  marginRight: -10,
+                  zIndex: 2,
+                }} />
+
+                <div style={{
+                  flex: 1,
+                  padding: "18px 12px 14px",
+                  borderRadius: 18,
+                  background: "linear-gradient(145deg,rgba(18,4,40,1),rgba(10,2,28,1))",
+                  border: "1.5px solid rgba(255,180,0,0.45)",
+                  boxShadow: [
+                    "0 0 40px rgba(255,160,0,0.15)",
+                    "0 0 80px rgba(140,40,255,0.08)",
+                    "inset 0 1px 0 rgba(255,200,0,0.08)",
+                  ].join(", "),
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  zIndex: 1,
+                }}>
+                  <div style={{ position: "relative", width: "100%", display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, color: "rgba(255,200,0,0.5)", animation: "dotBlink 2s 0.3s ease-in-out infinite" }}>✦</span>
+                    <span style={{ fontSize: 10, color: "rgba(255,200,0,0.5)", animation: "dotBlink 2s 0.8s ease-in-out infinite" }}>✦</span>
+                  </div>
+
+                  <div style={{
+                    fontSize: coinsWon >= 1000 ? 44 : 56, fontWeight: 900, lineHeight: 1,
+                    background: "linear-gradient(180deg,#FFF5AA 0%,#FFD700 35%,#FF9500 75%,#FF6000 100%)",
+                    WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                    filter: "drop-shadow(0 0 20px rgba(255,200,0,0.65))",
+                    animation: "winPop 0.6s 0.3s ease-out both",
+                    fontVariantNumeric: "tabular-nums",
+                    fontFamily: "'Impact','Arial Black',sans-serif",
+                    textAlign: "center", width: "100%",
+                  }}>{isCash ? `+£${coinsWon.toLocaleString()}` : `+${coinsWon.toLocaleString()}`}</div>
+
+                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 5, color: "rgba(252,211,77,0.8)", textTransform: "uppercase", marginTop: 6, textAlign: "center" }}>
+                    <span style={{ color: "rgba(255,180,0,0.35)", marginRight: 7 }}>◆</span>
+                    {isCash ? "CASH PRIZE" : "RINGTONE POINTS"}
+                    <span style={{ color: "rgba(255,180,0,0.35)", marginLeft: 7 }}>◆</span>
+                  </div>
+                </div>
+
+                <img src="/slot_win_coins_nobg.png" alt="" style={{
+                  width: 72, height: 72, objectFit: "contain", flexShrink: 0,
+                  filter: "drop-shadow(0 0 14px rgba(255,200,0,0.75))",
+                  transform: "scaleX(-1)",
+                  animation: "floatCoin 3s 1.1s ease-in-out infinite",
+                  marginLeft: -10,
+                  zIndex: 2,
+                }} />
+              </div>
+
+              <div style={{ fontSize: 12, color: "rgba(220,190,255,0.45)", marginBottom: 14, letterSpacing: 0.3 }}>
+                Credits added to your balance
+              </div>
+
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 7,
+                padding: "7px 20px", borderRadius: 22,
+                border: "1px solid rgba(255,210,0,0.38)",
+                background: "rgba(80,30,0,0.2)",
+                marginBottom: 18,
+              }}>
+                <span style={{ fontSize: 15 }}>👑</span>
+                <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: "#FFD700", textTransform: "uppercase" }}>{winLabel}</span>
+              </div>
+
+              <button
+                onClick={onDismiss}
+                style={{
+                  width: "100%", padding: "16px 24px", borderRadius: 50,
+                  border: "2px solid #22c55e",
+                  background: "linear-gradient(135deg,#16a34a 0%,#15803d 50%,#14532d 100%)",
+                  color: "#fff", fontWeight: 900, fontSize: 17, letterSpacing: 3.5,
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
+                  boxShadow: "0 0 40px rgba(22,163,74,0.45), 0 8px 28px rgba(0,0,0,0.7)",
+                  textTransform: "uppercase",
+                  fontFamily: "'Impact','Arial Black',sans-serif",
+                  transition: "box-shadow 0.2s, transform 0.15s",
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.boxShadow = "0 0 65px rgba(22,163,74,0.7), 0 8px 28px rgba(0,0,0,0.7)";
+                  e.currentTarget.style.transform = "scale(1.02)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.boxShadow = "0 0 40px rgba(22,163,74,0.45), 0 8px 28px rgba(0,0,0,0.7)";
+                  e.currentTarget.style.transform = "scale(1)";
+                }}
+              >
+                <span style={{ fontSize: 22, lineHeight: 1 }}>»</span>
+                Continue
+                <span style={{ fontSize: 22, lineHeight: 1 }}>«</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </>
@@ -89,35 +325,94 @@ function WinOverlay({ show, coinsWon, onDismiss }: { show: boolean; coinsWon: nu
 }
 
 // ─── Lose Overlay ──────────────────────────────────────────────────────────
-function LoseOverlay({ show }: { show: boolean }) {
+function LoseOverlay({ show, onDismiss }: { show: boolean; onDismiss: () => void }) {
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 55,
       display: "flex", alignItems: "center", justifyContent: "center",
+      background: show ? "rgba(10,0,5,0.80)" : "rgba(0,0,0,0)",
+      backdropFilter: show ? "blur(6px)" : "none",
       opacity: show ? 1 : 0,
-      transform: show ? "scale(1)" : "scale(0.88)",
-      transition: "opacity 0.3s ease, transform 0.35s cubic-bezier(0.34,1.56,0.64,1)",
-      pointerEvents: "none",
-      background: show ? "rgba(0,0,0,0.45)" : "transparent",
-      backdropFilter: show ? "blur(3px)" : "none",
+      transition: "opacity 0.3s ease, background 0.3s ease",
+      pointerEvents: show ? "all" : "none",
+      padding: "16px",
     }}>
       <div style={{
-        display: "flex", alignItems: "center", gap: 20, padding: "28px 40px", borderRadius: 24,
-        background: "linear-gradient(135deg,rgba(20,0,10,0.97),rgba(40,5,15,0.97))",
-        border: "1.5px solid rgba(220,50,50,0.55)",
-        boxShadow: "0 0 0 1px rgba(0,0,0,0.5), 0 8px 60px rgba(200,0,50,0.3), 0 0 100px rgba(0,0,0,0.9)",
-        backdropFilter: "blur(16px)", minWidth: 320, maxWidth: 460,
+        position: "relative",
+        maxWidth: 360, width: "100%",
+        animation: show ? "winCardPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both" : "none",
       }}>
         <div style={{
-          width: 60, height: 60, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-          background: "linear-gradient(135deg,#7f1d1d,#450a0a)",
-          border: "2px solid rgba(239,68,68,0.6)",
-          boxShadow: "0 0 24px rgba(220,38,38,0.4)",
-          fontSize: 28, flexShrink: 0,
-        }}>🎰</div>
-        <div>
-          <div style={{ fontWeight: 900, fontSize: 18, color: "#fff", marginBottom: 5 }}>No Match This Time!</div>
-          <div style={{ fontSize: 13, color: "rgba(255,130,130,0.85)", fontWeight: 500 }}>Keep spinning — your jackpot is coming!</div>
+          borderRadius: 28, overflow: "hidden",
+          background: "linear-gradient(165deg,#1a0005 0%,#0d0003 55%,#050001 100%)",
+          border: "2px solid rgba(220,38,38,0.6)",
+          boxShadow: [
+            "0 0 0 1px rgba(0,0,0,0.5)",
+            "0 0 55px rgba(220,38,38,0.2)",
+            "0 0 120px rgba(180,0,30,0.12)",
+            "inset 0 1px 0 rgba(255,80,80,0.08)",
+            "0 60px 160px rgba(0,0,0,0.99)",
+          ].join(", "),
+        }}>
+          <button onClick={onDismiss} style={{
+            position: "absolute", top: 14, right: 14, zIndex: 20,
+            width: 32, height: 32, borderRadius: "50%",
+            border: "1.5px solid rgba(220,80,80,0.45)",
+            background: "rgba(60,5,10,0.85)",
+            color: "#F87171", cursor: "pointer", fontSize: 14, fontWeight: 900,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>✕</button>
+
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            padding: "32px 32px 16px",
+            background: "linear-gradient(180deg,#200008 0%,#100004 100%)",
+          }}>
+            <div style={{
+              width: 100, height: 100, borderRadius: "50%",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "linear-gradient(135deg,#7f1d1d,#450a0a)",
+              border: "3px solid rgba(239,68,68,0.5)",
+              boxShadow: "0 0 40px rgba(220,38,38,0.35), 0 0 80px rgba(180,0,30,0.15)",
+              fontSize: 42,
+              animation: "trophyBounce 2.5s ease-in-out infinite",
+            }}>😔</div>
+          </div>
+
+          <div style={{
+            padding: "12px 20px 10px", textAlign: "center",
+            background: "linear-gradient(135deg,#6b0f0f,#450a0a,#6b0f0f)",
+            borderTop: "2px solid rgba(220,38,38,0.6)",
+            borderBottom: "2px solid rgba(220,38,38,0.6)",
+          }}>
+            <span style={{
+              fontWeight: 900, fontSize: 26, letterSpacing: 3, color: "#FCA5A5",
+              textShadow: "0 0 20px rgba(220,38,38,0.8), 2px 2px 0 rgba(0,0,0,0.7)",
+              fontFamily: "'Impact','Arial Black',sans-serif",
+            }}>NO MATCH!</span>
+          </div>
+
+          <div style={{
+            padding: "20px 28px 24px",
+            background: "linear-gradient(180deg,#0c0002,#060001)",
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: 15, color: "rgba(255,160,160,0.75)", marginBottom: 18, fontWeight: 500 }}>
+              Better luck on your next spin!<br />
+              <span style={{ fontSize: 12, color: "rgba(255,120,120,0.45)" }}>Your jackpot is just around the corner 🎰</span>
+            </div>
+            <button onClick={onDismiss} style={{
+              width: "100%", padding: "14px 24px", borderRadius: 50,
+              border: "2px solid rgba(220,38,38,0.7)",
+              background: "linear-gradient(135deg,#7f1d1d 0%,#991b1b 50%,#7f1d1d 100%)",
+              color: "#fff", fontWeight: 900, fontSize: 16, letterSpacing: 3,
+              cursor: "pointer", fontFamily: "'Impact','Arial Black',sans-serif",
+              boxShadow: "0 0 30px rgba(220,38,38,0.3), 0 8px 24px rgba(0,0,0,0.6)",
+              textTransform: "uppercase",
+            }}>
+              Try Again
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -145,6 +440,59 @@ function StatCard({ label, value, icon, accent }: { label: string; value: string
         WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
       }}>{value}</div>
       <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.35)" }}>{label}</div>
+    </div>
+  );
+}
+
+// ─── Spins Exhausted Overlay ─────────────────────────────────────────────
+function SpinsExhaustedOverlay({ totalSpins, wins, totalWon, onBack }: {
+  totalSpins: number; wins: number; totalWon: number; onBack: () => void;
+}) {
+  return (
+    <div style={{
+      position: "absolute", inset: 0, zIndex: 20,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      background: "linear-gradient(165deg,rgba(8,0,22,0.97) 0%,rgba(4,0,12,0.98) 100%)",
+      backdropFilter: "blur(6px)",
+      padding: "24px 16px",
+    }}>
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse 70% 50% at 50% 40%,rgba(200,130,255,0.1) 0%,transparent 70%)" }} />
+      <div style={{ fontSize: 56, marginBottom: 12, filter: "drop-shadow(0 0 18px rgba(200,130,255,0.5))" }}>🎰</div>
+      <div style={{
+        fontSize: 22, fontWeight: 900, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4,
+        background: "linear-gradient(180deg,#E0B0FF,#9B59B6)",
+        WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+      }}>All Spins Used!</div>
+      <div style={{ fontSize: 13, color: "rgba(200,160,255,0.6)", marginBottom: 20, textAlign: "center" }}>
+        You've completed all {totalSpins} spin{totalSpins !== 1 ? "s" : ""} for this game.
+      </div>
+
+      <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+        {[
+          { label: "Spins", value: totalSpins, icon: "🎰" },
+          { label: "Wins", value: wins, icon: "🏆" },
+          { label: "Won", value: totalWon > 0 ? `£${totalWon}` : "—", icon: "💰" },
+        ].map(s => (
+          <div key={s.label} style={{
+            textAlign: "center", padding: "12px 16px", borderRadius: 12,
+            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(200,150,255,0.2)",
+            minWidth: 72,
+          }}>
+            <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: "#E0B0FF" }}>{s.value}</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: "rgba(255,255,255,0.35)", textTransform: "uppercase" }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={onBack} style={{
+        padding: "12px 32px", borderRadius: 50, fontWeight: 900, fontSize: 14, cursor: "pointer",
+        letterSpacing: 1, textTransform: "uppercase",
+        background: "linear-gradient(135deg,#7c3aed,#4c1d95)",
+        border: "1px solid rgba(200,150,255,0.5)",
+        color: "#fff",
+        boxShadow: "0 0 24px rgba(140,50,255,0.4)",
+      }}>← Back to Competitions</button>
     </div>
   );
 }
@@ -177,8 +525,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
       border: "1.5px solid rgba(100,70,200,0.35)",
       boxShadow: "0 0 0 1px rgba(0,0,0,0.6), 0 24px 80px rgba(0,0,0,0.8)",
     }}>
-
-      {/* ══ TOP HEADER BAR ══ */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         flexWrap: "wrap", gap: 14,
@@ -207,7 +553,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
           </div>
         </div>
 
-        {/* Stat pills */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
           {[
             { icon: "🔄", value: history.length, label: "TOTAL SPINS", bg: "rgba(100,80,220,0.2)", border: "rgba(120,90,255,0.45)", color: "#A78BFA" },
@@ -225,9 +570,7 @@ function SpinHistoryTable({ history }: { history: any[] }) {
         </div>
       </div>
 
-      {/* ══ LARGE STAT CARDS ══ */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, padding: "20px 28px" }}>
-        {/* Total Spins */}
         <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "20px 22px", borderRadius: 18, background: "linear-gradient(135deg,#1e0d50,#140835)", border: "1.5px solid rgba(120,80,220,0.4)", boxShadow: "0 0 30px rgba(100,60,220,0.12)" }}>
           <div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg,#3d1a80,#2a0d60)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0, border: "1px solid rgba(160,100,255,0.3)", boxShadow: "0 0 20px rgba(120,60,255,0.3)" }}>🎰</div>
           <div>
@@ -235,7 +578,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
             <div style={{ fontSize: 36, fontWeight: 900, color: "#fff", lineHeight: 1 }}>{history.length}</div>
           </div>
         </div>
-        {/* Total Wins */}
         <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "20px 22px", borderRadius: 18, background: wins.length > 0 ? "linear-gradient(135deg,#0a2e18,#061a0e)" : "linear-gradient(135deg,#111,#0a0a0a)", border: `1.5px solid ${wins.length > 0 ? "rgba(34,197,94,0.45)" : "rgba(255,255,255,0.08)"}`, boxShadow: wins.length > 0 ? "0 0 30px rgba(34,197,94,0.1)" : "none" }}>
           <div style={{ width: 52, height: 52, borderRadius: 14, background: wins.length > 0 ? "linear-gradient(135deg,#166534,#0d4023)" : "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0, border: `1px solid ${wins.length > 0 ? "rgba(34,197,94,0.4)" : "rgba(255,255,255,0.08)"}`, boxShadow: wins.length > 0 ? "0 0 20px rgba(34,197,94,0.3)" : "none" }}>🏆</div>
           <div>
@@ -243,7 +585,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
             <div style={{ fontSize: 36, fontWeight: 900, color: wins.length > 0 ? "#4ADE80" : "rgba(255,255,255,0.2)", lineHeight: 1 }}>{wins.length}</div>
           </div>
         </div>
-        {/* Credits Won */}
         <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "20px 22px", borderRadius: 18, background: totalWon > 0 ? "linear-gradient(135deg,#2a1500,#1a0d00)" : "linear-gradient(135deg,#111,#0a0a0a)", border: `1.5px solid ${totalWon > 0 ? "rgba(255,185,0,0.5)" : "rgba(255,255,255,0.08)"}`, boxShadow: totalWon > 0 ? "0 0 30px rgba(255,150,0,0.18)" : "none" }}>
           <div style={{ width: 52, height: 52, borderRadius: 14, background: totalWon > 0 ? "linear-gradient(135deg,#92400e,#5c2800)" : "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0, border: `1px solid ${totalWon > 0 ? "rgba(255,185,0,0.45)" : "rgba(255,255,255,0.08)"}`, boxShadow: totalWon > 0 ? "0 0 20px rgba(255,150,0,0.4)" : "none" }}>🪙</div>
           <div>
@@ -258,7 +599,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
         </div>
       </div>
 
-      {/* ══ EMPTY STATE ══ */}
       {history.length === 0 ? (
         <div style={{ padding: "60px 32px", textAlign: "center", borderTop: "1px solid rgba(100,70,200,0.15)" }}>
           <div style={{ fontSize: 56, marginBottom: 16 }}>🎰</div>
@@ -267,7 +607,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
         </div>
       ) : (
         <>
-          {/* ══ COLUMN HEADERS ══ */}
           <div style={{
             display: "grid", gridTemplateColumns: COLS,
             padding: "12px 28px",
@@ -281,7 +620,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
             ))}
           </div>
 
-          {/* ══ DATA ROWS ══ */}
           <div style={{ maxHeight: 460, overflowY: "auto" }}>
             {history.map((spin, i) => {
               const num = history.length - i;
@@ -291,7 +629,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
               return (
                 <div
                   key={spin.id || i}
-                  data-testid={`row-spin-${num}`}
                   style={{
                     display: "grid", gridTemplateColumns: COLS,
                     padding: "15px 28px",
@@ -302,10 +639,8 @@ function SpinHistoryTable({ history }: { history: any[] }) {
                     animation: i === 0 ? "historyRowIn 0.5s ease-out" : "none",
                   }}
                 >
-                  {/* # */}
                   <div style={{ fontSize: 15, fontWeight: 800, color: "#FFB830" }}>#{num}</div>
 
-                  {/* Result icon + title + subtitle */}
                   <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                     <div style={{
                       width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
@@ -323,7 +658,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
                     </div>
                   </div>
 
-                  {/* Credits Won */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {isWin && coinsWon > 0 ? (
                       <>
@@ -335,7 +669,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
                     )}
                   </div>
 
-                  {/* Credits Spent */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {spin.coinsSpent > 0 ? (
                       <>
@@ -347,7 +680,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
                     )}
                   </div>
 
-                  {/* Time */}
                   <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 20, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)" }}>
                     <Clock style={{ width: 11, height: 11, color: "rgba(255,255,255,0.5)", flexShrink: 0 }} />
                     <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.8)", letterSpacing: 0.3 }}>
@@ -355,7 +687,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
                     </span>
                   </div>
 
-                  {/* Chevron */}
                   <div style={{ display: "flex", justifyContent: "center" }}>
                     <ChevronDown style={{ width: 16, height: 16, color: "rgba(255,255,255,0.2)" }} />
                   </div>
@@ -364,7 +695,6 @@ function SpinHistoryTable({ history }: { history: any[] }) {
             })}
           </div>
 
-          {/* ══ BIGGEST WIN BANNER ══ */}
           {biggestWin > 0 && (
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap",
@@ -401,15 +731,13 @@ function SpinHistoryTable({ history }: { history: any[] }) {
 export default function SlotGamePage() {
   const { competitionId, orderId } = useParams();
   const [, navigate] = useLocation();
-  const queryClient = useQueryClient();
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const spinCountRef = useRef(0);
   const [spinHistory, setSpinHistory] = useState<any[]>([]);
-  const [iframeReady, setIframeReady] = useState(false);
   const [showWinOverlay, setShowWinOverlay] = useState(false);
   const [showLoseOverlay, setShowLoseOverlay] = useState(false);
+  const [spinsExhausted, setSpinsExhausted] = useState(false);
   const [lastCoinsWon, setLastCoinsWon] = useState(0);
-  const loseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [lastPrizeType, setLastPrizeType] = useState<"cash" | "points">("cash");
+  const [lastPrizeName, setLastPrizeName] = useState("");
 
   const { data: orderData, isLoading } = useQuery({
     queryKey: ["/api/slot-order", orderId],
@@ -429,48 +757,35 @@ export default function SlotGamePage() {
   useEffect(() => {
     if (orderData?.history) {
       setSpinHistory(orderData.history);
-      spinCountRef.current = orderData.history.length;
     }
   }, [orderData?.history]);
 
-
-  const recordSpin = useCallback(async (isWin: boolean, coinsWon: number) => {
-    if (!orderId || order?.status !== "completed") return;
-    spinCountRef.current += 1;
-    const spinNumber = spinCountRef.current;
-    const coinsSpent = creditsPerSpin;
-    try {
-      await apiRequest("/api/record-slot-spin", "POST", { orderId, isWin, coinsWon, coinsSpent, spinNumber });
-      const newEntry = { id: `local-${spinNumber}`, isWin, coinsWon, coinsSpent, spinNumber, usedAt: new Date().toISOString() };
-      setSpinHistory(prev => [newEntry, ...prev]);
-      if (isWin && coinsWon > 0) queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-    } catch (err) { console.error("Failed to record spin:", err); }
-  }, [orderId, order?.status, creditsPerSpin, queryClient]);
-
   useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (!event.data || typeof event.data !== "object") return;
-      if (event.data.type === "slotSpinResult") {
-        const { isWin, coinsWon } = event.data;
-        recordSpin(isWin, coinsWon || 0);
-        if (isWin && (coinsWon || 0) > 0) {
-          setLastCoinsWon(coinsWon || 0);
-          setShowLoseOverlay(false);
-          setShowWinOverlay(true);
-        } else if (!isWin) {
-          setShowWinOverlay(false);
-          setShowLoseOverlay(true);
-          if (loseTimerRef.current) clearTimeout(loseTimerRef.current);
-          loseTimerRef.current = setTimeout(() => setShowLoseOverlay(false), 3000);
-        }
-      }
-    };
-    window.addEventListener("message", handler);
-    return () => {
-      window.removeEventListener("message", handler);
-      if (loseTimerRef.current) clearTimeout(loseTimerRef.current);
-    };
-  }, [recordSpin]);
+    if (order?.quantity && spinHistory.length >= order.quantity) {
+      setSpinsExhausted(true);
+    }
+  }, [spinHistory.length, order?.quantity]);
+
+  // ─── Handle spin completion from SlotGame ───
+  const handleSpinComplete = useCallback((result: SlotSpinResult) => {
+    console.log("[SLOT GAME] Spin complete callback received:", result);
+    setSpinHistory(prev => [result.newEntry, ...prev]);
+
+    if (result.isWin && result.coinsWon > 0) {
+      setLastCoinsWon(result.coinsWon);
+      setLastPrizeType(result.prizeType === "points" ? "points" : "cash");
+      setLastPrizeName(result.prizeName || "");
+      setShowLoseOverlay(false);
+      setShowWinOverlay(true);
+    } else {
+      setShowLoseOverlay(true);
+    }
+  }, []);
+
+  const handleNoSpinsLeft = useCallback(() => {
+    console.log("[SLOT GAME] No spins left callback");
+    setSpinsExhausted(true);
+  }, []);
 
   if (isLoading) {
     return (
@@ -508,8 +823,8 @@ export default function SlotGamePage() {
       <div className="fixed inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 80% 40% at 50% 0%,rgba(140,50,255,0.12) 0%,transparent 70%)", zIndex: 0 }} />
       <div className="fixed inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 30% at 50% 30%,rgba(255,180,0,0.06) 0%,transparent 60%)", zIndex: 0 }} />
 
-      <WinOverlay show={showWinOverlay} coinsWon={lastCoinsWon} onDismiss={() => setShowWinOverlay(false)} />
-      <LoseOverlay show={showLoseOverlay} />
+      <WinOverlay show={showWinOverlay} coinsWon={lastCoinsWon} prizeType={lastPrizeType} prizeName={lastPrizeName} onDismiss={() => setShowWinOverlay(false)} />
+      <LoseOverlay show={showLoseOverlay} onDismiss={() => setShowLoseOverlay(false)} />
 
       <Header />
 
@@ -532,7 +847,7 @@ export default function SlotGamePage() {
             </div>
           </div>
 
-          {/* ─── Game Frame ─── */}
+          {/* ─── Game Component ─── */}
           <div className="flex justify-center mb-6">
             <div style={{ width: "100%", maxWidth: 960 }}>
               <div
@@ -544,24 +859,30 @@ export default function SlotGamePage() {
                   boxShadow: "0 0 0 1px rgba(255,180,0,0.08), 0 0 80px rgba(140,50,255,0.15), 0 30px 100px rgba(0,0,0,0.8)",
                 }}
               >
-                {!iframeReady && (
-                  <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: "#050010" }}>
-                    <div className="text-center">
-                      <Loader2 className="w-10 h-10 animate-spin mx-auto mb-3" style={{ color: GOLD }} />
-                      <p className="text-sm" style={{ color: "rgba(200,140,255,0.6)" }}>Loading game...</p>
-                    </div>
-                  </div>
+                {/* Use the SlotGame component directly */}
+                {orderId && (
+                  <SlotGameComponent
+                    orderId={orderId}
+                    creditsPerSpin={creditsPerSpin}
+                    onSpinComplete={handleSpinComplete}
+                    onNoSpinsLeft={handleNoSpinsLeft}
+                  />
                 )}
-                <iframe
-                  ref={iframeRef}
-                  src={`/slotmachine/index.html?credits=${totalCredits}&orderId=${orderId}`}
-                  className="w-full h-full"
-                  style={{ border: "none", display: "block" }}
-                  title="Slot Machine"
-                  allow="autoplay"
-                  onLoad={() => setIframeReady(true)}
-                  data-testid="iframe-slot-game"
-                />
+
+                {/* Transparent blocker — prevents interacting with game while a popup is open */}
+                {(showWinOverlay || showLoseOverlay) && (
+                  <div className="absolute inset-0" style={{ zIndex: 10, pointerEvents: "all", cursor: "default" }} />
+                )}
+
+                {/* Spins exhausted — covers game with summary + back button */}
+                {spinsExhausted && (
+                  <SpinsExhaustedOverlay
+                    totalSpins={order?.quantity || spinHistory.length}
+                    wins={spinHistory.filter(h => h.isWin).length}
+                    totalWon={spinHistory.reduce((s, h) => s + (h.isWin ? (h.coinsWon || 0) : 0), 0)}
+                    onBack={() => navigate("/")}
+                  />
+                )}
               </div>
             </div>
           </div>

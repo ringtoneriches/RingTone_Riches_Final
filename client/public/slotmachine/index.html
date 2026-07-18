@@ -1,6 +1,7 @@
 <!doctype html>
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style type="text/css">
     @font-face {
       font-family: 'euroFont';
@@ -17,6 +18,8 @@
       padding: 0px;
       margin: 0px;
       overflow: hidden;
+      width: 100vw;
+      height: 100vh;
     }
     canvas {
       display: block;
@@ -25,6 +28,8 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
+      max-width: 100vw;
+      max-height: 100vh;
     }
   </style>
   <script src="js/phaser.js"></script>
@@ -52,6 +57,14 @@
           window.parent.scrollBy({ top: e.deltaY, left: 0, behavior: 'auto' });
         }
       }, { passive: true });
+
+      // Handle resize events
+      window.addEventListener('resize', function() {
+        // Phaser game should handle its own resize
+        if (window.game && window.game.scale) {
+          window.game.scale.resize(window.innerWidth, window.innerHeight);
+        }
+      });
     })();
   </script>
 </body>
