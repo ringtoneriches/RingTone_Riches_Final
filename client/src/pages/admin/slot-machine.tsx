@@ -393,7 +393,7 @@ export default function AdminSlotMachine() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: "Total Spins",  value: stats?.totalSpins ?? "—",                      icon: Activity,   color: "text-blue-400" },
             { label: "Total Wins",   value: stats?.totalWins ?? "—",                       icon: TrendingUp, color: "text-green-400" },
@@ -410,10 +410,10 @@ export default function AdminSlotMachine() {
               </CardContent>
             </Card>
           ))}
-        </div>
+        </div> */}
 
         {/* Settings + Recent Spins */}
-        <div className="grid md:grid-cols-2 gap-6">
+        {/* <div className="grid md:grid-cols-2 gap-6">
           <Card className="bg-zinc-900 border-zinc-800">
             <CardHeader>
               <CardTitle className="text-white">Game Settings</CardTitle>
@@ -508,7 +508,7 @@ export default function AdminSlotMachine() {
               )}
             </CardContent>
           </Card>
-        </div>
+        </div> */}
 
         {/* Prize Management */}
         <Card className="bg-zinc-900 border-zinc-800">

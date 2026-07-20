@@ -38,8 +38,8 @@ export class SlotGame extends Scene {
   // ─────────────────────────────────────────────────────────────
   private readonly REEL_CENTER_X_PCT = 0;
   private readonly REEL_CENTER_Y_PCT = -0.02;
-  private readonly REEL_SPAN_X_PCT = 0.32;
-  private readonly REEL_SPAN_Y_PCT = 0.34;
+  private readonly REEL_SPAN_X_PCT = 0.33;
+  private readonly REEL_SPAN_Y_PCT = 0.22;
 
   // Spin button position, same fraction system, relative to the
   // slot machine image. Your "Ringtone Riches" art already draws its
@@ -60,7 +60,7 @@ export class SlotGame extends Scene {
   // Your "slot" image already bakes in the frame, crown, jackpot
   // banner, spin button, AND the handle — so we skip drawing separate
   // handle/logo/lamp sprites entirely to avoid doubling them up.
-  private readonly DRAW_DECORATIVE_EXTRAS = false;
+  private readonly DRAW_DECORATIVE_EXTRAS = true;
 
   private CX = 0;
   private CY = 0;
@@ -73,7 +73,7 @@ export class SlotGame extends Scene {
   private cells: Phaser.GameObjects.Image[][] = [];
   private spinBtn!: Phaser.GameObjects.Image | Phaser.GameObjects.Zone;
   private sounds: Record<string, Phaser.Sound.BaseSound | null> = {};
-
+private reelBgs: Phaser.GameObjects.Image[] = [];
   private spinning = false;
   private reelStopped = [false, false, false];
   private spinTimer: Phaser.Time.TimerEvent | null = null;
@@ -93,24 +93,47 @@ export class SlotGame extends Scene {
 
   private winAmountText!: Phaser.GameObjects.Text;
 
+  private reelSpacing = 0;
+private readonly STRIP_LEN = 5; // 3 visible rows + 2 buffer symbols (top/bottom)
+private colStrips: Phaser.GameObjects.Image[][] = [[], [], []];
+private colSpinning: boolean[] = [false, false, false];
+private readonly SPIN_SPEED = 1300; // px/sec while spinning
+private reelMask: Phaser.Display.Masks.GeometryMask | null = null;
+
   constructor() {
     super("SlotGame");
   }
 
-  create() {
+ create() {
     this.W = this.cameras.main.width;
     this.H = this.cameras.main.height;
     this.CX = this.W / 2;
     this.CY = this.H / 2;
 
+    // Fix: Make sure background is added properly
+    const bg = this.add.image(
+        this.cameras.main.centerX,
+        this.cameras.main.centerY,
+        "background"
+    );
+
+    // Set size to cover entire canvas
+    bg.setDisplaySize(
+        this.cameras.main.width,
+        this.cameras.main.height
+    );
+
+    // Ensure it's behind everything
+    bg.setDepth(-100);
+    bg.setOrigin(0.5, 0.5); // Add this line to ensure proper centering
+
     this.drawSlotMachine();
     this.computeReelLayout();
     this.drawReelCells();
     this.drawSpinButton();
-    this.drawLampsIfAvailable();
     this.drawUI();
     this.initSounds();
-  }
+}
 
   setCallbacks(cb: SlotCallbacks) {
     this.callbacks = cb;
@@ -126,10 +149,10 @@ export class SlotGame extends Scene {
   // ──────────────────────── Slot Machine Visual ────────────────────────
 
   private drawSlotMachine() {
-    const bg = this.add.graphics();
-    bg.fillStyle(0x1a0a2e, 1);
-    bg.fillRect(0, 0, this.W, this.H);
-    bg.setDepth(-10);
+    // const bg = this.add.graphics();
+    // bg.fillStyle(0x1a0a2e, 1);
+    // bg.fillRect(0, 0, this.W, this.H);
+    // bg.setDepth(-10);
 
     this.slotMachine = this.add.image(this.CX, this.CY, "slot");
 
@@ -147,6 +170,36 @@ export class SlotGame extends Scene {
     this.machineDisplayW = nativeW * fitScale;
     this.machineDisplayH = nativeH * fitScale;
 
+    // ---------- Draw 3 reel backgrounds ----------
+
+const reelCenterX =
+  this.CX + this.REEL_CENTER_X_PCT * (this.machineDisplayW / 2);
+
+const reelCenterY =
+  this.CY + this.REEL_CENTER_Y_PCT * (this.machineDisplayH / 2);
+
+const spanX = this.REEL_SPAN_X_PCT * this.machineDisplayW;
+const spanY = this.REEL_SPAN_Y_PCT * this.machineDisplayH;
+
+const reelWidth = spanX / 3;
+const reelHeight = spanY * 1.5;
+
+const reelXs = [
+  reelCenterX - spanX / 2,
+  reelCenterX,
+  reelCenterX + spanX / 2,
+];
+
+for (const x of reelXs) {
+  const reel = this.add.image(x, reelCenterY, "reel");
+
+  reel.setDisplaySize(reelWidth * 1.2, reelHeight);
+
+  reel.setDepth(1);
+
+  this.reelBgs.push(reel);
+}
+
     if (!this.DRAW_DECORATIVE_EXTRAS) {
       this.handle = null;
       this.handleBall = null;
@@ -159,8 +212,8 @@ export class SlotGame extends Scene {
     // a themed asset pack that doesn't include them (like a baked
     // "Royal Reels" card image) doesn't crash the scene.
     this.handle = this.tryAddImage(
-      this.CX + this.machineDisplayW * 0.46,
-      this.CY + this.machineDisplayH * 0.08,
+      this.CX + this.machineDisplayW * 0.32,
+      this.CY + this.machineDisplayH * 0.13,
       "handle"
     );
     if (this.handle) {
@@ -170,8 +223,8 @@ export class SlotGame extends Scene {
     }
 
     this.handleBall = this.tryAddImage(
-      this.CX + this.machineDisplayW * 0.47,
-      this.CY - this.machineDisplayH * 0.3,
+      this.CX + this.machineDisplayW * 0.33,
+      this.CY - this.machineDisplayH * 0.13,
       "handle_ball"
     );
     if (this.handleBall) {
@@ -179,9 +232,9 @@ export class SlotGame extends Scene {
       this.handleBall.setDepth(5);
     }
 
-    this.logo = this.tryAddImage(this.CX, this.CY - this.machineDisplayH * 0.55, "logo");
+    this.logo = this.tryAddImage(this.CX, this.CY - this.machineDisplayH * 0.35, "logo");
     if (this.logo) {
-      this.logo.setScale(0.8 * fitScale * 1.6);
+      this.logo.setScale(0.2 * fitScale * 1.4);;
       this.logo.setDepth(5);
     }
   }
@@ -232,23 +285,46 @@ export class SlotGame extends Scene {
 
     // Symbol size scales with the column spacing so it stays
     // proportionate no matter how big/small the machine image is.
-    this.symbolSize = Math.max(24, (spanX / 2) * 0.85);
+    this.symbolSize = Math.max(24, (spanX / 2) * 0.45);
+    this.reelSpacing = this.rowYs[1] - this.rowYs[0];
   }
 
   private drawReelCells() {
-    this.cells = [];
+  this.cells = [[], [], []];
+  this.colStrips = [[], [], []];
 
-    for (let row = 0; row < 3; row++) {
-      this.cells[row] = [];
-      for (let col = 0; col < 3; col++) {
-        const key = ALL_SYM_KEYS[Math.floor(Math.random() * ALL_SYM_KEYS.length)];
-        const img = this.add.image(this.colXs[col], this.rowYs[row], key);
-        img.setDisplaySize(this.symbolSize, this.symbolSize);
-        img.setDepth(2);
-        this.cells[row][col] = img;
-      }
+  const maskX = this.colXs[0] - this.symbolSize * 0.7;
+  const maskW = (this.colXs[2] - this.colXs[0]) + this.symbolSize * 1.4;
+  const maskY = this.rowYs[0] - this.symbolSize * 0.55;
+  const maskH = (this.rowYs[2] - this.rowYs[0]) + this.symbolSize * 1.1;
+
+  const maskGfx = this.make.graphics(undefined, false);
+  maskGfx.fillStyle(0xffffff);
+  maskGfx.fillRect(maskX, maskY, maskW, maskH);
+  this.reelMask = maskGfx.createGeometryMask();
+
+  const offsets = [-2, -1, 0, 1, 2]; // top buffer -> bottom buffer
+
+  for (let col = 0; col < 3; col++) {
+    this.colStrips[col] = [];
+    for (let i = 0; i < this.STRIP_LEN; i++) {
+      const key = ALL_SYM_KEYS[Math.floor(Math.random() * ALL_SYM_KEYS.length)];
+      const y = this.rowYs[1] + offsets[i] * this.reelSpacing;
+      const img = this.add.image(this.colXs[col], y, key);
+      this.fitSymbol(img);
+      img.setDepth(2);
+      img.setMask(this.reelMask);
+      this.colStrips[col].push(img);
+
+      if (i >= 1 && i <= 3) this.cells[i - 1][col] = img; // visible rows
     }
   }
+}
+
+private fitSymbol(img: Phaser.GameObjects.Image) {
+  const scale = Math.min(this.symbolSize / img.width, this.symbolSize / img.height);
+  img.setScale(scale);
+}
 
   // ──────────────────────── Spin Button ────────────────────────
 
@@ -328,56 +404,91 @@ export class SlotGame extends Scene {
 
   // ──────────────────────── Spin logic ────────────────────────
 
-  private beginSpin() {
-    this.spinning = true;
-    this.reelStopped = [false, false, false];
-    this.spinStartTime = Date.now();
-    this.pendingFull = null;
+private beginSpin() {
+  this.spinning = true;
+  this.reelStopped = [false, false, false];
+  this.colSpinning = [true, true, true];
+  this.spinStartTime = Date.now();
+  this.pendingFull = null;
 
-    this.play("button");
-    this.play("spin");
+  this.play("button");
+  this.play("spin");
 
-    if (this.spinBtn instanceof Phaser.GameObjects.Image) {
+  if (this.spinBtn instanceof Phaser.GameObjects.Image) {
+    this.tweens.add({
+      targets: this.spinBtn,
+      y: this.spinBtn.y + 4,
+      duration: 80,
+      yoyo: true,
+      onComplete: () => (this.spinBtn as Phaser.GameObjects.Image).setAlpha(1),
+    });
+  }
+
+  this.callbacks?.onSpinRequest();
+}
+
+private animateHandle() {
+  if (!this.handle || !this.handleBall) return;
+
+  const handle = this.handle;
+  const ball = this.handleBall;
+
+  // Save original positions
+  const handleX = handle.x;
+  const handleY = handle.y;
+  const ballX = ball.x;
+  const ballY = ball.y;
+
+  // Rotate handle around its top
+  handle.setOrigin(0.5, 0.08);
+
+  this.tweens.add({
+    targets: handle,
+    angle: 170,          // almost a full pull
+    duration: 220,
+    ease: "Cubic.easeIn",
+
+    onUpdate: () => {
+      // Move the ball with the handle
+      const r = Phaser.Math.DegToRad(handle.angle);
+
+      const length = 95; // distance from pivot to ball
+
+      ball.x = handle.x + Math.sin(r) * length;
+      ball.y = handle.y + Math.cos(r) * length;
+    },
+
+    onComplete: () => {
+
       this.tweens.add({
-        targets: this.spinBtn,
-        y: this.spinBtn.y + 4,
-        duration: 80,
-        yoyo: true,
-        onComplete: () => (this.spinBtn as Phaser.GameObjects.Image).setAlpha(1),
+        targets: handle,
+        angle: 0,
+        duration: 450,
+        ease: "Back.easeOut",
+
+        onUpdate: () => {
+          const r = Phaser.Math.DegToRad(handle.angle);
+
+          const length = 95;
+
+          ball.x = handle.x + Math.sin(r) * length;
+          ball.y = handle.y + Math.cos(r) * length;
+        },
+
+        onComplete: () => {
+          handle.setOrigin(0.5, 1.2);
+
+          handle.x = handleX;
+          handle.y = handleY;
+
+          ball.x = ballX;
+          ball.y = ballY;
+        }
       });
+
     }
-
-    this.animateHandle();
-    this.startSymbolCycling();
-    this.callbacks?.onSpinRequest();
-  }
-
-  private animateHandle() {
-    if (!this.handle || !this.handleBall) return;
-
-    const handleY = this.handle.y;
-    const ballY = this.handleBall.y;
-
-    this.tweens.add({
-      targets: this.handle,
-      y: handleY + 20,
-      duration: 200,
-      ease: "Power2",
-      onComplete: () => {
-        this.tweens.add({ targets: this.handle, y: handleY, duration: 200, ease: "Power2" });
-      },
-    });
-
-    this.tweens.add({
-      targets: this.handleBall,
-      y: ballY + 200,
-      duration: 200,
-      ease: "Power2",
-      onComplete: () => {
-        this.tweens.add({ targets: this.handleBall, y: ballY, duration: 200, ease: "Power2" });
-      },
-    });
-  }
+  });
+}
 
   private startSymbolCycling() {
     this.spinTimer = this.time.addEvent({
@@ -394,31 +505,75 @@ export class SlotGame extends Scene {
     });
   }
 
-  private stopReels(result: SpinResult) {
-    this.spinTimer?.destroy();
-    this.spinTimer = null;
+  update(time: number, delta: number) {
+  if (!this.spinning) return;
+  const dy = (this.SPIN_SPEED * delta) / 1000;
+  const total = this.STRIP_LEN * this.reelSpacing;
+  const bottomLimit = this.rowYs[1] + 2.5 * this.reelSpacing;
 
-    const grid = this.buildFinalGrid(result);
+  for (let col = 0; col < 3; col++) {
+    if (!this.colSpinning[col]) continue;
+    for (const img of this.colStrips[col]) {
+      img.y += dy;
+      if (img.y > bottomLimit) {
+        img.y -= total;
+        img.setTexture(ALL_SYM_KEYS[Math.floor(Math.random() * ALL_SYM_KEYS.length)]);
+        this.fitSymbol(img);
+      }
+    }
+  }
+}
 
-    [0, 1, 2].forEach((col) => {
-      this.time.delayedCall(col * 350, () => {
-        this.reelStopped[col] = true;
-        for (let row = 0; row < 3; row++) {
-          this.cells[row][col].setTexture(grid[row][col]);
+private stopReels(result: SpinResult) {
+  const grid = this.buildFinalGrid(result);
+  const total = this.STRIP_LEN * this.reelSpacing;
+  const offsets = [-2, -1, 0, 1, 2];
+  const topBound = this.rowYs[1] - 2.5 * this.reelSpacing;
+
+  [0, 1, 2].forEach((col) => {
+    this.time.delayedCall(col * 350, () => {
+      this.reelStopped[col] = true;
+      this.colSpinning[col] = false;
+
+      const strip = this.colStrips[col];
+
+      strip.forEach((img, i) => {
+        const targetY = this.rowYs[1] + offsets[i] * this.reelSpacing;
+
+        if (i >= 1 && i <= 3) {
+          img.setTexture(grid[i - 1][col]);
+        } else {
+          img.setTexture(ALL_SYM_KEYS[Math.floor(Math.random() * ALL_SYM_KEYS.length)]);
         }
+        this.fitSymbol(img);
+
+        const startY = img.y;
+        let diff = targetY - startY;
+        diff = ((diff % total) + total) % total;
+        diff += total * 2; // two extra laps = visible slow-down before landing
+
+        const proxy = { p: 0 };
         this.tweens.add({
-          targets: [this.cells[0][col], this.cells[1][col], this.cells[2][col]],
-          scaleX: { from: 0.86, to: 1 },
-          scaleY: { from: 0.8, to: 1 },
-          duration: 200,
-          ease: "Back.easeOut",
+          targets: proxy,
+          p: 1,
+          duration: 900,
+          ease: "Cubic.easeOut",
+          onUpdate: () => {
+            const raw = startY + diff * proxy.p;
+            // wrap continuously so it never leaves the masked window
+            img.y = topBound + (((raw - topBound) % total) + total) % total;
+          },
+          onComplete: () => {
+            img.y = targetY; // pixel-perfect snap, kills float drift
+            if (i === 2 && col === 2) {
+              this.time.delayedCall(150, () => this.showResult(result));
+            }
+          },
         });
-        if (col === 2) {
-          this.time.delayedCall(280, () => this.showResult(result));
-        }
       });
     });
-  }
+  });
+}
 
   private buildFinalGrid(result: SpinResult): string[][] {
     const grid: string[][] = [[], [], []];

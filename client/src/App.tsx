@@ -94,6 +94,7 @@ import AdminRoyalReels from "./pages/admin/royal-reels";
 import AdminRoyalReelsSettings from "./pages/admin/admin-royal-reels";
 import AdminSlotMachineSettings from "./pages/admin/admin-slot-machine";
 import AdminBulkPoints from "./pages/admin/admin-bulk-points";
+import AdminSlotGame from "./pages/admin/admin-slot-spin";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -186,7 +187,8 @@ function Router() {
       <Route path="/admin/promo-video" component={AdminCompetitionVideos} />
       <Route path="/admin/tickets" component={AdminTicketManagerPage} />
       <Route path="/admin/winners" component={AdminAddWinner} />
-      <Route path="/admin/slot" component={AdminSlotMachine} />
+      <Route path="/admin/slot" component={AdminSlotGame} />
+      <Route path="/admin/slot-game/settings" component={AdminSlotMachine} />
       <Route path="/admin/royal" component={AdminRoyalReels} />
       {/* <Route path="/admin/royal-reels/settings" component={AdminRoyalReelsSettings} />
       <Route path="/admin/slot-machine/settings" component={AdminSlotMachineSettings} /> */}

@@ -19369,6 +19369,7 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
   // Mirrors the Voltz pattern: server is source of truth, client animates result.
 
 
+// ─── PLAY SLOT ENDPOINT ────────────────────────────────────────────────
 app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
   try {
     console.log("[API] 🎰 Play slot request received:", {
@@ -19532,6 +19533,7 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
       try {
         const user = await storage.getUser(userId);
         if (selectedPrize.isEuro && coinsWon > 0) {
+          // Cash prize → add to wallet balance
           const newBalance = parseFloat(user?.balance || "0") + coinsWon;
           await db.update(users).set({ balance: newBalance.toFixed(2) }).where(eq(users.id, userId));
           await storage.createTransaction({ 
@@ -19542,12 +19544,14 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
           });
           console.log("[API] 💰 Cash prize added:", coinsWon, "New balance:", newBalance);
         } else if (!selectedPrize.isEuro && coinsWon > 0) {
+          // Points prize → add to ringtonePoints
           const newPoints = (user?.ringtonePoints || 0) + coinsWon;
           await db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
+          // ✅ FIXED: Changed from "0.00" to actual points value
           await storage.createTransaction({ 
             userId, 
             type: "prize", 
-            amount: "0.00", 
+            amount: coinsWon.toString(), // Now shows actual points instead of "0.00"
             description: `Slot Machine Win - ${coinsWon} Ringtone Points` 
           });
           console.log("[API] 🎯 Points prize added:", coinsWon, "New points:", newPoints);
@@ -19638,93 +19642,117 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
   }
 });
 
-  app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const { orderId, coinsSpent, spinNumber, gameIsWin } = req.body;
-      if (!orderId) return res.status(400).json({ message: "Order ID required" });
-      const order = await storage.getOrder(orderId);
-      if (!order || order.userId !== userId || order.status !== "completed")
-        return res.status(400).json({ message: "No valid slot order found" });
-
-      // ── Enforce spin limit ───────────────────────────────────────────────
-      // Count how many spins have already been recorded for this order.
-      // order.quantity = number of spins purchased; reject if exceeded.
-      const existingSpins = await db.select({ id: slotUsage.id }).from(slotUsage).where(eq(slotUsage.orderId, orderId));
-      if (existingSpins.length >= order.quantity) {
-        return res.status(403).json({ message: "All spins used", spinsUsed: existingSpins.length, spinsAllowed: order.quantity });
-      }
-
-      // ── Server-side prize determination ─────────────────────────────────
-      // The server independently determines win/lose on every spin.
-      // Each prize's "probability" field is a per-spin win PERCENTAGE (0–100).
-      // We roll a random number [0, 100); if it lands within a prize's cumulative
-      // range the player wins that prize. If the roll exceeds the sum of all prize
-      // probabilities the spin is a loss.  The game's visual reel result is ignored
-      // for prize purposes — it is purely decorative.
-      let selectedPrize: any = null;
-
-      {
-        const [config] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
-        const allPrizes: any[] = config?.prizesConfig ? JSON.parse(config.prizesConfig) : [];
-
-        // Only enabled prizes with probability > 0 are eligible
-        const eligible = allPrizes.filter((p: any) => p.enabled !== false && Number(p.probability || 0) > 0);
-
-        if (eligible.length > 0) {
-          const rand = Math.random() * 100; // roll in [0, 100)
-          let cumulative = 0;
-          for (const prize of eligible) {
-            cumulative += Number(prize.probability);
-            if (rand < cumulative) { selectedPrize = prize; break; }
-          }
-          // selectedPrize stays null when rand >= total (i.e. a loss — no prize awarded)
-        }
-        // If no prizes are configured at all, fall back to a guaranteed £1 win so
-        // the overlay always works during initial setup.
-        if (allPrizes.length === 0) {
-          selectedPrize = { id: "default", symbol: "Win", isEuro: true, pay: 1 };
-        }
-      }
-
-      const isWin = selectedPrize !== null;
-      let coinsWon = 0;
-      let prizeId: string | null = null;
-      let prizeName: string | null = null;
-      let prizeType: string | null = null;
-
-      if (isWin && selectedPrize) {
-        prizeId = selectedPrize.id;
-        prizeName = selectedPrize.symbol;
-        prizeType = selectedPrize.isEuro ? "cash" : "points";
-        coinsWon = Number(selectedPrize.pay || 0);
-
-        const user = await storage.getUser(userId);
-        if (selectedPrize.isEuro && coinsWon > 0) {
-          // Cash prize → add to wallet balance
-          const newBalance = parseFloat(user?.balance || "0") + coinsWon;
-          await db.update(users).set({ balance: newBalance.toFixed(2) }).where(eq(users.id, userId));
-          await storage.createTransaction({ userId, type: "prize", amount: coinsWon.toFixed(2), description: `Slot Machine Win - £${coinsWon.toFixed(2)}` });
-        } else if (!selectedPrize.isEuro && coinsWon > 0) {
-          // Points prize → add to ringtonePoints
-          const newPoints = (user?.ringtonePoints || 0) + coinsWon;
-          await db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
-          await storage.createTransaction({ userId, type: "prize", amount: "0.00", description: `Slot Machine Win - ${coinsWon} Ringtone Points` });
-        }
-      }
-
-      await db.insert(slotUsage).values({
-        orderId, userId, isWin,
-        coinsWon, coinsSpent: coinsSpent || 0,
-        spinNumber: spinNumber || 1,
-      });
-
-      res.json({ success: true, isWin, coinsWon, prizeId, prizeName, prizeType });
-    } catch (error) {
-      console.error("Error recording slot spin:", error);
-      res.status(500).json({ message: "Failed to record spin" });
+// ─── RECORD SLOT SPIN ENDPOINT ─────────────────────────────────────────
+app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, coinsSpent, spinNumber, gameIsWin } = req.body;
+    
+    if (!orderId) {
+      return res.status(400).json({ message: "Order ID required" });
     }
-  });
+    
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({ message: "No valid slot order found" });
+    }
+
+    // ── Enforce spin limit ───────────────────────────────────────────────
+    const existingSpins = await db.select({ id: slotUsage.id }).from(slotUsage).where(eq(slotUsage.orderId, orderId));
+    if (existingSpins.length >= order.quantity) {
+      return res.status(403).json({ 
+        message: "All spins used", 
+        spinsUsed: existingSpins.length, 
+        spinsAllowed: order.quantity 
+      });
+    }
+
+    // ── Server-side prize determination ─────────────────────────────────
+    let selectedPrize: any = null;
+
+    const [config] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
+    const allPrizes: any[] = config?.prizesConfig ? JSON.parse(config.prizesConfig) : [];
+
+    // Only enabled prizes with probability > 0 are eligible
+    const eligible = allPrizes.filter((p: any) => p.enabled !== false && Number(p.probability || 0) > 0);
+
+    if (eligible.length > 0) {
+      const rand = Math.random() * 100;
+      let cumulative = 0;
+      for (const prize of eligible) {
+        cumulative += Number(prize.probability);
+        if (rand < cumulative) { 
+          selectedPrize = prize; 
+          break; 
+        }
+      }
+    }
+    
+    // Fallback if no prizes configured
+    if (allPrizes.length === 0) {
+      selectedPrize = { id: "default", symbol: "Win", isEuro: true, pay: 1 };
+    }
+
+    const isWin = selectedPrize !== null;
+    let coinsWon = 0;
+    let prizeId: string | null = null;
+    let prizeName: string | null = null;
+    let prizeType: string | null = null;
+
+    if (isWin && selectedPrize) {
+      prizeId = selectedPrize.id;
+      prizeName = selectedPrize.symbol;
+      prizeType = selectedPrize.isEuro ? "cash" : "points";
+      coinsWon = Number(selectedPrize.pay || 0);
+
+      const user = await storage.getUser(userId);
+      if (selectedPrize.isEuro && coinsWon > 0) {
+        // Cash prize → add to wallet balance
+        const newBalance = parseFloat(user?.balance || "0") + coinsWon;
+        await db.update(users).set({ balance: newBalance.toFixed(2) }).where(eq(users.id, userId));
+        await storage.createTransaction({ 
+          userId, 
+          type: "prize", 
+          amount: coinsWon.toFixed(2), 
+          description: `Slot Machine Win - £${coinsWon.toFixed(2)}` 
+        });
+      } else if (!selectedPrize.isEuro && coinsWon > 0) {
+        // Points prize → add to ringtonePoints
+        const newPoints = (user?.ringtonePoints || 0) + coinsWon;
+        await db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
+        // ✅ FIXED: Changed from "0.00" to actual points value
+        await storage.createTransaction({ 
+          userId, 
+          type: "prize", 
+          amount: coinsWon.toString(), // Now shows actual points instead of "0.00"
+          description: `Slot Machine Win - ${coinsWon} Ringtone Points` 
+        });
+      }
+    }
+
+    await db.insert(slotUsage).values({
+      orderId, 
+      userId, 
+      isWin,
+      coinsWon, 
+      coinsSpent: coinsSpent || 0,
+      spinNumber: spinNumber || 1,
+    });
+
+    res.json({ 
+      success: true, 
+      isWin, 
+      coinsWon, 
+      prizeId, 
+      prizeName, 
+      prizeType 
+    });
+    
+  } catch (error) {
+    console.error("Error recording slot spin:", error);
+    res.status(500).json({ message: "Failed to record spin" });
+  }
+});
 
   app.get("/api/slot-config", async (req, res) => {
     try {

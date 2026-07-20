@@ -1732,7 +1732,7 @@ const handleDeleteBankAccount = (
                                 return "-";
                               }
                               const sign = parseFloat(transaction.amount) > 0 ? "+" : "-";
-                              return `${sign}${formatAmount(transaction)}`;
+                              return `${formatAmount(transaction)}`;
                             })()}
                           </div>
                           </div>

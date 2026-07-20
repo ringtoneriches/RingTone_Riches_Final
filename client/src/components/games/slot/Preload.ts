@@ -56,6 +56,8 @@ export class Preload extends Scene {
     // ── Core machine visuals ──
     // NOTE: keys below MUST match what SlotGame.tsx calls this.add.image(x, y, "KEY") with.
     this.load.image("slot", "png/SlotMachine.png");
+    this.load.image("background", "png/Background_2.png");
+    console.log("Loading background...");
     this.load.image("reel", "png/Reel3x3.png");
     this.load.image("handle", "png/SlotMachineHandle.png");
     this.load.image("handle_ball", "png/red/HandleBall.png");
