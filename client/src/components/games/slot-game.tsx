@@ -194,10 +194,23 @@ export default function SlotGameComponent({
 
       if (!gameContainerRef.current || destroyed) return;
 
+      // Wait two animation frames so the CSS aspect-ratio box has
+      // fully committed its layout size before we measure it —
+      // measuring immediately on mount can catch a stale/small size.
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      );
+
+      if (!gameContainerRef.current || destroyed) return;
+
+      const rect = gameContainerRef.current.getBoundingClientRect();
+      const gameW = Math.round(rect.width) || 1280;
+      const gameH = Math.round(rect.height) || 720;
+
       game = new Phaser.Game({
         type: Phaser.AUTO,
-        width: 1280,
-        height: 720,
+        width: gameW,
+        height: gameH,
         parent: gameContainerRef.current,
         backgroundColor: "#080010",
         scale: {

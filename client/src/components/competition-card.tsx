@@ -391,31 +391,9 @@ export default function CompetitionCard({ competition, authenticated = false }: 
                 marginBottom: "clamp(3px, 0.8vw, 6px)",
               }} />
             )}
-            {competition.type !== "instant" && !isMysteryPrize ? (
-              <div style={{
-                fontSize: "clamp(7px, 1.2vw, 8.5px)", 
-                fontWeight: 800, 
-                letterSpacing: "0.04em",
-                color: isClosed ? "#666666" : tc.accent,
-                lineHeight: 1.35,
-              }}>
-                WIN UP TO {prizeStr || "BIG PRIZES"} CASH INSTANTLY!
-              </div>
-            ) : isMysteryPrize ? (
-              <div style={{
-                fontSize: "clamp(7px, 1.2vw, 8.5px)", 
-                fontWeight: 800, 
-                letterSpacing: "0.04em",
-                color: isClosed ? "#666666" : "#FFD700",
-                lineHeight: 1.35,
-              }}>
-                🎲 MYSTERY PRIZE AWAITS!
-              </div>
-            ) : (
-              <div style={{
+            <div style={{
                 height: "clamp(9px, 1.6vw, 11px)",
               }} />
-            )}
           </div>
 
           {/* ══ ENTRY + ENTRIES LEFT - Conditional with placeholder ══ */}

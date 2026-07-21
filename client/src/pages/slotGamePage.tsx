@@ -144,9 +144,9 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
                     style={{ background: "linear-gradient(180deg, #B8860B, #8B6914)", boxShadow: "0 4px 10px rgba(0,0,0,0.5)" }} />
                   
                   {/* Stars around trophy */}
-                  <div className="absolute -top-3 -right-2 text-xl sm:text-2xl animate-ping">✨</div>
+                  {/* <div className="absolute -top-3 -right-2 text-xl sm:text-2xl animate-ping">✨</div>
                   <div className="absolute -top-1 -left-4 text-lg sm:text-xl animate-pulse">⭐</div>
-                  <div className="absolute bottom-0 -right-4 text-base sm:text-lg animate-bounce">💫</div>
+                  <div className="absolute bottom-0 -right-4 text-base sm:text-lg animate-bounce">💫</div> */}
                 </div>
               </div>
             </div>
@@ -187,7 +187,7 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
               {/* Coins and Amount */}
               <div className="flex items-center gap-0 mb-3">
                 {/* Left Coin */}
-                <div className="w-16 sm:w-[72px] h-16 sm:h-[72px] flex-shrink-0 flex items-center justify-center -mr-2.5 z-2 animate-[floatCoin_3s_ease-in-out_infinite]">
+                {/* <div className="w-16 sm:w-[72px] h-16 sm:h-[72px] flex-shrink-0 flex items-center justify-center -mr-2.5 z-2 animate-[floatCoin_3s_ease-in-out_infinite]">
                   <div className="w-12 sm:w-14 h-12 sm:h-14 rounded-full flex items-center justify-center text-2xl sm:text-3xl"
                     style={{
                       background: "linear-gradient(135deg, #FFD700, #FFA500, #FF8C00)",
@@ -196,7 +196,7 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
                     }}>
                     💰
                   </div>
-                </div>
+                </div> */}
 
                 {/* Amount Box */}
                 <div className="flex-1 px-3 sm:px-3 py-3 sm:py-3.5 rounded-2xl border border-[rgba(255,180,0,0.45)] flex flex-col items-center justify-center z-1"
@@ -230,7 +230,7 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
                 </div>
 
                 {/* Right Coin */}
-                <div className="w-16 sm:w-[72px] h-16 sm:h-[72px] flex-shrink-0 flex items-center justify-center -ml-2.5 z-2 animate-[floatCoin_3s_1.1s_ease-in-out_infinite]">
+                {/* <div className="w-16 sm:w-[72px] h-16 sm:h-[72px] flex-shrink-0 flex items-center justify-center -ml-2.5 z-2 animate-[floatCoin_3s_1.1s_ease-in-out_infinite]">
                   <div className="w-12 sm:w-14 h-12 sm:h-14 rounded-full flex items-center justify-center text-2xl sm:text-3xl"
                     style={{
                       background: "linear-gradient(135deg, #FFD700, #FFA500, #FF8C00)",
@@ -240,7 +240,7 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
                     }}>
                     💰
                   </div>
-                </div>
+                </div> */}
               </div>
 
               <div className="text-xs text-[rgba(220,190,255,0.45)] mb-3 tracking-[0.3px]">Credits added to your balance</div>
@@ -853,13 +853,13 @@ export default function SlotGamePage() {
           {/* ─── Game Component ─── */}
           <div className="flex justify-center mb-5 sm:mb-6">
             <div className="w-full" style={{ maxWidth: 960 }}>
-              <div className="relative w-full rounded-xl sm:rounded-2xl overflow-hidden"
+              <div className="relative w-full rounded-xl sm:rounded-2xl overflow-hidden aspect-[9/14] sm:aspect-video min-h-[520px] sm:min-h-[280px]"
                 style={{
-                  aspectRatio: "16/9", minHeight: "280px",
-                  background: "#050010",
-                  border: "1.5px solid rgba(180,100,255,0.25)",
-                  boxShadow: "0 0 0 1px rgba(255,180,0,0.08), 0 0 80px rgba(140,50,255,0.15), 0 30px 100px rgba(0,0,0,0.8)",
-                }}>
+  background: "#050010",
+  border: "1.5px solid rgba(180,100,255,0.25)",
+  boxShadow:
+    "0 0 0 1px rgba(255,180,0,0.08), 0 0 80px rgba(140,50,255,0.15), 0 30px 100px rgba(0,0,0,0.8)",
+}}>
                 {orderId && (
                   <SlotGameComponent
                     orderId={orderId}

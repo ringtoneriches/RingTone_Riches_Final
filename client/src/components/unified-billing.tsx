@@ -64,7 +64,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
   const getTitle = () => {
     if (orderType === "spin") return wheelType === "wheel2" ? "RETRO RINGTONE SPIN" : "LUXURY CAR SPIN";
     switch (orderType) {
-      case "scratch": return "LANDMARK LOOT";
+      case "scratch": return "SCRATCH INTO SUMMER";
       case "pop": return "RINGTONE POP";
       case "plinko": return "RINGTONE PLINKO";
       case "voltz": return "RINGTONE VOLTZ";
@@ -125,7 +125,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
   const order       = orderData?.order;
   const user        = orderData?.user;
   const competition = orderData?.competition;
-
+console.log(competition)
   const isInstantCompetition = orderType === "competition" && competition?.type === "instant";
   const isPointsDisabled = isInstantCompetition;
 
@@ -261,7 +261,23 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
 
   const FALLBACK = "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&h=600";
   const prizeMatch = competition?.title?.match(/£[\d,]+/);
-  const prizeVal   = prizeMatch ? prizeMatch[0] : "";
+  // Better prize extraction with fallbacks
+const getPrizeValue = () => {
+  if (!competition?.title) return "£10,000";
+  
+  // Try to find £ amount in title
+  const prizeMatch = competition.title.match(/£[\d,]+/);
+  if (prizeMatch) return prizeMatch[0];
+  
+  // Try to find numeric amount with currency symbol
+  const numericMatch = competition.title.match(/[\d,]+/);
+  if (numericMatch) return `£${numericMatch[0]}`;
+  
+  // Fallback
+  return "£10,000";
+};
+
+const prizeVal = getPrizeValue();
   const qty        = order?.quantity || 1;
 
   /* ── LOADING ── */

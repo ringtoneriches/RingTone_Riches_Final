@@ -117,11 +117,16 @@ private reelMask: Phaser.Display.Masks.GeometryMask | null = null;
         "background"
     );
 
-    // Set size to cover entire canvas
-    bg.setDisplaySize(
-        this.cameras.main.width,
-        this.cameras.main.height
+   bg.setOrigin(0.5, 0.5);
+
+    // COVER behavior: scale by the larger ratio so the image fills
+    // the whole canvas with no gaps, cropping whatever overflows
+    // (instead of stretching/squashing to fit both dimensions).
+    const bgScale = Math.max(
+      this.cameras.main.width / bg.width,
+      this.cameras.main.height / bg.height
     );
+    bg.setScale(bgScale);
 
     // Ensure it's behind everything
     bg.setDepth(-100);
@@ -154,13 +159,21 @@ private reelMask: Phaser.Display.Masks.GeometryMask | null = null;
     // bg.fillRect(0, 0, this.W, this.H);
     // bg.setDepth(-10);
 
-    this.slotMachine = this.add.image(this.CX, this.CY, "slot");
+    const isMobile = this.W < 768;
+
+this.slotMachine = this.add.image(
+    this.CX,
+    this.CY,
+    "slot"
+);
 
     // Auto-fit the machine image to the available canvas instead of a
     // hardcoded 0.9 scale, so it doesn't overflow small containers.
     const nativeW = this.slotMachine.width;
     const nativeH = this.slotMachine.height;
-    const fitScale = Math.min(
+
+
+ const fitScale = Math.min(
       (this.W * this.MACHINE_FIT_WIDTH_RATIO) / nativeW,
       (this.H * this.MACHINE_FIT_HEIGHT_RATIO) / nativeH
     );
@@ -285,7 +298,7 @@ for (const x of reelXs) {
 
     // Symbol size scales with the column spacing so it stays
     // proportionate no matter how big/small the machine image is.
-    this.symbolSize = Math.max(24, (spanX / 2) * 0.45);
+    this.symbolSize = Math.max(24, (spanX / 2) * 0.55);
     this.reelSpacing = this.rowYs[1] - this.rowYs[0];
   }
 
