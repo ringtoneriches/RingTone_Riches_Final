@@ -87,7 +87,7 @@ function FloatingCoins({ active }: { active: boolean }) {
 function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show: boolean; coinsWon: number; prizeType: "cash" | "points"; prizeName: string; onDismiss: () => void }) {
   const winLabel = coinsWon >= 1000 ? "JACKPOT WIN! 🎉" : coinsWon >= 500 ? "BIG WIN! 🔥" : "AMAZING WIN!";
   const isCash = prizeType === "cash";
-  const DOTS = 5;
+  const DOTS = 3;
 
   return (
     <>

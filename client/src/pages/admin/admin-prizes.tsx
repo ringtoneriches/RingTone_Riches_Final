@@ -27,7 +27,8 @@ import {
   RotateCw,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Gamepad
 } from "lucide-react";
 import AdminLayout from "@/components/admin/admin-layout";
 import { Button } from "@/components/ui/button";
@@ -136,7 +137,7 @@ export default function AdminPrizes() {
       const allCompetitions = await res.json();
     
       // Filter to only show specific competition types
-      const allowedTypes = ['pop', 'voltz', 'plinko', 'scratch', 'spin'];
+      const allowedTypes = ['pop', 'voltz', 'plinko', 'scratch', 'spin', 'slot'];
       return allCompetitions.filter((comp: Competition) => 
         allowedTypes.includes(comp.type?.toLowerCase()));
     },
@@ -395,6 +396,7 @@ const filteredAndSortedPrizes = useMemo(() => {
       case 'voltz': return <Zap className="w-3 h-3" />;
       case 'plinko': return <Target className="w-3 h-3" />;
       case 'scratch': return <Gift className="w-3 h-3" />;
+      case 'slot': return <Gamepad className="w-3 h-3" />;
       case 'spin': return <RotateCw className="w-3 h-3" />;
       case 'wheel': return <RotateCw className="w-3 h-3" />;
       default: return null;

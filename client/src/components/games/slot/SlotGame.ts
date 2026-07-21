@@ -91,7 +91,7 @@ private reelBgs: Phaser.GameObjects.Image[] = [];
   private lampOn!: Phaser.GameObjects.Image | null;
   private lampOff!: Phaser.GameObjects.Image | null;
 
-  private winAmountText!: Phaser.GameObjects.Text;
+  // private winAmountText!: Phaser.GameObjects.Text;
 
   private reelSpacing = 0;
 private readonly STRIP_LEN = 5; // 3 visible rows + 2 buffer symbols (top/bottom)
@@ -381,21 +381,21 @@ private fitSymbol(img: Phaser.GameObjects.Image) {
     // Credit / total bet text removed — the surrounding app UI already
     // shows Total Credits, Credits/Spin, and Credits Won as cards.
 
-    this.winAmountText = this.add.text(
-      this.CX,
-      this.rowYs[1],
-      "0",
-      {
-        fontFamily: "Arial",
-        fontSize: "30px",
-        color: "#E6BE00",
-        fontStyle: "bold",
-        align: "center",
-        stroke: "#000000",
-        strokeThickness: 4,
-      }
-    ).setOrigin(0.5).setDepth(10);
-    this.winAmountText.setVisible(false);
+    // this.winAmountText = this.add.text(
+    //   this.CX,
+    //   this.rowYs[1],
+    //   "0",
+    //   {
+    //     fontFamily: "Arial",
+    //     fontSize: "30px",
+    //     color: "#E6BE00",
+    //     fontStyle: "bold",
+    //     align: "center",
+    //     stroke: "#000000",
+    //     strokeThickness: 4,
+    //   }
+    // ).setOrigin(0.5).setDepth(10);
+    // this.winAmountText.setVisible(false);
   }
 
   // ──────────────────────── Sounds ────────────────────────
@@ -640,13 +640,13 @@ private stopReels(result: SpinResult) {
       this.play("coins");
       this.flashWinCells();
       this.spawnParticles();
-      this.floatText("🏆 WIN! 🏆", "#FFD700", 40);
-      this.showWinAmount(result.coinsWon);
+      // this.floatText("🏆 WIN! 🏆", "#FFD700", 40);
+      // this.showWinAmount(result.coinsWon);
     } else {
       this.play("lose");
       this.shakeAll();
-      this.floatText("No Match", "#F87171", 30);
-      this.winAmountText.setVisible(false);
+      // this.floatText("No Match", "#F87171", 30);
+      // this.winAmountText.setVisible(false);
     }
 
     this.time.delayedCall(result.isWin ? 1800 : 800, () => {
