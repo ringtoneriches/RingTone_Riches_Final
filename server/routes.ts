@@ -81,7 +81,8 @@ import {
   royalUsage,
   gameRoyalConfig,
   gameSlotConfig,
-  slotUsage
+  slotUsage,
+  slotPrizeWins
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -4045,6 +4046,9 @@ res.json({
             break;
           case 'plinko':
             ticketNumber = `PLINKO-${nanoid(8).toUpperCase()}`;
+            break;
+          case 'slot':
+            ticketNumber = `SLOT-${nanoid(8).toUpperCase()}`;
             break;
           default:
             ticketNumber = `GAME-${nanoid(8).toUpperCase()}`;
@@ -15515,7 +15519,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
     }
   );
 
-  app.post(
+app.post(
   "/api/admin/users/bulk-add-points",
   isAuthenticated,
   isAdmin,
@@ -15527,6 +15531,13 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
         return res.status(400).json({ 
           error: "Please select at least one user" 
+        });
+      }
+
+      // Allow up to 500 users per request
+      if (userIds.length > 500) {
+        return res.status(400).json({ 
+          error: "Maximum 500 users per request. Please use smaller batches." 
         });
       }
 
@@ -15552,7 +15563,6 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       // Process each user
       for (const userId of userIds) {
         try {
-          // Get current user
           const [user] = await db
             .select()
             .from(users)
@@ -15567,33 +15577,21 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
             continue;
           }
 
-          // Update ringtone points
           const newPoints = (user.ringtonePoints || 0) + points;
 
-          const [updatedUser] = await db
+          await db
             .update(users)
             .set({
               ringtonePoints: newPoints,
               updatedAt: new Date(),
             })
-            .where(eq(users.id, userId))
-            .returning();
-
-          // Log the transaction (optional - create a points_transactions table if needed)
-          // await db.insert(pointsTransactions).values({
-          //   userId: userId,
-          //   points: points,
-          //   type: 'admin_add',
-          //   reason: reason || 'Admin bulk addition',
-          //   adminId: req.user.id,
-          //   createdAt: new Date(),
-          // });
+            .where(eq(users.id, userId));
 
           results.successful.push({
-            userId: updatedUser.id,
-            email: updatedUser.email,
-            firstName: updatedUser.firstName,
-            lastName: updatedUser.lastName,
+            userId: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
             previousPoints: user.ringtonePoints || 0,
             newPoints: newPoints,
             pointsAdded: points,
@@ -15618,7 +15616,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       console.error("Error in bulk add points:", error);
       res.status(500).json({ 
         error: "Failed to add points",
-        message: error.message 
+        message: error instanceof Error ? error.message : "Unknown error"
       });
     }
   }
@@ -19460,34 +19458,42 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
           allPrizes = [];
         }
 
-        // Count per-prize wins
+        // ✅ Get win counts from slot_prize_wins table
         let winsMap: Record<string, number> = {};
         try {
-          const perPrizeWins = await db
-            .select({ prizeId: slotUsage.prizeId, count: sql<number>`count(*)` })
-            .from(slotUsage)
-            .where(eq(slotUsage.isWin, true))
-            .groupBy(slotUsage.prizeId);
+          const prizeWins = await db
+            .select()
+            .from(slotPrizeWins);
           
-          for (const row of perPrizeWins) {
-            if (row.prizeId) winsMap[row.prizeId] = Number(row.count);
+          for (const row of prizeWins) {
+            if (row.prizeId) winsMap[row.prizeId] = Number(row.winCount);
           }
-          console.log("[API] Wins map:", winsMap);
+          console.log("[API] Current wins per prize from slot_prize_wins:", winsMap);
         } catch (winsError) {
           console.error("[API] ❌ Failed to get wins map:", winsError);
           winsMap = {};
         }
 
+        // Filter eligible prizes - check maxWins properly
         const eligible = allPrizes.filter((p: any) => {
           if (p.enabled === false) return false;
           if (Number(p.probability || 0) <= 0) return false;
-          if (p.maxWins !== null && p.maxWins !== undefined) {
-            if ((winsMap[p.id] || 0) >= Number(p.maxWins)) return false;
+          
+          // Check maxWins - if set and reached, prize is NOT eligible
+          if (p.maxWins !== null && p.maxWins !== undefined && Number(p.maxWins) > 0) {
+            const currentWins = winsMap[p.id] || 0;
+            if (currentWins >= Number(p.maxWins)) {
+              console.log(`[API] Prize ${p.id} (${p.symbol}) maxWins reached: ${currentWins}/${p.maxWins}`);
+              return false;
+            }
           }
           return true;
         });
 
         console.log("[API] Eligible prizes:", eligible.length);
+        if (eligible.length === 0) {
+          console.log("[API] ⚠️ No eligible prizes available - all maxWins reached or disabled");
+        }
 
         if (eligible.length > 0) {
           const rand = Math.random() * 100;
@@ -19501,12 +19507,13 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
           }
           console.log("[API] Random roll:", rand, "Selected prize:", selectedPrize?.id || "none");
         } else {
-          console.log("[API] ⚠️ No eligible prizes");
+          console.log("[API] ⚠️ No eligible prizes - returning no win");
+          selectedPrize = null;
         }
       }
       
       if (!selectedPrize && config) {
-        console.log("[API] ⚠️ No prize selected, using fallback");
+        console.log("[API] ⚠️ No prize selected, using fallback (no win)");
         selectedPrize = { id: "fallback", symbol: "Try Again", isEuro: false, pay: 0 };
       }
     } catch (configError) {
@@ -19547,18 +19554,50 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
           // Points prize → add to ringtonePoints
           const newPoints = (user?.ringtonePoints || 0) + coinsWon;
           await db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
-          // ✅ FIXED: Changed from "0.00" to actual points value
           await storage.createTransaction({ 
             userId, 
             type: "prize", 
-            amount: coinsWon.toString(), // Now shows actual points instead of "0.00"
+            amount: coinsWon.toString(),
             description: `Slot Machine Win - ${coinsWon} Ringtone Points` 
           });
           console.log("[API] 🎯 Points prize added:", coinsWon, "New points:", newPoints);
         }
 
-        // ─── ✅ SYNC WITH COMPETITION PRIZES ───
-        // This decrements the prize in the competition_prizes table
+        // ✅ Increment win count in slot_prize_wins table
+        try {
+          const existingWin = await db
+            .select()
+            .from(slotPrizeWins)
+            .where(eq(slotPrizeWins.prizeId, prizeId))
+            .limit(1);
+
+          if (existingWin.length > 0) {
+            // Update existing win count
+            await db
+              .update(slotPrizeWins)
+              .set({ 
+                winCount: Number(existingWin[0].winCount) + 1,
+                updatedAt: new Date()
+              })
+              .where(eq(slotPrizeWins.prizeId, prizeId));
+            console.log(`[API] ✅ Updated win count for ${prizeId}: ${Number(existingWin[0].winCount) + 1}`);
+          } else {
+            // Create new win count entry
+            await db
+              .insert(slotPrizeWins)
+              .values({
+                prizeId: prizeId,
+                winCount: 1,
+                updatedAt: new Date()
+              });
+            console.log(`[API] ✅ Created win count for ${prizeId}: 1`);
+          }
+        } catch (winCountError) {
+          console.error("[API] ❌ Error updating win count:", winCountError);
+          // Don't fail the whole request
+        }
+
+        // ─── SYNC WITH COMPETITION PRIZES ───
         const syncResult = await syncSlotPrize(
           competitionId,
           prizeId || "unknown",
@@ -19567,10 +19606,9 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
           selectedPrize.isEuro ? "cash" : "points",
           selectedPrize.maxWins || null
         );
-
         console.log("[API] Slot prize sync result:", syncResult);
 
-        // ─── ✅ RECORD IN WINNERS TABLE ───
+        // ─── RECORD IN WINNERS TABLE ───
         let prizeDescriptionText = "";
         let prizeValueText = "";
 
@@ -19611,10 +19649,10 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
         coinsWon, 
         coinsSpent: coinsSpent || 0,
         spinNumber, 
-        prizeId, 
-        prizeName,
+        prizeId: prizeId || null,  // ✅ Save prizeId
+        prizeName: prizeName || null,
       } as any);
-      console.log("[API] ✅ Spin recorded:", { spinNumber, isWin, coinsWon });
+      console.log("[API] ✅ Spin recorded:", { spinNumber, isWin, coinsWon, prizeId });
     } catch (dbError) {
       console.error("[API] ❌ Error recording spin:", dbError);
       // Don't return error - the spin was processed, we just failed to save
@@ -19790,35 +19828,40 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
   });
 
   app.get("/api/admin/slot-stats", isAuthenticated, isAdmin, async (req: any, res) => {
-    try {
-      const totalSpins = await db.select({ count: sql<number>`count(*)` }).from(slotUsage);
-      const wins = await db.select({ count: sql<number>`count(*)` }).from(slotUsage).where(eq(slotUsage.isWin, true));
-      const totalCoinsWon = await db.select({ sum: sql<number>`coalesce(sum(coins_won), 0)` }).from(slotUsage);
-      const totalCoinsSpent = await db.select({ sum: sql<number>`coalesce(sum(coins_spent), 0)` }).from(slotUsage);
-      const recentSpins = await db.select({ id: slotUsage.id, isWin: slotUsage.isWin, coinsWon: slotUsage.coinsWon, coinsSpent: slotUsage.coinsSpent, spinNumber: slotUsage.spinNumber, usedAt: slotUsage.usedAt })
-        .from(slotUsage).orderBy(desc(slotUsage.usedAt)).limit(20);
-      // Per-prize win counts for maxWins tracking
-      const prizeWinCounts = await db
-        .select({ prizeId: slotUsage.prizeId, count: sql<number>`count(*)` })
-        .from(slotUsage)
-        .where(eq(slotUsage.isWin, true))
-        .groupBy(slotUsage.prizeId);
-      const winsPerPrize: Record<string, number> = {};
-      for (const row of prizeWinCounts) {
-        if (row.prizeId) winsPerPrize[row.prizeId] = Number(row.count);
-      }
-      res.json({
-        totalSpins: Number(totalSpins[0]?.count || 0),
-        totalWins: Number(wins[0]?.count || 0),
-        totalCoinsWon: Number(totalCoinsWon[0]?.sum || 0),
-        totalCoinsSpent: Number(totalCoinsSpent[0]?.sum || 0),
-        recentSpins,
-        winsPerPrize,
-      });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch slot stats" });
+  try {
+    const totalSpins = await db.select({ count: sql<number>`count(*)` }).from(slotUsage);
+    const wins = await db.select({ count: sql<number>`count(*)` }).from(slotUsage).where(eq(slotUsage.isWin, true));
+    const totalCoinsWon = await db.select({ sum: sql<number>`coalesce(sum(coins_won), 0)` }).from(slotUsage);
+    const totalCoinsSpent = await db.select({ sum: sql<number>`coalesce(sum(coins_spent), 0)` }).from(slotUsage);
+    const recentSpins = await db.select({ 
+      id: slotUsage.id, 
+      isWin: slotUsage.isWin, 
+      coinsWon: slotUsage.coinsWon, 
+      coinsSpent: slotUsage.coinsSpent, 
+      spinNumber: slotUsage.spinNumber, 
+      usedAt: slotUsage.usedAt 
+    }).from(slotUsage).orderBy(desc(slotUsage.usedAt)).limit(20);
+    
+    // ✅ FIX: Get wins from slot_prize_wins
+    const prizeWins = await db.select().from(slotPrizeWins);
+    const winsPerPrize: Record<string, number> = {};
+    for (const row of prizeWins) {
+      if (row.prizeId) winsPerPrize[row.prizeId] = Number(row.winCount);
     }
-  });
+    
+    res.json({
+      totalSpins: Number(totalSpins[0]?.count || 0),
+      totalWins: Number(wins[0]?.count || 0),
+      totalCoinsWon: Number(totalCoinsWon[0]?.sum || 0),
+      totalCoinsSpent: Number(totalCoinsSpent[0]?.sum || 0),
+      recentSpins,
+      winsPerPrize,
+    });
+  } catch (error) {
+    console.error("Error fetching slot stats:", error);
+    res.status(500).json({ message: "Failed to fetch slot stats" });
+  }
+});
 
   // ─── Prize config routes ────────────────────────────────────────────────
   const DEFAULT_SLOT_PRIZES = [
@@ -19844,36 +19887,113 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
     { id: "pts1000",     symbol: "1000 Points", pay: 1000, isEuro: false, maxWins: null, enabled: true },
   ];
 
-  app.get("/api/slot-prizes", async (_req, res) => {
-    try {
-      const [config] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
-      if (config?.prizesConfig) {
-        res.json(JSON.parse(config.prizesConfig));
-      } else {
-        res.json(DEFAULT_SLOT_PRIZES);
-      }
-    } catch {
-      res.json(DEFAULT_SLOT_PRIZES);
+ app.get("/api/slot-prizes", async (_req, res) => {
+  try {
+    const [config] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
+    let prizes = [];
+    
+    if (config?.prizesConfig) {
+      prizes = JSON.parse(config.prizesConfig);
+    } else {
+      prizes = DEFAULT_SLOT_PRIZES;
     }
-  });
-
-  app.put("/api/admin/slot-prizes", isAuthenticated, isAdmin, async (req: any, res) => {
+    
+    // ✅ Get win counts from slot_prize_wins table
+    let winsMap: Record<string, number> = {};
     try {
-      const { prizes } = req.body;
-      if (!Array.isArray(prizes)) return res.status(400).json({ message: "prizes must be an array" });
-      const prizesConfig = JSON.stringify(prizes);
-      const [existing] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
-      if (existing) {
-        await db.update(gameSlotConfig).set({ prizesConfig, updatedAt: new Date() }).where(eq(gameSlotConfig.id, "active"));
-      } else {
-        await db.insert(gameSlotConfig).values({ id: "active", prizesConfig });
+      const prizeWins = await db
+        .select()
+        .from(slotPrizeWins);
+      
+      for (const win of prizeWins) {
+        if (win.prizeId) winsMap[win.prizeId] = Number(win.winCount);
       }
-      res.json({ success: true });
+      console.log("[API] Win counts from slot_prize_wins:", winsMap);
     } catch (error) {
-      console.error("Error saving slot prizes:", error);
-      res.status(500).json({ message: "Failed to save prizes" });
+      console.warn("[API] ⚠️ Could not get wins from slot_prize_wins:", error.message);
     }
-  });
+    
+    // ✅ Add current win counts to prizes for display
+    const prizesWithCounts = prizes.map((prize: any) => ({
+      ...prize,
+      currentWins: winsMap[prize.id] || 0
+    }));
+    
+    console.log("[API] Slot prizes with win counts:", prizesWithCounts.length);
+    res.json(prizesWithCounts);
+  } catch (error) {
+    console.error("Error fetching slot prizes:", error);
+    res.json(DEFAULT_SLOT_PRIZES);
+  }
+});
+
+ app.put("/api/admin/slot-prizes", isAuthenticated, isAdmin, async (req: any, res) => {
+  try {
+    const { prizes } = req.body;
+    if (!Array.isArray(prizes)) {
+      return res.status(400).json({ message: "prizes must be an array" });
+    }
+    
+    // ✅ Remove currentWins before saving (this is runtime data, not config)
+    const cleanPrizes = prizes.map((prize: any) => {
+      const { currentWins, wins, count, ...cleanPrize } = prize;
+      return cleanPrize;
+    });
+    
+    const prizesConfig = JSON.stringify(cleanPrizes);
+    const [existing] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
+    
+    if (existing) {
+      await db.update(gameSlotConfig)
+        .set({ prizesConfig, updatedAt: new Date() })
+        .where(eq(gameSlotConfig.id, "active"));
+    } else {
+      await db.insert(gameSlotConfig)
+        .values({ id: "active", prizesConfig });
+    }
+    
+    console.log("[API] ✅ Saved slot prizes (without currentWins)");
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error saving slot prizes:", error);
+    res.status(500).json({ message: "Failed to save prizes" });
+  }
+});
+
+
+app.get("/api/debug/slot-wins", async (_req, res) => {
+  try {
+    // Get wins from slot_prize_wins table
+    const prizeWins = await db.select().from(slotPrizeWins);
+    
+    // Get prize config
+    const [config] = await db.select().from(gameSlotConfig);
+    let prizes = [];
+    if (config?.prizesConfig) {
+      prizes = JSON.parse(config.prizesConfig);
+    }
+    
+    // Create summary
+    const winsMap: Record<string, number> = {};
+    for (const win of prizeWins) {
+      winsMap[win.prizeId] = Number(win.winCount);
+    }
+    
+    res.json({
+      prizeWins: prizeWins,
+      prizeSummary: prizes.map((p: any) => ({
+        id: p.id,
+        symbol: p.symbol,
+        maxWins: p.maxWins || 'unlimited',
+        currentWins: winsMap[p.id] || 0,
+        isExhausted: p.maxWins ? (winsMap[p.id] || 0) >= Number(p.maxWins) : false
+      }))
+    });
+  } catch (error) {
+    console.error("Debug error:", error);
+    res.status(500).json({ error: String(error) });
+  }
+});
 
   // ═══════════════════ END SLOT MACHINE ROUTES ═══════════════════
 

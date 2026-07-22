@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Users, Gift, CheckCircle, XCircle, ArrowBigLeft, ArrowBigRight } from "lucide-react";
+import { Search, Users, Gift, CheckCircle, XCircle, ArrowBigLeft, ArrowBigRight, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,8 +64,16 @@ export default function AdminBulkPoints() {
   });
 
   // Bulk operation state
+  const [isProcessing, setIsProcessing] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
   const [bulkResult, setBulkResult] = useState<BulkPointsResult | null>(null);
+  const [currentBatch, setCurrentBatch] = useState(0);
+  const [totalBatches, setTotalBatches] = useState(0);
+  const [processedUsers, setProcessedUsers] = useState(0);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [successfulUsers, setSuccessfulUsers] = useState<any[]>([]);
+  const [failedUsers, setFailedUsers] = useState<any[]>([]);
+  const [isComplete, setIsComplete] = useState(false);
 
   // Debounce search input
   useEffect(() => {
@@ -77,66 +85,46 @@ export default function AdminBulkPoints() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Fetch users using the dedicated endpoint
- // Fetch users using the dedicated endpoint
-const { data: usersData, isLoading, isError, error } = useQuery({
-  queryKey: ["/api/admin/users/bulk-points-list", debouncedSearch],
-  queryFn: async () => {
-    try {
-      const params = new URLSearchParams();
-      if (debouncedSearch) params.append("search", debouncedSearch);
-      
-      const url = `/api/admin/users/bulk-points-list${params.toString() ? '?' + params.toString() : ''}`;
-      console.log("Fetching URL:", url);
-      
-      const res = await fetch(url, {
-        credentials: "include",
-        headers: {
-          'Accept': 'application/json',
-        }
-      });
-      
-      console.log("Response status:", res.status);
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("Error response:", errorText);
-        throw new Error(`HTTP ${res.status}: ${errorText}`);
-      }
-      
-      const data = await res.json();
-      console.log("API Response:", data);
-      console.log("Users count:", data.users?.length);
-      
-      // Check if users exist
-      if (data.users) {
-        data.users.forEach((user: User, index: number) => {
-          if (index < 3) { // Log first 3 users for debugging
-            console.log(`User ${index + 1}:`, user.firstName, user.lastName, "Admin:", user.isAdmin);
+  // Fetch users
+  const { data: usersData, isLoading, isError, error } = useQuery({
+    queryKey: ["/api/admin/users/bulk-points-list", debouncedSearch],
+    queryFn: async () => {
+      try {
+        const params = new URLSearchParams();
+        if (debouncedSearch) params.append("search", debouncedSearch);
+        
+        const url = `/api/admin/users/bulk-points-list${params.toString() ? '?' + params.toString() : ''}`;
+        const res = await fetch(url, {
+          credentials: "include",
+          headers: {
+            'Accept': 'application/json',
           }
         });
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`HTTP ${res.status}: ${errorText}`);
+        }
+        
+        const data = await res.json();
+        return data.users as User[];
+      } catch (err) {
+        console.error("Fetch error:", err);
+        throw err;
       }
-      
-      return data.users as User[];
-    } catch (err) {
-      console.error("Fetch error:", err);
-      throw err;
-    }
-  },
-  keepPreviousData: true,
-  // Don't retry on 401/403
-  retry: (failureCount, error: any) => {
-    if (error?.message?.includes('401') || error?.message?.includes('403')) {
-      return false;
-    }
-    return failureCount < 3;
-  },
-});
+    },
+    keepPreviousData: true,
+    retry: (failureCount, error: any) => {
+      if (error?.message?.includes('401') || error?.message?.includes('403')) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+  });
 
   // Filter out admin users
   const nonAdminUsers = useMemo(() => {
     const filtered = usersData?.filter(user => !user.isAdmin) || [];
-    console.log("Non-admin users:", filtered.length);
     return filtered;
   }, [usersData]);
 
@@ -144,29 +132,6 @@ const { data: usersData, isLoading, isError, error } = useQuery({
   const totalPages = Math.ceil(nonAdminUsers.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedUsers = nonAdminUsers.slice(startIndex, startIndex + itemsPerPage);
-
-  // Bulk add points mutation
-  const bulkAddPointsMutation = useMutation({
-    mutationFn: async (data: { userIds: string[]; points: number; reason: string }) => {
-      const res = await apiRequest("/api/admin/users/bulk-add-points", "POST", data);
-      return res.json();
-    },
-    onSuccess: (data: BulkPointsResult) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      setBulkResult(data);
-      toast({
-        title: "Points Added Successfully",
-        description: `Added ${data.pointsAdded} points to ${data.successful.length} users.`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add points",
-        variant: "destructive",
-      });
-    },
-  });
 
   // Toggle user selection
   const toggleUser = (userId: string) => {
@@ -199,6 +164,13 @@ const { data: usersData, isLoading, isError, error } = useQuery({
 
   // Select all users (across all pages)
   const selectAllUsers = () => {
+    const userCount = nonAdminUsers.length;
+    if (userCount > 500) {
+      if (!confirm(`You are about to select ${userCount} users. This will process in batches of 500 and may take a few minutes. Continue?`)) {
+        return;
+      }
+    }
+    
     const newSelected = new Set<string>();
     nonAdminUsers.forEach(user => newSelected.add(user.id));
     setSelectedUsers(newSelected);
@@ -213,7 +185,7 @@ const { data: usersData, isLoading, isError, error } = useQuery({
     setSelectedUsers(new Set());
   };
 
-  // Handle bulk add points
+  // Handle bulk add points with batching - sends to ALL users in batches
   const handleBulkAddPoints = async () => {
     if (selectedUsers.size === 0) {
       toast({
@@ -233,33 +205,101 @@ const { data: usersData, isLoading, isError, error } = useQuery({
       return;
     }
 
+    const userIds = Array.from(selectedUsers);
+    const BATCH_SIZE = 500;
+    const batches = Math.ceil(userIds.length / BATCH_SIZE);
+    
+    // Reset state
+    setIsProcessing(true);
     setBulkProgress(0);
     setBulkResult(null);
+    setCurrentBatch(0);
+    setTotalBatches(batches);
+    setProcessedUsers(0);
+    setTotalUsers(userIds.length);
+    setSuccessfulUsers([]);
+    setFailedUsers([]);
+    setIsComplete(false);
 
-    const progressInterval = setInterval(() => {
-      setBulkProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(progressInterval);
-          return 90;
+    let allSuccessful: any[] = [];
+    let allFailed: any[] = [];
+
+    // Process batch by batch
+    for (let i = 0; i < batches; i++) {
+      const start = i * BATCH_SIZE;
+      const end = Math.min(start + BATCH_SIZE, userIds.length);
+      const batch = userIds.slice(start, end);
+      
+      setCurrentBatch(i + 1);
+      
+      try {
+        const res = await apiRequest("/api/admin/users/bulk-add-points", "POST", {
+          userIds: batch,
+          points: pointsForm.points,
+          reason: pointsForm.reason,
+        });
+        
+        const data = await res.json();
+        
+        if (data.successful) {
+          allSuccessful = [...allSuccessful, ...data.successful];
+          setSuccessfulUsers(allSuccessful);
         }
-        return prev + 10;
-      });
-    }, 500);
-
-    try {
-      await bulkAddPointsMutation.mutateAsync({
-        userIds: Array.from(selectedUsers),
-        points: pointsForm.points,
-        reason: pointsForm.reason,
-      });
-      setBulkProgress(100);
-      setSelectedUsers(new Set());
-    } finally {
-      clearInterval(progressInterval);
+        if (data.failed) {
+          allFailed = [...allFailed, ...data.failed];
+          setFailedUsers(allFailed);
+        }
+        
+        setProcessedUsers(end);
+        const progress = Math.round((end / userIds.length) * 100);
+        setBulkProgress(Math.min(progress, 99));
+        
+      } catch (error) {
+        console.error(`Batch ${i + 1} failed:`, error);
+        allFailed.push({
+          userIds: batch,
+          reason: `Batch ${i + 1} failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        });
+        setFailedUsers(allFailed);
+      }
     }
+
+    // Final result
+    const finalResult: BulkPointsResult = {
+      successful: allSuccessful,
+      failed: allFailed,
+      total: userIds.length,
+      pointsAdded: pointsForm.points,
+    };
+
+    setBulkResult(finalResult);
+    setBulkProgress(100);
+    setIsComplete(true);
+    
+    // Invalidate queries to refresh data
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/users/bulk-points-list"] });
+    
+    toast({
+      title: "Points Added Successfully",
+      description: `Added ${pointsForm.points} points to ${allSuccessful.length} users. ${allFailed.length} failed.`,
+    });
+    
+    // Clear selection after completion
+    setSelectedUsers(new Set());
   };
 
-  // Show error state
+  // Reset and close dialog
+  const resetAndClose = () => {
+    setDialogOpen(false);
+    setIsProcessing(false);
+    setBulkResult(null);
+    setBulkProgress(0);
+    setSuccessfulUsers([]);
+    setFailedUsers([]);
+    setIsComplete(false);
+  };
+
   if (isError) {
     return (
       <AdminLayout>
@@ -285,13 +325,13 @@ const { data: usersData, isLoading, isError, error } = useQuery({
               Bulk Add Ringtone Points
             </h1>
             <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-1">
-              Add ringtone points to multiple users at once
+              Add ringtone points to multiple users at once. Large selections will be processed in batches of 500 users.
             </p>
           </div>
 
           {/* Action Bar */}
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Badge variant="secondary" className="text-sm py-1.5">
                 <Users className="w-4 h-4 mr-1" />
                 {selectedUsers.size} users selected
@@ -308,20 +348,27 @@ const { data: usersData, isLoading, isError, error } = useQuery({
               )}
             </div>
             
-            <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex gap-2 w-full sm:w-auto flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={selectAllUsers}
                 className="text-xs"
+                disabled={isLoading}
               >
                 Select All ({nonAdminUsers.length})
               </Button>
               
-              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <Dialog open={dialogOpen} onOpenChange={(open) => {
+                if (!open && isProcessing) return; // Prevent closing while processing
+                setDialogOpen(open);
+                if (!open) {
+                  resetAndClose();
+                }
+              }}>
                 <DialogTrigger asChild>
                   <Button
-                    disabled={selectedUsers.size === 0}
+                    disabled={selectedUsers.size === 0 || isProcessing}
                     className="gap-1 text-sm"
                   >
                     <Gift className="w-4 h-4" />
@@ -331,109 +378,145 @@ const { data: usersData, isLoading, isError, error } = useQuery({
                 <DialogContent className="max-w-[95vw] sm:max-w-md p-4 sm:p-6">
                   <DialogHeader>
                     <DialogTitle className="text-lg sm:text-xl">
-                      Add Ringtone Points
+                      {isProcessing ? "Processing Points..." : "Add Ringtone Points"}
                     </DialogTitle>
                     <DialogDescription className="text-xs sm:text-sm">
-                      Add points to {selectedUsers.size} selected user{selectedUsers.size !== 1 ? 's' : ''}.
+                      {isProcessing 
+                        ? `Processing batch ${currentBatch} of ${totalBatches}`
+                        : `Add points to ${selectedUsers.size} selected user${selectedUsers.size !== 1 ? 's' : ''}.`
+                      }
                     </DialogDescription>
                   </DialogHeader>
                   
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-sm">Points to Add *</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        max="1000000"
-                        value={pointsForm.points}
-                        onChange={(e) => setPointsForm({ ...pointsForm, points: Number(e.target.value) })}
-                        placeholder="e.g., 100"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        These points will be added to each user's current balance.
-                      </p>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-sm">Reason (optional)</Label>
-                      <Input
-                        value={pointsForm.reason}
-                        onChange={(e) => setPointsForm({ ...pointsForm, reason: e.target.value })}
-                        placeholder="e.g., Promotion bonus, Loyalty reward"
-                      />
-                    </div>
-
-                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                      <p className="text-xs text-blue-700">
-                        💡 <strong>Summary:</strong> Adding {pointsForm.points} points to {selectedUsers.size} user{selectedUsers.size !== 1 ? 's' : ''}.
-                      </p>
-                      <p className="text-xs text-blue-700 mt-1">
-                        Total points to distribute: {pointsForm.points * selectedUsers.size}
-                      </p>
-                    </div>
-
-                    {(bulkAddPointsMutation.isPending || bulkProgress > 0) && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span>Adding points...</span>
-                          <span>{bulkProgress}%</span>
-                        </div>
-                        <Progress value={bulkProgress} className="h-2" />
+                  {!isProcessing ? (
+                    // Normal form when not processing
+                    <div className="space-y-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Points to Add *</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="1000000"
+                          value={pointsForm.points}
+                          onChange={(e) => setPointsForm({ ...pointsForm, points: Number(e.target.value) })}
+                          placeholder="e.g., 100"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          These points will be added to each user's current balance.
+                        </p>
                       </div>
-                    )}
 
-                    {bulkResult && (
-                      <div className="space-y-3 p-4 bg-muted rounded-lg">
-                        <div className="text-sm font-medium">Results:</div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle className="w-4 h-4" />
-                            <span>Success: {bulkResult.successful.length}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-red-600">
-                            <XCircle className="w-4 h-4" />
-                            <span>Failed: {bulkResult.failed.length}</span>
-                          </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Reason (optional)</Label>
+                        <Input
+                          value={pointsForm.reason}
+                          onChange={(e) => setPointsForm({ ...pointsForm, reason: e.target.value })}
+                          placeholder="e.g., Promotion bonus, Loyalty reward"
+                        />
+                      </div>
+
+                      <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <p className="text-xs text-blue-700">
+                          💡 <strong>Summary:</strong> Adding {pointsForm.points} points to {selectedUsers.size} user{selectedUsers.size !== 1 ? 's' : ''}.
+                        </p>
+                        <p className="text-xs text-blue-700 mt-1">
+                          Total points to distribute: {(pointsForm.points * selectedUsers.size).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-blue-700 mt-1">
+                          📦 Will process in batches of 500 users ({Math.ceil(selectedUsers.size / 500)} batches)
+                        </p>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-4">
+                        <Button
+                          variant="outline"
+                          onClick={() => setDialogOpen(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={handleBulkAddPoints}
+                          disabled={!pointsForm.points || isProcessing}
+                        >
+                          {isProcessing 
+                            ? "Processing..." 
+                            : `Add ${pointsForm.points} Points to ${selectedUsers.size} Users`}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    // Progress view when processing
+                    <div className="space-y-6 py-4">
+                      <div className="text-center space-y-2">
+                        <div className="text-3xl font-bold text-primary">
+                          {bulkProgress}%
                         </div>
-                        {bulkResult.successful.length > 0 && (
-                          <div className="text-xs text-green-600 mt-2">
-                            <div className="font-medium mb-1">Updated users:</div>
-                            <div className="max-h-32 overflow-y-auto space-y-1">
-                              {bulkResult.successful.slice(0, 5).map((user, i) => (
-                                <div key={i}>
-                                  {user.firstName} {user.lastName}: {user.previousPoints} → {user.newPoints} points
-                                </div>
-                              ))}
-                              {bulkResult.successful.length > 5 && (
-                                <div>...and {bulkResult.successful.length - 5} more</div>
-                              )}
+                        <div className="text-sm text-muted-foreground">
+                          Processing {processedUsers} of {totalUsers} users
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Batch {currentBatch} of {totalBatches}
+                        </div>
+                      </div>
+
+                      <Progress value={bulkProgress} className="h-3" />
+
+                      <div className="grid grid-cols-2 gap-4 text-center text-sm">
+                        <div className="p-3 bg-green-50 rounded-lg">
+                          <div className="text-green-600 font-bold text-lg">
+                            {successfulUsers.length}
+                          </div>
+                          <div className="text-green-600 text-xs">Successful</div>
+                        </div>
+                        <div className="p-3 bg-red-50 rounded-lg">
+                          <div className="text-red-600 font-bold text-lg">
+                            {failedUsers.length}
+                          </div>
+                          <div className="text-red-600 text-xs">Failed</div>
+                        </div>
+                      </div>
+
+                      {successfulUsers.length > 0 && (
+                        <div className="max-h-32 overflow-y-auto text-xs space-y-1 bg-muted p-2 rounded">
+                          <div className="font-medium mb-1">Recent updates:</div>
+                          {successfulUsers.slice(-5).map((user, i) => (
+                            <div key={i} className="text-green-600">
+                              {user.firstName} {user.lastName}: {user.previousPoints} → {user.newPoints} points
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                          ))}
+                          {successfulUsers.length > 5 && (
+                            <div className="text-muted-foreground">
+                              ...and {successfulUsers.length - 5} more successful
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setDialogOpen(false);
-                        setBulkResult(null);
-                        setBulkProgress(0);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleBulkAddPoints}
-                      disabled={!pointsForm.points || bulkAddPointsMutation.isPending}
-                    >
-                      {bulkAddPointsMutation.isPending 
-                        ? "Adding Points..." 
-                        : `Add ${pointsForm.points} Points to ${selectedUsers.size} Users`}
-                    </Button>
-                  </div>
+                      {failedUsers.length > 0 && (
+                        <div className="max-h-20 overflow-y-auto text-xs space-y-1 bg-red-50 p-2 rounded">
+                          <div className="font-medium mb-1 text-red-600">Failed:</div>
+                          {failedUsers.slice(-3).map((user, i) => (
+                            <div key={i} className="text-red-600">
+                              {user.userId || user.userIds?.join(', ')}: {user.reason}
+                            </div>
+                          ))}
+                          {failedUsers.length > 3 && (
+                            <div className="text-red-600">
+                              ...and {failedUsers.length - 3} more failed
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {isComplete && (
+                        <div className="flex justify-end">
+                          <Button onClick={resetAndClose} className="w-full">
+                            Close
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </DialogContent>
               </Dialog>
             </div>
@@ -449,11 +532,6 @@ const { data: usersData, isLoading, isError, error } = useQuery({
             onChange={(e) => setSearchInput(e.target.value)}
             className="pl-8 sm:pl-10 text-sm sm:text-base"
           />
-          {searchInput !== debouncedSearch && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
-            </div>
-          )}
         </div>
 
         {/* Users Table */}
@@ -469,6 +547,7 @@ const { data: usersData, isLoading, isError, error } = useQuery({
                         paginatedUsers.every(user => selectedUsers.has(user.id))
                       }
                       onCheckedChange={toggleAllOnPage}
+                      disabled={isLoading}
                     />
                   </th>
                   <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
@@ -490,7 +569,7 @@ const { data: usersData, isLoading, isError, error } = useQuery({
                   <tr>
                     <td colSpan={5} className="py-12 text-center">
                       <div className="flex flex-col items-center justify-center gap-3">
-                        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
                         <div className="text-sm text-muted-foreground">Loading users...</div>
                       </div>
                     </td>
@@ -512,7 +591,7 @@ const { data: usersData, isLoading, isError, error } = useQuery({
                     <tr
                       key={user.id}
                       className={`border-b border-border hover:bg-muted/50 cursor-pointer transition-colors ${
-                        selectedUsers.has(user.id) ? 'bg-blue-50 hover:bg-blue-100' : ''
+                        selectedUsers.has(user.id) ? 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/30' : ''
                       }`}
                       onClick={() => toggleUser(user.id)}
                     >
@@ -547,70 +626,70 @@ const { data: usersData, isLoading, isError, error } = useQuery({
           </div>
         </div>
 
-        {/* Pagination - only show if there are users and not loading */}
+        {/* Pagination */}
         {!isLoading && nonAdminUsers.length > 0 && (
-          <>
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 my-4 sm:my-6">
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => p - 1)}
-                  disabled={currentPage === 1}
-                  className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4"
-                >
-                  <ArrowBigLeft className="w-4 h-4" />
-                </Button>
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 my-4 sm:my-6">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4"
+              >
+                <ArrowBigLeft className="w-4 h-4" />
+              </Button>
 
-                <div className="flex items-center gap-1 sm:gap-2">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i;
-                    } else {
-                      pageNum = currentPage - 2 + i;
-                    }
-                    
-                    if (pageNum > totalPages) return null;
-                    
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={currentPage === pageNum ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setCurrentPage(pageNum)}
-                        className="w-8 h-8 sm:w-10 sm:h-10"
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
-                </div>
+              <div className="flex items-center gap-1 sm:gap-2">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  if (pageNum > totalPages) return null;
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className="w-8 h-8 sm:w-10 sm:h-10"
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                  disabled={currentPage === totalPages}
-                  className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4"
-                >
-                  <ArrowBigRight className="w-4 h-4" />
-                </Button>
-              </div>
-              
-              <div className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="w-10 h-10 sm:w-auto sm:h-auto sm:px-4"
+              >
+                <ArrowBigRight className="w-4 h-4" />
+              </Button>
             </div>
+            
+            <div className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </div>
+          </div>
+        )}
 
-            <p className="text-center text-xs sm:text-sm text-muted-foreground">
-              Showing {paginatedUsers.length} of {nonAdminUsers.length} users
-            </p>
-          </>
+        {!isLoading && nonAdminUsers.length > 0 && (
+          <p className="text-center text-xs sm:text-sm text-muted-foreground">
+            Showing {paginatedUsers.length} of {nonAdminUsers.length} users
+          </p>
         )}
       </div>
     </AdminLayout>

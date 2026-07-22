@@ -83,7 +83,11 @@ export class Preload extends Scene {
     this.load.audio("wincoins_clip", ["audio/win_coins.wav"]);
   }
 
-  create() {
-    this.scene.start("SlotGame");
-  }
+ create() {
+  SYMBOL_KEYS.forEach(({ key }) => {
+    this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+  });
+
+  this.scene.start("SlotGame");
+}
 }

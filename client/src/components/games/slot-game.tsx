@@ -217,6 +217,11 @@ export default function SlotGameComponent({
           mode: Phaser.Scale.FIT,
           autoCenter: Phaser.Scale.CENTER_BOTH,
         },
+         render: {
+        pixelArt: false,     // Set to false for smooth images
+        antialias: true,     // Enable antialiasing for smoother edges
+        roundPixels: false,  // Keep as false for smoother animation
+      },
         input: { touch: { capture: false } },
         audio: { disableWebAudio: false, noAudio: false },
         scene: [Boot, Preload, SlotGame],

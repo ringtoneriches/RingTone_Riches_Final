@@ -713,6 +713,18 @@ export const gameSlotConfig = pgTable("game_slot_config", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// In your schema file (e.g., db/schema.ts)
+export const slotPrizeWins = pgTable("slot_prize_wins", {
+  id: serial("id").primaryKey(),
+  prizeId: text("prize_id").notNull(),
+  winCount: integer("win_count").default(0).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    prizeIdIdx: uniqueIndex("slot_prize_wins_prize_id_idx").on(table.prizeId),
+  };
+});
+
 // Track slot machine sessions per order
 export const slotUsage = pgTable("slot_usage", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),

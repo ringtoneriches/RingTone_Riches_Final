@@ -335,8 +335,15 @@ for (const x of reelXs) {
 }
 
 private fitSymbol(img: Phaser.GameObjects.Image) {
-  const scale = Math.min(this.symbolSize / img.width, this.symbolSize / img.height);
+  const scale = Math.min(
+    this.symbolSize / img.width,
+    this.symbolSize / img.height
+  );
+
   img.setScale(scale);
+
+  // Force sharp rendering
+  img.setTexture(img.texture.key);
 }
 
   // ──────────────────────── Spin Button ────────────────────────
