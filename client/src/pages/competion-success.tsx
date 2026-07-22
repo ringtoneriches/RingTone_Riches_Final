@@ -73,6 +73,9 @@ export default function CheckoutSuccess() {
                 case "plinko":
                   redirectUrl = `/plinko/${data.competitionId}/${data.orderId}`;
                   break;
+                case "slot":
+                  redirectUrl = `/slot/${data.competitionId}/${data.orderId}`;
+                  break;
                 case "voltz":
                   redirectUrl = `/voltz/${data.competitionId}/${data.orderId}`;
                   break;
