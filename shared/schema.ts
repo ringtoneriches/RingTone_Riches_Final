@@ -69,6 +69,21 @@ export const users = pgTable("users", {
   notes: text("notes"),
   isRestricted: boolean("is_restricted").default(false),
   restrictedAt: timestamp("restricted_at"),
+   lastLoginIp: varchar("last_login_ip", { length: 45 }),
+  lastLoginAt: timestamp("last_login_at"),
+  previousLoginIp: varchar("previous_login_ip", { length: 45 }),
+  previousLoginAt: timestamp("previous_login_at"),
+  failedLoginAttempts: integer("failed_login_attempts").default(0),
+  lastFailedLogin: timestamp("last_failed_login"),
+  accountLocked: boolean("account_locked").default(false),
+  accountLockReason: text("account_lock_reason"),
+  accountLockedAt: timestamp("account_locked_at"),
+  accountUnlockAt: timestamp("account_unlock_at"),
+  passwordChangedAt: timestamp("password_changed_at"),
+  securityQuestion: varchar("security_question"),
+  securityAnswer: varchar("security_answer"), // Should be hashed
+  trustScore: integer("trust_score").default(0),
+  riskLevel: varchar("risk_level", { enum: ["low", "medium", "high", "critical"] }).default("low"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -82,6 +97,139 @@ export const userIpLogs = pgTable("user_ip_logs", {
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+
+// ===== SECURITY TABLES =====
+
+// 1. Suspicious Activities - Track all suspicious registration attempts
+export const suspiciousActivities = pgTable("suspicious_activities", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ipAddress: varchar("ip_address", { length: 45 }).notNull(),
+  email: varchar("email"),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  reason: text("reason").notNull(),
+  userAgent: text("user_agent"),
+  requestData: jsonb("request_data"), // Store full request data for analysis
+  blocked: boolean("blocked").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("suspicious_activities_ip_idx").on(table.ipAddress),
+  index("suspicious_activities_email_idx").on(table.email),
+  index("suspicious_activities_created_at_idx").on(table.createdAt),
+]);
+
+// 2. IP Blocklist - Block IPs that have been flagged
+export const ipBlocklist = pgTable("ip_blocklist", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ipAddress: varchar("ip_address", { length: 45 }).notNull().unique(),
+  reason: text("reason"),
+  blockedBy: varchar("blocked_by").references(() => users.id),
+  blockedAt: timestamp("blocked_at").defaultNow(),
+  expiresAt: timestamp("expires_at"), // Auto-expire blocks
+  isPermanent: boolean("is_permanent").default(false),
+  notes: text("notes"),
+}, (table) => [
+  index("ip_blocklist_ip_idx").on(table.ipAddress),
+  index("ip_blocklist_expires_at_idx").on(table.expiresAt),
+]);
+
+// 3. Failed Login Attempts - Track failed logins for brute force detection
+export const failedLoginAttempts = pgTable("failed_login_attempts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull(),
+  ipAddress: varchar("ip_address", { length: 45 }).notNull(),
+  userAgent: text("user_agent"),
+  attemptTime: timestamp("attempt_time").defaultNow(),
+}, (table) => [
+  index("failed_login_attempts_email_idx").on(table.email),
+  index("failed_login_attempts_ip_idx").on(table.ipAddress),
+  index("failed_login_attempts_time_idx").on(table.attemptTime),
+]);
+
+// 4. Security Audit Log - Track all security-related events
+export const securityAuditLog = pgTable("security_audit_log", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventType: varchar("event_type", { 
+    enum: ["registration", "login", "logout", "password_reset", "email_change", 
+           "profile_update", "suspicious_activity", "ip_blocked", "ip_unblocked",
+           "admin_action", "verification", "two_factor", "account_lock"] 
+  }).notNull(),
+  userId: varchar("user_id").references(() => users.id),
+  email: varchar("email"),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  details: jsonb("details"), // Additional context
+  severity: varchar("severity", { enum: ["info", "warning", "error", "critical"] }).default("info"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("security_audit_log_user_idx").on(table.userId),
+  index("security_audit_log_event_idx").on(table.eventType),
+  index("security_audit_log_created_idx").on(table.createdAt),
+]);
+
+// 5. User Security Settings - Per-user security preferences
+export const userSecuritySettings = pgTable("user_security_settings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false),
+  twoFactorSecret: varchar("two_factor_secret"),
+  backupCodes: jsonb("backup_codes"), // Array of backup codes
+  sessionTimeout: integer("session_timeout").default(3600), // Seconds
+  require2FAOnLogin: boolean("require_2fa_on_login").default(false),
+  allowedIPs: jsonb("allowed_ips"), // Array of allowed IP addresses
+  emailNotifications: boolean("email_notifications").default(true),
+  securityAlerts: boolean("security_alerts").default(true),
+  lastPasswordChange: timestamp("last_password_change"),
+  lastSecurityReview: timestamp("last_security_review"),
+  accountLocked: boolean("account_locked").default(false),
+  lockReason: text("lock_reason"),
+  lockedAt: timestamp("locked_at"),
+  unlockAt: timestamp("unlock_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// 6. User Session Log - Track all user sessions
+export const userSessions = pgTable("user_sessions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sessionId: varchar("session_id").notNull().unique(),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  location: jsonb("location"), // Geolocation data
+  isActive: boolean("is_active").default(true),
+  loginTime: timestamp("login_time").defaultNow(),
+  lastActivity: timestamp("last_activity").defaultNow(),
+  logoutTime: timestamp("logout_time"),
+  deviceType: varchar("device_type", { enum: ["desktop", "mobile", "tablet", "unknown"] }).default("unknown"),
+}, (table) => [
+  index("user_sessions_user_idx").on(table.userId),
+  index("user_sessions_session_idx").on(table.sessionId),
+  index("user_sessions_active_idx").on(table.isActive),
+]);
+
+// 7. IP Geo Location Cache - Cache IP geolocation data
+export const ipGeoLocation = pgTable("ip_geo_location", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ipAddress: varchar("ip_address", { length: 45 }).notNull().unique(),
+  country: varchar("country"),
+  city: varchar("city"),
+  region: varchar("region"),
+  timezone: varchar("timezone"),
+  latitude: decimal("latitude", { precision: 10, scale: 8 }),
+  longitude: decimal("longitude", { precision: 11, scale: 8 }),
+  isp: varchar("isp"),
+  organization: varchar("organization"),
+  isProxy: boolean("is_proxy").default(false),
+  isVPN: boolean("is_vpn").default(false),
+  isTor: boolean("is_tor").default(false),
+  lastUpdated: timestamp("last_updated").defaultNow(),
+}, (table) => [
+  index("ip_geo_location_ip_idx").on(table.ipAddress),
+  index("ip_geo_location_country_idx").on(table.country),
+]);
+
 
 
 export const userVerifications = pgTable("user_verifications", {
@@ -165,6 +313,10 @@ export const orders = pgTable("orders", {
   discountType: varchar("discount_type", { enum: ["cash", "points" , "percentage"] }),
   pointsDiscountAmount: decimal("points_discount_amount", { precision: 10, scale: 2 }),
   percentageDiscount: decimal("percentage_discount", { precision: 5, scale: 2 }),
+   fraudScore: decimal("fraud_score", { precision: 5, scale: 2 }),
+  riskFlags: jsonb("risk_flags"),
+  paymentVerified: boolean("payment_verified").default(false),
+  verificationMethod: varchar("verification_method"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -264,6 +416,11 @@ export const transactions = pgTable("transactions", {
   paymentRef: varchar("payment_ref").unique(), 
   description: text("description"),
   orderId: uuid("order_id").references(() => orders.id),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  locationData: jsonb("location_data"),
+  deviceFingerprint: varchar("device_fingerprint"),
+  isFraudulent: boolean("is_fraudulent").default(false),
+  riskScore: decimal("risk_score", { precision: 5, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow(),
 },
  (table) => [
@@ -924,6 +1081,44 @@ export const insertGuestPendingPaymentSchema = createInsertSchema(guestPendingPa
 });
 
 
+export const insertSuspiciousActivitySchema = createInsertSchema(suspiciousActivities).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertIpBlocklistSchema = createInsertSchema(ipBlocklist).omit({
+  id: true,
+  blockedAt: true,
+});
+
+export const insertFailedLoginAttemptSchema = createInsertSchema(failedLoginAttempts).omit({
+  id: true,
+  attemptTime: true,
+});
+
+export const insertSecurityAuditLogSchema = createInsertSchema(securityAuditLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserSecuritySettingsSchema = createInsertSchema(userSecuritySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  loginTime: true,
+  lastActivity: true,
+  logoutTime: true,
+});
+
+export const insertIpGeoLocationSchema = createInsertSchema(ipGeoLocation).omit({
+  id: true,
+  lastUpdated: true,
+});
+
 // Types
 export type SavedBankAccount = typeof savedBankAccounts.$inferSelect;
 export type InsertSavedBankAccount = z.infer<typeof insertSavedBankAccountSchema>;
@@ -1010,6 +1205,51 @@ export type GuestTicket = typeof guestTickets.$inferSelect;
 export type InsertGuestTicket = z.infer<typeof insertGuestTicketSchema>;
 export type GuestPendingPayment = typeof guestPendingPayments.$inferSelect;
 export type InsertGuestPendingPayment = z.infer<typeof insertGuestPendingPaymentSchema>;
+export type SuspiciousActivity = typeof suspiciousActivities.$inferSelect;
+export type InsertSuspiciousActivity = z.infer<typeof insertSuspiciousActivitySchema>;
+
+export type IpBlocklist = typeof ipBlocklist.$inferSelect;
+export type InsertIpBlocklist = z.infer<typeof insertIpBlocklistSchema>;
+
+export type FailedLoginAttempt = typeof failedLoginAttempts.$inferSelect;
+export type InsertFailedLoginAttempt = z.infer<typeof insertFailedLoginAttemptSchema>;
+
+export type SecurityAuditLog = typeof securityAuditLog.$inferSelect;
+export type InsertSecurityAuditLog = z.infer<typeof insertSecurityAuditLogSchema>;
+
+export type UserSecuritySettings = typeof userSecuritySettings.$inferSelect;
+export type InsertUserSecuritySettings = z.infer<typeof insertUserSecuritySettingsSchema>;
+
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+
+export type IpGeoLocation = typeof ipGeoLocation.$inferSelect;
+export type InsertIpGeoLocation = z.infer<typeof insertIpGeoLocationSchema>;
+
+// ===== USER SECURITY SCHEMAS =====
+
+export const updateSecuritySettingsSchema = z.object({
+  twoFactorEnabled: z.boolean().optional(),
+  sessionTimeout: z.number().int().min(300).max(86400).optional(),
+  emailNotifications: z.boolean().optional(),
+  securityAlerts: z.boolean().optional(),
+  require2FAOnLogin: z.boolean().optional(),
+});
+
+// ===== ADMIN SECURITY SCHEMAS =====
+
+export const adminBlockIpSchema = z.object({
+  ipAddress: z.string().ip(),
+  reason: z.string().min(1, "Reason is required"),
+  duration: z.number().int().min(1).max(60 * 24 * 30), // Max 30 days
+  isPermanent: z.boolean().default(false),
+});
+
+export const adminUnblockIpSchema = z.object({
+  ipAddress: z.string().ip(),
+  reason: z.string().optional(),
+});
+
 
 export const guestCheckoutSchema = z.object({
   guestName: z.string().min(2, "Name must be at least 2 characters").max(100),

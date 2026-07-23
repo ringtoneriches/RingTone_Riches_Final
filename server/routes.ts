@@ -82,7 +82,9 @@ import {
   gameRoyalConfig,
   gameSlotConfig,
   slotUsage,
-  slotPrizeWins
+  slotPrizeWins,
+  ipBlocklist,
+  suspiciousActivities
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -123,7 +125,7 @@ import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { calculateDiscountedTotal } from "./utils/discounts";
 import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
-
+import rateLimit ,{ ipKeyGenerator } from 'express-rate-limit';
 const supportUpload = createS3Uploader("support");
 const competitionUpload = createS3Uploader("competitions");
 const verificationUpload = createS3Uploader("Verifications");
@@ -1074,6 +1076,191 @@ async function awardReferralBonusInsideTransaction(
 }
 
 
+// ===== SECURITY CONSTANTS =====
+
+const SUSPICIOUS_PATTERNS = [
+  /https?:\/\/[^\s]+/gi,
+  /bit\.ly\/[^\s]+/gi,
+  /tinyurl\.com\/[^\s]+/gi,
+  /goo\.gl\/[^\s]+/gi,
+  /ow\.ly\/[^\s]+/gi,
+  /[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}\/[^\s]*/gi,
+  /www\.[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}[^\s]*/gi,
+  /[🚀🔥💎💰💵🎁✨⭐🌟💫💯🤑💸💲🔗📎🔍🌐🕸️🏆👑💪🤩😍✅❌⚠️🏅🎯🥇🥈🥉🎖️💹📈📉🔒🔓🔔📢📣💬🗣️👤👥🔄♻️✅❌⚠️🚫⛔❓❕❗🔴🟢🔵🟡🟣🟠🟤⚫⚪🟥🟧🟨🟩🟦🟪🟫⬛⬜🔺🔻🔸🔹🔶🔷🔰🌀🌙☀️⭐🌠🌌🌈🔥💧❄️☄️🌊🌪️🌫️☁️⛅🌤️🌥️🌦️🌧️⛈️🌨️❄️☃️⛄🌬️💨💭🗯️💬👁️‍🗨️🔇🔊🔉🔈🔔🔕📣📢💤💦💨]/g,
+  /\b(bonus|free|offer|limited|promotion|discount|exclusive|premium|gift|cash|money|earn|make money|investment|profit|win|winner|prize|billion|million|thousand|dollar|euro|pound|btc|bitcoin|crypto|mining|trading|forex|stock|rewards|claim|get now|hurry|urgent|guaranteed|100%|best|top|number one|amazing|incredible|unbelievable|click|here|now|today|act now|don't miss|limited time|exclusive offer|special|promo|code|voucher|coupon|deal|sale|buy|purchase|order|subscribe|follow|like|share|comment|join|sign up|register|apply|get|win|earn|make|money|cash|paypal|venmo|zelle|bank|transfer|wire|deposit|withdraw|investment|trading|signal|group|telegram|whatsapp|instagram|facebook|twitter|tiktok|youtube|discord|link|bio|profile|page|website|blog|vlog|channel)\b/gi,
+  /<[^>]*>/gi,
+  /javascript:/gi,
+  /on\w+="/gi,
+  /alert\(/gi,
+  /console\./gi,
+  /document\./gi,
+  /window\./gi,
+  /eval\(/gi,
+];
+
+const BOT_PATTERNS = [
+  /^\d{10,}$/,
+  /^[A-Z0-9]{10,}$/,
+  /^[a-zA-Z0-9]{20,}$/,
+  /^(.)\1{5,}$/,
+  /^[0-9a-zA-Z]{8,}$/i,
+  /^[a-f0-9]{16,}$/i,
+  /^[a-zA-Z]{1}\d{10,}$/,
+];
+
+// ===== RATE LIMITING =====
+
+
+
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per IP per window
+  message: {
+    message: "Too many registration attempts. Please try again later.",
+  },
+  skipSuccessfulRequests: true,
+  // ✅ Use the built-in ipKeyGenerator for proper IPv6 handling
+  keyGenerator: ipKeyGenerator,
+  handler: async (req, res) => {
+    // ✅ Get IP properly using ipKeyGenerator
+    const ip = ipKeyGenerator(req);
+    console.log(`🚨 Rate limit exceeded for IP: ${ip}`);
+    
+    try {
+      await db.insert(suspiciousActivities).values({
+        ipAddress: ip,
+        reason: "Rate limit exceeded",
+        userAgent: req.headers["user-agent"] || "unknown",
+      });
+    } catch (error) {
+      console.error("Failed to log suspicious activity:", error);
+    }
+    
+    res.status(429).json({
+      message: "Too many registration attempts. Please try again later.",
+    });
+  },
+});
+
+// ===== VALIDATION FUNCTIONS =====
+
+const validateFieldContent = (value: string, fieldName: string): string | null => {
+  if (!value || value.trim().length === 0) return null;
+  const trimmed = value.trim();
+
+  if (trimmed.length > 50) {
+    return `${fieldName} is too long (maximum 50 characters)`;
+  }
+
+  for (const pattern of SUSPICIOUS_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return `${fieldName} contains suspicious content (links, spam keywords, or unauthorized characters)`;
+    }
+  }
+
+  for (const pattern of BOT_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return `${fieldName} appears to be automatically generated`;
+    }
+  }
+
+  if (fieldName === "First name" || fieldName === "Last name") {
+    if (!/^[a-zA-Z\s\-'., ]+$/.test(trimmed)) {
+      return `${fieldName} contains invalid characters (only letters, spaces, hyphens, and apostrophes allowed)`;
+    }
+  }
+
+  const specialChars = trimmed.match(/[^a-zA-Z0-9\s\-'., ]/g) || [];
+  if (specialChars.length > trimmed.length * 0.3) {
+    return `${fieldName} contains too many special characters`;
+  }
+
+  if (/(\w)\1{5,}/.test(trimmed)) {
+    return `${fieldName} contains too many repeated characters`;
+  }
+
+  if (fieldName === "First name" || fieldName === "Last name") {
+    const letters = trimmed.match(/[a-zA-Z]/g) || [];
+    if (letters.length < 2) {
+      return `${fieldName} must contain at least 2 letters`;
+    }
+  }
+
+  return null;
+};
+
+const validateEmailDomain = (email: string): string | null => {
+  const trimmed = email.trim();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(trimmed)) {
+    return "Invalid email format";
+  }
+
+  const suspiciousDomains = [
+    'tempmail', 'temp-mail', 'throwaway', 'guerrillamail', 'mailinator',
+    '10minutemail', 'yopmail', 'getairmail', 'spamgourmet', 'trashmail',
+    'fakeinbox', 'mytempemail', 'mailnator', 'dispostable', 'throwawaymail',
+    'tempemail', 'guerrilla', 'mailnesia', 'spambox', 'trash2000',
+  ];
+
+  const domain = trimmed.split('@')[1]?.toLowerCase();
+  if (domain) {
+    for (const suspicious of suspiciousDomains) {
+      if (domain.includes(suspicious)) {
+        return "Please use a real email address (temporary emails are not allowed)";
+      }
+    }
+  }
+
+  return null;
+};
+
+const validatePasswordStrength = (password: string): string | null => {
+  if (password.length < 8) return "Password must be at least 8 characters";
+  if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
+  if (!/[a-z]/.test(password)) return "Password must contain at least one lowercase letter";
+  if (!/[0-9]/.test(password)) return "Password must contain at least one number";
+  if (!/[^A-Za-z0-9]/.test(password)) return "Password must contain at least one special character";
+  return null;
+};
+
+// ===== SCHEMA =====
+
+const registerUserSchema = z.object({
+  email: z.string()
+    .min(1, "Email is required")
+    .refine((email) => !validateEmailDomain(email), {
+      message: "Invalid email format or domain not allowed",
+    }),
+  password: z.string()
+    .min(1, "Password is required")
+    .refine((pass) => !validatePasswordStrength(pass), {
+      message: "Password must meet strength requirements",
+    }),
+  firstName: z.string()
+    .min(1, "First name is required")
+    .max(50)
+    .refine((val) => !validateFieldContent(val, "First name"), {
+      message: "First name contains invalid content",
+    }),
+  lastName: z.string()
+    .min(1, "Last name is required")
+    .max(50)
+    .refine((val) => !validateFieldContent(val, "Last name"), {
+      message: "Last name contains invalid content",
+    }),
+  phoneNumber: z.string()
+    .min(1, "Phone number is required")
+    .regex(/^[\+\d\s\-()]{7,20}$/, "Invalid phone number format"),
+  birthMonth: z.string().optional(),
+  birthYear: z.string().optional(),
+  receiveNewsletter: z.boolean().default(false),
+  referralCode: z.string().optional(),
+  howDidYouFindUs: z.string().min(1, "Please select how you found us"),
+  redeemCode: z.string().optional(),
+});
+
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   setupCustomAuth(app);
@@ -1173,15 +1360,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-app.post("/api/auth/register", async (req, res) => {
-  try {
-    console.log("🚀 [register] Starting registration...");
-    console.log("   Request body:", JSON.stringify(req.body, null, 2));
+app.post("/api/auth/register", registerLimiter, async (req, res) => {
+  const startTime = Date.now();
+  const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+  const userAgent = req.headers["user-agent"] || "unknown";
 
-    // Update schema validation to include redeemCode
+  try {
+    console.log(`📝 [register] Registration attempt from IP: ${clientIp}`);
+    
+    // ===== CHECK IP BLOCKLIST =====
+    const blockedIp = await db.query.ipBlocklist.findFirst({
+      where: eq(ipBlocklist.ipAddress, clientIp as string),
+    });
+
+    if (blockedIp) {
+      console.log(`🚫 [register] Blocked IP attempted registration: ${clientIp}`);
+      if (blockedIp.expiresAt && new Date() > new Date(blockedIp.expiresAt)) {
+        // Expired block, remove it
+        await db.delete(ipBlocklist).where(eq(ipBlocklist.ipAddress, clientIp as string));
+      } else {
+        return res.status(403).json({
+          message: "Access denied. Your IP has been blocked due to suspicious activity.",
+        });
+      }
+    }
+
+    // ===== CHECK FOR HONEYPOT =====
+    // The honeypot field is named "website" in the form
+    if (req.body.website || req.body.honeypot) {
+      console.log(`🚨 [register] Honeypot triggered for IP: ${clientIp}`);
+      await logSuspiciousActivity(clientIp as string, userAgent, "Honeypot triggered", req.body.email);
+      
+      // Block this IP
+      await blockIp(clientIp as string, "Honeypot triggered - bot detected");
+      
+      return res.status(403).json({
+        message: "Invalid request. Please try again.",
+      });
+    }
+
+    // ===== CHECK SUBMISSION TIME =====
+    // Check if form was submitted too quickly (bot)
+    const submissionTime = req.body._timestamp || Date.now();
+    if (Date.now() - submissionTime < 2000) {
+      console.log(`🚨 [register] Too fast submission from IP: ${clientIp}`);
+      await logSuspiciousActivity(clientIp as string, userAgent, "Form submitted too quickly", req.body.email);
+      
+      return res.status(403).json({
+        message: "Invalid request. Please try again.",
+      });
+    }
+
+    // ===== VALIDATE REQUEST BODY =====
     const result = registerUserSchema.safeParse(req.body);
     if (!result.success) {
-      console.error("❌ [register] Validation failed:", result.error);
+      const errorMessages = result.error.issues.map(issue => issue.message);
+      console.log(`❌ [register] Validation failed:`, errorMessages);
+      
+      // Log suspicious validation failures
+      await logSuspiciousActivity(clientIp as string, userAgent, `Validation failed: ${errorMessages.join(', ')}`, req.body.email);
+      
       return res.status(400).json({
         message: "Invalid registration data",
         errors: result.error.issues,
@@ -1193,45 +1431,38 @@ app.post("/api/auth/register", async (req, res) => {
       password,
       firstName,
       lastName,
-      dateOfBirth,
-      phoneNumber,
-      receiveNewsletter,
       birthMonth,
       birthYear,
+      phoneNumber,
+      receiveNewsletter,
       referralCode,
       howDidYouFindUs,
       redeemCode,
-    } = req.body;
+    } = result.data;
 
-    console.log("   Email to register:", email);
-    console.log("   Referral code provided:", referralCode);
-    console.log("   Redeem code provided:", redeemCode);
+    console.log(`📝 [register] Processing registration for: ${email}`);
 
+    // ===== CHECK EXISTING USER =====
     const normalizedEmail = email.toLowerCase().trim();
-    
-    console.log("   Original email:", email);
-    console.log("   Normalized email (stored in DB):", normalizedEmail);
-
-    // Check if user exists
     const existingUser = await storage.getUserByEmail(normalizedEmail);
     if (existingUser) {
-      console.log("❌ [register] User already exists:", normalizedEmail);
+      console.log(`❌ [register] User already exists: ${normalizedEmail}`);
       return res.status(400).json({ message: "User already exists with this email" });
     }
 
-    // Validate referral code if provided
+    // ===== VALIDATE REFERRAL CODE =====
     let referrerId = null;
     if (referralCode) {
       const referrer = await storage.getUserByReferralCode(referralCode);
       if (referrer) {
         referrerId = referrer.id;
-        console.log("   ✅ Valid referral code found. Referrer:", referrer.email);
+        console.log(`✅ Valid referral code: ${referralCode} from ${referrer.email}`);
       } else {
-        console.log("   ❌ Invalid referral code:", referralCode);
+        console.log(`⚠️ Invalid referral code: ${referralCode}`);
       }
     }
 
-    // Validate redeem code if provided
+    // ===== VALIDATE REDEEM CODE =====
     let pendingRedeemCode = null;
     let pendingRedeemAmount = null;
     
@@ -1239,263 +1470,209 @@ app.post("/api/auth/register", async (req, res) => {
       try {
         const upperCode = redeemCode.toUpperCase().trim();
         
-        // Find the redeem code
-        const foundCode = await db.query.redeemCodes.findFirst({
-          where: eq(redeemCodes.code, upperCode),
+        // Check if user already used a code
+        const existingRedemption = await db.query.redeemCodeRedemptions.findFirst({
+          where: eq(redeemCodeRedemptions.userId, existingUser?.id || 0),
         });
 
-        if (foundCode) {
-          // Check if code is active
-          if (!foundCode.isActive) {
-            console.log(`   ❌ Redeem code is inactive: ${upperCode}`);
-          }
-          // Check if expired
-          else if (foundCode.expiresAt && new Date() > new Date(foundCode.expiresAt)) {
-            console.log(`   ❌ Redeem code expired: ${upperCode}`);
-          }
-          // Check usage limits
-          else if (foundCode.usageLimit !== null && foundCode.currentUses >= foundCode.usageLimit) {
-            console.log(`   ❌ Redeem code has reached its usage limit (${foundCode.usageLimit} uses): ${upperCode}`);
-          }
-          // Code is valid for potential use
-          else {
-            pendingRedeemCode = upperCode;
-            pendingRedeemAmount = foundCode.amount;
-            console.log(`   ✅ Valid redeem code found: ${upperCode} worth £${foundCode.amount}`);
-            console.log(`      Current usage: ${foundCode.currentUses}/${foundCode.usageLimit || '∞'}`);
-          }
+        if (existingRedemption) {
+          console.log(`⚠️ User already used a redeem code`);
         } else {
-          console.log(`   ❌ Invalid redeem code: ${upperCode}`);
+          const foundCode = await db.query.redeemCodes.findFirst({
+            where: eq(redeemCodes.code, upperCode),
+          });
+
+          if (foundCode) {
+            if (!foundCode.isActive) {
+              console.log(`❌ Redeem code is inactive: ${upperCode}`);
+            } else if (foundCode.expiresAt && new Date() > new Date(foundCode.expiresAt)) {
+              console.log(`❌ Redeem code expired: ${upperCode}`);
+            } else if (foundCode.usageLimit !== null && foundCode.currentUses >= foundCode.usageLimit) {
+              console.log(`❌ Redeem code has reached its usage limit: ${upperCode}`);
+            } else {
+              pendingRedeemCode = upperCode;
+              pendingRedeemAmount = foundCode.amount;
+              console.log(`✅ Valid redeem code: ${upperCode} worth £${foundCode.amount}`);
+            }
+          } else {
+            console.log(`❌ Invalid redeem code: ${upperCode}`);
+          }
         }
       } catch (redeemError) {
-        console.error("   Error validating redeem code:", redeemError);
+        console.error("Error validating redeem code:", redeemError);
       }
     }
 
-    // Hash password
-    const hashedPassword = await hashPassword(password || "");
-    console.log("   Password hashed");
+    // ===== HASH PASSWORD =====
+    const hashedPassword = await hashPassword(password);
+    console.log("✅ Password hashed");
 
-    // Create DOB
-    const dobString =
-      birthMonth && birthYear
-        ? `${birthYear}-${String(birthMonth).padStart(2, "0")}-01`
-        : undefined;
+    // ===== CREATE USER =====
+    const dobString = birthMonth && birthYear
+      ? `${birthYear}-${String(birthMonth).padStart(2, "0")}-01`
+      : undefined;
 
-    // Create new user (emailVerified set to true by default)
-    console.log("   Creating user in database...");
+    console.log("📝 Creating user in database...");
     const user = await storage.createUser({
       email: normalizedEmail,
       password: hashedPassword,
-      firstName,
-      lastName,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
       dateOfBirth: dobString,
-      phoneNumber,
+      phoneNumber: phoneNumber.trim(),
       howDidYouFindUs,
       receiveNewsletter: receiveNewsletter || false,
-      emailVerified: true, // ⭐ Auto-verify email
+      emailVerified: true,
       referredBy: referrerId,
       pendingRedeemCode: pendingRedeemCode,
       pendingRedeemAmount: pendingRedeemAmount,
+      ipAddress: clientIp as string,
     });
 
-    console.log("✅ [register] User created:", user.id);
+    console.log(`✅ User created with ID: ${user.id}`);
 
-    // Log IP
-    try {
-      const ip = getClientIp(req);
-      const ua = req.headers["user-agent"] || "";
-      await db.insert(userIpLogs).values({
-        userId: user.id,
-        ipAddress: ip,
-        userAgent: ua,
-      });
-    } catch (e) {
-      console.error("IP log failed on register:", e);
-    }
+    // ===== LOG IP =====
+    await db.insert(userIpLogs).values({
+      userId: user.id,
+      ipAddress: clientIp as string,
+      userAgent: userAgent,
+      createdAt: new Date(),
+    });
 
-    // Apply bonuses immediately (no verification needed)
+    // ===== APPLY BONUSES =====
     let bonusCashCredited = 0;
     let bonusPointsCredited = 0;
     let redeemAmountCredited = 0;
 
-    await db.transaction(async (tx) => {
-      // 1. Apply normal signup bonus
-      try {
-        const settings = await storage.getPlatformSettings();
-        if (settings?.signupBonusEnabled) {
-          const bonusCash = parseFloat(settings.signupBonusCash || "0");
-          const bonusPoints = settings.signupBonusPoints || 0;
-
-          if (bonusCash > 0) {
-            await tx.update(users)
-              .set({
-                balance: sql`${users.balance} + ${bonusCash}`,
-              })
-              .where(eq(users.id, user.id));
-            bonusCashCredited = bonusCash;
-
-            await tx.insert(transactions).values({
-              userId: user.id,
-              amount: bonusCash.toFixed(2),
-              type: "deposit",
-              status: "completed",
-              description: "Signup bonus - Welcome cash",
-            });
-          }
-
-          if (bonusPoints > 0) {
-            await tx.update(users)
-              .set({
-                ringtonePoints: sql`${users.ringtonePoints} + ${bonusPoints}`,
-              })
-              .where(eq(users.id, user.id));
-            bonusPointsCredited = bonusPoints;
-
-            await tx.insert(transactions).values({
-              userId: user.id,
-              amount: "0.00",
-              type: "deposit",
-              status: "completed",
-              description: `Signup bonus - ${bonusPoints} RingTone Points`,
-            });
-          }
-        }
-      } catch (bonusError) {
-        console.error("Signup bonus error:", bonusError);
-      }
-
-      // 2. Apply redeem code if exists
-      if (pendingRedeemCode && pendingRedeemAmount) {
+    try {
+      await db.transaction(async (tx) => {
+        // 1. Signup Bonus
         try {
-          const code = pendingRedeemCode;
-          const amount = parseFloat(pendingRedeemAmount);
+          const settings = await storage.getPlatformSettings();
+          if (settings?.signupBonusEnabled) {
+            const bonusCash = parseFloat(settings.signupBonusCash || "0");
+            const bonusPoints = settings.signupBonusPoints || 0;
 
-          // Find the redeem code again (within transaction)
-          const redeemCode = await tx.query.redeemCodes.findFirst({
-            where: eq(redeemCodes.code, code),
-          });
+            if (bonusCash > 0) {
+              await tx.update(users)
+                .set({
+                  balance: sql`${users.balance} + ${bonusCash}`,
+                })
+                .where(eq(users.id, user.id));
+              bonusCashCredited = bonusCash;
 
-          if (redeemCode) {
-            // Double-check all conditions within the transaction
-            if (!redeemCode.isActive) {
-              console.log(`❌ Code ${code} is inactive`);
-              return;
+              await tx.insert(transactions).values({
+                userId: user.id,
+                amount: bonusCash.toFixed(2),
+                type: "deposit",
+                status: "completed",
+                description: "🎉 Signup bonus - Welcome cash",
+              });
             }
 
-            if (redeemCode.expiresAt && new Date() > new Date(redeemCode.expiresAt)) {
-              console.log(`❌ Code ${code} has expired`);
-              return;
-            }
+            if (bonusPoints > 0) {
+              await tx.update(users)
+                .set({
+                  ringtonePoints: sql`${users.ringtonePoints} + ${bonusPoints}`,
+                })
+                .where(eq(users.id, user.id));
+              bonusPointsCredited = bonusPoints;
 
-            // Check usage limits
-            if (redeemCode.usageLimit !== null && redeemCode.currentUses >= redeemCode.usageLimit) {
-              console.log(`❌ Code ${code} has reached its usage limit (${redeemCode.usageLimit} uses)`);
-              return;
+              await tx.insert(transactions).values({
+                userId: user.id,
+                amount: "0.00",
+                type: "deposit",
+                status: "completed",
+                description: `🎉 Signup bonus - ${bonusPoints} RingTone Points`,
+              });
             }
+          }
+        } catch (bonusError) {
+          console.error("Signup bonus error:", bonusError);
+        }
 
-            // Check if user has already used this specific code
-            const existingRedemption = await tx.query.redeemCodeRedemptions.findFirst({
-              where: and(
-                eq(redeemCodeRedemptions.redeemCodeId, redeemCode.id),
-                eq(redeemCodeRedemptions.userId, user.id)
-              ),
+        // 2. Redeem Code
+        if (pendingRedeemCode && pendingRedeemAmount) {
+          try {
+            const code = pendingRedeemCode;
+            const amount = parseFloat(pendingRedeemAmount);
+
+            const redeemCode = await tx.query.redeemCodes.findFirst({
+              where: eq(redeemCodes.code, code),
             });
 
-            if (existingRedemption) {
-              console.log(`❌ User ${user.id} has already used code ${code}`);
-              return;
-            }
+            if (redeemCode) {
+              if (redeemCode.isActive && 
+                  !(redeemCode.expiresAt && new Date() > new Date(redeemCode.expiresAt)) &&
+                  (redeemCode.usageLimit === null || redeemCode.currentUses < redeemCode.usageLimit)) {
+                
+                // Update usage
+                const newUses = redeemCode.currentUses + 1;
+                await tx.update(redeemCodes)
+                  .set({ 
+                    currentUses: newUses,
+                    isUsed: redeemCode.usageLimit !== null && newUses >= redeemCode.usageLimit,
+                    usedByUserId: user.id,
+                    usedAt: new Date(),
+                  })
+                  .where(eq(redeemCodes.id, redeemCode.id));
 
-            // For flyer codes (system generated), check if they've used any code
-            if (redeemCode.isSystemGenerated) {
-              const anyRedemption = await tx.query.redeemCodeRedemptions.findFirst({
-                where: eq(redeemCodeRedemptions.userId, user.id),
-              });
+                // Add amount
+                await tx.update(users)
+                  .set({
+                    balance: sql`${users.balance} + ${amount}`,
+                  })
+                  .where(eq(users.id, user.id));
 
-              if (anyRedemption) {
-                console.log(`❌ User ${user.id} has already used a flyer code`);
-                return;
+                // Record redemption
+                await tx.insert(redeemCodeRedemptions).values({
+                  redeemCodeId: redeemCode.id,
+                  userId: user.id,
+                  amount: amount.toString(),
+                  ipAddress: clientIp as string,
+                  userAgent: userAgent,
+                });
+
+                await tx.insert(transactions).values({
+                  userId: user.id,
+                  amount: amount.toString(),
+                  type: "redeem",
+                  description: `🎁 Redeemed code: ${code}`,
+                  status: "completed",
+                });
+
+                redeemAmountCredited = amount;
+                console.log(`✅ Code ${code} redeemed for £${amount}`);
               }
             }
 
-            // IMPORTANT: Update the usage counter
-            const newCurrentUses = redeemCode.currentUses + 1;
-            console.log(`📝 Updating code usage from ${redeemCode.currentUses} to ${newCurrentUses}`);
-            
-            await tx.update(redeemCodes)
-              .set({ 
-                currentUses: newCurrentUses,
-                // Update legacy fields for backward compatibility
-                isUsed: redeemCode.usageLimit !== null && newCurrentUses >= redeemCode.usageLimit,
-                usedByUserId: user.id,
-                usedAt: new Date(),
-              })
-              .where(eq(redeemCodes.id, redeemCode.id));
-
-            // Add amount to user's balance
+            // Clear pending fields
             await tx.update(users)
               .set({
-                balance: sql`${users.balance} + ${amount}`,
+                pendingRedeemCode: null,
+                pendingRedeemAmount: null,
               })
               .where(eq(users.id, user.id));
 
-            // Record redemption
-            await tx.insert(redeemCodeRedemptions).values({
-              redeemCodeId: redeemCode.id,
-              userId: user.id,
-              amount: amount.toString(),
-              ipAddress: req.ip,
-              userAgent: req.headers["user-agent"],
-            });
-
-            // Create transaction record
-            await tx.insert(transactions).values({
-              userId: user.id,
-              amount: amount.toString(),
-              type: "redeem",
-              description: `Redeemed flyer code: ${code}`,
-              status: "completed",
-            });
-
-            redeemAmountCredited = amount;
-            console.log(`✅ Flyer code ${code} redeemed for user ${user.id} - £${amount}`);
-            console.log(`   New currentUses: ${newCurrentUses}`);
+          } catch (redeemError) {
+            console.error("Failed to apply redeem code:", redeemError);
+            await tx.update(users)
+              .set({
+                pendingRedeemCode: null,
+                pendingRedeemAmount: null,
+              })
+              .where(eq(users.id, user.id));
           }
-
-          // Clear pending fields
-          await tx.update(users)
-            .set({
-              pendingRedeemCode: null,
-              pendingRedeemAmount: null,
-            })
-            .where(eq(users.id, user.id));
-
-        } catch (redeemError) {
-          console.error("Failed to apply redeem code during registration:", redeemError);
-          // Clear pending fields
-          await tx.update(users)
-            .set({
-              pendingRedeemCode: null,
-              pendingRedeemAmount: null,
-            })
-            .where(eq(users.id, user.id));
         }
-      }
 
-      // 3. Apply referral system
-      try {
-        if (referrerId) {
-          const referrer = await storage.getUser(referrerId);
-          if (referrer && referrer.id !== user.id) {
+        // 3. Referral Bonus
+        try {
+          if (referrerId && referrerId !== user.id) {
             await storage.saveUserReferral({
               userId: user.id,
-              referrerId: referrer.id,
+              referrerId: referrerId,
             });
 
-            console.log(`🎉 Referral: ${referrer.email} referred ${user.email}`);
-
-            // Give new user 100 points
             const welcomeReferralPoints = 100;
             await tx.update(users)
               .set({
@@ -1508,28 +1685,39 @@ app.post("/api/auth/register", async (req, res) => {
               amount: welcomeReferralPoints.toString(),
               type: "referral_bonus",
               status: "completed",
-              description: `Welcome referral bonus +${welcomeReferralPoints} points`,
+              description: `👥 Referral bonus +${welcomeReferralPoints} points`,
             });
+
+            console.log(`🎉 Referral: user ${user.id} was referred by ${referrerId}`);
           }
+        } catch (referralError) {
+          console.error("Referral processing error:", referralError);
         }
-      } catch (referralError) {
-        console.error("Referral processing error:", referralError);
-      }
-    });
+      });
+    } catch (txError) {
+      console.error("Transaction error:", txError);
+    }
 
-    // Send welcome email (optional - just for notification)
-    sendWelcomeEmail(email, {
-      userName: `${user.firstName} ${user.lastName}`.trim() || "there",
-      email,
-    }).catch((err) => console.error("Failed to send welcome email:", err));
+    // ===== SEND WELCOME EMAIL =====
+    try {
+      await sendWelcomeEmail(email, {
+        userName: `${user.firstName} ${user.lastName}`.trim() || "there",
+        email: email,
+      });
+      console.log("📧 Welcome email sent");
+    } catch (emailError) {
+      console.error("Failed to send welcome email:", emailError);
+    }
 
-    // Create session immediately
+    // ===== CREATE SESSION =====
     (req as any).session.userId = user.id;
+    (req as any).session.save();
 
-    // Get updated user
+    // ===== GET UPDATED USER =====
     const updatedUser = await storage.getUser(user.id);
 
-    console.log("✅ [register] Registration complete with bonuses!");
+    // ===== RESPONSE =====
+    console.log(`✅ Registration complete for ${email} in ${Date.now() - startTime}ms`);
 
     res.status(201).json({
       message: "Registration successful! Welcome to RingTone Riches!",
@@ -1552,13 +1740,51 @@ app.post("/api/auth/register", async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error("🔥 [register] Registration error:", error);
+    console.error("🔥 Registration error:", error);
+    
+    // Log the error
+    await logSuspiciousActivity(
+      clientIp as string,
+      userAgent,
+      `Registration error: ${error.message}`,
+      req.body.email
+    );
+
     res.status(500).json({
       message: "Failed to register user",
-      error: error.message,
+      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
     });
   }
 });
+
+// ===== HELPER FUNCTIONS =====
+
+async function logSuspiciousActivity(ip: string, userAgent: string, reason: string, email?: string) {
+  try {
+    await db.insert(suspiciousActivities).values({
+      ipAddress: ip,
+      email: email || null,
+      reason: reason,
+      userAgent: userAgent,
+      createdAt: new Date(),
+    });
+  } catch (error) {
+    console.error("Failed to log suspicious activity:", error);
+  }
+}
+
+async function blockIp(ip: string, reason: string) {
+  try {
+    await db.insert(ipBlocklist).values({
+      ipAddress: ip,
+      reason: reason,
+      blockedAt: new Date(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Block for 24 hours
+    });
+  } catch (error) {
+    console.error("Failed to block IP:", error);
+  }
+}
 
 // Login route (simplified - no verification check)
 app.post("/api/auth/login", async (req, res) => {

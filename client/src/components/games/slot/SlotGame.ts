@@ -298,7 +298,7 @@ for (const x of reelXs) {
 
     // Symbol size scales with the column spacing so it stays
     // proportionate no matter how big/small the machine image is.
-    this.symbolSize = Math.max(24, (spanX / 2) * 0.55);
+    this.symbolSize = Math.max(24, (spanX / 2) * 0.65);
     this.reelSpacing = this.rowYs[1] - this.rowYs[0];
   }
 

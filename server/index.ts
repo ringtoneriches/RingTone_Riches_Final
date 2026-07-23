@@ -215,8 +215,8 @@ app.use((req, res, next) => {
 
 (async () => {
   storage.initializeAdminUser();
-  await autoSeedProduction();
-  await autoCreateAdmin();
+  // await autoSeedProduction();
+  // await autoCreateAdmin();
   const server = await registerRoutes(app);
 
   startCrons();
