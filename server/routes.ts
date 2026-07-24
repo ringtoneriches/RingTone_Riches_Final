@@ -19617,7 +19617,8 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
       orderId: order?.id, 
       userId: order?.userId, 
       status: order?.status,
-      quantity: order?.quantity 
+      quantity: order?.quantity,
+      competitionId: order?.competitionId  // ← Check if order has competitionId
     });
 
     if (!order || order.userId !== userId || order.status !== "completed") {
@@ -19643,20 +19644,58 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
     }
     const spinNumber = existingSpins.length + 1;
 
-    // ── Get competition ID ──────────────────────────────────────────────
-    let competitionId = "slot-default";
+    // ── Get competition ID (FIXED) ──────────────────────────────────────
+    let competitionId = order.competitionId || "slot-default"; // ← Use order's competitionId first!
+    let competitionTitle = "Slot Machine";
+    
     try {
-      const activeCompetition = await db
-        .select({ id: competitions.id })
-        .from(competitions)
-        .where(eq(competitions.isActive, true))
-        .limit(1);
-      
-      if (activeCompetition.length > 0) {
-        competitionId = activeCompetition[0].id;
+      // If order has competitionId, get the competition details
+      if (order.competitionId) {
+        const [competition] = await db
+          .select({ 
+            id: competitions.id, 
+            title: competitions.title,
+            imageUrl: competitions.imageUrl 
+          })
+          .from(competitions)
+          .where(eq(competitions.id, order.competitionId))
+          .limit(1);
+        
+        if (competition) {
+          competitionTitle = competition.title || "Slot Machine";
+          console.log("[API] Found competition from order:", { 
+            id: competition.id, 
+            title: competition.title 
+          });
+        }
+      } else {
+        // Fallback: Look specifically for slot competition
+        const [slotComp] = await db
+          .select({ 
+            id: competitions.id, 
+            title: competitions.title,
+            imageUrl: competitions.imageUrl 
+          })
+          .from(competitions)
+          .where(
+            and(
+              eq(competitions.isActive, true),
+              eq(competitions.type, "slot")  // ← IMPORTANT: Filter by type!
+            )
+          )
+          .limit(1);
+        
+        if (slotComp) {
+          competitionId = slotComp.id;
+          competitionTitle = slotComp.title || "Slot Machine";
+          console.log("[API] Found slot competition:", { 
+            id: slotComp.id, 
+            title: slotComp.title 
+          });
+        }
       }
     } catch (compError) {
-      console.log("[API] ⚠️ Could not get competition, using default");
+      console.log("[API] ⚠️ Could not get competition, using default:", compError);
     }
 
     // ── Server-side prize determination ─────────────────────────────────
@@ -19798,7 +19837,6 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
             .limit(1);
 
           if (existingWin.length > 0) {
-            // Update existing win count
             await db
               .update(slotPrizeWins)
               .set({ 
@@ -19808,7 +19846,6 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
               .where(eq(slotPrizeWins.prizeId, prizeId));
             console.log(`[API] ✅ Updated win count for ${prizeId}: ${Number(existingWin[0].winCount) + 1}`);
           } else {
-            // Create new win count entry
             await db
               .insert(slotPrizeWins)
               .values({
@@ -19820,7 +19857,6 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
           }
         } catch (winCountError) {
           console.error("[API] ❌ Error updating win count:", winCountError);
-          // Don't fail the whole request
         }
 
         // ─── SYNC WITH COMPETITION PRIZES ───
@@ -19834,21 +19870,21 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
         );
         console.log("[API] Slot prize sync result:", syncResult);
 
-        // ─── RECORD IN WINNERS TABLE ───
+        // ─── RECORD IN WINNERS TABLE (FIXED) ───
         let prizeDescriptionText = "";
         let prizeValueText = "";
 
         if (selectedPrize.isEuro) {
-          prizeDescriptionText = "Slot Machine Win";
+          prizeDescriptionText = `Slot Machine Win - ${competitionTitle}`;  // ← Include competition name
           prizeValueText = `£${coinsWon} Cash`;
         } else {
-          prizeDescriptionText = "Slot Machine Win";
+          prizeDescriptionText = `Slot Machine Win - ${competitionTitle}`;  // ← Include competition name
           prizeValueText = `${coinsWon} Points`;
         }
 
         await db.insert(winners).values({
           userId,
-          competitionId: competitionId,
+          competitionId: competitionId,  // ← Now uses correct competition ID
           prizeDescription: prizeDescriptionText,
           prizeValue: prizeValueText,
           imageUrl: selectedPrize.image || null,
@@ -19856,11 +19892,10 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
           createdAt: new Date(),
           updatedAt: new Date(),
         });
-        console.log("[API] ✅ Winner recorded in winners table");
+        console.log("[API] ✅ Winner recorded in winners table with competition:", competitionTitle);
 
       } catch (prizeError) {
         console.error("[API] ❌ Error processing prize:", prizeError);
-        // Don't fail the whole request - the spin still happened
       }
     } else {
       console.log("[API] ❌ No win this spin");
@@ -19875,13 +19910,12 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
         coinsWon, 
         coinsSpent: coinsSpent || 0,
         spinNumber, 
-        prizeId: prizeId || null,  // ✅ Save prizeId
+        prizeId: prizeId || null,
         prizeName: prizeName || null,
       } as any);
       console.log("[API] ✅ Spin recorded:", { spinNumber, isWin, coinsWon, prizeId });
     } catch (dbError) {
       console.error("[API] ❌ Error recording spin:", dbError);
-      // Don't return error - the spin was processed, we just failed to save
     }
 
     const response = { 

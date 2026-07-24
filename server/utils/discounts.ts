@@ -1,17 +1,10 @@
 // server/utils/discounts.ts
 
-// OLD DISCOUNTS - Replace these:
-// export const TICKET_DISCOUNTS: Record<number, number> = {
-//   5: 0.10,  // 10% off for 5 tickets
-//   10: 0.15, // 15% off for 10 tickets
-//   15: 0.20, // 20% off for 15 tickets
-// };
-
-// NEW DISCOUNTS - Add these:
+// NEW DISCOUNTS - Max 15 plays, 15% max discount
 export const TICKET_DISCOUNTS: Record<number, number> = {
-  10: 0.02,  // 2% off for 10 plays
-  20: 0.05,  // 5% off for 20 plays
-  50: 0.10,  // 10% off for 50 plays
+  5: 0.05,   // 5% off for 5 plays
+  10: 0.10,  // 10% off for 10 plays
+  15: 0.15,  // 15% off for 15 plays (maximum)
 };
 
 export function generateRandomCode(length: number = 8): string {
@@ -75,13 +68,16 @@ export function calculateDiscount(quantity: number): {
   discountPercent: number;
   discountMultiplier: number;
 } {
+  // Cap quantity at 15 for discount eligibility
+  const cappedQuantity = Math.min(quantity, 15);
+  
   const sortedTiers = Object.keys(TICKET_DISCOUNTS)
     .map(Number)
     .sort((a, b) => b - a);
   
   let discountPercent = 0;
   for (const tier of sortedTiers) {
-    if (quantity >= tier) {
+    if (cappedQuantity >= tier) {
       discountPercent = TICKET_DISCOUNTS[tier];
       break;
     }
@@ -104,7 +100,15 @@ export function calculateDiscountedTotal(
 } {
   const originalTotal = pricePerTicket * quantity;
   const { discountPercent, discountMultiplier } = calculateDiscount(quantity);
-  const discountedTotal = originalTotal * discountMultiplier;
+  
+  // Only apply discount to first 15 plays, rest at full price
+  const discountedPlaysCount = Math.min(quantity, 15);
+  const fullPricePlaysCount = Math.max(0, quantity - 15);
+  
+  const discountedPlaysTotal = (pricePerTicket * discountedPlaysCount) * discountMultiplier;
+  const fullPricePlaysTotal = pricePerTicket * fullPricePlaysCount;
+  
+  const discountedTotal = discountedPlaysTotal + fullPricePlaysTotal;
   const savings = originalTotal - discountedTotal;
   
   return {
