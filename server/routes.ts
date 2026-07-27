@@ -4871,6 +4871,19 @@ res.json({
       // Handle Instaplay - direct card payment without wallet
     if (useInstaplay) {
       const totalAmount = Number(order.totalAmount);
+
+        // ✅ MINIMUM PURCHASE VALIDATION FOR INSTANT PLAY
+      const MINIMUM_PURCHASE = 3; // £3 minimum
+      if (totalAmount < MINIMUM_PURCHASE) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum purchase is £${MINIMUM_PURCHASE}. Your total is £${totalAmount.toFixed(2)}. Please add more plays.`,
+          minimumAmount: MINIMUM_PURCHASE,
+          currentAmount: totalAmount,
+          code: 'MINIMUM_PURCHASE_REQUIRED'
+        });
+      }
+
       
       // Create Cashflows session for instant play
       const session = await cashflows.createCompetitionPaymentSession(
@@ -6306,6 +6319,17 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
       // Handle Instaplay - direct card payment without wallet
     if (useInstaplay) {
       const totalAmount = Number(order.totalAmount);
+       // ✅ MINIMUM PURCHASE VALIDATION FOR INSTANT PLAY
+      const MINIMUM_PURCHASE = 3; // £3 minimum
+      if (totalAmount < MINIMUM_PURCHASE) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum purchase is £${MINIMUM_PURCHASE}. Your total is £${totalAmount.toFixed(2)}. Please add more plays.`,
+          minimumAmount: MINIMUM_PURCHASE,
+          currentAmount: totalAmount,
+          code: 'MINIMUM_PURCHASE_REQUIRED'
+        });
+      }
       
       // Create Cashflows session for instant play
       const session = await cashflows.createCompetitionPaymentSession(
@@ -7788,7 +7812,17 @@ app.post(
       // Handle Instaplay - direct card payment without wallet
     if (useInstaplay) {
       const totalAmount = Number(order.totalAmount);
-      
+       // ✅ MINIMUM PURCHASE VALIDATION FOR INSTANT PLAY
+      const MINIMUM_PURCHASE = 3; // £3 minimum
+      if (totalAmount < MINIMUM_PURCHASE) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum purchase is £${MINIMUM_PURCHASE}. Your total is £${totalAmount.toFixed(2)}. Please add more plays.`,
+          minimumAmount: MINIMUM_PURCHASE,
+          currentAmount: totalAmount,
+          code: 'MINIMUM_PURCHASE_REQUIRED'
+        });
+      }
       // Create Cashflows session for instant play
       const session = await cashflows.createCompetitionPaymentSession(
         totalAmount,
@@ -8048,6 +8082,17 @@ app.post(
 
       if (useInstaplay) {
         const totalAmount = Number(order.totalAmount);
+         // ✅ MINIMUM PURCHASE VALIDATION FOR INSTANT PLAY
+      const MINIMUM_PURCHASE = 3; // £3 minimum
+      if (totalAmount < MINIMUM_PURCHASE) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum purchase is £${MINIMUM_PURCHASE}. Your total is £${totalAmount.toFixed(2)}. Please add more plays.`,
+          minimumAmount: MINIMUM_PURCHASE,
+          currentAmount: totalAmount,
+          code: 'MINIMUM_PURCHASE_REQUIRED'
+        });
+      }
         const session = await cashflows.createCompetitionPaymentSession(
           totalAmount,
           { orderId, competitionId: order.competitionId, userId, quantity: order.quantity.toString(), paymentType: 'instant_play', gameType: 'voltz' }
@@ -11196,7 +11241,17 @@ app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) =
     // Handle Instaplay - direct card payment without wallet
     if (useInstaplay) {
       const totalAmount = Number(order.totalAmount);
-      
+       // ✅ MINIMUM PURCHASE VALIDATION FOR INSTANT PLAY
+      const MINIMUM_PURCHASE = 3; // £3 minimum
+      if (totalAmount < MINIMUM_PURCHASE) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum purchase is £${MINIMUM_PURCHASE}. Your total is £${totalAmount.toFixed(2)}. Please add more plays.`,
+          minimumAmount: MINIMUM_PURCHASE,
+          currentAmount: totalAmount,
+          code: 'MINIMUM_PURCHASE_REQUIRED'
+        });
+      }
       // Create Cashflows session for instant play
       const session = await cashflows.createCompetitionPaymentSession(
         totalAmount,
@@ -12356,78 +12411,81 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
     }
   });
 
-  // ====== WINNERS ADMIN ENDPOINTS ======
-  app.get("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const { dateFrom, dateTo } = req.query;
-
-      let query = db
-        .select()
-        .from(winners)
-        .leftJoin(users, eq(users.id, winners.userId))
-        .leftJoin(competitions, eq(competitions.id, winners.competitionId));
-
-      // Apply filters
-      const conditions = [];
-
-      // Date from
-      if (dateFrom) {
-        conditions.push(gte(winners.createdAt, new Date(dateFrom)));
-      }
-
-      // Date to
-      if (dateTo) {
-        const endDate = new Date(dateTo);
-        endDate.setHours(23, 59, 59, 999);
-        conditions.push(lte(winners.createdAt, endDate));
-      }
-
-      // If any conditions exist → add to query
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions));
-      }
-
-      // Order newest first
-      const allWinners = await query.orderBy(desc(winners.createdAt));
-
-      // Transform shape to match frontend
-      const result = allWinners.map((row) => ({
-        winners: {
-          id: row.winners.id,
-          userId: row.winners.userId,
-          competitionId: row.winners.competitionId,
-          prizeDescription: row.winners.prizeDescription,
-          prizeValue: row.winners.prizeValue,
-          imageUrl: row.winners.imageUrl,
-          isShowcase: row.winners.isShowcase,
-          createdAt: row.winners.createdAt,
-        },
-        users: row.users
-          ? {
-              id: row.users.id,
-              firstName: row.users.firstName,
-              lastName: row.users.lastName,
-              email: row.users.email,
-            }
-          : null,
-        competitions: row.competitions
-          ? {
-              id: row.competitions.id,
-              title: row.competitions.title,
-            }
-          : null,
-      }));
-
-      res.json(result);
-    } catch (error) {
-      console.error("Error fetching winners for admin:", error);
-      res.status(500).json({ message: "Failed to fetch winners" });
-    }
-  });
-
-  app.post("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
+ // ====== WINNERS ADMIN ENDPOINTS ======
+app.get("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
   try {
-    const { firstName, lastName, competitionId, prizeDescription, prizeValue, imageUrl } = req.body;
+    const { dateFrom, dateTo } = req.query;
+
+    let query = db
+      .select()
+      .from(winners)
+      .leftJoin(users, eq(users.id, winners.userId))
+      .leftJoin(competitions, eq(competitions.id, winners.competitionId));
+
+    // Apply filters
+    const conditions = [];
+
+    // Date from
+    if (dateFrom) {
+      conditions.push(gte(winners.createdAt, new Date(dateFrom)));
+    }
+
+    // Date to
+    if (dateTo) {
+      const endDate = new Date(dateTo);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(winners.createdAt, endDate));
+    }
+
+    // If any conditions exist → add to query
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    // Order newest first
+    const allWinners = await query.orderBy(desc(winners.createdAt));
+
+    // Transform shape to match frontend
+    const result = allWinners.map((row) => ({
+      winners: {
+        id: row.winners.id,
+        userId: row.winners.userId,
+        competitionId: row.winners.competitionId,
+        prizeDescription: row.winners.prizeDescription,
+        prizeValue: row.winners.prizeValue,
+        imageUrl: row.winners.imageUrl,
+        isShowcase: row.winners.isShowcase,
+        createdAt: row.winners.createdAt,
+      },
+      users: row.users
+        ? {
+            id: row.users.id,
+            firstName: row.users.firstName,
+            lastName: row.users.lastName,
+            email: row.users.email,
+          }
+        : null,
+      competitions: row.competitions
+        ? {
+            id: row.competitions.id,
+            title: row.competitions.title,
+          }
+        : null,
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error fetching winners for admin:", error);
+    res.status(500).json({ message: "Failed to fetch winners" });
+  }
+});
+
+app.post("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { firstName, lastName, competitionId, prizeDescription, prizeValue, imageUrl, createdAt } = req.body;
+
+    console.log("Received request body:", req.body); // Debug log
+    console.log("Received createdAt:", createdAt); // Debug log
 
     // Validate required fields
     if (!firstName || !lastName || !prizeDescription || !prizeValue) {
@@ -12442,13 +12500,11 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
     
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-    // Check if user already exists with this email
     let user = await db.query.users.findFirst({
       where: (u, { eq }) => eq(u.email, tempEmail),
     });
 
     if (!user) {
-      // Create new user
       const newUser = await db.insert(users).values({
         firstName,
         lastName,
@@ -12463,7 +12519,18 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
       user = newUser[0];
     }
 
-    // Step 2: Create the winner linked to the user
+    // Step 2: Prepare winner data with custom date
+    let customDate: Date | undefined = undefined;
+    
+    if (createdAt) {
+      const parsedDate = new Date(createdAt);
+      if (!isNaN(parsedDate.getTime())) {
+        customDate = parsedDate;
+        console.log("Using custom date:", customDate);
+      }
+    }
+
+    // Create winner with the custom date
     const winner = await storage.createWinner({
       userId: user.id,
       competitionId: competitionId || null,
@@ -12471,7 +12538,10 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
       prizeValue,
       imageUrl: imageUrl || null,
       isShowcase: true,
+      createdAt: customDate, // This will be passed to the storage function
     });
+
+    console.log("Winner created with date:", winner.createdAt);
 
     res.json(winner);
   } catch (error) {
@@ -12480,77 +12550,81 @@ app.delete("/api/saved-bank-accounts/:id", isAuthenticated, async (req: any, res
   }
 });
 
-  app.patch(
-    "/api/admin/winners/:id",
-    isAuthenticated,
-    isAdmin,
-    async (req, res) => {
-      try {
-        const { id } = req.params;
-        const {
-          userId,
-          competitionId,
-          prizeDescription,
-          prizeValue,
-          imageUrl,
-          isShowcase,
-        } = req.body;
+app.patch(
+  "/api/admin/winners/:id",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        userId,
+        competitionId,
+        prizeDescription,
+        prizeValue,
+        imageUrl,
+        isShowcase,
+        createdAt,
+      } = req.body;
 
-        const existingWinner = await storage.getWinner(id);
-        if (!existingWinner) {
-          return res.status(404).json({ message: "Winner not found" });
-        }
-
-        const updateData: any = {};
-        if (userId !== undefined) updateData.userId = userId;
-        if (competitionId !== undefined)
-          updateData.competitionId =
-            competitionId === null || competitionId === ""
-              ? null
-              : competitionId;
-        if (prizeDescription !== undefined)
-          updateData.prizeDescription = prizeDescription;
-        if (prizeValue !== undefined) updateData.prizeValue = prizeValue;
-        if (imageUrl !== undefined)
-          updateData.imageUrl =
-            imageUrl === null || imageUrl === "" ? null : imageUrl;
-        if (isShowcase !== undefined) updateData.isShowcase = !!isShowcase; // Use isShowcase (not is_showcase)
-        // console.log('PATCH winner request:', {
-        //   id,
-        //   body: req.body,
-        //   isShowcase: req.body.isShowcase,
-        //   typeofIsShowcase: typeof req.body.isShowcase
-        // });
-        const updatedWinner = await storage.updateWinner(id, updateData);
-        res.json(updatedWinner);
-      } catch (error) {
-        console.error("Error updating winner:", error);
-        res.status(500).json({ message: "Failed to update winner" });
+      const existingWinner = await storage.getWinner(id);
+      if (!existingWinner) {
+        return res.status(404).json({ message: "Winner not found" });
       }
-    }
-  );
 
-  app.delete(
-    "/api/admin/winners/:id",
-    isAuthenticated,
-    isAdmin,
-    async (req, res) => {
-      try {
-        const { id } = req.params;
-
-        const existingWinner = await storage.getWinner(id);
-        if (!existingWinner) {
-          return res.status(404).json({ message: "Winner not found" });
+      const updateData: any = {};
+      if (userId !== undefined) updateData.userId = userId;
+      if (competitionId !== undefined)
+        updateData.competitionId =
+          competitionId === null || competitionId === ""
+            ? null
+            : competitionId;
+      if (prizeDescription !== undefined)
+        updateData.prizeDescription = prizeDescription;
+      if (prizeValue !== undefined) updateData.prizeValue = prizeValue;
+      if (imageUrl !== undefined)
+        updateData.imageUrl =
+          imageUrl === null || imageUrl === "" ? null : imageUrl;
+      if (isShowcase !== undefined) updateData.isShowcase = !!isShowcase;
+      
+      // Handle createdAt update
+      if (createdAt !== undefined) {
+        const customDate = new Date(createdAt);
+        if (!isNaN(customDate.getTime())) {
+          updateData.createdAt = customDate;
         }
-
-        await storage.deleteWinner(id);
-        res.json({ message: "Winner deleted successfully" });
-      } catch (error) {
-        console.error("Error deleting winner:", error);
-        res.status(500).json({ message: "Failed to delete winner" });
       }
+
+      const updatedWinner = await storage.updateWinner(id, updateData);
+      res.json(updatedWinner);
+    } catch (error) {
+      console.error("Error updating winner:", error);
+      res.status(500).json({ message: "Failed to update winner" });
     }
-  );
+  }
+);
+
+app.delete(
+  "/api/admin/winners/:id",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const existingWinner = await storage.getWinner(id);
+      if (!existingWinner) {
+        return res.status(404).json({ message: "Winner not found" });
+      }
+
+      await storage.deleteWinner(id);
+      res.json({ message: "Winner deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting winner:", error);
+      res.status(500).json({ message: "Failed to delete winner" });
+    }
+  }
+);
 
   app.post("/api/seed-competitions", async (req, res) => {
     try {
@@ -19479,6 +19553,17 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
 
       if (useInstaplay) {
         const totalAmount = Number(order.totalAmount);
+         // ✅ MINIMUM PURCHASE VALIDATION FOR INSTANT PLAY
+      const MINIMUM_PURCHASE = 3; // £3 minimum
+      if (totalAmount < MINIMUM_PURCHASE) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum purchase is £${MINIMUM_PURCHASE}. Your total is £${totalAmount.toFixed(2)}. Please add more plays.`,
+          minimumAmount: MINIMUM_PURCHASE,
+          currentAmount: totalAmount,
+          code: 'MINIMUM_PURCHASE_REQUIRED'
+        });
+      }
         const session = await cashflows.createCompetitionPaymentSession(totalAmount, {
           orderId, competitionId: order.competitionId, userId,
           quantity: order.quantity.toString(), paymentType: "instant_play", gameType: "slot",

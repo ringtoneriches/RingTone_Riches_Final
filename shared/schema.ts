@@ -584,7 +584,7 @@ export const winners = pgTable("winners", {
   prizeValue: text("prize_value").notNull(),
   imageUrl: text("image_url"),
   isShowcase: boolean("is_showcase").default(false).notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

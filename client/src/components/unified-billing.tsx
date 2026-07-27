@@ -27,6 +27,33 @@ interface UnifiedBillingProps {
   wheelType?: string;
 }
 
+// Add this helper function at the top of your billing component or in a separate utils file
+
+const MINIMUM_PURCHASE_AMOUNT = 3; // £3 minimum for all instant play purchases
+const MINIMUM_PURCHASE_MESSAGE = `Minimum purchase is £${MINIMUM_PURCHASE_AMOUNT}. Please add more plays.`;
+
+export const validateMinimumPurchase = (totalAmount: number, paymentType: string): { valid: boolean; message?: string; minimumAmount: number; currentAmount: number } => {
+  // Only validate for instant play (card payments)
+  if (paymentType === 'instaplay' && totalAmount < MINIMUM_PURCHASE_AMOUNT) {
+    return {
+      valid: false,
+      message: `Minimum purchase is £${MINIMUM_PURCHASE_AMOUNT}. Your total is £${totalAmount.toFixed(2)}. Please add more plays.`,
+      minimumAmount: MINIMUM_PURCHASE_AMOUNT,
+      currentAmount: totalAmount
+    };
+  }
+  
+  // For wallet/points payments, no minimum restriction
+  return {
+    valid: true,
+    minimumAmount: MINIMUM_PURCHASE_AMOUNT,
+    currentAmount: totalAmount
+  };
+};
+
+// Export constants for use in components
+export const MIN_PURCHASE = MINIMUM_PURCHASE_AMOUNT;
+
 export default function UnifiedBilling({ orderId, orderType, wheelType }: UnifiedBillingProps) {
   const [, setLocation] = useLocation();
   const [selectedMethods, setSelectedMethods] = useState({ walletBalance: false, ringtonePoints: false, instaplay: false });
@@ -232,16 +259,60 @@ console.log(competition)
     },
   });
 
-  const handleConfirmPayment = () => {
-    if (!orderId) { toast({ title: "Error", description: "Invalid order ID.", variant: "destructive" }); return; }
-    if (!agreeToTerms) { toast({ title: "Terms Not Accepted", description: "Please agree to terms and conditions.", variant: "destructive" }); return; }
-    if (!hasSelectedMethod) { toast({ title: "Select Payment Method", description: "Please select a payment method.", variant: "destructive" }); return; }
-    if (isInstantCompetition && selectedMethods.ringtonePoints) { toast({ title: "Invalid Payment Method", description: "Ringtone Points cannot be used for competitions.", variant: "destructive" }); return; }
-    if (selectedMethods.instaplay) { setIsProcessing(true); processPaymentMutation.mutate({ useInstaplay: true }); return; }
-    if (remainingAmount > 0) { setShowTopUpModal(true); return; }
+  
+
+const handleConfirmPayment = () => {
+  if (!orderId) {
+    toast({ title: "Error", description: "Invalid order ID.", variant: "destructive" });
+    return;
+  }
+  if (!agreeToTerms) {
+    toast({ title: "Terms Not Accepted", description: "Please agree to terms and conditions.", variant: "destructive" });
+    return;
+  }
+  if (!hasSelectedMethod) {
+    toast({ title: "Select Payment Method", description: "Please select a payment method.", variant: "destructive" });
+    return;
+  }
+  if (isInstantCompetition && selectedMethods.ringtonePoints) {
+    toast({ title: "Invalid Payment Method", description: "Ringtone Points cannot be used for competitions.", variant: "destructive" });
+    return;
+  }
+
+  // ✅ ADD MINIMUM PURCHASE VALIDATION FOR INSTANT PLAY
+  if (selectedMethods.instaplay) {
+    const validation = validateMinimumPurchase(totalAmount, 'instaplay');
+    if (!validation.valid) {
+      toast({
+        variant: "destructive",
+        title: `Minimum £${validation.minimumAmount} Purchase Required`,
+        description: validation.message,
+        duration: 6000,
+      });
+      return;
+    }
+  }
+
+  if (selectedMethods.instaplay) {
     setIsProcessing(true);
-    processPaymentMutation.mutate({ useWalletBalance: selectedMethods.walletBalance, useRingtonePoints: selectedMethods.ringtonePoints, walletAmount: walletUsed, pointsAmount: pointsUsed, pointsNeeded });
-  };
+    processPaymentMutation.mutate({ useInstaplay: true });
+    return;
+  }
+
+  if (remainingAmount > 0) {
+    setShowTopUpModal(true);
+    return;
+  }
+
+  setIsProcessing(true);
+  processPaymentMutation.mutate({
+    useWalletBalance: selectedMethods.walletBalance,
+    useRingtonePoints: selectedMethods.ringtonePoints,
+    walletAmount: walletUsed,
+    pointsAmount: pointsUsed,
+    pointsNeeded
+  });
+};
 
   useEffect(() => {
     const pending = localStorage.getItem("pendingInstaplayOrder");
@@ -539,26 +610,67 @@ const prizeVal = getPrizeValue();
                 </div>
               </div>
 
-              {/* INSTANT PLAY */}
-              {isGame && (
-                <div onClick={() => handleMethodToggle("instaplay")} data-testid="checkbox-instaplay"
-                  style={{ padding: "13px 16px", borderRadius: 12, border: `2px solid ${selectedMethods.instaplay ? "#00CFFF" : "rgba(255,255,255,0.1)"}`, background: selectedMethods.instaplay ? "rgba(0,207,255,0.06)" : "rgba(255,255,255,0.02)", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, transition: "all 0.18s" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(0,207,255,0.1)", border: "1px solid rgba(0,207,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Zap style={{ width: 20, height: 20, color: "#00CFFF" }} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>Instant Play</span>
-                      <div style={{ padding: "1px 8px", borderRadius: 20, fontSize: 7.5, fontWeight: 900, background: "rgba(0,207,255,0.1)", border: "1px solid rgba(0,207,255,0.25)", color: "#00CFFF", letterSpacing: "0.08em" }}>FAST &amp; INSTANT</div>
-                    </div>
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>Pay directly with card • No wallet top-up needed</div>
-                    {selectedMethods.instaplay && <div style={{ fontSize: 9.5, color: "#00CFFF", marginTop: 2 }}>✓ Pay £{totalAmount.toFixed(2)} now and play instantly</div>}
-                  </div>
-                  <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${selectedMethods.instaplay ? "#00CFFF" : "rgba(255,255,255,0.25)"}`, background: selectedMethods.instaplay ? "#00CFFF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {selectedMethods.instaplay && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#000" }} />}
-                  </div>
-                </div>
-              )}
+             {/* INSTANT PLAY - Updated with minimum purchase indicator */}
+{isGame && (
+  <div 
+    onClick={() => handleMethodToggle("instaplay")} 
+    data-testid="checkbox-instaplay"
+    style={{ 
+      padding: "13px 16px", 
+      borderRadius: 12, 
+      border: `2px solid ${selectedMethods.instaplay ? "#00CFFF" : "rgba(255,255,255,0.1)"}`, 
+      background: selectedMethods.instaplay ? "rgba(0,207,255,0.06)" : "rgba(255,255,255,0.02)", 
+      cursor: "pointer", 
+      display: "flex", 
+      alignItems: "center", 
+      gap: 14, 
+      transition: "all 0.18s" 
+    }}
+  >
+    <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(0,207,255,0.1)", border: "1px solid rgba(0,207,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <Zap style={{ width: 20, height: 20, color: "#00CFFF" }} />
+    </div>
+    <div style={{ flex: 1 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>Instant Play</span>
+        <div style={{ padding: "1px 8px", borderRadius: 20, fontSize: 7.5, fontWeight: 900, background: "rgba(0,207,255,0.1)", border: "1px solid rgba(0,207,255,0.25)", color: "#00CFFF", letterSpacing: "0.08em" }}>
+          FAST & INSTANT
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
+        Pay directly with card • No wallet top-up needed
+      </div>
+      
+      {/* ✅ MINIMUM PURCHASE INDICATOR */}
+      {selectedMethods.instaplay && totalAmount < MIN_PURCHASE ? (
+        <div style={{ fontSize: 9.5, color: "#FF9500", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
+          <AlertCircle style={{ width: 12, height: 12 }} />
+          Minimum £{MIN_PURCHASE} required • Current: £{totalAmount.toFixed(2)}
+        </div>
+      ) : selectedMethods.instaplay && (
+        <div style={{ fontSize: 9.5, color: "#00E676", marginTop: 2 }}>
+          ✓ Pay £{totalAmount.toFixed(2)} now and play instantly
+        </div>
+      )}
+      
+      {!selectedMethods.instaplay && totalAmount > 0 && totalAmount < MIN_PURCHASE && (
+        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", marginTop: 1 }}>
+          Minimum £{MIN_PURCHASE} for Instant Play
+        </div>
+      )}
+    </div>
+    
+    {/* Radio circle */}
+    <div style={{ 
+      width: 20, height: 20, borderRadius: "50%", 
+      border: `2px solid ${selectedMethods.instaplay ? "#00CFFF" : "rgba(255,255,255,0.25)"}`, 
+      background: selectedMethods.instaplay ? "#00CFFF" : "transparent", 
+      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 
+    }}>
+      {selectedMethods.instaplay && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#000" }} />}
+    </div>
+  </div>
+)}
 
               {/* Insufficient funds warning */}
               {hasSelectedMethod && !selectedMethods.instaplay && remainingAmount > 0 && (
@@ -583,53 +695,84 @@ const prizeVal = getPrizeValue();
             </label>
           </div>
 
-          {/* ACTIVATE ENTRY CTA */}
-          <div>
-            <button onClick={handleConfirmPayment} disabled={isProcessing || !agreeToTerms || !hasSelectedMethod}
-              data-testid="button-checkout" className="ub-cta"
-              style={{
-                width: "100%", padding: "17px 24px", borderRadius: 14, border: "none",
-                fontSize: 16, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em",
-                cursor: (isProcessing || !agreeToTerms || !hasSelectedMethod) ? "not-allowed" : "pointer",
-                background: (isProcessing || !agreeToTerms || !hasSelectedMethod)
-                  ? "rgba(255,255,255,0.05)"
-                  : selectedMethods.instaplay
-                    ? "linear-gradient(135deg,#00B4CC,#0070F3,#00B4CC)"
-                    : `linear-gradient(135deg,#FFE066 0%,${GOLD} 25%,${AMBER} 55%,${GOLD} 80%,#FFE066 100%)`,
-                backgroundSize: "250% 100%",
-                color: (isProcessing || !agreeToTerms || !hasSelectedMethod) ? "rgba(255,255,255,0.2)" : "#000",
-                boxShadow: (isProcessing || !agreeToTerms || !hasSelectedMethod) ? "none" : `0 0 40px rgba(255,185,0,0.45), 0 8px 30px rgba(255,140,0,0.3)`,
-                animation: (isProcessing || !agreeToTerms || !hasSelectedMethod) ? "none" : "ub-plasma 3s ease infinite",
-                position: "relative", overflow: "hidden",
-              }}>
-              {(!isProcessing && agreeToTerms && hasSelectedMethod) && (
-                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(105deg,transparent 25%,rgba(255,255,255,0.3) 50%,transparent 75%)", animation: "ub-shimmer 2s ease-in-out infinite" }} />
-              )}
-              <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-                {isProcessing ? (
-                  <><div style={{ width: 20, height: 20, border: "2px solid rgba(0,0,0,0.3)", borderTopColor: "transparent", borderRadius: "50%", animation: "ub-spin 0.7s linear infinite" }} />PROCESSING...</>
-                ) : selectedMethods.instaplay ? (
-                  <><Zap style={{ width: 20, height: 20 }} />PAY WITH INSTAPLAY — £{totalAmount.toFixed(2)}</>
-                ) : remainingAmount > 0 ? (
-                  <><Lock style={{ width: 20, height: 20 }} />TOP UP REQUIRED — £{remainingAmount.toFixed(2)}</>
-                ) : (
-                  <><Zap style={{ width: 20, height: 20 }} />ACTIVATE ENTRY — £{totalAmount.toFixed(2)}</>
-                )}
-              </span>
-            </button>
+          {/* ACTIVATE ENTRY CTA - Updated */}
+<div>
+  <button 
+    onClick={handleConfirmPayment} 
+    disabled={isProcessing || !agreeToTerms || !hasSelectedMethod}
+    data-testid="button-checkout" 
+    className="ub-cta"
+    style={{
+      width: "100%", padding: "17px 24px", borderRadius: 14, border: "none",
+      fontSize: 16, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em",
+      cursor: (isProcessing || !agreeToTerms || !hasSelectedMethod) ? "not-allowed" : "pointer",
+      background: (isProcessing || !agreeToTerms || !hasSelectedMethod)
+        ? "rgba(255,255,255,0.05)"
+        : selectedMethods.instaplay && totalAmount < MIN_PURCHASE
+          ? "rgba(255,122,0,0.2)"
+          : selectedMethods.instaplay
+            ? "linear-gradient(135deg,#00B4CC,#0070F3,#00B4CC)"
+            : `linear-gradient(135deg,#FFE066 0%,${GOLD} 25%,${AMBER} 55%,${GOLD} 80%,#FFE066 100%)`,
+      backgroundSize: "250% 100%",
+      color: (isProcessing || !agreeToTerms || !hasSelectedMethod) 
+        ? "rgba(255,255,255,0.2)" 
+        : selectedMethods.instaplay && totalAmount < MIN_PURCHASE
+          ? "#FF9500"
+          : "#000",
+      boxShadow: (isProcessing || !agreeToTerms || !hasSelectedMethod || (selectedMethods.instaplay && totalAmount < MIN_PURCHASE)) 
+        ? "none" 
+        : `0 0 40px rgba(255,185,0,0.45), 0 8px 30px rgba(255,140,0,0.3)`,
+      animation: (isProcessing || !agreeToTerms || !hasSelectedMethod || (selectedMethods.instaplay && totalAmount < MIN_PURCHASE)) 
+        ? "none" 
+        : "ub-plasma 3s ease infinite",
+      position: "relative", overflow: "hidden",
+    }}>
+    {(!isProcessing && agreeToTerms && hasSelectedMethod && !(selectedMethods.instaplay && totalAmount < MIN_PURCHASE)) && (
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(105deg,transparent 25%,rgba(255,255,255,0.3) 50%,transparent 75%)", animation: "ub-shimmer 2s ease-in-out infinite" }} />
+    )}
+    <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+      {isProcessing ? (
+        <><div style={{ width: 20, height: 20, border: "2px solid rgba(0,0,0,0.3)", borderTopColor: "transparent", borderRadius: "50%", animation: "ub-spin 0.7s linear infinite" }} />PROCESSING...</>
+      ) : selectedMethods.instaplay && totalAmount < MIN_PURCHASE ? (
+        <><AlertCircle style={{ width: 20, height: 20 }} />MINIMUM £{MIN_PURCHASE} REQUIRED</>
+      ) : selectedMethods.instaplay ? (
+        <><Zap style={{ width: 20, height: 20 }} />PAY WITH INSTAPLAY — £{totalAmount.toFixed(2)}</>
+      ) : remainingAmount > 0 ? (
+        <><Lock style={{ width: 20, height: 20 }} />TOP UP REQUIRED — £{remainingAmount.toFixed(2)}</>
+      ) : (
+        <><Zap style={{ width: 20, height: 20 }} />ACTIVATE ENTRY — £{totalAmount.toFixed(2)}</>
+      )}
+    </span>
+  </button>
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <Lock style={{ width: 10, height: 10, color: "rgba(255,185,0,0.45)" }} />
-                <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.14em" }}>Safe. Secure. Encrypted.</span>
-              </div>
-              <div style={{ width: 3, height: 3, borderRadius: "50%", background: "rgba(255,255,255,0.15)" }} />
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <Shield style={{ width: 10, height: 10, color: "rgba(255,185,0,0.45)" }} />
-                <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.14em" }}>256-Bit SSL Protection</span>
-              </div>
-            </div>
-          </div>
+  {/* Show minimum purchase note under button */}
+  {selectedMethods.instaplay && totalAmount < MIN_PURCHASE && (
+    <div style={{ 
+      marginTop: 8, 
+      padding: "8px 12px", 
+      borderRadius: 8, 
+      background: "rgba(255,122,0,0.1)", 
+      border: "1px solid rgba(255,122,0,0.2)",
+      textAlign: "center",
+      fontSize: 11,
+      color: "#FF9500"
+    }}>
+      Add {Math.ceil((MIN_PURCHASE - totalAmount) / (totalAmount / (order?.quantity || 1)))} more play(s) to reach £{MIN_PURCHASE} minimum
+    </div>
+  )}
+
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 12 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+      <Lock style={{ width: 10, height: 10, color: "rgba(255,185,0,0.45)" }} />
+      <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.14em" }}>Safe. Secure. Encrypted.</span>
+    </div>
+    <div style={{ width: 3, height: 3, borderRadius: "50%", background: "rgba(255,255,255,0.15)" }} />
+    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+      <Shield style={{ width: 10, height: 10, color: "rgba(255,185,0,0.45)" }} />
+      <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.14em" }}>256-Bit SSL Protection</span>
+    </div>
+  </div>
+</div>
         </div>
 
         {/* ── RIGHT SIDEBAR ── */}

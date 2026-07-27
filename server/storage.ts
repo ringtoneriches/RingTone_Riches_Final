@@ -482,7 +482,6 @@ async getUserRingtonePoints(userId: string): Promise<number> {
     const [created] = await db.insert(transactions).values(transaction).returning();
     return created;
   }
-
 // storage.ts or wherever your storage object is defined
 async getUserTransactions(userId: string): Promise<Transaction[]> {
   const userTransactions = await db
@@ -514,7 +513,7 @@ async getUserTransactions(userId: string): Promise<Transaction[]> {
 
 
 
-  // Winner operations
+// Winner operations
 async getRecentWinners(limit?: number, showcaseOnly = false): Promise<Winner[]> {
   try {
     let query = db
@@ -578,34 +577,35 @@ async getWinner(id: string): Promise<Winner | undefined> {
   return winner;
 }
 
-async createWinner(winner: Omit<Winner, "id" | "createdAt">): Promise<Winner> {
+// FIXED: Allow custom createdAt
+async createWinner(winner: Omit<Winner, "id" | "createdAt"> & { createdAt?: Date }): Promise<Winner> {
+  const now = new Date();
   const [created] = await db.insert(winners).values({
     ...winner,
-    createdAt: new Date(),
+    // Use provided createdAt or default to now
+    createdAt: winner.createdAt || now,
   }).returning();
   return created;
 }
 
+// FIXED: Allow updating createdAt as well
 async updateWinner(
   id: string,
-  data: Partial<Omit<Winner, 'id' | 'createdAt'>>
+  data: Partial<Omit<Winner, 'id'>> // Allow updating createdAt too
 ): Promise<Winner> {
-  // Remove the column renaming - keep isShowcase as is
-  const dbData: any = { ...data, updatedAt: new Date() };
+  const dbData: any = { 
+    ...data, 
+    updatedAt: new Date() 
+  };
 
   const [updated] = await db
     .update(winners)
     .set(dbData)
     .where(eq(winners.id, id))
     .returning();
-// console.log('updateWinner data:', {
-//   id,
-//   data,
-//   isShowcaseInData: data.isShowcase
-// });
+
   return updated;
 }
-
 
 async deleteWinner(id: string): Promise<void> {
   await db

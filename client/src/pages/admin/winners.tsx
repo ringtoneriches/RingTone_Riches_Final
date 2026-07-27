@@ -27,6 +27,7 @@ interface WinnerFormData {
   prizeValue: string;
   imageUrl: string;
   isShowcase: boolean;
+  createdAt: string;
 }
 
 interface Competition {
@@ -41,6 +42,13 @@ export default function AdminAddWinner() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   
+  // Get current datetime in local format for the input
+  const getCurrentDateTime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16);
+  };
+
   const [form, setForm] = useState<WinnerFormData>({
     firstName: "",
     lastName: "",
@@ -49,6 +57,7 @@ export default function AdminAddWinner() {
     prizeValue: "",
     imageUrl: "",
     isShowcase: true,
+    createdAt: getCurrentDateTime(),
   });
 
   // Fetch competitions for selection
@@ -116,6 +125,7 @@ export default function AdminAddWinner() {
         prizeDescription,
         prizeValue,
         imageUrl: form.imageUrl || null,
+        createdAt: form.createdAt ? new Date(form.createdAt).toISOString() : undefined,
       };
 
       console.log("Creating winner with payload:", payload);
@@ -152,6 +162,7 @@ export default function AdminAddWinner() {
         prizeValue: "",
         imageUrl: "",
         isShowcase: true,
+        createdAt: getCurrentDateTime(),
       });
       
       // Navigate back to winners list
@@ -168,6 +179,24 @@ export default function AdminAddWinner() {
     }
   };
 
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return "";
+    }
+  };
+
   return (
     <AdminLayout>
       <div className="max-w-4xl mx-auto space-y-6 p-4 sm:p-6">
@@ -176,7 +205,7 @@ export default function AdminAddWinner() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">Add New Winner</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Add a winner to display in the showcase
+              Add a winner to display in the showcase with full date/time control
             </p>
           </div>
         </div>
@@ -338,6 +367,103 @@ export default function AdminAddWinner() {
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Date & Time Control */}
+            <div>
+              <h2 className="text-lg font-semibold mb-4">Date & Time Control</h2>
+              <div className="space-y-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <Info className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-900">
+                        Set custom date and time
+                      </p>
+                      <p className="text-xs text-amber-700 mt-1">
+                        By default, the current date/time will be used. You can change this to backdate or predate winners.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="createdAt" className="text-sm font-medium">
+                    Winner Date & Time
+                  </Label>
+                  <Input
+                    id="createdAt"
+                    type="datetime-local"
+                    value={form.createdAt}
+                    onChange={(e) =>
+                      setForm({ ...form, createdAt: e.target.value })
+                    }
+                    className="w-full"
+                  />
+                  {form.createdAt && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatDate(form.createdAt)}
+                    </p>
+                  )}
+                </div>
+
+                {/* Quick Action Buttons for Common Dates */}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const date = new Date();
+                      date.setDate(date.getDate() - 1);
+                      date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+                      setForm({ ...form, createdAt: date.toISOString().slice(0, 16) });
+                    }}
+                  >
+                    Yesterday
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const date = new Date();
+                      date.setDate(date.getDate() - 7);
+                      date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+                      setForm({ ...form, createdAt: date.toISOString().slice(0, 16) });
+                    }}
+                  >
+                    Last Week
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const date = new Date();
+                      date.setMonth(date.getMonth() - 1);
+                      date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+                      setForm({ ...form, createdAt: date.toISOString().slice(0, 16) });
+                    }}
+                  >
+                    Last Month
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const now = new Date();
+                      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                      setForm({ ...form, createdAt: now.toISOString().slice(0, 16) });
+                    }}
+                  >
+                    Now
+                  </Button>
                 </div>
               </div>
             </div>

@@ -340,13 +340,7 @@ export default function Home() {
     <div className="absolute -inset-full w-full h-full skew-x-[-20deg] bg-gradient-to-r from-transparent via-amber-400/30 to-transparent group-hover:translate-x-full duration-700" />
   </div>
   
-  <div className="relative flex items-center justify-center gap-2.5">
-    <Sparkles className="w-4 h-4 text-amber-400/70 group-hover:text-amber-400 group-hover:scale-110 transition-all duration-300" />
-    <span className="text-amber-400/80 group-hover:text-amber-400 font-semibold tracking-wide transition-colors duration-300">
-      Explore Games
-    </span>
-    <ChevronRight className="w-4 h-4 text-amber-400/50 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all duration-300" />
-  </div>
+ 
 </Button>
                 </div>
               </div>

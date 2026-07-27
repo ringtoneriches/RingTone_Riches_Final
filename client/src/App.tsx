@@ -199,9 +199,9 @@ function Router() {
 }
 
 function App() {
-  useEffect(() => {
-    initSocialBrowserWarning();
-  }, []);
+  // useEffect(() => {
+  //   initSocialBrowserWarning();
+  // }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -215,8 +215,6 @@ function AppWithMaintenance() {
   const { user, isLoading: authLoading } = useAuth();
   const [showSourceModal, setShowSourceModal] = useState(false);
   const [hasCheckedSource, setHasCheckedSource] = useState(false);
-  const [showBalloonPop, setShowBalloonPop] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
   // Fetch maintenance status with polling every 3 seconds
   const { data: maintenanceData, isLoading: maintenanceLoading } = useQuery({
@@ -242,26 +240,6 @@ function AppWithMaintenance() {
     staleTime: 0
   });
 
-  // Handle balloon pop visibility
-  useEffect(() => {
-    const hasSeenBalloon = localStorage.getItem('hasSeenBalloonPop');
-    
-    const isAdminRoute = location.startsWith("/admin");
-    const isAuthRoute = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password"]
-      .some(route => location.startsWith(route));
-    
-    // Don't show balloon during maintenance
-    if (!hasSeenBalloon && !isAdminRoute && !isAuthRoute && !maintenanceLoading && !maintenanceData?.maintenanceMode) {
-      const timer = setTimeout(() => {
-        setShowBalloonPop(true);
-        setIsLoading(false);
-      }, 300);
-      
-      return () => clearTimeout(timer);
-    } else {
-      setIsLoading(false);
-    }
-  }, [location, maintenanceLoading, maintenanceData?.maintenanceMode]);
 
   // Show registration source modal
   useEffect(() => {
@@ -347,10 +325,7 @@ function AppWithMaintenance() {
     );
   }
 
-  const handleBalloonComplete = () => {
-    setShowBalloonPop(false);
-    localStorage.setItem('hasSeenBalloonPop', 'true');
-  };
+
 
   // Check if we should show maintenance banner for admin
   const showMaintenanceBanner = maintenanceData?.maintenanceMode && isAdminUser;
@@ -369,14 +344,7 @@ function AppWithMaintenance() {
       
       {/* Adjust top padding based on maintenance banner */}
       <div className={showMaintenanceBanner ? "pt-20 lg:pt-28" : "pt-20 lg:pt-24"}/>
-      
-      {/* Only show balloon pop when not in maintenance */}
-      {!maintenanceData?.maintenanceMode && (
-        <PremiumBalloonPop
-          isOpen={showBalloonPop}
-          onComplete={handleBalloonComplete}
-        />
-      )}
+    
 
       <Router />
       
