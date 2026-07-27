@@ -314,34 +314,7 @@ export default function Home() {
                     <Play className="w-4 h-4 mr-2" />
                     Start Winning Now
                   </Button>
-                  <Button 
-  variant="ghost"
-  onClick={() => {
-    const section = document.getElementById("games-section");
-    if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
-  }}
-  className="group relative h-12 px-8 text-sm font-bold rounded-full transition-all duration-300 w-full sm:w-auto overflow-hidden"
-  style={{ 
-    background: 'rgba(212, 175, 55, 0.08)',
-    border: '1px solid rgba(212, 175, 55, 0.35)',
-    backdropFilter: 'blur(4px)',
-  }}
-  data-testid="button-hero-browse"
->
-  {/* Subtle gold glow on hover */}
-  <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-    style={{ 
-      background: 'radial-gradient(circle at center, rgba(212,175,55,0.2), transparent 70%)',
-    }}
-  />
-  
-  {/* Shimmer line on hover */}
-  <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none overflow-hidden">
-    <div className="absolute -inset-full w-full h-full skew-x-[-20deg] bg-gradient-to-r from-transparent via-amber-400/30 to-transparent group-hover:translate-x-full duration-700" />
-  </div>
-  
- 
-</Button>
+                 
                 </div>
               </div>
 
