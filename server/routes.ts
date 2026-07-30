@@ -84,7 +84,11 @@ import {
   slotUsage,
   slotPrizeWins,
   ipBlocklist,
-  suspiciousActivities
+  suspiciousActivities,
+  guestPrizes,
+  guestOrders,
+  guestTickets,
+  guestPendingPayments
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { db } from "./db";
@@ -4206,6 +4210,15 @@ res.json({
         console.warn("Duplicate instant play transaction blocked:", pendingPaymentId);
         return;
       }
+
+       // Get user before any changes
+    const [user] = await transaction
+      .select()
+      .from(users)
+      .where(eq(users.id, userId));
+
+    const oldBalance = Number(user.balance) || 0;
+    const newBalance = oldBalance; 
   
       // Get the order details
       const [order] = await transaction
@@ -4292,8 +4305,19 @@ res.json({
         generatedTickets.push(ticket);
       }
   
-      return { order, competition, generatedTickets };
-    };
+        // 🆕 RECORD AUDIT LOG FOR INSTANT PLAY PURCHASE
+    await transaction.insert(auditLogs).values({
+      userId: userId,
+      action: `${gameType}_purchase`,
+      description: `Instant play purchase: ${quantity} ${gameType} game(s) for "${competition?.title || gameType}" - £${amount.toFixed(2)}`,
+      startBalance: oldBalance,
+      endBalance: newBalance,
+      competitionId: competition?.id || null,
+      createdAt: new Date(),
+    });
+
+    return { order, competition, generatedTickets };
+  };
   
     try {
       let result;
@@ -4408,7 +4432,7 @@ res.json({
   
 
   // Ticket purchase route
- app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
+app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const {
@@ -4441,43 +4465,7 @@ res.json({
       const compType = competition.type;
       
       // -------------------------
-      // 2️⃣ CHECK 24-HOUR TICKET CAP (INSTANT ONLY)
-      // -------------------------
-      if (compType === "instant") {
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        
-        // Count tickets purchased by this user in the last 24 hours for this competition
-        const recentTickets = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(tickets)
-          .where(
-            and(
-              eq(tickets.userId, userId),
-              eq(tickets.competitionId, competitionId),
-              sql`${tickets.createdAt} >= ${twentyFourHoursAgo}`
-            )
-          );
-        
-        const ticketsInLast24h = Number(recentTickets[0]?.count || 0);
-        const DAILY_TICKET_CAP = 250;
-        
-        // Check if this purchase would exceed the cap
-        if (ticketsInLast24h + quantity > DAILY_TICKET_CAP) {
-          const remainingTickets = DAILY_TICKET_CAP - ticketsInLast24h;
-          return res.status(400).json({
-            message: `Daily ticket limit reached. You can only purchase ${remainingTickets} more ticket(s) in the next 24 hours. You've already purchased ${ticketsInLast24h} tickets for this competition.`,
-            dailyLimit: DAILY_TICKET_CAP,
-            purchasedToday: ticketsInLast24h,
-            remainingToday: Math.max(0, remainingTickets)
-          });
-        }
-      }
-      
-      // Total already includes discount if applied
-      const totalAmount = Number(order.totalAmount);
-  
-      // -------------------------
-      // 3️⃣ SOLD-OUT LOGIC (INSTANT ONLY)
+      // 2️⃣ SOLD-OUT LOGIC (INSTANT ONLY)
       // -------------------------
       if (compType === "instant") {
         const soldTickets = Number(competition.soldTickets || 0);
@@ -4494,9 +4482,12 @@ res.json({
           });
         }
       }
+      
+      // Total already includes discount if applied
+      const totalAmount = Number(order.totalAmount);
   
       // -------------------------
-      // 4️⃣ USER BALANCE + POINTS
+      // 3️⃣ USER BALANCE + POINTS
       // -------------------------
       const [user] = await db.select().from(users).where(eq(users.id, userId));
       const walletBalance = Number(user?.balance || "0");
@@ -4510,7 +4501,7 @@ res.json({
       const paymentBreakdown = [];
   
       // -------------------------
-      // 5️⃣ APPLY WALLET
+      // 4️⃣ APPLY WALLET
       // -------------------------
       if (useWalletBalance) {
         walletUsed = Math.min(walletBalance, remainingAmount);
@@ -4540,7 +4531,7 @@ res.json({
       }
   
       // -------------------------
-      // 6️⃣ APPLY POINTS - SIMPLE, NO DISCOUNT LOGIC
+      // 5️⃣ APPLY POINTS - SIMPLE, NO DISCOUNT LOGIC
       // -------------------------
       if (useRingtonePoints && remainingAmount > 0) {
         const availablePoints = ringtonePoints;
@@ -4595,7 +4586,7 @@ res.json({
       }
   
       // -------------------------
-      // 7️⃣ CASHFLOWS NEEDED?
+      // 6️⃣ CASHFLOWS NEEDED?
       // -------------------------
       if (remainingAmount > 0) {
         cashflowsUsed = remainingAmount;
@@ -4660,7 +4651,7 @@ res.json({
       }
   
       // -------------------------
-      // 8️⃣ FULLY PAID — COMPLETE ORDER
+      // 7️⃣ FULLY PAID — COMPLETE ORDER
       // -------------------------
       let paymentMethodText = "Discount";
       if (walletUsed > 0 && pointsUsed > 0) {
@@ -4738,10 +4729,8 @@ res.json({
         });
       }
   
-    
-  
       // -------------------------
-      // 9️⃣ AUDIT LOG
+      // 8️⃣ AUDIT LOG
       // -------------------------
       const startBalance = Number(user.balance) + Number(totalAmount);
       const endBalance = Number(user.balance);
@@ -4768,7 +4757,7 @@ res.json({
       });
   
       // -------------------------
-      // 🔟 RESPONSE
+      // 9️⃣ RESPONSE
       // -------------------------
       return res.json({
         success: true,
@@ -5219,7 +5208,7 @@ res.json({
   });
 
   // 🛡️ CRITICAL SAFEGUARD: In-memory cooldown tracker
-  const spinCooldowns = new Map<string, number>();
+  const spinCooldowns = new Map<processWalletTopupstring, number>();
   const SPIN_COOLDOWN_MS = 3000; // 3 seconds minimum between spins
 
   // SERVER-SIDE: Spin wheel play route with probability and max wins enforcement
@@ -9826,9 +9815,8 @@ app.get(
         // Update user balance
         // Update user balance using storage abstraction
         const user = await storage.getUser(userId);
-        const newBalance = (
-          parseFloat(user?.balance || "0") + parseFloat(amount)
-        ).toString();
+         const oldBalance = parseFloat(user?.balance || "0");
+          const newBalance = oldBalance + parseFloat(amount);
         await storage.updateUserBalance(userId, newBalance);
 
         // Insert a transaction record using storage abstraction
@@ -9838,6 +9826,16 @@ app.get(
           amount: amount.toString(),
           description: `Direct top-up of £${amount}`,
         });
+
+         // 🆕 RECORD AUDIT LOG FOR DIRECT TOP-UP
+      await db.insert(auditLogs).values({
+        userId: userId,
+        action: "wallet_topup",
+        description: `wallet top-up of £${amount}`,
+        startBalance: oldBalance,
+        endBalance: newBalance,
+        createdAt: new Date(),
+      });
 
         return res.json({ success: true });
       }
@@ -14482,10 +14480,29 @@ const popCooldowns = new Map<string, number>();
   const POP_COOLDOWN_MS = 3000;
 
 
-app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
+app.post("/api/play-pop", async (req: any, res) => {
   try {
-    const userId = req.user.id;
-    const { orderId, competitionId } = req.body;
+    // ============================================
+    // 1. DETERMINE IF AUTHENTICATED OR GUEST
+    // ============================================
+    const userId = req.user?.id;
+    const { 
+      orderId, 
+      competitionId,
+      isGuest = false,
+      guestEmail,
+      guestName,
+      guestPhone
+    } = req.body;
+
+    const isGuestMode = isGuest || !userId;
+
+    if (!isGuestMode && !userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
 
     if (!orderId || !competitionId) {
       return res.status(400).json({
@@ -14494,8 +14511,13 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // Cooldown
-    const cooldownKey = `${userId}-${orderId}`;
+    // ============================================
+    // 2. COOLDOWN CHECK
+    // ============================================
+    const cooldownKey = isGuestMode 
+      ? `guest-${guestEmail || 'unknown'}-${orderId}`
+      : `${userId}-${orderId}`;
+    
     const lastPlayTime = popCooldowns.get(cooldownKey) || 0;
     const now = Date.now();
 
@@ -14505,49 +14527,116 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
         message: "Please wait a moment before playing again",
       });
     }
-
     popCooldowns.set(cooldownKey, now);
 
-    // Verify order
-    const order = await storage.getOrder(orderId);
+    // ============================================
+    // 3. GET ORDER & VERIFY
+    // ============================================
+    let order;
+    let guestOrder;
+    let user;
+    let playsRemaining = 0;
+    let tickets: any[] = [];
+    let nextTicket: any = null;
 
-    if (
-      !order ||
-      order.userId !== userId ||
-      order.status !== "completed"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid pop game purchase found",
-      });
+    if (isGuestMode) {
+      // --- GUEST MODE: Get from guest tables ---
+      [guestOrder] = await db
+        .select()
+        .from(guestOrders)
+        .where(eq(guestOrders.id, orderId))
+        .where(eq(guestOrders.status, "completed"));
+
+      if (!guestOrder) {
+        return res.status(400).json({
+          success: false,
+          message: "No valid pop game purchase found",
+        });
+      }
+
+      // Get guest tickets
+      tickets = await db
+        .select()
+        .from(guestTickets)
+        .where(eq(guestTickets.guestOrderId, orderId));
+
+      const playedTickets = tickets.filter(t => 
+        t.isWinner !== null && t.isWinner !== undefined
+      );
+      playsRemaining = tickets.length - playedTickets.length;
+
+      if (playsRemaining <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No plays remaining in this purchase",
+        });
+      }
+
+      // Get next unplayed ticket
+      [nextTicket] = await db
+        .select()
+        .from(guestTickets)
+        .where(eq(guestTickets.guestOrderId, orderId))
+        .where(sql`${guestTickets.isWinner} IS NULL`)
+        .limit(1);
+
+      if (!nextTicket) {
+        return res.status(400).json({
+          success: false,
+          message: "No unplayed tickets found",
+        });
+      }
+
+      // Create a fake user object for guest
+      user = {
+        id: `guest-${guestOrder.id}`,
+        balance: "0",
+        ringtonePoints: 0,
+        email: guestOrder.guestEmail,
+        firstName: guestOrder.firstName || guestOrder.guestName,
+        lastName: guestOrder.lastName || "",
+      };
+
+    } else {
+      // --- AUTHENTICATED MODE: Get from user tables ---
+      order = await storage.getOrder(orderId);
+
+      if (!order || order.userId !== userId || order.status !== "completed") {
+        return res.status(400).json({
+          success: false,
+          message: "No valid pop game purchase found",
+        });
+      }
+
+      // Check remaining plays
+      const playsUsed = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(popUsage)
+        .where(eq(popUsage.orderId, orderId));
+
+      const usedCount = Number(playsUsed[0]?.count || 0);
+      playsRemaining = order.quantity - usedCount;
+
+      if (playsRemaining <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No plays remaining in this purchase",
+        });
+      }
+
+      user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
     }
 
-    // Check remaining plays
-    const playsUsed = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(popUsage)
-      .where(eq(popUsage.orderId, orderId));
-
-    const usedCount = Number(playsUsed[0]?.count || 0);
-    const playsRemaining = order.quantity - usedCount;
-
-    if (playsRemaining <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No plays remaining in this purchase",
-      });
-    }
-
-    const user = await storage.getUser(userId);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // Load config
+    // ============================================
+    // 4. LOAD POP CONFIG
+    // ============================================
     const [config] = await db
       .select()
       .from(gamePopConfig)
@@ -14562,11 +14651,9 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // Segments
-    const segments =
-      (popConfig as any).segments ||
-      (popConfig as any).prizes ||
-      DEFAULT_POP_CONFIG.segments;
+    const segments = (popConfig as any).segments || 
+                     (popConfig as any).prizes || 
+                     DEFAULT_POP_CONFIG.segments;
 
     if (!segments || segments.length === 0) {
       return res.status(400).json({
@@ -14575,7 +14662,9 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // ✅ FILTER 1: Only ACTIVE segments (isActive !== false)
+    // ============================================
+    // 5. FILTER ACTIVE SEGMENTS & CHECK MAX WINS
+    // ============================================
     const activeSegments = segments.filter((seg: any) => seg.isActive !== false);
 
     if (activeSegments.length === 0) {
@@ -14585,23 +14674,41 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // Count wins INCLUDING try_again
-    const counts = await db
-      .select({
-        prizeId: popWins.prizeId,
-        count: sql<number>`count(*)`,
-      })
-      .from(popWins)
-      .where(
-        sql`(${popWins.isWin} = true OR ${popWins.rewardType} = 'try_again')`
-      )
-      .groupBy(popWins.prizeId);
+    // Get win counts based on mode
+    let segmentWinCounts = new Map<string, number>();
 
-    const segmentWinCounts = new Map<string, number>();
+    if (isGuestMode) {
+      // Guest mode: count from guestPrizes
+      const counts = await db
+        .select({
+          prizeId: guestPrizes.prizeType,
+          count: sql<number>`count(*)`,
+        })
+        .from(guestPrizes)
+        .where(eq(guestPrizes.competitionId, competitionId))
+        .where(sql`${guestPrizes.winStatus} = 'pending' OR ${guestPrizes.winStatus} = 'transferred'`)
+        .groupBy(guestPrizes.prizeType);
 
-    counts.forEach((c) => {
-      segmentWinCounts.set(c.prizeId, Number(c.count));
-    });
+      counts.forEach((c) => {
+        segmentWinCounts.set(c.prizeId, Number(c.count));
+      });
+    } else {
+      // Authenticated mode: count from popWins
+      const counts = await db
+        .select({
+          prizeId: popWins.prizeId,
+          count: sql<number>`count(*)`,
+        })
+        .from(popWins)
+        .where(
+          sql`(${popWins.isWin} = true OR ${popWins.rewardType} = 'try_again')`
+        )
+        .groupBy(popWins.prizeId);
+
+      counts.forEach((c) => {
+        segmentWinCounts.set(c.prizeId, Number(c.count));
+      });
+    }
 
     // Initialize missing segments
     activeSegments.forEach((seg: any) => {
@@ -14611,70 +14718,50 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
     });
 
     // Find lose segment
-    const loseSegment = activeSegments.find(
-      (s: any) => s.rewardType === "lose"
-    );
+    const loseSegment = activeSegments.find((s: any) => s.rewardType === "lose");
 
-    // ✅ FILTER 2: Eligible segments based on maxWins
+    // Filter eligible segments based on maxWins
     const eligibleSegments = activeSegments.filter((seg: any) => {
       const wins = segmentWinCounts.get(seg.id) ?? 0;
+      const maxWins = seg.maxWins !== undefined && 
+                      seg.maxWins !== null && 
+                      seg.maxWins !== "" 
+                        ? Number(seg.maxWins) 
+                        : null;
 
-      // Convert maxWins safely
-      const maxWins =
-        seg.maxWins !== undefined &&
-        seg.maxWins !== null &&
-        seg.maxWins !== ""
-          ? Number(seg.maxWins)
-          : null;
-
-      // Unlimited prize
-      if (maxWins === null) {
-        return true;
-      }
-
-      // Prize exhausted
+      if (maxWins === null) return true;
       if (wins >= maxWins) {
-        console.log(
-          `Prize ${seg.label || seg.id} exhausted (${wins}/${maxWins})`
-        );
+        console.log(`Prize ${seg.label || seg.id} exhausted (${wins}/${maxWins})`);
         return false;
       }
-
       return true;
     });
 
-    // Fallback
-    let finalEligible;
-
-    if (eligibleSegments.length > 0) {
-      finalEligible = eligibleSegments;
-    } else {
-      finalEligible = loseSegment ? [loseSegment] : activeSegments;
-    }
+    let finalEligible = eligibleSegments.length > 0 
+      ? eligibleSegments 
+      : (loseSegment ? [loseSegment] : activeSegments);
 
     if (!finalEligible.length) {
       console.error("No eligible segments found");
-
       return res.status(500).json({
         success: false,
         message: "Game configuration error",
       });
     }
 
-    // Weighted random selection
+    // ============================================
+    // 6. WEIGHTED RANDOM SELECTION
+    // ============================================
     const totalProbability = finalEligible.reduce(
-      (sum: number, seg: any) =>
-        sum + Number(seg.probability || 0),
+      (sum: number, seg: any) => sum + Number(seg.probability || 0),
       0
     );
 
     let random = Math.random() * totalProbability;
-
     let selectedSegment = finalEligible[0];
 
     for (const seg of finalEligible) {
       random -= Number(seg.probability || 0);
-
       if (random <= 0) {
         selectedSegment = seg;
         break;
@@ -14688,68 +14775,35 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    // RESULT LOGIC
+    // ============================================
+    // 7. RESULT LOGIC
+    // ============================================
     let balloonValues: number[] = [];
-
     const rewardType = selectedSegment.rewardType || "lose";
-
-    const prizeName =
-      selectedSegment.label ||
-      selectedSegment.prizeName ||
-      (selectedSegment.rewardType === "physical"
-        ? selectedSegment.rewardValue
-        : null) ||
-      "Prize";
-
+    const prizeName = selectedSegment.label ||
+                      selectedSegment.prizeName ||
+                      (selectedSegment.rewardType === "physical" ? selectedSegment.rewardValue : null) ||
+                      "Prize";
     let rewardValue = "0";
-
     const isRPrize = rewardType === "try_again";
-
-    const isWin =
-      rewardType === "cash" ||
-      rewardType === "points" ||
-      rewardType === "physical";
+    const isWin = rewardType === "cash" || rewardType === "points" || rewardType === "physical";
 
     // TRY AGAIN
     if (isRPrize) {
-      const cashSegments = activeSegments.filter(
-        (s: any) => s.rewardType === "cash"
-      );
-
-      const vals = cashSegments.map((s: any) =>
-        parseFloat(s.rewardValue?.toString() || "1")
-      );
-
-      let val1 =
-        vals[Math.floor(Math.random() * vals.length)] || 1;
-
-      let val2 =
-        vals.length > 1
-          ? vals[Math.floor(Math.random() * vals.length)]
-          : val1 + 1;
-
+      const cashSegments = activeSegments.filter((s: any) => s.rewardType === "cash");
+      const vals = cashSegments.map((s: any) => parseFloat(s.rewardValue?.toString() || "1"));
+      let val1 = vals[Math.floor(Math.random() * vals.length)] || 1;
+      let val2 = vals.length > 1 ? vals[Math.floor(Math.random() * vals.length)] : val1 + 1;
       while (val2 === val1 && vals.length > 1) {
-        val2 =
-          vals[Math.floor(Math.random() * vals.length)];
+        val2 = vals[Math.floor(Math.random() * vals.length)];
       }
-
       const rPos = Math.floor(Math.random() * 3);
-
-      balloonValues =
-        rPos === 0
-          ? [-1, val1, val2]
-          : rPos === 1
-          ? [val1, -1, val2]
-          : [val1, val2, -1];
-
+      balloonValues = rPos === 0 ? [-1, val1, val2] : rPos === 1 ? [val1, -1, val2] : [val1, val2, -1];
       rewardValue = "0";
     }
-
     // WIN
     else if (isWin) {
-      const value = parseFloat(
-        selectedSegment.rewardValue?.toString() || "0"
-      );
+      const value = parseFloat(selectedSegment.rewardValue?.toString() || "0");
 
       if (rewardType === "physical") {
         balloonValues = [0, 0, 0];
@@ -14759,224 +14813,290 @@ app.post("/api/play-pop", isAuthenticated, async (req: any, res) => {
         rewardValue = value.toString();
       }
 
-      // CASH
-      if (rewardType === "cash") {
-        const finalBalance =
-          parseFloat(user.balance || "0") + value;
-
-        await storage.updateUserBalance(
-          userId,
-          finalBalance.toFixed(2)
-        );
-
-        await storage.createTransaction({
-          userId,
-          type: "prize",
-          amount: value.toFixed(2),
-          description: `Ringtone Pop Win - £${value}`,
+      // --- HANDLE WINNING BASED ON MODE ---
+      if (isGuestMode) {
+        // GUEST WIN: Store in guestPrizes (no real money credited yet)
+        // Just store the win record
+        await db.insert(guestPrizes).values({
+          guestOrderId: guestOrder.id,
+          ticketId: nextTicket.id,
+          guestEmail: guestOrder.guestEmail,
+          guestName: guestOrder.guestName,
+          guestPhone: guestOrder.guestPhone,
+          competitionId: competitionId,
+          prizeAmount: value.toString(),
+          prizeType: rewardType,
+          prizeDetails: {
+            segmentId: selectedSegment.id,
+            prizeName: prizeName,
+            balloonValues: balloonValues,
+            rewardType: rewardType,
+            rewardValue: value,
+            isPhysical: rewardType === "physical"
+          },
+          winStatus: 'pending',
+          createdAt: new Date()
         });
 
-       const maxWins = selectedSegment.maxWins !== undefined && 
-                  selectedSegment.maxWins !== null && 
-                  selectedSegment.maxWins !== "" 
-                    ? Number(selectedSegment.maxWins) 
-                    : null;
-  
-  await syncPopPrize(
-    competitionId,
-    selectedSegment.id || "unknown",
-    prizeName,
-    value,
-    'cash',  // ← ADD rewardType
-    maxWins
-  );
-}
+        // Update guest order total winnings
+        const allPrizes = await db
+          .select()
+          .from(guestPrizes)
+          .where(eq(guestPrizes.guestOrderId, orderId));
 
-      // POINTS
-      else if (rewardType === "points") {
-        const pointsValue = Math.floor(value);
-
-        const newPoints =
-          (user.ringtonePoints || 0) + pointsValue;
-
-        await db
-          .update(users)
+        const totalPrize = allPrizes.reduce((sum, p) => sum + Number(p.prizeAmount), 0);
+        
+        await db.update(guestOrders)
           .set({
-            ringtonePoints: newPoints,
+            isWinner: true,
+            prizeAmount: totalPrize.toString(),
+            updatedAt: new Date()
           })
-          .where(eq(users.id, userId));
+          .where(eq(guestOrders.id, orderId));
 
-        await storage.createTransaction({
+        // Send win notification for guest
+        if (guestOrder.guestEmail) {
+          sendGuestWinNotification(guestOrder.guestEmail, {
+            amount: value,
+            type: rewardType,
+            gameType: 'pop',
+            orderReference: guestOrder.orderReference,
+            totalWinnings: totalPrize
+          }).catch(err => console.error("Failed to send guest win notification:", err));
+        }
+
+        // Add to guest winners table (optional)
+        await db.insert(guestWinners).values({
+          guestOrderId: guestOrder.id,
+          guestEmail: guestOrder.guestEmail,
+          guestName: guestOrder.guestName,
+          competitionId: competitionId,
+          prizeDescription: rewardType === "cash" ? `£${value} Cash` : 
+                           rewardType === "points" ? `${value} Points` : 
+                           `Physical Prize: ${prizeName}`,
+          prizeValue: rewardType === "physical" ? prizeName : value.toString(),
+          imageUrl: selectedSegment.imageUrl || null,
+          createdAt: new Date()
+        }).catch(() => {}); // Ignore if table doesn't exist
+
+      } else {
+        // AUTHENTICATED WIN: Credit real money/points
+        // CASH
+        if (rewardType === "cash") {
+          const finalBalance = parseFloat(user.balance || "0") + value;
+          await storage.updateUserBalance(userId, finalBalance.toFixed(2));
+          await storage.createTransaction({
+            userId,
+            type: "prize",
+            amount: value.toFixed(2),
+            description: `Ringtone Pop Win - £${value}`,
+          });
+
+          const maxWins = selectedSegment.maxWins !== undefined && 
+                    selectedSegment.maxWins !== null && 
+                    selectedSegment.maxWins !== "" 
+                      ? Number(selectedSegment.maxWins) 
+                      : null;
+          await syncPopPrize(competitionId, selectedSegment.id || "unknown", prizeName, value, 'cash', maxWins);
+        }
+        // POINTS
+        else if (rewardType === "points") {
+          const pointsValue = Math.floor(value);
+          const newPoints = (user.ringtonePoints || 0) + pointsValue;
+          await db.update(users)
+            .set({ ringtonePoints: newPoints })
+            .where(eq(users.id, userId));
+          await storage.createTransaction({
+            userId,
+            type: "ringtone_points",
+            amount: pointsValue.toString(),
+            description: `Ringtone Pop Win - ${pointsValue} pts`,
+          });
+
+          const maxWins = selectedSegment.maxWins !== undefined && 
+                    selectedSegment.maxWins !== null && 
+                    selectedSegment.maxWins !== "" 
+                      ? Number(selectedSegment.maxWins) 
+                      : null;
+          await syncPopPrize(competitionId, selectedSegment.id || "unknown", prizeName, pointsValue, 'points', maxWins);
+        }
+        // PHYSICAL
+        else if (rewardType === "physical") {
+          await storage.createTransaction({
+            userId,
+            type: "prize",
+            amount: "0",
+            description: `Physical Prize Won: ${prizeName} - Contact support`,
+          });
+
+          const maxWins = selectedSegment.maxWins !== undefined && 
+                    selectedSegment.maxWins !== null && 
+                    selectedSegment.maxWins !== "" 
+                      ? Number(selectedSegment.maxWins) 
+                      : null;
+          await syncPopPrize(competitionId, selectedSegment.id || "unknown", prizeName, 0, 'physical', maxWins);
+        }
+
+        // Winners table (authenticated)
+        let prizeDescriptionText = "";
+        let prizeValueText = "";
+
+        if (rewardType === "cash") {
+          prizeDescriptionText = "Ringtone Pop Win";
+          prizeValueText = `£${rewardValue} Cash`;
+        } else if (rewardType === "points") {
+          prizeDescriptionText = "Ringtone Pop Win";
+          prizeValueText = `${rewardValue} Points`;
+        } else if (rewardType === "physical") {
+          prizeDescriptionText = `Physical Prize: ${prizeName}`;
+          prizeValueText = prizeName;
+        }
+
+        await db.insert(winners).values({
           userId,
-          type: "ringtone_points",
-          amount: pointsValue.toString(),
-          description: `Ringtone Pop Win - ${pointsValue} pts`,
+          competitionId,
+          prizeDescription: prizeDescriptionText,
+          prizeValue: prizeValueText,
+          imageUrl: selectedSegment.imageUrl || null,
+          isShowcase: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         });
-
-         const maxWins = selectedSegment.maxWins !== undefined && 
-                  selectedSegment.maxWins !== null && 
-                  selectedSegment.maxWins !== "" 
-                    ? Number(selectedSegment.maxWins) 
-                    : null;
-  
-  await syncPopPrize(
-    competitionId,
-    selectedSegment.id || "unknown",
-    prizeName,
-    pointsValue,
-    'points',  // ← ADD rewardType
-    maxWins
-  );
-}
-
-      // PHYSICAL
-      else if (rewardType === "physical") {
-        await storage.createTransaction({
-          userId,
-          type: "prize",
-          amount: "0",
-          description: `Physical Prize Won: ${prizeName} - Contact support`,
-        });
-
-      const maxWins = selectedSegment.maxWins !== undefined && 
-                  selectedSegment.maxWins !== null && 
-                  selectedSegment.maxWins !== "" 
-                    ? Number(selectedSegment.maxWins) 
-                    : null;
-  
-  await syncPopPrize(
-    competitionId,
-    selectedSegment.id || "unknown",
-    prizeName,
-    0,
-    'physical',  // ← ADD rewardType
-    maxWins
-  );
-}
-
-      // Winners table
-      let prizeDescriptionText = "";
-      let prizeValueText = "";
-
-      if (rewardType === "cash") {
-        prizeDescriptionText = "Ringtone Pop Win";
-        prizeValueText = `£${rewardValue} Cash`;
-      } else if (rewardType === "points") {
-        prizeDescriptionText = "Ringtone Pop Win";
-        prizeValueText = `${rewardValue} Points`;
-      } else if (rewardType === "physical") {
-        prizeDescriptionText = `Physical Prize: ${prizeName}`;
-        prizeValueText = prizeName;
       }
-
-      await db.insert(winners).values({
-        userId,
-        competitionId,
-        prizeDescription: prizeDescriptionText,
-        prizeValue: prizeValueText,
-        imageUrl: selectedSegment.imageUrl || null,
-        isShowcase: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
     }
-
     // LOSE
     else {
       const cashVals = activeSegments
         .filter((s: any) => s.rewardType === "cash")
-        .map((s: any) =>
-          parseFloat(s.rewardValue?.toString() || "1")
-        );
+        .map((s: any) => parseFloat(s.rewardValue?.toString() || "1"));
 
       if (cashVals.length >= 2) {
-        let v1 =
-          cashVals[Math.floor(Math.random() * cashVals.length)];
-
-        let v2 =
-          cashVals[Math.floor(Math.random() * cashVals.length)];
-
-        let v3 =
-          cashVals[Math.floor(Math.random() * cashVals.length)];
-
+        let v1 = cashVals[Math.floor(Math.random() * cashVals.length)];
+        let v2 = cashVals[Math.floor(Math.random() * cashVals.length)];
+        let v3 = cashVals[Math.floor(Math.random() * cashVals.length)];
         if (v1 === v2 && v2 === v3) {
           v3 = cashVals.find((v) => v !== v1) || v1 + 1;
         }
-
         balloonValues = [v1, v2, v3];
       } else {
         balloonValues = [1, 5, 10];
       }
     }
 
-    // SAVE USAGE
-    // try_again does NOT consume play
-    if (!isRPrize) {
-      await db.insert(popUsage).values({
+    // ============================================
+    // 8. SAVE RESULTS
+    // ============================================
+    if (isGuestMode) {
+      // Update guest ticket with result
+      await db.update(guestTickets)
+        .set({
+          isWinner: isWin,
+          prizeAmount: isWin ? rewardValue : "0",
+          prizeType: rewardType,
+          prizeDetails: {
+            segmentId: selectedSegment.id,
+            prizeName: prizeName,
+            balloonValues: balloonValues,
+            rewardType: rewardType,
+            rewardValue: rewardValue,
+            isPhysical: rewardType === "physical"
+          }
+        })
+        .where(eq(guestTickets.id, nextTicket.id));
+
+      // Calculate new plays remaining
+      const updatedTickets = await db
+        .select()
+        .from(guestTickets)
+        .where(eq(guestTickets.guestOrderId, orderId));
+      
+      const updatedPlayedTickets = updatedTickets.filter(t => 
+        t.isWinner !== null && t.isWinner !== undefined
+      );
+      const newPlaysRemaining = updatedTickets.length - updatedPlayedTickets.length;
+
+      // Get total winnings
+      const allPrizes = await db
+        .select()
+        .from(guestPrizes)
+        .where(eq(guestPrizes.guestOrderId, orderId));
+      
+      const totalWinnings = allPrizes.reduce((sum, p) => sum + Number(p.prizeAmount), 0);
+
+      // Response for guest
+      return res.json({
+        success: true,
+        isGuest: true,
+        isWinner: isWin,
+        prizeAmount: isWin ? rewardValue : "0",
+        prizeType: rewardType,
+        result: {
+          balloonValues: rewardType === "physical" ? [0, 0, 0] : balloonValues,
+          isWin,
+          isRPrize,
+          rewardType,
+          rewardValue: rewardType === "physical" ? prizeName : rewardValue,
+          prizeName: rewardType === "physical" ? prizeName : undefined,
+          prizeDescription: rewardType === "physical" ? selectedSegment.prizeDescription || selectedSegment.label : undefined,
+          isPhysical: rewardType === "physical",
+        },
+        playsRemaining: newPlaysRemaining,
+        totalTickets: updatedTickets.length,
+        ticketNumber: nextTicket.ticketNumber,
+        orderReference: guestOrder.orderReference,
+        guestEmail: guestOrder.guestEmail,
+        totalWinnings: totalWinnings,
+        hasUnclaimedWinnings: totalWinnings > 0,
+        message: isWin ? `🎉 Congratulations! You won ${rewardValue}!` : "Better luck next time!",
+        // Flag to show account creation prompt if won and no plays remaining
+        shouldCreateAccount: isWin && newPlaysRemaining === 0
+      });
+
+    } else {
+      // AUTHENTICATED: Save usage and win record
+      if (!isRPrize) {
+        await db.insert(popUsage).values({
+          orderId,
+          userId,
+          usedAt: new Date(),
+        });
+      }
+
+      await db.insert(popWins).values({
         orderId,
         userId,
-        usedAt: new Date(),
+        competitionId,
+        prizeId: selectedSegment.id || "none",
+        balloonValues,
+        prizeName,
+        rewardType,
+        rewardValue,
+        isWin,
+        wonAt: new Date(),
+      });
+
+      const newPlaysRemaining = isRPrize ? playsRemaining : playsRemaining - 1;
+
+      // Response for authenticated user
+      return res.json({
+        success: true,
+        isGuest: false,
+        result: {
+          balloonValues: rewardType === "physical" ? [0, 0, 0] : balloonValues,
+          isWin,
+          isRPrize,
+          rewardType,
+          rewardValue: rewardType === "physical" ? selectedSegment.label || selectedSegment.prizeName : rewardValue,
+          prizeName: rewardType === "physical" ? selectedSegment.label || selectedSegment.prizeName : undefined,
+          prizeDescription: rewardType === "physical" ? selectedSegment.prizeDescription || selectedSegment.label : undefined,
+          isPhysical: rewardType === "physical",
+        },
+        playsRemaining: newPlaysRemaining,
       });
     }
 
-    // SAVE WIN RECORD
-    await db.insert(popWins).values({
-      orderId,
-      userId,
-      competitionId,
-      prizeId: selectedSegment.id || "none",
-      balloonValues,
-      prizeName,
-      rewardType,
-      rewardValue,
-      isWin,
-      wonAt: new Date(),
-    });
-
-    // Remaining plays
-    const newPlaysRemaining = isRPrize
-      ? playsRemaining
-      : playsRemaining - 1;
-
-    // Response
-    res.json({
-      success: true,
-      result: {
-        balloonValues:
-          rewardType === "physical"
-            ? [0, 0, 0]
-            : balloonValues,
-
-        isWin,
-        isRPrize,
-        rewardType,
-
-        rewardValue:
-          rewardType === "physical"
-            ? selectedSegment.label ||
-              selectedSegment.prizeName
-            : rewardValue,
-
-        prizeName:
-          rewardType === "physical"
-            ? selectedSegment.label ||
-              selectedSegment.prizeName
-            : undefined,
-
-        prizeDescription:
-          rewardType === "physical"
-            ? selectedSegment.prizeDescription ||
-              selectedSegment.label
-            : undefined,
-
-        isPhysical: rewardType === "physical",
-      },
-
-      playsRemaining: newPlaysRemaining,
-    });
   } catch (error) {
     console.error("Error playing pop game:", error);
-
     res.status(500).json({
       success: false,
       message: "Failed to play pop game",
@@ -18532,30 +18652,27 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
   });
 
 
-// CREATE GUEST ORDER
+// =============================================
+// 1. CREATE GUEST ORDER (with guest details)
+// =============================================
+
 app.post("/api/guest/create-order", async (req: any, res) => {
   try {
     const { 
-      guestName, 
-      guestEmail, 
-      guestPhone, 
+      firstName = '',      // Make optional with defaults
+      lastName = '',       // Make optional with defaults
+      email = '',          // Make optional with defaults
+      phone = '',          // Make optional with defaults
       competitionId, 
       gameType, 
-      quantity 
+      quantity = 1
     } = req.body;
 
-    // Validate required fields
-    if (!guestName || !guestEmail || !competitionId || !gameType || !quantity) {
+    // Only validate required fields for order creation
+    if (!competitionId || !gameType) {
       return res.status(400).json({ 
-        message: "Missing required fields" 
-      });
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(guestEmail)) {
-      return res.status(400).json({ 
-        message: "Invalid email address" 
+        success: false,
+        message: "Missing required fields: competitionId, gameType" 
       });
     }
 
@@ -18566,7 +18683,10 @@ app.post("/api/guest/create-order", async (req: any, res) => {
       .where(eq(competitions.id, competitionId));
 
     if (!competition) {
-      return res.status(404).json({ message: "Competition not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Competition not found" 
+      });
     }
 
     // Calculate total amount
@@ -18574,13 +18694,15 @@ app.post("/api/guest/create-order", async (req: any, res) => {
     const totalAmount = ticketPrice * quantity;
 
     // Generate order reference
-    const orderRef = `GSTR-${nanoid(8).toUpperCase()}`;
+    const orderRef = `GST-${nanoid(8).toUpperCase()}`;
 
-    // Create guest order
+    // Create guest order with whatever details we have (can be empty)
     const [guestOrder] = await db.insert(guestOrders).values({
-      guestName,
-      guestEmail,
-      guestPhone,
+      guestName: firstName && lastName ? `${firstName} ${lastName}`.trim() : 'Guest User',
+      guestEmail: email || `guest_${Date.now()}@temp.com`,
+      guestPhone: phone || '0000000000',
+      firstName: firstName || '',
+      lastName: lastName || '',
       competitionId,
       gameType,
       quantity,
@@ -18597,22 +18719,109 @@ app.post("/api/guest/create-order", async (req: any, res) => {
       orderId: guestOrder.id,
       orderReference: orderRef,
       totalAmount: totalAmount.toFixed(2),
+      firstName: firstName || '',
+      lastName: lastName || '',
+      email: email || '',
+      phone: phone || '',
+      competitionId,
+      gameType,
+      quantity,
       message: "Guest order created successfully"
     });
 
   } catch (error) {
     console.error("Error creating guest order:", error);
     res.status(500).json({ 
+      success: false,
       message: "Failed to create guest order",
       error: error.message 
     });
   }
 });
 
-// PROCESS GUEST PAYMENT (Instaplay)
+// =============================================
+// UPDATE GUEST ORDER DETAILS
+// =============================================
+
+app.put("/api/guest/update-details/:orderId", async (req: any, res) => {
+  try {
+    const { orderId } = req.params;
+    const { firstName, lastName, email, phone } = req.body;
+
+    // Validate required fields
+    if (!firstName || !lastName || !email || !phone) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "All fields are required: firstName, lastName, email, phone" 
+      });
+    }
+
+    // Validate email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid email address" 
+      });
+    }
+
+    // Check if order exists
+    const [existingOrder] = await db
+      .select()
+      .from(guestOrders)
+      .where(eq(guestOrders.id, orderId));
+
+    if (!existingOrder) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Guest order not found" 
+      });
+    }
+
+    // Update the guest order with details
+    const [updatedOrder] = await db
+      .update(guestOrders)
+      .set({
+        firstName,
+        lastName,
+        guestName: `${firstName} ${lastName}`.trim(),
+        guestEmail: email,
+        guestPhone: phone,
+        updatedAt: new Date()
+      })
+      .where(eq(guestOrders.id, orderId))
+      .returning();
+
+    res.json({ 
+      success: true, 
+      order: updatedOrder,
+      message: "Guest details updated successfully"
+    });
+
+  } catch (error) {
+    console.error("Error updating guest order:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to update guest details",
+      error: error.message 
+    });
+  }
+});
+
+// =============================================
+// 2. PROCESS GUEST PAYMENT (Modified instaplay)
+// =============================================
+
 app.post("/api/guest/process-payment", async (req: any, res) => {
   try {
     const { orderId } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Order ID is required" 
+      });
+    }
 
     // Get guest order
     const [guestOrder] = await db
@@ -18621,11 +18830,17 @@ app.post("/api/guest/process-payment", async (req: any, res) => {
       .where(eq(guestOrders.id, orderId));
 
     if (!guestOrder) {
-      return res.status(404).json({ message: "Guest order not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Guest order not found" 
+      });
     }
 
     if (guestOrder.status !== "pending") {
-      return res.status(400).json({ message: "Order already processed" });
+      return res.status(400).json({ 
+        success: false,
+        message: `Order already ${guestOrder.status}` 
+      });
     }
 
     // Create Cashflows payment session
@@ -18639,15 +18854,21 @@ app.post("/api/guest/process-payment", async (req: any, res) => {
         guestName: guestOrder.guestName,
         quantity: guestOrder.quantity.toString(),
         paymentType: 'guest_instant_play',
-        gameType: guestOrder.gameType
+        gameType: guestOrder.gameType,
+        firstName: guestOrder.firstName,
+        lastName: guestOrder.lastName,
+        phone: guestOrder.guestPhone
       }
     );
 
     if (!session.hostedPageUrl) {
-      return res.status(500).json({ message: "Failed to create payment session" });
+      return res.status(500).json({ 
+        success: false,
+        message: "Failed to create payment session" 
+      });
     }
 
-    // Create pending payment
+    // Create pending payment record
     await db.insert(guestPendingPayments).values({
       guestOrderId: guestOrder.id,
       paymentJobReference: session.paymentJobReference,
@@ -18658,6 +18879,9 @@ app.post("/api/guest/process-payment", async (req: any, res) => {
         quantity: guestOrder.quantity,
         guestEmail: guestOrder.guestEmail,
         guestName: guestOrder.guestName,
+        firstName: guestOrder.firstName,
+        lastName: guestOrder.lastName,
+        phone: guestOrder.guestPhone
       },
       status: 'pending',
       createdAt: new Date()
@@ -18667,19 +18891,25 @@ app.post("/api/guest/process-payment", async (req: any, res) => {
       success: true,
       redirectUrl: session.hostedPageUrl,
       sessionId: session.paymentJobReference,
+      orderId: guestOrder.id,
+      orderReference: guestOrder.orderReference,
       message: "Redirecting to payment..."
     });
 
   } catch (error) {
     console.error("Error processing guest payment:", error);
     res.status(500).json({ 
+      success: false,
       message: "Failed to process guest payment",
       error: error.message 
     });
   }
 });
 
-// GUEST PAYMENT WEBHOOK HANDLER
+// =============================================
+// 3. GUEST PAYMENT WEBHOOK (Same as before)
+// =============================================
+
 app.post("/api/guest/webhook", async (req, res) => {
   console.log("GUEST WEBHOOK HIT", req.body);
 
@@ -18743,7 +18973,10 @@ app.post("/api/guest/webhook", async (req, res) => {
   }
 });
 
-// Process guest order after successful payment
+// =============================================
+// 4. PROCESS GUEST ORDER AFTER PAYMENT
+// =============================================
+
 async function processGuestOrder(
   guestOrderId: string, 
   paymentRef: string, 
@@ -18795,7 +19028,7 @@ async function processGuestOrder(
         .where(eq(competitions.id, guestOrder.competitionId));
     }
 
-    // Generate tickets
+    // Generate GUEST tickets
     const ticketNumbers = [];
     for (let i = 0; i < guestOrder.quantity; i++) {
       let ticketNumber;
@@ -18809,6 +19042,12 @@ async function processGuestOrder(
         case 'spin':
           ticketNumber = `SPN-G-${nanoid(8).toUpperCase()}`;
           break;
+        case 'slot':
+          ticketNumber = `SLT-G-${nanoid(8).toUpperCase()}`;
+          break;
+        case 'plinko':
+          ticketNumber = `PLK-G-${nanoid(8).toUpperCase()}`;
+          break;
         default:
           ticketNumber = `GST-G-${nanoid(8).toUpperCase()}`;
       }
@@ -18817,7 +19056,7 @@ async function processGuestOrder(
         guestOrderId: guestOrder.id,
         ticketNumber,
         competitionId: guestOrder.competitionId,
-        isWinner: false,
+        isWinner: false, // Will be set when played
         createdAt: new Date(),
       }).returning();
 
@@ -18829,12 +19068,14 @@ async function processGuestOrder(
       .set({ ticketNumbers: JSON.stringify(ticketNumbers) })
       .where(eq(guestOrders.id, guestOrderId));
 
-    // Send confirmation email (non-blocking)
+    // Send confirmation email
     if (guestOrder.guestEmail) {
       sendGuestOrderConfirmation(guestOrder.guestEmail, {
         orderId: guestOrder.id,
         orderReference: guestOrder.orderReference,
         guestName: guestOrder.guestName,
+        firstName: guestOrder.firstName,
+        lastName: guestOrder.lastName,
         gameType: guestOrder.gameType,
         itemName: competition?.title || `${guestOrder.gameType} Game`,
         quantity: guestOrder.quantity,
@@ -18857,144 +19098,417 @@ async function processGuestOrder(
   });
 }
 
-// Email helper for guest orders
-async function sendGuestOrderConfirmation(
-  email: string, 
-  orderDetails: {
-    orderId: string;
-    orderReference: string;
-    guestName: string;
-    gameType: string;
-    itemName: string;
-    quantity: number;
-    totalAmount: string;
-    orderDate: string;
-    paymentMethod: string;
-    ticketNumbers: string[];
-  }
-) {
-  // Use your existing email service
+async function sendGuestOrderConfirmation(email: string, orderDetails: any) {
+  // Implement your email sending logic here
   // This is a placeholder - integrate with your email provider
   console.log("Sending guest order confirmation to:", email);
   console.log("Order details:", orderDetails);
   
-  // You can use your existing sendOrderConfirmationEmail function
-  // with a flag for guest orders
+  // Example using your existing email service:
+  // await sendEmail({
+  //   to: email,
+  //   subject: `Your Guest Order Confirmation - ${orderDetails.orderReference}`,
+  //   html: generateGuestOrderEmailHTML(orderDetails)
+  // });
 }
+// =============================================
+// 5. GET GUEST ORDER STATUS
+// =============================================
 
-// ADMIN: Get all guest orders
-app.get(
-  "/api/admin/guest-orders",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const { search, status, dateFrom, dateTo } = req.query;
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 30;
-      const offset = (page - 1) * limit;
-
-      let query = db
+app.get("/api/guest/order/:identifier", async (req: any, res) => {
+  try {
+    const { identifier } = req.params;
+    
+    let guestOrder;
+    
+    if (identifier.includes('-') && identifier.length === 36) {
+      [guestOrder] = await db
         .select()
         .from(guestOrders)
-        .orderBy(desc(guestOrders.createdAt));
+        .where(eq(guestOrders.id, identifier));
+    } else {
+      [guestOrder] = await db
+        .select()
+        .from(guestOrders)
+        .where(eq(guestOrders.orderReference, identifier));
+    }
 
-      // Apply filters
-      const conditions = [];
-      
-      if (status) {
-        conditions.push(eq(guestOrders.status, status as string));
-      }
-      
-      if (dateFrom) {
-        conditions.push(gte(guestOrders.createdAt, new Date(dateFrom as string)));
-      }
-      
-      if (dateTo) {
-        const endDate = new Date(dateTo as string);
-        endDate.setHours(23, 59, 59, 999);
-        conditions.push(lte(guestOrders.createdAt, endDate));
-      }
-
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions));
-      }
-
-      let allOrders = await query;
-
-      // Apply search filter
-      if (search) {
-        const searchTerm = (search as string).toLowerCase();
-        allOrders = allOrders.filter(order => 
-          order.guestName?.toLowerCase().includes(searchTerm) ||
-          order.guestEmail?.toLowerCase().includes(searchTerm) ||
-          order.orderReference?.toLowerCase().includes(searchTerm) ||
-          order.guestPhone?.toLowerCase().includes(searchTerm)
-        );
-      }
-
-      const total = allOrders.length;
-      const paginatedOrders = allOrders.slice(offset, offset + limit);
-
-      res.json({
-        orders: paginatedOrders,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-          hasMore: offset + limit < total
-        }
-      });
-
-    } catch (error) {
-      console.error("Error fetching guest orders:", error);
-      res.status(500).json({ 
-        message: "Failed to fetch guest orders",
-        error: error.message 
+    if (!guestOrder) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Guest order not found" 
       });
     }
-  }
-);
 
-// ADMIN: Get single guest order
-app.get(
-  "/api/admin/guest-orders/:id",
-  isAuthenticated,
-  isAdmin,
-  async (req: any, res) => {
-    try {
-      const { id } = req.params;
+    // Get tickets
+    const tickets = await db
+      .select()
+      .from(guestTickets)
+      .where(eq(guestTickets.guestOrderId, guestOrder.id));
 
-      const [order] = await db
-        .select()
-        .from(guestOrders)
-        .where(eq(guestOrders.id, id));
+    // Get prizes
+    const prizes = await db
+      .select()
+      .from(guestPrizes)
+      .where(eq(guestPrizes.guestOrderId, guestOrder.id));
 
-      if (!order) {
-        return res.status(404).json({ message: "Guest order not found" });
+    // Calculate stats
+    const playedTickets = tickets.filter(t => t.isWinner !== null && t.isWinner !== undefined);
+    const remainingPlays = tickets.length - playedTickets.length;
+    const totalWinnings = prizes.reduce((sum, p) => sum + Number(p.prizeAmount), 0);
+    const hasUnclaimedWinnings = prizes.some(p => p.winStatus === 'pending');
+
+    res.json({
+      success: true,
+      order: {
+        ...guestOrder,
+        firstName: guestOrder.firstName,
+        lastName: guestOrder.lastName,
+        fullName: guestOrder.guestName,
+        email: guestOrder.guestEmail,
+        phone: guestOrder.guestPhone,
+      },
+      tickets,
+      prizes,
+      stats: {
+        totalTickets: tickets.length,
+        playedCount: playedTickets.length,
+        remainingPlays: remainingPlays,
+        totalWinnings: totalWinnings,
+        hasUnclaimedWinnings: hasUnclaimedWinnings,
+        isComplete: remainingPlays === 0,
+        shouldCreateAccount: remainingPlays === 0 && totalWinnings > 0,
+        hasWinnings: totalWinnings > 0
+      },
+      // Include guest details for frontend
+      guest: {
+        firstName: guestOrder.firstName,
+        lastName: guestOrder.lastName,
+        email: guestOrder.guestEmail,
+        phone: guestOrder.guestPhone
       }
+    });
 
-      // Get tickets
-      const tickets = await db
-        .select()
-        .from(guestTickets)
-        .where(eq(guestTickets.guestOrderId, id));
+  } catch (error) {
+    console.error("Error fetching guest order:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch guest order",
+      error: error.message 
+    });
+  }
+});
 
-      res.json({
+// =============================================
+// 6. GET GUEST WINNINGS BY EMAIL
+// =============================================
+
+app.get("/api/guest/winnings/:email", async (req: any, res) => {
+  try {
+    const { email } = req.params;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required"
+      });
+    }
+
+    // Get all guest prizes for this email
+    const prizes = await db
+      .select()
+      .from(guestPrizes)
+      .where(eq(guestPrizes.guestEmail, email));
+
+    // Get unclaimed prizes
+    const unclaimedPrizes = prizes.filter(p => p.winStatus === 'pending');
+    const totalUnclaimed = unclaimedPrizes.reduce(
+      (sum, p) => sum + Number(p.prizeAmount), 
+      0
+    );
+
+    // Get guest orders
+    const orders = await db
+      .select()
+      .from(guestOrders)
+      .where(eq(guestOrders.guestEmail, email))
+      .orderBy(desc(guestOrders.createdAt));
+
+    // Group prizes by order
+    const prizesByOrder = orders.map(order => {
+      const orderPrizes = prizes.filter(p => p.guestOrderId === order.id);
+      return {
         order,
-        tickets
-      });
+        prizes: orderPrizes,
+        totalAmount: orderPrizes.reduce((sum, p) => sum + Number(p.prizeAmount), 0),
+        hasUnclaimed: orderPrizes.some(p => p.winStatus === 'pending')
+      };
+    });
 
-    } catch (error) {
-      console.error("Error fetching guest order:", error);
-      res.status(500).json({ 
-        message: "Failed to fetch guest order",
-        error: error.message 
+    res.json({
+      success: true,
+      prizes,
+      unclaimedPrizes,
+      totalUnclaimed,
+      orders: prizesByOrder,
+      hasWinnings: totalUnclaimed > 0,
+      prizeCount: prizes.length,
+      unclaimedCount: unclaimedPrizes.length,
+      message: totalUnclaimed > 0 
+        ? `You have £${totalUnclaimed} in unclaimed winnings!` 
+        : "No unclaimed winnings found."
+    });
+
+  } catch (error) {
+    console.error("Error fetching guest winnings:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch winnings",
+      error: error.message 
+    });
+  }
+});
+
+// =============================================
+// 7. TRANSFER GUEST WINNINGS TO USER ACCOUNT
+// =============================================
+
+app.post("/api/guest/transfer-winnings", async (req: any, res) => {
+  try {
+    const { 
+      email,
+      firstName,
+      lastName,
+      password,
+      phone,
+      acceptTerms = false
+    } = req.body;
+
+    // Validate required fields
+    if (!email || !firstName || !lastName || !password) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Missing required fields: email, firstName, lastName, password" 
       });
     }
+
+    if (!acceptTerms) {
+      return res.status(400).json({ 
+        success: false,
+        message: "You must accept the terms and conditions" 
+      });
+    }
+
+    // Check if user already exists
+    const [existingUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email));
+
+    if (existingUser) {
+      return res.status(400).json({ 
+        success: false,
+        message: "User already exists with this email. Please login instead." 
+      });
+    }
+
+    // Check if guest has unclaimed prizes
+    const unclaimedPrizes = await db
+      .select()
+      .from(guestPrizes)
+      .where(eq(guestPrizes.guestEmail, email))
+      .where(eq(guestPrizes.winStatus, 'pending'));
+
+    if (unclaimedPrizes.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: "No unclaimed prizes found for this email" 
+      });
+    }
+
+    const totalPrizeAmount = unclaimedPrizes.reduce(
+      (sum, p) => sum + Number(p.prizeAmount), 
+      0
+    );
+
+    // Create user account
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [newUser] = await db.insert(users).values({
+      firstName,
+      lastName,
+      email: email,
+      phoneNumber: phone || null,
+      password: hashedPassword,
+      role: 'user',
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+
+    // Transfer prizes in transaction
+    await db.transaction(async (tx) => {
+      // 1. Update guest orders - link to user
+      const orderIds = [...new Set(unclaimedPrizes.map(p => p.guestOrderId))];
+      for (const orderId of orderIds) {
+        await tx.update(guestOrders)
+          .set({ 
+            userId: newUser.id,
+            prizeClaimed: true,
+            prizeClaimedAt: new Date()
+          })
+          .where(eq(guestOrders.id, orderId));
+      }
+
+      // 2. Update guest prizes - mark as transferred
+      for (const prize of unclaimedPrizes) {
+        await tx.update(guestPrizes)
+          .set({
+            winStatus: 'transferred',
+            transferredToUserId: newUser.id,
+            transferredAt: new Date()
+          })
+          .where(eq(guestPrizes.id, prize.id));
+      }
+
+      // 3. Credit user's wallet
+      await tx.insert(walletTransactions).values({
+        userId: newUser.id,
+        amount: totalPrizeAmount,
+        type: 'credit',
+        description: `Guest winnings transferred (${unclaimedPrizes.length} prize${unclaimedPrizes.length > 1 ? 's' : ''}) from email: ${email}`,
+        status: 'completed',
+        createdAt: new Date()
+      });
+
+      // 4. Update user's wallet balance
+      const [wallet] = await tx
+        .select()
+        .from(wallets)
+        .where(eq(wallets.userId, newUser.id));
+
+      if (wallet) {
+        await tx.update(wallets)
+          .set({
+            balance: (Number(wallet.balance) + totalPrizeAmount).toString(),
+            updatedAt: new Date()
+          })
+          .where(eq(wallets.id, wallet.id));
+      } else {
+        await tx.insert(wallets).values({
+          userId: newUser.id,
+          balance: totalPrizeAmount.toString(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+      }
+
+      // 5. Create welcome notification
+      // await tx.insert(notifications).values({
+      //   userId: newUser.id,
+      //   title: '🎉 Winnings Transferred!',
+      //   message: `Your guest winnings of £${totalPrizeAmount} have been transferred to your wallet. Welcome to the community!`,
+      //   type: 'success',
+      //   read: false,
+      //   createdAt: new Date()
+      // });
+    });
+
+    // Generate JWT token for auto-login
+    const token = jwt.sign(
+      { 
+        userId: newUser.id, 
+        email: newUser.email, 
+        role: newUser.role 
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Send welcome email
+    sendWelcomeEmail(email, {
+      firstName,
+      lastName,
+      transferredAmount: totalPrizeAmount,
+      prizeCount: unclaimedPrizes.length
+    }).catch(err => console.error("Failed to send welcome email:", err));
+
+    res.json({
+      success: true,
+      message: `Account created and £${totalPrizeAmount} in winnings transferred successfully!`,
+      user: {
+        id: newUser.id,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        email: newUser.email,
+        phone: newUser.phoneNumber
+      },
+      token,
+      transferredAmount: totalPrizeAmount,
+      prizeCount: unclaimedPrizes.length,
+      redirectTo: '/dashboard'
+    });
+
+  } catch (error) {
+    console.error("Error transferring guest winnings:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to transfer winnings",
+      error: error.message 
+    });
   }
-);
+});
+
+// =============================================
+// 8. CHECK IF GUEST HAS WINNINGS (Quick check)
+// =============================================
+
+app.get("/api/guest/check-winnings/:email", async (req: any, res) => {
+  try {
+    const { email } = req.params;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required"
+      });
+    }
+
+    const prizes = await db
+      .select()
+      .from(guestPrizes)
+      .where(eq(guestPrizes.guestEmail, email))
+      .where(eq(guestPrizes.winStatus, 'pending'));
+
+    const totalAmount = prizes.reduce(
+      (sum, p) => sum + Number(p.prizeAmount), 
+      0
+    );
+
+    res.json({
+      success: true,
+      hasWinnings: prizes.length > 0,
+      prizeCount: prizes.length,
+      totalAmount: totalAmount,
+      prizes: prizes.map(p => ({
+        id: p.id,
+        prizeAmount: p.prizeAmount,
+        prizeType: p.prizeType,
+        competitionId: p.competitionId,
+        guestOrderId: p.guestOrderId
+      }))
+    });
+
+  } catch (error) {
+    console.error("Error checking guest winnings:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to check winnings",
+      error: error.message 
+    });
+  }
+});
+
+
 
 
 

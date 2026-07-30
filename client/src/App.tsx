@@ -95,6 +95,7 @@ import AdminRoyalReelsSettings from "./pages/admin/admin-royal-reels";
 import AdminSlotMachineSettings from "./pages/admin/admin-slot-machine";
 import AdminBulkPoints from "./pages/admin/admin-bulk-points";
 import AdminSlotGame from "./pages/admin/admin-slot-spin";
+import GuestBilling from "./pages/guestbillling";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -130,6 +131,8 @@ function Router() {
       <Route path="/voltz/:competitionId/:orderId" component={VoltzGamePage} />
       <Route path="/slot/:competitionId/:orderId" component={SlotGamePage} />
        <Route path="/royal/:competitionId/:orderId" component={RoyalGamePage} />
+       
+<Route path="/guest-billing/:orderId" component={GuestBilling} />
 
       {/* Authenticated routes - always registered, auth checked in component */}
       <Route path="/instant" component={instant} />

@@ -349,19 +349,22 @@ export const competitionTicketSettings = pgTable("competition_ticket_settings", 
   index("competition_ticket_settings_is_active_idx").on(table.isActive),
 ]);
 
-// Fix guest orders table - change varchar to uuid
+// Fix guest orders table
 export const guestOrders = pgTable(
   "guest_orders",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid("user_id"), // Add this for linking after registration
     guestName: varchar("guest_name").notNull(),
+    firstName: varchar("first_name").notNull(), // ADD THIS
+    lastName: varchar("last_name").notNull(),
     guestEmail: varchar("guest_email").notNull(),
     guestPhone: varchar("guest_phone"),
     competitionId: uuid("competition_id").notNull(),
     gameType: varchar("game_type").notNull(),
     quantity: integer("quantity").notNull().default(1),
     totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
-    status: varchar("status").notNull().default("pending"),
+    status: varchar("status").notNull().default("pending"), // pending, completed, failed, claimed
     paymentMethod: varchar("payment_method").default("instaplay"),
     paymentReference: varchar("payment_reference"),
     paymentStatus: varchar("payment_status").default("pending"),
@@ -370,26 +373,58 @@ export const guestOrders = pgTable(
     prizeType: varchar("prize_type"),
     isWinner: boolean("is_winner").default(false),
     ticketNumbers: text("ticket_numbers"),
+    prizeClaimed: boolean("prize_claimed").default(false), // Track if prize has been claimed
+    prizeClaimedAt: timestamp("prize_claimed_at"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
   (table) => [
-    // Move the indexes here!
     index("guest_orders_email_idx").on(table.guestEmail),
     index("guest_orders_ref_idx").on(table.orderReference),
     index("guest_orders_status_idx").on(table.status),
     index("guest_orders_created_idx").on(table.createdAt),
+    index("guest_orders_user_idx").on(table.userId), // Add index for userId
   ]
 );
 
-// Fix guest tickets table
+// Create guest prizes table
+export const guestPrizes = pgTable(
+  "guest_prizes",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    guestOrderId: uuid("guest_order_id").references(() => guestOrders.id),
+    ticketId: uuid("ticket_id").references(() => guestTickets.id),
+    guestEmail: varchar("guest_email").notNull(),
+    guestName: varchar("guest_name").notNull(),
+    guestPhone: varchar("guest_phone"),
+    competitionId: uuid("competition_id").notNull(),
+    prizeAmount: decimal("prize_amount", { precision: 10, scale: 2 }).notNull(),
+    prizeType: varchar("prize_type").notNull(),
+    prizeDetails: jsonb("prize_details"),
+    winStatus: varchar("win_status").default("pending"), // pending, claimed, transferred
+    claimedAt: timestamp("claimed_at"),
+    transferredToUserId: uuid("transferred_to_user_id"),
+    transferredAt: timestamp("transferred_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("guest_prizes_email_idx").on(table.guestEmail),
+    index("guest_prizes_status_idx").on(table.winStatus),
+    index("guest_prizes_order_idx").on(table.guestOrderId),
+  ]
+);
+
+// Add prizeType to guest tickets
 export const guestTickets = pgTable("guest_tickets", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`), // Changed to uuid
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   guestOrderId: uuid("guest_order_id").references(() => guestOrders.id),
   ticketNumber: varchar("ticket_number").notNull(),
-  competitionId: uuid("competition_id").notNull(), // Match competitions.id type
+  competitionId: uuid("competition_id").notNull(),
   isWinner: boolean("is_winner").default(false),
   prizeAmount: decimal("prize_amount", { precision: 10, scale: 2 }),
+  prizeType: varchar("prize_type"), // Add this
+  prizeDetails: jsonb("prize_details"), // Add this
   createdAt: timestamp("created_at").defaultNow(),
 });
 

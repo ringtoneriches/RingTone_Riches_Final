@@ -24,9 +24,6 @@ import { Minus, Plus, ChevronLeft, ChevronRight, Sparkles, Zap, Crown } from "lu
 import useEmblaCarousel from "embla-carousel-react";
 import UserCompetitionPrizes from "./user-competition-prizes";
 
-
-// Add this component before the CompetitionPage component definition
-
 // Premium Progress Bar Component for Instant Type
 const InstantProgressBar = ({ competition }: { competition: Competition }) => {
   const sold = competition.soldTickets ?? 0;
@@ -38,19 +35,13 @@ const InstantProgressBar = ({ competition }: { competition: Competition }) => {
   
   return (
     <div className="relative group">
-      {/* Animated border glow */}
       <div className="absolute -inset-[2px] bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-2xl opacity-40 group-hover:opacity-70 transition-all duration-500 blur-md"></div>
       
       <div className="relative bg-gradient-to-br from-[#0a0a0a] to-[#0f0f0f] rounded-2xl p-6 md:p-8 border border-[#FACC15]/20 overflow-hidden">
-        
-        {/* Background shimmer effect */}
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#FACC15]/5 to-transparent animate-shimmer"></div>
         </div>
         
-        
-        
-        {/* Premium Progress Bar Section */}
         <div className="space-y-3">
           <div className="flex justify-between items-end">
             <div>
@@ -63,26 +54,19 @@ const InstantProgressBar = ({ competition }: { competition: Competition }) => {
             </div>
           </div>
           
-          {/* Multi-layer progress bar */}
           <div className="relative">
-            {/* Background track */}
             <div className="h-6 bg-black/60 rounded-full overflow-hidden border border-[#FACC15]/20">
-              {/* Main progress fill */}
               <div 
                 className="relative h-full bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-full transition-all duration-1000 ease-out"
                 style={{ width: `${percentage}%` }}
               >
-                {/* Animated shimmer overlay */}
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                
-                {/* Pulsing glow effect */}
                 <div className="absolute inset-0 rounded-full animate-pulse opacity-50" 
                      style={{ background: "radial-gradient(circle at center, rgba(250,204,21,0.8) 0%, transparent 80%)" }}>
                 </div>
               </div>
             </div>
             
-            {/* Percentage markers */}
             <div className="absolute inset-0 flex justify-between px-2 pointer-events-none">
               {[0, 25, 50, 75, 100].map((mark) => (
                 <div key={mark} className="relative">
@@ -95,7 +79,6 @@ const InstantProgressBar = ({ competition }: { competition: Competition }) => {
             </div>
           </div>
           
-          {/* Progress message with urgency */}
           <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#FACC15]/10">
             <div className="flex items-center gap-2">
               <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${
@@ -110,7 +93,6 @@ const InstantProgressBar = ({ competition }: { competition: Competition }) => {
               </span>
             </div>
             
-            {/* Urgency indicator */}
             {isAlmostFull && remaining > 0 && (
               <div className="flex items-center gap-2 animate-bounce">
                 <span className="text-sm">⚠️</span>
@@ -122,14 +104,12 @@ const InstantProgressBar = ({ competition }: { competition: Competition }) => {
           </div>
         </div>
         
-        {/* Mini visual indicator of ticket distribution */}
         <div className="mt-6 pt-4 border-t border-[#FACC15]/10">
           <div className="flex items-center justify-between text-[10px] text-gray-500 mb-2">
             <span>Ticket Distribution Visual</span>
             <span>{sold.toLocaleString()} / {total.toLocaleString()} claimed</span>
           </div>
           <div className="flex h-2 gap-0.5 overflow-hidden rounded-full">
-            {/* Create mini blocks for visual representation */}
             {Array.from({ length: 20 }).map((_, i) => {
               const blockPercentage = (i + 1) * 5;
               const isFilled = blockPercentage <= percentage;
@@ -153,19 +133,16 @@ const InstantProgressBar = ({ competition }: { competition: Competition }) => {
 };
 
 // Discount calculation utility - ONLY for game types
-// NEW DISCOUNT SCHEME: 10 plays: 2%, 20 plays: 5%, 50 plays: 10%
 const TICKET_DISCOUNTS: Record<number, number> = {
-  5: 0.05,   // 5% off for 5 plays
-  10: 0.10,  // 10% off for 10 plays
-  15: 0.15,  // 15% off for 15 plays (maximum)
+  5: 0.05,
+  10: 0.10,
+  15: 0.15,
 };
 
-const GAME_TYPES = ["spin", "scratch", "pop", "plinko", "voltz" , "slot" , "royal"];
+const GAME_TYPES = ["spin", "scratch", "pop", "plinko", "voltz", "slot", "royal"];
 
 function calculateDiscountedPrice(basePrice: number, quantity: number) {
   const originalPrice = basePrice * quantity;
-  
-  // Cap quantity at 15 for discount calculation
   const cappedQuantity = Math.min(quantity, 15);
   
   const sortedTiers = Object.keys(TICKET_DISCOUNTS)
@@ -180,7 +157,6 @@ function calculateDiscountedPrice(basePrice: number, quantity: number) {
     }
   }
   
-  // Only apply discount to first 15 plays, rest at full price
   const discountedPlaysPrice = (basePrice * Math.min(quantity, 15)) * (1 - discountPercent);
   const fullPricePlays = quantity > 15 ? basePrice * (quantity - 15) : 0;
   const discountedPrice = discountedPlaysPrice + fullPricePlays;
@@ -195,9 +171,7 @@ function calculateDiscountedPrice(basePrice: number, quantity: number) {
 }
 
 function getApplicableDiscount(quantity: number): number {
-  // Cap quantity at 15 for discount eligibility
   const cappedQuantity = Math.min(quantity, 15);
-  
   const sortedTiers = Object.keys(TICKET_DISCOUNTS)
     .map(Number)
     .sort((a, b) => b - a);
@@ -207,7 +181,6 @@ function getApplicableDiscount(quantity: number): number {
       return TICKET_DISCOUNTS[tier] * 100;
     }
   }
-  
   return 0;
 }
 
@@ -229,7 +202,6 @@ export default function CompetitionPage() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
   
-  // Carousel state
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
@@ -251,23 +223,20 @@ export default function CompetitionPage() {
   }, [emblaApi, onSelect]);
   
   const quizQuestion = {
-    question:
-      "You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?",
+    question: "You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?",
     options: ["7:15am", "7:25am", "7:30am", "7:45am"],
     correct: "7:30am",
   };
 
   const handleOpenQuiz = () => {
-  // Only show quiz for instant/regular competitions
-  if (!isGameType) {
-    setSelectedAnswer(null);
-    setIsAnswerCorrect(null);
-    setShowQuiz(true);
-  } else {
-    // For game types, directly proceed to purchase
-    handlePurchase();
-  }
-};
+    if (!isGameType) {
+      setSelectedAnswer(null);
+      setIsAnswerCorrect(null);
+      setShowQuiz(true);
+    } else {
+      handlePurchase();
+    }
+  };
 
   const { data: competition, isLoading } = useQuery<Competition>({
     queryKey: ["/api/competitions", id],
@@ -296,81 +265,94 @@ export default function CompetitionPage() {
 
   const competitionType = competition?.type?.toLowerCase() || "";
   const isGameType = GAME_TYPES.includes(competitionType);
-  // Add this query in your CompetitionPage component
-const { data: ticketSettings } = useQuery({
-  queryKey: ["/api/public/max-tickets"],
-  queryFn: () => fetch("/api/public/max-tickets").then((res) => res.json()),
-});
 
-// Get the max tickets value
-const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
+  const { data: ticketSettings } = useQuery({
+    queryKey: ["/api/public/max-tickets"],
+    queryFn: () => fetch("/api/public/max-tickets").then((res) => res.json()),
+  });
 
+  const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
+
+  // ✅ FIXED: Pass competition image through order creation
   const purchaseTicketMutation = useMutation({
     mutationFn: async (data: { competitionId: string; quantity: number }) => {
+      const payload = {
+        ...data,
+        competitionImage: competition?.imageUrl // ✅ Pass the image
+      };
+
       if (competitionType === "spin") {
-        const response = await apiRequest("/api/create-spin-order", "POST", data);
+        const response = await apiRequest("/api/create-spin-order", "POST", payload);
         return response.json();
       } 
       else if (competitionType === "scratch") {
-        const response = await apiRequest("/api/create-scratch-order", "POST", data);
+        const response = await apiRequest("/api/create-scratch-order", "POST", payload);
         return response.json();
       }
       else if (competitionType === "pop") {
-        const response = await apiRequest("/api/create-pop-order", "POST", data);
+        const response = await apiRequest("/api/create-pop-order", "POST", payload);
         return response.json();
       }
       else if (competitionType === "plinko") {
-        const response = await apiRequest("/api/create-plinko-order", "POST", data);
+        const response = await apiRequest("/api/create-plinko-order", "POST", payload);
         return response.json();
       }
       else if (competitionType === "voltz") {
-        const response = await apiRequest("/api/create-voltz-order", "POST", data);
+        const response = await apiRequest("/api/create-voltz-order", "POST", payload);
         return response.json();
       }
       else if (competitionType === "slot") {
-        const response = await apiRequest("/api/create-slot-order", "POST", data);
+        const response = await apiRequest("/api/create-slot-order", "POST", payload);
         return response.json();
       }
       else if (competitionType === "royal") {
-        const response = await apiRequest("/api/create-royal-order", "POST", data);
+        const response = await apiRequest("/api/create-royal-order", "POST", payload);
         return response.json();
       }
       else {
-        const response = await apiRequest("/api/create-competition-order", "POST", data);
+        const response = await apiRequest("/api/create-competition-order", "POST", payload);
         return response.json();
       }
     },
 
+    // ✅ FIXED: Pass image in URL when navigating
     onSuccess: (data) => {
+      const imageParam = competition?.imageUrl ? `?image=${encodeURIComponent(competition.imageUrl)}` : '';
+      
+      // Store in localStorage as backup
+      if (competition?.imageUrl) {
+        localStorage.setItem(`competition_image_${data.orderId}`, competition.imageUrl);
+      }
+
       if (competitionType === "spin") {
-        setLocation(`/spin-billing/${data.orderId}/${competition?.wheelType}`);
+        setLocation(`/spin-billing/${data.orderId}/${competition?.wheelType}${imageParam}`);
         return;
       }
       if (competitionType === "scratch") {
-        setLocation(`/scratch-billing/${data.orderId}`);
+        setLocation(`/scratch-billing/${data.orderId}${imageParam}`);
         return;
       }
       if (competitionType === "pop") {
-        setLocation(`/pop-billing/${data.orderId}`);
+        setLocation(`/pop-billing/${data.orderId}${imageParam}`);
         return;
       }
       if (competitionType === "plinko") {
-        setLocation(`/plinko-billing/${data.orderId}`);
+        setLocation(`/plinko-billing/${data.orderId}${imageParam}`);
         return;
       }
       if (competitionType === "voltz") {
-        setLocation(`/voltz-billing/${data.orderId}`);
+        setLocation(`/voltz-billing/${data.orderId}${imageParam}`);
         return;
       }
       if (competitionType === "slot") {
-        setLocation(`/slot-billing/${data.orderId}`);
+        setLocation(`/slot-billing/${data.orderId}${imageParam}`);
         return;
       }
       if (competitionType === "royal") {
-        setLocation(`/royal-billing/${data.orderId}`);
+        setLocation(`/royal-billing/${data.orderId}${imageParam}`);
         return;
       }
-      setLocation(`/checkout/${data.orderId}`);
+      setLocation(`/checkout/${data.orderId}${imageParam}`);
     },
 
     onError: (error) => {
@@ -417,10 +399,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
   }, [competition]);
 
   const handlePurchase = () => {
-    if (!isAuthenticated) {
-      window.location.href = "/login";
-      return;
-    }
     if (!competition) return;
 
     if (isFreeGiveaway) {
@@ -572,7 +550,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
 
   const pricePerTicket = parseFloat(competition.ticketPrice);
   
-  // Only calculate discount for game types
   const { originalPrice, discountPercent, discountedPrice, savings } = 
     isGameType ? calculateDiscountedPrice(pricePerTicket, quantity) : 
     { originalPrice: pricePerTicket * quantity, discountPercent: 0, discountedPrice: pricePerTicket * quantity, savings: 0 };
@@ -581,7 +558,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
     <div className="min-h-screen bg-background text-foreground">
       <Header />
 
-      {/* Competition Details */}
       <section className="py-6 md:py-12 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A]">
           <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-[#facc15]/20 to-transparent rounded-full blur-3xl animate-pulse"></div>
@@ -823,7 +799,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                           <span className="text-xs text-muted-foreground font-normal">per entry</span>
                         </div>
 
-                        {/* Total Cost Box - Premium Yellow/Gold */}
                         <div className="bg-gradient-to-br from-[#facc15] via-[#f59e0b] to-[#d97706] rounded-lg p-3 md:p-4 shadow-xl">
                           <div className="flex justify-between items-center mb-1.5">
                             <span className="font-medium text-gray-900 text-sm">Total</span>
@@ -914,9 +889,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
         </div>
       </section>
 
-       {/* ==========================================
-          PREMIUM PROGRESS BAR - ONLY FOR INSTANT TYPE
-          ========================================== */}
       {competition.maxTickets && (
         <section className="py-6 md:py-8 relative">
           <div className="container mx-auto px-3 md:px-4 max-w-6xl">
@@ -925,17 +897,11 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
         </section>
       )}
 
-      {/* ==========================================
-          ENTRY SELECTOR SECTION
-          ========================================== */}
       <section className="py-6 md:py-8 relative overflow-hidden">
-        {/* Premium Dark Background with Gold Accents */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0A] via-[#1a1a1a] to-[#0A0A0A]">
-          {/* Gold Glow Orbs */}
           <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[#FACC15]/10 rounded-full blur-[100px] animate-pulse"></div>
           <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-[#F59E0B]/10 rounded-full blur-[100px] animate-pulse" style={{animationDelay: "1s"}}></div>
           
-          {/* Subtle Grid Pattern */}
           <div className="absolute inset-0 opacity-[0.03]" style={{
             backgroundImage: `linear-gradient(rgba(250,204,21,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(250,204,21,0.3) 1px, transparent 1px)`,
             backgroundSize: '60px 60px'
@@ -944,7 +910,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
 
         <div ref={rangeRef} className="container mx-auto px-3 md:px-4 text-center max-w-3xl relative z-10">
           
-          {/* Section Title */}
           <div className="mb-6 md:mb-8">
             <div className="inline-flex items-center gap-3 mb-2">
               <div className="h-px w-8 md:w-12 bg-gradient-to-r from-transparent to-[#FACC15]"></div>
@@ -958,123 +923,104 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
             <p className="text-gray-400 text-xs md:text-sm">Choose your quantity and start playing</p>
           </div>
 
-         {/* ========== PREMIUM BUNDLE DISCOUNT SECTION - ONLY FOR GAMES ========== */}
-{isGameType && (
-  <div className="mb-6 md:mb-8">
-    {/* Gold Border Wrapper */}
-    <div className="relative p-[1px] rounded-2xl bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706]">
-      <div className="relative bg-[#0a0a0a] rounded-2xl overflow-hidden">
-        
-        {/* Inner Gold Glow */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/5 via-transparent to-[#F59E0B]/5"></div>
-        
-        <div className="relative p-4 md:p-6">
-          
-          {/* Header with Crown */}
-          <div className="flex items-center justify-center gap-2 md:gap-3 mb-5">
-            <Crown className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15]" />
-            <h3 className="text-base md:text-lg font-black text-[#FACC15] tracking-wider uppercase">
-              Bundle & Save
-            </h3>
-            <Crown className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15]" />
-          </div>
-
-          {/* Discount Tier Cards */}
-          <div className="grid grid-cols-3 gap-2 md:gap-4">
-            {[
-              { qty: 5, discount: 5, icon: "⭐", label: "STARTER" },
-              { qty: 10, discount: 10, icon: "🔥", label: "POPULAR" },
-              { qty: 15, discount: 15, icon: "💎", label: "BEST VALUE" },
-            ].map((tier) => {
-              const isSelected = quantity === tier.qty;
-              const savingsAmount = ((pricePerTicket * tier.qty) * (tier.discount / 100)).toFixed(2);
-              
-              return (
-                <button
-                  key={tier.qty}
-                  onClick={() => setQuantity(tier.qty)}
-                  className={`relative p-3 md:p-4 rounded-xl transition-all duration-300 group ${
-                    isSelected
-                      ? "bg-gradient-to-br from-[#FACC15] to-[#F59E0B] shadow-2xl shadow-[#FACC15]/40 scale-105 z-10"
-                      : "bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-[#FACC15]/30"
-                  }`}
-                >
-                  {/* Selected Checkmark */}
-                  {isSelected && (
-                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-black rounded-full border-2 border-[#FACC15] flex items-center justify-center shadow-lg">
-                      <span className="text-[#FACC15] text-xs font-black">✓</span>
+          {isGameType && (
+            <div className="mb-6 md:mb-8">
+              <div className="relative p-[1px] rounded-2xl bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706]">
+                <div className="relative bg-[#0a0a0a] rounded-2xl overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/5 via-transparent to-[#F59E0B]/5"></div>
+                  
+                  <div className="relative p-4 md:p-6">
+                    <div className="flex items-center justify-center gap-2 md:gap-3 mb-5">
+                      <Crown className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15]" />
+                      <h3 className="text-base md:text-lg font-black text-[#FACC15] tracking-wider uppercase">
+                        Bundle & Save
+                      </h3>
+                      <Crown className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15]" />
                     </div>
-                  )}
 
-                  {/* Tier Icon */}
-                  <div className="text-xl md:text-2xl mb-1">{tier.icon}</div>
-                  
-                  {/* Quantity */}
-                  <div className={`text-sm md:text-base font-bold mb-0.5 ${
-                    isSelected ? "text-gray-900" : "text-white"
-                  }`}>
-                    {tier.qty} {competitionType === "spin" ? "Spins" : competitionType === "scratch" ? "Scratches" : competitionType === "pop" ? "Pops" : competitionType === "plinko" ? "Drops" : competitionType === "slot" ? "Slots" : competitionType === "royal" ? "Plays" : "Plays"}
-                  </div>
-                  
-                  {/* Discount Percentage */}
-                  <div className={`text-2xl md:text-3xl font-black mb-1 ${
-                    isSelected ? "text-gray-900" : "text-[#FACC15]"
-                  }`}>
-                    {tier.discount}%
-                  </div>
-                  
-                  {/* OFF Label */}
-                  <div className={`text-[10px] md:text-xs font-semibold mb-2 ${
-                    isSelected ? "text-gray-800" : "text-[#FACC15]/70"
-                  }`}>
-                    OFF
-                  </div>
+                    <div className="grid grid-cols-3 gap-2 md:gap-4">
+                      {[
+                        { qty: 5, discount: 5, icon: "⭐", label: "STARTER" },
+                        { qty: 10, discount: 10, icon: "🔥", label: "POPULAR" },
+                        { qty: 15, discount: 15, icon: "💎", label: "BEST VALUE" },
+                      ].map((tier) => {
+                        const isSelected = quantity === tier.qty;
+                        const savingsAmount = ((pricePerTicket * tier.qty) * (tier.discount / 100)).toFixed(2);
+                        
+                        return (
+                          <button
+                            key={tier.qty}
+                            onClick={() => setQuantity(tier.qty)}
+                            className={`relative p-3 md:p-4 rounded-xl transition-all duration-300 group ${
+                              isSelected
+                                ? "bg-gradient-to-br from-[#FACC15] to-[#F59E0B] shadow-2xl shadow-[#FACC15]/40 scale-105 z-10"
+                                : "bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-[#FACC15]/30"
+                            }`}
+                          >
+                            {isSelected && (
+                              <div className="absolute -top-2 -right-2 w-6 h-6 bg-black rounded-full border-2 border-[#FACC15] flex items-center justify-center shadow-lg">
+                                <span className="text-[#FACC15] text-xs font-black">✓</span>
+                              </div>
+                            )}
 
-                  {/* Savings */}
-                  <div className={`text-[10px] md:text-xs py-1 px-2 rounded-full font-semibold ${
-                    isSelected 
-                      ? "bg-black/30 text-gray-900" 
-                      : "bg-[#FACC15]/10 text-[#FACC15]"
-                  }`}>
-                    Save £{savingsAmount}
-                  </div>
+                            <div className="text-xl md:text-2xl mb-1">{tier.icon}</div>
+                            
+                            <div className={`text-sm md:text-base font-bold mb-0.5 ${
+                              isSelected ? "text-gray-900" : "text-white"
+                            }`}>
+                              {tier.qty} {competitionType === "spin" ? "Spins" : competitionType === "scratch" ? "Scratches" : competitionType === "pop" ? "Pops" : competitionType === "plinko" ? "Drops" : competitionType === "slot" ? "Slots" : competitionType === "royal" ? "Plays" : "Plays"}
+                            </div>
+                            
+                            <div className={`text-2xl md:text-3xl font-black mb-1 ${
+                              isSelected ? "text-gray-900" : "text-[#FACC15]"
+                            }`}>
+                              {tier.discount}%
+                            </div>
+                            
+                            <div className={`text-[10px] md:text-xs font-semibold mb-2 ${
+                              isSelected ? "text-gray-800" : "text-[#FACC15]/70"
+                            }`}>
+                              OFF
+                            </div>
 
-                  {/* Label Badge */}
-                  <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] md:text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${
-                    isSelected
-                      ? "bg-black text-[#FACC15]"
-                      : "bg-[#FACC15]/20 text-[#FACC15]/80"
-                  }`}>
-                    {tier.label}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                            <div className={`text-[10px] md:text-xs py-1 px-2 rounded-full font-semibold ${
+                              isSelected 
+                                ? "bg-black/30 text-gray-900" 
+                                : "bg-[#FACC15]/10 text-[#FACC15]"
+                            }`}>
+                              Save £{savingsAmount}
+                            </div>
 
-          {/* Bottom Info */}
-          <div className="mt-4 text-center">
-            <p className="text-[10px] md:text-xs text-gray-500">
-              Discount automatically applied • Cannot be combined
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-          {/* ========== QUANTITY SELECTOR CARD ========== */}
+                            <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] md:text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${
+                              isSelected
+                                ? "bg-black text-[#FACC15]"
+                                : "bg-[#FACC15]/20 text-[#FACC15]/80"
+                            }`}>
+                              {tier.label}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-4 text-center">
+                      <p className="text-[10px] md:text-xs text-gray-500">
+                        Discount automatically applied • Cannot be combined
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="relative group">
-            {/* Animated Gold Border */}
             <div className="absolute -inset-[1px] bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-2xl opacity-70 blur-sm group-hover:opacity-100 transition duration-500"></div>
             
             <div className="relative bg-[#0a0a0a] rounded-2xl p-5 md:p-8 border border-[#FACC15]/20">
-              
-              {/* Inner Glow */}
               <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/[0.03] via-transparent to-[#F59E0B]/[0.03] rounded-2xl"></div>
 
               <div className="relative">
-                
                 {isFreeGiveaway ? (
                   <div className="space-y-4">
                     {userTicketCount >= maxTicketsForGiveaway ? (
@@ -1110,56 +1056,49 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    
-                    {/* Quick Select Pills - UPDATED WITH NEW REQUIREMENTS */}
-<div className="flex justify-center gap-2 flex-wrap">
-  {[1, 5, 10, 15, 20, 30].map((num) => {
-    const discount = isGameType ? getApplicableDiscount(num) : 0;
-    const effectiveQuantity = Math.min(num, 15);
-    const discountedPlays = num <= 15 ? num : 15;
-    const fullPricePlays = num <= 15 ? 0 : num - 15;
-    
-    const pillPrice = isGameType 
-      ? (pricePerTicket * discountedPlays * (1 - discount / 100)) + (pricePerTicket * fullPricePlays)
-      : pricePerTicket * num;
-    
-    return (
-      <button
-        key={num}
-        onClick={() => setQuantity(num)}
-        className={`relative min-w-[65px] md:min-w-[75px] px-3 md:px-4 py-2.5 rounded-xl border-2 font-bold transition-all text-xs md:text-sm ${
-          quantity === num
-            ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 border-transparent shadow-xl shadow-[#FACC15]/30 scale-105"
-            : "bg-transparent text-white border-white/10 hover:border-[#FACC15]/40 hover:bg-white/[0.03]"
-        }`}
-        data-testid={`button-quantity-${num}`}
-      >
-        <div className="text-base md:text-lg font-black">{num}</div>
-        {isGameType && discount > 0 && num <= 15 && (
-          <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black ${
-            quantity === num 
-              ? "bg-black text-[#FACC15]" 
-              : "bg-[#FACC15] text-black"
-          }`}>
-            -{discount}%
-          </div>
-        )}
-        {num > 15 && (
-          <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-red-500/20 text-red-400`}>
-            MAX
-          </div>
-        )}
-        <div className={`text-[9px] mt-0.5 font-medium ${
-          quantity === num ? "text-gray-800" : "text-gray-400"
-        }`}>
-          £{pillPrice.toFixed(2)}
-        </div>
-      </button>
-    );
-  })}
-</div>
+                    <div className="flex justify-center gap-2 flex-wrap">
+                      {[1, 5, 10, 15, 20, 30].map((num) => {
+                        const discount = isGameType ? getApplicableDiscount(num) : 0;
+                        const effectiveQuantity = Math.min(num, 15);
+                        const discountedPlays = num <= 15 ? num : 15;
+                        const fullPricePlays = num <= 15 ? 0 : num - 15;
+                        
+                        const pillPrice = isGameType 
+                          ? (pricePerTicket * discountedPlays * (1 - discount / 100)) + (pricePerTicket * fullPricePlays)
+                          : pricePerTicket * num;
+                        
+                        return (
+                          <button
+                            key={num}
+                            onClick={() => setQuantity(num)}
+                            className={`relative min-w-[65px] md:min-w-[75px] px-3 md:px-4 py-2.5 rounded-xl border-2 font-bold transition-all text-xs md:text-sm ${
+                              quantity === num
+                                ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 border-transparent shadow-xl shadow-[#FACC15]/30 scale-105"
+                                : "bg-transparent text-white border-white/10 hover:border-[#FACC15]/40 hover:bg-white/[0.03]"
+                            }`}
+                            data-testid={`button-quantity-${num}`}
+                          >
+                            <div className="text-base md:text-lg font-black">{num}</div>
+                            {isGameType && discount > 0 && num <= 15 && (
+                              <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black ${
+                                quantity === num 
+                                  ? "bg-black text-[#FACC15]" 
+                                  : "bg-[#FACC15] text-black"
+                              }`}>
+                                -{discount}%
+                              </div>
+                            )}
+                            
+                            <div className={`text-[9px] mt-0.5 font-medium ${
+                              quantity === num ? "text-gray-800" : "text-gray-400"
+                            }`}>
+                              £{pillPrice.toFixed(2)}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                    {/* Large Quantity Counter */}
                     <div className="text-center py-2">
                       <div className="text-5xl md:text-6xl font-black bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] bg-clip-text text-transparent mb-1">
                         {quantity}
@@ -1175,7 +1114,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                          `Ticket${quantity > 1 ? "s" : ""}`}
                       </div>
                       
-                      {/* Active Discount Badge */}
                       {isGameType && discountPercent > 0 && (
                         <div className="inline-flex items-center gap-2 mt-2 px-4 py-1.5 bg-[#FACC15]/10 border border-[#FACC15]/30 rounded-full">
                           <Sparkles className="w-3.5 h-3.5 text-[#FACC15]" />
@@ -1186,7 +1124,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                       )}
                     </div>
 
-                    {/* +/- Controls with Slider */}
                     <div className="flex items-center gap-4 md:gap-6">
                       <button
                         onClick={() => setQuantity((prev) => Math.max(prev - 1, 1))}
@@ -1201,7 +1138,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                         <Minus className="w-5 h-5" />
                       </button>
 
-                      {/* Premium Slider */}
                       <div className="flex-1 relative">
                         <input
                           type="range"
@@ -1230,11 +1166,8 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                   </div>
                 )}
                 
-                {/* ========== TOTAL COST BREAKDOWN ========== */}
                 <div className="mt-6">
                   <div className="p-4 md:p-5 bg-gradient-to-br from-[#FACC15]/5 to-[#F59E0B]/5 rounded-xl border border-[#FACC15]/20">
-                    
-                    {/* Main Total */}
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400 text-sm font-medium uppercase tracking-wider">Total</span>
                       <div className="text-right">
@@ -1249,7 +1182,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                       </div>
                     </div>
 
-                    {/* Discount Breakdown - Only for Games - UPDATED TIERS */}
                     {isGameType && discountPercent > 0 && (
                       <div className="mt-3 pt-3 border-t border-[#FACC15]/10">
                         <div className="flex items-center justify-between gap-2 mb-2">
@@ -1264,29 +1196,27 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                           </span>
                         </div>
                         
-                      {/* Progress to Next Tier - UPDATED WITH NEW VALUES */}
-<div className="mt-2">
-  <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-    <span>5 for 5%</span>
-    <span>10 for 10%</span>
-    <span>15 for 15%</span>
-  </div>
-  <div className="h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
-    <div 
-      className="h-full bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-full transition-all duration-500"
-      style={{ width: `${Math.min((quantity / 15) * 100, 100)}%` }}
-    ></div>
-  </div>
-  {quantity > 15 && (
-    <p className="text-[10px] text-gray-500 mt-1 text-center">
-      Discount applies to first 15 plays only
-    </p>
-  )}
-</div>
+                        <div className="mt-2">
+                          <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                            <span>5 for 5%</span>
+                            <span>10 for 10%</span>
+                            <span>15 for 15%</span>
+                          </div>
+                          <div className="h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min((quantity / 15) * 100, 100)}%` }}
+                            ></div>
+                          </div>
+                          {quantity > 15 && (
+                            <p className="text-[10px] text-gray-500 mt-1 text-center">
+                              Discount applies to first 15 plays only
+                            </p>
+                          )}
+                        </div>
                       </div>
                     )}
 
-                    {/* Per Entry Price */}
                     <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
                       <span>Per entry: £{pricePerTicket.toFixed(2)}</span>
                       {isGameType && discountPercent > 0 && (
@@ -1304,9 +1234,7 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
             </div>
           </div>
 
-          {/* ========== CTA BUTTON ========== */}
           <div className="mt-6 relative group/cta">
-            {/* Glow Effect */}
             <div className="absolute -inset-2 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-2xl opacity-0 group-hover/cta:opacity-40 blur-xl transition-all duration-500"></div>
             
             <button
@@ -1347,7 +1275,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
                 )}
               </span>
               
-              {/* Shimmer Effect */}
               {!isSoldOut && !purchaseTicketMutation.isPending && !(isFreeGiveaway && !canBuyMore) && (
                 <div className="absolute inset-0 rounded-xl overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover/cta:translate-x-full transition-transform duration-1000"></div>
@@ -1356,7 +1283,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
             </button>
           </div>
           
-          {/* Savings Highlight - Only for Games */}
           {isGameType && discountPercent > 0 && (
             <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-[#FACC15]/5 border border-[#FACC15]/20 rounded-full">
               <Sparkles className="w-4 h-4 text-[#FACC15]" />
@@ -1366,7 +1292,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
             </div>
           )}
           
-          {/* Postal Entry */}
           <div 
             className="mt-4 text-xs md:text-sm text-gray-400 hover:text-[#FACC15] cursor-pointer transition-colors inline-flex items-center gap-1"
             onClick={() => setIsPostalModalOpen(true)}
@@ -1377,7 +1302,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
         </div>
       </section>
 
-      {/* Add Premium Slider CSS */}
       <style>{`
         .premium-slider::-webkit-slider-thumb {
           -webkit-appearance: none;
@@ -1408,7 +1332,6 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
 
       <UserCompetitionPrizes competitionId={competition.id} />
 
-      {/* Call to Action */}
       <section className="bg-gradient-to-r from-gray-900 via-black to-gray-900 py-12 md:py-16 relative overflow-hidden border-t border-[#FACC15]/20">
         <div className="absolute inset-0 opacity-5">
           <div className="absolute inset-0" style={{ 
@@ -1433,47 +1356,45 @@ const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
         </div>
       </section>
 
-      {/* Quiz Dialog */}
       {!isGameType && (
-      <Dialog open={showQuiz} onOpenChange={setShowQuiz}>
-        <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto rounded-2xl bg-[#0a0a0a] border border-[#FACC15]/20">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-black text-white text-center">
-              Answer to Proceed
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-center text-gray-300 font-medium">{quizQuestion.question}</p>
-            <div className="grid grid-cols-1 gap-2">
-              {quizQuestion.options.map((option) => (
-                <button
-                  key={option}
-                  onClick={() => setSelectedAnswer(option)}
-                  className={`w-full p-3 rounded-xl border-2 font-semibold transition-all ${
-                    selectedAnswer === option
-                      ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 border-transparent"
-                      : "border-white/10 text-white hover:border-[#FACC15]/40 bg-white/[0.02]"
-                  }`}
-                >
-                  {option}
-                </button>
-              ))}
+        <Dialog open={showQuiz} onOpenChange={setShowQuiz}>
+          <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto rounded-2xl bg-[#0a0a0a] border border-[#FACC15]/20">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black text-white text-center">
+                Answer to Proceed
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-center text-gray-300 font-medium">{quizQuestion.question}</p>
+              <div className="grid grid-cols-1 gap-2">
+                {quizQuestion.options.map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => setSelectedAnswer(option)}
+                    className={`w-full p-3 rounded-xl border-2 font-semibold transition-all ${
+                      selectedAnswer === option
+                        ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 border-transparent"
+                        : "border-white/10 text-white hover:border-[#FACC15]/40 bg-white/[0.02]"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          <DialogFooter className="flex justify-center">
-            <Button
-              disabled={!selectedAnswer}
-              onClick={handleSubmitAnswer}
-              className="mt-4 bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 font-bold px-8 py-2.5 rounded-xl hover:from-[#FBBF24] hover:to-[#D97706] disabled:opacity-50"
-            >
-              Submit
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter className="flex justify-center">
+              <Button
+                disabled={!selectedAnswer}
+                onClick={handleSubmitAnswer}
+                className="mt-4 bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 font-bold px-8 py-2.5 rounded-xl hover:from-[#FBBF24] hover:to-[#D97706] disabled:opacity-50"
+              >
+                Submit
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
-      {/* Postal Modal */}
       <Dialog open={isPostalModalOpen} onOpenChange={setIsPostalModalOpen}>
         <DialogContent className="max-w-lg bg-[#0a0a0a] border border-[#FACC15]/20 rounded-2xl">
           <DialogHeader>

@@ -25,15 +25,14 @@ interface UnifiedBillingProps {
   orderId: string;
   orderType: "competition" | "spin" | "scratch" | "pop" | "plinko" | "voltz" | "slot" | "royal";
   wheelType?: string;
+  competitionImage?: string; // ✅ NEW PROP
 }
 
-// Add this helper function at the top of your billing component or in a separate utils file
-
-const MINIMUM_PURCHASE_AMOUNT = 3; // £3 minimum for all instant play purchases
+// Helper function for minimum purchase validation
+const MINIMUM_PURCHASE_AMOUNT = 3;
 const MINIMUM_PURCHASE_MESSAGE = `Minimum purchase is £${MINIMUM_PURCHASE_AMOUNT}. Please add more plays.`;
 
 export const validateMinimumPurchase = (totalAmount: number, paymentType: string): { valid: boolean; message?: string; minimumAmount: number; currentAmount: number } => {
-  // Only validate for instant play (card payments)
   if (paymentType === 'instaplay' && totalAmount < MINIMUM_PURCHASE_AMOUNT) {
     return {
       valid: false,
@@ -42,8 +41,6 @@ export const validateMinimumPurchase = (totalAmount: number, paymentType: string
       currentAmount: totalAmount
     };
   }
-  
-  // For wallet/points payments, no minimum restriction
   return {
     valid: true,
     minimumAmount: MINIMUM_PURCHASE_AMOUNT,
@@ -51,10 +48,9 @@ export const validateMinimumPurchase = (totalAmount: number, paymentType: string
   };
 };
 
-// Export constants for use in components
 export const MIN_PURCHASE = MINIMUM_PURCHASE_AMOUNT;
 
-export default function UnifiedBilling({ orderId, orderType, wheelType }: UnifiedBillingProps) {
+export default function UnifiedBilling({ orderId, orderType, wheelType, competitionImage: passedImage }: UnifiedBillingProps) {
   const [, setLocation] = useLocation();
   const [selectedMethods, setSelectedMethods] = useState({ walletBalance: false, ringtonePoints: false, instaplay: false });
   const [agreeToTerms, setAgreeToTerms] = useState(false);
@@ -66,10 +62,25 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // ✅ Get stored image from localStorage as backup
+  const [storedImage, setStoredImage] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (orderId) {
+      const image = localStorage.getItem(`competition_image_${orderId}`);
+      if (image) {
+        setStoredImage(image);
+        // Clean up after retrieving
+        // localStorage.removeItem(`competition_image_${orderId}`);
+      }
+    }
+  }, [orderId]);
+
   useEffect(() => {
     const t = setInterval(() => setEntryTimer(s => Math.max(0, s - 1)), 1000);
     return () => clearInterval(t);
   }, []);
+  
   const fmtTimer = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
@@ -140,19 +151,31 @@ export default function UnifiedBilling({ orderId, orderType, wheelType }: Unifie
     }
   };
 
+  // ✅ FIXED: Query with image handling
   const { data: orderData, isLoading, refetch: refetchOrder } = useQuery({
     queryKey: [getEndpoint(), orderId],
     enabled: !!orderId,
     queryFn: async () => {
       const res = await apiRequest(`${getEndpoint()}/${orderId}`, "GET");
-      return res.json();
+      const data = await res.json();
+      
+      // ✅ Merge passed image or stored image into competition data
+      if (data.competition) {
+        if (passedImage) {
+          data.competition.imageUrl = passedImage;
+        } else if (storedImage) {
+          data.competition.imageUrl = storedImage;
+        }
+      }
+      
+      return data;
     },
   });
 
   const order       = orderData?.order;
   const user        = orderData?.user;
   const competition = orderData?.competition;
-console.log(competition)
+
   const isInstantCompetition = orderType === "competition" && competition?.type === "instant";
   const isPointsDisabled = isInstantCompetition;
 
@@ -259,60 +282,57 @@ console.log(competition)
     },
   });
 
-  
-
-const handleConfirmPayment = () => {
-  if (!orderId) {
-    toast({ title: "Error", description: "Invalid order ID.", variant: "destructive" });
-    return;
-  }
-  if (!agreeToTerms) {
-    toast({ title: "Terms Not Accepted", description: "Please agree to terms and conditions.", variant: "destructive" });
-    return;
-  }
-  if (!hasSelectedMethod) {
-    toast({ title: "Select Payment Method", description: "Please select a payment method.", variant: "destructive" });
-    return;
-  }
-  if (isInstantCompetition && selectedMethods.ringtonePoints) {
-    toast({ title: "Invalid Payment Method", description: "Ringtone Points cannot be used for competitions.", variant: "destructive" });
-    return;
-  }
-
-  // ✅ ADD MINIMUM PURCHASE VALIDATION FOR INSTANT PLAY
-  if (selectedMethods.instaplay) {
-    const validation = validateMinimumPurchase(totalAmount, 'instaplay');
-    if (!validation.valid) {
-      toast({
-        variant: "destructive",
-        title: `Minimum £${validation.minimumAmount} Purchase Required`,
-        description: validation.message,
-        duration: 6000,
-      });
+  const handleConfirmPayment = () => {
+    if (!orderId) {
+      toast({ title: "Error", description: "Invalid order ID.", variant: "destructive" });
       return;
     }
-  }
+    if (!agreeToTerms) {
+      toast({ title: "Terms Not Accepted", description: "Please agree to terms and conditions.", variant: "destructive" });
+      return;
+    }
+    if (!hasSelectedMethod) {
+      toast({ title: "Select Payment Method", description: "Please select a payment method.", variant: "destructive" });
+      return;
+    }
+    if (isInstantCompetition && selectedMethods.ringtonePoints) {
+      toast({ title: "Invalid Payment Method", description: "Ringtone Points cannot be used for competitions.", variant: "destructive" });
+      return;
+    }
 
-  if (selectedMethods.instaplay) {
+    if (selectedMethods.instaplay) {
+      const validation = validateMinimumPurchase(totalAmount, 'instaplay');
+      if (!validation.valid) {
+        toast({
+          variant: "destructive",
+          title: `Minimum £${validation.minimumAmount} Purchase Required`,
+          description: validation.message,
+          duration: 6000,
+        });
+        return;
+      }
+    }
+
+    if (selectedMethods.instaplay) {
+      setIsProcessing(true);
+      processPaymentMutation.mutate({ useInstaplay: true });
+      return;
+    }
+
+    if (remainingAmount > 0) {
+      setShowTopUpModal(true);
+      return;
+    }
+
     setIsProcessing(true);
-    processPaymentMutation.mutate({ useInstaplay: true });
-    return;
-  }
-
-  if (remainingAmount > 0) {
-    setShowTopUpModal(true);
-    return;
-  }
-
-  setIsProcessing(true);
-  processPaymentMutation.mutate({
-    useWalletBalance: selectedMethods.walletBalance,
-    useRingtonePoints: selectedMethods.ringtonePoints,
-    walletAmount: walletUsed,
-    pointsAmount: pointsUsed,
-    pointsNeeded
-  });
-};
+    processPaymentMutation.mutate({
+      useWalletBalance: selectedMethods.walletBalance,
+      useRingtonePoints: selectedMethods.ringtonePoints,
+      walletAmount: walletUsed,
+      pointsAmount: pointsUsed,
+      pointsNeeded
+    });
+  };
 
   useEffect(() => {
     const pending = localStorage.getItem("pendingInstaplayOrder");
@@ -330,28 +350,31 @@ const handleConfirmPayment = () => {
     }
   }, [orderId]);
 
+  // ✅ Helper to get the competition image with fallbacks
+  const getCompetitionImage = () => {
+    // Priority: passedImage > storedImage > competition.imageUrl > fallback
+    if (passedImage) return passedImage;
+    if (storedImage) return storedImage;
+    if (competition?.imageUrl) return competition.imageUrl;
+    return "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&h=600";
+  };
+
   const FALLBACK = "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&h=600";
-  const prizeMatch = competition?.title?.match(/£[\d,]+/);
+  const imageSrc = getCompetitionImage();
+
   // Better prize extraction with fallbacks
-const getPrizeValue = () => {
-  if (!competition?.title) return "£10,000";
-  
-  // Try to find £ amount in title
-  const prizeMatch = competition.title.match(/£[\d,]+/);
-  if (prizeMatch) return prizeMatch[0];
-  
-  // Try to find numeric amount with currency symbol
-  const numericMatch = competition.title.match(/[\d,]+/);
-  if (numericMatch) return `£${numericMatch[0]}`;
-  
-  // Fallback
-  return "£10,000";
-};
+  const getPrizeValue = () => {
+    if (!competition?.title) return "£10,000";
+    const prizeMatch = competition.title.match(/£[\d,]+/);
+    if (prizeMatch) return prizeMatch[0];
+    const numericMatch = competition.title.match(/[\d,]+/);
+    if (numericMatch) return `£${numericMatch[0]}`;
+    return "£10,000";
+  };
 
-const prizeVal = getPrizeValue();
-  const qty        = order?.quantity || 1;
+  const prizeVal = getPrizeValue();
+  const qty = order?.quantity || 1;
 
-  /* ── LOADING ── */
   if (isLoading) return (
     <div style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: BG }}>
       <div style={{ width: 48, height: 48, border: "2px solid rgba(255,185,0,0.15)", borderTopColor: GOLD, borderRadius: "50%", animation: "ub-spin 0.8s linear infinite" }} />
@@ -405,19 +428,16 @@ const prizeVal = getPrizeValue();
         {/* ── LEFT ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
-          {/* HERO CARD */}
+          {/* HERO CARD - ✅ FIXED with imageSrc */}
           <div style={{ ...P, overflow: "hidden" }}>
-            {/* Gold top line */}
             <div style={{ height: 2, background: `linear-gradient(90deg,transparent,${GOLD},${AMBER},transparent)` }} />
             <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 0 }} className="ub-hero">
 
-              {/* Competition image */}
               <div style={{ position: "relative", overflow: "hidden" }}>
-                <img src={competition?.imageUrl || FALLBACK} alt=""
+                <img src={imageSrc} alt=""
                   onError={e => { (e.target as HTMLImageElement).src = FALLBACK; }}
                   style={{ width: "100%", height: "100%", objectFit: "cover", filter: "saturate(1.2) brightness(0.8)" }} />
                 <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg,transparent 60%,rgba(14,10,2,0.8) 100%)" }} />
-                {/* Prize overlay */}
                 {prizeVal && (
                   <div style={{ position: "absolute", bottom: 10, left: 0, right: 0, textAlign: "center" }}>
                     {[prizeVal, prizeVal, prizeVal].slice(0, 3).map((v, i) => (
@@ -427,9 +447,7 @@ const prizeVal = getPrizeValue();
                 )}
               </div>
 
-              {/* Text content */}
               <div style={{ padding: "18px 20px 20px" }}>
-                {/* Badges */}
                 <div style={{ display: "flex", gap: 7, marginBottom: 12, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 20, background: "rgba(0,230,118,0.1)", border: "1px solid rgba(0,230,118,0.25)" }}>
                     <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#00E676", boxShadow: "0 0 6px #00E676", animation: "ub-blink 1.5s ease-in-out infinite" }} />
@@ -453,7 +471,6 @@ const prizeVal = getPrizeValue();
                   </span>
                 </div>
 
-                {/* 4 feature icons */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
                   {[
                     { icon: Zap,     label: "Instant", sub: "Results",           color: GOLD    },
@@ -479,7 +496,6 @@ const prizeVal = getPrizeValue();
 
           {/* ENTRY ACTIVATION */}
           <div style={{ ...P, overflow: "hidden" }}>
-            {/* Header */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: `1px solid rgba(255,185,0,0.1)` }}>
               <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                 <Zap style={{ width: 15, height: 15, color: GOLD }} />
@@ -501,9 +517,7 @@ const prizeVal = getPrizeValue();
               )}
             </div>
 
-            {/* Entry rows */}
             <div style={{ padding: "4px 0" }}>
-              {/* Item row */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 18px", borderBottom: `1px solid rgba(255,185,0,0.06)` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                   <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,185,0,0.1)", border: `1px solid rgba(255,185,0,0.2)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -514,13 +528,11 @@ const prizeVal = getPrizeValue();
                 <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.65)" }}>{qty} Entr{qty === 1 ? "y" : "ies"}</span>
               </div>
 
-              {/* Price per entry */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 18px", borderBottom: `1px solid rgba(255,185,0,0.06)` }}>
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Price per Entry</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>£{itemCost.toFixed(2)}</span>
               </div>
 
-              {/* Discount rows */}
               {discountType === "percentage" && percentageDiscount > 0 && (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 18px", borderBottom: `1px solid rgba(255,185,0,0.06)` }}>
                   <span style={{ fontSize: 12, color: "#00E676" }}>{percentageDiscount}% Discount</span>
@@ -534,7 +546,6 @@ const prizeVal = getPrizeValue();
                 </div>
               )}
 
-              {/* TOTAL COST */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 18px" }}>
                 <span style={{ fontSize: 11, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.2em", color: "rgba(255,255,255,0.45)" }}>TOTAL COST</span>
                 <div style={{ textAlign: "right" }}>
@@ -545,15 +556,6 @@ const prizeVal = getPrizeValue();
                 </div>
               </div>
             </div>
-
-            {/* Bonus banner */}
-            {/* <div style={{ margin: "0 14px 14px", padding: "10px 14px", borderRadius: 10, background: "rgba(139,92,246,0.07)", border: "1px solid rgba(139,92,246,0.2)", display: "flex", alignItems: "center", gap: 9 }}>
-              <span style={{ fontSize: 16 }}>🎁</span>
-              <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.7)" }}>
-                <strong style={{ color: GOLD }}>BONUS</strong> — You will earn{" "}
-                <strong style={{ color: "#8B5CF6" }}>{bonusPoints} RingTone Points</strong> with this entry!
-              </span>
-            </div> */}
           </div>
 
           {/* PAYMENT TERMINAL */}
@@ -582,7 +584,6 @@ const prizeVal = getPrizeValue();
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>Available: <span style={{ color: GOLD, fontWeight: 800 }}>£{walletBalance.toFixed(2)}</span></div>
                   {selectedMethods.walletBalance && walletUsed > 0 && <div style={{ fontSize: 9.5, color: "#00E676", marginTop: 2 }}>✓ Using £{walletUsed.toFixed(2)} from wallet</div>}
                 </div>
-                {/* Radio circle */}
                 <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${selectedMethods.walletBalance ? GOLD : "rgba(255,255,255,0.25)"}`, background: selectedMethods.walletBalance ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   {selectedMethods.walletBalance && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#000" }} />}
                 </div>
@@ -610,69 +611,66 @@ const prizeVal = getPrizeValue();
                 </div>
               </div>
 
-             {/* INSTANT PLAY - Updated with minimum purchase indicator */}
-{isGame && (
-  <div 
-    onClick={() => handleMethodToggle("instaplay")} 
-    data-testid="checkbox-instaplay"
-    style={{ 
-      padding: "13px 16px", 
-      borderRadius: 12, 
-      border: `2px solid ${selectedMethods.instaplay ? "#00CFFF" : "rgba(255,255,255,0.1)"}`, 
-      background: selectedMethods.instaplay ? "rgba(0,207,255,0.06)" : "rgba(255,255,255,0.02)", 
-      cursor: "pointer", 
-      display: "flex", 
-      alignItems: "center", 
-      gap: 14, 
-      transition: "all 0.18s" 
-    }}
-  >
-    <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(0,207,255,0.1)", border: "1px solid rgba(0,207,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-      <Zap style={{ width: 20, height: 20, color: "#00CFFF" }} />
-    </div>
-    <div style={{ flex: 1 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-        <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>Instant Play</span>
-        <div style={{ padding: "1px 8px", borderRadius: 20, fontSize: 7.5, fontWeight: 900, background: "rgba(0,207,255,0.1)", border: "1px solid rgba(0,207,255,0.25)", color: "#00CFFF", letterSpacing: "0.08em" }}>
-          FAST & INSTANT
-        </div>
-      </div>
-      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
-        Pay directly with card • No wallet top-up needed
-      </div>
-      
-      {/* ✅ MINIMUM PURCHASE INDICATOR */}
-      {selectedMethods.instaplay && totalAmount < MIN_PURCHASE ? (
-        <div style={{ fontSize: 9.5, color: "#FF9500", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
-          <AlertCircle style={{ width: 12, height: 12 }} />
-          Minimum £{MIN_PURCHASE} required • Current: £{totalAmount.toFixed(2)}
-        </div>
-      ) : selectedMethods.instaplay && (
-        <div style={{ fontSize: 9.5, color: "#00E676", marginTop: 2 }}>
-          ✓ Pay £{totalAmount.toFixed(2)} now and play instantly
-        </div>
-      )}
-      
-      {!selectedMethods.instaplay && totalAmount > 0 && totalAmount < MIN_PURCHASE && (
-        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", marginTop: 1 }}>
-          Minimum £{MIN_PURCHASE} for Instant Play
-        </div>
-      )}
-    </div>
-    
-    {/* Radio circle */}
-    <div style={{ 
-      width: 20, height: 20, borderRadius: "50%", 
-      border: `2px solid ${selectedMethods.instaplay ? "#00CFFF" : "rgba(255,255,255,0.25)"}`, 
-      background: selectedMethods.instaplay ? "#00CFFF" : "transparent", 
-      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 
-    }}>
-      {selectedMethods.instaplay && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#000" }} />}
-    </div>
-  </div>
-)}
+              {/* INSTANT PLAY */}
+              {isGame && (
+                <div 
+                  onClick={() => handleMethodToggle("instaplay")} 
+                  data-testid="checkbox-instaplay"
+                  style={{ 
+                    padding: "13px 16px", 
+                    borderRadius: 12, 
+                    border: `2px solid ${selectedMethods.instaplay ? "#00CFFF" : "rgba(255,255,255,0.1)"}`, 
+                    background: selectedMethods.instaplay ? "rgba(0,207,255,0.06)" : "rgba(255,255,255,0.02)", 
+                    cursor: "pointer", 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: 14, 
+                    transition: "all 0.18s" 
+                  }}
+                >
+                  <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(0,207,255,0.1)", border: "1px solid rgba(0,207,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Zap style={{ width: 20, height: 20, color: "#00CFFF" }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>Instant Play</span>
+                      <div style={{ padding: "1px 8px", borderRadius: 20, fontSize: 7.5, fontWeight: 900, background: "rgba(0,207,255,0.1)", border: "1px solid rgba(0,207,255,0.25)", color: "#00CFFF", letterSpacing: "0.08em" }}>
+                        FAST & INSTANT
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
+                      Pay directly with card • No wallet top-up needed
+                    </div>
+                    
+                    {selectedMethods.instaplay && totalAmount < MIN_PURCHASE ? (
+                      <div style={{ fontSize: 9.5, color: "#FF9500", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
+                        <AlertCircle style={{ width: 12, height: 12 }} />
+                        Minimum £{MIN_PURCHASE} required • Current: £{totalAmount.toFixed(2)}
+                      </div>
+                    ) : selectedMethods.instaplay && (
+                      <div style={{ fontSize: 9.5, color: "#00E676", marginTop: 2 }}>
+                        ✓ Pay £{totalAmount.toFixed(2)} now and play instantly
+                      </div>
+                    )}
+                    
+                    {!selectedMethods.instaplay && totalAmount > 0 && totalAmount < MIN_PURCHASE && (
+                      <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", marginTop: 1 }}>
+                        Minimum £{MIN_PURCHASE} for Instant Play
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div style={{ 
+                    width: 20, height: 20, borderRadius: "50%", 
+                    border: `2px solid ${selectedMethods.instaplay ? "#00CFFF" : "rgba(255,255,255,0.25)"}`, 
+                    background: selectedMethods.instaplay ? "#00CFFF" : "transparent", 
+                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 
+                  }}>
+                    {selectedMethods.instaplay && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#000" }} />}
+                  </div>
+                </div>
+              )}
 
-              {/* Insufficient funds warning */}
               {hasSelectedMethod && !selectedMethods.instaplay && remainingAmount > 0 && (
                 <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(255,122,0,0.08)", border: "1px solid rgba(255,122,0,0.28)", display: "flex", alignItems: "center", gap: 8 }}>
                   <AlertCircle style={{ width: 15, height: 15, color: "#FF9500", flexShrink: 0 }} />
@@ -695,90 +693,89 @@ const prizeVal = getPrizeValue();
             </label>
           </div>
 
-          {/* ACTIVATE ENTRY CTA - Updated */}
-<div>
-  <button 
-    onClick={handleConfirmPayment} 
-    disabled={isProcessing || !agreeToTerms || !hasSelectedMethod}
-    data-testid="button-checkout" 
-    className="ub-cta"
-    style={{
-      width: "100%", padding: "17px 24px", borderRadius: 14, border: "none",
-      fontSize: 16, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em",
-      cursor: (isProcessing || !agreeToTerms || !hasSelectedMethod) ? "not-allowed" : "pointer",
-      background: (isProcessing || !agreeToTerms || !hasSelectedMethod)
-        ? "rgba(255,255,255,0.05)"
-        : selectedMethods.instaplay && totalAmount < MIN_PURCHASE
-          ? "rgba(255,122,0,0.2)"
-          : selectedMethods.instaplay
-            ? "linear-gradient(135deg,#00B4CC,#0070F3,#00B4CC)"
-            : `linear-gradient(135deg,#FFE066 0%,${GOLD} 25%,${AMBER} 55%,${GOLD} 80%,#FFE066 100%)`,
-      backgroundSize: "250% 100%",
-      color: (isProcessing || !agreeToTerms || !hasSelectedMethod) 
-        ? "rgba(255,255,255,0.2)" 
-        : selectedMethods.instaplay && totalAmount < MIN_PURCHASE
-          ? "#FF9500"
-          : "#000",
-      boxShadow: (isProcessing || !agreeToTerms || !hasSelectedMethod || (selectedMethods.instaplay && totalAmount < MIN_PURCHASE)) 
-        ? "none" 
-        : `0 0 40px rgba(255,185,0,0.45), 0 8px 30px rgba(255,140,0,0.3)`,
-      animation: (isProcessing || !agreeToTerms || !hasSelectedMethod || (selectedMethods.instaplay && totalAmount < MIN_PURCHASE)) 
-        ? "none" 
-        : "ub-plasma 3s ease infinite",
-      position: "relative", overflow: "hidden",
-    }}>
-    {(!isProcessing && agreeToTerms && hasSelectedMethod && !(selectedMethods.instaplay && totalAmount < MIN_PURCHASE)) && (
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(105deg,transparent 25%,rgba(255,255,255,0.3) 50%,transparent 75%)", animation: "ub-shimmer 2s ease-in-out infinite" }} />
-    )}
-    <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-      {isProcessing ? (
-        <><div style={{ width: 20, height: 20, border: "2px solid rgba(0,0,0,0.3)", borderTopColor: "transparent", borderRadius: "50%", animation: "ub-spin 0.7s linear infinite" }} />PROCESSING...</>
-      ) : selectedMethods.instaplay && totalAmount < MIN_PURCHASE ? (
-        <><AlertCircle style={{ width: 20, height: 20 }} />MINIMUM £{MIN_PURCHASE} REQUIRED</>
-      ) : selectedMethods.instaplay ? (
-        <><Zap style={{ width: 20, height: 20 }} />PAY WITH INSTAPLAY — £{totalAmount.toFixed(2)}</>
-      ) : remainingAmount > 0 ? (
-        <><Lock style={{ width: 20, height: 20 }} />TOP UP REQUIRED — £{remainingAmount.toFixed(2)}</>
-      ) : (
-        <><Zap style={{ width: 20, height: 20 }} />ACTIVATE ENTRY — £{totalAmount.toFixed(2)}</>
-      )}
-    </span>
-  </button>
+          {/* ACTIVATE ENTRY CTA */}
+          <div>
+            <button 
+              onClick={handleConfirmPayment} 
+              disabled={isProcessing || !agreeToTerms || !hasSelectedMethod}
+              data-testid="button-checkout" 
+              className="ub-cta"
+              style={{
+                width: "100%", padding: "17px 24px", borderRadius: 14, border: "none",
+                fontSize: 16, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em",
+                cursor: (isProcessing || !agreeToTerms || !hasSelectedMethod) ? "not-allowed" : "pointer",
+                background: (isProcessing || !agreeToTerms || !hasSelectedMethod)
+                  ? "rgba(255,255,255,0.05)"
+                  : selectedMethods.instaplay && totalAmount < MIN_PURCHASE
+                    ? "rgba(255,122,0,0.2)"
+                    : selectedMethods.instaplay
+                      ? "linear-gradient(135deg,#00B4CC,#0070F3,#00B4CC)"
+                      : `linear-gradient(135deg,#FFE066 0%,${GOLD} 25%,${AMBER} 55%,${GOLD} 80%,#FFE066 100%)`,
+                backgroundSize: "250% 100%",
+                color: (isProcessing || !agreeToTerms || !hasSelectedMethod) 
+                  ? "rgba(255,255,255,0.2)" 
+                  : selectedMethods.instaplay && totalAmount < MIN_PURCHASE
+                    ? "#FF9500"
+                    : "#000",
+                boxShadow: (isProcessing || !agreeToTerms || !hasSelectedMethod || (selectedMethods.instaplay && totalAmount < MIN_PURCHASE)) 
+                  ? "none" 
+                  : `0 0 40px rgba(255,185,0,0.45), 0 8px 30px rgba(255,140,0,0.3)`,
+                animation: (isProcessing || !agreeToTerms || !hasSelectedMethod || (selectedMethods.instaplay && totalAmount < MIN_PURCHASE)) 
+                  ? "none" 
+                  : "ub-plasma 3s ease infinite",
+                position: "relative", overflow: "hidden",
+              }}>
+              {(!isProcessing && agreeToTerms && hasSelectedMethod && !(selectedMethods.instaplay && totalAmount < MIN_PURCHASE)) && (
+                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(105deg,transparent 25%,rgba(255,255,255,0.3) 50%,transparent 75%)", animation: "ub-shimmer 2s ease-in-out infinite" }} />
+              )}
+              <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                {isProcessing ? (
+                  <><div style={{ width: 20, height: 20, border: "2px solid rgba(0,0,0,0.3)", borderTopColor: "transparent", borderRadius: "50%", animation: "ub-spin 0.7s linear infinite" }} />PROCESSING...</>
+                ) : selectedMethods.instaplay && totalAmount < MIN_PURCHASE ? (
+                  <><AlertCircle style={{ width: 20, height: 20 }} />MINIMUM £{MIN_PURCHASE} REQUIRED</>
+                ) : selectedMethods.instaplay ? (
+                  <><Zap style={{ width: 20, height: 20 }} />PAY WITH INSTAPLAY — £{totalAmount.toFixed(2)}</>
+                ) : remainingAmount > 0 ? (
+                  <><Lock style={{ width: 20, height: 20 }} />TOP UP REQUIRED — £{remainingAmount.toFixed(2)}</>
+                ) : (
+                  <><Zap style={{ width: 20, height: 20 }} />ACTIVATE ENTRY — £{totalAmount.toFixed(2)}</>
+                )}
+              </span>
+            </button>
 
-  {/* Show minimum purchase note under button */}
-  {selectedMethods.instaplay && totalAmount < MIN_PURCHASE && (
-    <div style={{ 
-      marginTop: 8, 
-      padding: "8px 12px", 
-      borderRadius: 8, 
-      background: "rgba(255,122,0,0.1)", 
-      border: "1px solid rgba(255,122,0,0.2)",
-      textAlign: "center",
-      fontSize: 11,
-      color: "#FF9500"
-    }}>
-      Add {Math.ceil((MIN_PURCHASE - totalAmount) / (totalAmount / (order?.quantity || 1)))} more play(s) to reach £{MIN_PURCHASE} minimum
-    </div>
-  )}
+            {selectedMethods.instaplay && totalAmount < MIN_PURCHASE && (
+              <div style={{ 
+                marginTop: 8, 
+                padding: "8px 12px", 
+                borderRadius: 8, 
+                background: "rgba(255,122,0,0.1)", 
+                border: "1px solid rgba(255,122,0,0.2)",
+                textAlign: "center",
+                fontSize: 11,
+                color: "#FF9500"
+              }}>
+                Add {Math.ceil((MIN_PURCHASE - totalAmount) / (totalAmount / (order?.quantity || 1)))} more play(s) to reach £{MIN_PURCHASE} minimum
+              </div>
+            )}
 
-  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 12 }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-      <Lock style={{ width: 10, height: 10, color: "rgba(255,185,0,0.45)" }} />
-      <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.14em" }}>Safe. Secure. Encrypted.</span>
-    </div>
-    <div style={{ width: 3, height: 3, borderRadius: "50%", background: "rgba(255,255,255,0.15)" }} />
-    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-      <Shield style={{ width: 10, height: 10, color: "rgba(255,185,0,0.45)" }} />
-      <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.14em" }}>256-Bit SSL Protection</span>
-    </div>
-  </div>
-</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <Lock style={{ width: 10, height: 10, color: "rgba(255,185,0,0.45)" }} />
+                <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.14em" }}>Safe. Secure. Encrypted.</span>
+              </div>
+              <div style={{ width: 3, height: 3, borderRadius: "50%", background: "rgba(255,255,255,0.15)" }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <Shield style={{ width: 10, height: 10, color: "rgba(255,185,0,0.45)" }} />
+                <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.14em" }}>256-Bit SSL Protection</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ── RIGHT SIDEBAR ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
-          {/* PRIZE POOL */}
+          {/* PRIZE POOL - ✅ FIXED with imageSrc */}
           <div style={{ ...P, overflow: "hidden" }}>
             <div style={{ height: 2, background: `linear-gradient(90deg,transparent,${GOLD},${AMBER},transparent)` }} />
             <div style={{ padding: "12px 14px 6px", borderBottom: `1px solid rgba(255,185,0,0.1)`, display: "flex", alignItems: "center", gap: 7 }}>
@@ -786,8 +783,7 @@ const prizeVal = getPrizeValue();
               <span style={{ fontSize: 8.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(255,185,0,0.6)" }}>PRIZE POOL</span>
             </div>
             <div style={{ position: "relative", overflow: "hidden", textAlign: "center", padding: "10px 14px 0" }}>
-              {/* bg image */}
-              <img src={competition?.imageUrl || FALLBACK} alt="" onError={e => { (e.target as HTMLImageElement).src = FALLBACK; }}
+              <img src={imageSrc} alt="" onError={e => { (e.target as HTMLImageElement).src = FALLBACK; }}
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.25, filter: "saturate(1.4) blur(4px)" }} />
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,rgba(14,10,2,0.6) 0%,rgba(14,10,2,0.92) 100%)" }} />
               <div style={{ position: "relative", zIndex: 2, padding: "4px 0 12px" }}>
@@ -797,7 +793,6 @@ const prizeVal = getPrizeValue();
                 <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(255,255,255,0.45)", marginTop: 4 }}>
                   CASH PRIZE
                 </div>
-                {/* Money stack image placeholder */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 10, marginBottom: 4 }}>
                   {["💰", "💰", "💰"].map((e, i) => (
                     <span key={i} style={{ fontSize: 24, filter: "drop-shadow(0 0 12px rgba(255,185,0,0.5))", animation: `ub-float ${2.5 + i * 0.4}s ease-in-out ${i * 0.3}s infinite` }}>{e}</span>
@@ -813,7 +808,6 @@ const prizeVal = getPrizeValue();
               <div style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(255,185,0,0.1)", border: `1px solid rgba(255,185,0,0.3)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: GOLD }}>1</div>
               <span style={{ fontSize: 8.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.2em", color: "rgba(255,185,0,0.6)" }}>ENTRY RESERVED</span>
             </div>
-            {/* Circular timer */}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
               <div style={{ position: "relative", width: 120, height: 120 }}>
                 <svg width="120" height="120" viewBox="0 0 120 120" style={{ position: "absolute", inset: 0 }}>
@@ -835,59 +829,11 @@ const prizeVal = getPrizeValue();
             </div>
           </div>
 
-          {/* WHAT YOU COULD WIN */}
-          <div style={{ ...P, overflow: "hidden" }}>
-            <div style={{ padding: "12px 14px", borderBottom: `1px solid rgba(255,185,0,0.1)`, display: "flex", alignItems: "center", gap: 7 }}>
-              <span style={{ fontSize: 12 }}>🏆</span>
-              <span style={{ fontSize: 8.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.2em", color: "rgba(255,185,0,0.6)" }}>WHAT YOU COULD WIN</span>
-            </div>
-            <div style={{ padding: "6px 0" }}>
-              {[
-                { icon: "🥇", label: prizeVal ? `${prizeVal} Cash` : "Top Prize", badge: "TOP PRIZE",         color: GOLD,            badgeBg: "rgba(255,185,0,0.12)", badgeBorder: "rgba(255,185,0,0.3)" },
-                { icon: "🥈", label: "£5,000 Cash",                               badge: null,                color: "rgba(255,255,255,0.65)" },
-                { icon: "🥉", label: "£1,000 Cash",                               badge: null,                color: AMBER },
-                // { icon: "⭐", label: "Bonus RingTone Points",                     badge: "Extra rewards",     color: "#8B5CF6",       badgeBg: "rgba(139,92,246,0.1)", badgeBorder: "rgba(139,92,246,0.25)" },
-              ].map((w, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderBottom: i < 3 ? `1px solid rgba(255,185,0,0.06)` : "none" }}>
-                  <span style={{ fontSize: 18, flexShrink: 0 }}>{w.icon}</span>
-                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: w.color }}>{w.label}</span>
-                  {w.badge && (
-                    <div style={{ padding: "2px 8px", borderRadius: 20, fontSize: 7.5, fontWeight: 900, background: w.badgeBg, border: `1px solid ${w.badgeBorder}`, color: w.color, whiteSpace: "nowrap" }}>
-                      {w.badge}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+         
         </div>
       </div>
 
-      {/* ══ TRUST STATS ══ */}
-      <div style={{ background: "#060500", borderTop: `1px solid ${BORDER}` }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 16px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)" }} className="trust-g">
-            {[
-              { icon: Users,      val: "50,000+", label: "Happy Winners",      color: GOLD,      rgb: "255,185,0"  },
-              { icon: Zap,        val: "£2.4M+",  label: "Paid Out",           color: AMBER,     rgb: "255,140,0"  },
-              { icon: Star,       val: "4.9/5",   label: "Trustpilot Rating",  color: GOLD,      rgb: "255,185,0", stars: true },
-              { icon: Shield,     val: "100%",    label: "Secure & Safe",      color: "#00E676", rgb: "0,230,118" },
-              { icon: Headphones, val: "24/7",    label: "Customer Support",   color: "#00CFFF", rgb: "0,207,255" },
-            ].map((s, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 10px", borderRight: i < 4 ? `1px solid rgba(255,185,0,0.07)` : "none" }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: `rgba(${s.rgb},0.1)`, border: `1px solid rgba(${s.rgb},0.25)` }}>
-                  <s.icon style={{ width: 17, height: 17, color: s.color }} />
-                </div>
-                <div>
-                  <div style={{ fontSize: "clamp(0.9rem, 1.6vw, 1.15rem)", fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.val}</div>
-                  {(s as any).stars && <div style={{ display: "flex", gap: 1, margin: "1px 0" }}>{[0,1,2,3,4].map(j => <span key={j} style={{ fontSize: 7, color: GOLD }}>★</span>)}</div>}
-                  <div style={{ fontSize: 7.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.28)", marginTop: (s as any).stars ? 0 : 2 }}>{s.label}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+  
 
       {/* ══ DISCOUNT DIALOG ══ */}
       <Dialog open={showDiscountDialog} onOpenChange={setShowDiscountDialog}>
