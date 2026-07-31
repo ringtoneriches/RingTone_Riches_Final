@@ -83,7 +83,6 @@ function FloatingCoins({ active }: { active: boolean }) {
 }
 
 // ─── Win Overlay (Responsive) ───────────────────────────────────────────
-// ─── Win Overlay (Responsive, No External Images) ───────────────────────
 function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show: boolean; coinsWon: number; prizeType: "cash" | "points"; prizeName: string; onDismiss: () => void }) {
   const winLabel = coinsWon >= 1000 ? "JACKPOT WIN! 🎉" : coinsWon >= 500 ? "BIG WIN! 🔥" : "AMAZING WIN!";
   const isCash = prizeType === "cash";
@@ -142,11 +141,6 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
                     style={{ background: "linear-gradient(180deg, #FFD700, #B8860B)", boxShadow: "0 4px 10px rgba(0,0,0,0.5)" }} />
                   <div className="w-28 sm:w-32 h-3 sm:h-4 mx-auto rounded-b-lg"
                     style={{ background: "linear-gradient(180deg, #B8860B, #8B6914)", boxShadow: "0 4px 10px rgba(0,0,0,0.5)" }} />
-                  
-                  {/* Stars around trophy */}
-                  {/* <div className="absolute -top-3 -right-2 text-xl sm:text-2xl animate-ping">✨</div>
-                  <div className="absolute -top-1 -left-4 text-lg sm:text-xl animate-pulse">⭐</div>
-                  <div className="absolute bottom-0 -right-4 text-base sm:text-lg animate-bounce">💫</div> */}
                 </div>
               </div>
             </div>
@@ -186,18 +180,6 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
 
               {/* Coins and Amount */}
               <div className="flex items-center gap-0 mb-3">
-                {/* Left Coin */}
-                {/* <div className="w-16 sm:w-[72px] h-16 sm:h-[72px] flex-shrink-0 flex items-center justify-center -mr-2.5 z-2 animate-[floatCoin_3s_ease-in-out_infinite]">
-                  <div className="w-12 sm:w-14 h-12 sm:h-14 rounded-full flex items-center justify-center text-2xl sm:text-3xl"
-                    style={{
-                      background: "linear-gradient(135deg, #FFD700, #FFA500, #FF8C00)",
-                      border: "3px solid #B8860B",
-                      boxShadow: "0 0 20px rgba(255,215,0,0.7), inset 0 2px 5px rgba(255,255,255,0.4)"
-                    }}>
-                    💰
-                  </div>
-                </div> */}
-
                 {/* Amount Box */}
                 <div className="flex-1 px-3 sm:px-3 py-3 sm:py-3.5 rounded-2xl border border-[rgba(255,180,0,0.45)] flex flex-col items-center justify-center z-1"
                   style={{
@@ -219,7 +201,7 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
                       filter: "drop-shadow(0 0 20px rgba(255,200,0,0.65))",
                       fontFamily: "'Impact','Arial Black',sans-serif"
                     }}>
-                    {isCash ? `+£${coinsWon.toLocaleString()}` : `+${coinsWon.toLocaleString()}`}
+                    {isCash ? `+£${coinsWon.toLocaleString()}` : `+${coinsWon.toLocaleString()} pts`}
                   </div>
 
                   <div className="text-[11px] font-black tracking-[5px] text-[rgba(252,211,77,0.8)] uppercase mt-1.5 text-center">
@@ -228,19 +210,6 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
                     <span className="text-[rgba(255,180,0,0.35)] ml-2">◆</span>
                   </div>
                 </div>
-
-                {/* Right Coin */}
-                {/* <div className="w-16 sm:w-[72px] h-16 sm:h-[72px] flex-shrink-0 flex items-center justify-center -ml-2.5 z-2 animate-[floatCoin_3s_1.1s_ease-in-out_infinite]">
-                  <div className="w-12 sm:w-14 h-12 sm:h-14 rounded-full flex items-center justify-center text-2xl sm:text-3xl"
-                    style={{
-                      background: "linear-gradient(135deg, #FFD700, #FFA500, #FF8C00)",
-                      border: "3px solid #B8860B",
-                      boxShadow: "0 0 20px rgba(255,215,0,0.7), inset 0 2px 5px rgba(255,255,255,0.4)",
-                      transform: "scaleX(-1)"
-                    }}>
-                    💰
-                  </div>
-                </div> */}
               </div>
 
               <div className="text-xs text-[rgba(220,190,255,0.45)] mb-3 tracking-[0.3px]">Credits added to your balance</div>
@@ -353,6 +322,7 @@ function LoseOverlay({ show, onDismiss }: { show: boolean; onDismiss: () => void
     </div>
   );
 }
+
 // ─── Casino Stat Card (Responsive) ───────────────────────────────────────
 function StatCard({ label, value, icon, accent }: { label: string; value: string | number; icon: string; accent?: boolean }) {
   return (
@@ -412,10 +382,38 @@ function SpinsCounter({ used, total }: { used: number; total: number }) {
   );
 }
 
-// ─── Spins Exhausted Overlay (Responsive) ───────────────────────────────
-function SpinsExhaustedOverlay({ totalSpins, wins, totalWon, onBack }: {
-  totalSpins: number; wins: number; totalWon: number; onBack: () => void;
-}) {
+// ─── Spins Exhausted Overlay (FIXED - Shows points vs cash) ──────────────
+interface SpinsExhaustedOverlayProps {
+  totalSpins: number;
+  wins: number;
+  totalWon: number;
+  prizeType: 'cash' | 'points';
+  onBack: () => void;
+}
+
+function SpinsExhaustedOverlay({ 
+  totalSpins, 
+  wins, 
+  totalWon, 
+  prizeType, 
+  onBack 
+}: SpinsExhaustedOverlayProps) {
+  // Format the won value based on prize type
+  const formatWonValue = () => {
+    if (totalWon <= 0) return "—";
+    if (prizeType === 'cash') {
+      return `£${totalWon}`;
+    } else {
+      return `${totalWon} pts`;
+    }
+  };
+
+  // Get the appropriate icon for the prize type
+  const getPrizeIcon = () => {
+    if (totalWon <= 0) return "💰";
+    return prizeType === 'cash' ? "💰" : "⭐";
+  };
+
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 sm:p-6"
       style={{
@@ -436,7 +434,11 @@ function SpinsExhaustedOverlay({ totalSpins, wins, totalWon, onBack }: {
         {[
           { label: "Spins", value: totalSpins, icon: "🎰" },
           { label: "Wins", value: wins, icon: "🏆" },
-          { label: "Won", value: totalWon > 0 ? `£${totalWon}` : "—", icon: "💰" },
+          { 
+            label: prizeType === 'cash' ? "Won" : "Points Won", 
+            value: formatWonValue(), 
+            icon: getPrizeIcon() 
+          },
         ].map(s => (
           <div key={s.label} className="text-center px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl min-w-[60px] sm:min-w-[72px]"
             style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(200,150,255,0.2)" }}>
@@ -733,6 +735,7 @@ export default function SlotGamePage() {
   const [lastCoinsWon, setLastCoinsWon] = useState(0);
   const [lastPrizeType, setLastPrizeType] = useState<"cash" | "points">("cash");
   const [lastPrizeName, setLastPrizeName] = useState("");
+  const [totalPrizeType, setTotalPrizeType] = useState<"cash" | "points">("cash");
 
   const { data: orderData, isLoading } = useQuery({
     queryKey: ["/api/slot-order", orderId],
@@ -766,9 +769,12 @@ export default function SlotGamePage() {
     console.log("[SLOT GAME] Spin complete callback received:", result);
     setSpinHistory(prev => [result.newEntry, ...prev]);
 
+    // Update total prize type based on the most recent win
     if (result.isWin && result.coinsWon > 0) {
+      const prizeType = result.prizeType === "points" ? "points" : "cash";
+      setTotalPrizeType(prizeType);
       setLastCoinsWon(result.coinsWon);
-      setLastPrizeType(result.prizeType === "points" ? "points" : "cash");
+      setLastPrizeType(prizeType);
       setLastPrizeName(result.prizeName || "");
       setShowLoseOverlay(false);
       setShowWinOverlay(true);
@@ -855,11 +861,11 @@ export default function SlotGamePage() {
             <div className="w-full" style={{ maxWidth: 960 }}>
               <div className="relative w-full rounded-xl sm:rounded-2xl overflow-hidden aspect-[9/14] sm:aspect-video min-h-[520px] sm:min-h-[280px]"
                 style={{
-  background: "#050010",
-  border: "1.5px solid rgba(180,100,255,0.25)",
-  boxShadow:
-    "0 0 0 1px rgba(255,180,0,0.08), 0 0 80px rgba(140,50,255,0.15), 0 30px 100px rgba(0,0,0,0.8)",
-}}>
+                  background: "#050010",
+                  border: "1.5px solid rgba(180,100,255,0.25)",
+                  boxShadow:
+                    "0 0 0 1px rgba(255,180,0,0.08), 0 0 80px rgba(140,50,255,0.15), 0 30px 100px rgba(0,0,0,0.8)",
+                }}>
                 {orderId && (
                   <SlotGameComponent
                     orderId={orderId}
@@ -878,6 +884,7 @@ export default function SlotGamePage() {
                     totalSpins={order?.quantity || spinHistory.length}
                     wins={spinHistory.filter(h => h.isWin).length}
                     totalWon={spinHistory.reduce((s, h) => s + (h.isWin ? (h.coinsWon || 0) : 0), 0)}
+                    prizeType={totalPrizeType}
                     onBack={() => navigate("/")}
                   />
                 )}
