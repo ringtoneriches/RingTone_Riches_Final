@@ -58,7 +58,7 @@ export default function AdminSettings() {
   const [signupBonusEnabled, setSignupBonusEnabled] = useState(false);
   const [signupBonusCash, setSignupBonusCash] = useState("0.00");
   const [signupBonusPoints, setSignupBonusPoints] = useState("0");
-  const [maxTicketsPerOrder, setMaxTicketsPerOrder] = useState("500");
+  const [maxTicketsPerOrder, setMaxTicketsPerOrder] = useState("10000");
 
   const [newUsername, setNewUsername] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -82,7 +82,7 @@ export default function AdminSettings() {
       setSignupBonusEnabled(settings.signupBonusEnabled || false);
       setSignupBonusCash(settings.signupBonusCash || "0.00");
       setSignupBonusPoints(String(settings.signupBonusPoints || 0));
-      setMaxTicketsPerOrder(String(settings.maxTicketsPerOrder || 500));
+      setMaxTicketsPerOrder(String(settings.maxTicketsPerOrder || 10000));
     }
   }, [settings]);
 
@@ -120,7 +120,7 @@ export default function AdminSettings() {
       signupBonusEnabled,
       signupBonusCash,
       signupBonusPoints: parseInt(signupBonusPoints) || 0,
-      maxTicketsPerOrder: parseInt(maxTicketsPerOrder) || 500,
+      maxTicketsPerOrder: parseInt(maxTicketsPerOrder) || 10000,
     });
   };
 
@@ -296,7 +296,7 @@ export default function AdminSettings() {
                   <Input
                     id="max-tickets"
                     type="number"
-                    placeholder="500"
+                    placeholder="10000"
                     value={maxTicketsPerOrder}
                     onChange={(e) => setMaxTicketsPerOrder(e.target.value)}
                     min="1"
@@ -313,7 +313,7 @@ export default function AdminSettings() {
                 <div className="p-4 bg-yellow-400/5 border border-yellow-400/20 rounded-lg">
                   <p className="text-sm font-medium text-foreground mb-2">Preview</p>
                   <p className="text-sm text-muted-foreground">
-                    Users will be able to select between <span className="text-yellow-400 font-bold">1</span> and <span className="text-yellow-400 font-bold">{maxTicketsPerOrder || 500}</span> tickets per order on competition pages.
+                    Users will be able to select between <span className="text-yellow-400 font-bold">1</span> and <span className="text-yellow-400 font-bold">10000</span> tickets per order on competition pages.
                   </p>
                 </div>
 

@@ -1146,8 +1146,6 @@ const registerLimiter = rateLimit({
   },
 });
 
-// ===== VALIDATION FUNCTIONS =====
-
 const validateFieldContent = (value: string, fieldName: string): string | null => {
   if (!value || value.trim().length === 0) return null;
   const trimmed = value.trim();
@@ -1156,6 +1154,25 @@ const validateFieldContent = (value: string, fieldName: string): string | null =
     return `${fieldName} is too long (maximum 50 characters)`;
   }
 
+  // For first and last names, only do minimal validation
+  // Real users shouldn't be blocked by aggressive bot detection
+  if (fieldName === "First name" || fieldName === "Last name") {
+    // Only allow letters, spaces, hyphens, apostrophes, periods, and commas
+    if (!/^[a-zA-Z\s\-',. ]+$/.test(trimmed)) {
+      return `${fieldName} contains invalid characters (only letters, spaces, hyphens, and apostrophes allowed)`;
+    }
+
+    // Must contain at least 2 letters
+    const letters = trimmed.match(/[a-zA-Z]/g) || [];
+    if (letters.length < 2) {
+      return `${fieldName} must contain at least 2 letters`;
+    }
+
+    // Name is valid - skip all other checks
+    return null;
+  }
+
+  // For all other fields, run the full security checks
   for (const pattern of SUSPICIOUS_PATTERNS) {
     if (pattern.test(trimmed)) {
       return `${fieldName} contains suspicious content (links, spam keywords, or unauthorized characters)`;
@@ -1168,12 +1185,6 @@ const validateFieldContent = (value: string, fieldName: string): string | null =
     }
   }
 
-  if (fieldName === "First name" || fieldName === "Last name") {
-    if (!/^[a-zA-Z\s\-'., ]+$/.test(trimmed)) {
-      return `${fieldName} contains invalid characters (only letters, spaces, hyphens, and apostrophes allowed)`;
-    }
-  }
-
   const specialChars = trimmed.match(/[^a-zA-Z0-9\s\-'., ]/g) || [];
   if (specialChars.length > trimmed.length * 0.3) {
     return `${fieldName} contains too many special characters`;
@@ -1181,13 +1192,6 @@ const validateFieldContent = (value: string, fieldName: string): string | null =
 
   if (/(\w)\1{5,}/.test(trimmed)) {
     return `${fieldName} contains too many repeated characters`;
-  }
-
-  if (fieldName === "First name" || fieldName === "Last name") {
-    const letters = trimmed.match(/[a-zA-Z]/g) || [];
-    if (letters.length < 2) {
-      return `${fieldName} must contain at least 2 letters`;
-    }
   }
 
   return null;
@@ -4305,16 +4309,18 @@ res.json({
         generatedTickets.push(ticket);
       }
   
-        // 🆕 RECORD AUDIT LOG FOR INSTANT PLAY PURCHASE
-    await transaction.insert(auditLogs).values({
-      userId: userId,
-      action: `${gameType}_purchase`,
-      description: `Instant play purchase: ${quantity} ${gameType} game(s) for "${competition?.title || gameType}" - £${amount.toFixed(2)}`,
-      startBalance: oldBalance,
-      endBalance: newBalance,
-      competitionId: competition?.id || null,
-      createdAt: new Date(),
-    });
+     // 🆕 RECORD AUDIT LOG FOR INSTANT PLAY PURCHASE
+await transaction.insert(auditLogs).values({
+  userId: userId,
+  userName: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Customer",
+  email: user.email || "",
+  action: `${gameType}_purchase`,
+  description: `Instant play purchase: ${quantity} ${gameType} game(s) for "${competition?.title || gameType}" - £${amount.toFixed(2)}`,
+  startBalance: oldBalance,
+  endBalance: newBalance,
+  competitionId: competition?.id || null,
+  createdAt: new Date(),
+});
 
     return { order, competition, generatedTickets };
   };
@@ -20193,6 +20199,7 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
 
 
 // ─── PLAY SLOT ENDPOINT ────────────────────────────────────────────────
+// ─── PLAY SLOT ENDPOINT ────────────────────────────────────────────────
 app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
   try {
     console.log("[API] 🎰 Play slot request received:", {
@@ -20217,7 +20224,7 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
       userId: order?.userId, 
       status: order?.status,
       quantity: order?.quantity,
-      competitionId: order?.competitionId  // ← Check if order has competitionId
+      competitionId: order?.competitionId
     });
 
     if (!order || order.userId !== userId || order.status !== "completed") {
@@ -20243,12 +20250,11 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
     }
     const spinNumber = existingSpins.length + 1;
 
-    // ── Get competition ID (FIXED) ──────────────────────────────────────
-    let competitionId = order.competitionId || "slot-default"; // ← Use order's competitionId first!
+    // ── Get competition ID ──────────────────────────────────────────────
+    let competitionId = order.competitionId || "slot-default";
     let competitionTitle = "Slot Machine";
     
     try {
-      // If order has competitionId, get the competition details
       if (order.competitionId) {
         const [competition] = await db
           .select({ 
@@ -20268,7 +20274,6 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
           });
         }
       } else {
-        // Fallback: Look specifically for slot competition
         const [slotComp] = await db
           .select({ 
             id: competitions.id, 
@@ -20279,7 +20284,7 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
           .where(
             and(
               eq(competitions.isActive, true),
-              eq(competitions.type, "slot")  // ← IMPORTANT: Filter by type!
+              eq(competitions.type, "slot")
             )
           )
           .limit(1);
@@ -20338,51 +20343,91 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
           winsMap = {};
         }
 
-        // Filter eligible prizes - check maxWins properly
+        // ─── STRICT PRIZE FILTERING (FIXED) ──────────────────────────
         const eligible = allPrizes.filter((p: any) => {
-          if (p.enabled === false) return false;
-          if (Number(p.probability || 0) <= 0) return false;
+          // 1. Must be enabled
+          if (p.enabled === false) {
+            console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: DISABLED`);
+            return false;
+          }
           
-          // Check maxWins - if set and reached, prize is NOT eligible
-          if (p.maxWins !== null && p.maxWins !== undefined && Number(p.maxWins) > 0) {
-            const currentWins = winsMap[p.id] || 0;
-            if (currentWins >= Number(p.maxWins)) {
-              console.log(`[API] Prize ${p.id} (${p.symbol}) maxWins reached: ${currentWins}/${p.maxWins}`);
+          // 2. Must have probability > 0
+          const prob = Number(p.probability || 0);
+          if (prob <= 0) {
+            console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: PROBABILITY is ${prob}%`);
+            return false;
+          }
+          
+          // 3. Must have pay > 0 (no point winning 0)
+          const payAmount = Number(p.pay || 0);
+          if (payAmount <= 0) {
+            console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: PAY is ${payAmount}`);
+            return false;
+          }
+          
+          // 4. Check maxWins - STRICT: if maxWins is 0, prize is COMPLETELY disabled
+          if (p.maxWins !== null && p.maxWins !== undefined) {
+            const maxWinsValue = Number(p.maxWins);
+            
+            // If maxWins is 0 or negative, prize should NEVER win
+            if (maxWinsValue <= 0) {
+              console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: MAX WINS is ${maxWinsValue} (capped at 0)`);
               return false;
             }
+            
+            // If maxWins is set and reached, prize is NOT eligible
+            const currentWins = winsMap[p.id] || 0;
+            if (currentWins >= maxWinsValue) {
+              console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: MAX WINS REACHED (${currentWins}/${maxWinsValue})`);
+              return false;
+            }
+            
+            console.log(`[API] ✅ Prize "${p.symbol}" (${p.id}) wins: ${currentWins}/${maxWinsValue}`);
+          } else {
+            console.log(`[API] ✅ Prize "${p.symbol}" (${p.id}) wins: unlimited`);
           }
+          
           return true;
         });
 
-        console.log("[API] Eligible prizes:", eligible.length);
+        console.log("[API] 📊 Eligible prizes after filtering:", eligible.length);
+        
         if (eligible.length === 0) {
-          console.log("[API] ⚠️ No eligible prizes available - all maxWins reached or disabled");
-        }
-
-        if (eligible.length > 0) {
-          const rand = Math.random() * 100;
+          console.log("[API] ⚠️ NO ELIGIBLE PRIZES - all either disabled, 0% probability, 0 pay, or maxWins reached");
+          selectedPrize = null;
+        } else {
+          // Weighted random selection
+          const totalProbability = eligible.reduce((sum, p) => sum + Number(p.probability), 0);
+          const rand = Math.random() * totalProbability;
           let cumulative = 0;
+          
+          console.log(`[API] 🎲 Rolling: ${rand.toFixed(2)} out of ${totalProbability.toFixed(2)}`);
+          
           for (const prize of eligible) {
             cumulative += Number(prize.probability);
-            if (rand < cumulative) { 
+            if (rand <= cumulative) { 
               selectedPrize = prize; 
+              console.log(`[API] 🎉 SELECTED: "${prize.symbol}" (${prize.id}) at cumulative ${cumulative.toFixed(2)}`);
               break; 
             }
           }
-          console.log("[API] Random roll:", rand, "Selected prize:", selectedPrize?.id || "none");
-        } else {
-          console.log("[API] ⚠️ No eligible prizes - returning no win");
-          selectedPrize = null;
+          
+          // Fallback: if somehow no prize selected, take the last eligible one
+          if (!selectedPrize && eligible.length > 0) {
+            selectedPrize = eligible[eligible.length - 1];
+            console.log(`[API] ⚠️ Fallback selection: "${selectedPrize.symbol}"`);
+          }
         }
       }
       
+      // If no config and no prize selected, it's a loss
       if (!selectedPrize && config) {
-        console.log("[API] ⚠️ No prize selected, using fallback (no win)");
-        selectedPrize = { id: "fallback", symbol: "Try Again", isEuro: false, pay: 0 };
+        console.log("[API] ❌ No prize selected - this spin is a LOSS");
+        selectedPrize = null;
       }
     } catch (configError) {
       console.error("[API] ❌ Error processing config:", configError);
-      selectedPrize = { id: "default", symbol: "Win", isEuro: true, pay: 1 };
+      selectedPrize = null;
     }
 
     const isWin = selectedPrize !== null && Number(selectedPrize.pay || 0) > 0;
@@ -20469,21 +20514,13 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
         );
         console.log("[API] Slot prize sync result:", syncResult);
 
-        // ─── RECORD IN WINNERS TABLE (FIXED) ───
-        let prizeDescriptionText = "";
-        let prizeValueText = "";
-
-        if (selectedPrize.isEuro) {
-          prizeDescriptionText = `Slot Machine Win - ${competitionTitle}`;  // ← Include competition name
-          prizeValueText = `£${coinsWon} Cash`;
-        } else {
-          prizeDescriptionText = `Slot Machine Win - ${competitionTitle}`;  // ← Include competition name
-          prizeValueText = `${coinsWon} Points`;
-        }
+        // ─── RECORD IN WINNERS TABLE ───
+        let prizeDescriptionText = `Slot Machine Win - ${competitionTitle}`;
+        let prizeValueText = selectedPrize.isEuro ? `£${coinsWon} Cash` : `${coinsWon} Points`;
 
         await db.insert(winners).values({
           userId,
-          competitionId: competitionId,  // ← Now uses correct competition ID
+          competitionId: competitionId,
           prizeDescription: prizeDescriptionText,
           prizeValue: prizeValueText,
           imageUrl: selectedPrize.image || null,
