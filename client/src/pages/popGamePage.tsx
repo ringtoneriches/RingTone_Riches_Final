@@ -303,8 +303,6 @@ export default function PopGamePage() {
   const [, navigate] = useLocation();
 
   const [gameResult, setGameResult] = useState<any>(null);
-  const [remainingPlays, setRemainingPlays] = useState<number>(0);
-  const [gameHistory, setGameHistory] = useState<any[]>([]);
   const [showRevealAllDialog, setShowRevealAllDialog] = useState(false);
   const [isRevealingAll, setIsRevealingAll] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
@@ -337,12 +335,9 @@ export default function PopGamePage() {
     },
   });
 
-  useEffect(() => {
-    if (orderData) {
-      setRemainingPlays(orderData.playsRemaining || 0);
-      setGameHistory(orderData.history || []);
-    }
-  }, [orderData]);
+  // Derive from order data so the game never mounts with a stale 0 and flashes "No Pops Left"
+  const remainingPlays = orderData?.playsRemaining ?? 0;
+  const gameHistory = orderData?.history ?? [];
 
   const handlePlayComplete = (result: any) => {
     setGameResult(result);
