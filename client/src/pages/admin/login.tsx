@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Shield, Lock, Mail, Sparkles } from "lucide-react";
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -23,6 +24,9 @@ export default function AdminLogin() {
     },
     onSuccess: async (data) => {
       if (data.user && data.user.isAdmin) {
+        // Sync auth cache before navigating so maintenance gate sees isAdmin immediately
+        queryClient.setQueryData(["/api/auth/user"], data.user);
+        await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         toast({
           title: "Welcome Back!",
           description: "Logged in successfully as admin.",
@@ -31,6 +35,7 @@ export default function AdminLogin() {
       } else {
         // Non-admin user logged in - log them out and show error
         await apiRequest("/api/auth/logout", "POST");
+        queryClient.setQueryData(["/api/auth/user"], null);
         toast({
           title: "Access Denied",
           description: "You must be an admin to access this area.",

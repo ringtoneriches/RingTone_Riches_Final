@@ -281,15 +281,6 @@ function AppWithMaintenance() {
     }
   }, [location]);
 
-  // Show loading state
-  if (maintenanceLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
   const isAdminUser = user?.isAdmin === true;
   const isAdminRoute = location.startsWith("/admin");
   
@@ -308,6 +299,19 @@ function AppWithMaintenance() {
   ];
   
   const isPublicRoute = publicRoutes.some(route => location.startsWith(route));
+
+  // Show loading state (also wait for auth while maintenance is on so a
+  // just-logged-in admin isn't briefly treated as a regular user)
+  if (
+    maintenanceLoading ||
+    (maintenanceData?.maintenanceMode && authLoading && !isPublicRoute)
+  ) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   // If maintenance is ON and user is not admin and not on public route
   if (maintenanceData?.maintenanceMode && !isAdminUser && !isPublicRoute) {
@@ -330,15 +334,18 @@ function AppWithMaintenance() {
 
 
 
-  // Check if we should show maintenance banner for admin
-  const showMaintenanceBanner = maintenanceData?.maintenanceMode && isAdminUser;
+  // Top banner when admin browses the public site during maintenance.
+  // Hidden on /admin* so it doesn't cover the admin header Disable control
+  // (admin layout already shows its own maintenance indicator + toggle).
+  const showMaintenanceBanner =
+    maintenanceData?.maintenanceMode && isAdminUser && !isAdminRoute;
 
   return (
     <TooltipProvider>
       <Toaster />
       <ScrollToTop />
       
-      {/* Maintenance banner for admin users */}
+      {/* Maintenance banner for admin users (public site only) */}
       {showMaintenanceBanner && (
         <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 z-[100] font-bold text-sm">
           ⚠️ MAINTENANCE MODE ACTIVE - Site is not visible to regular users ⚠️
