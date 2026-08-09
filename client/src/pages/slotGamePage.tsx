@@ -764,10 +764,15 @@ export default function SlotGamePage() {
     }
   }, [spinHistory.length, order?.quantity]);
 
+  const spinsRemaining = Math.max(0, (order?.quantity || 0) - spinHistory.length);
+
   // ─── Handle spin completion from SlotGame ───
   const handleSpinComplete = useCallback((result: SlotSpinResult) => {
     console.log("[SLOT GAME] Spin complete callback received:", result);
     setSpinHistory(prev => [result.newEntry, ...prev]);
+
+    const noSpinsLeft =
+      (typeof result.spinsRemaining === "number" && result.spinsRemaining <= 0);
 
     // Update total prize type based on the most recent win
     if (result.isWin && result.coinsWon > 0) {
@@ -778,6 +783,12 @@ export default function SlotGamePage() {
       setLastPrizeName(result.prizeName || "");
       setShowLoseOverlay(false);
       setShowWinOverlay(true);
+      if (noSpinsLeft) setSpinsExhausted(true);
+    } else if (noSpinsLeft) {
+      // Last spin was a loss — show exhausted overlay, not "Try Again"
+      // (Try Again was starting another spin + sound with 0 remaining)
+      setShowLoseOverlay(false);
+      setSpinsExhausted(true);
     } else {
       setShowLoseOverlay(true);
     }
@@ -869,7 +880,9 @@ export default function SlotGamePage() {
                 {orderId && (
                   <SlotGameComponent
                     orderId={orderId}
+                    competitionId={competitionId}
                     creditsPerSpin={creditsPerSpin}
+                    spinsRemaining={spinsRemaining}
                     onSpinComplete={handleSpinComplete}
                     onNoSpinsLeft={handleNoSpinsLeft}
                   />

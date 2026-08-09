@@ -6,6 +6,9 @@ server/public
 vite.config.ts.*
 *.tar.gz
 
+# Local scratch / QA notes
+tmp/
+
 
 # Puppeteer profile/cache
 puppeteer-profile/
@@ -19,3 +22,6 @@ browser-profile/
 config.bat
 temp_auto_push.bat
 temp_interactive_push.bat
+
+
+ringtone_prod.dump

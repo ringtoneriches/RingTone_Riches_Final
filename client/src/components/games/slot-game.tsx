@@ -21,8 +21,9 @@ export interface SlotSpinResult {
 
 interface SlotGameProps {
   orderId: string;
-  competitionId: string;
+  competitionId?: string;
   creditsPerSpin: number;
+  spinsRemaining: number;
   onSpinComplete: (result: SlotSpinResult) => void;
   onNoSpinsLeft: () => void;
 }
@@ -31,6 +32,7 @@ export default function SlotGameComponent({
   orderId,
   competitionId,
   creditsPerSpin,
+  spinsRemaining,
   onSpinComplete,
   onNoSpinsLeft,
 }: SlotGameProps) {
@@ -42,6 +44,7 @@ export default function SlotGameComponent({
 
   const orderIdRef = useRef(orderId);
   const creditsPerSpinRef = useRef(creditsPerSpin);
+  const spinsRemainingRef = useRef(spinsRemaining);
   const onSpinCompleteRef = useRef(onSpinComplete);
   const onNoSpinsLeftRef = useRef(onNoSpinsLeft);
   const isProcessingRef = useRef(false);
@@ -50,9 +53,15 @@ export default function SlotGameComponent({
 
   useEffect(() => { orderIdRef.current = orderId; }, [orderId]);
   useEffect(() => { creditsPerSpinRef.current = creditsPerSpin; }, [creditsPerSpin]);
+  useEffect(() => { spinsRemainingRef.current = spinsRemaining; }, [spinsRemaining]);
   useEffect(() => { onSpinCompleteRef.current = onSpinComplete; }, [onSpinComplete]);
   useEffect(() => { onNoSpinsLeftRef.current = onNoSpinsLeft; }, [onNoSpinsLeft]);
   useEffect(() => { toastRef.current = toast; }, [toast]);
+
+  // Keep Phaser scene in sync so beginSpin can block audio when exhausted
+  useEffect(() => {
+    gameSceneRef.current?.setSpinsRemaining?.(spinsRemaining);
+  }, [spinsRemaining, isGameReady]);
 
   const handleSpinRequest = useCallback(async () => {
   console.log("[SPIN] 🎰 Spin request initiated");
@@ -61,7 +70,15 @@ export default function SlotGameComponent({
     hasGameScene: !!gameSceneRef.current,
     orderId: orderIdRef.current,
     creditsPerSpin: creditsPerSpinRef.current,
+    spinsRemaining: spinsRemainingRef.current,
   });
+
+  if (spinsRemainingRef.current <= 0) {
+    console.warn("[SPIN] ⚠️ No spins remaining — cancelling without audio");
+    gameSceneRef.current?.cancelSpin?.();
+    onNoSpinsLeftRef.current();
+    return;
+  }
 
   if (isProcessingRef.current) {
     console.warn("[SPIN] ⚠️ Spin already in progress, rejecting duplicate request");
@@ -89,32 +106,30 @@ export default function SlotGameComponent({
     
     console.log(`[SPIN] 📥 API response received in ${(endTime - startTime).toFixed(2)}ms`);
     console.log("[SPIN] Response status:", res.status, res.statusText);
-    console.log("[SPIN] Response headers:", Object.fromEntries(res.headers.entries()));
 
     const data = await res.json();
     console.log("[SPIN] 📦 Response data:", JSON.stringify(data, null, 2));
 
-    if (!res.ok) {
-      console.error(`[SPIN] ❌ API error (${res.status}):`, data);
-      
-      if (data.message === "All spins used") {
-        console.warn("[SPIN] ⚠️ No spins remaining, triggering callback");
-        onNoSpinsLeftRef.current();
-      }
-      
-      console.log("[SPIN] Sending fallback result due to API error");
-      gameSceneRef.current?.deliverResult({ isWin: false, coinsWon: 0, prizeType: "none", prizeName: "" });
-      return;
-    }
-
     console.log("[SPIN] ✅ API request successful");
+
+    const spinsAllowed = data.spinsAllowed ?? data.spinsUsed ?? data.spinNumber;
+    const spinsRemainingAfter =
+      typeof data.spinsRemaining === "number"
+        ? data.spinsRemaining
+        : typeof data.spinsUsed === "number" && typeof data.spinsAllowed === "number"
+          ? Math.max(0, data.spinsAllowed - data.spinsUsed)
+          : typeof data.spinNumber === "number" && typeof data.spinsAllowed === "number"
+            ? Math.max(0, data.spinsAllowed - data.spinNumber)
+            : spinsRemainingRef.current - 1;
+
+    gameSceneRef.current?.setSpinsRemaining?.(spinsRemainingAfter);
 
     const spinResult: SlotSpinResult = {
       isWin: !!data.isWin,
       coinsWon: data.coinsWon || 0,
       prizeType: data.prizeType || "none",
       prizeName: data.prizeName || "",
-      spinsRemaining: data.spinsRemaining ?? -1,
+      spinsRemaining: spinsRemainingAfter,
       newEntry: {
         id: `local-${data.spinNumber}`,
         isWin: !!data.isWin,
@@ -132,6 +147,7 @@ export default function SlotGameComponent({
       prizeName: spinResult.prizeName,
       spinsRemaining: spinResult.spinsRemaining,
       spinNumber: spinResult.newEntry.spinNumber,
+      spinsAllowed,
     });
 
     pendingResultRef.current = spinResult;
@@ -161,12 +177,17 @@ export default function SlotGameComponent({
 
   } catch (err) {
     console.error("[SPIN] 💥 Spin request failed with error:", err);
-    console.error("[SPIN] Error details:", {
-      name: err instanceof Error ? err.name : 'Unknown',
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    
+    const message = err instanceof Error ? err.message : String(err);
+
+    // apiRequest throws on 403 "All spins used" — cancel quietly, no lose/spin audio
+    if (message.includes("All spins used")) {
+      console.warn("[SPIN] ⚠️ All spins used — cancelling without result audio");
+      gameSceneRef.current?.cancelSpin?.();
+      gameSceneRef.current?.setSpinsRemaining?.(0);
+      onNoSpinsLeftRef.current();
+      return;
+    }
+
     toastRef.current({ 
       title: "Error", 
       description: "Network error. Please try again.", 
@@ -241,7 +262,11 @@ export default function SlotGameComponent({
         const scene = game?.scene?.getScene("SlotGame") as any;
         if (scene && scene.scene?.isActive()) {
           gameSceneRef.current = scene;
-          scene.setCallbacks({ onSpinRequest: handleSpinRequest });
+          scene.setCallbacks({
+            onSpinRequest: handleSpinRequest,
+            onNoSpinsLeft: () => onNoSpinsLeftRef.current(),
+          });
+          scene.setSpinsRemaining?.(spinsRemainingRef.current);
           setIsGameReady(true);
 
           game.events.on("spinComplete", (_result: any, fullResult: any) => {
@@ -261,16 +286,16 @@ export default function SlotGameComponent({
     return () => {
       destroyed = true;
       if (game) {
+        // Let Phaser own AudioContext teardown. Manually calling
+        // context.close() and/or nulling context caused:
+        // - "Cannot close a closed AudioContext" (double close)
+        // - "Cannot read properties of null (reading 'close')"
         try {
-          // Close the AudioContext before destroy to prevent
-          // "Cannot resume a closed AudioContext" errors from
-          // Phaser's lingering visibility event listeners.
-          const soundMgr = game.sound as any;
-          if (soundMgr?.context && soundMgr.context.state !== "closed") {
-            soundMgr.context.close().catch(() => {});
-          }
-        } catch (e) {}
-        try { game.destroy(true); } catch (e) {}
+          game.sound?.stopAll?.();
+        } catch {}
+        try {
+          game.destroy(true);
+        } catch {}
         gameInstanceRef.current = null;
         gameSceneRef.current = null;
       }
