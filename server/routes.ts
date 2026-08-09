@@ -14491,6 +14491,12 @@ app.post("/api/play-pop", async (req: any, res) => {
     // ============================================
     // 1. DETERMINE IF AUTHENTICATED OR GUEST
     // ============================================
+    // This route supports both logged-in and guest play, so it cannot use
+    // isAuthenticated middleware. Load the session user when present.
+    if (!req.user && req.session?.userId) {
+      req.user = await storage.getUser(req.session.userId);
+    }
+
     const userId = req.user?.id;
     const { 
       orderId, 
@@ -14501,7 +14507,8 @@ app.post("/api/play-pop", async (req: any, res) => {
       guestPhone
     } = req.body;
 
-    const isGuestMode = isGuest || !userId;
+    // Prefer explicit guest flag; otherwise use session user when available
+    const isGuestMode = Boolean(isGuest) || !userId;
 
     if (!isGuestMode && !userId) {
       return res.status(401).json({

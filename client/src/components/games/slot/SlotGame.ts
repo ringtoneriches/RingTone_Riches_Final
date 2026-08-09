@@ -10,6 +10,7 @@ export interface SpinResult {
 
 export interface SlotCallbacks {
   onSpinRequest: () => void;
+  onNoSpinsLeft?: () => void;
 }
 
 const ACTIVE_SYMS = [
@@ -81,6 +82,8 @@ private reelBgs: Phaser.GameObjects.Image[] = [];
   private readonly MIN_SPIN_MS = 2200;
   private callbacks: SlotCallbacks | null = null;
   private pendingFull: any = null;
+  /** null = unknown (allow spin); number = remaining spins from parent */
+  private spinsRemaining: number | null = null;
 
   // UI Elements
   private slotMachine!: Phaser.GameObjects.Image;
@@ -142,6 +145,29 @@ private reelMask: Phaser.Display.Masks.GeometryMask | null = null;
 
   setCallbacks(cb: SlotCallbacks) {
     this.callbacks = cb;
+  }
+
+  setSpinsRemaining(remaining: number) {
+    this.spinsRemaining = Math.max(0, remaining);
+  }
+
+  /** Abort a spin that was rejected (e.g. all spins used) — no lose/win audio */
+  cancelSpin() {
+    this.stopSpinSounds();
+    if (this.spinTimer) {
+      this.spinTimer.destroy();
+      this.spinTimer = null;
+    }
+    this.colSpinning = [false, false, false];
+    this.reelStopped = [true, true, true];
+    this.spinning = false;
+    this.pendingFull = null;
+    if (this.spinBtn instanceof Phaser.GameObjects.Image) {
+      this.spinBtn.setAlpha(1);
+      if (this.textures.exists("button_spin")) {
+        this.spinBtn.setTexture("button_spin");
+      }
+    }
   }
 
   deliverResult(result: SpinResult, fullResult?: any) {
@@ -422,9 +448,25 @@ private fitSymbol(img: Phaser.GameObjects.Image) {
     try { this.sounds[key]?.play(); } catch {}
   }
 
+  private stopSpinSounds() {
+    try {
+      this.sounds["spin"]?.stop();
+      this.sounds["button"]?.stop();
+      this.sounds["lose"]?.stop();
+      this.sounds["win"]?.stop();
+      this.sounds["coins"]?.stop();
+    } catch {}
+  }
+
   // ──────────────────────── Spin logic ────────────────────────
 
 private beginSpin() {
+  // No spins left — do not play audio or start reels
+  if (this.spinsRemaining !== null && this.spinsRemaining <= 0) {
+    this.callbacks?.onNoSpinsLeft?.();
+    return;
+  }
+
   this.spinning = true;
   this.reelStopped = [false, false, false];
   this.colSpinning = [true, true, true];

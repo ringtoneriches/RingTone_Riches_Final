@@ -384,20 +384,29 @@ export default function RingtonePopGame({
   const [isRevealingAll, setIsRevealingAll] = useState(false);
   const [resultAnimStage, setResultAnimStage] = useState(0);
   const resultTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // Track remaining plays from the play API so the last round isn't stuck
+  // waiting on a parent refresh before we can show "No Pops Left".
+  const [localPlaysRemaining, setLocalPlaysRemaining] = useState(playsRemaining);
   
   const allPlaysUsed = popHistory.length > 0 && popHistory.every(s => s.status === "PLAYED");
   
   const winSoundRef = useRef<HTMLAudioElement | null>(null);
   const loseSoundRef = useRef<HTMLAudioElement | null>(null);
 
+  useEffect(() => {
+    if (!isPlaying && !isLoading) {
+      setLocalPlaysRemaining(playsRemaining);
+    }
+  }, [playsRemaining, isPlaying, isLoading]);
+
   // Show dialog when plays run out
   useEffect(() => {
-    if (playsRemaining <= 0 && !isPlaying && !showResultModal) {
+    if (localPlaysRemaining <= 0 && !isPlaying && !showResultModal) {
       setShowOutOfPlaysDialog(true);
     } else {
       setShowOutOfPlaysDialog(false);
     }
-  }, [playsRemaining, isPlaying, showResultModal]);
+  }, [localPlaysRemaining, isPlaying, showResultModal]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -451,7 +460,7 @@ export default function RingtonePopGame({
   };
 
   const startGame = async () => {
-    if (playsRemaining <= 0 || isPlaying || isLoading) return;
+    if (localPlaysRemaining <= 0 || isPlaying || isLoading) return;
 
     setIsLoading(true);
     setBalloonValues(["?", "?", "?"]);
@@ -476,6 +485,9 @@ export default function RingtonePopGame({
 
       const data = await response.json();
       const gameData = data.result || data;
+      if (typeof data.playsRemaining === "number") {
+        setLocalPlaysRemaining(data.playsRemaining);
+      }
       setGameResult({ 
         ...gameData, 
         _fullResponse: data,
@@ -531,6 +543,29 @@ export default function RingtonePopGame({
     } else {
       // All balloons popped - show results with staged animation
       setTimeout(() => {
+        const remainingAfterPlay =
+          typeof gameResult._fullResponse?.playsRemaining === "number"
+            ? gameResult._fullResponse.playsRemaining
+            : localPlaysRemaining;
+        const isLossResult =
+          !gameResult.isWin &&
+          !gameResult.isRPrize &&
+          gameResult.rewardType !== "physical";
+
+        // Last play used up with no win: skip "Try Again" and show No Pops Left
+        if (remainingAfterPlay <= 0 && isLossResult) {
+          if (!isMuted && loseSoundRef.current) {
+            loseSoundRef.current.currentTime = 0;
+            loseSoundRef.current.play().catch(() => {});
+          }
+          setShowResultModal(false);
+          setIsPlaying(false);
+          setLocalPlaysRemaining(0);
+          onPlayComplete(gameResult);
+          onRefresh();
+          return;
+        }
+
         if (gameResult.isWin) {
           triggerWinConfetti();
           if (!isMuted && winSoundRef.current) {
@@ -653,7 +688,7 @@ export default function RingtonePopGame({
               className="bg-gradient-to-r from-purple-500/20 via-fuchsia-500/20 to-pink-500/20 text-white border-purple-500/40 px-4 py-2 text-sm sm:text-base shadow-lg shadow-purple-500/20"
             >
               <Music className="w-4 h-4 mr-2 text-purple-400" />
-              <span className="font-bold">{playsRemaining}</span>
+              <span className="font-bold">{localPlaysRemaining}</span>
               <span className="text-white/70 ml-1.5">Plays Left</span>
             </Badge>
             <Button
@@ -813,7 +848,7 @@ export default function RingtonePopGame({
                 <Button
                   size="lg"
                   onClick={startGame}
-                  disabled={playsRemaining <= 0 || isLoading}
+                  disabled={localPlaysRemaining <= 0 || isLoading}
                   className="relative bg-gradient-to-r from-amber-400 via-yellow-500 to-orange-500 hover:from-amber-500 hover:via-yellow-600 hover:to-orange-600 text-black font-black px-12 py-7 text-xl shadow-2xl shadow-yellow-500/50 border-2 border-yellow-300/50 min-w-[260px] overflow-hidden group rounded-full transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-yellow-500/60"
                   data-testid="button-start-game"
                 >
@@ -829,7 +864,7 @@ export default function RingtonePopGame({
                       <Loader2 className="w-6 h-6 mr-2 animate-spin" />
                       Loading...
                     </>
-                  ) : playsRemaining <= 0 ? (
+                  ) : localPlaysRemaining <= 0 ? (
                     "No Plays Left"
                   ) : (
                     <div className="flex items-center text-white justify-center gap-2 relative">
@@ -1391,7 +1426,7 @@ export default function RingtonePopGame({
             {/* CTA button */}
             <button
               onClick={closeModalAndReset}
-              disabled={playsRemaining < 1}
+              disabled={localPlaysRemaining < 1 && !isWin && !isPhysicalWin && !isFreeReplay}
               className="w-full py-4 text-sm font-bold tracking-[0.18em] uppercase transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
               style={{
                 background: isWin
