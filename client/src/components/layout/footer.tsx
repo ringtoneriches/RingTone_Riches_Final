@@ -1,4 +1,4 @@
-import logoImage from "@assets/Logo_1758887059353.gif";
+import logoImage from "@assets/Ringtone_Riches_Logo.png";
 import { Facebook, Headphones } from "lucide-react";
 import facebook from "../../../../attached_assets/facebook.png";
 import { Link } from "wouter";
