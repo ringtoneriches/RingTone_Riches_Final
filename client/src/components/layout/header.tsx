@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { User } from "@shared/schema";
-import logoImage from "@assets/Logo_1758887059353.gif";
+import logoImage from "@assets/Ringtone_Riches_Logo.png";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
