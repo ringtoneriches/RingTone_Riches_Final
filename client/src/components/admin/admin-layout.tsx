@@ -108,6 +108,7 @@ const sidebarGroups = [
       { name: "Past Winners", path: "/admin/past-winners", icon: Award },
       { name: "Promo Video", path: "/admin/promo-video", icon: Video },
       { name: "Prize Table", path: "/admin/prize-table", icon: Award },
+      { name: "Instant Pool", path: "/admin/instant-pool", icon: Sparkles },
       { name: "Users", path: "/admin/users", icon: Users, protected: true },
       { name: "Transactions", path: "/admin/transactions", icon: Euro },
       { name: "Orders", path: "/admin/orders", icon: ShoppingCart },

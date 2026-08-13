@@ -32,8 +32,23 @@ interface Prize {
   prizeValue: number;
   totalQuantity: number;
   remainingQuantity: number;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
+  publicStatus?: "available" | "won" | "unavailable";
+  status?: string;
+  winningTicketNumber?: number | null;
+  winnerDisplayName?: string | null;
+}
+
+interface PrizeTableResponse {
+  mode: "probability" | "controlled_pool";
+  prizes: Prize[];
+  pool?: {
+    maxTickets: number;
+    soldTickets: number;
+    remaining: number;
+    percentSold: number;
+  };
 }
 
 interface TicketInfo {
@@ -87,7 +102,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
   const [isOpen, setIsOpen] = useState(false);
 
   // Fetch prizes
-  const { data: prizes = [], isLoading, error } = useQuery<Prize[]>({
+  const { data: prizeTable, isLoading, error } = useQuery<PrizeTableResponse>({
     queryKey: ["/api/competitions", competitionId, "prizes"],
     queryFn: async () => {
       const res = await fetch(`/api/competitions/${competitionId}/prize-table`, {
@@ -95,16 +110,34 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
       });
       if (!res.ok) throw new Error("Failed to fetch prizes");
       const data = await res.json();
-      // Normalize numeric fields
-      return data.map((prize: any) => ({
-        ...prize,
-        prizeValue: Number(prize.prizeValue),
-        totalQuantity: Number(prize.totalQuantity),
-        remainingQuantity: Number(prize.remainingQuantity),
-      }));
+      if (Array.isArray(data)) {
+        return {
+          mode: "probability" as const,
+          prizes: data.map((prize: any) => ({
+            ...prize,
+            prizeValue: Number(prize.prizeValue),
+            totalQuantity: Number(prize.totalQuantity),
+            remainingQuantity: Number(prize.remainingQuantity),
+          })),
+        };
+      }
+      return {
+        mode: data.mode || "controlled_pool",
+        pool: data.pool,
+        prizes: (data.prizes || []).map((prize: any) => ({
+          ...prize,
+          prizeValue: Number(prize.prizeValue),
+          totalQuantity: Number(prize.totalQuantity ?? 1),
+          remainingQuantity: Number(prize.remainingQuantity ?? 0),
+        })),
+      };
     },
     enabled: !!competitionId,
+    refetchInterval: 15000,
   });
+
+  const prizes = prizeTable?.prizes || [];
+  const isControlled = prizeTable?.mode === "controlled_pool";
 
   // Fetch ticket info
   const { data: ticketInfo, isLoading: ticketLoading } = useQuery<TicketInfo>({
@@ -181,7 +214,37 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
         </p>
         
         {/* Ticket Info Card */}
-        {ticketInfo && (
+        {isControlled && prizeTable?.pool ? (
+          <Card className="max-w-2xl mx-auto bg-gradient-to-r from-amber-500/5 to-yellow-500/5 border-amber-500/20">
+            <CardContent className="p-4 sm:p-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <Ticket className="w-5 h-5 text-amber-400" />
+                    <span className="text-sm text-muted-foreground">Tickets sold</span>
+                  </div>
+                  <p className="text-2xl font-bold text-amber-400">
+                    {prizeTable.pool.soldTickets} / {prizeTable.pool.maxTickets}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <Gift className="w-5 h-5 text-blue-500" />
+                    <span className="text-sm text-muted-foreground">Remaining</span>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-500">{prizeTable.pool.remaining}</p>
+                </div>
+                <div className="text-center col-span-2 sm:col-span-1">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <Zap className="w-5 h-5 text-purple-500" />
+                    <span className="text-sm text-muted-foreground">Pool</span>
+                  </div>
+                  <p className="text-2xl font-bold text-purple-400">{prizeTable.pool.percentSold}% sold</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : ticketInfo ? (
           <Card className="max-w-2xl mx-auto bg-gradient-to-r from-blue-500/5 to-purple-500/5 border-blue-500/20">
             <CardContent className="p-4 sm:p-6">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -221,7 +284,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
       </div>
 
       {/* Prizes Grid with Collapsible Animation */}
@@ -319,7 +382,25 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                 </div>
                 
                 {/* Win Chance Indicator */}
-                {ticketInfo && (
+                {isControlled && prize.publicStatus === "won" && (
+                  <div className="text-center pt-2 space-y-1">
+                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30">Won</Badge>
+                    <p className="text-sm text-muted-foreground">
+                      Ticket #{prize.winningTicketNumber} · {prize.winnerDisplayName}
+                    </p>
+                  </div>
+                )}
+                {isControlled && prize.publicStatus === "unavailable" && (
+                  <div className="text-center pt-2">
+                    <Badge variant="outline" className="text-slate-400">Coming soon</Badge>
+                  </div>
+                )}
+                {isControlled && prize.publicStatus === "available" && (
+                  <div className="text-center pt-2">
+                    <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">Available</Badge>
+                  </div>
+                )}
+                {!isControlled && ticketInfo && (
                   <div className="text-center pt-2">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20">
                       <Ticket className="w-4 h-4 text-green-500" />
