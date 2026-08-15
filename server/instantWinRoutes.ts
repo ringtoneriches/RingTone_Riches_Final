@@ -51,13 +51,14 @@ export function registerInstantWinRoutes(app: Express) {
           soldTickets: competitions.soldTickets,
           instantWinMode: competitions.instantWinMode,
           nextTicketNumber: competitions.nextTicketNumber,
+          ticketBlockSize: competitions.ticketBlockSize,
           isActive: competitions.isActive,
           status: competitions.status,
+          createdAt: competitions.createdAt,
         })
-        .from(competitions);
-      res.json(
-        rows.filter((c) => c.type !== "instant")
-      );
+        .from(competitions)
+        .orderBy(desc(competitions.createdAt));
+      res.json(rows);
     } catch (error) {
       handleInstantWinError(res, error);
     }
@@ -91,14 +92,19 @@ export function registerInstantWinRoutes(app: Express) {
     isAdmin,
     async (req: any, res) => {
       try {
-        const { mode } = req.body || {};
+        const { mode, ticketBlockSize } = req.body || {};
         if (mode !== "probability" && mode !== "controlled_pool") {
           return res.status(400).json({ message: "mode must be probability or controlled_pool" });
         }
         const updated = await setCompetitionInstantWinMode(
           req.params.competitionId,
           mode,
-          req.user?.id
+          req.user?.id,
+          ticketBlockSize === undefined
+            ? undefined
+            : ticketBlockSize === null || ticketBlockSize === ""
+            ? null
+            : Number(ticketBlockSize)
         );
         res.json(updated);
       } catch (error) {

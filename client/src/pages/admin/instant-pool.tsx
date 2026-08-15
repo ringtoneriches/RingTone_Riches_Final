@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/admin/admin-layout";
 import { apiRequest } from "@/lib/queryClient";
@@ -11,7 +11,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -42,6 +44,7 @@ import {
   PoundSterling,
   ShieldAlert,
   Sparkles,
+  Search,
 } from "lucide-react";
 
 const statusStyles: Record<string, string> = {
@@ -57,6 +60,8 @@ export default function AdminInstantPool() {
   const [selectedId, setSelectedId] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [compSearch, setCompSearch] = useState("");
+  const [blockSizeInput, setBlockSizeInput] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
@@ -82,6 +87,7 @@ export default function AdminInstantPool() {
       const res = await apiRequest("/api/admin/instant-win/competitions", "GET");
       return res.json();
     },
+    staleTime: 0,
   });
 
   const { data, isLoading, refetch } = useQuery<any>({
@@ -113,21 +119,21 @@ export default function AdminInstantPool() {
   }, [prizes, search]);
 
   const modeMutation = useMutation({
-    mutationFn: async (mode: string) => {
+    mutationFn: async (payload: { mode: string; ticketBlockSize?: number | null }) => {
       const res = await apiRequest(
         `/api/admin/competitions/${selectedId}/instant-win-mode`,
         "PATCH",
-        { mode }
+        payload
       );
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Mode updated" });
+      toast({ title: "Competition updated" });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/instant-win/competitions"] });
       refetch();
     },
     onError: (error: any) => {
-      toast({ title: "Could not update mode", description: error.message, variant: "destructive" });
+      toast({ title: "Could not update competition", description: error.message, variant: "destructive" });
     },
   });
 
@@ -182,6 +188,34 @@ export default function AdminInstantPool() {
 
   const selectedComp = competitions.find((c) => c.id === selectedId);
   const isControlled = selectedComp?.instantWinMode === "controlled_pool";
+  const isInstantDraw = selectedComp?.type === "instant";
+
+  useEffect(() => {
+    setBlockSizeInput(
+      selectedComp?.ticketBlockSize ? String(selectedComp.ticketBlockSize) : ""
+    );
+  }, [selectedComp?.id, selectedComp?.ticketBlockSize]);
+
+  const visibleCompetitions = useMemo(() => {
+    const q = compSearch.trim().toLowerCase();
+    if (!q) return competitions;
+    return competitions.filter((c) =>
+      [c.title, c.type, c.instantWinMode, c.isActive ? "active" : "archived"]
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [competitions, compSearch]);
+
+  const eligibleCompetitions = visibleCompetitions.filter((c) => c.type !== "instant");
+  const instantDrawCompetitions = visibleCompetitions.filter((c) => c.type === "instant");
+  const browseEligible = competitions.filter((c) => c.type !== "instant");
+  const browseInstantDraws = competitions.filter((c) => c.type === "instant");
+
+  const pickCompetition = (id: string) => {
+    setSelectedId(id);
+    setCompSearch("");
+  };
 
   const submitCreate = (forceHighValue = false) => {
     const value = Number(form.value);
@@ -223,50 +257,158 @@ export default function AdminInstantPool() {
               Instant Win Pool
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Finite tickets, RNG prize numbers, and frozen results. Unflagged games stay on probability.
+              Finite tickets, RNG prize numbers, and frozen results. Create test games from{" "}
+              <span className="text-amber-400">Games → Ringtone Pop / Slot / Spin</span>
+              , not the Competitions page.
             </p>
           </div>
         </div>
 
         <Card className="border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent">
-          <CardContent className="p-4 sm:p-6 grid gap-4 md:grid-cols-[1fr_auto_auto] items-end">
-            <div>
-              <Label className="mb-2 block">Competition</Label>
-              <Select value={selectedId} onValueChange={setSelectedId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a game competition" />
-                </SelectTrigger>
-                <SelectContent>
-                  {competitions.map((comp) => (
-                    <SelectItem key={comp.id} value={comp.id}>
-                      {comp.title} · {comp.type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {selectedComp && (
-              <>
-                <div>
-                  <Label className="mb-2 block">Ticket mode</Label>
-                  <Select
-                    value={selectedComp.instantWinMode || "probability"}
-                    onValueChange={(mode) => modeMutation.mutate(mode)}
-                  >
-                    <SelectTrigger className="min-w-[200px]">
-                      <SelectValue />
+          <CardContent className="p-4 sm:p-6 space-y-4">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_auto] items-end">
+              <div>
+                <Label className="mb-2 block">Competition</Label>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={compSearch}
+                    onChange={(e) => setCompSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      const first = eligibleCompetitions[0] || visibleCompetitions[0];
+                      if (first) pickCompetition(first.id);
+                    }}
+                    placeholder="Search by name or type (pop, slot, spin…)"
+                    className="pl-9"
+                  />
+                </div>
+                {compSearch.trim() ? (
+                  <div className="border border-border rounded-md max-h-64 overflow-y-auto bg-popover">
+                    {visibleCompetitions.length === 0 && (
+                      <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
+                    )}
+                    {eligibleCompetitions.map((comp) => (
+                      <button
+                        key={comp.id}
+                        type="button"
+                        onClick={() => pickCompetition(comp.id)}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-amber-500/10 ${
+                          selectedId === comp.id ? "bg-amber-500/15 text-amber-300" : ""
+                        }`}
+                      >
+                        {comp.title} · {comp.type}
+                        {comp.isActive ? "" : " · archived"}
+                      </button>
+                    ))}
+                    {instantDrawCompetitions.map((comp) => (
+                      <button
+                        key={comp.id}
+                        type="button"
+                        onClick={() => pickCompetition(comp.id)}
+                        className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                      >
+                        {comp.title} · instant draw
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <Select value={selectedId} onValueChange={setSelectedId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a game competition" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="probability">Probability (live default)</SelectItem>
-                      <SelectItem value="controlled_pool">Controlled pool</SelectItem>
+                    <SelectContent className="max-h-80">
+                      {browseEligible.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>Instant-win games</SelectLabel>
+                          {browseEligible.map((comp) => (
+                            <SelectItem key={comp.id} value={comp.id}>
+                              {comp.title} · {comp.type}
+                              {comp.isActive ? "" : " · archived"}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                      {browseInstantDraws.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>Instant draws — not eligible</SelectLabel>
+                          {browseInstantDraws.map((comp) => (
+                            <SelectItem key={comp.id} value={comp.id}>
+                              {comp.title} · instant draw
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
                     </SelectContent>
                   </Select>
+                )}
+              </div>
+              {selectedComp && (
+                <>
+                  <div>
+                    <Label className="mb-2 block">Ticket mode</Label>
+                    <Select
+                      value={selectedComp.instantWinMode || "probability"}
+                      onValueChange={(mode) =>
+                        modeMutation.mutate({
+                          mode,
+                          ticketBlockSize: blockSizeInput ? Number(blockSizeInput) : null,
+                        })
+                      }
+                      disabled={isInstantDraw}
+                    >
+                      <SelectTrigger className="min-w-[200px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="probability">Probability (live default)</SelectItem>
+                        <SelectItem value="controlled_pool">Controlled pool</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button variant="outline" onClick={() => refetch()}>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Refresh
+                  </Button>
+                </>
+              )}
+            </div>
+            {selectedComp && !isInstantDraw && selectedComp.instantWinMode === "controlled_pool" && (
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] items-end">
+                <div>
+                  <Label className="mb-2 block">Sale block size</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={selectedComp.maxTickets || undefined}
+                    value={blockSizeInput}
+                    onChange={(e) => setBlockSizeInput(e.target.value)}
+                    placeholder="Leave empty for 1, 2, 3 in order"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Pool stays 1–{selectedComp.maxTickets || "N"}. Set e.g. 500 to give customers random unused numbers in 1–500, then 501–1000, and so on. A purchase that fills a block continues in the next one. Leave empty to keep issuing 1, 2, 3.
+                  </p>
                 </div>
-                <Button variant="outline" onClick={() => refetch()}>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh
+                <Button
+                  variant="outline"
+                  disabled={modeMutation.isPending}
+                  onClick={() =>
+                    modeMutation.mutate({
+                      mode: "controlled_pool",
+                      ticketBlockSize: blockSizeInput ? Number(blockSizeInput) : null,
+                    })
+                  }
+                >
+                  Save block size
                 </Button>
-              </>
+              </div>
+            )}
+            {isInstantDraw && (
+              <p className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
+                This is an instant-draw competition (created under Competitions), so it cannot use the controlled ticket pool.
+                Create a Pop / Slot / Spin from the Games menu instead.
+              </p>
             )}
           </CardContent>
         </Card>
@@ -319,9 +461,14 @@ export default function AdminInstantPool() {
               </div>
             </CardHeader>
             <CardContent>
-              {!isControlled && (
+              {!isControlled && !isInstantDraw && (
                 <p className="text-sm text-muted-foreground mb-4">
                   Switch this competition to <span className="text-amber-400">Controlled pool</span> to configure instant-win prizes. Live probability games are unchanged until you do.
+                </p>
+              )}
+              {isInstantDraw && (
+                <p className="text-sm text-muted-foreground mb-4">
+                  Instant-draw raffles stay draw-based. Use Games → Ringtone Pop to create a test game with a finite max ticket count.
                 </p>
               )}
               {isLoading ? (

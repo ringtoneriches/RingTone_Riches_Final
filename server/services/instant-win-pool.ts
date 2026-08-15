@@ -216,6 +216,60 @@ async function allocatedWinningNumbers(tx: DbTx, competitionId: string, exceptPr
   );
 }
 
+function pickDistinctRandom(available: number[], count: number): number[] {
+  const pool = available.slice();
+  const picked: number[] = [];
+  for (let i = 0; i < count; i++) {
+    if (pool.length === 0) break;
+    const idx = randomInt(0, pool.length);
+    picked.push(pool[idx]);
+    pool[idx] = pool[pool.length - 1];
+    pool.pop();
+  }
+  return picked;
+}
+
+async function allocateRandomSeqsInBlocks(
+  tx: DbTx,
+  competitionId: string,
+  quantity: number,
+  maxTickets: number,
+  blockSize: number
+): Promise<number[]> {
+  const size = Math.min(Math.max(1, blockSize), maxTickets);
+  const seqs: number[] = [];
+  let need = quantity;
+
+  for (let start = 1; start <= maxTickets && need > 0; start += size) {
+    const end = Math.min(start + size - 1, maxTickets);
+    const sold = await soldSeqsInRange(tx, competitionId, start, end);
+    const available: number[] = [];
+    for (let n = start; n <= end; n++) {
+      if (!sold.has(n)) available.push(n);
+    }
+    if (available.length === 0) continue;
+    const take = Math.min(need, available.length);
+    seqs.push(...pickDistinctRandom(available, take));
+    need -= take;
+  }
+
+  if (need > 0) {
+    throw new InstantWinError("This competition is sold out", 400, "sold_out");
+  }
+  return seqs;
+}
+
+function sortTicketsForReveal<T extends { createdAt?: Date | string | null; ticketSeq?: number | null }>(
+  rows: T[]
+) {
+  return rows.slice().sort((a, b) => {
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    if (ta !== tb) return ta - tb;
+    return Number(a.ticketSeq || 0) - Number(b.ticketSeq || 0);
+  });
+}
+
 export async function pickUnsoldNumberInRange(
   tx: DbTx,
   competitionId: string,
@@ -512,6 +566,9 @@ async function issuePlayTicketsInner(tx: DbTx, opts: IssueTicketsOpts) {
   const controlled = isControlledMode(competition.instantWinMode);
   const maxTickets = Number(competition.maxTickets || 0);
   const sold = Number(competition.soldTickets || 0);
+  const startSeq = Number(competition.nextTicketNumber || 1);
+  const blockSize = Number(competition.ticketBlockSize || 0);
+  const useBlocks = controlled && blockSize >= 1;
 
   if (controlled) {
     if (!maxTickets) {
@@ -521,8 +578,10 @@ async function issuePlayTicketsInner(tx: DbTx, opts: IssueTicketsOpts) {
         "unlimited_not_allowed"
       );
     }
-    const next = Number(competition.nextTicketNumber || 1);
-    if (next + quantity - 1 > maxTickets) {
+    if (sold + quantity > maxTickets) {
+      throw new InstantWinError("This competition is sold out", 400, "sold_out");
+    }
+    if (!useBlocks && startSeq + quantity - 1 > maxTickets) {
       throw new InstantWinError("This competition is sold out", 400, "sold_out");
     }
     const maxPerOrder = await getMaxTicketsPerOrder();
@@ -535,11 +594,29 @@ async function issuePlayTicketsInner(tx: DbTx, opts: IssueTicketsOpts) {
     }
   }
 
-  const startSeq = Number(competition.nextTicketNumber || 1);
+  let seqs: Array<number | null> = [];
+
+  if (controlled) {
+    if (useBlocks) {
+      seqs = await allocateRandomSeqsInBlocks(
+        tx,
+        opts.competitionId,
+        quantity,
+        maxTickets,
+        blockSize
+      );
+    } else {
+      seqs = Array.from({ length: quantity }, (_, i) => startSeq + i);
+    }
+  } else {
+    seqs = Array.from({ length: quantity }, () => null);
+  }
+
   const issued: any[] = [];
+  const issuedAtBase = Date.now();
 
   for (let i = 0; i < quantity; i++) {
-    const seq = controlled ? startSeq + i : null;
+    const seq = seqs[i];
     const ticketNumber = controlled ? String(seq) : opts.makeLegacyNumber(i);
     const base = {
       ticketNumber,
@@ -547,7 +624,7 @@ async function issuePlayTicketsInner(tx: DbTx, opts: IssueTicketsOpts) {
       ticketSeq: seq,
       isWinner: false,
       resultStatus: "pending" as const,
-      createdAt: new Date(),
+      createdAt: new Date(issuedAtBase + i),
     };
 
     if (opts.isGuest) {
@@ -1002,6 +1079,7 @@ export async function getAdminExposure(competitionId: string) {
     remaining: Math.max(0, maxTickets - soldTickets),
     percentSold: maxTickets > 0 ? Math.round((soldTickets / maxTickets) * 1000) / 10 : 0,
     nextTicketNumber: competition.nextTicketNumber || 1,
+    ticketBlockSize: competition.ticketBlockSize || null,
     revenue,
     instantWinsPaid: Math.round(paid * 100) / 100,
     activePrizeValue: Math.round(activeLiability * 100) / 100,
@@ -1019,7 +1097,8 @@ export async function getAdminExposure(competitionId: string) {
 export async function setCompetitionInstantWinMode(
   competitionId: string,
   mode: "probability" | "controlled_pool",
-  adminId?: string
+  adminId?: string,
+  ticketBlockSize?: number | null
 ) {
   const [competition] = await db
     .select()
@@ -1045,13 +1124,35 @@ export async function setCompetitionInstantWinMode(
     }
   }
 
+  const maxTickets = Number(competition.maxTickets || 0);
+  const patch: any = {
+    instantWinMode: mode,
+    nextTicketNumber: competition.nextTicketNumber || Number(competition.soldTickets || 0) + 1,
+    updatedAt: new Date(),
+  };
+
+  if (ticketBlockSize !== undefined) {
+    if (ticketBlockSize == null || ticketBlockSize === 0) {
+      patch.ticketBlockSize = null;
+    } else {
+      const size = Number(ticketBlockSize);
+      if (!Number.isInteger(size) || size < 1) {
+        throw new InstantWinError("Sale block size must be a whole number of at least 1", 400, "invalid_block");
+      }
+      if (maxTickets && size > maxTickets) {
+        throw new InstantWinError(
+          `Sale block size cannot be larger than the ticket pool (${maxTickets})`,
+          400,
+          "invalid_block"
+        );
+      }
+      patch.ticketBlockSize = size;
+    }
+  }
+
   const [updated] = await db
     .update(competitions)
-    .set({
-      instantWinMode: mode,
-      nextTicketNumber: competition.nextTicketNumber || Number(competition.soldTickets || 0) + 1,
-      updatedAt: new Date(),
-    })
+    .set(patch)
     .where(eq(competitions.id, competitionId))
     .returning();
 
@@ -1171,16 +1272,16 @@ async function nextFrozenTicket(opts: {
       .select()
       .from(guestTickets)
       .where(eq(guestTickets.guestOrderId, opts.guestOrderId));
-    const pending = rows
-      .filter((t) => t.resultStatus === "win" || t.resultStatus === "lose")
-      .sort((a, b) => Number(a.ticketSeq || 0) - Number(b.ticketSeq || 0));
+    const pending = sortTicketsForReveal(
+      rows.filter((t) => t.resultStatus === "win" || t.resultStatus === "lose")
+    );
     return { ticket: pending[0] || null, remaining: pending.length, total: rows.length };
   }
   if (!opts.orderId) return { ticket: null, remaining: 0, total: 0 };
   const rows = await db.select().from(tickets).where(eq(tickets.orderId, opts.orderId));
-  const pending = rows
-    .filter((t) => t.resultStatus === "win" || t.resultStatus === "lose")
-    .sort((a, b) => Number(a.ticketSeq || 0) - Number(b.ticketSeq || 0));
+  const pending = sortTicketsForReveal(
+    rows.filter((t) => t.resultStatus === "win" || t.resultStatus === "lose")
+  );
   return { ticket: pending[0] || null, remaining: pending.length, total: rows.length };
 }
 
@@ -1304,10 +1405,9 @@ export async function revealAllControlledPop(opts: {
 }) {
   if (!(await isCompetitionControlled(opts.competitionId))) return null;
   const rows = await db.select().from(tickets).where(eq(tickets.orderId, opts.orderId));
-  const pending = rows
-    .filter((t) => t.resultStatus === "win" || t.resultStatus === "lose")
-    .sort((a, b) => Number(a.ticketSeq || 0) - Number(b.ticketSeq || 0))
-    .slice(0, opts.count);
+  const pending = sortTicketsForReveal(
+    rows.filter((t) => t.resultStatus === "win" || t.resultStatus === "lose")
+  ).slice(0, opts.count);
 
   const results: any[] = [];
   let totalCash = 0;
@@ -1476,10 +1576,9 @@ export async function revealAllControlledSpin(opts: {
 }) {
   if (!(await isCompetitionControlled(opts.competitionId))) return null;
   const rows = await db.select().from(tickets).where(eq(tickets.orderId, opts.orderId));
-  const pending = rows
-    .filter((t) => t.resultStatus === "win" || t.resultStatus === "lose")
-    .sort((a, b) => Number(a.ticketSeq || 0) - Number(b.ticketSeq || 0))
-    .slice(0, opts.count);
+  const pending = sortTicketsForReveal(
+    rows.filter((t) => t.resultStatus === "win" || t.resultStatus === "lose")
+  ).slice(0, opts.count);
 
   const results: any[] = [];
   for (const ticket of pending) {
@@ -1636,10 +1735,9 @@ export async function revealAllControlledPlinko(opts: {
 }) {
   if (!(await isCompetitionControlled(opts.competitionId))) return null;
   const rows = await db.select().from(tickets).where(eq(tickets.orderId, opts.orderId));
-  const pending = rows
-    .filter((t) => t.resultStatus === "win" || t.resultStatus === "lose")
-    .sort((a, b) => Number(a.ticketSeq || 0) - Number(b.ticketSeq || 0))
-    .slice(0, opts.count);
+  const pending = sortTicketsForReveal(
+    rows.filter((t) => t.resultStatus === "win" || t.resultStatus === "lose")
+  ).slice(0, opts.count);
 
   const results: any[] = [];
   let totalCashWon = 0;

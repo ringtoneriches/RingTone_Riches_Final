@@ -265,6 +265,7 @@ export const competitions = pgTable("competitions", {
   soldTickets: integer("sold_tickets").default(0),
   nextTicketNumber: integer("next_ticket_number").default(1),
   instantWinMode: varchar("instant_win_mode", { enum: ["probability", "controlled_pool"] }).default("probability"),
+  ticketBlockSize: integer("ticket_block_size"),
   prizeData: jsonb("prize_data"), // For storing wheel segments or scratch card prizes
   skillQuestion: text("skill_question"), // Optional skill question for compliance
   isActive: boolean("is_active").default(true),

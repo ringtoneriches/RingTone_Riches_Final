@@ -13308,12 +13308,21 @@ app.get(
     isAdmin,
     async (req: any, res) => {
       try {
-        const data = req.body;
+        const data = { ...req.body };
+        delete data.startDate;
+        delete data.createdAt;
+        delete data.created_at;
+        delete data.id;
+
+        if (!data.endDate) {
+          data.endDate = null;
+        } else {
+          const parsedEnd = new Date(data.endDate);
+          data.endDate = Number.isNaN(parsedEnd.getTime()) ? null : parsedEnd;
+        }
 
         const competition = await storage.createCompetition({
           ...data,
-          startDate: new Date(data.startDate),
-          endDate: new Date(data.endDate),
           isActive: true,
         });
 
