@@ -48,5 +48,14 @@ export function startCrons() {
     }
   });
 
+  cron.schedule("* * * * *", async () => {
+    try {
+      const { activateDueDatetimePrizes } = await import("./services/instant-win-pool");
+      await activateDueDatetimePrizes();
+    } catch (err) {
+      console.error("❌ Instant-win datetime activation failed:", err);
+    }
+  });
+
   console.log("✅ All cron jobs started");
 }

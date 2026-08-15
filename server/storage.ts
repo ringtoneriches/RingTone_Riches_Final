@@ -306,7 +306,39 @@ async incrementCompetitionSoldTickets(competitionId: string, qty: number): Promi
   }
 
   async createCompetition(competition: InsertCompetition): Promise<Competition> {
-    const [created] = await db.insert(competitions).values(competition).returning();
+    const parseDate = (value: unknown) => {
+      if (value == null || value === "") return null;
+      const parsed = value instanceof Date ? value : new Date(String(value));
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    const [created] = await db
+      .insert(competitions)
+      .values({
+        title: competition.title,
+        description: competition.description,
+        imageUrl: competition.imageUrl,
+        type: competition.type,
+        ticketPrice: competition.ticketPrice,
+        maxTickets: competition.maxTickets ?? null,
+        soldTickets: competition.soldTickets ?? 0,
+        nextTicketNumber: competition.nextTicketNumber ?? 1,
+        instantWinMode: competition.instantWinMode ?? "probability",
+        ticketBlockSize: competition.ticketBlockSize ?? null,
+        prizeData: competition.prizeData,
+        skillQuestion: competition.skillQuestion,
+        isActive: competition.isActive ?? true,
+        ringtonePoints: competition.ringtonePoints,
+        displayOrder: competition.displayOrder,
+        endDate: parseDate(competition.endDate),
+        wheelType: competition.wheelType,
+        status: competition.status,
+        videoUrl: competition.videoUrl,
+        videoKey: competition.videoKey,
+        videoMimeType: competition.videoMimeType,
+        videoUpdatedAt: parseDate(competition.videoUpdatedAt),
+      })
+      .returning();
     return created;
   }
 

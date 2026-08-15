@@ -116,6 +116,22 @@ import {
   sendTopupConfirmationEmail,
 } from "./email";
 import { wsManager } from "./websocket";
+import { registerInstantWinRoutes } from "./instantWinRoutes";
+import {
+  InstantWinError,
+  assertCanPurchaseTickets,
+  issuePlayTickets,
+  tryRevealControlledPop,
+  revealAllControlledPop,
+  tryRevealControlledSlot,
+  tryRevealControlledSpin,
+  revealAllControlledSpin,
+  peekControlledVoltz,
+  confirmControlledVoltz,
+  tryRevealControlledPlinko,
+  revealAllControlledPlinko,
+  getPublicPrizePool,
+} from "./services/instant-win-pool";
 
 import { applySelfSuspensionExpiry, isNotRestricted } from "./restriction";
 import {
@@ -763,6 +779,19 @@ export const isAdmin = (req: any, res: any, next: any) => {
 
   next();
 };
+
+async function guardControlledPurchase(res: any, competitionId: string, quantity: number) {
+  try {
+    await assertCanPurchaseTickets(competitionId, quantity);
+    return true;
+  } catch (err: any) {
+    if (err instanceof InstantWinError) {
+      res.status(err.status).json({ message: err.message, code: err.code });
+      return false;
+    }
+    throw err;
+  }
+}
 
 export function getClientIp(req: any) {
   return (
@@ -3618,20 +3647,16 @@ res.json({
 
           await storage.updateOrderStatus(orderId, "completed");
 
-          // Create tickets
-          const tickets = [];
           const actualQuantity = quantity || order.quantity || 1;
-          for (let i = 0; i < actualQuantity; i++) {
-            const ticketNumber = nanoid(8).toUpperCase();
-            const ticket = await storage.createTicket({
-              userId,
-              competitionId: competition.id,
-              orderId,
-              ticketNumber,
-              isWinner: false,
-            });
-            tickets.push(ticket);
-          }
+          const { tickets } = await issuePlayTickets({
+            competitionId: competition.id,
+            quantity: actualQuantity,
+            userId,
+            orderId,
+            gameType: "instant",
+            incrementSold: true,
+            makeLegacyNumber: () => nanoid(8).toUpperCase(),
+          });
 
           return res.json({
             success: true,
@@ -4261,53 +4286,32 @@ res.json({
           paymentMethod: "instaplay",
         })
         .where(eq(orders.id, orderId));
-  
-      // Update competition sold tickets count
-      if (competition) {
-        await transaction.update(competitions)
-          .set({ 
-            soldTickets: (competition.soldTickets || 0) + order.quantity,
-            updatedAt: new Date()
-          })
-          .where(eq(competitions.id, order.competitionId));
-      }
-  
-      // Generate tickets for the game (these are the entries/plays)
-      const generatedTickets = [];
-      for (let i = 0; i < order.quantity; i++) {
-        // Generate appropriate ticket number format based on game type
-        let ticketNumber;
-        switch (gameType) {
-          case 'scratch':
-            ticketNumber = `SCRATCH-${nanoid(8).toUpperCase()}`;
-            break;
-          case 'spin':
-            ticketNumber = `SPIN-${nanoid(8).toUpperCase()}`;
-            break;
-          case 'pop':
-            ticketNumber = `POP-${nanoid(8).toUpperCase()}`;
-            break;
-          case 'plinko':
-            ticketNumber = `PLINKO-${nanoid(8).toUpperCase()}`;
-            break;
-          case 'slot':
-            ticketNumber = `SLOT-${nanoid(8).toUpperCase()}`;
-            break;
-          default:
-            ticketNumber = `GAME-${nanoid(8).toUpperCase()}`;
-        }
-        
-        const [ticket] = await transaction.insert(tickets).values({
-          userId,
-          competitionId: order.competitionId,
-          orderId: orderId,
-          ticketNumber,
-          isWinner: false,
-          createdAt: new Date(),
-        }).returning();
-        
-        generatedTickets.push(ticket);
-      }
+
+      const { tickets: generatedTickets } = await issuePlayTickets({
+        tx: transaction,
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        userId,
+        orderId,
+        gameType,
+        incrementSold: true,
+        makeLegacyNumber: () => {
+          switch (gameType) {
+            case "scratch":
+              return `SCRATCH-${nanoid(8).toUpperCase()}`;
+            case "spin":
+              return `SPIN-${nanoid(8).toUpperCase()}`;
+            case "pop":
+              return `POP-${nanoid(8).toUpperCase()}`;
+            case "plinko":
+              return `PLINKO-${nanoid(8).toUpperCase()}`;
+            case "slot":
+              return `SLOT-${nanoid(8).toUpperCase()}`;
+            default:
+              return `GAME-${nanoid(8).toUpperCase()}`;
+          }
+        },
+      });
   
      // 🆕 RECORD AUDIT LOG FOR INSTANT PLAY PURCHASE
 await transaction.insert(auditLogs).values({
@@ -4682,32 +4686,18 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
         .where(eq(orders.id, orderId));
   
       // Create tickets
-      const createdTickets = [];
+      const { tickets: createdTickets } = await issuePlayTickets({
+        competitionId,
+        quantity,
+        userId,
+        orderId: order.id,
+        gameType: compType,
+        incrementSold: compType === "instant",
+        makeLegacyNumber: () => nanoid(8).toUpperCase(),
+      });
 
-      for (let i = 0; i < quantity; i++) {
-        const ticketNumber = nanoid(8).toUpperCase();
-      
-        const [ticket] = await db.insert(tickets).values({
-          userId,
-          competitionId,
-          orderId: order.id,
-          ticketNumber,
-          isWinner: false,
-          createdAt: new Date(),
-        }).returning();
-      
-        createdTickets.push(ticket);
-      }
-      
-  
-      // Update sold tickets for instant competitions
       if (compType === "instant") {
-        await db.update(competitions)
-          .set({ 
-            soldTickets: (competition.soldTickets || 0) + quantity,
-            updatedAt: new Date()
-          })
-          .where(eq(competitions.id, competition.id));
+        // soldTickets already incremented by allocator when incrementSold is true
       }
   
       // Send confirmation email
@@ -4790,6 +4780,7 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
+    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
     const spinCostPerTicket = parseFloat(competition.ticketPrice);
     
@@ -5120,28 +5111,15 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
           .where(eq(orders.id, orderId));
   
         // Create spin entries
-        const spinEntries  = [];
-        for (let i = 0; i < order.quantity; i++) {
-          const ticketNumber = `SPIN-${nanoid(8).toUpperCase()}`;
-          const [ticket] = await db.insert(tickets).values({
-            userId,
-            competitionId: order.competitionId,
-            orderId: order.id,
-            ticketNumber,
-            isUsed: false,
-            result: null,
-            createdAt: new Date(),
-          }).returning();
-          spinEntries .push(ticket);
-        }
-  
-        // Update competition sold tickets count
-        await db.update(competitions)
-          .set({ 
-            soldTickets: (competition.soldTickets || 0) + order.quantity,
-            updatedAt: new Date()
-          })
-          .where(eq(competitions.id, competition.id));
+        const { tickets: spinEntries } = await issuePlayTickets({
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          userId,
+          orderId: order.id,
+          gameType: "spin",
+          incrementSold: true,
+          makeLegacyNumber: () => `SPIN-${nanoid(8).toUpperCase()}`,
+        });
   
         // Get discount info for audit log
         let discountInfo = '';
@@ -5257,6 +5235,21 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         success: false,
         message: "No valid spin purchase found",
       });
+    }
+
+    const controlledSpin = await tryRevealControlledSpin({
+      competitionId,
+      orderId,
+      userId,
+    });
+    if (controlledSpin?.handled) {
+      if (controlledSpin.noTickets) {
+        return res.status(400).json({
+          success: false,
+          message: "No spins remaining in this purchase",
+        });
+      }
+      return res.json(controlledSpin.response);
     }
 
     // Check spins remaining
@@ -5583,6 +5576,16 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
         success: false,
         message: "No valid spin purchase found",
       });
+    }
+
+    const controlledRevealSpins = await revealAllControlledSpin({
+      competitionId,
+      orderId,
+      userId,
+      count,
+    });
+    if (controlledRevealSpins?.handled) {
+      return res.json(controlledRevealSpins.response);
     }
 
     // Check spins remaining
@@ -6122,6 +6125,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
+    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
     const scratchCostPerCard = parseFloat(competition.ticketPrice);
     
@@ -6178,6 +6182,7 @@ app.post("/api/create-pop-order", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
+    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
     const popCostPerGame = parseFloat(competition.ticketPrice);
     
@@ -6237,6 +6242,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
+    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
     const voltzCostPerGame = parseFloat(competition.ticketPrice);
     
@@ -6567,27 +6573,15 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
           .where(eq(orders.id, orderId));
   
         // Create scratch card entries
-        const scratchTickets = []; // <-- renamed from tickets
-          for (let i = 0; i < order.quantity; i++) {
-            const ticketNumber = `SCRATCH-${nanoid(8).toUpperCase()}`;
-            const [ticket] = await db.insert(tickets).values({ // <-- tickets table
-              userId,
-              competitionId: order.competitionId,
-              orderId: order.id,
-              ticketNumber,
-              isWinner: false,
-              createdAt: new Date(),
-            }).returning();
-            scratchTickets.push(ticket);
-          }
-  
-        // Update competition sold tickets count
-        await db.update(competitions)
-          .set({ 
-            soldTickets: (competition.soldTickets || 0) + order.quantity,
-            updatedAt: new Date()
-          })
-          .where(eq(competitions.id, competition.id));
+        const { tickets: scratchTickets } = await issuePlayTickets({
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          userId,
+          orderId: order.id,
+          gameType: "scratch",
+          incrementSold: true,
+          makeLegacyNumber: () => `SCRATCH-${nanoid(8).toUpperCase()}`,
+        });
   
         // Get discount info for audit log
         let discountInfo = '';
@@ -7981,16 +7975,18 @@ app.post(
           updatedAt: new Date()
         })
         .where(eq(orders.id, orderId));
-  
-      // Update competition sold tickets count
-      await db.update(competitions)
-        .set({ 
-          soldTickets: (competition.soldTickets || 0) + order.quantity,
-          updatedAt: new Date()
-        })
-        .where(eq(competitions.id, competition.id));
-  
-      // Create transaction record
+
+      const { tickets: popTickets } = await issuePlayTickets({
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        userId,
+        orderId: order.id,
+        gameType: "pop",
+        incrementSold: true,
+        makeLegacyNumber: (i) =>
+          `POP-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`,
+      });
+
       await db.insert(transactions).values({
         userId,
         type: "pop_purchase",
@@ -7999,21 +7995,6 @@ app.post(
         orderId: orderId,
         createdAt: new Date(),
       });
-  
-      // Create tickets for pop game entries
-      const popTickets = [];
-      for (let i = 0; i < order.quantity; i++) {
-        const ticketNumber = `POP-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`;
-        const [ticket] = await db.insert(tickets).values({
-          userId,
-          competitionId: order.competitionId,
-          orderId: order.id,
-          ticketNumber,
-          isWinner: false,
-          createdAt: new Date(),
-        }).returning();
-        popTickets.push(ticket);
-      }
   
       // Send confirmation email
       if (user?.email) {
@@ -8162,16 +8143,18 @@ app.post(
         pointsAmount: pointsUsed.toString(), cashflowsAmount: "0", paymentBreakdown: JSON.stringify(paymentBreakdown), updatedAt: new Date()
       }).where(eq(orders.id, orderId));
 
-      await db.update(competitions).set({ soldTickets: (competition.soldTickets || 0) + order.quantity, updatedAt: new Date() }).where(eq(competitions.id, competition.id));
+      const { tickets: voltzTickets } = await issuePlayTickets({
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        userId,
+        orderId: order.id,
+        gameType: "voltz",
+        incrementSold: true,
+        makeLegacyNumber: (i) =>
+          `VLT-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`,
+      });
 
       await db.insert(transactions).values({ userId, type: "voltz_purchase", amount: totalAmount.toFixed(2), description: `Voltz Game Purchase - ${order.quantity} games`, orderId: orderId, createdAt: new Date() });
-
-      const voltzTickets = [];
-      for (let i = 0; i < order.quantity; i++) {
-        const ticketNumber = `VLT-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`;
-        const [ticket] = await db.insert(tickets).values({ userId, competitionId: order.competitionId, orderId: order.id, ticketNumber, isWinner: false, createdAt: new Date() }).returning();
-        voltzTickets.push(ticket);
-      }
 
       if (user?.email) {
         const ticketNumbers = voltzTickets.map((t) => t.ticketNumber);
@@ -10552,6 +10535,7 @@ app.post("/api/create-plinko-order", isAuthenticated, async (req: any, res) => {
     if (!competition || competition.type !== "plinko") {
       return res.status(404).json({ message: "Plinko competition not found" });
     }
+    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
     const ticketPrice = parseFloat(competition.ticketPrice);
     
@@ -10657,6 +10641,20 @@ app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
     if (!order || order.userId !== userId || order.status !== "completed") {
       return res.status(400).json({ success: false, message: "No valid Plinko game purchase found" });
     }
+
+    const controlledPlinko = await tryRevealControlledPlinko({
+      competitionId,
+      orderId,
+      userId,
+    });
+    if (controlledPlinko?.handled) {
+      if (controlledPlinko.noTickets) {
+        return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
+      }
+      plinkoCooldowns.set(cooldownKey, now);
+      return res.json(controlledPlinko.response);
+    }
+
     if (!user) return res.status(404).json({ message: "User not found" });
     if (!config.isActive) {
       return res.status(400).json({ success: false, message: "Ringtone Plinko is currently unavailable" });
@@ -10908,6 +10906,16 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
         success: false, 
         message: "No valid Plinko game purchase found" 
       });
+    }
+
+    const controlledRevealPlinko = await revealAllControlledPlinko({
+      competitionId,
+      orderId,
+      userId,
+      count,
+    });
+    if (controlledRevealPlinko?.handled) {
+      return res.json(controlledRevealPlinko.response);
     }
 
     const playsUsed = await db.select({ count: sql<number>`count(*)` })
@@ -11429,30 +11437,18 @@ app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) =
       createdAt: new Date(),
     });
 
-    // Update competition sold tickets count
-    const newSoldTickets = (competition.soldTickets || 0) + order.quantity;
-    
-    await db.update(competitions)
-      .set({ 
-        soldTickets: newSoldTickets,
-        updatedAt: new Date()
-      })
-      .where(eq(competitions.id, competition.id));
+    const { tickets: plinkoTickets } = await issuePlayTickets({
+      competitionId: order.competitionId,
+      quantity: order.quantity,
+      userId,
+      orderId: order.id,
+      gameType: "plinko",
+      incrementSold: true,
+      makeLegacyNumber: (i) =>
+        `PLINKO-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`,
+    });
 
-    // Create tickets for plinko game entries
-    const plinkoTickets = [];
-    for (let i = 0; i < order.quantity; i++) {
-      const ticketNumber = `PLINKO-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, '0')}`;
-      const [ticket] = await db.insert(tickets).values({
-        userId,
-        competitionId: order.competitionId,
-        orderId: order.id,
-        ticketNumber,
-        isWinner: false,
-        createdAt: new Date(),
-      }).returning();
-      plinkoTickets.push(ticket);
-    }
+    const newSoldTickets = (competition.soldTickets || 0) + order.quantity;
 
     res.json({
       success: true,
@@ -11533,6 +11529,16 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
         success: false,
         message: "No valid Plinko game purchase found",
       });
+    }
+
+    const controlledRevealPlinko2 = await revealAllControlledPlinko({
+      competitionId,
+      orderId,
+      userId,
+      count: req.body.count || order.quantity,
+    });
+    if (controlledRevealPlinko2?.handled) {
+      return res.json(controlledRevealPlinko2.response);
     }
 
     // Get user
@@ -13302,12 +13308,21 @@ app.get(
     isAdmin,
     async (req: any, res) => {
       try {
-        const data = req.body;
+        const data = { ...req.body };
+        delete data.startDate;
+        delete data.createdAt;
+        delete data.created_at;
+        delete data.id;
+
+        if (!data.endDate) {
+          data.endDate = null;
+        } else {
+          const parsedEnd = new Date(data.endDate);
+          data.endDate = Number.isNaN(parsedEnd.getTime()) ? null : parsedEnd;
+        }
 
         const competition = await storage.createCompetition({
           ...data,
-          startDate: new Date(data.startDate),
-          endDate: new Date(data.endDate),
           isActive: true,
         });
 
@@ -13587,6 +13602,12 @@ app.patch(
       const competition = existing[0];
       if (!competition) {
         return res.status(404).json({ message: "Competition not found" });
+      }
+
+      if (competition.instantWinMode === "controlled_pool" && soldTickets !== undefined) {
+        return res.status(400).json({
+          message: "Sold tickets cannot be edited on controlled pool competitions",
+        });
       }
 
       // Check if competition is active and not archived
@@ -14567,6 +14588,22 @@ app.post("/api/play-pop", async (req: any, res) => {
         });
       }
 
+      const controlledGuestPop = await tryRevealControlledPop({
+        competitionId,
+        orderId,
+        isGuest: true,
+        guestOrder,
+      });
+      if (controlledGuestPop?.handled) {
+        if (controlledGuestPop.noTickets) {
+          return res.status(400).json({
+            success: false,
+            message: "No plays remaining in this purchase",
+          });
+        }
+        return res.json(controlledGuestPop.response);
+      }
+
       // Get guest tickets
       tickets = await db
         .select()
@@ -14619,6 +14656,22 @@ app.post("/api/play-pop", async (req: any, res) => {
           success: false,
           message: "No valid pop game purchase found",
         });
+      }
+
+      const controlledPop = await tryRevealControlledPop({
+        competitionId,
+        orderId,
+        userId,
+        isGuest: false,
+      });
+      if (controlledPop?.handled) {
+        if (controlledPop.noTickets) {
+          return res.status(400).json({
+            success: false,
+            message: "No plays remaining in this purchase",
+          });
+        }
+        return res.json(controlledPop.response);
       }
 
       // Check remaining plays
@@ -15157,6 +15210,16 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
         success: false,
         message: "No valid pop game purchase found",
       });
+    }
+
+    const controlledReveal = await revealAllControlledPop({
+      competitionId,
+      orderId,
+      userId,
+      count,
+    });
+    if (controlledReveal?.handled) {
+      return res.json(controlledReveal.response);
     }
 
     // Check remaining plays
@@ -17710,6 +17773,17 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ success: false, message: "No valid Voltz game purchase found" });
     }
 
+    const controlledVoltz = await peekControlledVoltz({
+      competitionId,
+      orderId,
+    });
+    if (controlledVoltz?.handled) {
+      if (controlledVoltz.noTickets) {
+        return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
+      }
+      return res.json(controlledVoltz.response);
+    }
+
     const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
     const usedCount = Number(playsUsed[0]?.count || 0);
     const playsRemaining = order.quantity - usedCount;
@@ -17961,6 +18035,17 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
     const order = await storage.getOrder(orderId);
     if (!order || order.userId !== userId) {
       return res.status(400).json({ success: false, message: "Order not found" });
+    }
+
+    const controlledConfirm = await confirmControlledVoltz({
+      competitionId: order.competitionId,
+      orderId,
+      userId,
+      ticketId: result?.ticketId,
+      switchChosen,
+    });
+    if (controlledConfirm?.handled) {
+      return res.json(controlledConfirm.response || { success: true, controlledPool: true, creditedAtSale: true });
     }
 
     const user = await storage.getUser(userId);
@@ -19031,50 +19116,33 @@ async function processGuestOrder(
       .from(competitions)
       .where(eq(competitions.id, guestOrder.competitionId));
 
-    // Update competition sold tickets
-    if (competition) {
-      await tx.update(competitions)
-        .set({ 
-          soldTickets: (competition.soldTickets || 0) + guestOrder.quantity,
-          updatedAt: new Date()
-        })
-        .where(eq(competitions.id, guestOrder.competitionId));
-    }
-
-    // Generate GUEST tickets
-    const ticketNumbers = [];
-    for (let i = 0; i < guestOrder.quantity; i++) {
-      let ticketNumber;
-      switch (guestOrder.gameType) {
-        case 'pop':
-          ticketNumber = `POP-G-${nanoid(8).toUpperCase()}`;
-          break;
-        case 'scratch':
-          ticketNumber = `SCR-G-${nanoid(8).toUpperCase()}`;
-          break;
-        case 'spin':
-          ticketNumber = `SPN-G-${nanoid(8).toUpperCase()}`;
-          break;
-        case 'slot':
-          ticketNumber = `SLT-G-${nanoid(8).toUpperCase()}`;
-          break;
-        case 'plinko':
-          ticketNumber = `PLK-G-${nanoid(8).toUpperCase()}`;
-          break;
-        default:
-          ticketNumber = `GST-G-${nanoid(8).toUpperCase()}`;
-      }
-
-      const [ticket] = await tx.insert(guestTickets).values({
-        guestOrderId: guestOrder.id,
-        ticketNumber,
-        competitionId: guestOrder.competitionId,
-        isWinner: false, // Will be set when played
-        createdAt: new Date(),
-      }).returning();
-
-      ticketNumbers.push(ticket.ticketNumber);
-    }
+    // Generate GUEST tickets from the shared pool
+    const { tickets: issuedGuestTickets } = await issuePlayTickets({
+      tx,
+      competitionId: guestOrder.competitionId,
+      quantity: guestOrder.quantity,
+      guestOrderId: guestOrder.id,
+      isGuest: true,
+      gameType: guestOrder.gameType,
+      incrementSold: true,
+      makeLegacyNumber: () => {
+        switch (guestOrder.gameType) {
+          case "pop":
+            return `POP-G-${nanoid(8).toUpperCase()}`;
+          case "scratch":
+            return `SCR-G-${nanoid(8).toUpperCase()}`;
+          case "spin":
+            return `SPN-G-${nanoid(8).toUpperCase()}`;
+          case "slot":
+            return `SLT-G-${nanoid(8).toUpperCase()}`;
+          case "plinko":
+            return `PLK-G-${nanoid(8).toUpperCase()}`;
+          default:
+            return `GST-G-${nanoid(8).toUpperCase()}`;
+        }
+      },
+    });
+    const ticketNumbers = issuedGuestTickets.map((t) => t.ticketNumber);
 
     // Update order with ticket numbers
     await tx.update(guestOrders)
@@ -19623,6 +19691,17 @@ app.delete("/api/admin/faqs/:id", isAuthenticated, isAdmin, async (req, res) => 
 app.get("/api/competitions/:competitionId/prize-table",  async (req, res) => {
   try {
     const { competitionId } = req.params;
+
+    const [competition] = await db
+      .select()
+      .from(competitions)
+      .where(eq(competitions.id, competitionId))
+      .limit(1);
+
+    if (competition?.instantWinMode === "controlled_pool") {
+      const pool = await getPublicPrizePool(competitionId);
+      return res.json(pool);
+    }
     
     const prizes = await db
       .select()
@@ -20043,6 +20122,7 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
       const { competitionId, quantity = 1 } = req.body;
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
+      if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
       const slotCostPerSpin = parseFloat(competition.ticketPrice);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(slotCostPerSpin, quantity);
       const user = await storage.getUser(userId);
@@ -20150,15 +20230,18 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
         walletAmount: walletUsed.toString(), pointsAmount: pointsUsed.toString(),
         cashflowsAmount: "0", paymentBreakdown: JSON.stringify(paymentBreakdown), updatedAt: new Date(),
       }).where(eq(orders.id, orderId));
-      await db.update(competitions).set({ soldTickets: (competition.soldTickets || 0) + order.quantity, updatedAt: new Date() }).where(eq(competitions.id, competition.id));
       await db.insert(transactions).values({ userId, type: "purchase", amount: totalAmount.toFixed(2), description: `Slot Machine Purchase - ${order.quantity} spins`, orderId, createdAt: new Date() });
 
-      const slotTickets = [];
-      for (let i = 0; i < order.quantity; i++) {
-        const ticketNumber = `SLT-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`;
-        const [ticket] = await db.insert(tickets).values({ userId, competitionId: order.competitionId, orderId: order.id, ticketNumber, isWinner: false, createdAt: new Date() }).returning();
-        slotTickets.push(ticket);
-      }
+      const { tickets: slotTickets } = await issuePlayTickets({
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        userId,
+        orderId: order.id,
+        gameType: "slot",
+        incrementSold: true,
+        makeLegacyNumber: (i) =>
+          `SLT-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`,
+      });
 
       if (user?.email) {
         sendOrderConfirmationEmail(user.email, {
@@ -20241,6 +20324,18 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
         status: order?.status 
       });
       return res.status(400).json({ message: "No valid slot order found" });
+    }
+
+    const controlledSlot = await tryRevealControlledSlot({
+      competitionId: order.competitionId,
+      orderId,
+      userId,
+    });
+    if (controlledSlot?.handled) {
+      if (controlledSlot.noTickets) {
+        return res.status(403).json({ message: "All spins used" });
+      }
+      return res.json(controlledSlot.response);
     }
 
     // ── Enforce spin limit ───────────────────────────────────────────────
@@ -20978,6 +21073,7 @@ app.get("/api/debug/slot-wins", async (_req, res) => {
       const { competitionId, quantity = 1 } = req.body;
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
+      if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
       const costPerPlay = parseFloat(competition.ticketPrice);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(costPerPlay, quantity);
       const user = await storage.getUser(userId);
@@ -21072,15 +21168,18 @@ app.get("/api/debug/slot-wins", async (_req, res) => {
         walletAmount: walletUsed.toString(), pointsAmount: pointsUsed.toString(),
         cashflowsAmount: "0", paymentBreakdown: JSON.stringify(paymentBreakdown), updatedAt: new Date(),
       }).where(eq(orders.id, orderId));
-      await db.update(competitions).set({ soldTickets: (competition.soldTickets || 0) + order.quantity, updatedAt: new Date() }).where(eq(competitions.id, competition.id));
       await db.insert(transactions).values({ userId, type: "purchase", amount: totalAmount.toFixed(2), description: `Royal Reels Purchase - ${order.quantity} games`, orderId, createdAt: new Date() });
 
-      const royalTickets = [];
-      for (let i = 0; i < order.quantity; i++) {
-        const ticketNumber = `RYL-${orderId.slice(0,8).toUpperCase()}-${(i+1).toString().padStart(3,"0")}`;
-        const [ticket] = await db.insert(tickets).values({ userId, competitionId: order.competitionId, orderId: order.id, ticketNumber, isWinner: false, createdAt: new Date() }).returning();
-        royalTickets.push(ticket);
-      }
+      const { tickets: royalTickets } = await issuePlayTickets({
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        userId,
+        orderId: order.id,
+        gameType: "royal",
+        incrementSold: true,
+        makeLegacyNumber: (i) =>
+          `RYL-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`,
+      });
 
       if (user?.email) {
         sendOrderConfirmationEmail(user.email, {
@@ -21300,6 +21399,7 @@ app.get("/api/debug/slot-wins", async (_req, res) => {
 
   // ════════════════════ END ROYAL REELS ROUTES ════════════════════
 
+  registerInstantWinRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

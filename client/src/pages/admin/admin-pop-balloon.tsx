@@ -278,6 +278,8 @@ export default function AdminPopBalloon() {
 
       if (formData.endDate) {
         payload.endDate = new Date(formData.endDate).toISOString();
+      } else {
+        delete payload.endDate;
       }
 
       const res = await apiRequest("/api/admin/competitions", "POST", payload);
@@ -286,6 +288,7 @@ export default function AdminPopBalloon() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/competitions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/instant-win/competitions"] });
       setCreateDialogOpen(false);
       toast({ title: "Pop Balloon game created successfully" });
     },
@@ -461,13 +464,14 @@ export default function AdminPopBalloon() {
                   Pop Settings
                 </Button>
               </Link>
-              {/* <Button
+              <Button
                 onClick={() => setCreateDialogOpen(true)}
                 data-testid="button-create-pop"
+                className="bg-amber-500 hover:bg-amber-600 text-black"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Pop Game
-              </Button> */}
+              </Button>
             </div>
           </div>
         </div>
@@ -481,9 +485,12 @@ export default function AdminPopBalloon() {
                 <p className="text-muted-foreground mb-4">
                   No active pop balloon games yet
                 </p>
-                {/* <Button onClick={() => setCreateDialogOpen(true)}>
+                <Button
+                  onClick={() => setCreateDialogOpen(true)}
+                  className="bg-amber-500 hover:bg-amber-600 text-black"
+                >
                   Create Your First Pop Game
-                </Button> */}
+                </Button>
               </div>
             ) : (
               activeCompetitions.map((competition) => (

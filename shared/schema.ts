@@ -263,6 +263,9 @@ export const competitions = pgTable("competitions", {
   ticketPrice: decimal("ticket_price", { precision: 10, scale: 2 }).notNull(),
   maxTickets: integer("max_tickets"),
   soldTickets: integer("sold_tickets").default(0),
+  nextTicketNumber: integer("next_ticket_number").default(1),
+  instantWinMode: varchar("instant_win_mode", { enum: ["probability", "controlled_pool"] }).default("probability"),
+  ticketBlockSize: integer("ticket_block_size"),
   prizeData: jsonb("prize_data"), // For storing wheel segments or scratch card prizes
   skillQuestion: text("skill_question"), // Optional skill question for compliance
   isActive: boolean("is_active").default(true),
@@ -287,10 +290,18 @@ export const tickets = pgTable("tickets", {
   competitionId: uuid("competition_id").notNull().references(() => competitions.id),
   orderId: uuid("order_id").references(() => orders.id),
   ticketNumber: varchar("ticket_number").notNull(),
+  ticketSeq: integer("ticket_seq"),
   isWinner: boolean("is_winner").default(false),
   prizeAmount: decimal("prize_amount", { precision: 10, scale: 2 }),
+  prizeType: varchar("prize_type"),
+  prizeDetails: jsonb("prize_details"),
+  resultStatus: varchar("result_status", { enum: ["pending", "lose", "win", "revealed"] }).default("pending"),
+  instantWinPrizeId: uuid("instant_win_prize_id"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("tickets_order_id_idx").on(table.orderId),
+  index("tickets_result_status_idx").on(table.resultStatus),
+]);
 
 // Orders for tracking purchases
 export const orders = pgTable("orders", {
@@ -421,12 +432,61 @@ export const guestTickets = pgTable("guest_tickets", {
   guestOrderId: uuid("guest_order_id").references(() => guestOrders.id),
   ticketNumber: varchar("ticket_number").notNull(),
   competitionId: uuid("competition_id").notNull(),
+  ticketSeq: integer("ticket_seq"),
   isWinner: boolean("is_winner").default(false),
   prizeAmount: decimal("prize_amount", { precision: 10, scale: 2 }),
   prizeType: varchar("prize_type"), // Add this
   prizeDetails: jsonb("prize_details"), // Add this
+  resultStatus: varchar("result_status", { enum: ["pending", "lose", "win", "revealed"] }).default("pending"),
+  instantWinPrizeId: uuid("instant_win_prize_id"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("guest_tickets_order_idx").on(table.guestOrderId),
+  index("guest_tickets_result_status_idx").on(table.resultStatus),
+]);
+
+export const instantWinPrizes = pgTable("instant_win_prizes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+  name: varchar("name").notNull(),
+  value: decimal("value", { precision: 10, scale: 2 }).notNull(),
+  rewardType: varchar("reward_type", { enum: ["cash", "points", "physical"] }).notNull(),
+  status: varchar("status", { enum: ["locked", "active", "won", "disabled"] }).notNull().default("locked"),
+  rangeFrom: integer("range_from").notNull(),
+  rangeTo: integer("range_to").notNull(),
+  activationType: varchar("activation_type", { enum: ["manual", "percent_sold", "count_sold", "revenue", "datetime"] }).notNull().default("manual"),
+  activationValue: jsonb("activation_value"),
+  allocationMethod: varchar("allocation_method", { enum: ["a_pregen", "b_on_activate"] }).notNull().default("b_on_activate"),
+  winningTicketNumber: integer("winning_ticket_number"),
+  wonAt: timestamp("won_at"),
+  winnerUserId: varchar("winner_user_id"),
+  winnerDisplayName: varchar("winner_display_name"),
+  lastChangedAt: timestamp("last_changed_at").defaultNow(),
+  lastChangedBy: varchar("last_changed_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("instant_win_prizes_competition_idx").on(table.competitionId),
+  index("instant_win_prizes_status_idx").on(table.status),
+  index("instant_win_prizes_winning_ticket_idx").on(table.competitionId, table.winningTicketNumber),
+]);
+
+export const instantWinPrizeAudit = pgTable("instant_win_prize_audit", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  prizeId: uuid("prize_id").notNull().references(() => instantWinPrizes.id, { onDelete: "cascade" }),
+  adminId: varchar("admin_id"),
+  action: varchar("action").notNull(),
+  previousStatus: varchar("previous_status"),
+  newStatus: varchar("new_status"),
+  activationRule: jsonb("activation_rule"),
+  rngRef: varchar("rng_ref"),
+  winningTicketNumber: integer("winning_ticket_number"),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("instant_win_prize_audit_prize_idx").on(table.prizeId),
+  index("instant_win_prize_audit_created_idx").on(table.createdAt),
+]);
 
 // Fix guest pending payments table
 export const guestPendingPayments = pgTable("guest_pending_payments", {
@@ -1225,6 +1285,8 @@ export type CampaignEmail = typeof campaignEmails.$inferSelect;
 export type InsertCampaignEmail = z.infer<typeof insertCampaignEmailSchema>;
 export type CompetitionTicketSettings = typeof competitionTicketSettings.$inferSelect;
 export type InsertCompetitionTicketSettings = z.infer<typeof insertCompetitionTicketSettingsSchema>;
+export type InstantWinPrize = typeof instantWinPrizes.$inferSelect;
+export type InstantWinPrizeAudit = typeof instantWinPrizeAudit.$inferSelect;
 // Type definitions
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;

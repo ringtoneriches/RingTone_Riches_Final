@@ -1,6 +1,6 @@
 // server/services/prize-sync.ts
 
-import { competitionPrizes } from "@shared/schema";
+import { competitionPrizes, competitions } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, sql } from "drizzle-orm";
 
@@ -38,6 +38,22 @@ export async function syncPrizeWin(params: PrizeSyncParams) {
       quantity = 1,
       maxWins = null
     } = params;
+
+    if (competitionId) {
+      const [competition] = await db
+        .select({ instantWinMode: competitions.instantWinMode })
+        .from(competitions)
+        .where(eq(competitions.id, competitionId))
+        .limit(1);
+      if (competition?.instantWinMode === "controlled_pool") {
+        return {
+          success: true,
+          action: "skipped",
+          message: "Controlled pool prizes are marked Won on the prize row, not decremented",
+          reason: "controlled-pool",
+        };
+      }
+    }
 
     // ✅ ONLY SYNC CASH PRIZES
     if (rewardType !== 'cash') {
