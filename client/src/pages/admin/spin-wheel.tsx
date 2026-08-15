@@ -571,14 +571,14 @@ export default function AdminSpinWheel() {
               </Button>
             </Link>
               
-              {/* <Button 
-                onClick={() => setCreateDialogOpen(true)} 
-                size="icon"
-                className="bg-yellow-500 hover:bg-yellow-600 text-black"
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                className="bg-amber-500 hover:bg-amber-600 text-black"
                 data-testid="button-create-spin"
               >
-                <Plus className="w-4 h-4" />
-              </Button> */}
+                <Plus className="w-4 h-4 mr-2" />
+                Create Spin Wheel
+              </Button>
             </div>
           </div>
         </div>
@@ -592,9 +592,12 @@ export default function AdminSpinWheel() {
                 <p className="text-muted-foreground mb-4">
                   No active spin wheel competitions yet
                 </p>
-                {/* <Button onClick={() => setCreateDialogOpen(true)}>
+                <Button
+                  onClick={() => setCreateDialogOpen(true)}
+                  className="bg-amber-500 hover:bg-amber-600 text-black"
+                >
                   Create Your First Spin Wheel
-                </Button> */}
+                </Button>
               </div>
             ) : (
               activeCompetitions.map((competition) => (

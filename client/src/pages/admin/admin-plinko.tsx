@@ -461,13 +461,14 @@ export default function AdminPlinkoBalloon() {
                   Plinko Settings
                 </Button>
               </Link>
-              {/* <Button
+              <Button
                 onClick={() => setCreateDialogOpen(true)}
-                data-testid="button-create-pop"
+                className="bg-amber-500 hover:bg-amber-600 text-black"
+                data-testid="button-create-plinko"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Plinko Game
-              </Button> */}
+              </Button>
             </div>
           </div>
         </div>
@@ -481,9 +482,12 @@ export default function AdminPlinkoBalloon() {
                 <p className="text-muted-foreground mb-4">
                   No active plinlko balloon games yet
                 </p>
-                {/* <Button onClick={() => setCreateDialogOpen(true)}>
+                <Button
+                  onClick={() => setCreateDialogOpen(true)}
+                  className="bg-amber-500 hover:bg-amber-600 text-black"
+                >
                   Create Your First Plinko Game
-                </Button> */}
+                </Button>
               </div>
             ) : (
               activeCompetitions.map((competition) => (

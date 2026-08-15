@@ -641,6 +641,14 @@ export default function AdminScratchCard() {
               <Settings className="w-4 h-4" />
               Scratch Settings
             </Button>
+            <Button
+              onClick={() => setCreateDialogOpen(true)}
+              className="bg-amber-500 hover:bg-amber-600 text-black"
+              data-testid="button-create-scratch"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Scratch Card
+            </Button>
           </div>
         </div>
 
@@ -653,9 +661,12 @@ export default function AdminScratchCard() {
                 <p className="text-muted-foreground mb-4">
                   No active scratch card competitions yet
                 </p>
-                {/* <Button onClick={() => setCreateDialogOpen(true)}>
+                <Button
+                  onClick={() => setCreateDialogOpen(true)}
+                  className="bg-amber-500 hover:bg-amber-600 text-black"
+                >
                   Create Your First Scratch Card
-                </Button> */}
+                </Button>
               </div>
             ) : (
               activeCompetitions.map((competition) => (

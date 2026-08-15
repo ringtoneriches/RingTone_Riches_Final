@@ -284,13 +284,14 @@ export default function AdminVoltz() {
                   Voltz Settings
                 </Button>
               </Link>
-              {/* <Button
+              <Button
                 onClick={() => setCreateDialogOpen(true)}
-                data-testid="button-create-pop"
+                className="bg-amber-500 hover:bg-amber-600 text-black"
+                data-testid="button-create-voltz"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Voltz Game
-              </Button> */}
+              </Button>
             </div>
           </div>
         </div>
@@ -300,6 +301,12 @@ export default function AdminVoltz() {
             {activeCompetitions.length === 0 ? (
               <div className="text-center py-12 border border-dashed rounded-lg">
                 <p className="text-muted-foreground mb-4">No active Voltz games yet</p>
+                <Button
+                  onClick={() => setCreateDialogOpen(true)}
+                  className="bg-amber-500 hover:bg-amber-600 text-black"
+                >
+                  Create Your First Voltz Game
+                </Button>
               </div>
             ) : (
               activeCompetitions.map((competition) => (
