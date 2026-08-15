@@ -50,6 +50,91 @@ export const validateMinimumPurchase = (totalAmount: number, paymentType: string
 
 export const MIN_PURCHASE = MINIMUM_PURCHASE_AMOUNT;
 
+function formatPrizeAmount(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "";
+  if (Number.isInteger(value)) return `£${value.toLocaleString("en-GB")}`;
+  return `£${value.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function subtitleForReward(type?: string, name?: string) {
+  if (type === "points") return "POINTS PRIZE";
+  if (type === "physical") {
+    const label = (name || "").trim();
+    return label && label.length <= 28 ? label.toUpperCase() : "PRIZE";
+  }
+  if (type === "cash") return "CASH PRIZE";
+  return name?.trim() ? name.trim().toUpperCase() : "PRIZE";
+}
+
+function pickFromPrizeData(prizeData: any): { headline: string; subtitle: string } | null {
+  if (!prizeData) return null;
+
+  if (typeof prizeData.mainPrize === "string" && prizeData.mainPrize.trim()) {
+    const text = prizeData.mainPrize.trim();
+    const pound = text.match(/£[\d,]+(?:\.\d+)?/);
+    if (pound) {
+      return { headline: pound[0], subtitle: /cash/i.test(text) ? "CASH PRIZE" : "MAIN PRIZE" };
+    }
+    if (text.length <= 16) {
+      return { headline: text, subtitle: /cash/i.test(text) ? "CASH PRIZE" : "MAIN PRIZE" };
+    }
+    return { headline: "PRIZE", subtitle: text.length > 28 ? `${text.slice(0, 28).trim()}…` : text };
+  }
+
+  const list = Array.isArray(prizeData) ? prizeData : prizeData.prizes;
+  if (!Array.isArray(list) || !list.length) return null;
+
+  const valued = list
+    .map((p: any) => ({
+      value: Number(p.rewardValue ?? p.value ?? p.amount ?? 0),
+      label: String(p.label || p.name || p.prizeName || ""),
+      type: String(p.rewardType || p.type || ""),
+    }))
+    .filter((p: { value: number; type: string }) => p.value > 0 && !["lose", "try_again", "no_win"].includes(p.type));
+
+  if (!valued.length) return null;
+  const top = valued.reduce((a: any, b: any) => (b.value > a.value ? b : a));
+  const headline = formatPrizeAmount(top.value);
+  if (!headline) return null;
+  return { headline, subtitle: subtitleForReward(top.type, top.label) };
+}
+
+function resolveCheckoutPrize(
+  competition: any,
+  prizePool: any,
+): { headline: string; subtitle: string } {
+  const poolPrizes = Array.isArray(prizePool?.prizes) ? prizePool.prizes : [];
+  const isControlled = prizePool?.mode === "controlled_pool" || competition?.instantWinMode === "controlled_pool";
+
+  if (isControlled && poolPrizes.length) {
+    const available = poolPrizes.filter((p: any) => p.publicStatus === "available" || p.status === "active");
+    const candidates = available.length ? available : poolPrizes;
+    const top = candidates.reduce((best: any, p: any) =>
+      Number(p.prizeValue || 0) > Number(best.prizeValue || 0) ? p : best
+    );
+    const headline = formatPrizeAmount(Number(top.prizeValue || 0));
+    if (headline) {
+      return { headline, subtitle: subtitleForReward(top.rewardType, top.prizeName) };
+    }
+  }
+
+  if (isControlled && !poolPrizes.length) {
+    return { headline: "PRIZES", subtitle: "INSTANT WIN" };
+  }
+
+  const fromPrizeData = pickFromPrizeData(competition?.prizeData);
+  if (fromPrizeData) return fromPrizeData;
+
+  const title = String(competition?.title || "");
+  const prizeMatch = title.match(/£[\d,]+(?:\.\d+)?/);
+  if (prizeMatch) {
+    return { headline: prizeMatch[0], subtitle: /cash/i.test(title) ? "CASH PRIZE" : "MAIN PRIZE" };
+  }
+
+  // Existing probability games with no prize text keep the previous checkout look.
+  return { headline: "£10,000", subtitle: "CASH PRIZE" };
+}
+
 export default function UnifiedBilling({ orderId, orderType, wheelType, competitionImage: passedImage }: UnifiedBillingProps) {
   const [, setLocation] = useLocation();
   const [selectedMethods, setSelectedMethods] = useState({ walletBalance: false, ringtonePoints: false, instaplay: false });
@@ -175,6 +260,17 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
   const order       = orderData?.order;
   const user        = orderData?.user;
   const competition = orderData?.competition;
+  const competitionId = competition?.id || order?.competitionId;
+
+  const { data: prizePool } = useQuery({
+    queryKey: ["/api/competitions", competitionId, "instant-win-pool"],
+    enabled: !!competitionId,
+    queryFn: async () => {
+      const res = await apiRequest(`/api/competitions/${competitionId}/instant-win-pool`, "GET");
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
 
   const isInstantCompetition = orderType === "competition" && competition?.type === "instant";
   const isPointsDisabled = isInstantCompetition;
@@ -362,17 +458,9 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
   const FALLBACK = "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&h=600";
   const imageSrc = getCompetitionImage();
 
-  // Better prize extraction with fallbacks
-  const getPrizeValue = () => {
-    if (!competition?.title) return "£10,000";
-    const prizeMatch = competition.title.match(/£[\d,]+/);
-    if (prizeMatch) return prizeMatch[0];
-    const numericMatch = competition.title.match(/[\d,]+/);
-    if (numericMatch) return `£${numericMatch[0]}`;
-    return "£10,000";
-  };
-
-  const prizeVal = getPrizeValue();
+  const prizeDisplay = resolveCheckoutPrize(competition, prizePool);
+  const prizeVal = prizeDisplay.headline;
+  const prizeSubtitle = prizeDisplay.subtitle;
   const qty = order?.quantity || 1;
 
   if (isLoading) return (
@@ -474,7 +562,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
                   {[
                     { icon: Zap,     label: "Instant", sub: "Results",           color: GOLD    },
-                    { icon: Trophy,  label: prizeVal || "Top",  sub: "Prize",    color: AMBER   },
+                    { icon: Trophy,  label: prizeVal === "PRIZES" ? "Instant" : (prizeVal || "Top"),  sub: "Prize",    color: AMBER   },
                     { icon: Shield,  label: "Secure &", sub: "Fair Draw",        color: "#00CFFF" },
                     { icon: Sparkles,label: "Bonus", sub: "Points",              color: "#8B5CF6" },
                   ].map((f, i) => {
@@ -787,11 +875,11 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.25, filter: "saturate(1.4) blur(4px)" }} />
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,rgba(14,10,2,0.6) 0%,rgba(14,10,2,0.92) 100%)" }} />
               <div style={{ position: "relative", zIndex: 2, padding: "4px 0 12px" }}>
-                <div style={{ fontSize: "clamp(2rem, 6vw, 3rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 40px rgba(255,185,0,0.8), 0 0 80px rgba(255,185,0,0.4)`, lineHeight: 1 }}>
-                  {prizeVal || "£10,000"}
+                <div style={{ fontSize: prizeVal?.startsWith("£") ? "clamp(2rem, 6vw, 3rem)" : "clamp(1.4rem, 4vw, 2.2rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 40px rgba(255,185,0,0.8), 0 0 80px rgba(255,185,0,0.4)`, lineHeight: 1, padding: "0 8px" }}>
+                  {prizeVal || "PRIZE"}
                 </div>
-                <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(255,255,255,0.45)", marginTop: 4 }}>
-                  CASH PRIZE
+                <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(255,255,255,0.45)", marginTop: 4, padding: "0 10px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {prizeSubtitle || "PRIZE"}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 10, marginBottom: 4 }}>
                   {["💰", "💰", "💰"].map((e, i) => (
