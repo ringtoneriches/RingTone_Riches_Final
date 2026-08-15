@@ -461,13 +461,14 @@ export default function AdminSlotGame() {
                   Slot Settings
                 </Button>
               </Link>
-              {/* <Button
+              <Button
                 onClick={() => setCreateDialogOpen(true)}
+                className="bg-amber-500 hover:bg-amber-600 text-black"
                 data-testid="button-create-slot"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Slot Game
-              </Button> */}
+              </Button>
             </div>
           </div>
         </div>
