@@ -45,6 +45,10 @@ import {
   ShieldAlert,
   Sparkles,
   Search,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 const statusStyles: Record<string, string> = {
@@ -53,6 +57,8 @@ const statusStyles: Record<string, string> = {
   won: "bg-amber-500/20 text-amber-300 border-amber-500/30",
   disabled: "bg-red-500/20 text-red-300 border-red-500/30",
 };
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
 export default function AdminInstantPool() {
   const { toast } = useToast();
@@ -64,6 +70,10 @@ export default function AdminInstantPool() {
   const [blockSizeInput, setBlockSizeInput] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [groupPages, setGroupPages] = useState<Record<string, number>>({});
   const [pendingAction, setPendingAction] = useState<{
     type: "activate" | "lock" | "disable";
     prize: any;
@@ -124,6 +134,55 @@ export default function AdminInstantPool() {
       return String(a.id || "").localeCompare(String(b.id || ""));
     });
   }, [prizes, search]);
+
+  const groups = useMemo(() => {
+    const map = new Map<string, {
+      key: string;
+      name: string;
+      value: number;
+      rewardType: string;
+      prizes: any[];
+    }>();
+    for (const prize of filtered) {
+      const key = prize.competitionPrizeId
+        || `${Number(prize.value).toFixed(2)}|${prize.name}|${prize.rewardType}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.prizes.push(prize);
+      } else {
+        map.set(key, {
+          key,
+          name: prize.name,
+          value: Number(prize.value || 0),
+          rewardType: prize.rewardType,
+          prizes: [prize],
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (b.value !== a.value) return b.value - a.value;
+      return a.name.localeCompare(b.name);
+    });
+  }, [filtered]);
+
+  const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = groups.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const pageEnd = Math.min(safePage * pageSize, groups.length);
+  const pagedGroups = useMemo(
+    () => groups.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [groups, safePage, pageSize]
+  );
+
+  useEffect(() => {
+    setPage(1);
+    setOpenGroups({});
+    setGroupPages({});
+  }, [selectedId, statusFilter, search, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const modeMutation = useMutation({
     mutationFn: async (payload: { mode: string; ticketBlockSize?: number | null }) => {
@@ -438,15 +497,15 @@ export default function AdminInstantPool() {
                   Add prizes from Tools → Prize Table (quantity creates these rows). Then set each range and Activate here. Winning numbers stay hidden from customers while locked.
                 </CardDescription>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto">
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search prize, status, ticket"
-                  className="w-48"
+                  className="w-full sm:w-48"
                 />
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-36">
+                  <SelectTrigger className="w-full sm:w-36">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -460,7 +519,7 @@ export default function AdminInstantPool() {
                 <Button
                   onClick={() => setCreateOpen(true)}
                   disabled={!isControlled}
-                  className="bg-amber-500 hover:bg-amber-600 text-black"
+                  className="bg-amber-500 hover:bg-amber-600 text-black w-full sm:w-auto"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Add prize
@@ -480,72 +539,195 @@ export default function AdminInstantPool() {
               )}
               {isLoading ? (
                 <div className="h-32 flex items-center justify-center text-muted-foreground">Loading prizes…</div>
+              ) : groups.length === 0 ? (
+                <p className="text-center text-muted-foreground py-10">No prizes yet.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Prize</TableHead>
-                        <TableHead>Winning ticket</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Activation</TableHead>
-                        <TableHead>Last change</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filtered.map((prize: any) => (
-                        <TableRow key={prize.id}>
-                          <TableCell>
-                            <div className="font-medium">{prize.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {prize.rewardType} · £{Number(prize.value).toFixed(2)} · range {prize.rangeFrom}–{prize.rangeTo}
-                              {prize.competitionPrizeId ? " · from Prize Table" : ""}
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-muted-foreground">
+                    <span>
+                      {groups.length} prize group{groups.length === 1 ? "" : "s"} · {filtered.length} individual
+                      {groups.length > 0 ? ` · showing ${pageStart}–${pageEnd}` : ""}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">Groups per page</span>
+                      <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v) as any)}>
+                        <SelectTrigger className="w-20 h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PAGE_SIZE_OPTIONS.map((n) => (
+                            <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {pagedGroups.map((group) => {
+                    const isOpen = !!openGroups[group.key];
+                    const counts = {
+                      active: group.prizes.filter((p) => p.status === "active").length,
+                      locked: group.prizes.filter((p) => p.status === "locked").length,
+                      won: group.prizes.filter((p) => p.status === "won").length,
+                    };
+                    const innerPage = groupPages[group.key] || 1;
+                    const innerTotal = Math.max(1, Math.ceil(group.prizes.length / pageSize));
+                    const innerSafe = Math.min(innerPage, innerTotal);
+                    const innerRows = group.prizes.slice((innerSafe - 1) * pageSize, innerSafe * pageSize);
+
+                    return (
+                      <div key={group.key} className="rounded-xl border border-border bg-card/60 overflow-hidden">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 sm:p-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-base sm:text-lg truncate">{group.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              £{group.value.toLocaleString("en-GB")} · {group.prizes.length} prize{group.prizes.length === 1 ? "" : "s"}
+                              <span className="hidden sm:inline">
+                                {" "}· {counts.active} active · {counts.locked} locked · {counts.won} won
+                              </span>
                             </div>
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">
-                            {prize.status === "locked" ? "Hidden" : prize.winningTicketLabel}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={statusStyles[prize.status] || ""}>
-                              {prize.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {prize.activationType.replace("_", " ")}
-                            {prize.allocationMethod === "a_pregen" ? " · Method A" : " · Method B"}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {prize.lastChangedAt ? new Date(prize.lastChangedAt).toLocaleString("en-GB") : "—"}
-                          </TableCell>
-                          <TableCell className="text-right space-x-1">
-                            {prize.status !== "won" && prize.status !== "active" && (
-                              <Button size="sm" variant="outline" onClick={() => { setPendingAction({ type: "activate", prize }); setConfirmOpen(true); }}>
-                                <Unlock className="w-3.5 h-3.5 mr-1" /> Activate
-                              </Button>
+                            <div className="sm:hidden text-xs text-muted-foreground mt-1">
+                              {counts.active} active · {counts.locked} locked · {counts.won} won
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            onClick={() =>
+                              setOpenGroups((prev) => ({ ...prev, [group.key]: !prev[group.key] }))
+                            }
+                          >
+                            {isOpen ? <ChevronUp className="w-4 h-4 mr-1" /> : <ChevronDown className="w-4 h-4 mr-1" />}
+                            {isOpen ? "Close" : "Open"}
+                          </Button>
+                        </div>
+
+                        {isOpen && (
+                          <div className="border-t border-border">
+                            <div className="hidden md:block overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Winning ticket</TableHead>
+                                    <TableHead>Range</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Activation</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {innerRows.map((prize: any) => (
+                                    <TableRow key={prize.id}>
+                                      <TableCell className="font-mono text-sm">
+                                        {prize.status === "locked" ? "Hidden" : prize.winningTicketLabel}
+                                      </TableCell>
+                                      <TableCell className="text-sm">{prize.rangeFrom}–{prize.rangeTo}</TableCell>
+                                      <TableCell>
+                                        <Badge variant="outline" className={statusStyles[prize.status] || ""}>
+                                          {prize.status}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-sm">
+                                        {prize.activationType.replace("_", " ")}
+                                        {prize.allocationMethod === "a_pregen" ? " · Method A" : " · Method B"}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <PrizeActions
+                                          prize={prize}
+                                          onAction={(type) => {
+                                            setPendingAction({ type, prize });
+                                            setConfirmOpen(true);
+                                          }}
+                                        />
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+
+                            <div className="md:hidden divide-y divide-border">
+                              {innerRows.map((prize: any) => (
+                                <div key={prize.id} className="p-3 space-y-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-mono text-sm">
+                                      {prize.status === "locked" ? "Ticket hidden" : prize.winningTicketLabel}
+                                    </span>
+                                    <Badge variant="outline" className={statusStyles[prize.status] || ""}>
+                                      {prize.status}
+                                    </Badge>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    Range {prize.rangeFrom}–{prize.rangeTo} · {prize.activationType.replace("_", " ")}
+                                    {prize.allocationMethod === "a_pregen" ? " · Method A" : " · Method B"}
+                                  </div>
+                                  <PrizeActions
+                                    prize={prize}
+                                    stacked
+                                    onAction={(type) => {
+                                      setPendingAction({ type, prize });
+                                      setConfirmOpen(true);
+                                    }}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+
+                            {group.prizes.length > pageSize && (
+                              <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border text-xs text-muted-foreground">
+                                <span>
+                                  {(innerSafe - 1) * pageSize + 1}–{Math.min(innerSafe * pageSize, group.prizes.length)} of {group.prizes.length}
+                                </span>
+                                <div className="flex gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={innerSafe <= 1}
+                                    onClick={() => setGroupPages((prev) => ({ ...prev, [group.key]: innerSafe - 1 }))}
+                                  >
+                                    <ChevronLeft className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={innerSafe >= innerTotal}
+                                    onClick={() => setGroupPages((prev) => ({ ...prev, [group.key]: innerSafe + 1 }))}
+                                  >
+                                    <ChevronRight className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
                             )}
-                            {prize.status === "active" && (
-                              <Button size="sm" variant="outline" onClick={() => { setPendingAction({ type: "lock", prize }); setConfirmOpen(true); }}>
-                                <Lock className="w-3.5 h-3.5 mr-1" /> Lock
-                              </Button>
-                            )}
-                            {prize.status !== "won" && prize.status !== "disabled" && (
-                              <Button size="sm" variant="ghost" onClick={() => { setPendingAction({ type: "disable", prize }); setConfirmOpen(true); }}>
-                                <Ban className="w-3.5 h-3.5 mr-1" /> Disable
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {filtered.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
-                            No prizes yet.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {groups.length > pageSize && (
+                    <div className="flex items-center justify-between gap-2 pt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={safePage <= 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      >
+                        <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        Page {safePage} of {totalPages}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={safePage >= totalPages}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      >
+                        Next <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -677,6 +859,36 @@ export default function AdminInstantPool() {
         </Dialog>
       </div>
     </AdminLayout>
+  );
+}
+
+function PrizeActions({
+  prize,
+  onAction,
+  stacked,
+}: {
+  prize: any;
+  onAction: (type: "activate" | "lock" | "disable") => void;
+  stacked?: boolean;
+}) {
+  return (
+    <div className={stacked ? "flex flex-col gap-2" : "flex flex-wrap justify-end gap-1"}>
+      {prize.status !== "won" && prize.status !== "active" && (
+        <Button size="sm" variant="outline" className={stacked ? "w-full" : ""} onClick={() => onAction("activate")}>
+          <Unlock className="w-3.5 h-3.5 mr-1" /> Activate
+        </Button>
+      )}
+      {prize.status === "active" && (
+        <Button size="sm" variant="outline" className={stacked ? "w-full" : ""} onClick={() => onAction("lock")}>
+          <Lock className="w-3.5 h-3.5 mr-1" /> Lock
+        </Button>
+      )}
+      {prize.status !== "won" && prize.status !== "disabled" && (
+        <Button size="sm" variant="ghost" className={stacked ? "w-full" : ""} onClick={() => onAction("disable")}>
+          <Ban className="w-3.5 h-3.5 mr-1" /> Disable
+        </Button>
+      )}
+    </div>
   );
 }
 
