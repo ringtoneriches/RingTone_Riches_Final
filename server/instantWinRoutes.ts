@@ -15,6 +15,7 @@ import {
   lockInstantWinPrize,
   setCompetitionInstantWinMode,
 } from "./services/instant-win-pool";
+import { ensureChildrenForCompetition } from "./services/prize-table-pool";
 
 const isAdmin = (req: any, res: any, next: any) => {
   if (!req.user) {
@@ -106,6 +107,9 @@ export function registerInstantWinRoutes(app: Express) {
             ? null
             : Number(ticketBlockSize)
         );
+        if (mode === "controlled_pool") {
+          await ensureChildrenForCompetition(req.params.competitionId, req.user?.id);
+        }
         res.json(updated);
       } catch (error) {
         handleInstantWinError(res, error);
