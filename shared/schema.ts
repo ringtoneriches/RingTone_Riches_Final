@@ -463,12 +463,14 @@ export const instantWinPrizes = pgTable("instant_win_prizes", {
   winnerDisplayName: varchar("winner_display_name"),
   lastChangedAt: timestamp("last_changed_at").defaultNow(),
   lastChangedBy: varchar("last_changed_by"),
+  competitionPrizeId: uuid("competition_prize_id").references(() => competitionPrizes.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("instant_win_prizes_competition_idx").on(table.competitionId),
   index("instant_win_prizes_status_idx").on(table.status),
   index("instant_win_prizes_winning_ticket_idx").on(table.competitionId, table.winningTicketNumber),
+  index("instant_win_prizes_table_prize_idx").on(table.competitionPrizeId),
 ]);
 
 export const instantWinPrizeAudit = pgTable("instant_win_prize_audit", {

@@ -1,8 +1,9 @@
 import { randomInt, randomBytes } from "crypto";
-import { and, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import {
+  competitionPrizes,
   competitions,
   guestOrders,
   guestPrizes,
@@ -161,6 +162,26 @@ async function writeAudit(
     reason: data.reason || null,
     createdAt: new Date(),
   });
+}
+
+export async function syncTablePrizeCounts(tx: DbTx, competitionPrizeId: string) {
+  const siblings = await tx
+    .select()
+    .from(instantWinPrizes)
+    .where(eq(instantWinPrizes.competitionPrizeId, competitionPrizeId));
+
+  const live = siblings.filter((s) => s.status !== "disabled");
+  const won = live.filter((s) => s.status === "won").length;
+  const total = live.length;
+
+  await tx
+    .update(competitionPrizes)
+    .set({
+      totalQuantity: total,
+      remainingQuantity: Math.max(0, total - won),
+      updatedAt: new Date(),
+    })
+    .where(eq(competitionPrizes.id, competitionPrizeId));
 }
 
 async function soldSeqsInRange(tx: DbTx, competitionId: string, from: number, to: number) {
@@ -467,6 +488,10 @@ async function creditFrozenWin(
     })
     .where(eq(instantWinPrizes.id, opts.prize.id));
 
+  if (opts.prize.competitionPrizeId) {
+    await syncTablePrizeCounts(tx, opts.prize.competitionPrizeId);
+  }
+
   await writeAudit(tx, {
     prizeId: opts.prize.id,
     action: "won_on_sale",
@@ -708,6 +733,7 @@ export async function createInstantWinPrize(input: {
   allocationMethod?: "a_pregen" | "b_on_activate";
   adminId?: string;
   confirmHighValue?: boolean;
+  competitionPrizeId?: string | null;
 }) {
   const [competition] = await db
     .select()
@@ -767,6 +793,7 @@ export async function createInstantWinPrize(input: {
         winningTicketNumber,
         lastChangedAt: new Date(),
         lastChangedBy: input.adminId || null,
+        competitionPrizeId: input.competitionPrizeId || null,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -961,6 +988,9 @@ export async function disableInstantWinPrize(prizeId: string, adminId?: string) 
       winningTicketNumber: prize.winningTicketNumber,
       reason: "Prize disabled",
     });
+    if (prize.competitionPrizeId) {
+      await syncTablePrizeCounts(tx, prize.competitionPrizeId);
+    }
     return updated;
   });
 }
@@ -972,7 +1002,8 @@ export async function listInstantWinPrizes(
   const rows = await db
     .select()
     .from(instantWinPrizes)
-    .where(eq(instantWinPrizes.competitionId, competitionId));
+    .where(eq(instantWinPrizes.competitionId, competitionId))
+    .orderBy(asc(instantWinPrizes.createdAt), asc(instantWinPrizes.id));
 
   const filtered = opts?.status && opts.status !== "all"
     ? rows.filter((r) => r.status === opts.status)
@@ -1009,22 +1040,54 @@ export async function getPublicPrizePool(competitionId: string) {
     .filter((p) => p.status !== "disabled")
     .map((p) => {
       const unavailable = p.status === "locked";
+      const showTicket = p.status === "active" || p.status === "won";
       return {
         id: p.id,
         competitionId: p.competitionId,
+        competitionPrizeId: p.competitionPrizeId,
         prizeName: p.name,
         prizeValue: Number(p.value),
         rewardType: p.rewardType,
         status: unavailable ? "unavailable" : p.status,
         publicStatus:
           p.status === "won" ? "won" : p.status === "active" ? "available" : "unavailable",
-        winningTicketNumber: p.status === "won" ? p.winningTicketNumber : null,
+        winningTicketNumber: showTicket ? p.winningTicketNumber : null,
         winnerDisplayName: p.status === "won" ? p.winnerDisplayName : null,
         wonAt: p.status === "won" ? p.wonAt : null,
         totalQuantity: 1,
-        remainingQuantity: p.status === "active" ? 1 : 0,
+        remainingQuantity: p.status === "won" ? 0 : 1,
       };
     });
+
+  const grouped = new Map<string, typeof publicPrizes>();
+  for (const prize of publicPrizes) {
+    const key = prize.competitionPrizeId || `solo-${prize.id}`;
+    const list = grouped.get(key) || [];
+    list.push(prize);
+    grouped.set(key, list);
+  }
+
+  const groups = Array.from(grouped.entries()).map(([id, items]) => {
+    const wonItems = items.filter((p) => p.publicStatus === "won");
+    const leftItems = items.filter((p) => p.publicStatus !== "won");
+    const first = items[0];
+    return {
+      id,
+      prizeName: first.prizeName,
+      prizeValue: first.prizeValue,
+      rewardType: first.rewardType,
+      totalQuantity: items.length,
+      remainingQuantity: leftItems.length,
+      wonCount: wonItems.length,
+      leftCount: leftItems.length,
+      tickets: items.map((p) => ({
+        id: p.id,
+        winningTicketNumber: p.winningTicketNumber,
+        publicStatus: p.publicStatus,
+        winnerDisplayName: p.winnerDisplayName,
+      })),
+    };
+  }).sort((a, b) => b.prizeValue - a.prizeValue);
 
   const maxTickets = Number(competition?.maxTickets || 0);
   const soldTickets = Number(competition?.soldTickets || 0);
@@ -1032,6 +1095,7 @@ export async function getPublicPrizePool(competitionId: string) {
   return {
     mode: isControlledMode(competition?.instantWinMode) ? CONTROLLED_MODE : PROBABILITY_MODE,
     prizes: publicPrizes,
+    groups,
     pool: {
       maxTickets,
       soldTickets,

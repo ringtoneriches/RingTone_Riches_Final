@@ -23,6 +23,12 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 interface Prize {
@@ -40,9 +46,28 @@ interface Prize {
   winnerDisplayName?: string | null;
 }
 
+interface PrizeGroupTicket {
+  id: string;
+  winningTicketNumber?: number | null;
+  publicStatus?: "available" | "won" | "unavailable";
+  winnerDisplayName?: string | null;
+}
+
+interface PrizeGroup {
+  id: string;
+  prizeName: string;
+  prizeValue: number;
+  totalQuantity: number;
+  remainingQuantity: number;
+  wonCount: number;
+  leftCount: number;
+  tickets: PrizeGroupTicket[];
+}
+
 interface PrizeTableResponse {
   mode: "probability" | "controlled_pool";
   prizes: Prize[];
+  groups?: PrizeGroup[];
   pool?: {
     maxTickets: number;
     soldTickets: number;
@@ -100,6 +125,7 @@ const formatNumber = (num: number) => {
 export default function UserCompetitionPrizes({ competitionId }: UserCompetitionPrizesProps) {
   const [hoveredPrize, setHoveredPrize] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [openGroup, setOpenGroup] = useState<PrizeGroup | null>(null);
 
   // Fetch prizes
   const { data: prizeTable, isLoading, error } = useQuery<PrizeTableResponse>({
@@ -124,6 +150,15 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
       return {
         mode: data.mode || "controlled_pool",
         pool: data.pool,
+        groups: (data.groups || []).map((group: any) => ({
+          ...group,
+          prizeValue: Number(group.prizeValue),
+          totalQuantity: Number(group.totalQuantity ?? 1),
+          remainingQuantity: Number(group.remainingQuantity ?? 0),
+          wonCount: Number(group.wonCount ?? 0),
+          leftCount: Number(group.leftCount ?? group.remainingQuantity ?? 0),
+          tickets: group.tickets || [],
+        })),
         prizes: (data.prizes || []).map((prize: any) => ({
           ...prize,
           prizeValue: Number(prize.prizeValue),
@@ -137,7 +172,9 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
   });
 
   const prizes = prizeTable?.prizes || [];
+  const groups = prizeTable?.groups || [];
   const isControlled = prizeTable?.mode === "controlled_pool";
+  const useGroups = isControlled && groups.length > 0;
 
   // Fetch ticket info
   const { data: ticketInfo, isLoading: ticketLoading } = useQuery<TicketInfo>({
@@ -187,7 +224,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
     );
   }
 
-  if (sortedPrizes.length === 0) {
+  if ((useGroups ? groups.length : sortedPrizes.length) === 0) {
     return (
       <Card className="bg-gradient-to-br from-gray-500/10 to-gray-600/5 border-gray-500/20">
         <CardContent className="pt-12 pb-12 text-center">
@@ -294,9 +331,21 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
          isOpen ? "max-h-none opacity-100" : "max-h-0 opacity-0"
         )}
       >
-        {sortedPrizes.map((prize, index) => {
+        {(useGroups ? groups : sortedPrizes).map((item, index) => {
+          const prize = useGroups
+            ? {
+                id: (item as PrizeGroup).id,
+                prizeName: (item as PrizeGroup).prizeName,
+                prizeValue: (item as PrizeGroup).prizeValue,
+                totalQuantity: (item as PrizeGroup).totalQuantity,
+                remainingQuantity: (item as PrizeGroup).remainingQuantity,
+              }
+            : (item as Prize);
+          const group = useGroups ? (item as PrizeGroup) : null;
           const stockStatus = getStockStatus(prize.remainingQuantity, prize.totalQuantity);
-          const percentageRemaining = (prize.remainingQuantity / prize.totalQuantity) * 100;
+          const percentageRemaining = prize.totalQuantity > 0
+            ? (prize.remainingQuantity / prize.totalQuantity) * 100
+            : 0;
           const gradientIndex = index % gradientStyles.length;
           
           return (
@@ -344,7 +393,9 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground">Availability</span>
                     <span className={cn("font-semibold", stockStatus.textColor)}>
-                      {prize.remainingQuantity} / {prize.totalQuantity} remaining
+                      {group
+                        ? `${group.leftCount} OF ${group.totalQuantity} PRIZES REMAINING`
+                        : `${prize.remainingQuantity} / ${prize.totalQuantity} remaining`}
                     </span>
                   </div>
                   <Progress 
@@ -370,32 +421,42 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                 {/* Stats Grid */}
                 <div className="grid grid-cols-2 gap-3 pt-2">
                   <div className="text-center p-2 rounded-lg bg-background/50 backdrop-blur">
-                    <p className="text-xs text-muted-foreground">Total Available</p>
-                    <p className="text-lg font-bold">{formatNumber(prize.totalQuantity)}</p>
+                    <p className="text-xs text-muted-foreground">{group ? "Won" : "Total Available"}</p>
+                    <p className="text-lg font-bold">{formatNumber(group ? group.wonCount : prize.totalQuantity)}</p>
                   </div>
                   <div className="text-center p-2 rounded-lg bg-background/50 backdrop-blur">
-                    <p className="text-xs text-muted-foreground">Remaining</p>
+                    <p className="text-xs text-muted-foreground">{group ? "Left" : "Remaining"}</p>
                     <p className={cn("text-lg font-bold", stockStatus.textColor)}>
-                      {formatNumber(prize.remainingQuantity)}
+                      {formatNumber(group ? group.leftCount : prize.remainingQuantity)}
                     </p>
                   </div>
                 </div>
+
+                {group && (
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroup(group)}
+                    className="w-full text-sm font-semibold text-amber-400 hover:text-amber-300 pt-1"
+                  >
+                    Check ticket numbers →
+                  </button>
+                )}
                 
                 {/* Win Chance Indicator */}
-                {isControlled && prize.publicStatus === "won" && (
+                {!group && isControlled && (item as Prize).publicStatus === "won" && (
                   <div className="text-center pt-2 space-y-1">
                     <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30">Won</Badge>
                     <p className="text-sm text-muted-foreground">
-                      Ticket #{prize.winningTicketNumber} · {prize.winnerDisplayName}
+                      Ticket #{(item as Prize).winningTicketNumber} · {(item as Prize).winnerDisplayName}
                     </p>
                   </div>
                 )}
-                {isControlled && prize.publicStatus === "unavailable" && (
+                {!group && isControlled && (item as Prize).publicStatus === "unavailable" && (
                   <div className="text-center pt-2">
                     <Badge variant="outline" className="text-slate-400">Coming soon</Badge>
                   </div>
                 )}
-                {isControlled && prize.publicStatus === "available" && (
+                {!group && isControlled && (item as Prize).publicStatus === "available" && (
                   <div className="text-center pt-2">
                     <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">Available</Badge>
                   </div>
@@ -436,6 +497,34 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
           )}
         </Button>
       </div>
+
+      <Dialog open={!!openGroup} onOpenChange={(open) => { if (!open) setOpenGroup(null); }}>
+        <DialogContent className="max-w-lg bg-zinc-950 border-amber-500/20">
+          <DialogHeader>
+            <p className="text-xs font-bold tracking-[0.2em] text-amber-400 uppercase">Ticket assignments</p>
+            <DialogTitle className="text-2xl">{openGroup?.prizeName}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            {(openGroup?.tickets || []).map((ticket) => (
+              <div
+                key={ticket.id}
+                className="rounded-xl border border-white/10 bg-black/40 p-4 text-center"
+              >
+                <div className="text-xl font-bold">
+                  {ticket.winningTicketNumber ? `#${ticket.winningTicketNumber}` : "—"}
+                </div>
+                <div className="text-xs mt-1 uppercase tracking-wide text-muted-foreground">
+                  {ticket.publicStatus === "won"
+                    ? ticket.winnerDisplayName || "Won"
+                    : ticket.publicStatus === "available"
+                    ? "Available"
+                    : "Coming soon"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

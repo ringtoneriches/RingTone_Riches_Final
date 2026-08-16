@@ -109,13 +109,20 @@ export default function AdminInstantPool() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return prizes;
-    return prizes.filter((p: any) =>
-      [p.name, p.status, p.activationType, String(p.winningTicketNumber || "")]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
+    const list = !q
+      ? prizes
+      : prizes.filter((p: any) =>
+          [p.name, p.status, p.activationType, String(p.winningTicketNumber || "")]
+            .join(" ")
+            .toLowerCase()
+            .includes(q)
+        );
+    return [...list].sort((a: any, b: any) => {
+      const aTime = new Date(a.createdAt || 0).getTime();
+      const bTime = new Date(b.createdAt || 0).getTime();
+      if (aTime !== bTime) return aTime - bTime;
+      return String(a.id || "").localeCompare(String(b.id || ""));
+    });
   }, [prizes, search]);
 
   const modeMutation = useMutation({
@@ -428,7 +435,7 @@ export default function AdminInstantPool() {
               <div>
                 <CardTitle>Prizes</CardTitle>
                 <CardDescription>
-                  Winning numbers stay hidden from customers while locked. Method B picks from unsold tickets on activate.
+                  Add prizes from Tools → Prize Table (quantity creates these rows). Then set each range and Activate here. Winning numbers stay hidden from customers while locked.
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -493,6 +500,7 @@ export default function AdminInstantPool() {
                             <div className="font-medium">{prize.name}</div>
                             <div className="text-xs text-muted-foreground">
                               {prize.rewardType} · £{Number(prize.value).toFixed(2)} · range {prize.rangeFrom}–{prize.rangeTo}
+                              {prize.competitionPrizeId ? " · from Prize Table" : ""}
                             </div>
                           </TableCell>
                           <TableCell className="font-mono text-sm">

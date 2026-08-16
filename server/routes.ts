@@ -132,6 +132,11 @@ import {
   revealAllControlledPlinko,
   getPublicPrizePool,
 } from "./services/instant-win-pool";
+import {
+  onTablePrizeCreated,
+  onTablePrizeDeleted,
+  onTablePrizeUpdated,
+} from "./services/prize-table-pool";
 
 import { applySelfSuspensionExpiry, isNotRestricted } from "./restriction";
 import {
@@ -19748,19 +19753,31 @@ app.post("/api/competitions/:competitionId/prizes", isAuthenticated, isAdmin , a
    
    
     
+    const qty = Math.max(1, Number(totalQuantity || 1));
+    const remaining = remainingQuantity == null ? qty : Number(remainingQuantity);
+
     const [newPrize] = await db
       .insert(competitionPrizes)
       .values({
         competitionId,
         prizeName,
         prizeValue,
-        totalQuantity,
-        remainingQuantity,
+        totalQuantity: qty,
+        remainingQuantity: remaining,
       })
       .returning();
-    
-    res.json(newPrize);
+
+    try {
+      const sync = await onTablePrizeCreated(newPrize, (req as any).user?.id);
+      res.json({ ...newPrize, instantPoolSpawned: sync.spawned });
+    } catch (syncError) {
+      await db.delete(competitionPrizes).where(eq(competitionPrizes.id, newPrize.id));
+      throw syncError;
+    }
   } catch (error) {
+    if (error instanceof InstantWinError) {
+      return res.status(error.status).json({ error: error.message, message: error.message });
+    }
     console.error("Error creating prize:", error);
     res.status(500).json({ error: "Failed to create prize" });
   }
@@ -19784,9 +19801,16 @@ app.put("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
       })
       .where(eq(competitionPrizes.id, prizeId))
       .returning();
+
+    if (updatedPrize) {
+      await onTablePrizeUpdated(updatedPrize, (req as any).user?.id);
+    }
     
     res.json(updatedPrize);
   } catch (error) {
+    if (error instanceof InstantWinError) {
+      return res.status(error.status).json({ error: error.message, message: error.message });
+    }
     console.error("Error updating prize:", error);
     res.status(500).json({ error: "Failed to update prize" });
   }
@@ -19796,7 +19820,8 @@ app.put("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
 app.delete("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
   try {
     const { prizeId } = req.params;
-  
+
+    await onTablePrizeDeleted(prizeId);
     
     await db
       .delete(competitionPrizes)
@@ -19804,6 +19829,9 @@ app.delete("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) =
     
     res.json({ message: "Prize deleted successfully" });
   } catch (error) {
+    if (error instanceof InstantWinError) {
+      return res.status(error.status).json({ error: error.message, message: error.message });
+    }
     console.error("Error deleting prize:", error);
     res.status(500).json({ error: "Failed to delete prize" });
   }
