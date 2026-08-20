@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { User } from "@shared/schema";
 import logoImage from "@assets/Ringtone_Riches_Logo.png";
@@ -27,6 +27,7 @@ export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const [location] = useLocation();
 
   // Optimize scroll handler with passive event listener
   useEffect(() => {
@@ -35,7 +36,10 @@ export default function Header() {
     const handleScroll = () => {
       if (!ticking) {
         requestAnimationFrame(() => {
-          setScrolled(window.scrollY > 20);
+          setScrolled((prev) => {
+            const next = window.scrollY > 20;
+            return prev === next ? prev : next;
+          });
           ticking = false;
         });
         ticking = true;
@@ -109,62 +113,67 @@ export default function Header() {
 
   return (
     <>
-      <header 
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          scrolled 
-            ? 'glass-modern shadow-2xl shadow-black/20' 
-            : 'bg-transparent'
+      <header
+        className={`fixed top-0 left-0 right-0 z-50 rr-header transition-shadow duration-300 ${
+          scrolled ? "is-scrolled" : ""
         }`}
       >
+        <div className="rr-header-line" aria-hidden />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex items-center justify-between h-20 lg:h-24">
+          <nav className="flex items-center justify-between h-16 lg:h-[4.5rem]">
             <Link href="/">
               <div className="flex items-center cursor-pointer group">
                 <img
                   src={logoImage}
                   alt="RingTone Riches"
-                  className="h-16 sm:h-14 lg:h-16 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+                  className="h-12 sm:h-12 lg:h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
                   data-testid="img-logo"
                   loading="eager"
                 />
               </div>
             </Link>
 
-            <div className="hidden lg:flex items-center gap-12">
+            <div className="hidden lg:flex items-center gap-10">
               <Link href="/">
-                <span className="relative text-sm font-semibold tracking-wide text-white/80 hover:text-white transition-colors cursor-pointer group" data-testid="link-competitions">
-                  OUR COMPETITIONS
-                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-300 group-hover:w-full" />
+                <span className={`rr-nav-link cursor-pointer ${location === "/" ? "is-active" : ""}`} data-testid="link-competitions">
+                  Competitions
                 </span>
               </Link>
               <Link href="/winners">
-                <span className="relative text-sm font-semibold tracking-wide text-white/80 hover:text-white transition-colors cursor-pointer group" data-testid="link-winners">
-                  PAST WINNERS
-                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-300 group-hover:w-full" />
+                <span className={`rr-nav-link cursor-pointer ${location === "/winners" ? "is-active" : ""}`} data-testid="link-winners">
+                  Winners
                 </span>
               </Link>
-              {/* <span className="relative text-sm font-semibold tracking-wide text-white/80 hover:text-white transition-colors cursor-pointer group" data-testid="link-jackpots">
-                JACKPOTS
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-300 group-hover:w-full" />
-              </span> */}
+              <Link href="/#how-it-works">
+                <span
+                  className="rr-nav-link cursor-pointer"
+                  data-testid="link-how-it-works"
+                  onClick={(e) => {
+                    if (location === "/") {
+                      e.preventDefault();
+                      document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
+                    }
+                  }}
+                >
+                  How It Works
+                </span>
+              </Link>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
               {isAuthenticated ? (
                 <>
                   <Link href="/wallet?tab=points">
-                    <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 md:px-4 md:py-2.5 rounded-full bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all cursor-pointer group" data-testid="button-ringtone-points">
-                      <Music className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400" />
-                      <span className="text-xs sm:text-sm font-semibold text-white">{ringtonePoints.toLocaleString()}</span>
+                    <div className="rr-header-chip cursor-pointer" data-testid="button-ringtone-points">
+                      <Music className="w-3.5 h-3.5 text-[#F1D47A]" />
+                      <span>{ringtonePoints.toLocaleString()}</span>
                     </div>
                   </Link>
 
                   <Link href="/wallet?tab=wallet">
-                    <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 md:px-4 md:py-2.5 rounded-full bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all cursor-pointer group" data-testid="button-wallet">
-                      <Wallet className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400" />
-                      <span className="text-xs sm:text-sm font-semibold text-white">
-                        £{userBalance.toFixed(2)}
-                      </span>
+                    <div className="rr-header-chip cursor-pointer" data-testid="button-wallet">
+                      <Wallet className="w-3.5 h-3.5 text-[#F1D47A]" />
+                      <span>£{userBalance.toFixed(2)}</span>
                     </div>
                   </Link>
                   
@@ -172,7 +181,7 @@ export default function Header() {
                   
                   <Link href="/wallet?tab=account">
                     <div className="hidden lg:flex">
-                      <button className="btn-modern-primary text-xs px-6 py-3" data-testid="button-account">
+                      <button className="rr-cta rr-header-cta" data-testid="button-account">
                         MY ACCOUNT
                       </button>
                     </div>
@@ -181,7 +190,7 @@ export default function Header() {
                   <div className="hidden lg:flex">
                     <button
                       onClick={handleLogout}
-                      className="btn-modern-secondary text-xs px-6 py-3"
+                      className="rr-header-ghost"
                       data-testid="button-logout"
                     >
                       LOGOUT
@@ -189,14 +198,14 @@ export default function Header() {
                   </div>
                 </>
               ) : (
-                <div className="hidden lg:flex items-center gap-3">
+                <div className="hidden lg:flex items-center gap-2.5">
                   <Link href="/login">
-                    <button className="btn-modern-secondary text-xs px-6 py-3" data-testid="button-login">
+                    <button className="rr-header-ghost" data-testid="button-login">
                       LOGIN
                     </button>
                   </Link>
                   <Link href="/register">
-                    <button className="btn-modern-primary text-xs px-6 py-3" data-testid="button-register">
+                    <button className="rr-cta rr-header-cta" data-testid="button-register">
                       REGISTER
                     </button>
                   </Link>
@@ -205,7 +214,7 @@ export default function Header() {
 
               <button
                   ref={menuButtonRef}
-                  className="lg:hidden flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all active:scale-95"
+                  className="lg:hidden rr-header-menu"
                   onClick={toggleMobileMenu}
                   data-testid="button-mobile-menu"
                   aria-label="Menu"
@@ -237,65 +246,90 @@ export default function Header() {
         
         {/* Menu Panel - Slide from right for faster feel */}
         <div 
-          className={`absolute right-0 top-0 bottom-0 w-full max-w-sm bg-gradient-to-b from-gray-900 to-black shadow-2xl transition-transform duration-150 ${
+          className={`absolute right-0 top-0 bottom-0 flex w-full max-w-sm flex-col rr-mobile-sheet shadow-2xl transition-transform duration-150 ${
             mobileOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         >
-          <div className="h-full flex flex-col pt-20 px-6 pb-8 overflow-y-auto">
-            {/* Menu Items */}
+          <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 px-5">
+            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#F1D47A]">
+              Menu
+            </span>
+            <button
+              type="button"
+              className="rr-header-menu"
+              onClick={closeMobileMenu}
+              aria-label="Close menu"
+              data-testid="button-mobile-menu-close"
+              style={{
+                touchAction: "manipulation",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-8 pt-5">
             <div className="space-y-2">
               <Link href="/" onClick={closeMobileMenu}>
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-500/30 transition-all group active:scale-98">
-                  <span className="text-lg font-bold text-white">OUR COMPETITIONS</span>
-                  <ChevronRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
+                <div className="rr-mobile-item group active:scale-98">
+                  <span className="text-sm font-black uppercase tracking-[0.16em] text-white">Competitions</span>
+                  <ChevronRight className="w-5 h-5 text-[#F1D47A] group-hover:translate-x-1 transition-transform" />
                 </div>
               </Link>
               <Link href="/winners" onClick={closeMobileMenu}>
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-500/30 transition-all group active:scale-98">
-                  <span className="text-lg font-bold text-white">PAST WINNERS</span>
-                  <ChevronRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
+                <div className="rr-mobile-item group active:scale-98">
+                  <span className="text-sm font-black uppercase tracking-[0.16em] text-white">Winners</span>
+                  <ChevronRight className="w-5 h-5 text-[#F1D47A] group-hover:translate-x-1 transition-transform" />
                 </div>
               </Link>
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-500/30 transition-all group cursor-pointer active:scale-98">
-                <span className="text-lg font-bold text-white">JACKPOTS</span>
-                <ChevronRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
-              </div>
+              <Link href="/#how-it-works" onClick={(e) => {
+                closeMobileMenu();
+                if (location === "/") {
+                  e.preventDefault();
+                  setTimeout(() => {
+                    document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
+                  }, 50);
+                }
+              }}>
+                <div className="rr-mobile-item group active:scale-98">
+                  <span className="text-sm font-black uppercase tracking-[0.16em] text-white">How It Works</span>
+                  <ChevronRight className="w-5 h-5 text-[#F1D47A] group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
             </div>
 
-            <div className="divider-gold my-6" />
+            <div className="my-6 h-px bg-gradient-to-r from-transparent via-[#D4AF37]/40 to-transparent" />
 
             {isAuthenticated ? (
               <div className="space-y-3">
                 <Link href="/notifications" onClick={closeMobileMenu}>
-                  <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-500/30 transition-all group active:scale-98">
+                  <div className="rr-mobile-item group active:scale-98">
                     <div className="flex items-center gap-3">
-                      <Bell className="w-5 h-5 text-amber-400" />
-                      <span className="text-lg font-bold text-white">NOTIFICATIONS</span>
+                      <Bell className="w-5 h-5 text-[#F1D47A]" />
+                      <span className="text-sm font-black uppercase tracking-[0.16em] text-white">Notifications</span>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
+                    <ChevronRight className="w-5 h-5 text-[#F1D47A] group-hover:translate-x-1 transition-transform" />
                   </div>
                 </Link>
 
                 <div className="flex gap-3">
                   <Link href="/wallet?tab=points" onClick={closeMobileMenu} className="flex-1">
-                    <div className="flex items-center justify-center gap-2 p-4 rounded-2xl bg-white/5 border border-white/10 active:scale-98 transition-transform">
-                      <Music className="w-5 h-5 text-amber-400" />
-                      <span className="text-lg font-bold text-white">{ringtonePoints.toLocaleString()}</span>
+                    <div className="rr-header-chip h-14 w-full justify-center">
+                      <Music className="w-5 h-5 text-[#F1D47A]" />
+                      <span className="text-base">{ringtonePoints.toLocaleString()}</span>
                     </div>
                   </Link>
                   <Link href="/wallet?tab=wallet" onClick={closeMobileMenu} className="flex-1">
-                    <div className="flex items-center justify-center gap-2 p-4 rounded-2xl bg-white/5 border border-white/10 active:scale-98 transition-transform">
-                      <Wallet className="w-5 h-5 text-amber-400" />
-                      <span className="text-lg font-bold text-white">
-                        £{userBalance.toFixed(2)}
-                      </span>
+                    <div className="rr-header-chip h-14 w-full justify-center">
+                      <Wallet className="w-5 h-5 text-[#F1D47A]" />
+                      <span className="text-base">£{userBalance.toFixed(2)}</span>
                     </div>
                   </Link>
                 </div>
 
                 <Link href="/wallet?tab=account" onClick={closeMobileMenu}>
-                  <button className="w-full mt-5 btn-modern-primary py-4 text-base active:scale-98 transition-transform">
-                    <UserIcon className="w-5 h-5 mr-2 inline" />
+                  <button className="rr-cta mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-black uppercase tracking-[0.16em] active:scale-98">
+                    <UserIcon className="w-5 h-5" />
                     MY ACCOUNT
                   </button>
                 </Link>
@@ -305,21 +339,21 @@ export default function Header() {
                     closeMobileMenu();
                     handleLogout(e);
                   }}
-                  className="w-full btn-modern-secondary py-4 text-base active:scale-98 transition-transform"
+                  className="rr-header-ghost h-12 w-full gap-2 text-sm active:scale-98"
                 >
-                  <LogOut className="w-5 h-5 mr-2 inline" />
+                  <LogOut className="w-5 h-5" />
                   LOGOUT
                 </button>
               </div>
             ) : (
               <div className="space-y-3">
                 <Link href="/login" onClick={closeMobileMenu}>
-                  <button className="w-full btn-modern-secondary py-4 text-base active:scale-98 transition-transform">
+                  <button className="rr-header-ghost h-12 w-full text-sm active:scale-98">
                     LOGIN
                   </button>
                 </Link>
                 <Link href="/register" onClick={closeMobileMenu}>
-                  <button className="w-full mt-3 btn-modern-primary py-4 text-base active:scale-98 transition-transform">
+                  <button className="rr-cta mt-3 flex h-12 w-full items-center justify-center rounded-xl text-sm font-black uppercase tracking-[0.16em] active:scale-98">
                     REGISTER
                   </button>
                 </Link>

@@ -206,6 +206,14 @@ export default function CompetitionPage() {
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const qty = parseInt(params.get("qty") || "", 10);
+    if (Number.isFinite(qty) && qty >= 1) {
+      setQuantity(qty);
+    }
+  }, []);
+
   const scrollPrev = useCallback(() => emblaApi && emblaApi.scrollPrev(), [emblaApi]);
   const scrollNext = useCallback(() => emblaApi && emblaApi.scrollNext(), [emblaApi]);
 
