@@ -1,60 +1,63 @@
 import logoImage from "@assets/Ringtone_Riches_Logo.png";
-import { Facebook, Headphones } from "lucide-react";
-import facebook from "../../../../attached_assets/facebook.png";
+import { Facebook, Headphones, Instagram } from "lucide-react";
 import { Link } from "wouter";
-import { Button } from "../ui/button";
+
+function TikTokIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <path d="M14.5 3c.4 2.3 1.8 4.1 4 4.6v2.3c-1.4 0-2.7-.4-3.8-1.2v6.8c0 3.5-2.8 6.5-6.4 6.5S2 19 2 15.5 4.8 9 8.3 9c.4 0 .8 0 1.2.1v2.5c-.4-.1-.8-.2-1.2-.2-2.1 0-3.8 1.7-3.8 3.9s1.7 3.9 3.8 3.9 3.6-1.6 3.8-3.6V3h2.4Z" />
+    </svg>
+  );
+}
+
 export default function Footer() {
   return (
-    <footer className="bg-background border-t border-border py-8 sm:py-12">
-      <div className="container mx-auto px-3 sm:px-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
-          {/* Brand - Mobile Optimized */}
-          <div className="space-y-3 sm:space-y-4">
-            <div className="flex items-center space-x-2 cursor-pointer">
+    <footer className="rr-footer py-12 sm:py-16">
+      <div className="relative z-[1] mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
+          <div className="space-y-5">
+            <Link href="/">
               <img
                 src={logoImage}
                 alt="RingToneRiches Logo"
-                className="w-32 h-16 sm:w-36 sm:h-18 md:w-40 md:h-24 object-contain"
+                className="h-16 w-auto cursor-pointer object-contain sm:h-20"
               />
-            </div>
-            <div className="flex space-x-3">
+            </Link>
+            <p className="max-w-xs text-sm leading-relaxed text-white/45">
+              Real competitions. Real winners. Play for prizes you actually want.
+            </p>
+            <div className="flex items-center gap-2.5">
               <a
                 href="https://www.facebook.com/profile.php?id=61579695463356"
-                className="hover:opacity-80 transition"
+                className="rr-footer-social"
                 data-testid="link-facebook"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Facebook"
               >
-                <img src={facebook} className="w-14 " alt="" />
+                <Facebook className="h-4 w-4" />
               </a>
-
-             <a
-              href="https://www.instagram.com/ringtoneriches?igsh=MTVyMnJvZ2w4dGZ2Zw%3D%3D&utm_source=qr"
-              className="hover:opacity-80 transition"
-              data-testid="link-facebook"
-            >
-              <i
-                className="fab fa-instagram text-3xl -ml-3"
-                style={{
-                  background: "linear-gradient(to bottom, #9F399B, #F39C3D)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  display: "inline-block",
-                }}
-              ></i>
-            </a>
-
-
+              <a
+                href="https://www.instagram.com/ringtoneriches?igsh=MTVyMnJvZ2w4dGZ2Zw%3D%3D&utm_source=qr"
+                className="rr-footer-social"
+                data-testid="link-instagram"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram"
+              >
+                <Instagram className="h-4 w-4" />
+              </a>
               <a
                 href="https://www.tiktok.com/@ringtone.riches?_t=ZN-90jrPt73hTi&_r=1"
-                className="hover:opacity-80 transition"
+                className="rr-footer-social"
                 data-testid="link-tiktok"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="TikTok"
               >
-                <i
-                  className="fab fa-tiktok text-2xl"
-                  style={{ color: "#ffffff" }} // TikTok Black (or you can use gradient below)
-                ></i>
+                <TikTokIcon className="h-4 w-4" />
               </a>
             </div>
-
             <div className="flex space-x-2">
               <ul className="payment-icons">
                 <li>
@@ -137,117 +140,52 @@ export default function Footer() {
             
           </div>
 
-          {/* Useful Information - Mobile Optimized */}
-          <div className="space-y-3 sm:space-y-4">
-            <h4 className="text-primary font-bold text-sm sm:text-base">
-              USEFUL INFORMATION
-            </h4>
-            <div className="space-y-2 text-xs sm:text-sm">
-              <a
-                href="/"
-                className="block text-muted-foreground hover:text-primary transition-colors"
-                data-testid="link-competitions"
-              >
+          <div>
+            <h4 className="rr-footer-heading">Useful information</h4>
+            <div className="space-y-2.5">
+              <a href="/" className="rr-footer-link" data-testid="link-competitions">
                 Competitions
               </a>
-              {/* <a
-                href="/play-responsible"
-                className="block text-muted-foreground hover:text-primary transition-colors"
-                data-testid="link-how-to-play"
-              >
-                How to Play
-              </a> */}
-              <a
-                href="/be-aware"
-                className="block text-muted-foreground hover:text-primary transition-colors"
-                data-testid="link-be-aware"
-              >
+              <a href="/#how-it-works" className="rr-footer-link" data-testid="link-how-it-works">
+                How It Works
+              </a>
+              <a href="/be-aware" className="rr-footer-link" data-testid="link-be-aware">
                 Be Aware
               </a>
             </div>
           </div>
 
-          {/* Policies - Mobile Optimized */}
-          <div className="space-y-3 sm:space-y-4">
-            <h4 className="text-primary font-bold text-sm sm:text-base">
-              POLICIES
-            </h4>
-            <div className="space-y-2 text-xs sm:text-sm">
-              <a
-                href="/termsAndConditions"
-                className="block text-muted-foreground hover:text-primary transition-colors"
-                data-testid="link-terms"
-              >
+          <div>
+            <h4 className="rr-footer-heading">Policies</h4>
+            <div className="space-y-2.5">
+              <a href="/termsAndConditions" className="rr-footer-link" data-testid="link-terms">
                 Terms & Conditions
               </a>
-
-              <a
-                href="/privacy-policy"
-                className="block text-muted-foreground hover:text-primary transition-colors"
-                data-testid="link-privacy"
-              >
+              <a href="/privacy-policy" className="rr-footer-link" data-testid="link-privacy">
                 Privacy & Cookies Policy
               </a>
-              {/* <a
-                href="/play-responsible"
-                className="block text-muted-foreground hover:text-primary transition-colors"
-                data-testid="link-responsible-gaming"
-              >
-                Responsible Gaming
-              </a> */}
             </div>
           </div>
 
-          {/* Contact */}
-          <div className="space-y-4">
-          <h4 className="text-primary font-bold">CONTACT</h4>
-          <div className="space-y-3">
-
-          <Link href="/wallet?tab=support">
-          <p className="text-white mb-3 border-2 border-yellow-500/30 rounded-lg px-4 py-2.5 w-fit font-semibold
-                        bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-600 bg-size-200
-                        hover:animate-none cursor-pointer
-                        transition-all duration-500
-                        hover:bg-right hover:from-amber-700 hover:via-yellow-700 hover:to-amber-700
-                        hover:border-yellow-400 hover:shadow-2xl hover:shadow-yellow-500/20
-                        shadow-lg shadow-amber-900/20">
-            <span className="flex items-center gap-2">
-              <Headphones className="w-4 h-4 animate-pulse" />
-              Support
-            </span>
-            <style>{`
-              .bg-size-200 {
-                background-size: 200% 100%;
-              }
-              .bg-right {
-                background-position: right center;
-              }
-            `}</style>
-          </p>
-        </Link>
-            
+          <div>
+            <h4 className="rr-footer-heading">Contact</h4>
+            <Link href="/wallet?tab=support">
+              <span className="rr-header-ghost inline-flex h-11 cursor-pointer gap-2 px-4">
+                <Headphones className="h-4 w-4" />
+                Support
+              </span>
+            </Link>
           </div>
         </div>
-        </div>
 
-       <div className="border-t border-border mt-8 pt-6 flex flex-col items-center gap-4 text-muted-foreground">
-  {/* 18+ Badge */}
-  <div className="flex items-center justify-center">
-    <div className="w-11 h-11 rounded-full border-2 border-yellow-400 text-yellow-400 flex items-center justify-center font-bold text-sm tracking-wide">
-      18+
-    </div>
-  </div>
-
-  <p className="text-xs flex  items-center sm:text-sm text-center">
-            &copy; 2026 RingTone Riches <span className="text-[25px] mt-1">®</span>. All rights reserved.
+        <div className="mt-10 flex flex-col items-center gap-4 border-t border-white/10 pt-6 text-white/40">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#D4AF37]/50 text-xs font-black tracking-wide text-[#F1D47A]">
+            18+
+          </div>
+          <p className="text-center text-xs sm:text-sm">
+            &copy; 2026 RingTone Riches <span className="text-lg leading-none">®</span>. All rights reserved.
           </p>
-</div>
-
-{/* <div className="flex items-center justify-center mt-5">
-<p className="text-xs flex text-muted-foreground items-center sm:text-sm text-center">
-    RingTone Riches<span className="text-[25px] mt-1">®</span>
-  </p>
-</div> */}
+        </div>
       </div>
     </footer>
   );
