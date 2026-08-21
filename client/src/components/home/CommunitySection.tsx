@@ -20,7 +20,7 @@ const PERKS = [
 ] as const;
 
 export default function CommunitySection() {
-  const [memberCount, setMemberCount] = useState<string | null>(null);
+  const [memberCount, setMemberCount] = useState("10.3K");
 
   useEffect(() => {
     let cancelled = false;
@@ -28,7 +28,7 @@ export default function CommunitySection() {
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
-        if (data?.totalMembers > 0) {
+        if (data?.totalMembers >= 10000) {
           const formatted =
             data.totalMembers >= 1000
               ? `${(data.totalMembers / 1000).toFixed(1)}K`

@@ -17,7 +17,7 @@ interface PrizeModalProps {
     description?: string;
   };
   gameType: 'scratch' | 'spin';
-  spinWheelType:string
+  spinWheelType?: string
   congratsAudioRef: React.RefObject<HTMLAudioElement>;
 }
 
@@ -56,13 +56,13 @@ export function PrizeModal({ isOpen, onClose, isWinner, prize, gameType ,congrat
           ...defaults,
           particleCount,
           origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
-          colors: ['#FACC15', '#F59E0B', '#D97706', '#FDE047', '#FEF08A']
+          colors: ['#C8102E', '#FF263D', '#F1D47A', '#B98928', '#fff8ee']
         });
         confetti({
           ...defaults,
           particleCount,
           origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
-          colors: ['#FACC15', '#F59E0B', '#D97706', '#FDE047', '#FEF08A']
+          colors: ['#C8102E', '#FF263D', '#F1D47A', '#B98928', '#fff8ee']
         });
       }, 250);
 
@@ -164,57 +164,53 @@ const handleClose = () => {
         {/* Glow effect */}
         <div className={`absolute -inset-4 rounded-3xl blur-2xl ${
           isWinner 
-            ? 'bg-gradient-to-r from-[#FACC15]/40 via-[#F59E0B]/40 to-[#FACC15]/40 animate-pulse' 
-            : 'bg-gradient-to-r from-gray-600/20 via-gray-500/20 to-gray-600/20'
+            ? 'bg-gradient-to-r from-[#C8102E]/40 via-[#F1D47A]/30 to-[#C8102E]/40 animate-pulse' 
+            : 'bg-gradient-to-r from-white/5 via-white/10 to-white/5'
         }`}></div>
         
         {/* Modal content */}
-        <div className={`relative bg-gradient-to-br ${
+        <div className={`relative overflow-hidden rounded-2xl border-2 bg-[#0A0A0D] shadow-2xl ${
           isWinner 
-            ? 'from-gray-900 via-gray-800 to-gray-900' 
-            : 'from-gray-900 via-gray-800 to-gray-900'
-        } rounded-2xl border-2 ${
-          isWinner 
-            ? 'border-[#FACC15]/60' 
-            : 'border-gray-700/60'
-        } shadow-2xl overflow-hidden`}>
+            ? 'border-[#C8102E]/60' 
+            : 'border-white/10'
+        }`}>
           
           {/* Close button */}
           <button
             onClick={handleClose}
-            className="absolute top-4 right-4 z-10 p-2 rounded-full bg-gray-800/80 hover:bg-gray-700/80 transition-colors"
+            className="absolute top-4 right-4 z-10 rounded-full bg-white/10 p-2 transition-colors hover:bg-white/15"
             data-testid="button-close-modal"
           >
-            <X className="w-5 h-5 text-gray-400" />
+            <X className="w-5 h-5 text-white/50" />
           </button>
 
           {/* Header with gradient */}
-          <div className={`px-8 pt-12 pb-8 bg-gradient-to-br ${
+          <div className={`px-8 pt-12 pb-8 ${
             isWinner 
-              ? 'from-[#FACC15]/20 via-[#F59E0B]/10 to-transparent' 
-              : 'from-gray-800/40 via-gray-700/20 to-transparent'
+              ? 'bg-gradient-to-br from-[#C8102E]/20 via-[#F1D47A]/10 to-transparent' 
+              : 'bg-gradient-to-br from-white/[0.04] to-transparent'
           }`}>
             {/* Icon */}
-            <div className={`w-24 h-24 mx-auto mb-6 rounded-full flex items-center justify-center text-5xl ${
+            <div className={`mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full text-5xl ${
               isWinner 
-                ? 'bg-gradient-to-br from-[#FACC15]/30 to-[#F59E0B]/30 border-2 border-[#FACC15]/40 shadow-lg shadow-[#FACC15]/20' 
-                : 'bg-gray-800/60 border-2 border-gray-700/40'
+                ? 'border-2 border-[#F1D47A]/40 bg-[#F1D47A]/15 shadow-lg shadow-[#C8102E]/20' 
+                : 'border-2 border-white/10 bg-white/[0.04]'
             } ${isWinner ? 'animate-bounce' : ''}`}>
              {renderPrizeIcon()}
 
             </div>
 
             {/* Title */}
-            <h2 className={`small-congrats text-3xl sm:text-4xl font-black text-center mb-2 ${
+            <h2 className={`small-congrats mb-2 text-center font-prize text-3xl sm:text-4xl ${
               isWinner 
-                ? 'text-transparent bg-clip-text bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15]' 
-                : 'text-gray-300'
+                ? 'text-[#F1D47A]' 
+                : 'text-white/80'
             }`} data-testid="text-modal-title">
               {isWinner ? 'CONGRATULATIONS!' : 'UNLUCKY!'}
             </h2>
 
             {/* Subtitle */}
-            <p className="text-center text-gray-400 text-sm sm:text-base mb-6">
+            <p className="mb-6 text-center text-sm text-white/50 sm:text-base">
               {isWinner 
                 ? `You won in this ${gameType === 'scratch' ? 'scratch card' : 'spin wheel'} game!` 
                 : `No luck this time on ${gameType === 'scratch' ? 'scratch card' : 'spin wheel'}`}
@@ -222,15 +218,15 @@ const handleClose = () => {
 
             {/* Prize display */}
             {isWinner && (
-              <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 rounded-xl p-6 border border-[#FACC15]/30 backdrop-blur-sm">
+              <div className="rounded-xl border border-[#F1D47A]/30 bg-[#F1D47A]/5 p-6 backdrop-blur-sm">
                 <div className="text-center">
-                  <p className="text-gray-400 text-xs sm:text-sm uppercase tracking-wider mb-2 font-semibold">
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/45">
                     Your Prize
                   </p>
-                  <p className="text-3xl sm:text-4xl font-black text-[#FACC15] mb-1" data-testid="text-prize-value">
+                  <p className="mb-1 font-prize text-3xl text-[#F1D47A] sm:text-4xl" data-testid="text-prize-value">
                     {prizeInfo.text}
                   </p>
-                  <p className="text-[#F59E0B] text-sm sm:text-base font-semibold">
+                  <p className="text-sm font-semibold text-[#FF263D] sm:text-base">
                     {prizeInfo.subtext}
                   </p>
                 </div>
@@ -238,8 +234,8 @@ const handleClose = () => {
             )}
 
             {!isWinner && (
-              <div className="bg-gradient-to-br from-gray-800/40 to-gray-900/40 rounded-xl p-6 border border-gray-700/30 backdrop-blur-sm">
-                <p className="text-center text-gray-400 text-sm sm:text-base">
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-sm">
+                <p className="text-center text-sm text-white/50 sm:text-base">
                   {gameType === "scratch" ?
                      `Better luck next time! Keep playing for more chances to win amazing prizes.` :
                      spinWheelType === "wheel2" ?
@@ -257,11 +253,11 @@ const handleClose = () => {
           <div className="px-8 pb-8">
             <Button
               onClick={handleClose}
-              className={`w-full h-12 sm:h-14 text-base sm:text-lg font-bold rounded-xl ${
+              className={`h-12 w-full rounded-xl text-base font-bold sm:h-14 sm:text-lg ${
                 isWinner 
-                  ? 'bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] hover:from-[#F59E0B] hover:via-[#FACC15] hover:to-[#F59E0B] text-gray-900' 
-                  : 'bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white'
-              } transition-all duration-300 shadow-lg`}
+                  ? 'rr-cta' 
+                  : 'border border-white/15 bg-white/10 text-white hover:bg-white/15'
+              }`}
               data-testid="button-continue"
             >
               {isWinner ? '🏆 Get in!' : 'Try Again'}

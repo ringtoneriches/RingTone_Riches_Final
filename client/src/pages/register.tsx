@@ -1,16 +1,15 @@
 // src/components/auth/Register.tsx
-import { useState, useRef, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { AlertCircle, Shield, XCircle } from "lucide-react";
+import { Shield, XCircle } from "lucide-react";
+import AuthShell from "@/components/auth/AuthShell";
+import AuthPasswordInput from "@/components/auth/AuthPasswordInput";
 
 // ===== SECURITY CONSTANTS =====
 const SUSPICIOUS_PATTERNS = [
@@ -355,291 +354,253 @@ const registerMutation = useMutation({
     "Flyer",
   ];
 
+  const passwordReqs = [
+    { ok: formData.password.length >= 8, label: "8+ characters" },
+    { ok: /[A-Z]/.test(formData.password), label: "Uppercase letter" },
+    { ok: /[a-z]/.test(formData.password), label: "Lowercase letter" },
+    { ok: /[0-9]/.test(formData.password), label: "Number" },
+    { ok: /[^A-Za-z0-9]/.test(formData.password), label: "Special character" },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background/90 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold gradient-text">MY ACCOUNT</h1>
+    <AuthShell
+      wide
+      kicker="My account"
+      title="CREATE ACCOUNT"
+      sub="Takes a minute. Then you’re on the live board."
+    >
+      <form ref={formRef} onSubmit={handleSubmit} className="rr-auth-form">
+        <div className="hidden">
+          <label htmlFor="honeypot">Website</label>
+          <Input
+            id="honeypot"
+            name="website"
+            tabIndex={-1}
+            autoComplete="off"
+            value={formData.honeypot}
+            onChange={(e) => handleFieldChange("honeypot", e.target.value)}
+          />
         </div>
 
-        <Card className="bg-black/40 border-ringtone-900/20 backdrop-blur-sm shadow-2xl">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold gradient-text text-center">REGISTER</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
-              {/* ===== HONEYPOT FIELD (Hidden) ===== */}
-              <div className="hidden">
-                <Label htmlFor="honeypot">Website</Label>
-                <Input
-                  id="honeypot"
-                  name="website"
-                  tabIndex={-1}
-                  autoComplete="off"
-                  value={formData.honeypot}
-                  onChange={(e) => handleFieldChange("honeypot", e.target.value)}
-                />
-              </div>
+        <div className="rr-auth-note flex items-start gap-2">
+          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-[#F1D47A]" />
+          <p>
+            Names can only use letters, spaces, hyphens and apostrophes. No links, emojis or spam.
+          </p>
+        </div>
 
-              {/* ===== SECURITY INFO ===== */}
-              <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3 flex items-start gap-2">
-                <Shield className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-yellow-400">
-                  🔒 For security, names must contain only letters, spaces, hyphens, and apostrophes.
-                  No links, emojis, or spam keywords allowed.
-                </p>
-              </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rr-auth-field">
+            <label htmlFor="firstName" className="rr-auth-label">First name *</label>
+            <Input
+              id="firstName"
+              value={formData.firstName}
+              onChange={(e) => handleFieldChange("firstName", e.target.value)}
+              className={`rr-auth-input ${getFieldError("firstName") ? "is-invalid" : ""}`}
+              placeholder="First name"
+              required
+              maxLength={50}
+            />
+            {getFieldError("firstName") && (
+              <p className="rr-auth-error"><XCircle className="h-3 w-3" /> {getFieldError("firstName")}</p>
+            )}
+          </div>
+          <div className="rr-auth-field">
+            <label htmlFor="lastName" className="rr-auth-label">Last name *</label>
+            <Input
+              id="lastName"
+              value={formData.lastName}
+              onChange={(e) => handleFieldChange("lastName", e.target.value)}
+              className={`rr-auth-input ${getFieldError("lastName") ? "is-invalid" : ""}`}
+              placeholder="Last name"
+              required
+              maxLength={50}
+            />
+            {getFieldError("lastName") && (
+              <p className="rr-auth-error"><XCircle className="h-3 w-3" /> {getFieldError("lastName")}</p>
+            )}
+          </div>
+        </div>
 
-              {/* ===== NAME FIELDS ===== */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="firstName" className="text-white">First name *</Label>
-                  <Input
-                    id="firstName"
-                    value={formData.firstName}
-                    onChange={(e) => handleFieldChange("firstName", e.target.value)}
-                    className={`bg-white text-black border-gray-300 mt-2 ${getFieldError("firstName") ? "border-red-500" : ""}`}
-                    placeholder="Enter first name"
-                    required
-                    maxLength={50}
-                  />
-                  {getFieldError("firstName") && (
-                    <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                      <XCircle className="h-3 w-3" /> {getFieldError("firstName")}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor="lastName" className="text-white">Last name *</Label>
-                  <Input
-                    id="lastName"
-                    value={formData.lastName}
-                    onChange={(e) => handleFieldChange("lastName", e.target.value)}
-                    className={`bg-white text-black border-gray-300 mt-2 ${getFieldError("lastName") ? "border-red-500" : ""}`}
-                    placeholder="Enter last name"
-                    required
-                    maxLength={50}
-                  />
-                  {getFieldError("lastName") && (
-                    <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                      <XCircle className="h-3 w-3" /> {getFieldError("lastName")}
-                    </p>
-                  )}
-                </div>
-              </div>
+        <div className="rr-auth-field">
+          <span className="rr-auth-label">Date of birth *</span>
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              value={formData.birthMonth}
+              onValueChange={(value) => handleFieldChange("birthMonth", value)}
+            >
+              <SelectTrigger className={`rr-auth-input ${getFieldError("birthDate") ? "is-invalid" : ""}`}>
+                <SelectValue placeholder="Month" />
+              </SelectTrigger>
+              <SelectContent>
+                {months.map((month, index) => (
+                  <SelectItem key={month} value={(index + 1).toString().padStart(2, "0")}>
+                    {month}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={formData.birthYear}
+              onValueChange={(value) => handleFieldChange("birthYear", value)}
+            >
+              <SelectTrigger className={`rr-auth-input ${getFieldError("birthDate") ? "is-invalid" : ""}`}>
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent>
+                {years.map((year) => (
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {getFieldError("birthDate") && (
+            <p className="rr-auth-error"><XCircle className="h-3 w-3" /> {getFieldError("birthDate")}</p>
+          )}
+        </div>
 
-              {/* ===== DATE OF BIRTH ===== */}
-              <div>
-                <Label className="text-white">Date of Birth *</Label>
-                <div className="grid grid-cols-2 gap-4 mt-2">
-                  <Select 
-                    value={formData.birthMonth} 
-                    onValueChange={(value) => handleFieldChange("birthMonth", value)}
-                  >
-                    <SelectTrigger className={`bg-white text-black ${getFieldError("birthDate") ? "border-red-500" : ""}`}>
-                      <SelectValue placeholder="Month" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {months.map((month, index) => (
-                        <SelectItem key={month} value={(index + 1).toString().padStart(2, '0')}>
-                          {month}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select 
-                    value={formData.birthYear} 
-                    onValueChange={(value) => handleFieldChange("birthYear", value)}
-                  >
-                    <SelectTrigger className={`bg-white text-black ${getFieldError("birthDate") ? "border-red-500" : ""}`}>
-                      <SelectValue placeholder="Year" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {years.map((year) => (
-                        <SelectItem key={year} value={year.toString()}>
-                          {year}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {getFieldError("birthDate") && (
-                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                    <XCircle className="h-3 w-3" /> {getFieldError("birthDate")}
-                  </p>
-                )}
-              </div>
+        <div className="rr-auth-field">
+          <label htmlFor="phoneNumber" className="rr-auth-label">Phone number *</label>
+          <Input
+            id="phoneNumber"
+            type="tel"
+            value={formData.phoneNumber}
+            onChange={(e) => handleFieldChange("phoneNumber", e.target.value)}
+            className={`rr-auth-input ${getFieldError("phoneNumber") ? "is-invalid" : ""}`}
+            placeholder="+44 1234 567890"
+            required
+          />
+          {getFieldError("phoneNumber") && (
+            <p className="rr-auth-error"><XCircle className="h-3 w-3" /> {getFieldError("phoneNumber")}</p>
+          )}
+        </div>
 
-              {/* ===== PHONE NUMBER ===== */}
-              <div>
-                <Label htmlFor="phoneNumber" className="text-white">Phone Number *</Label>
-                <Input
-                  id="phoneNumber"
-                  type="tel"
-                  value={formData.phoneNumber}
-                  onChange={(e) => handleFieldChange("phoneNumber", e.target.value)}
-                  className={`bg-white text-black border-gray-300 mt-2 ${getFieldError("phoneNumber") ? "border-red-500" : ""}`}
-                  placeholder="+44 1234 567890"
-                  required
-                />
-                {getFieldError("phoneNumber") && (
-                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                    <XCircle className="h-3 w-3" /> {getFieldError("phoneNumber")}
-                  </p>
-                )}
-              </div>
+        <div className="rr-auth-field">
+          <label htmlFor="email" className="rr-auth-label">Email address *</label>
+          <Input
+            id="email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => handleFieldChange("email", e.target.value)}
+            className={`rr-auth-input ${getFieldError("email") ? "is-invalid" : ""}`}
+            placeholder="you@email.com"
+            required
+          />
+          {getFieldError("email") && (
+            <p className="rr-auth-error"><XCircle className="h-3 w-3" /> {getFieldError("email")}</p>
+          )}
+        </div>
 
-              {/* ===== EMAIL ===== */}
-              <div>
-                <Label htmlFor="email" className="text-white">Email address *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleFieldChange("email", e.target.value)}
-                  className={`bg-white text-black border-gray-300 mt-2 ${getFieldError("email") ? "border-red-500" : ""}`}
-                  placeholder="you@example.com"
-                  required
-                />
-                {getFieldError("email") && (
-                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                    <XCircle className="h-3 w-3" /> {getFieldError("email")}
-                  </p>
-                )}
-              </div>
+        <div className="rr-auth-field">
+          <label htmlFor="password" className="rr-auth-label">Password *</label>
+          <AuthPasswordInput
+            id="password"
+            value={formData.password}
+            onChange={(value) => handleFieldChange("password", value)}
+            placeholder="Create a strong password"
+            autoComplete="new-password"
+            required
+            invalid={!!getFieldError("password")}
+          />
+          {getFieldError("password") && (
+            <p className="rr-auth-error"><XCircle className="h-3 w-3" /> {getFieldError("password")}</p>
+          )}
+          <ul className="rr-auth-reqs">
+            {passwordReqs.map((req) => (
+              <li key={req.label} className={req.ok ? "is-met" : undefined}>
+                {req.ok ? "✓" : "•"} {req.label}
+              </li>
+            ))}
+          </ul>
+        </div>
 
-              {/* ===== PASSWORD ===== */}
-              <div>
-                <Label htmlFor="password" className="text-white">Password *</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => handleFieldChange("password", e.target.value)}
-                  className={`bg-white text-black border-gray-300 mt-2 ${getFieldError("password") ? "border-red-500" : ""}`}
-                  placeholder="Min 8 chars with uppercase, lowercase, number, special"
-                  required
-                />
-                {getFieldError("password") && (
-                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                    <XCircle className="h-3 w-3" /> {getFieldError("password")}
-                  </p>
-                )}
-                <p className="text-gray-400 text-xs mt-1">
-                  Must contain at least 8 characters, 1 uppercase, 1 lowercase, 1 number, and 1 special character
-                </p>
-              </div>
+        <div className="rr-auth-field">
+          <label htmlFor="confirmPassword" className="rr-auth-label">Confirm password *</label>
+          <AuthPasswordInput
+            id="confirmPassword"
+            value={formData.confirmPassword}
+            onChange={(value) => handleFieldChange("confirmPassword", value)}
+            placeholder="Confirm your password"
+            autoComplete="new-password"
+            required
+            invalid={!!getFieldError("confirmPassword")}
+          />
+          {getFieldError("confirmPassword") && (
+            <p className="rr-auth-error"><XCircle className="h-3 w-3" /> {getFieldError("confirmPassword")}</p>
+          )}
+        </div>
 
-              {/* ===== CONFIRM PASSWORD ===== */}
-              <div>
-                <Label htmlFor="confirmPassword" className="text-white">Confirm Password *</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => handleFieldChange("confirmPassword", e.target.value)}
-                  className={`bg-white text-black border-gray-300 mt-2 ${getFieldError("confirmPassword") ? "border-red-500" : ""}`}
-                  placeholder="Confirm your password"
-                  required
-                />
-                {getFieldError("confirmPassword") && (
-                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                    <XCircle className="h-3 w-3" /> {getFieldError("confirmPassword")}
-                  </p>
-                )}
-              </div>
+        <div className="rr-auth-field">
+          <label htmlFor="redeemCode" className="rr-auth-label">Prize / redeem code</label>
+          <Input
+            id="redeemCode"
+            value={formData.redeemCode}
+            onChange={(e) => handleFieldChange("redeemCode", e.target.value.toUpperCase().trim())}
+            className="rr-auth-input"
+            placeholder="Optional"
+            maxLength={20}
+          />
+          <p className="rr-auth-hint">Only if you were given one.</p>
+        </div>
 
-              {/* ===== REDEEM CODE ===== */}
-              <div>
-                <Label htmlFor="redeemCode" className="text-white">Prize/Redeem Code</Label>
-                <Input
-                  id="redeemCode"
-                  value={formData.redeemCode}
-                  onChange={(e) => handleFieldChange("redeemCode", e.target.value.toUpperCase().trim())}
-                  className="bg-white text-black border-gray-300 mt-2"
-                  placeholder="e.g., 5PZNC"
-                  maxLength={20}
-                />
-                <p className="text-gray-400 text-xs mt-1">
-                  Enter any promotional code you received
-                </p>
-              </div>
+        <div className="rr-auth-field">
+          <span className="rr-auth-label">How did you find Ringtone Riches? *</span>
+          <Select
+            value={formData.howDidYouFindUs}
+            onValueChange={(value) => handleFieldChange("howDidYouFindUs", value)}
+          >
+            <SelectTrigger className={`rr-auth-input ${getFieldError("howDidYouFindUs") ? "is-invalid" : ""}`}>
+              <SelectValue placeholder="Select an option" />
+            </SelectTrigger>
+            <SelectContent>
+              {discoveryOptions.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {getFieldError("howDidYouFindUs") && (
+            <p className="rr-auth-error"><XCircle className="h-3 w-3" /> {getFieldError("howDidYouFindUs")}</p>
+          )}
+        </div>
 
-              {/* ===== HOW DID YOU FIND US ===== */}
-              <div>
-                <Label className="text-white">How did you find out about Ringtone Riches? *</Label>
-                <Select
-                  value={formData.howDidYouFindUs}
-                  onValueChange={(value) => handleFieldChange("howDidYouFindUs", value)}
-                >
-                  <SelectTrigger className={`bg-white text-black mt-2 ${getFieldError("howDidYouFindUs") ? "border-red-500" : ""}`}>
-                    <SelectValue placeholder="Select an option" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {discoveryOptions.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {getFieldError("howDidYouFindUs") && (
-                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                    <XCircle className="h-3 w-3" /> {getFieldError("howDidYouFindUs")}
-                  </p>
-                )}
-              </div>
+        <div className="rr-auth-check-row">
+          <Checkbox
+            id="newsletter"
+            checked={formData.receiveNewsletter}
+            onCheckedChange={(checked) => handleFieldChange("receiveNewsletter", checked === true)}
+            className="rr-auth-check mt-0.5"
+          />
+          <label htmlFor="newsletter">
+            Send me marketing by email and SMS.
+          </label>
+        </div>
 
-              {/* ===== NEWSLETTER ===== */}
-              <div className="flex items-start space-x-2">
-                <Checkbox
-                  id="newsletter"
-                  checked={formData.receiveNewsletter}
-                  onCheckedChange={(checked) => handleFieldChange("receiveNewsletter", checked === true)}
-                  className="mt-1"
-                />
-                <Label htmlFor="newsletter" className="text-white text-sm leading-tight">
-                  If you would like to receive our marketing via Email and SMS please tick here.
-                </Label>
-              </div>
+        <div className="rr-auth-note">
+          Your data is used to run your account and entries, as set out in our{" "}
+          <Link href="/privacy-policy" className="rr-auth-link">privacy policy</Link>.
+          By registering you also agree to the{" "}
+          <Link href="/termsAndConditions" className="rr-auth-link">terms</Link>.
+        </div>
 
-              {/* ===== PRIVACY NOTICE ===== */}
-              <div className="text-xs text-gray-400 bg-gray-900/50 p-3 rounded-lg">
-                <p>
-                  Your personal data will be used to support your experience throughout this 
-                  website, to manage access to your account, and for other purposes described in 
-                  our privacy policy.
-                </p>
-                <p className="mt-1 text-yellow-400">
-                  🔒 All data is encrypted and protected.
-                </p>
-              </div>
+        <button
+          type="submit"
+          className="rr-cta inline-flex h-12 w-full items-center justify-center rounded-xl text-sm font-black uppercase tracking-[0.12em]"
+          disabled={registerMutation.isPending || isSubmitting}
+        >
+          {registerMutation.isPending ? "Creating account…" : "Create account"}
+        </button>
 
-              {/* ===== REGISTER BUTTON ===== */}
-              <Button
-                type="submit"
-                className="w-full bg-yellow-600 hover:bg-ringtone-700 text-white font-bold"
-                disabled={registerMutation.isPending || isSubmitting}
-              >
-                {registerMutation.isPending ? "CREATING ACCOUNT..." : "REGISTER"}
-              </Button>
-
-              {/* ===== LOGIN LINK ===== */}
-              <div className="text-center border-t border-gray-600 pt-4">
-                <p className="text-white text-sm mb-2">Already have an account?</p>
-                <Link href="/login">
-                  <Button
-                    variant="outline"
-                    className="border-ringtone-600 text-ringtone-400 hover:bg-ringtone-600/20 hover:text-ringtone-400"
-                  >
-                    SIGN IN
-                  </Button>
-                </Link>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+        <div className="rr-auth-footer">
+          <p>Already have an account?</p>
+          <Link href="/login">
+            <span className="rr-auth-ghost cursor-pointer">Log in</span>
+          </Link>
+        </div>
+      </form>
+    </AuthShell>
   );
 }

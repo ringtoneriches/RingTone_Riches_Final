@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
+import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
 import { Link, Router, useLocation } from "wouter";
 import { Transaction, User, Ticket, Competition } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -234,7 +235,7 @@ function UpdateProfileModal({ user }: { user: any }) {
         Update Profile
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-zinc-900 border-yellow-500/20">
+        <DialogContent className="rr-wallet bg-[#0A0A0D] border-[#C8102E]/30 text-white">
           <DialogHeader>
             <DialogTitle className="text-yellow-400">
               Update Profile
@@ -291,7 +292,7 @@ function UpdateProfileModal({ user }: { user: any }) {
             <Button
               onClick={() => mutation.mutate()}
               disabled={mutation.isPending}
-              className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black hover:from-yellow-500 hover:to-yellow-400"
+              className="rr-cta"
             >
               {mutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
@@ -336,7 +337,7 @@ function ChangePasswordModal() {
         Change Password
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-zinc-900 border-yellow-500/20">
+        <DialogContent className="rr-wallet bg-[#0A0A0D] border-[#C8102E]/30 text-white">
           <DialogHeader>
             <DialogTitle className="text-yellow-400">
               Change Password
@@ -357,7 +358,7 @@ function ChangePasswordModal() {
             <Button
               onClick={() => mutation.mutate()}
               disabled={mutation.isPending || !password}
-              className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black hover:from-yellow-500 hover:to-yellow-400"
+              className="rr-cta"
             >
               {mutation.isPending ? "Updating..." : "Update Password"}
             </Button>
@@ -985,6 +986,7 @@ const handleSortCodeChange = (e) => {
     const tab = params.get("tab");
     // Map 'ringtone' to 'points' for consistency with header
     if (tab === "ringtone") return "points";
+    if (tab === "topup") return "wallet";
     return tab || "wallet";
   };
 
@@ -1313,11 +1315,15 @@ const handleDeleteBankAccount = (
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black flex items-center justify-center">
-        <div
-          className="animate-spin w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full"
-          aria-label="Loading"
-        />
+      <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+        <DigitalAtmosphere />
+        <Header />
+        <div className="relative z-10 flex min-h-[60vh] items-center justify-center">
+          <div
+            className="h-10 w-10 animate-spin rounded-full border-2 border-[#C8102E] border-t-transparent"
+            aria-label="Loading"
+          />
+        </div>
       </div>
     );
   }
@@ -1341,24 +1347,25 @@ const handleDeleteBankAccount = (
 };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black text-white">
+    <div className="rr-wallet relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <DigitalAtmosphere />
       <Header />
 
        {/* 🔥 PENDING ORDER BANNER - Shows when user returns from top-up */}
     {pendingOrder && (
-      <div className="bg-gradient-to-r from-yellow-900/30 to-amber-900/20 border-y border-yellow-500/50">
+      <div className="relative z-10 border-y border-[#C8102E]/40 bg-[#C8102E]/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3 flex-1">
-              <div className="bg-yellow-500/20 p-2 rounded-full">
-                <AlertCircle className="w-6 h-6 text-yellow-500" />
+              <div className="rounded-full bg-[#C8102E]/20 p-2">
+                <AlertCircle className="h-6 w-6 text-[#F1D47A]" />
               </div>
               <div>
-                <h3 className="font-bold text-yellow-400 text-lg">
+                <h3 className="text-lg font-bold text-[#F1D47A]">
                   Complete Your Order!
                 </h3>
-                <p className="text-gray-300 text-sm">
-                 Topup your wallet . You have a pending order waiting to be completed.
+                <p className="text-sm text-white/60">
+                 Top up your wallet. You have a pending order waiting to be completed.
                 </p>
                 {/* <p className="text-gray-300 text-sm">
                  Or you can complete it later in the <span className="font-bold">'Orders'</span> tab.
@@ -1369,7 +1376,7 @@ const handleDeleteBankAccount = (
             <div className="flex items-center gap-3">
               <Button
                 onClick={handleResumeOrder}
-                className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-bold px-6"
+                className="rr-cta px-6 font-bold"
                 data-testid="button-resume-pending-order"
               >
                 <ArrowRight className="w-4 h-4 mr-2" />
@@ -1389,23 +1396,19 @@ const handleDeleteBankAccount = (
       </div>
     )}
 
-      <div className="container mx-auto px-4 py-8">
-        {/* Premium Header */}
+      <div className="relative z-10 container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto mb-8">
-          <div className="text-center mb-8">
+          <div className="mb-8 text-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">Your account</p>
             <h1
-              className="text-5xl font-bold mb-3 bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 bg-clip-text text-transparent"
+              className="mt-2 font-prize text-4xl text-white sm:text-5xl"
               data-testid="heading-account"
             >
               MY ACCOUNT
             </h1>
-            <div className="flex items-center justify-center gap-3 text-gray-400">
-              <Sparkles className="h-4 w-4 text-yellow-500" />
-              <p className="text-sm">
-                Manage your competitions, rewards & settings
-              </p>
-              <Sparkles className="h-4 w-4 text-yellow-500" />
-            </div>
+            <p className="mt-2 text-sm text-white/50">
+              Wallet, entries, rewards and settings — all in one place.
+            </p>
           </div>
 
           {/* Premium Tabbed Interface */}
@@ -1415,12 +1418,12 @@ const handleDeleteBankAccount = (
             className="w-full"
           >
             <TabsList
-              className="grid w-full h-full grid-cols-5 md:grid-cols-10 gap-2 bg-zinc-900/50 border border-yellow-500/20 p-2 rounded-xl mb-12 relative z-10"
+              className="rr-wallet-tabs !flex !h-auto"
               data-testid="tabs-account"
             >
               <TabsTrigger
                 value="wallet"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3"
+                className="rr-wallet-tab"
                 data-testid="tab-wallet"
               >
                 <WalletIcon className="h-4 w-4" />
@@ -1428,7 +1431,7 @@ const handleDeleteBankAccount = (
               </TabsTrigger>
               <TabsTrigger
                 value="orders"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3"
+                className="rr-wallet-tab"
                 data-testid="tab-orders"
               >
                 <FileText className="h-4 w-4" />
@@ -1436,7 +1439,7 @@ const handleDeleteBankAccount = (
               </TabsTrigger>
               <TabsTrigger
                 value="entries"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3"
+                className="rr-wallet-tab"
                 data-testid="tab-entries"
               >
                 <ShoppingCart className="h-4 w-4" />
@@ -1444,7 +1447,7 @@ const handleDeleteBankAccount = (
               </TabsTrigger>
               <TabsTrigger
                 value="points"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3"
+                className="rr-wallet-tab"
                 data-testid="tab-points"
               >
                 <Award className="h-4 w-4" />
@@ -1452,7 +1455,7 @@ const handleDeleteBankAccount = (
               </TabsTrigger>
               <TabsTrigger
                 value="referral"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3"
+                className="rr-wallet-tab"
                 data-testid="tab-referral"
               >
                 <Users className="h-4 w-4" />
@@ -1460,7 +1463,7 @@ const handleDeleteBankAccount = (
               </TabsTrigger>
               <TabsTrigger
                 value="account"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3"
+                className="rr-wallet-tab"
                 data-testid="tab-account"
               >
                 <UserCircle className="h-4 w-4" />
@@ -1468,7 +1471,7 @@ const handleDeleteBankAccount = (
               </TabsTrigger>
               <TabsTrigger
                 value="verification"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3"
+                className="rr-wallet-tab"
                 data-testid="tab-verification"
               >
                 <Check className="h-4 w-4" />
@@ -1476,7 +1479,7 @@ const handleDeleteBankAccount = (
               </TabsTrigger>
               <TabsTrigger
                 value="wellbeing"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3 relative"
+                className="rr-wallet-tab relative"
                 data-testid="tab-support"
               >
                 <Heart className="h-4 w-4" />
@@ -1484,7 +1487,7 @@ const handleDeleteBankAccount = (
               </TabsTrigger>
               <TabsTrigger
                 value="address"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3"
+                className="rr-wallet-tab"
                 data-testid="tab-address"
               >
                 <Home className="h-4 w-4" />
@@ -1492,7 +1495,7 @@ const handleDeleteBankAccount = (
               </TabsTrigger>
                <TabsTrigger
                 value="support"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-600 data-[state=active]:to-yellow-500 data-[state=active]:text-black data-[state=active]:shadow-lg data-[state=active]:shadow-yellow-500/50 transition-all text-xs sm:text-sm flex-col sm:flex-row gap-1 py-3 relative"
+                className="rr-wallet-tab relative"
                 data-testid="tab-support"
               >
                 <Headphones className="h-4 w-4" />
@@ -1509,7 +1512,7 @@ const handleDeleteBankAccount = (
             {/* WALLET TAB */}
             <TabsContent
               value="wallet"
-              className="space-y-6 pt-12 relative z-0"
+              className="space-y-6 pt-2 relative z-0"
               data-testid="content-wallet"
             >
               <div className="grid lg:grid-cols-2 gap-6">
@@ -1551,7 +1554,7 @@ const handleDeleteBankAccount = (
                               onClick={() => setTopUpAmount(String(amount))}
                               className={`py-3 rounded-lg font-semibold transition-all transform hover:scale-105 ${
                                 topUpAmount === String(amount)
-                                  ? "bg-gradient-to-r from-yellow-600 to-yellow-500 text-black shadow-lg shadow-yellow-500/50"
+                                  ? "rr-cta shadow-lg"
                                   : "bg-zinc-800 text-gray-300 hover:bg-zinc-700 border border-yellow-500/20"
                               }`}
                               data-testid={`button-amount-${amount}`}
@@ -1574,7 +1577,7 @@ const handleDeleteBankAccount = (
                       <button
                         onClick={handleTopUp}
                         disabled={topUpMutation.isPending}
-                        className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold py-4 rounded-lg hover:from-yellow-500 hover:to-yellow-400 transition-all transform hover:scale-105 shadow-lg shadow-yellow-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="rr-cta w-full py-4 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                         data-testid="button-topup"
                       >
                         {topUpMutation.isPending
@@ -1811,7 +1814,7 @@ const handleDeleteBankAccount = (
             {/* ORDERS TAB */}
             <TabsContent
               value="orders"
-              className="space-y-6 pt-12 relative z-0"
+              className="space-y-6 pt-2 relative z-0"
               data-testid="content-orders"
             >
               {/* Incomplete Games */}
@@ -1911,7 +1914,7 @@ const handleDeleteBankAccount = (
             className={`h-full transition-all shadow-lg ${
               expired 
                 ? 'bg-gradient-to-r from-red-600 to-red-400 shadow-red-500/50' 
-                : 'bg-gradient-to-r from-yellow-600 to-yellow-400 shadow-yellow-500/50'
+                : 'rr-progress-fill'
             }`}
             style={{
               width: `${((order.remainingPlays || 0) / order.orders.quantity) * 100}%`,
@@ -1940,7 +1943,7 @@ const handleDeleteBankAccount = (
           className="block"
         >
           <button
-            className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-black font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-105 shadow-lg shadow-yellow-500/50"
+            className="rr-cta w-full py-3 px-4 font-bold"
             data-testid={`button-resume-${order.orders.id}`}
           >
             Resume Game
@@ -1957,7 +1960,7 @@ const handleDeleteBankAccount = (
                       <div className="flex justify-center mt-6">
                         <button
                           onClick={() => setVisibleIncompleteGames(prev => Math.min(prev + 6, incompleteGames.length))}
-                          className="group relative px-8 py-3 bg-gradient-to-r from-yellow-600/20 to-yellow-500/20 hover:from-yellow-600 hover:to-yellow-500 border border-yellow-500/30 hover:border-transparent text-yellow-400 hover:text-black rounded-lg font-bold transition-all transform hover:scale-105 shadow-lg hover:shadow-yellow-500/50 overflow-hidden"
+                          className="rr-cta px-8 py-3 font-bold"
                         >
                           <span className="relative z-10  flex justify-center items-center gap-2">
                             See More Games
@@ -1970,7 +1973,6 @@ const handleDeleteBankAccount = (
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7-7-7" />
                             </svg>
                           </span>
-                          <div className="absolute inset-0 bg-gradient-to-r from-yellow-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </button>
                       </div>
                     )}
@@ -2011,7 +2013,7 @@ const handleDeleteBankAccount = (
                         No orders yet
                       </p>
                       <Link href="/">
-                        <button className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black px-6 py-3 rounded-lg font-bold hover:from-yellow-500 hover:to-yellow-400 transition-all transform hover:scale-105 shadow-lg shadow-yellow-500/50">
+                        <button className="rr-cta px-6 py-3 font-bold">
                           Browse Competitions
                         </button>
                       </Link>
@@ -2115,7 +2117,7 @@ const handleDeleteBankAccount = (
                                           setOrderDialogOpen(true); 
                                         }
                                       }}
-                                      className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-bold hover:from-yellow-500 hover:to-yellow-400 transition-all"
+                                      className="rr-cta px-4 py-2 text-sm font-bold"
                                     >
                                       {order.orders.status === "pending" ? "RESUME" : "VIEW"}
                                     </button>
@@ -2207,7 +2209,7 @@ const handleDeleteBankAccount = (
                                     setOrderDialogOpen(true); 
                                   }
                                 }}
-                                className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-bold hover:from-yellow-500 hover:to-yellow-400 transition-all flex-shrink-0"
+                                className="rr-cta px-4 py-2 text-sm font-bold flex-shrink-0"
                                 data-testid={`button-view-order-${order.orders.id}`}
                               >
                                 VIEW
@@ -2251,7 +2253,7 @@ const handleDeleteBankAccount = (
             {/* ENTRIES TAB */}
             <TabsContent
               value="entries"
-              className="space-y-6 pt-12 relative z-0"
+              className="space-y-6 pt-2 relative z-0"
               data-testid="content-entries"
             >
               <Card className="bg-gradient-to-br from-yellow-900/10 via-zinc-900 to-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
@@ -2346,7 +2348,7 @@ const handleDeleteBankAccount = (
                           Start entering competitions to see your entries here!
                         </p>
                         <Link href="/">
-                          <button className="mt-4 px-6 py-3 bg-gradient-to-r from-yellow-600 to-yellow-500 text-black rounded-lg font-bold hover:from-yellow-500 hover:to-yellow-400 transition-all transform hover:scale-105 shadow-lg shadow-yellow-500/50">
+                          <button className="rr-cta mt-4 px-6 py-3 font-bold">
                             Browse Competitions
                           </button>
                         </Link>
@@ -2435,7 +2437,7 @@ const handleDeleteBankAccount = (
             {/* RINGTONE POINTS TAB */}
             <TabsContent
               value="points"
-              className="space-y-6 pt-12 relative z-0"
+              className="space-y-6 pt-2 relative z-0"
               data-testid="content-points"
             >
               <Card className="bg-gradient-to-br from-yellow-900/20 via-zinc-900 to-zinc-900 border-yellow-500/40 shadow-xl shadow-yellow-500/20">
@@ -2562,7 +2564,7 @@ const handleDeleteBankAccount = (
             {/* REFERRAL TAB */}
             <TabsContent
               value="referral"
-              className="space-y-6 pt-12 relative z-0"
+              className="space-y-6 pt-2 relative z-0"
               data-testid="content-referral"
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2622,7 +2624,7 @@ const handleDeleteBankAccount = (
                     />
                     <Button
                       onClick={copyReferralLink}
-                      className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black hover:from-yellow-500 hover:to-yellow-400 shadow-lg shadow-yellow-500/50"
+                      className="rr-cta"
                       data-testid="button-copy-referral"
                     >
                       <Copy className="h-4 w-4 mr-2" />
@@ -2722,7 +2724,7 @@ const handleDeleteBankAccount = (
             {/* ACCOUNT TAB */}
             <TabsContent
               value="account"
-              className="space-y-6 pt-12 relative z-0"
+              className="space-y-6 pt-2 relative z-0"
               data-testid="content-account"
             >
               <div className="grid md:grid-cols-3 gap-6">
@@ -2797,7 +2799,7 @@ const handleDeleteBankAccount = (
                       <div className="grid grid-cols-2 gap-4">
                         <button
                           onClick={() => handleTabChange("orders")}
-                          className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black py-3 rounded-lg font-bold hover:from-yellow-500 hover:to-yellow-400 transition-all transform hover:scale-105 shadow-lg shadow-yellow-500/50"
+                          className="rr-cta py-3 font-bold"
                           data-testid="button-view-orders"
                         >
                           View Orders
@@ -2831,7 +2833,7 @@ const handleDeleteBankAccount = (
                         </p>
                         <button
                          onClick={() => handleTabChange("wallet")}
-                          className="mt-4 w-full bg-gradient-to-r from-yellow-600 to-yellow-500 text-black px-6 py-3 rounded-lg font-bold hover:from-yellow-500 hover:to-yellow-400 transition-all transform hover:scale-105 shadow-lg shadow-yellow-500/50"
+                          className="mt-4 w-full rr-cta px-6 py-3 font-bold"
                           data-testid="button-top-up"
                         >
                           TOP UP
@@ -2874,7 +2876,7 @@ const handleDeleteBankAccount = (
             {/* ADDRESS TAB */}
             <TabsContent
               value="address"
-              className="space-y-6 pt-12 relative z-0"
+              className="space-y-6 pt-2 relative z-0"
               data-testid="content-address"
             >
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
@@ -2982,7 +2984,7 @@ const handleDeleteBankAccount = (
                   <div className="pt-4">
                     <Button
                       onClick={handleSaveAddress}
-                      className="w-full md:w-auto bg-gradient-to-r from-yellow-600 to-yellow-500 text-black hover:from-yellow-500 hover:to-yellow-400"
+                      className="w-full md:w-auto rr-cta"
                       disabled={saveAddressMutation.isPending}
                       data-testid="button-save-address"
                     >
@@ -3017,7 +3019,7 @@ const handleDeleteBankAccount = (
             {/* Support tab */}
             <TabsContent
               value="support"
-              className="space-y-6 pt-12 relative z-0"
+              className="space-y-6 pt-2 relative z-0"
               data-testid="content-support"
             >
               <Support/>
@@ -3043,7 +3045,7 @@ const handleDeleteBankAccount = (
 
       {/* Withdrawal Request Dialog */}
       <Dialog open={withdrawalDialogOpen} onOpenChange={setWithdrawalDialogOpen}>
-  <DialogContent className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 text-white max-w-md">
+  <DialogContent className="rr-wallet bg-[#0A0A0D] border-[#C8102E]/30 text-white max-w-md">
     <DialogHeader>
       <DialogTitle className="text-2xl text-yellow-400">
         Request Withdrawal
@@ -3215,7 +3217,7 @@ const handleDeleteBankAccount = (
       <button
         type="submit"
         disabled={withdrawalRequestMutation.isPending || saveBankAccountMutation.isPending}
-        className="w-full py-3 px-4 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="rr-cta w-full py-3 px-4 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {withdrawalRequestMutation.isPending || saveBankAccountMutation.isPending 
           ? "Processing..." 
@@ -3227,7 +3229,7 @@ const handleDeleteBankAccount = (
 </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-  <DialogContent>
+  <DialogContent className="rr-wallet border-[#C8102E]/30 bg-[#0A0A0D] text-white">
     <DialogHeader>
       <DialogTitle>Daily spending limit reached</DialogTitle>
       <DialogDescription>

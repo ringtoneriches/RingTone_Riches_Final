@@ -23,7 +23,7 @@ export default function CountdownBlocks({ time, size = "sm", ended = false }: Pr
   }
 
   return (
-    <div className={`flex items-end ${size === "lg" ? "gap-2 sm:gap-3" : "gap-1"}`}>
+    <div className={`rr-countdown flex items-end ${size === "lg" ? "gap-2 sm:gap-3" : "gap-1"}`}>
       {units.map((u) => (
         <div key={u.l} className="text-center">
           <div

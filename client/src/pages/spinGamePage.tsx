@@ -2,8 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearch } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import Header from "@/components/layout/header";
-import Footer from "@/components/layout/footer";
+import { GameDisclaimer, GameEmpty, GameHero, GameShell, GameStatus } from "@/components/games/GameChrome";
+import { Target } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { PrizeModal } from "@/components/games/prize-modal";
@@ -184,45 +184,35 @@ export default function SpinGamePage() {
     // }
   };
 
-  if (isLoading)
-    return (
-      <div className="flex justify-center items-center h-[80vh] text-yellow-400">
-        <p>Loading your spins...</p>
-      </div>
-    );
+  if (isLoading) return <GameStatus message="Loading your spins..." />;
 
-  if (!orderData?.order)
+  if (!orderData?.order) {
     return (
-      <div className="flex justify-center items-center h-[80vh] text-yellow-400">
-        <p>Invalid or expired spin order.</p>
-      </div>
+      <GameEmpty
+        title="SPIN EXPIRED"
+        message="This spin order is invalid or has expired."
+        actionLabel="Back to home"
+        href="/"
+      />
     );
+  }
+
+  const isRetro = wheelType === "wheel2";
 
   return (
-    <div className="min-h-screen  bg-background text-foreground">
-      <Header />
-      <div className="flex flex-col justify-center items-center">
-        {/* Countdown Timer */}
-        {/* {competition?.endDate && (
-          <div className="py-6">
-            <CountdownTimer endDate={competition.endDate} />
-          </div>
-        )} */}
-      </div>
-      <main className="container mx-auto   text-center">
-          {getWheelComponent()}
-          {/* Disclaimer text */}
-  {/* <div className="my-8 max-w-2xl mx-auto p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-    <p className="text-sm text-gray-400">
-      Please note: All on-screen graphics are for entertainment purposes only. 
-      Prize outcomes are securely pre-selected before any visual gameplay begins 
-      and are not influenced by the animations.
-    </p>
-  </div> */}
-  
+    <GameShell>
+      <main className="mx-auto max-w-5xl px-4 py-6 text-center sm:py-8">
+        <GameHero
+          kicker={isRetro ? "Retro spin · play" : "Luxury spin · play"}
+          title={isRetro ? "RETRO RINGTONE SPIN" : "LUXURY CAR SPIN"}
+          subtitle="Spin for the prize. Outcome is locked in before the wheel moves."
+          remaining={remainingSpins}
+          remainingLabel={remainingSpins === 1 ? "spin left" : "spins left"}
+          Icon={Target}
+        />
+        {getWheelComponent()}
       </main>
 
-      {/* Modern Prize Modal with Confetti */}
       <PrizeModal
         isOpen={isResultModalOpen}
         onClose={handleCloseResultModal}
@@ -233,32 +223,7 @@ export default function SpinGamePage() {
         spinWheelType={wheelType}
       />
 
-      <Footer />
-
-  {showDisclaimer && (
-  <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:justify-center px-4">
-    {/* Backdrop */}
-    <div 
-      className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
-      onClick={() => setShowDisclaimer(false)}
-    ></div>
-
-    {/* Disclaimer Card */}
-    <div className="relative w-full mb-2 max-w-md bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 rounded-2xl p-5 sm:p-6 shadow-2xl border border-gray-700 transform transition-all duration-300 scale-95 animate-slide-up">
-      <div className="flex flex-col items-start gap-4 ">
-        <p className="text-white text-sm sm:text-base font-medium leading-snug">
-          ⚠️ <span className="font-semibold">Disclaimer:</span> All on-screen graphics are for entertainment purposes only. Prize outcomes are securely pre-selected before gameplay and are not influenced by animations.
-        </p>
-        <button
-          onClick={() => setShowDisclaimer(false)}
-          className="self-end bg-indigo-500 hover:bg-indigo-400 text-white px-6 py-2 rounded-full font-semibold text-sm sm:text-base shadow-lg transition-transform duration-200 hover:scale-105"
-        >
-          Got it
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-    </div>
+      <GameDisclaimer open={showDisclaimer} onClose={() => setShowDisclaimer(false)} />
+    </GameShell>
   );
 }

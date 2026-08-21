@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import Header from "@/components/layout/header";
-import Footer from "@/components/layout/footer";
+import { GameEmpty, GameShell, GameStatus } from "@/components/games/GameChrome";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -24,11 +23,11 @@ interface SlotSpinResult {
   };
 }
 
-const GOLD = "#FFD700";
-const AMBER = "#FF8C00";
+const GOLD = "#F1D47A";
+const AMBER = "#C8102E";
 
 // ─── Confetti ──────────────────────────────────────────────────────────────
-const CONFETTI_COLORS = ["#FFD700","#FF6B35","#E63946","#06D6A0","#9B59B6","#FF3FA4","#FFE066","#2ECC71","#3498DB","#E74C3C","#F39C12","#1ABC9C"];
+const CONFETTI_COLORS = ["#F1D47A","#C8102E","#FF263D","#B98928","#fff8ee","#E63946","#FFE066"];
 
 function Confetti({ active }: { active: boolean }) {
   const pieces = Array.from({ length: 110 }, (_, i) => ({
@@ -97,18 +96,18 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
         style={{ background: show ? "rgba(2,0,10,0.88)" : "rgba(0,0,0,0)", backdropFilter: show ? "blur(8px)" : "none" }}>
         
         <div className="relative w-full max-w-[360px] animate-[winCardPop_0.6s_cubic-bezier(0.34,1.56,0.64,1)_both]">
-          <div className="relative rounded-3xl overflow-hidden border-2 border-[#c9922a]"
+          <div className="relative overflow-hidden rounded-3xl border-2 border-[#C8102E]/50"
             style={{
-              background: "linear-gradient(165deg,#0e0025 0%,#08001a 55%,#050010 100%)",
-              boxShadow: "0 0 0 1px rgba(255,200,0,0.15), 0 0 55px rgba(180,80,255,0.2), 0 0 120px rgba(120,40,200,0.15), inset 0 1px 0 rgba(255,210,0,0.1), 0 60px 160px rgba(0,0,0,0.99)"
+              background: "linear-gradient(165deg,#0A0A0D 0%,#050505 55%,#111115 100%)",
+              boxShadow: "0 0 0 1px rgba(241,212,122,0.15), 0 0 55px rgba(200,16,46,0.25), 0 60px 160px rgba(0,0,0,0.99)"
             }}>
             
-            <button onClick={onDismiss} className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full border border-[rgba(200,140,255,0.45)] bg-[rgba(30,5,60,0.85)] text-[#C084FC] flex items-center justify-center text-sm font-black hover:bg-[rgba(50,10,80,0.9)] transition-colors"
+            <button onClick={onDismiss} className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full border border-white/15 bg-[#0A0A0D]/85 text-[#F1D47A] flex items-center justify-center text-sm font-black hover:bg-white/10 transition-colors"
               style={{ lineHeight: 1 }}>✕</button>
 
             {/* Trophy Section - CSS Only */}
             <div className="relative flex flex-col items-center px-6 sm:px-8 pt-8 sm:pt-8 pb-2"
-              style={{ background: "linear-gradient(180deg,#1a0040 0%,#0e0028 100%)", overflow: "hidden" }}>
+              style={{ background: "linear-gradient(180deg,#1a0508 0%,#0A0A0D 100%)", overflow: "hidden" }}>
               
               <div className="absolute inset-0 pointer-events-none"
                 style={{ background: "radial-gradient(ellipse 85% 75% at 50% 85%, rgba(255,180,0,0.22) 0%, rgba(140,40,255,0.14) 45%, transparent 75%)" }} />
@@ -329,17 +328,17 @@ function StatCard({ label, value, icon, accent }: { label: string; value: string
     <div className="relative p-3 sm:p-4 md:p-5 rounded-2xl text-center overflow-hidden"
       style={{
         background: accent
-          ? "linear-gradient(145deg,rgba(60,30,0,0.95),rgba(30,12,0,0.95))"
-          : "linear-gradient(145deg,rgba(18,8,35,0.95),rgba(8,4,20,0.95))",
-        border: accent ? "1px solid rgba(255,180,0,0.4)" : "1px solid rgba(120,60,200,0.3)",
+          ? "linear-gradient(145deg,rgba(200,16,46,0.18),rgba(10,10,13,0.95))"
+          : "linear-gradient(145deg,rgba(18,18,22,0.95),rgba(8,8,10,0.95))",
+        border: accent ? "1px solid rgba(241,212,122,0.4)" : "1px solid rgba(255,255,255,0.1)",
         boxShadow: accent
-          ? "0 0 30px rgba(255,160,0,0.12), inset 0 1px 0 rgba(255,200,0,0.15)"
-          : "0 0 20px rgba(120,60,200,0.08), inset 0 1px 0 rgba(150,80,255,0.1)"
+          ? "0 0 30px rgba(200,16,46,0.12), inset 0 1px 0 rgba(241,212,122,0.15)"
+          : "inset 0 1px 0 rgba(255,255,255,0.06)"
       }}>
       <div className="text-lg sm:text-xl md:text-[22px] mb-1.5">{icon}</div>
       <div className="text-xl sm:text-2xl md:text-[26px] font-black leading-none mb-1 tabular-nums"
         style={{
-          background: accent ? "linear-gradient(180deg,#FFE566,#FF8C00)" : "linear-gradient(180deg,#E0B0FF,#9B59B6)",
+          background: accent ? "linear-gradient(180deg,#F1D47A,#B98928)" : "linear-gradient(180deg,#fff,#d4d4d8)",
           WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent"
         }}>{value}</div>
       <div className="text-[9px] sm:text-[10px] font-black tracking-[2px] uppercase text-[rgba(255,255,255,0.35)]">{label}</div>
@@ -354,13 +353,13 @@ function SpinsCounter({ used, total }: { used: number; total: number }) {
   
   return (
     <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl"
-      style={{ background: "linear-gradient(135deg,rgba(30,10,80,0.9),rgba(15,5,40,0.9))", border: "1px solid rgba(180,100,255,0.35)" }}>
+      style={{ background: "linear-gradient(135deg,rgba(200,16,46,0.18),rgba(10,10,13,0.9))", border: "1px solid rgba(200,16,46,0.35)" }}>
       <div className="flex items-center gap-1.5">
         <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" style={{ color: GOLD }} />
         <span className="text-xs sm:text-sm font-black" style={{ color: GOLD }}>
           <span className="text-white">{used}</span>
           <span className="mx-1 text-[rgba(255,255,255,0.3)]">/</span>
-          <span className="text-[rgba(200,150,255,0.8)]">{total}</span>
+          <span className="text-[rgba(241,212,122,0.8)]">{total}</span>
         </span>
       </div>
       
@@ -369,8 +368,8 @@ function SpinsCounter({ used, total }: { used: number; total: number }) {
         <div className="h-full rounded-full transition-all duration-500"
           style={{
             width: `${percentage}%`,
-            background: remaining > 0 ? "linear-gradient(90deg,#FFD700,#FF8C00)" : "#22C55E",
-            boxShadow: remaining > 0 ? "0 0 8px rgba(255,180,0,0.5)" : "0 0 8px rgba(34,197,94,0.5)"
+            background: remaining > 0 ? "linear-gradient(90deg,#C8102E,#F1D47A)" : "#22C55E",
+            boxShadow: remaining > 0 ? "0 0 8px rgba(200,16,46,0.5)" : "0 0 8px rgba(34,197,94,0.5)"
           }} />
       </div>
       
@@ -417,16 +416,16 @@ function SpinsExhaustedOverlay({
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 sm:p-6"
       style={{
-        background: "linear-gradient(165deg,rgba(8,0,22,0.97) 0%,rgba(4,0,12,0.98) 100%)",
+        background: "linear-gradient(165deg,rgba(5,5,5,0.97) 0%,rgba(10,10,13,0.98) 100%)",
         backdropFilter: "blur(6px)"
       }}>
-      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 70% 50% at 50% 40%,rgba(200,130,255,0.1) 0%,transparent 70%)" }} />
-      <div className="text-4xl sm:text-5xl md:text-[56px] mb-3" style={{ filter: "drop-shadow(0 0 18px rgba(200,130,255,0.5))" }}>🎰</div>
+      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 70% 50% at 50% 40%,rgba(200,16,46,0.12) 0%,transparent 70%)" }} />
+      <div className="text-4xl sm:text-5xl md:text-[56px] mb-3" style={{ filter: "drop-shadow(0 0 18px rgba(241,212,122,0.5))" }}>🎰</div>
       <div className="text-lg sm:text-xl md:text-[22px] font-black tracking-[2px] uppercase mb-1"
-        style={{ background: "linear-gradient(180deg,#E0B0FF,#9B59B6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+        style={{ background: "linear-gradient(180deg,#F1D47A,#B98928)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
         All Spins Used!
       </div>
-      <div className="text-xs sm:text-[13px] text-[rgba(200,160,255,0.6)] mb-5 text-center">
+      <div className="text-xs sm:text-[13px] text-white/50 mb-5 text-center">
         You've completed all {totalSpins} spin{totalSpins !== 1 ? "s" : ""} for this game.
       </div>
 
@@ -472,22 +471,21 @@ function SpinHistoryTable({ history }: { history: any[] }) {
   };
 
   return (
-    <div className="rounded-2xl sm:rounded-3xl overflow-hidden border border-[rgba(100,70,200,0.35)]"
+    <div className="overflow-hidden rounded-2xl border border-white/10 sm:rounded-3xl"
       style={{
-        background: "linear-gradient(160deg,#0d0820 0%,#091520 50%,#0a0d1a 100%)",
-        boxShadow: "0 0 0 1px rgba(0,0,0,0.6), 0 24px 80px rgba(0,0,0,0.8)"
+        background: "linear-gradient(160deg,#0A0A0D 0%,#111115 100%)",
+        boxShadow: "0 24px 80px rgba(0,0,0,0.8)"
       }}>
       
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3 p-4 sm:p-5 md:p-6"
-        style={{ background: "linear-gradient(135deg,rgba(18,8,45,1),rgba(8,18,42,1))", borderBottom: "1.5px solid rgba(100,70,200,0.25)" }}>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#C8102E]/25 p-4 sm:p-5 md:p-6"
+        style={{ background: "linear-gradient(135deg,rgba(200,16,46,0.12),rgba(10,10,13,1))" }}>
         
         <div className="flex items-center gap-3 sm:gap-3.5">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-[54px] md:h-[54px] rounded-2xl flex items-center justify-center text-xl sm:text-2xl md:text-[26px]"
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl text-xl sm:h-12 sm:w-12 sm:text-2xl md:h-[54px] md:w-[54px] md:text-[26px]"
             style={{
-              background: "linear-gradient(135deg,#2d1060,#1a0840)",
-              border: "2px solid rgba(160,100,255,0.5)",
-              boxShadow: "0 0 24px rgba(140,60,255,0.3)"
+              background: "linear-gradient(135deg,#C8102E,#8a0b1f)",
+              border: "2px solid rgba(241,212,122,0.4)",
             }}>🎰</div>
           <div>
             <div className="flex items-center gap-2.5 mb-1.5">
@@ -498,14 +496,14 @@ function SpinHistoryTable({ history }: { history: any[] }) {
                 <span className="w-1.5 h-1.5 rounded-full bg-white inline-block" />
                 LIVE
               </span>
-              <span className="text-[10px] sm:text-[11px] text-[rgba(180,140,255,0.7)] font-semibold">✦ Real Time Updates</span>
+              <span className="text-[10px] sm:text-[11px] font-semibold text-white/40">✦ Real Time Updates</span>
             </div>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2 sm:gap-2.5">
           {[
-            { icon: "🔄", value: history.length, label: "TOTAL SPINS", bg: "rgba(100,80,220,0.2)", border: "rgba(120,90,255,0.45)", color: "#A78BFA" },
+            { icon: "🔄", value: history.length, label: "TOTAL SPINS", bg: "rgba(200,16,46,0.15)", border: "rgba(200,16,46,0.45)", color: "#FF263D" },
             { icon: "🏆", value: wins.length, label: "TOTAL WINS", bg: wins.length > 0 ? "rgba(22,163,74,0.15)" : "rgba(255,255,255,0.04)", border: wins.length > 0 ? "rgba(34,197,94,0.45)" : "rgba(255,255,255,0.1)", color: wins.length > 0 ? "#4ADE80" : "rgba(255,255,255,0.3)" },
             { icon: "🎯", value: `${winRate}%`, label: "WIN RATE", bg: "rgba(234,179,8,0.12)", border: "rgba(255,185,0,0.4)", color: "#FCD34D" },
           ].map(p => (
@@ -524,11 +522,11 @@ function SpinHistoryTable({ history }: { history: any[] }) {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 p-4 sm:p-5 md:py-5 md:px-7">
         <div className="flex items-center gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl"
-          style={{ background: "linear-gradient(135deg,#1e0d50,#140835)", border: "1.5px solid rgba(120,80,220,0.4)", boxShadow: "0 0 30px rgba(100,60,220,0.12)" }}>
+          style={{ background: "linear-gradient(135deg,#1a0508,#0A0A0D)", border: "1.5px solid rgba(200,16,46,0.4)" }}>
           <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-[52px] md:h-[52px] rounded-2xl flex items-center justify-center text-xl sm:text-2xl md:text-[26px] flex-shrink-0"
-            style={{ background: "linear-gradient(135deg,#3d1a80,#2a0d60)", border: "1px solid rgba(160,100,255,0.3)", boxShadow: "0 0 20px rgba(120,60,255,0.3)" }}>🎰</div>
+            style={{ background: "linear-gradient(135deg,#C8102E,#8a0b1f)", border: "1px solid rgba(241,212,122,0.3)" }}>🎰</div>
           <div>
-            <div className="text-[9px] sm:text-[10px] font-black tracking-[2.5px] text-[rgba(160,120,255,0.7)] uppercase mb-1">Total Spins</div>
+            <div className="text-[9px] sm:text-[10px] font-black tracking-[2.5px] text-[#F1D47A]/70 uppercase mb-1">Total Spins</div>
             <div className="text-2xl sm:text-3xl md:text-[36px] font-black text-white leading-none">{history.length}</div>
           </div>
         </div>
@@ -800,29 +798,17 @@ export default function SlotGamePage() {
   }, []);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "radial-gradient(ellipse at 50% 0%,rgba(140,50,255,0.15),#060010 60%)" }}>
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: GOLD }} />
-          <p className="text-gray-400">Loading Slot Machine...</p>
-        </div>
-      </div>
-    );
+    return <GameStatus message="Loading Slot Machine..." />;
   }
 
   if (!order || order.status !== "completed") {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "#060010" }}>
-        <div className="text-center p-6 sm:p-8 rounded-2xl w-full max-w-md"
-          style={{ background: "rgba(18,5,40,0.9)", border: "1px solid rgba(180,100,255,0.3)" }}>
-          <div className="text-4xl mb-4">🎰</div>
-          <h2 className="text-xl font-bold text-white mb-2">No Active Session</h2>
-          <p className="text-gray-400 mb-4">Please complete your purchase first.</p>
-          <Button onClick={() => navigate("/")} style={{ background: `linear-gradient(135deg,${GOLD},${AMBER})`, color: "#1a0a00", fontWeight: 900 }}>
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
-          </Button>
-        </div>
-      </div>
+      <GameEmpty
+        title="NO ACTIVE SESSION"
+        message="Please complete your purchase first."
+        actionLabel="Back to home"
+        href="/"
+      />
     );
   }
 
@@ -830,30 +816,23 @@ export default function SlotGamePage() {
   const totalWon = wins.reduce((s, h) => s + (h.coinsWon || 0), 0);
 
   return (
-    <div className="min-h-screen flex flex-col" style={{
-      background: "linear-gradient(180deg,rgba(10,2,30,1) 0%,rgba(5,2,15,1) 50%,rgba(8,4,2,1) 100%)",
-    }}>
-      <div className="fixed inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 80% 40% at 50% 0%,rgba(140,50,255,0.12) 0%,transparent 70%)", zIndex: 0 }} />
-      <div className="fixed inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 30% at 50% 30%,rgba(255,180,0,0.06) 0%,transparent 60%)", zIndex: 0 }} />
-
+    <GameShell>
       <WinOverlay show={showWinOverlay} coinsWon={lastCoinsWon} prizeType={lastPrizeType} prizeName={lastPrizeName} onDismiss={() => setShowWinOverlay(false)} />
       <LoseOverlay show={showLoseOverlay} onDismiss={() => setShowLoseOverlay(false)} />
-
-      <Header />
 
       <main className="flex-1 relative z-10">
         <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-5" style={{ maxWidth: 1100 }}>
 
           {/* Top bar */}
           <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-5">
-            <button onClick={() => navigate("/")} className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-semibold transition-opacity hover:opacity-70" style={{ color: "rgba(200,140,255,0.7)" }} data-testid="button-slot-back">
+            <button onClick={() => navigate("/")} className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-semibold transition-opacity hover:opacity-70 text-white/50" data-testid="button-slot-back">
               <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">Back</span>
             </button>
-            <div className="h-4 w-px hidden sm:block" style={{ background: "rgba(180,100,255,0.25)" }} />
+            <div className="h-4 w-px hidden sm:block bg-white/15" />
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="text-base sm:text-xl">🎰</span>
-              <span className="font-black text-white tracking-wide text-sm sm:text-base">{competition?.title || "Slot Machine"}</span>
+              <span className="font-prize text-white tracking-wide text-sm sm:text-base">{competition?.title || "Slot Machine"}</span>
             </div>
             
             {/* Spins Counter */}
@@ -862,7 +841,7 @@ export default function SlotGamePage() {
             </div>
             
             <div className="hidden sm:flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-black"
-              style={{ background: "linear-gradient(135deg,rgba(50,15,100,0.9),rgba(25,8,50,0.9))", border: "1px solid rgba(200,150,255,0.35)", color: GOLD, boxShadow: "0 0 20px rgba(180,80,255,0.15)" }}>
+              style={{ background: "rgba(200,16,46,0.12)", border: "1px solid rgba(200,16,46,0.35)", color: GOLD }}>
               🏆 {totalCredits.toLocaleString()} Credits
             </div>
           </div>
@@ -872,10 +851,10 @@ export default function SlotGamePage() {
             <div className="w-full" style={{ maxWidth: 960 }}>
               <div className="relative w-full rounded-xl sm:rounded-2xl overflow-hidden aspect-[9/14] sm:aspect-video min-h-[520px] sm:min-h-[280px]"
                 style={{
-                  background: "#050010",
-                  border: "1.5px solid rgba(180,100,255,0.25)",
+                  background: "#050505",
+                  border: "1.5px solid rgba(200,16,46,0.35)",
                   boxShadow:
-                    "0 0 0 1px rgba(255,180,0,0.08), 0 0 80px rgba(140,50,255,0.15), 0 30px 100px rgba(0,0,0,0.8)",
+                    "0 0 0 1px rgba(241,212,122,0.08), 0 0 80px rgba(200,16,46,0.12), 0 30px 100px rgba(0,0,0,0.8)",
                 }}>
                 {orderId && (
                   <SlotGameComponent
@@ -917,8 +896,6 @@ export default function SlotGamePage() {
           <SpinHistoryTable history={spinHistory} />
         </div>
       </main>
-
-      <Footer />
-    </div>
+    </GameShell>
   );
 }

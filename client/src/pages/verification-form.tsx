@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { WelcomeBonusPopup } from "@/components/welcome-bonus-popup";
-import { Mail, RefreshCw, Lock, Shield } from "lucide-react";
+import { Mail, RefreshCw, Lock, Loader2 } from "lucide-react";
+import AuthShell from "@/components/auth/AuthShell";
 
 interface VerificationFormProps {
   email: string;
@@ -107,6 +105,16 @@ export const VerificationForm: React.FC<VerificationFormProps> = ({ email, onVer
     if (value && index < 5) {
       inputsRef.current[index + 1]?.focus();
     }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!text) return;
+    e.preventDefault();
+    const next = ["", "", "", "", "", ""];
+    for (let i = 0; i < text.length; i++) next[i] = text[i];
+    setOtp(next);
+    inputsRef.current[Math.min(text.length, 5)]?.focus();
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
@@ -281,155 +289,120 @@ export const VerificationForm: React.FC<VerificationFormProps> = ({ email, onVer
   // Show loading while fetching status
   if (timeLeft === null && !statusData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background/90 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-ringtone-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white">Loading verification status...</p>
+      <AuthShell kicker="Verify email" title="CHECKING" sub="Loading your verification status.">
+        <div className="rr-auth-status">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#F1D47A]" />
+          <p className="mt-4">Loading verification status…</p>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background/90 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold gradient-text">EMAIL VERIFICATION</h1>
-          <p className="text-gray-400 mt-2">Check your email for the 6-digit code</p>
+    <AuthShell
+      kicker="Verify email"
+      title="ENTER YOUR CODE"
+      sub="We sent a 6-digit code to your inbox."
+    >
+      <form onSubmit={handleSubmit} className="rr-auth-form">
+        <div className="rr-auth-note flex items-center justify-center gap-2">
+          <Mail className="h-4 w-4 shrink-0 text-[#F1D47A]" />
+          <span>{email}</span>
         </div>
 
-        <Card className="bg-black/40 border-ringtone-900/20 backdrop-blur-sm shadow-2xl">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold gradient-text text-center flex items-center justify-center gap-2">
-              <Shield className="w-6 h-6" />
-              Verify Your Email
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-6 p-4 bg-ringtone-900/30 rounded-lg border border-ringtone-800">
-              <div className="flex items-center justify-center gap-3">
-                <Mail className="w-5 h-5 text-ringtone-400" />
-                <p className="text-white font-medium">{email}</p>
-              </div>
-            </div>
+        <div className="rr-auth-field">
+          <span className="rr-auth-label" style={{ textAlign: "center" }}>6-digit code</span>
+          <div className="rr-auth-otp">
+            {otp.map((digit, index) => (
+              <Input
+                key={index}
+                ref={(el) => (inputsRef.current[index] = el)}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handleOtpChange(index, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(index, e)}
+                onPaste={handlePaste}
+                className="rr-auth-input"
+                disabled={loading}
+                data-testid={`otp-input-${index}`}
+              />
+            ))}
+          </div>
+        </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <Label className="text-white text-center block mb-4">
-                  Enter the 6-digit code sent to your email
-                </Label>
-                <div className="flex justify-center space-x-2 mb-6">
-                  {otp.map((digit, index) => (
-                    <Input
-                      key={index}
-                      ref={(el) => (inputsRef.current[index] = el)}
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleOtpChange(index, e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(index, e)}
-                      className="w-14 h-14 text-3xl font-bold text-center border-2 border-ringtone-700 bg-black/50 text-white rounded-xl focus:border-ringtone-400 focus:ring-2 focus:ring-ringtone-400/30 outline-none transition-all"
-                      disabled={loading}
-                      data-testid={`otp-input-${index}`}
-                    />
-                  ))}
-                </div>
+        <div className="text-center">
+          <div className="rr-auth-timer">
+            <Lock className="h-3.5 w-3.5 text-[#F1D47A]" />
+            {formatTime(timeLeft)}
+          </div>
+          {timeLeft !== null && timeLeft > 0 && (
+            <p className="rr-auth-hint mt-2">
+              Code expires in {formatTime(timeLeft)}
+              {timeLeft < 120 ? " — hurry." : ""}
+            </p>
+          )}
+          {isOtpExpired && (
+            <p className="rr-auth-error mt-2 justify-center">OTP has expired. Request a new one.</p>
+          )}
+        </div>
 
-                <div className="text-center mb-4">
-                  <div className="inline-flex items-center space-x-2 bg-black/50 px-4 py-2 rounded-full border border-ringtone-800">
-                    <Lock className="w-4 h-4 text-ringtone-400" />
-                    <span className="font-mono text-lg font-bold text-white">
-                      {formatTime(timeLeft)}
-                    </span>
-                  </div>
-                  {timeLeft !== null && timeLeft > 0 && (
-                    <p className="text-gray-400 text-sm mt-2">
-                      Code expires in {formatTime(timeLeft)}
-                      {timeLeft < 120 && (
-                        <span className="text-red-400 ml-1">⚠️ Hurry!</span>
-                      )}
-                    </p>
-                  )}
-                  {isOtpExpired && (
-                    <p className="text-red-400 text-sm mt-2">
-                      OTP has expired. Please request a new one.
-                    </p>
-                  )}
-                </div>
-              </div>
+        <button
+          type="submit"
+          disabled={loading || otp.join("").length !== 6 || verifyMutation.isPending || isOtpExpired}
+          className="rr-cta inline-flex h-12 w-full items-center justify-center rounded-xl text-sm font-black uppercase tracking-[0.12em]"
+          data-testid="verify-button"
+        >
+          {loading || verifyMutation.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Verifying…
+            </>
+          ) : isOtpExpired ? (
+            "OTP expired"
+          ) : (
+            "Verify email"
+          )}
+        </button>
 
-              <Button
-                type="submit"
-                disabled={loading || otp.join('').length !== 6 || verifyMutation.isPending || isOtpExpired}
-                className="w-full bg-yellow-600 hover:bg-ringtone-700 text-white font-bold py-6 text-lg"
-                data-testid="verify-button"
-              >
-                {loading || verifyMutation.isPending ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Verifying...
-                  </>
-                ) : isOtpExpired ? (
-                  "OTP Expired"
-                ) : (
-                  "Verify Email"
-                )}
-              </Button>
+        <div className="rr-auth-footer">
+          <p>Didn’t get the code?</p>
+          <button
+            type="button"
+            onClick={handleResendOtp}
+            disabled={resendLoading || (!isOtpExpired && !resendMutation.isSuccess)}
+            className="rr-auth-ghost"
+            data-testid="resend-button"
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${resendLoading ? "animate-spin" : ""}`} />
+            {resendLoading ? "Sending…" : "Resend code"}
+          </button>
+          {!isOtpExpired && !resendMutation.isSuccess && timeLeft !== null && timeLeft > 0 && (
+            <p className="rr-auth-hint mt-2">Resend available in {formatTime(timeLeft)}</p>
+          )}
+        </div>
 
-              <div className="pt-6 border-t border-gray-700">
-                <div className="text-center">
-                  <p className="text-gray-400 mb-4">Didn't receive the code?</p>
-                  <Button
-                    type="button"
-                    onClick={handleResendOtp}
-                    disabled={resendLoading || (!isOtpExpired && !resendMutation.isSuccess)}
-                    variant="outline"
-                    className="border-ringtone-700 text-ringtone-400 hover:bg-ringtone-900/30 hover:text-ringtone-300"
-                    data-testid="resend-button"
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${resendLoading ? 'animate-spin' : ''}`} />
-                    {resendLoading ? 'Sending...' : 'Resend OTP'}
-                  </Button>
-                  {!isOtpExpired && !resendMutation.isSuccess && timeLeft !== null && timeLeft > 0 && (
-                    <p className="text-gray-500 text-sm mt-2">
-                      Resend available in {formatTime(timeLeft)}
-                    </p>
-                  )}
-                </div>
-              </div>
+        <div className="rr-auth-note">
+          Check spam if it’s not in your inbox. The code is valid for 10 minutes.
+        </div>
 
-              <div className="p-4 bg-ringtone-900/20 border border-ringtone-800 rounded-xl">
-                <p className="text-gray-300 text-sm text-center">
-                  <strong>Note:</strong> Check your spam folder if you don't see the email.
-                  The OTP is valid for 10 minutes only.
-                </p>
-              </div>
+        <div className="rr-auth-footer">
+          <p>Already verified?</p>
+          <Link href="/login">
+            <span className="rr-auth-ghost cursor-pointer">Go to login</span>
+          </Link>
+        </div>
+      </form>
 
-              <div className="text-center border-t border-gray-700 pt-6">
-                <p className="text-white text-sm mb-2">Already verified?</p>
-                <Link href="/login">
-                  <Button
-                    variant="outline"
-                    className="border-ringtone-600 text-ringtone-400 hover:bg-ringtone-600/20 hover:text-ringtone-400"
-                  >
-                    Go to Login
-                  </Button>
-                </Link>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        <WelcomeBonusPopup
-          isOpen={showBonusPopup}
-          onClose={handleBonusPopupClose}
-          bonusCash={bonusData.cash}
-          bonusPoints={bonusData.points}
-          userName={bonusData.userName}
-        />
-      </div>
-    </div>
+      <WelcomeBonusPopup
+        isOpen={showBonusPopup}
+        onClose={handleBonusPopupClose}
+        bonusCash={bonusData.cash}
+        bonusPoints={bonusData.points}
+        userName={bonusData.userName}
+      />
+    </AuthShell>
   );
 };

@@ -120,7 +120,7 @@ function FeaturedSlide({
 
         {stats.hasTickets && (
           <div className="mt-5">
-            <SoldProgress pct={stats.pct} remaining={stats.remaining} maxT={stats.maxT} />
+            <SoldProgress pct={stats.pct} sold={stats.soldT} />
           </div>
         )}
 
@@ -188,7 +188,7 @@ export default function FeaturedCompetition({ competitions }: Props) {
   const atLast = activeIndex === count - 1;
 
   return (
-    <section ref={sectionRef} className="relative overflow-hidden py-8 sm:py-16 lg:py-20" data-testid="section-featured-competition">
+    <section ref={sectionRef} className="relative overflow-hidden pt-1 pb-8 sm:py-16 lg:py-20" data-testid="section-featured-competition">
       {starsOn && <DigitalAtmosphere stars layers={false} />}
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <ChaserBorder variant="featured" className="shadow-[0_24px_80px_rgba(0,0,0,0.55)]">

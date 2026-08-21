@@ -1,11 +1,10 @@
-import { useParams, useLocation } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useCallback, useEffect } from "react";
+import { useParams, useLocation, Link } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import Testimonials from "@/components/testimonials";
 import { Competition, User } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -18,119 +17,87 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useRef } from "react";
-import CountdownTimer from "./countdownTimer";
-import { Minus, Plus, ChevronLeft, ChevronRight, Sparkles, Zap, Crown } from "lucide-react";
-import useEmblaCarousel from "embla-carousel-react";
+import { Minus, Plus, Sparkles, Zap, Crown, Ticket, Trophy, Lock, Mail } from "lucide-react";
 import UserCompetitionPrizes from "./user-competition-prizes";
+import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
+import ChaserBorder from "@/components/home/ChaserBorder";
+import QuantitySelector from "@/components/home/QuantitySelector";
+import CountdownBlocks from "@/components/home/CountdownBlocks";
+import SoldProgress from "@/components/home/SoldProgress";
+import CommunitySection from "@/components/home/CommunitySection";
+import { useCountdown } from "@/hooks/useCountdown";
+import {
+  getCompetitionTypeConfig,
+  getFallbackImage,
+  getPrizeDisplay,
+  getStatusBadge,
+  getTicketStats,
+} from "@/lib/competition-display";
 
-// Premium Progress Bar Component for Instant Type
-const InstantProgressBar = ({ competition }: { competition: Competition }) => {
+function InstantProgressBar({ competition }: { competition: Competition }) {
   const sold = competition.soldTickets ?? 0;
   const total = competition.maxTickets ?? 0;
   const remaining = total - sold;
   const percentage = total > 0 ? (sold / total) * 100 : 0;
-  const isHighDemand = percentage > 70;
   const isAlmostFull = percentage > 85;
-  
+
   return (
-    <div className="relative group">
-      <div className="absolute -inset-[2px] bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-2xl opacity-40 group-hover:opacity-70 transition-all duration-500 blur-md"></div>
-      
-      <div className="relative bg-gradient-to-br from-[#0a0a0a] to-[#0f0f0f] rounded-2xl p-6 md:p-8 border border-[#FACC15]/20 overflow-hidden">
-        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#FACC15]/5 to-transparent animate-shimmer"></div>
+    <div className="rounded-2xl border border-white/10 bg-[#0A0A0D] p-5 md:p-7">
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#F1D47A]">Ticket pool</p>
+          <p className="mt-1 font-prize text-3xl text-white">{percentage.toFixed(1)}% sold</p>
         </div>
-        
-        <div className="space-y-3">
-          <div className="flex justify-between items-end">
-            <div>
-              <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Overall Progress</span>
-              <p className="text-2xl font-bold text-white">{percentage.toFixed(1)}%</p>
-            </div>
-            <div className="text-right">
-              <span className="text-xs text-gray-500">Total Capacity</span>
-              <p className="text-lg font-bold text-[#FACC15]">{total.toLocaleString()} tickets</p>
-            </div>
-          </div>
-          
-          <div className="relative">
-            <div className="h-6 bg-black/60 rounded-full overflow-hidden border border-[#FACC15]/20">
-              <div 
-                className="relative h-full bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-full transition-all duration-1000 ease-out"
-                style={{ width: `${percentage}%` }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                <div className="absolute inset-0 rounded-full animate-pulse opacity-50" 
-                     style={{ background: "radial-gradient(circle at center, rgba(250,204,21,0.8) 0%, transparent 80%)" }}>
-                </div>
-              </div>
-            </div>
-            
-            <div className="absolute inset-0 flex justify-between px-2 pointer-events-none">
-              {[0, 25, 50, 75, 100].map((mark) => (
-                <div key={mark} className="relative">
-                  <div className="w-px h-4 bg-white/20"></div>
-                  <div className="absolute top-7 left-1/2 -translate-x-1/2 text-[10px] text-gray-600 font-medium">
-                    {mark}%
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#FACC15]/10">
-            <div className="flex items-center gap-2">
-              <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${
-                remaining === 0 ? 'bg-red-500' : remaining < 100 ? 'bg-orange-500' : 'bg-green-500'
-              }`}></div>
-              <span className="text-xs text-gray-400">
-                {remaining === 0 
-                  ? "🏆 All tickets sold! Winner announcement coming soon."
-                  : remaining < 50 
-                  ? `⚡ Hurry! Only ${remaining.toLocaleString()} tickets remaining!`
-                  : `${remaining.toLocaleString()} spots left - Don't miss out!`}
-              </span>
-            </div>
-            
-            {isAlmostFull && remaining > 0 && (
-              <div className="flex items-center gap-2 animate-bounce">
-                <span className="text-sm">⚠️</span>
-                <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
-                  Last Chance!
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        <div className="mt-6 pt-4 border-t border-[#FACC15]/10">
-          <div className="flex items-center justify-between text-[10px] text-gray-500 mb-2">
-            <span>Ticket Distribution Visual</span>
-            <span>{sold.toLocaleString()} / {total.toLocaleString()} claimed</span>
-          </div>
-          <div className="flex h-2 gap-0.5 overflow-hidden rounded-full">
-            {Array.from({ length: 20 }).map((_, i) => {
-              const blockPercentage = (i + 1) * 5;
-              const isFilled = blockPercentage <= percentage;
-              return (
-                <div
-                  key={i}
-                  className={`flex-1 transition-all duration-500 rounded-sm ${
-                    isFilled
-                      ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B]"
-                      : "bg-white/5"
-                  }`}
-                  style={{ transitionDelay: `${i * 20}ms` }}
-                />
-              );
-            })}
-          </div>
-        </div>
+        <p className="text-sm font-semibold tabular-nums text-white/50">
+          {total.toLocaleString()} capacity
+        </p>
+      </div>
+      <SoldProgress pct={percentage} sold={sold} remaining={remaining} maxT={total} showRemaining />
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/8 pt-3">
+        <p className="text-xs text-white/50">
+          {remaining === 0
+            ? "All tickets sold. Winner announcement coming soon."
+            : remaining < 50
+              ? `Only ${remaining.toLocaleString()} tickets remaining.`
+              : `${remaining.toLocaleString()} spots left.`}
+        </p>
+        {isAlmostFull && remaining > 0 && (
+          <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-[#FF263D]">
+            Last chance
+          </span>
+        )}
       </div>
     </div>
   );
-};
+}
+
+function playNoun(type: string, quantity: number, mode: "cta" | "label" = "label") {
+  const many = quantity !== 1;
+  if (mode === "cta") {
+    if (type === "spin") return `BUY ${quantity} SPIN${many ? "S" : ""}`;
+    if (type === "scratch") return `BUY ${quantity} SCRATCH${many ? "ES" : ""}`;
+    if (type === "pop") return `BUY ${quantity} POP GAME${many ? "S" : ""}`;
+    if (type === "plinko") return `BUY ${quantity} PLINKO DROP${many ? "S" : ""}`;
+    if (type === "voltz") return `BUY ${quantity} VOLTZ GAME${many ? "S" : ""}`;
+    if (type === "slot") return `BUY ${quantity} SLOT GAME${many ? "S" : ""}`;
+    if (type === "royal") return `BUY ${quantity} ROYAL GAME${many ? "S" : ""}`;
+    return "ENTER NOW";
+  }
+  if (type === "spin") return many ? "Spins" : "Spin";
+  if (type === "scratch") return many ? "Scratch Cards" : "Scratch Card";
+  if (type === "pop") return many ? "Pop Games" : "Pop Game";
+  if (type === "plinko") return many ? "Plinko Drops" : "Plinko Drop";
+  if (type === "voltz") return many ? "Voltz Games" : "Voltz Game";
+  if (type === "slot") return many ? "Slot Games" : "Slot Game";
+  if (type === "royal") return many ? "Royal Games" : "Royal Game";
+  return many ? "Tickets" : "Ticket";
+}
+
+const PROCESS_STEPS = [
+  { n: "01", title: "PICK YOUR PRIZE", body: "You're on it. Confirm this is the draw or game you want.", Icon: Trophy },
+  { n: "02", title: "SECURE YOUR ENTRY", body: "Choose quantity and enter through checkout. Same price, same tickets.", Icon: Ticket },
+  { n: "03", title: "PLAY · DRAW · CLAIM", body: "Instant games play at once. Prize draws land when the competition closes.", Icon: Zap },
+] as const;
 
 // Discount calculation utility - ONLY for game types
 const TICKET_DISCOUNTS: Record<number, number> = {
@@ -193,7 +160,6 @@ export default function CompetitionPage() {
     isAuthenticated: boolean;
     user: User | null;
   };
-  const queryClient = useQueryClient();
   const [quantity, setQuantity] = useState(1);
   const [showQuiz, setShowQuiz] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -201,10 +167,6 @@ export default function CompetitionPage() {
   const [isPostalModalOpen, setIsPostalModalOpen] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
-  
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
-  const [canScrollPrev, setCanScrollPrev] = useState(false);
-  const [canScrollNext, setCanScrollNext] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -213,22 +175,6 @@ export default function CompetitionPage() {
       setQuantity(qty);
     }
   }, []);
-
-  const scrollPrev = useCallback(() => emblaApi && emblaApi.scrollPrev(), [emblaApi]);
-  const scrollNext = useCallback(() => emblaApi && emblaApi.scrollNext(), [emblaApi]);
-
-  const onSelect = useCallback(() => {
-    if (!emblaApi) return;
-    setCanScrollPrev(emblaApi.canScrollPrev());
-    setCanScrollNext(emblaApi.canScrollNext());
-  }, [emblaApi]);
-
-  useEffect(() => {
-    if (!emblaApi) return;
-    onSelect();
-    emblaApi.on("select", onSelect);
-    emblaApi.on("reInit", onSelect);
-  }, [emblaApi, onSelect]);
   
   const quizQuestion = {
     question: "You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?",
@@ -280,6 +226,7 @@ export default function CompetitionPage() {
   });
 
   const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
+  const countdown = useCountdown(competition?.endDate);
 
   // ✅ FIXED: Pass competition image through order creation
   const purchaseTicketMutation = useMutation({
@@ -457,38 +404,37 @@ export default function CompetitionPage() {
     });
   };
 
-  const totalPrice = competition
-    ? parseFloat(competition.ticketPrice) * quantity
-    : 0;
-  const progressPercentage = competition?.maxTickets
-    ? (competition.soldTickets! / competition.maxTickets) * 100
-    : 0;
-
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div
-          className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
-          aria-label="Loading"
-        />
+      <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+        <DigitalAtmosphere />
+        <Header />
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div
+            className="h-10 w-10 animate-spin rounded-full border-2 border-[#C8102E] border-t-transparent"
+            aria-label="Loading"
+          />
+        </div>
       </div>
     );
   }
 
   if (!competition) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+        <DigitalAtmosphere />
         <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <h1 className="text-4xl font-bold mb-4">Competition Not Found</h1>
-          <p className="text-muted-foreground mb-8">
-            The competition you're looking for doesn't exist.
+        <div className="relative z-10 mx-auto max-w-lg px-4 py-24 text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">Not found</p>
+          <h1 className="mt-3 font-prize text-4xl text-white">Competition gone</h1>
+          <p className="mt-3 text-sm text-white/50">
+            The competition you're looking for doesn't exist or is no longer live.
           </p>
           <button
             onClick={() => setLocation("/")}
-            className="bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:opacity-90 transition-opacity"
+            className="rr-cta mt-8 inline-flex h-12 items-center justify-center rounded-xl px-7 text-sm font-black uppercase tracking-[0.14em]"
           >
-            Back to Competitions
+            Back to competitions
           </button>
         </div>
         <Footer />
@@ -518,43 +464,15 @@ export default function CompetitionPage() {
     window.scrollTo({ top, behavior: "smooth" });
   };
 
-  const getGradientStyles = () => {
-    if (competitionType === "spin") {
-      return {
-        hero: "bg-gradient-to-br from-[#facc15] via-[#d946ef] to-[#facc15]",
-        glow: "shadow-[0_0_60px_rgba(250,204,21,0.5)] shadow-[#facc15]/30",
-        badge: "bg-gradient-to-r from-[#facc15] via-[#d946ef] to-[#facc15]",
-        button: "bg-gradient-to-r from-[#facc15] via-[#d946ef] to-[#facc15] hover:from-[#fbbf24] hover:via-[#c026d3] hover:to-[#fbbf24]",
-        shimmer: "from-[#facc15] via-[#d946ef] to-[#facc15]",
-        accent: "rgba(217, 70, 239, 0.15)"
-      };
-    } else if (competitionType === "scratch") {
-      return {
-        hero: "bg-gradient-to-br from-[#facc15] via-[#22d3ee] to-[#facc15]",
-        glow: "shadow-[0_0_60px_rgba(250,204,21,0.5)] shadow-[#facc15]/30",
-        badge: "bg-gradient-to-r from-[#facc15] via-[#22d3ee] to-[#facc15]",
-        button: "bg-gradient-to-r from-[#facc15] via-[#22d3ee] to-[#facc15] hover:from-[#fbbf24] hover:via-[#06b6d4] hover:to-[#fbbf24]",
-        shimmer: "from-[#facc15] via-[#22d3ee] to-[#facc15]",
-        accent: "rgba(34, 211, 238, 0.15)"
-      };
-    } else {
-      return {
-        hero: "bg-gradient-to-br from-[#facc15] via-[#f59e0b] to-[#d97706]",
-        glow: "shadow-[0_0_60px_rgba(250,204,21,0.5)] shadow-[#facc15]/30",
-        badge: "bg-gradient-to-r from-[#facc15] to-[#f59e0b]",
-        button: "bg-gradient-to-r from-[#facc15] to-[#f59e0b] hover:from-[#fbbf24] hover:to-[#d97706]",
-        shimmer: "from-[#facc15] via-[#fbbf24] to-[#facc15]",
-        accent: "rgba(245, 158, 11, 0.15)"
-      };
-    }
-  };
-
-  const gradients = getGradientStyles();
-
   const remainingPercentage = competition?.maxTickets
     ? ((competition.maxTickets - (competition.soldTickets ?? 0)) / competition.maxTickets) * 100
     : 100;
   const isAlmostGone = remainingPercentage < 15;
+  const typeCfg = getCompetitionTypeConfig(competitionType);
+  const TypeIcon = typeCfg.Icon;
+  const prizeMeta = getPrizeDisplay(competition);
+  const stats = getTicketStats(competition);
+  const statusBadge = getStatusBadge(stats);
 
   const pricePerTicket = parseFloat(competition.ticketPrice);
   
@@ -562,827 +480,557 @@ export default function CompetitionPage() {
     isGameType ? calculateDiscountedPrice(pricePerTicket, quantity) : 
     { originalPrice: pricePerTicket * quantity, discountPercent: 0, discountedPrice: pricePerTicket * quantity, savings: 0 };
 
+  const displayTotal = isGameType ? discountedPrice : pricePerTicket * quantity;
+  const purchaseLocked = isSoldOut || purchaseTicketMutation.isPending || (isFreeGiveaway && !canBuyMore);
+  const ctaLabel = isSoldOut
+    ? "SOLD OUT"
+    : purchaseTicketMutation.isPending
+      ? "Processing..."
+      : isFreeGiveaway && !canBuyMore
+        ? "MAX TICKETS REACHED"
+        : playNoun(competitionType, quantity, "cta");
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <DigitalAtmosphere />
       <Header />
 
-      <section className="py-6 md:py-12 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A]">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-[#facc15]/20 to-transparent rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tl from-[#f59e0b]/20 to-transparent rounded-full blur-3xl animate-pulse" style={{animationDelay: "1.5s"}}></div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full blur-3xl animate-pulse opacity-30" style={{background: gradients.accent, animationDelay: "0.7s"}}></div>
-          
-          <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-[#facc15] rounded-full animate-sparkle-float" style={{animationDelay: "0s"}}></div>
-          <div className="absolute top-1/3 right-1/3 w-1.5 h-1.5 bg-[#fbbf24] rounded-full animate-sparkle-float" style={{animationDelay: "1.2s"}}></div>
-          <div className="absolute bottom-1/4 left-1/2 w-2.5 h-2.5 bg-[#facc15] rounded-full animate-sparkle-float" style={{animationDelay: "2s"}}></div>
-          <div className="absolute top-2/3 left-1/3 w-1 h-1 bg-[#fbbf24] rounded-full animate-sparkle-float" style={{animationDelay: "0.8s"}}></div>
-          <div className="absolute bottom-1/3 right-1/4 w-2 h-2 bg-[#facc15] rounded-full animate-sparkle-float" style={{animationDelay: "1.6s"}}></div>
-        </div>
-        
-        <style>{`
-          @keyframes sparkle-float {
-            0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
-            25% { transform: translateY(-20px) scale(1.2); opacity: 0.7; }
-            50% { transform: translateY(-30px) scale(0.8); opacity: 0.5; }
-            75% { transform: translateY(-15px) scale(1.1); opacity: 0.6; }
-          }
-          .animate-sparkle-float { animation: sparkle-float 6s ease-in-out infinite; }
-          @media (prefers-reduced-motion: reduce) {
-            .animate-sparkle-float, .animate-pulse { animation: none; }
-          }
-        `}</style>
-
-        <div className="container mx-auto px-3 md:px-4 relative z-10">
-          <div className="max-w-6xl mx-auto">
-            <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6 md:gap-12">
-              {/* Left: Competition Image and Details */}
-              <div className="space-y-4 md:space-y-6">
-                <div className="relative group">
-                  <div className="absolute -inset-3 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-3xl blur-2xl opacity-40 group-hover:opacity-60 transition-all duration-700"></div>
-                  
-                  <div className={`relative rounded-2xl overflow-hidden ${gradients.glow} shadow-2xl border-4 border-[#FACC15]/60`}>
-                    <div className="overflow-hidden rounded-xl" ref={emblaRef}>
-                      <div className="flex">
-                        <div className="flex-[0_0_100%] min-w-0">
-                          <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-                            <img
-                              src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"}
-                              alt={competition.title}
-                              className="w-full h-full object-cover"
-                              data-testid={`img-competition-${competition.id}`}
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none z-10"></div>
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(250,204,21,0.05),transparent_60%)] pointer-events-none z-10"></div>
-                            
-                            {isAlmostGone && competition.maxTickets && (
-                              <div className="absolute top-2 md:top-3 right-2 md:right-3 bg-gradient-to-r from-red-600 to-pink-600 text-white px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[10px] md:text-sm font-bold shadow-xl z-20">
-                                ⚡ ALMOST GONE!
-                              </div>
-                            )}
-
-                            <div className="absolute bottom-2 md:bottom-3 left-2 md:left-3 bg-gradient-to-r from-[#FACC15]/95 to-[#F59E0B]/95 backdrop-blur-md text-gray-900 px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[10px] md:text-sm font-bold flex items-center gap-1.5 md:gap-2 shadow-xl z-20">
-                              <span>🔥</span>
-                              <span>Trending</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={scrollPrev}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full z-20 transition-all"
-                      disabled={!canScrollPrev}
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={scrollNext}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full z-20 transition-all"
-                      disabled={!canScrollNext}
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
-                  </div>
+      <section className="relative z-10 pb-8 pt-4 sm:pt-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <ChaserBorder variant="featured" className="rounded-2xl lg:rounded-3xl">
+          <div className="overflow-hidden rounded-2xl bg-[#0A0A0D] lg:rounded-3xl">
+            <div className="grid lg:grid-cols-2">
+              <div className="relative min-h-[240px] overflow-hidden sm:min-h-[380px] lg:min-h-[560px]">
+                <img
+                  src={competition.imageUrl || getFallbackImage(competitionType)}
+                  alt={competition.title}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  data-testid={`img-competition-${competition.id}`}
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    if (img.dataset.fallbackApplied === "1") return;
+                    img.dataset.fallbackApplied = "1";
+                    img.src = getFallbackImage(competitionType);
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0D] via-transparent to-black/20 lg:bg-gradient-to-r lg:from-transparent lg:via-transparent lg:to-[#0A0A0D]/80" />
+                <div className="absolute left-3 top-3 flex flex-wrap items-center gap-2 sm:left-4 sm:top-4">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#C8102E]/50 bg-black/70 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-[#FF263D]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#FF263D]" />
+                    {statusBadge}
+                  </span>
+                  {isAlmostGone && stats.hasTickets && !stats.isClosed && (
+                    <span className="rounded-full bg-[#C8102E] px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+                      Selling fast
+                    </span>
+                  )}
                 </div>
-
-                <div className="relative group">
-                  <div className="absolute -inset-0.5 bg-gradient-to-r from-[#facc15] via-[#f59e0b] to-[#facc15] rounded-xl opacity-50 blur group-hover:opacity-75 transition duration-500"></div>
-                  
-                  <div className="relative bg-black/60 backdrop-blur-xl rounded-xl border border-white/10 p-4 md:p-6 shadow-2xl overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-[#facc15]/10 via-[#f59e0b]/5 to-[#d97706]/10 pointer-events-none"></div>
-                    
-                    <div className="relative z-10">
-                      <h3 className="text-lg md:text-2xl font-bold mb-4 md:mb-5 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] bg-clip-text text-transparent">
-                        ✨ Competition Details
-                      </h3>
-                      <div className="space-y-3 md:space-y-4">
-                        <div className="flex justify-between items-center gap-2 bg-black/30 rounded-lg p-2.5">
-                          <span className="text-gray-300 text-xs md:text-sm flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#facc15]"></span>
-                            Type
-                          </span>
-                          <span className={`capitalize font-bold text-xs md:text-sm ${gradients.badge} text-white px-3 py-1.5 rounded-full shadow-lg`}>
-                            {competitionType === "spin" ? "🎡 Spin Wheel" : competitionType === "scratch" ? "🎫 Scratch Card" : competitionType === "pop" ? "🎈 Pop Balloon" : competitionType === "plinko" ? "🎯 Plinko" : competitionType === "voltz" ? "⚡ Voltz" : competitionType === "slot" ? "Slot" : competitionType === "royal" ? "Royal" : "🏆 Competition"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center gap-2 bg-black/30 rounded-lg p-2.5">
-                          <span className="text-gray-300 text-xs md:text-sm flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#facc15]"></span>
-                            Price per Entry
-                          </span>
-                          <span className="font-bold text-[#facc15] text-base md:text-lg drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
-                            £{pricePerTicket.toFixed(2)}
-                          </span>
-                        </div>
-                        {competition.maxTickets && (
-                          <div className="space-y-2 bg-black/30 rounded-lg p-2.5">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="text-gray-300 text-xs md:text-sm flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#facc15]"></span>
-                                Progress
-                              </span>
-                              <span className="text-xs md:text-sm text-white font-medium">
-                                {competition.soldTickets} / {competition.maxTickets} sold
-                              </span>
-                            </div>
-                            <div className="relative h-3 bg-gray-800/50 rounded-full overflow-hidden border border-[#facc15]/20">
-                              <div
-                                className={`h-full ${gradients.hero} transition-all duration-500 relative`}
-                                style={{ width: `${progressPercentage}%` }}
-                              >
-                                <div className={`absolute inset-0 bg-gradient-to-r ${gradients.shimmer} opacity-50 animate-pulse`}></div>
-                              </div>
-                            </div>
-                            <p className="text-xs text-center font-medium" style={{ color: remainingPercentage < 15 ? "#facc15" : "#9ca3af" }}>
-                              {remainingPercentage < 15 ? "⚡ Less than 15% remaining!" : `${Math.round(remainingPercentage)}% available`}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-5 md:mt-6 pt-4 border-t border-[#facc15]/20 grid grid-cols-2 gap-3">
-                        {[
-                          { icon: "🔒", label: "Secure Payment" },
-                          { icon: "✓", label: "Fair Draw" },
-                          { icon: "⚡", label: "Quick Entry" },
-                          { icon: "🏆", label: "Real Winners" },
-                        ].map((badge, i) => (
-                          <div key={i} className="relative group/badge">
-                            <div className="absolute inset-0 bg-gradient-to-r from-[#facc15] to-[#f59e0b] rounded-lg opacity-0 group-hover/badge:opacity-20 transition duration-300"></div>
-                            <div className="relative flex flex-col items-center gap-2 text-center bg-gradient-to-br from-[#facc15]/10 to-transparent rounded-lg p-3 border border-[#facc15]/30 hover:border-[#facc15]/60 transition group-hover/badge:scale-105 transform">
-                              <span className="text-2xl">{badge.icon}</span>
-                              <span className="text-[10px] md:text-xs font-bold bg-gradient-to-r from-[#facc15] to-[#f59e0b] bg-clip-text text-transparent">{badge.label}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {competitionType === "instant" && videoUrl && (
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-xl opacity-30 blur group-hover:opacity-50 transition duration-500"></div>
-                    <div className="relative bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-3 overflow-hidden shadow-2xl">
-                      <div className="relative rounded-lg overflow-hidden bg-black">
-                        <video controls className="w-full max-h-[200px] md:max-h-[240px] object-contain" preload="metadata">
-                          <source src={videoUrl} type="video/mp4" />
-                        </video>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Right: Purchase Form */}
-              <div className="space-y-4 md:space-y-6">
-                <div className="relative group">
-                  <div className="absolute -inset-0.5 bg-gradient-to-r from-[#facc15] via-[#f59e0b] to-[#facc15] rounded-xl opacity-30 blur group-hover:opacity-50 transition duration-500"></div>
-                  
-                  <div className="relative bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4 md:p-8 overflow-hidden shadow-2xl">
-                    <div className="absolute inset-0 bg-gradient-to-br from-[#facc15]/5 via-[#f59e0b]/5 to-[#d97706]/5"></div>
-                    
-                    <div className="relative z-10">
-                      <div className="mb-5">
-                        <CountdownTimer endDate={competition.endDate} />
-                      </div>
-                      
-                      <div className="relative mb-4 md:mb-5">
-                        <div className="absolute inset-0 bg-gradient-to-r from-[#FACC15]/20 via-[#F59E0B]/20 to-[#FACC15]/20 blur-2xl"></div>
-                        <h1
-                          className="relative text-2xl sm:text-3xl md:text-4xl lg:text-5xl mt-2 md:mt-3 font-black break-words leading-[1.1] tracking-tight"
-                          style={{ 
-                            wordBreak: "break-word", 
-                            hyphens: "auto",
-                            background: "linear-gradient(135deg, #FACC15 0%, #F59E0B 50%, #FACC15 100%)",
-                            backgroundSize: "200% 100%",
-                            WebkitBackgroundClip: "text",
-                            WebkitTextFillColor: "transparent",
-                            backgroundClip: "text",
-                            filter: "drop-shadow(0 0 24px rgba(250, 204, 21, 0.3))"
-                          }}
-                          data-testid={`heading-${competition.id}`}
-                        >
-                          {competition.title}
-                        </h1>
-                        <div className="h-1 mt-2 md:mt-3 bg-gradient-to-r from-transparent via-[#FACC15] to-transparent rounded-full opacity-60"></div>
-                      </div>
-
-                      {competition.description?.trim() ? (
-                        <div className="mb-4 md:mb-5">
-                          <div className="bg-gradient-to-br from-[#FACC15]/5 to-[#F59E0B]/5 rounded-lg p-3 md:p-4 border border-[#FACC15]/20">
-                            <div className="text-gray-300 text-[11px] md:text-xs whitespace-pre-line leading-relaxed">
-                              {competition.description}
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {isGameType && (
-                        <div className="mb-4 md:mb-5">
-                          <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-lg p-3 md:p-4 border border-green-500/30 shadow-lg">
-                            <div className="flex items-start gap-3">
-                              <div className="flex-shrink-0 mt-0.5">
-                                <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                                  <span className="text-lg">🎯</span>
-                                </div>
-                              </div>
-                              <div className="flex-1">
-                                <h4 className="text-green-400 font-bold text-sm md:text-base mb-1.5">
-                                  💷 £100 Cash Draw Every Month
-                                </h4>
-                                <p className="text-gray-300 text-[11px] md:text-xs leading-relaxed">
-                                  All entries automatically enter our monthly £100 cash draw!
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-3 md:space-y-4">
-                        <div className="flex items-center justify-between text-lg md:text-xl font-bold">
-                          <span className="break-words">£{pricePerTicket.toFixed(2)}</span>
-                          <span className="text-xs text-muted-foreground font-normal">per entry</span>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-[#facc15] via-[#f59e0b] to-[#d97706] rounded-lg p-3 md:p-4 shadow-xl">
-                          <div className="flex justify-between items-center mb-1.5">
-                            <span className="font-medium text-gray-900 text-sm">Total</span>
-                            <div className="text-right">
-                              {isGameType && discountPercent > 0 && (
-                                <span className="text-xs text-gray-700 line-through block">
-                                  £{originalPrice.toFixed(2)}
-                                </span>
-                              )}
-                              <span className="text-lg md:text-xl font-bold text-gray-900">
-                                £{isGameType ? discountedPrice.toFixed(2) : (pricePerTicket * quantity).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                          {isGameType && discountPercent > 0 && (
-                            <div className="flex items-center justify-center gap-2 mt-1 bg-black/20 rounded-full py-1 px-3">
-                              <Sparkles className="w-3 h-3 text-yellow-300" />
-                              <span className="text-gray-900 text-[10px] md:text-xs font-bold">
-                                {discountPercent}% BUNDLE OFF
-                              </span>
-                              <span className="text-gray-900 text-[10px] md:text-xs font-semibold">
-                                Save £{savings.toFixed(2)}
-                              </span>
-                            </div>
-                          )}
-                          <p className="text-[11px] md:text-xs text-gray-900/90 mt-1.5 font-semibold text-center">
-                            ✓ FREE DIGITAL ENTRY SLIPS
-                          </p>
-                        </div>
-
-                        {availableTickets.length > 0 && !isGameType ? (
-                          <div className="space-y-2.5 md:space-y-3">
-                            <div className="bg-gradient-to-r from-[#facc15]/20 to-[#f59e0b]/20 border border-[#facc15]/30 rounded-lg p-2.5 md:p-3 text-center">
-                              <p className="bg-gradient-to-r from-[#facc15] to-[#f59e0b] bg-clip-text text-transparent font-bold text-xs">
-                                ✅ You have {availableTickets.length} Tickets
-                              </p>
-                            </div>
-                            <button
-                              onClick={scrollToRange}
-                              disabled={isSoldOut || purchaseTicketMutation.isPending}
-                              className={`w-full py-2.5 md:py-3 rounded-lg font-bold text-sm md:text-base transition-all transform hover:scale-105 ${
-                                isSoldOut
-                                  ? "bg-gray-400 text-gray-700 cursor-not-allowed"
-                                  : "bg-gradient-to-r from-[#facc15] to-[#f59e0b] text-gray-900 shadow-lg hover:shadow-xl hover:from-[#fbbf24] hover:to-[#d97706]"
-                              }`}
-                              data-testid="button-purchase"
-                            >
-                              {isSoldOut ? "SOLD OUT" : purchaseTicketMutation.isPending ? "Processing..." : "BUY MORE TICKETS"}
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={scrollToRange}
-                            disabled={isSoldOut || purchaseTicketMutation.isPending}
-                            className={`w-full py-2.5 md:py-3 rounded-lg font-bold text-sm md:text-base transition-all transform hover:scale-105 ${
-                              isSoldOut
-                                ? "bg-gray-400 text-gray-700 cursor-not-allowed"
-                                : "bg-gradient-to-r from-[#facc15] to-[#f59e0b] text-gray-900 shadow-lg hover:shadow-xl hover:from-[#fbbf24] hover:to-[#d97706]"
-                            }`}
-                            data-testid="button-purchase"
-                          >
-                            {isSoldOut ? "SOLD OUT" : purchaseTicketMutation.isPending ? "Processing..." : "BUY NOW 🚀"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+              <div className="flex flex-col justify-center p-5 sm:p-8 lg:p-10">
+                <div className="mb-3 inline-flex items-center gap-2 self-start rounded-full border border-white/10 bg-black/40 px-3 py-1">
+                  <TypeIcon className="h-3.5 w-3.5 text-[#F1D47A]" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#F1D47A]">
+                    {typeCfg.label}
+                  </span>
                 </div>
 
-                {isAuthenticated && user && (
-                  <div className="bg-gradient-to-r from-[#facc15] to-[#f59e0b] rounded-lg p-3 md:p-4 text-center text-gray-900 shadow-lg">
-                    <h3 className="font-bold mb-1.5 text-xs md:text-sm">💰 Your Wallet Balance</h3>
-                    <p className="text-xl md:text-2xl font-bold">
-                      £{parseFloat(user.balance || "0").toFixed(2)}
-                    </p>
+                {prizeMeta.prizeDisplay && (
+                  <p className="font-prize text-4xl leading-none text-[#F1D47A] sm:text-5xl">
+                    {prizeMeta.prizeDisplay}
+                  </p>
+                )}
+
+                <h1
+                  className="mt-2 font-prize text-2xl leading-tight text-white sm:text-3xl lg:text-4xl"
+                  data-testid={`heading-${competition.id}`}
+                >
+                  {competition.title}
+                </h1>
+
+                {competition.description?.trim() ? (
+                  <p className="mt-3 max-h-24 overflow-y-auto whitespace-pre-line text-sm leading-relaxed text-white/55">
+                    {competition.description}
+                  </p>
+                ) : null}
+
+                <div className="mt-5">
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
+                    Draw closes
+                  </p>
+                  <CountdownBlocks time={countdown} size="lg" ended={stats.isExpired} />
+                </div>
+
+                {stats.hasTickets && (
+                  <div className="mt-5">
+                    <SoldProgress
+                      pct={stats.pct}
+                      sold={stats.soldT}
+                      remaining={stats.remaining}
+                      maxT={stats.maxT}
+                      showRemaining
+                    />
                   </div>
                 )}
 
-                <div className="bg-[#111]/60 backdrop-blur-sm rounded-lg p-2.5 md:p-3 border border-[#facc15]/20">
-                  <div className="flex items-center justify-center gap-1.5 text-[10px]">
-                    <span className="text-[#facc15] text-sm">🔒</span>
-                    <span className="text-[#facc15] font-medium">SSL Secured • Encrypted</span>
+                {isGameType && (
+                  <div className="mt-4 rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/8 px-3 py-2.5 text-sm text-white/70">
+                    <span className="font-black text-[#F1D47A]">£100 cash draw every month.</span>{" "}
+                    Every entry is in automatically.
                   </div>
+                )}
+
+                <div className="mt-6 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/40">Per entry</p>
+                    <p className="font-prize text-3xl text-white">£{pricePerTicket.toFixed(2)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/40">Total</p>
+                    {isGameType && discountPercent > 0 && (
+                      <p className="text-xs text-white/35 line-through">£{originalPrice.toFixed(2)}</p>
+                    )}
+                    <p className="font-prize text-3xl text-[#F1D47A]">£{displayTotal.toFixed(2)}</p>
+                  </div>
+                </div>
+
+                {isGameType && discountPercent > 0 && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 self-start rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-[#F1D47A]">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {discountPercent}% bundle off · save £{savings.toFixed(2)}
+                  </div>
+                )}
+
+                {!isFreeGiveaway && (
+                  <div className="mt-5 flex items-center justify-between gap-3">
+                    <span className="text-xs font-black uppercase tracking-widest text-white/45">Quantity</span>
+                    <QuantitySelector
+                      value={quantity}
+                      min={1}
+                      max={maxTicketsAllowed}
+                      onChange={setQuantity}
+                      disabled={stats.isClosed}
+                      size="lg"
+                    />
+                  </div>
+                )}
+
+                {availableTickets.length > 0 && !isGameType && (
+                  <p className="mt-3 text-center text-xs font-semibold text-[#F1D47A]">
+                    You already have {availableTickets.length} ticket{availableTickets.length === 1 ? "" : "s"}
+                  </p>
+                )}
+
+                <button
+                  onClick={handleOpenQuiz}
+                  disabled={purchaseLocked}
+                  className={`rr-cta mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-sm font-black uppercase tracking-[0.14em] ${
+                    isSoldOut || (isFreeGiveaway && !canBuyMore) ? "opacity-50" : ""
+                  }`}
+                  data-testid="button-purchase"
+                >
+                  {purchaseTicketMutation.isPending ? (
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  ) : (
+                    <Zap className="h-4 w-4" />
+                  )}
+                  {ctaLabel}
+                  {!purchaseLocked && (
+                    <span className="text-xs font-bold opacity-80">· £{displayTotal.toFixed(2)}</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={scrollToRange}
+                  className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.16em] text-white/40 transition-colors hover:text-[#F1D47A]"
+                >
+                  More quantities & bundles
+                </button>
+
+                {isAuthenticated && user && (
+                  <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-4 py-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Wallet</span>
+                    <span className="font-prize text-xl text-white">
+                      £{parseFloat(user.balance || "0").toFixed(2)}
+                    </span>
+                  </div>
+                )}
+
+                <div className="mt-4 flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  <Lock className="h-3 w-3 text-[#F1D47A]" />
+                  SSL secured · Encrypted checkout
                 </div>
               </div>
             </div>
           </div>
+          </ChaserBorder>
         </div>
       </section>
 
-      {competition.maxTickets && (
-        <section className="py-6 md:py-8 relative">
-          <div className="container mx-auto px-3 md:px-4 max-w-6xl">
+      {competition.maxTickets ? (
+        <section className="relative z-10 py-4 sm:py-6">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <InstantProgressBar competition={competition} />
+          </div>
+        </section>
+      ) : null}
+
+      {competitionType === "instant" && videoUrl && (
+        <section className="relative z-10 py-2">
+          <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
+              <video controls className="max-h-[280px] w-full object-contain" preload="metadata">
+                <source src={videoUrl} type="video/mp4" />
+              </video>
+            </div>
           </div>
         </section>
       )}
 
-      <section className="py-6 md:py-8 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0A] via-[#1a1a1a] to-[#0A0A0A]">
-          <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[#FACC15]/10 rounded-full blur-[100px] animate-pulse"></div>
-          <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-[#F59E0B]/10 rounded-full blur-[100px] animate-pulse" style={{animationDelay: "1s"}}></div>
-          
-          <div className="absolute inset-0 opacity-[0.03]" style={{
-            backgroundImage: `linear-gradient(rgba(250,204,21,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(250,204,21,0.3) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px'
-          }}></div>
-        </div>
-
-        <div ref={rangeRef} className="container mx-auto px-3 md:px-4 text-center max-w-3xl relative z-10">
-          
-          <div className="mb-6 md:mb-8">
-            <div className="inline-flex items-center gap-3 mb-2">
-              <div className="h-px w-8 md:w-12 bg-gradient-to-r from-transparent to-[#FACC15]"></div>
-              <Zap className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15] fill-[#FACC15]" />
-              <h2 className="text-xl md:text-2xl font-black text-white tracking-wider uppercase">
-                Select Entries
-              </h2>
-              <Zap className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15] fill-[#FACC15]" />
-              <div className="h-px w-8 md:w-12 bg-gradient-to-l from-transparent to-[#FACC15]"></div>
-            </div>
-            <p className="text-gray-400 text-xs md:text-sm">Choose your quantity and start playing</p>
-          </div>
+      <section className="relative z-10 py-10 sm:py-14">
+        <div ref={rangeRef} className="mx-auto max-w-3xl px-4 text-center sm:px-6">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">Your shot</p>
+          <h2 className="mt-2 font-prize text-3xl text-white sm:text-4xl">SELECT ENTRIES</h2>
+          <p className="mt-2 text-sm text-white/50">Choose quantity, then enter. Same checkout as before.</p>
 
           {isGameType && (
-            <div className="mb-6 md:mb-8">
-              <div className="relative p-[1px] rounded-2xl bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706]">
-                <div className="relative bg-[#0a0a0a] rounded-2xl overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/5 via-transparent to-[#F59E0B]/5"></div>
-                  
-                  <div className="relative p-4 md:p-6">
-                    <div className="flex items-center justify-center gap-2 md:gap-3 mb-5">
-                      <Crown className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15]" />
-                      <h3 className="text-base md:text-lg font-black text-[#FACC15] tracking-wider uppercase">
-                        Bundle & Save
-                      </h3>
-                      <Crown className="w-5 h-5 md:w-6 md:h-6 text-[#FACC15]" />
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 md:gap-4">
-                      {[
-                        { qty: 5, discount: 5, icon: "⭐", label: "STARTER" },
-                        { qty: 10, discount: 10, icon: "🔥", label: "POPULAR" },
-                        { qty: 15, discount: 15, icon: "💎", label: "BEST VALUE" },
-                      ].map((tier) => {
-                        const isSelected = quantity === tier.qty;
-                        const savingsAmount = ((pricePerTicket * tier.qty) * (tier.discount / 100)).toFixed(2);
-                        
-                        return (
-                          <button
-                            key={tier.qty}
-                            onClick={() => setQuantity(tier.qty)}
-                            className={`relative p-3 md:p-4 rounded-xl transition-all duration-300 group ${
-                              isSelected
-                                ? "bg-gradient-to-br from-[#FACC15] to-[#F59E0B] shadow-2xl shadow-[#FACC15]/40 scale-105 z-10"
-                                : "bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-[#FACC15]/30"
-                            }`}
-                          >
-                            {isSelected && (
-                              <div className="absolute -top-2 -right-2 w-6 h-6 bg-black rounded-full border-2 border-[#FACC15] flex items-center justify-center shadow-lg">
-                                <span className="text-[#FACC15] text-xs font-black">✓</span>
-                              </div>
-                            )}
-
-                            <div className="text-xl md:text-2xl mb-1">{tier.icon}</div>
-                            
-                            <div className={`text-sm md:text-base font-bold mb-0.5 ${
-                              isSelected ? "text-gray-900" : "text-white"
-                            }`}>
-                              {tier.qty} {competitionType === "spin" ? "Spins" : competitionType === "scratch" ? "Scratches" : competitionType === "pop" ? "Pops" : competitionType === "plinko" ? "Drops" : competitionType === "slot" ? "Slots" : competitionType === "royal" ? "Plays" : "Plays"}
-                            </div>
-                            
-                            <div className={`text-2xl md:text-3xl font-black mb-1 ${
-                              isSelected ? "text-gray-900" : "text-[#FACC15]"
-                            }`}>
-                              {tier.discount}%
-                            </div>
-                            
-                            <div className={`text-[10px] md:text-xs font-semibold mb-2 ${
-                              isSelected ? "text-gray-800" : "text-[#FACC15]/70"
-                            }`}>
-                              OFF
-                            </div>
-
-                            <div className={`text-[10px] md:text-xs py-1 px-2 rounded-full font-semibold ${
-                              isSelected 
-                                ? "bg-black/30 text-gray-900" 
-                                : "bg-[#FACC15]/10 text-[#FACC15]"
-                            }`}>
-                              Save £{savingsAmount}
-                            </div>
-
-                            <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] md:text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${
-                              isSelected
-                                ? "bg-black text-[#FACC15]"
-                                : "bg-[#FACC15]/20 text-[#FACC15]/80"
-                            }`}>
-                              {tier.label}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="mt-4 text-center">
-                      <p className="text-[10px] md:text-xs text-gray-500">
-                        Discount automatically applied • Cannot be combined
-                      </p>
-                    </div>
-                  </div>
-                </div>
+            <div className="mt-8 rounded-2xl border border-white/10 bg-[#0A0A0D] p-4 sm:p-6">
+              <div className="mb-5 flex items-center justify-center gap-2">
+                <Crown className="h-5 w-5 text-[#F1D47A]" />
+                <h3 className="font-prize text-xl text-[#F1D47A]">Bundle & save</h3>
               </div>
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                {[
+                  { qty: 5, discount: 5, label: "Starter" },
+                  { qty: 10, discount: 10, label: "Popular" },
+                  { qty: 15, discount: 15, label: "Best value" },
+                ].map((tier) => {
+                  const isSelected = quantity === tier.qty;
+                  const savingsAmount = ((pricePerTicket * tier.qty) * (tier.discount / 100)).toFixed(2);
+                  return (
+                    <button
+                      key={tier.qty}
+                      onClick={() => setQuantity(tier.qty)}
+                      className={`relative rounded-xl border px-2 py-4 transition-all ${
+                        isSelected
+                          ? "border-[#F1D47A] bg-[#C8102E] text-white shadow-[0_8px_24px_rgba(200,16,46,0.35)]"
+                          : "border-white/10 bg-white/[0.03] text-white hover:border-[#C8102E]/50"
+                      }`}
+                    >
+                      <div className="text-xs font-black uppercase tracking-widest opacity-70">{tier.label}</div>
+                      <div className="mt-1 text-lg font-black">
+                        {tier.qty} {competitionType === "spin" ? "Spins" : competitionType === "scratch" ? "Scratches" : competitionType === "pop" ? "Pops" : competitionType === "plinko" ? "Drops" : competitionType === "slot" ? "Slots" : competitionType === "royal" ? "Plays" : "Plays"}
+                      </div>
+                      <div className={`mt-1 font-prize text-2xl ${isSelected ? "text-[#F1D47A]" : "text-[#F1D47A]"}`}>
+                        {tier.discount}%
+                      </div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-white/55">off</div>
+                      <div className="mt-2 text-[10px] font-semibold text-white/70">Save £{savingsAmount}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-4 text-[10px] text-white/35">Discount automatically applied · Cannot be combined</p>
             </div>
           )}
 
-          <div className="relative group">
-            <div className="absolute -inset-[1px] bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-2xl opacity-70 blur-sm group-hover:opacity-100 transition duration-500"></div>
-            
-            <div className="relative bg-[#0a0a0a] rounded-2xl p-5 md:p-8 border border-[#FACC15]/20">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/[0.03] via-transparent to-[#F59E0B]/[0.03] rounded-2xl"></div>
-
-              <div className="relative">
-                {isFreeGiveaway ? (
-                  <div className="space-y-4">
-                    {userTicketCount >= maxTicketsForGiveaway ? (
-                      <div className="bg-[#FACC15]/5 border border-[#FACC15]/20 rounded-xl p-4">
-                        <p className="text-[#FACC15] font-semibold text-sm">✅ You have {userTicketCount} tickets</p>
-                        <p className="text-gray-500 text-xs mt-1">Maximum {maxTicketsForGiveaway} per user</p>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex justify-center gap-3">
-                          {[1, 2].map((num) => (
-                            <button
-                              key={num}
-                              onClick={() => setQuantity(Math.min(num, remainingTickets))}
-                              disabled={num > remainingTickets}
-                              className={`min-w-[100px] px-6 py-3 rounded-xl border-2 font-bold transition-all text-sm ${
-                                quantity === num
-                                  ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 border-transparent shadow-xl shadow-[#FACC15]/30 scale-105"
-                                  : num > remainingTickets
-                                  ? "bg-gray-800/50 text-gray-500 border-gray-700 cursor-not-allowed"
-                                  : "bg-transparent text-white border-[#FACC15]/20 hover:border-[#FACC15]/60"
-                              }`}
-                            >
-                              {num} Ticket{num > 1 ? "s" : ""}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-gray-400 text-xs">
-                          {remainingTickets === 1 ? "1 ticket remaining" : `${remainingTickets} tickets remaining`}
-                        </p>
-                      </>
-                    )}
+          <div className="mt-6 rounded-2xl border border-white/10 bg-[#0A0A0D] p-5 sm:p-8">
+            {isFreeGiveaway ? (
+              <div className="space-y-4">
+                {userTicketCount >= maxTicketsForGiveaway ? (
+                  <div className="rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/8 p-4">
+                    <p className="font-semibold text-[#F1D47A]">You have {userTicketCount} tickets</p>
+                    <p className="mt-1 text-xs text-white/50">Maximum {maxTicketsForGiveaway} per user</p>
                   </div>
                 ) : (
-                  <div className="space-y-6">
-                    <div className="flex justify-center gap-2 flex-wrap">
-                      {[1, 5, 10, 15, 20, 30].map((num) => {
-                        const discount = isGameType ? getApplicableDiscount(num) : 0;
-                        const effectiveQuantity = Math.min(num, 15);
-                        const discountedPlays = num <= 15 ? num : 15;
-                        const fullPricePlays = num <= 15 ? 0 : num - 15;
-                        
-                        const pillPrice = isGameType 
-                          ? (pricePerTicket * discountedPlays * (1 - discount / 100)) + (pricePerTicket * fullPricePlays)
-                          : pricePerTicket * num;
-                        
-                        return (
-                          <button
-                            key={num}
-                            onClick={() => setQuantity(num)}
-                            className={`relative min-w-[65px] md:min-w-[75px] px-3 md:px-4 py-2.5 rounded-xl border-2 font-bold transition-all text-xs md:text-sm ${
-                              quantity === num
-                                ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 border-transparent shadow-xl shadow-[#FACC15]/30 scale-105"
-                                : "bg-transparent text-white border-white/10 hover:border-[#FACC15]/40 hover:bg-white/[0.03]"
-                            }`}
-                            data-testid={`button-quantity-${num}`}
-                          >
-                            <div className="text-base md:text-lg font-black">{num}</div>
-                            {isGameType && discount > 0 && num <= 15 && (
-                              <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black ${
-                                quantity === num 
-                                  ? "bg-black text-[#FACC15]" 
-                                  : "bg-[#FACC15] text-black"
-                              }`}>
-                                -{discount}%
-                              </div>
-                            )}
-                            
-                            <div className={`text-[9px] mt-0.5 font-medium ${
-                              quantity === num ? "text-gray-800" : "text-gray-400"
-                            }`}>
-                              £{pillPrice.toFixed(2)}
-                            </div>
-                          </button>
-                        );
-                      })}
+                  <>
+                    <div className="flex justify-center gap-3">
+                      {[1, 2].map((num) => (
+                        <button
+                          key={num}
+                          onClick={() => setQuantity(Math.min(num, remainingTickets))}
+                          disabled={num > remainingTickets}
+                          className={`min-w-[100px] rounded-xl border-2 px-6 py-3 text-sm font-bold transition-all ${
+                            quantity === num
+                              ? "border-transparent bg-[#C8102E] text-white"
+                              : num > remainingTickets
+                                ? "cursor-not-allowed border-white/10 bg-white/5 text-white/30"
+                                : "border-white/15 bg-transparent text-white hover:border-[#C8102E]/60"
+                          }`}
+                        >
+                          {num} Ticket{num > 1 ? "s" : ""}
+                        </button>
+                      ))}
                     </div>
-
-                    <div className="text-center py-2">
-                      <div className="text-5xl md:text-6xl font-black bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] bg-clip-text text-transparent mb-1">
-                        {quantity}
-                      </div>
-                      <div className="text-sm text-gray-400 font-medium uppercase tracking-wider">
-                        {competitionType === "spin" ? `Spin${quantity > 1 ? "s" : ""}` : 
-                         competitionType === "scratch" ? `Scratch Card${quantity > 1 ? "s" : ""}` :
-                         competitionType === "pop" ? `Pop Game${quantity > 1 ? "s" : ""}` :
-                         competitionType === "plinko" ? `Plinko Drop${quantity > 1 ? "s" : ""}` :
-                         competitionType === "voltz" ? `Voltz Game${quantity > 1 ? "s" : ""}` :
-                         competitionType === "slot" ? `Slot Game${quantity > 1 ? "s" : ""}` :
-                         competitionType === "royal" ? `Royal Game${quantity > 1 ? "s" : ""}` :
-                         `Ticket${quantity > 1 ? "s" : ""}`}
-                      </div>
-                      
-                      {isGameType && discountPercent > 0 && (
-                        <div className="inline-flex items-center gap-2 mt-2 px-4 py-1.5 bg-[#FACC15]/10 border border-[#FACC15]/30 rounded-full">
-                          <Sparkles className="w-3.5 h-3.5 text-[#FACC15]" />
-                          <span className="text-[#FACC15] text-xs md:text-sm font-bold">
-                            {discountPercent}% DISCOUNT ACTIVE
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-4 md:gap-6">
-                      <button
-                        onClick={() => setQuantity((prev) => Math.max(prev - 1, 1))}
-                        disabled={quantity <= 1}
-                        className={`p-3 rounded-xl font-semibold transition-all ${
-                          quantity <= 1
-                            ? "bg-white/[0.03] text-gray-600 cursor-not-allowed border border-white/[0.05]"
-                            : "bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-white hover:scale-110 shadow-lg shadow-[#F59E0B]/30"
-                        }`}
-                        data-testid="button-decrease"
-                      >
-                        <Minus className="w-5 h-5" />
-                      </button>
-
-                      <div className="flex-1 relative">
-                        <input
-                          type="range"
-                          min="1"
-                          max={maxTicketsAllowed}
-                          value={Math.min(quantity, maxTicketsAllowed)}
-                          onChange={(e) => setQuantity(Number(e.target.value))}
-                          className="premium-slider w-full appearance-none cursor-pointer"
-                          data-testid="slider-quantity"
-                          style={{
-                            height: "8px",
-                            borderRadius: "10px",
-                            background: `linear-gradient(to right, #FACC15 ${((Math.min(quantity, maxTicketsAllowed) - 1) * 100) / (maxTicketsAllowed - 1)}%, rgba(255,255,255,0.1) ${((Math.min(quantity, maxTicketsAllowed) - 1) * 100) / (maxTicketsAllowed - 1)}%)`,
-                          }}
-                        />
-                      </div>
-
-                      <button
-                        onClick={() => setQuantity((prev) => prev + 1)}
-                        className="p-3 rounded-xl font-semibold transition-all bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 hover:scale-110 shadow-lg shadow-[#FACC15]/30"
-                        data-testid="button-increase"
-                      >
-                        <Plus className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
+                    <p className="text-xs text-white/50">
+                      {remainingTickets === 1 ? "1 ticket remaining" : `${remainingTickets} tickets remaining`}
+                    </p>
+                  </>
                 )}
-                
-                <div className="mt-6">
-                  <div className="p-4 md:p-5 bg-gradient-to-br from-[#FACC15]/5 to-[#F59E0B]/5 rounded-xl border border-[#FACC15]/20">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-sm font-medium uppercase tracking-wider">Total</span>
-                      <div className="text-right">
-                        {isGameType && discountPercent > 0 && (
-                          <span className="text-xs text-gray-500 line-through block mb-0.5">
-                            £{originalPrice.toFixed(2)}
-                          </span>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="flex flex-wrap justify-center gap-2">
+                  {[1, 5, 10, 15, 20, 30].map((num) => {
+                    const discount = isGameType ? getApplicableDiscount(num) : 0;
+                    const discountedPlays = num <= 15 ? num : 15;
+                    const fullPricePlays = num <= 15 ? 0 : num - 15;
+                    const pillPrice = isGameType
+                      ? (pricePerTicket * discountedPlays * (1 - discount / 100)) + (pricePerTicket * fullPricePlays)
+                      : pricePerTicket * num;
+
+                    return (
+                      <button
+                        key={num}
+                        onClick={() => setQuantity(num)}
+                        className={`relative min-w-[65px] rounded-xl border-2 px-3 py-2.5 text-xs font-bold transition-all md:min-w-[75px] md:px-4 md:text-sm ${
+                          quantity === num
+                            ? "scale-105 border-transparent bg-[#C8102E] text-white shadow-[0_8px_24px_rgba(200,16,46,0.35)]"
+                            : "border-white/10 bg-transparent text-white hover:border-[#C8102E]/40"
+                        }`}
+                        data-testid={`button-quantity-${num}`}
+                      >
+                        <div className="text-base font-black md:text-lg">{num}</div>
+                        {isGameType && discount > 0 && num <= 15 && (
+                          <div
+                            className={`absolute -right-2 -top-2 rounded-full px-1.5 py-0.5 text-[9px] font-black ${
+                              quantity === num ? "bg-black text-[#F1D47A]" : "bg-[#F1D47A] text-black"
+                            }`}
+                          >
+                            -{discount}%
+                          </div>
                         )}
-                        <span className="text-3xl md:text-4xl font-black bg-gradient-to-r from-[#FACC15] to-[#F59E0B] bg-clip-text text-transparent">
-                          £{isGameType ? discountedPrice.toFixed(2) : (pricePerTicket * quantity).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {isGameType && discountPercent > 0 && (
-                      <div className="mt-3 pt-3 border-t border-[#FACC15]/10">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2">
-                            <Crown className="w-4 h-4 text-[#FACC15]" />
-                            <span className="text-[#FACC15] font-semibold text-sm">
-                              Bundle Discount ({discountPercent}%)
-                            </span>
-                          </div>
-                          <span className="text-green-400 font-bold text-base">
-                            -£{savings.toFixed(2)}
-                          </span>
+                        <div className={`mt-0.5 text-[9px] font-medium ${quantity === num ? "text-white/80" : "text-white/40"}`}>
+                          £{pillPrice.toFixed(2)}
                         </div>
-                        
-                        <div className="mt-2">
-                          <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-                            <span>5 for 5%</span>
-                            <span>10 for 10%</span>
-                            <span>15 for 15%</span>
-                          </div>
-                          <div className="h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#D97706] rounded-full transition-all duration-500"
-                              style={{ width: `${Math.min((quantity / 15) * 100, 100)}%` }}
-                            ></div>
-                          </div>
-                          {quantity > 15 && (
-                            <p className="text-[10px] text-gray-500 mt-1 text-center">
-                              Discount applies to first 15 plays only
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                      </button>
+                    );
+                  })}
+                </div>
 
-                    <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
-                      <span>Per entry: £{pricePerTicket.toFixed(2)}</span>
-                      {isGameType && discountPercent > 0 && (
-                        <>
-                          <span className="text-[#FACC15]">→</span>
-                          <span className="text-green-400 font-semibold">
-                            £{(discountedPrice / quantity).toFixed(2)}
-                          </span>
-                        </>
-                      )}
-                    </div>
+                <div>
+                  <div className="font-prize text-5xl text-[#F1D47A] md:text-6xl">{quantity}</div>
+                  <div className="mt-1 text-sm font-medium uppercase tracking-wider text-white/45">
+                    {playNoun(competitionType, quantity)}
                   </div>
+                  {isGameType && discountPercent > 0 && (
+                    <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-4 py-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-[#F1D47A]" />
+                      <span className="text-xs font-bold text-[#F1D47A] md:text-sm">
+                        {discountPercent}% discount active
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-4 md:gap-6">
+                  <button
+                    onClick={() => setQuantity((prev) => Math.max(prev - 1, 1))}
+                    disabled={quantity <= 1}
+                    className={`rounded-xl p-3 font-semibold transition-all ${
+                      quantity <= 1
+                        ? "cursor-not-allowed border border-white/5 bg-white/[0.03] text-white/25"
+                        : "bg-[#C8102E] text-white hover:scale-110"
+                    }`}
+                    data-testid="button-decrease"
+                  >
+                    <Minus className="h-5 w-5" />
+                  </button>
+
+                  <div className="relative flex-1">
+                    <input
+                      type="range"
+                      min="1"
+                      max={maxTicketsAllowed}
+                      value={Math.min(quantity, maxTicketsAllowed)}
+                      onChange={(e) => setQuantity(Number(e.target.value))}
+                      className="rr-qty-slider w-full cursor-pointer"
+                      data-testid="slider-quantity"
+                      style={{
+                        background: `linear-gradient(to right, #C8102E ${((Math.min(quantity, maxTicketsAllowed) - 1) * 100) / (maxTicketsAllowed - 1)}%, rgba(255,255,255,0.1) ${((Math.min(quantity, maxTicketsAllowed) - 1) * 100) / (maxTicketsAllowed - 1)}%)`,
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => setQuantity((prev) => prev + 1)}
+                    className="rounded-xl bg-[#C8102E] p-3 font-semibold text-white transition-all hover:scale-110"
+                    data-testid="button-increase"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </button>
                 </div>
               </div>
-            </div>
-          </div>
+            )}
 
-          <div className="mt-6 relative group/cta">
-            <div className="absolute -inset-2 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-2xl opacity-0 group-hover/cta:opacity-40 blur-xl transition-all duration-500"></div>
-            
-            <button
-              onClick={handleOpenQuiz}
-              disabled={isSoldOut || purchaseTicketMutation.isPending || (isFreeGiveaway && !canBuyMore)}
-              className={`relative w-full px-8 py-4 md:py-5 rounded-xl font-black text-base md:text-lg uppercase tracking-wider transition-all transform ${
-                isSoldOut || (isFreeGiveaway && !canBuyMore)
-                  ? "bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700"
-                  : "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 hover:scale-[1.02] shadow-2xl shadow-[#FACC15]/30 hover:shadow-[#FACC15]/50 active:scale-[0.98]"
-              } disabled:opacity-100`}
-              data-testid="button-purchase"
-            >
-              <span className="relative z-10 flex items-center justify-center gap-3">
-                {isSoldOut ? (
-                  "SOLD OUT"
-                ) : purchaseTicketMutation.isPending ? (
+            <div className="mt-6 rounded-xl border border-white/10 bg-black/40 p-4 md:p-5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium uppercase tracking-wider text-white/45">Total</span>
+                <div className="text-right">
+                  {isGameType && discountPercent > 0 && (
+                    <span className="mb-0.5 block text-xs text-white/35 line-through">
+                      £{originalPrice.toFixed(2)}
+                    </span>
+                  )}
+                  <span className="font-prize text-3xl text-[#F1D47A] md:text-4xl">
+                    £{displayTotal.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {isGameType && discountPercent > 0 && (
+                <div className="mt-3 border-t border-white/10 pt-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Crown className="h-4 w-4 text-[#F1D47A]" />
+                      <span className="text-sm font-semibold text-[#F1D47A]">
+                        Bundle discount ({discountPercent}%)
+                      </span>
+                    </div>
+                    <span className="text-base font-bold text-[#F1D47A]">-£{savings.toFixed(2)}</span>
+                  </div>
+                  <div className="mt-2">
+                    <div className="mb-1 flex justify-between text-[10px] text-white/35">
+                      <span>5 for 5%</span>
+                      <span>10 for 10%</span>
+                      <span>15 for 15%</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                      <div
+                        className="rr-progress-fill h-full rounded-full"
+                        style={{ width: `${Math.min((quantity / 15) * 100, 100)}%` }}
+                      />
+                    </div>
+                    {quantity > 15 && (
+                      <p className="mt-1 text-center text-[10px] text-white/40">
+                        Discount applies to first 15 plays only
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-3 flex items-center justify-center gap-2 text-xs text-white/40">
+                <span>Per entry: £{pricePerTicket.toFixed(2)}</span>
+                {isGameType && discountPercent > 0 && (
                   <>
-                    <div className="w-5 h-5 border-2 border-gray-900 border-t-transparent rounded-full animate-spin"></div>
-                    Processing...
-                  </>
-                ) : isFreeGiveaway && !canBuyMore ? (
-                  "MAX TICKETS REACHED"
-                ) : (
-                  <>
-                    <Zap className="w-5 h-5 fill-gray-900" />
-                    {competitionType === "spin" ? `BUY ${quantity} SPIN${quantity > 1 ? "S" : ""}` :
-                     competitionType === "scratch" ? `BUY ${quantity} SCRATCH${quantity > 1 ? "ES" : ""}` :
-                     competitionType === "pop" ? `BUY ${quantity} POP GAME${quantity > 1 ? "S" : ""}` :
-                     competitionType === "plinko" ? `BUY ${quantity} PLINKO DROP${quantity > 1 ? "S" : ""}` :
-                     competitionType === "voltz" ? `BUY ${quantity} VOLTZ GAME${quantity > 1 ? "S" : ""}` :
-                     competitionType === "slot" ? `BUY ${quantity} SLOT GAME${quantity > 1 ? "S" : ""}` :
-                     competitionType === "royal" ? `BUY ${quantity} ROYAL GAME${quantity > 1 ? "S" : ""}` :
-                     `ENTER NOW`}
-                    <span className="text-sm font-bold opacity-75">
-                      - £{isGameType ? discountedPrice.toFixed(2) : (pricePerTicket * quantity).toFixed(2)}
+                    <span className="text-[#F1D47A]">→</span>
+                    <span className="font-semibold text-[#F1D47A]">
+                      £{(discountedPrice / quantity).toFixed(2)}
                     </span>
                   </>
                 )}
-              </span>
-              
-              {!isSoldOut && !purchaseTicketMutation.isPending && !(isFreeGiveaway && !canBuyMore) && (
-                <div className="absolute inset-0 rounded-xl overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover/cta:translate-x-full transition-transform duration-1000"></div>
-                </div>
-              )}
-            </button>
+              </div>
+            </div>
           </div>
-          
+
+          <button
+            onClick={handleOpenQuiz}
+            disabled={purchaseLocked}
+            className={`rr-cta mt-6 flex h-14 w-full items-center justify-center gap-3 rounded-xl text-base font-black uppercase tracking-[0.14em] md:h-16 ${
+              isSoldOut || (isFreeGiveaway && !canBuyMore) ? "opacity-50" : ""
+            }`}
+          >
+            {purchaseTicketMutation.isPending ? (
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            ) : (
+              <Zap className="h-5 w-5" />
+            )}
+            {ctaLabel}
+            {!purchaseLocked && (
+              <span className="text-sm font-bold opacity-80">· £{displayTotal.toFixed(2)}</span>
+            )}
+          </button>
+
           {isGameType && discountPercent > 0 && (
-            <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-[#FACC15]/5 border border-[#FACC15]/20 rounded-full">
-              <Sparkles className="w-4 h-4 text-[#FACC15]" />
-              <span className="text-[#FACC15] text-sm font-bold">
-                YOU'RE SAVING £{savings.toFixed(2)}!
-              </span>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/25 bg-[#D4AF37]/8 px-4 py-2">
+              <Sparkles className="h-4 w-4 text-[#F1D47A]" />
+              <span className="text-sm font-bold text-[#F1D47A]">You're saving £{savings.toFixed(2)}</span>
             </div>
           )}
-          
-          <div 
-            className="mt-4 text-xs md:text-sm text-gray-400 hover:text-[#FACC15] cursor-pointer transition-colors inline-flex items-center gap-1"
+
+          <button
+            type="button"
+            className="mt-4 inline-flex items-center gap-1.5 text-xs text-white/45 underline underline-offset-4 transition-colors hover:text-[#F1D47A] md:text-sm"
             onClick={() => setIsPostalModalOpen(true)}
           >
-            <span>📬</span>
-            <span className="underline underline-offset-4">Free postal entry route</span>
+            <Mail className="h-3.5 w-3.5" />
+            Free postal entry route
+          </button>
+        </div>
+      </section>
+
+      <section className="relative z-10 py-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <UserCompetitionPrizes competitionId={competition.id} />
+        </div>
+      </section>
+
+      <section className="relative z-10 py-12 sm:py-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-10 text-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">The process</p>
+            <h2 className="mt-2 font-prize text-3xl text-white sm:text-5xl">HOW IT WORKS</h2>
+          </div>
+          <div className="grid gap-5 md:grid-cols-3">
+            {PROCESS_STEPS.map((step) => (
+              <article key={step.n} className="rr-hiw-card rr-hiw-card--red">
+                <span className="rr-hiw-watermark" aria-hidden>
+                  {step.n}
+                </span>
+                <div className="relative z-[1] flex items-start justify-between">
+                  <span className="rounded-md border border-white/10 bg-black/40 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">
+                    Step {step.n}
+                  </span>
+                  <div className="rr-hiw-icon">
+                    <step.Icon className="h-5 w-5" strokeWidth={2.2} />
+                  </div>
+                </div>
+                <h3 className="relative z-[1] mt-6 font-prize text-2xl text-white">{step.title}</h3>
+                <p className="relative z-[1] mt-3 text-sm leading-relaxed text-white/55">{step.body}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
-      <style>{`
-        .premium-slider::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #FACC15, #F59E0B);
-          cursor: pointer;
-          box-shadow: 0 0 30px rgba(250, 204, 21, 0.6), 0 0 60px rgba(250, 204, 21, 0.3);
-          border: 3px solid #0a0a0a;
-          transition: all 0.3s ease;
-        }
-        .premium-slider::-webkit-slider-thumb:hover {
-          transform: scale(1.15);
-          box-shadow: 0 0 40px rgba(250, 204, 21, 0.8), 0 0 80px rgba(250, 204, 21, 0.4);
-        }
-        .premium-slider::-moz-range-thumb {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #FACC15, #F59E0B);
-          cursor: pointer;
-          box-shadow: 0 0 30px rgba(250, 204, 21, 0.6), 0 0 60px rgba(250, 204, 21, 0.3);
-          border: 3px solid #0a0a0a;
-        }
-      `}</style>
+      <CommunitySection />
 
-      <UserCompetitionPrizes competitionId={competition.id} />
-
-      <section className="bg-gradient-to-r from-gray-900 via-black to-gray-900 py-12 md:py-16 relative overflow-hidden border-t border-[#FACC15]/20">
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{ 
-            backgroundImage: 'radial-gradient(circle, #FACC15 2px, transparent 2px)',
-            backgroundSize: '40px 40px'
-          }}></div>
-        </div>
-
-        <div className="container mx-auto px-3 md:px-4 text-center relative z-10">
-          <h2 className="text-2xl md:text-4xl font-black text-white mb-3 md:mb-4">
-            View All Competitions
-          </h2>
-          <p className="text-sm md:text-lg text-gray-400 mb-6 md:mb-8 max-w-2xl mx-auto">
-            Your chance to win luxury items for a fraction of the cost at RingTone Riches!
+      <section className="relative z-10 border-t border-white/10 py-12 md:py-16">
+        <div className="mx-auto max-w-2xl px-4 text-center">
+          <h2 className="font-prize text-3xl text-white md:text-4xl">More live prizes</h2>
+          <p className="mt-3 text-sm text-white/50 md:text-base">
+            Jump back to the board and pick another shot.
           </p>
           <button
             onClick={() => setLocation("/")}
-            className="bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 px-8 py-4 rounded-xl font-black hover:from-[#FBBF24] hover:to-[#D97706] transition-all transform hover:scale-105 shadow-xl shadow-[#FACC15]/20 text-sm md:text-base uppercase tracking-wider"
+            className="rr-cta mt-8 inline-flex h-12 items-center justify-center rounded-xl px-8 text-sm font-black uppercase tracking-[0.14em]"
           >
-            🏆 View All Competitions
+            View all competitions
           </button>
         </div>
       </section>
 
       {!isGameType && (
         <Dialog open={showQuiz} onOpenChange={setShowQuiz}>
-          <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto rounded-2xl bg-[#0a0a0a] border border-[#FACC15]/20">
+          <DialogContent className="mx-auto w-[90vw] max-w-sm rounded-2xl border border-white/10 bg-[#0A0A0D] sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-xl font-black text-white text-center">
-                Answer to Proceed
+              <DialogTitle className="text-center font-prize text-2xl text-white">
+                Answer to proceed
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <p className="text-center text-gray-300 font-medium">{quizQuestion.question}</p>
+              <p className="text-center font-medium text-white/70">{quizQuestion.question}</p>
               <div className="grid grid-cols-1 gap-2">
                 {quizQuestion.options.map((option) => (
                   <button
                     key={option}
                     onClick={() => setSelectedAnswer(option)}
-                    className={`w-full p-3 rounded-xl border-2 font-semibold transition-all ${
+                    className={`w-full rounded-xl border-2 p-3 font-semibold transition-all ${
                       selectedAnswer === option
-                        ? "bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 border-transparent"
-                        : "border-white/10 text-white hover:border-[#FACC15]/40 bg-white/[0.02]"
+                        ? "border-transparent bg-[#C8102E] text-white"
+                        : "border-white/10 bg-white/[0.02] text-white hover:border-[#C8102E]/40"
                     }`}
                   >
                     {option}
@@ -1394,7 +1042,7 @@ export default function CompetitionPage() {
               <Button
                 disabled={!selectedAnswer}
                 onClick={handleSubmitAnswer}
-                className="mt-4 bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 font-bold px-8 py-2.5 rounded-xl hover:from-[#FBBF24] hover:to-[#D97706] disabled:opacity-50"
+                className="rr-cta mt-4 h-11 rounded-xl px-8 font-black uppercase tracking-wider text-white disabled:opacity-50"
               >
                 Submit
               </Button>
@@ -1404,14 +1052,14 @@ export default function CompetitionPage() {
       )}
 
       <Dialog open={isPostalModalOpen} onOpenChange={setIsPostalModalOpen}>
-        <DialogContent className="max-w-lg bg-[#0a0a0a] border border-[#FACC15]/20 rounded-2xl">
+        <DialogContent className="max-w-lg rounded-2xl border border-white/10 bg-[#0A0A0D]">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-black text-white text-center">
-              Postal Entry Route
+            <DialogTitle className="text-center font-prize text-2xl text-white">
+              Postal entry route
             </DialogTitle>
           </DialogHeader>
           <DialogDescription asChild>
-            <div className="space-y-4 text-sm leading-relaxed text-gray-300">
+            <div className="space-y-4 text-sm leading-relaxed text-white/65">
               <p>
                 Send an unclosed postcard (standard postcard size is approx 148mm x 105mm)
                 first or second class to:
@@ -1420,7 +1068,7 @@ export default function CompetitionPage() {
                 1 West Havelock Street, South Shields, Tyne and Wear, NE33 5AF.
               </p>
               <p>Include the following information:</p>
-              <ul className="list-disc pl-6 space-y-1">
+              <ul className="list-disc space-y-1 pl-6">
                 <li>The competition you wish to enter</li>
                 <li>Your full name and postal address</li>
                 <li>Your phone number and email address on your RingTone Riches account</li>
@@ -1431,14 +1079,15 @@ export default function CompetitionPage() {
               </ul>
               <p>
                 Your entry will be subject to our{" "}
-                <span className="text-[#FACC15] underline cursor-pointer">terms and conditions</span>.
+                <Link href="/termsAndConditions" className="text-[#F1D47A] underline">
+                  terms and conditions
+                </Link>
+                .
               </p>
               <p className="mt-4 font-semibold text-white">
                 You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?
               </p>
-              <p>
-                A: 7:15am B: 7:20am C: 7:30am D: 7:45am
-              </p>
+              <p>A: 7:15am B: 7:20am C: 7:30am D: 7:45am</p>
             </div>
           </DialogDescription>
         </DialogContent>

@@ -1,13 +1,15 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { User } from "@shared/schema";
-import logoImage from "@assets/Ringtone_Riches_Logo.png";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import BrandLogo from "@/components/layout/BrandLogo";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Menu, X, Wallet, Music, User as UserIcon, LogOut, ChevronRight, Bell } from "lucide-react";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
+import AnnouncementTicker from "@/components/home/AnnouncementTicker";
+import ThemeToggle from "@/components/layout/ThemeToggle";
 
 // Helper function to safely parse balance
 function getValidBalance(balance: string | null | undefined): number {
@@ -118,18 +120,51 @@ export default function Header() {
           scrolled ? "is-scrolled" : ""
         }`}
       >
+        <AnnouncementTicker />
         <div className="rr-header-line" aria-hidden />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex items-center justify-between h-16 lg:h-[4.5rem]">
-            <Link href="/">
-              <div className="flex items-center cursor-pointer group">
-                <img
-                  src={logoImage}
-                  alt="RingTone Riches"
-                  className="h-12 sm:h-12 lg:h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
-                  data-testid="img-logo"
-                  loading="eager"
-                />
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
+          <nav className="flex h-16 items-center justify-between lg:h-[4.5rem]">
+            {/* Mobile: menu | logo | wallet */}
+            <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center lg:hidden">
+              <div className="justify-self-start">
+                <button
+                  ref={menuButtonRef}
+                  className="rr-header-menu"
+                  onClick={toggleMobileMenu}
+                  data-testid="button-mobile-menu"
+                  aria-label="Menu"
+                  style={{
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                </button>
+              </div>
+
+              <Link href="/">
+                <div className="flex min-w-0 cursor-pointer items-center justify-center px-2">
+                  <BrandLogo
+                    className="h-11 w-auto max-w-[46vw] object-contain"
+                    testId="img-logo"
+                  />
+                </div>
+              </Link>
+
+              <div className="justify-self-end">
+                <Link href={isAuthenticated ? "/wallet?tab=wallet" : "/login"}>
+                  <div className="rr-header-chip rr-header-chip--balance cursor-pointer" data-testid="button-wallet">
+                    <Wallet className="h-3.5 w-3.5 shrink-0 text-[#F1D47A]" />
+                    <span className="whitespace-nowrap">£{userBalance.toFixed(2)}</span>
+                  </div>
+                </Link>
+              </div>
+            </div>
+
+            {/* Desktop */}
+            <Link href="/" className="hidden lg:block">
+              <div className="flex cursor-pointer items-center group">
+                <BrandLogo className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
               </div>
             </Link>
 
@@ -160,7 +195,8 @@ export default function Header() {
               </Link>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden lg:flex items-center gap-3">
+              <ThemeToggle />
               {isAuthenticated ? (
                 <>
                   <Link href="/wallet?tab=points">
@@ -171,34 +207,30 @@ export default function Header() {
                   </Link>
 
                   <Link href="/wallet?tab=wallet">
-                    <div className="rr-header-chip cursor-pointer" data-testid="button-wallet">
+                    <div className="rr-header-chip cursor-pointer">
                       <Wallet className="w-3.5 h-3.5 text-[#F1D47A]" />
                       <span>£{userBalance.toFixed(2)}</span>
                     </div>
                   </Link>
-                  
+
                   <NotificationsDropdown />
-                  
+
                   <Link href="/wallet?tab=account">
-                    <div className="hidden lg:flex">
-                      <button className="rr-cta rr-header-cta" data-testid="button-account">
-                        MY ACCOUNT
-                      </button>
-                    </div>
-                  </Link>
-                  
-                  <div className="hidden lg:flex">
-                    <button
-                      onClick={handleLogout}
-                      className="rr-header-ghost"
-                      data-testid="button-logout"
-                    >
-                      LOGOUT
+                    <button className="rr-cta rr-header-cta" data-testid="button-account">
+                      MY ACCOUNT
                     </button>
-                  </div>
+                  </Link>
+
+                  <button
+                    onClick={handleLogout}
+                    className="rr-header-ghost"
+                    data-testid="button-logout"
+                  >
+                    LOGOUT
+                  </button>
                 </>
               ) : (
-                <div className="hidden lg:flex items-center gap-2.5">
+                <>
                   <Link href="/login">
                     <button className="rr-header-ghost" data-testid="button-login">
                       LOGIN
@@ -209,22 +241,8 @@ export default function Header() {
                       REGISTER
                     </button>
                   </Link>
-                </div>
+                </>
               )}
-
-              <button
-                  ref={menuButtonRef}
-                  className="lg:hidden rr-header-menu"
-                  onClick={toggleMobileMenu}
-                  data-testid="button-mobile-menu"
-                  aria-label="Menu"
-                  style={{ 
-                    touchAction: 'manipulation',
-                    WebkitTapHighlightColor: 'transparent'
-                  }}
-                >
-                {mobileOpen ? <X className="w-4 h-4 sm:w-5 sm:h-5" /> : <Menu className="w-4 h-4 sm:w-5 sm:h-5" />}
-              </button>
             </div>
           </nav>
         </div>
@@ -254,19 +272,22 @@ export default function Header() {
             <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#F1D47A]">
               Menu
             </span>
-            <button
-              type="button"
-              className="rr-header-menu"
-              onClick={closeMobileMenu}
-              aria-label="Close menu"
-              data-testid="button-mobile-menu-close"
-              style={{
-                touchAction: "manipulation",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <button
+                type="button"
+                className="rr-header-menu"
+                onClick={closeMobileMenu}
+                aria-label="Close menu"
+                data-testid="button-mobile-menu-close"
+                style={{
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-8 pt-5">
             <div className="space-y-2">

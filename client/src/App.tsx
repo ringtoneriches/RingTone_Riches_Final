@@ -355,7 +355,9 @@ function AppWithMaintenance() {
       )}
       
       {/* Adjust top padding based on maintenance banner */}
-      <div className={showMaintenanceBanner ? "pt-16 lg:pt-20" : "pt-16 lg:pt-[4.5rem]"}/>
+      <div
+        className={showMaintenanceBanner ? "pt-[7.5rem] lg:pt-[8.5rem]" : "pt-[6rem] lg:pt-[6.5rem]"}
+      />
     
 
       <Router />

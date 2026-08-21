@@ -3,8 +3,8 @@ import { useParams, useSearch } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import ScratchCardTest from "@/components/games/scratch-card-test";
-import Header from "@/components/layout/header";
-import Footer from "@/components/layout/footer";
+import { GameDisclaimer, GameEmpty, GameHero, GameShell, GameStatus } from "@/components/games/GameChrome";
+import { Sparkles } from "lucide-react";
 import { PrizeModal } from "@/components/games/prize-modal";
 import { useState, useEffect, useRef } from "react";
 import { apiRequest } from "@/lib/queryClient";
@@ -160,64 +160,30 @@ export default function ScratchGamePage() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background text-foreground">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <p>Loading your scratch cards...</p>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
+  if (isLoading) return <GameStatus message="Loading your scratch cards..." />;
 
   if (!orderData?.order) {
     return (
-      <div className="min-h-screen bg-background text-foreground">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <h1 className="text-4xl font-bold mb-8">Scratch Card Not Found</h1>
-          <p className="text-lg mb-4">The scratch card purchase could not be found or has expired.</p>
-          <button 
-            onClick={() => window.location.href = "/competitions"}
-            className="bg-[#FACC15] hover:bg-[#F59E0B] text-gray-900 font-bold py-2 px-6 rounded-lg transition-colors"
-          >
-            Browse Competitions
-          </button>
-        </div>
-        <Footer />
-      </div>
+      <GameEmpty
+        title="CARD NOT FOUND"
+        message="This scratch purchase could not be found or has expired."
+        actionLabel="Browse competitions"
+        href="/"
+      />
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Header />
-
-      {/* Countdown Timer */}
-      {/* {competition?.endDate && (
-        <div className="flex justify-center py-6">
-          <CountdownTimer endDate={competition.endDate} />
-        </div>
-      )} */}
-
-      <section className="container mx-auto px-4 py-8 text-center">
-        {/* <h1 className="text-4xl font-bold mb-4">
-          🎟️ {competition?.title || "Scratch & Win!"}
-        </h1> */}
-        
-        {/* Remaining Scratches Counter */}
-        {/* <div className="mb-8 p-4 bg-yellow-100 dark:bg-yellow-900 rounded-lg inline-block">
-          <div className="text-lg font-semibold text-yellow-800 dark:text-yellow-200">
-            <span className="text-2xl">{remainingScratches}</span> Scratch{remainingScratches !== 1 ? "es" : ""} Remaining
-          </div>
-          <div className="text-sm text-yellow-600 dark:text-yellow-300 mt-1">
-            Order: #{orderId?.slice(-8)}
-          </div>
-        </div> */}
-
-        {/* Scratch Card Component */}
+    <GameShell>
+      <section className="mx-auto max-w-5xl px-4 py-6 text-center sm:py-8">
+        <GameHero
+          kicker="Scratch & win · play"
+          title="SCRATCH INTO SUMMER"
+          subtitle={competition?.title || "Scratch to reveal. Outcome is locked in before you start."}
+          remaining={remainingScratches}
+          remainingLabel={remainingScratches === 1 ? "card left" : "cards left"}
+          Icon={Sparkles}
+        />
         <ScratchCardTest
           onScratchReveal={handleScratchReveal}
           onCommitSession={handleCommitSession}
@@ -225,15 +191,12 @@ export default function ScratchGamePage() {
           commitError={commitError}
           scratchTicketCount={remainingScratches}
           orderId={orderId}
-          competitionId={competitionId}  
-          mode="loose" // or "tight" based on your preference
+          competitionId={competitionId}
+          mode="loose"
           congratsAudioRef={winnerCongratsRef}
         />
-
-      
       </section>
-    
-      {/* Modern Prize Modal with Confetti */}
+
       <PrizeModal
         isOpen={isResultModalOpen}
         onClose={handleCloseResultModal}
@@ -243,31 +206,7 @@ export default function ScratchGamePage() {
         congratsAudioRef={winnerCongratsRef}
       />
 
-      <Footer />
-          {showDisclaimer && (
-  <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:justify-center px-4">
-    {/* Backdrop */}
-    <div 
-      className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
-      onClick={() => setShowDisclaimer(false)}
-    ></div>
-
-    {/* Disclaimer Card */}
-    <div className="relative w-full mb-2 max-w-md bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 rounded-2xl p-5 sm:p-6 shadow-2xl border border-gray-700 transform transition-all duration-300 scale-95 animate-slide-up">
-      <div className="flex flex-col items-start gap-4 ">
-        <p className="text-white text-sm sm:text-base font-medium leading-snug">
-          ⚠️ <span className="font-semibold">Disclaimer:</span> All on-screen graphics are for entertainment purposes only. Prize outcomes are securely pre-selected before gameplay and are not influenced by animations.
-        </p>
-        <button
-          onClick={() => setShowDisclaimer(false)}
-          className="self-end bg-indigo-500 hover:bg-indigo-400 text-white px-6 py-2 rounded-full font-semibold text-sm sm:text-base shadow-lg transition-transform duration-200 hover:scale-105"
-        >
-          Got it
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-    </div>
+      <GameDisclaimer open={showDisclaimer} onClose={() => setShowDisclaimer(false)} />
+    </GameShell>
   );
 }

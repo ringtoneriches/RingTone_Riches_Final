@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useParams, useSearch } from "wouter";
-import Header from "@/components/layout/header";
-import Footer from "@/components/layout/footer";
+import { GameDisclaimer, GameEmpty, GameHero, GameShell, GameStatus } from "@/components/games/GameChrome";
 import { PlinkoGame } from "@/components/games/plinko-game";
 import { useState, useEffect, useRef } from "react";
 import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trophy, Coins, Crown, Loader2, Star, Gem, Zap, Gift, Diamond, ChevronLeft, ChevronRight, Award, Sparkles } from "lucide-react";
+import { ArrowLeft, Trophy, Coins, Crown, Loader2, Star, Gem, Zap, Gift, Diamond, ChevronLeft, ChevronRight, Award, Sparkles, Target } from "lucide-react";
 import congrats from "../../../attached_assets/sounds/congrats.mp3";
 
 export default function PlinkoGamePage() {
@@ -77,26 +76,17 @@ const { competitionId, orderId } = params;
 
   if (!orderId || !competitionId) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-purple-950/20 to-slate-950 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">Invalid Game Session</h1>
-          <Button onClick={() => navigate("/")} data-testid="button-go-home">
-            Go Home
-          </Button>
-        </div>
-      </div>
+      <GameEmpty
+        title="INVALID SESSION"
+        message="This plinko session is missing. Head back and try again."
+        actionLabel="Go home"
+        href="/"
+      />
     );
   }
 
   if (orderLoading || configLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-purple-950/20 to-slate-950 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-purple-500 mx-auto mb-4" />
-          <p className="text-white/70">Loading Plinko...</p>
-        </div>
-      </div>
-    );
+    return <GameStatus message="Loading Plinko..." />;
   }
 
   const prizes = configData?.prizes || [];
@@ -115,45 +105,28 @@ const { competitionId, orderId } = params;
   const paginatedHistory = history.slice(startIndex, startIndex + itemsPerPage);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-purple-950/20 to-slate-950">
-      <Header />
+    <GameShell>
       <audio ref={winnerCongratsRef} />
-      
-      {/* Luxury background effects */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl" />
-        <div className="absolute top-40 right-20 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-40 left-1/4 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl" />
-      </div>
-      
-      <main className="relative max-w-7xl mx-auto px-4 py-8">
-        <Button
-          variant="ghost"
+
+      <main className="relative mx-auto max-w-7xl px-4 py-6 sm:py-8">
+        <button
+          type="button"
           onClick={() => navigate("/")}
-          className="mb-6 text-purple-300 hover:text-purple-100"
+          className="mb-6 inline-flex items-center text-sm text-white/45 hover:text-white"
           data-testid="button-back"
         >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Competitions
-        </Button>
-        
-        {/* Premium Header */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-gradient-to-r from-amber-500/20 via-yellow-500/10 to-amber-500/20 border border-amber-500/40 mb-6">
-            <Crown className="w-5 h-5 text-amber-400" />
-            <span className="text-amber-400 font-bold tracking-wider">PREMIUM PLINKO EXPERIENCE</span>
-            <Crown className="w-5 h-5 text-amber-400" />
-          </div>
-          
-          <h1 className="text-5xl md:text-6xl font-black mb-3">
-            <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-amber-400 bg-clip-text text-transparent drop-shadow-lg">
-              Ringtone Plinko
-            </span>
-          </h1>
-          <p className="text-purple-200/70 text-xl max-w-md mx-auto">
-            Drop the ball and watch your fortune unfold
-          </p>
-        </div>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to competitions
+        </button>
+
+        <GameHero
+          kicker="Plinko drop · play"
+          title="RINGTONE PLINKO"
+          subtitle="Drop the ball and watch it bounce. Outcome is locked in before the drop."
+          remaining={playsRemaining}
+          remainingLabel={playsRemaining === 1 ? "drop left" : "drops left"}
+          Icon={Target}
+        />
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
           {/* Left Panel - Spectacular Jackpot & Features */}
@@ -210,15 +183,15 @@ const { competitionId, orderId } = params;
             {/* Features - Premium Cards - Horizontal on mobile, vertical on desktop */}
             <div className="grid grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-3">
               {/* Instant Prize */}
-              <div className="group relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-br from-purple-900/40 to-fuchsia-900/30 border border-purple-500/40 p-2.5 sm:p-4 hover:border-purple-400/70 transition-all hover:shadow-lg hover:shadow-purple-500/20">
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-fuchsia-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="group relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#C8102E]/25 to-[#C8102E]/10 border border-[#C8102E]/40 p-2.5 sm:p-4 hover:border-[#FF263D]/70 transition-all hover:shadow-lg hover:shadow-[#C8102E]/20">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#C8102E]/10 to-[#F1D47A]/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="relative flex flex-col lg:flex-row items-center lg:items-center gap-2 lg:gap-4 text-center lg:text-left">
-                  <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-gradient-to-br from-purple-400 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-purple-500/30 flex-shrink-0">
+                  <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-gradient-to-br from-[#C8102E] to-[#FF263D] flex items-center justify-center shadow-lg shadow-[#C8102E]/30 flex-shrink-0">
                     <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
                   <div>
                     <div className="text-white font-bold text-[10px] sm:text-sm leading-tight">Instant Credits</div>
-                    <div className="text-purple-300/70 text-[8px] sm:text-xs hidden sm:block">Prizes added instantly</div>
+                    <div className="text-white/45 text-[8px] sm:text-xs hidden sm:block">Prizes added instantly</div>
                   </div>
                 </div>
               </div>
@@ -269,13 +242,13 @@ const { competitionId, orderId } = params;
           <div className="lg:col-span-4">
             <div className="relative overflow-hidden rounded-3xl border-2 border-transparent bg-gradient-to-b from-slate-900 via-slate-900/98 to-slate-950">
               {/* Animated border glow */}
-              <div className="absolute -inset-[2px] bg-gradient-to-r from-purple-500 via-pink-500 to-amber-500 rounded-3xl opacity-60 blur-sm animate-gradient-shift" />
+              <div className="absolute -inset-[2px] bg-gradient-to-r from-[#C8102E] via-[#FF263D] to-[#F1D47A] rounded-3xl opacity-60 blur-sm animate-gradient-shift" />
               
               {/* Inner container */}
               <div className="relative bg-gradient-to-b from-slate-900 via-slate-900/98 to-slate-950 rounded-3xl m-[2px]">
                 {/* Header with shimmer effect */}
                 <div className="relative px-6 py-5 overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-600/30 via-fuchsia-500/20 to-pink-500/30" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#C8102E]/30 via-[#FF263D]/20 to-[#F1D47A]/20" />
                   <div className="absolute inset-0 shimmer-effect" />
                   
                   <div className="relative flex items-center gap-4">
@@ -289,23 +262,23 @@ const { competitionId, orderId } = params;
                       <h3 className="text-xl font-black text-white tracking-tight">YOUR RESULTS</h3>
                       <div className="flex items-center gap-2 mt-1">
                         <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="text-sm text-purple-300/80">{history.length} total drops</span>
+                        <span className="text-sm text-white/50">{history.length} total drops</span>
                       </div>
                     </div>
                   </div>
                 </div>
                 
                 {/* Divider with glow */}
-                <div className="h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
+                <div className="h-px bg-gradient-to-r from-transparent via-[#C8102E]/50 to-transparent" />
                 
                 {/* Results List - Premium Cards */}
                 <div className="p-5">
                   {history.length === 0 ? (
                     <div className="text-center py-12">
                       <div className="relative inline-flex">
-                        <div className="absolute inset-0 bg-purple-500/30 rounded-full blur-2xl animate-pulse" />
-                        <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-purple-500/30 flex items-center justify-center">
-                          <Sparkles className="w-10 h-10 text-purple-400/60" />
+                        <div className="absolute inset-0 bg-[#C8102E]/30 rounded-full blur-2xl animate-pulse" />
+                        <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-[#0A0A0D] to-[#111] border-2 border-[#C8102E]/30 flex items-center justify-center">
+                          <Sparkles className="w-10 h-10 text-[#F1D47A]/60" />
                         </div>
                       </div>
                       <p className="text-white/50 text-base mt-6 font-semibold">Ready to Play</p>
@@ -424,13 +397,13 @@ const { competitionId, orderId } = params;
                             size="icon"
                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                             disabled={currentPage === 1}
-                            className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/50 text-white disabled:opacity-30 hover:bg-purple-500/20 hover:border-purple-500/50"
+                            className="w-10 h-10 rounded-xl bg-[#0A0A0D]/80 border border-white/10 text-white disabled:opacity-30 hover:bg-[#C8102E]/20 hover:border-[#C8102E]/50"
                             data-testid="button-prev-page"
                           >
                             <ChevronLeft className="w-5 h-5" />
                           </Button>
                           
-                          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30">
+                          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C8102E]/15 border border-[#C8102E]/30">
                             {Array.from({ length: Math.min(5, totalPages) }, (_, idx) => {
                               let pageNum;
                               if (totalPages <= 5) {
@@ -449,7 +422,7 @@ const { competitionId, orderId } = params;
                                   onClick={() => setCurrentPage(pageNum)}
                                   className={`w-8 h-8 rounded-lg font-bold text-sm transition-all ${
                                     currentPage === pageNum
-                                      ? "bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg"
+                                      ? "bg-[#C8102E] text-white shadow-lg"
                                       : "text-white/60 hover:text-white hover:bg-white/10"
                                   }`}
                                   data-testid={`button-page-${pageNum}`}
@@ -465,7 +438,7 @@ const { competitionId, orderId } = params;
                             size="icon"
                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                             disabled={currentPage === totalPages}
-                            className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/50 text-white disabled:opacity-30 hover:bg-purple-500/20 hover:border-purple-500/50"
+                            className="w-10 h-10 rounded-xl bg-[#0A0A0D]/80 border border-white/10 text-white disabled:opacity-30 hover:bg-[#C8102E]/20 hover:border-[#C8102E]/50"
                             data-testid="button-next-page"
                           >
                             <ChevronRight className="w-5 h-5" />
@@ -480,31 +453,7 @@ const { competitionId, orderId } = params;
           </div>
         </div>
       </main>
-      {showDisclaimer && (
-  <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:justify-center px-4">
-    {/* Backdrop */}
-    <div 
-      className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
-      onClick={() => setShowDisclaimer(false)}
-    ></div>
-
-    {/* Disclaimer Card */}
-    <div className="relative w-full mb-2 max-w-md bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 rounded-2xl p-5 sm:p-6 shadow-2xl border border-gray-700 transform transition-all duration-300 scale-95 animate-slide-up">
-      <div className="flex flex-col items-start gap-4 ">
-        <p className="text-white text-sm sm:text-base font-medium leading-snug">
-          ⚠️ <span className="font-semibold">Disclaimer:</span> All on-screen graphics are for entertainment purposes only. Prize outcomes are securely pre-selected before gameplay and are not influenced by animations.
-        </p>
-        <button
-          onClick={() => setShowDisclaimer(false)}
-          className="self-end bg-indigo-500 hover:bg-indigo-400 text-white px-6 py-2 rounded-full font-semibold text-sm sm:text-base shadow-lg transition-transform duration-200 hover:scale-105"
-        >
-          Got it
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-      <Footer />
+      <GameDisclaimer open={showDisclaimer} onClose={() => setShowDisclaimer(false)} />
       
       <style>{`
         @keyframes gradient-shift {
@@ -577,6 +526,6 @@ const { competitionId, orderId } = params;
           50% { transform: translateY(-3px); }
         }
       `}</style>
-    </div>
+    </GameShell>
   );
 }

@@ -5,9 +5,10 @@ import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import UnifiedBilling from "@/components/unified-billing";
+import BillingChrome from "@/components/billing/BillingChrome";
+import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { UserCircle, Shield, Loader2 } from "lucide-react";
+import { UserCircle, Shield, Loader2, Lock } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -16,18 +17,17 @@ export default function GuestBilling() {
   const [, setLocation] = useLocation();
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
-  
+
   const [showGuestForm, setShowGuestForm] = useState(true);
   const [guestForm, setGuestForm] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
   });
-  const [guestFormErrors, setGuestFormErrors] = useState<{[key: string]: string}>({});
+  const [guestFormErrors, setGuestFormErrors] = useState<{ [key: string]: string }>({});
   const [isFormValid, setIsFormValid] = useState(false);
 
-  // FETCH ORDER DATA FIRST - this is critical!
   const { data: orderData, isLoading: orderLoading, error: orderError } = useQuery({
     queryKey: ["/api/guest/order", orderId],
     enabled: !!orderId,
@@ -37,12 +37,10 @@ export default function GuestBilling() {
     },
   });
 
-  // Get gameType from order data OR URL params
   const searchParams = new URLSearchParams(window.location.search);
-  const urlGameType = searchParams.get('gameType') || 'pop';
+  const urlGameType = searchParams.get("gameType") || "pop";
   const gameType = orderData?.order?.gameType || urlGameType;
 
-  // If order fetch fails, show error
   useEffect(() => {
     if (orderError) {
       toast({
@@ -53,27 +51,25 @@ export default function GuestBilling() {
     }
   }, [orderError, toast]);
 
-  // If user is authenticated, redirect to appropriate billing
   useEffect(() => {
     if (isAuthenticated && orderId) {
       const gameTypeMap: Record<string, string> = {
-        spin: 'spin-billing',
-        scratch: 'scratch-billing',
-        pop: 'pop-billing',
-        plinko: 'plinko-billing',
-        voltz: 'voltz-billing',
-        slot: 'slot-billing',
-        royal: 'royal-billing',
+        spin: "spin-billing",
+        scratch: "scratch-billing",
+        pop: "pop-billing",
+        plinko: "plinko-billing",
+        voltz: "voltz-billing",
+        slot: "slot-billing",
+        royal: "royal-billing",
       };
-      
-      const route = gameTypeMap[gameType] || 'checkout';
+
+      const route = gameTypeMap[gameType] || "checkout";
       setLocation(`/${route}/${orderId}`);
     }
   }, [isAuthenticated, orderId, gameType, setLocation]);
 
-  // Validate guest form
   const validateGuestForm = () => {
-    const errors: {[key: string]: string} = {};
+    const errors: { [key: string]: string } = {};
     if (!guestForm.firstName.trim()) errors.firstName = "First name is required";
     if (!guestForm.lastName.trim()) errors.lastName = "Last name is required";
     if (!guestForm.email.trim()) {
@@ -83,7 +79,7 @@ export default function GuestBilling() {
     }
     if (!guestForm.phone.trim()) {
       errors.phone = "Phone number is required";
-    } else if (guestForm.phone.replace(/\s/g, '').length < 10) {
+    } else if (guestForm.phone.replace(/\s/g, "").length < 10) {
       errors.phone = "Please enter a valid phone number";
     }
     setGuestFormErrors(errors);
@@ -92,26 +88,36 @@ export default function GuestBilling() {
     return isValid;
   };
 
-  // Update validation on form change
   useEffect(() => {
     validateGuestForm();
   }, [guestForm]);
 
-  // Handle form submission - update order with guest details then proceed
+  useEffect(() => {
+    if (orderData?.order) {
+      const order = orderData.order;
+      setGuestForm({
+        firstName: order.firstName || "",
+        lastName: order.lastName || "",
+        email: order.guestEmail || "",
+        phone: order.guestPhone || "",
+      });
+    }
+  }, [orderData]);
+
   const handleGuestFormSubmit = async () => {
     if (!validateGuestForm()) {
       toast({
         title: "Please fill in all fields",
         description: "All guest details are required for checkout.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
     try {
       const response = await fetch(`/api/guest/update-details/${orderId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           firstName: guestForm.firstName,
           lastName: guestForm.lastName,
@@ -123,11 +129,11 @@ export default function GuestBilling() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to update guest details');
+        throw new Error(data.message || "Failed to update guest details");
       }
 
       setShowGuestForm(false);
-      
+
       toast({
         title: "Details Saved!",
         description: "Proceed to payment.",
@@ -136,32 +142,37 @@ export default function GuestBilling() {
       toast({
         title: "Error",
         description: error.message || "Failed to save details. Please try again.",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
 
-  // Loading state
+  const fieldClass = (hasError: boolean) =>
+    `h-12 rounded-xl bg-white/[0.04] text-white placeholder:text-white/30 ${
+      hasError ? "border-[#C8102E]" : "border-white/10"
+    }`;
+
   if (orderLoading) {
     return (
-      <div className="min-h-screen bg-[#0a0800] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#FFC300] animate-spin" />
-        <p className="text-gray-400 ml-3">Loading order...</p>
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] text-white">
+        <DigitalAtmosphere />
+        <Loader2 className="relative z-10 h-8 w-8 animate-spin text-[#C8102E]" />
+        <p className="relative z-10 ml-3 text-white/50">Loading order...</p>
       </div>
     );
   }
 
-  // Check if order exists
   if (!orderData?.order) {
     return (
-      <div className="min-h-screen bg-[#0a0800] flex items-center justify-center">
-        <div className="text-white text-center">
-          <UserCircle className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Order Not Found</h2>
-          <p className="text-gray-400">The order you're looking for doesn't exist or has expired.</p>
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] text-white">
+        <DigitalAtmosphere />
+        <div className="relative z-10 px-6 text-center">
+          <UserCircle className="mx-auto mb-4 h-16 w-16 text-white/20" />
+          <h2 className="font-prize text-3xl">Order not found</h2>
+          <p className="mt-2 text-white/50">This order does not exist or has expired.</p>
           <button
             onClick={() => setLocation("/")}
-            className="mt-4 bg-[#FFC300] text-black px-6 py-2 rounded-lg font-bold hover:bg-[#FF8C00] transition"
+            className="rr-cta mt-6 inline-flex px-6 py-2.5 text-sm"
           >
             Back to Home
           </button>
@@ -172,130 +183,137 @@ export default function GuestBilling() {
 
   if (!orderId) {
     return (
-      <div className="min-h-screen bg-[#0a0800] flex items-center justify-center">
-        <div className="text-white text-center">
-          <h2 className="text-2xl font-bold mb-2">Invalid Order</h2>
-          <p className="text-gray-400">Please go back and try again.</p>
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] text-white">
+        <DigitalAtmosphere />
+        <div className="relative z-10 px-6 text-center">
+          <h2 className="font-prize text-3xl">Invalid order</h2>
+          <p className="mt-2 text-white/50">Please go back and try again.</p>
         </div>
       </div>
     );
   }
 
-  // Pre-fill guest form from order data if available
-  useEffect(() => {
-    if (orderData?.order) {
-      const order = orderData.order;
-      setGuestForm({
-        firstName: order.firstName || '',
-        lastName: order.lastName || '',
-        email: order.guestEmail || '',
-        phone: order.guestPhone || '',
-      });
-    }
-  }, [orderData]);
+  if (!showGuestForm) {
+    return (
+      <BillingChrome
+        kicker="Guest · checkout"
+        title="CHECKOUT"
+        subtitle="Pay here to complete your guest order."
+        facts={["Guest checkout"]}
+        Icon={UserCircle}
+      >
+        <UnifiedBilling orderId={orderId} orderType={gameType as any} />
+      </BillingChrome>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#0a0800]">
+    <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <DigitalAtmosphere />
       <Header />
-      <div className="container mx-auto px-4 py-8">
-        {showGuestForm ? (
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-[#0e0a02] border border-[rgba(255,185,0,0.2)] rounded-xl p-6 md:p-8">
-              <div className="flex items-center gap-3 mb-2">
-                <UserCircle className="w-6 h-6 text-[#FFC300]" />
-                <h2 className="text-xl font-bold text-white">Guest Checkout</h2>
-              </div>
-              <p className="text-gray-400 text-sm mb-6">Please enter your details to continue with payment</p>
+      <main className="relative z-10 flex-1 pb-12 pt-5 sm:pt-8">
+        <div className="mx-auto max-w-xl px-4 sm:px-6">
+          <div className="mb-6 text-center">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#C8102E]/40 bg-[#C8102E]/10 px-3 py-1">
+              <UserCircle className="h-3.5 w-3.5 text-[#F1D47A]" />
+              <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">
+                Guest · checkout
+              </span>
+            </div>
+            <h1 className="font-prize text-4xl text-white sm:text-5xl">YOUR DETAILS</h1>
+            <p className="mx-auto mt-2 max-w-md text-sm text-white/50">
+              Enter these once so we can confirm your purchase and send any winnings.
+            </p>
+          </div>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-400 block mb-1.5">
-                      First Name <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      value={guestForm.firstName}
-                      onChange={(e) => setGuestForm({ ...guestForm, firstName: e.target.value })}
-                      placeholder="John"
-                      className={`bg-[rgba(255,255,255,0.05)] border ${guestFormErrors.firstName ? 'border-red-500' : 'border-[rgba(255,185,0,0.2)]'} text-white rounded-xl py-3`}
-                    />
-                    {guestFormErrors.firstName && (
-                      <p className="text-red-500 text-xs mt-1">{guestFormErrors.firstName}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-400 block mb-1.5">
-                      Last Name <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      value={guestForm.lastName}
-                      onChange={(e) => setGuestForm({ ...guestForm, lastName: e.target.value })}
-                      placeholder="Doe"
-                      className={`bg-[rgba(255,255,255,0.05)] border ${guestFormErrors.lastName ? 'border-red-500' : 'border-[rgba(255,185,0,0.2)]'} text-white rounded-xl py-3`}
-                    />
-                    {guestFormErrors.lastName && (
-                      <p className="text-red-500 text-xs mt-1">{guestFormErrors.lastName}</p>
-                    )}
-                  </div>
-                </div>
-
+          <div className="rounded-2xl border border-white/10 bg-[#0A0A0D]/80 p-6 sm:p-8">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="text-sm font-medium text-gray-400 block mb-1.5">
-                    Email Address <span className="text-red-500">*</span>
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.16em] text-white/45">
+                    First name <span className="text-[#FF263D]">*</span>
                   </label>
                   <Input
-                    value={guestForm.email}
-                    onChange={(e) => setGuestForm({ ...guestForm, email: e.target.value })}
-                    placeholder="john@example.com"
-                    type="email"
-                    className={`bg-[rgba(255,255,255,0.05)] border ${guestFormErrors.email ? 'border-red-500' : 'border-[rgba(255,185,0,0.2)]'} text-white rounded-xl py-3`}
+                    value={guestForm.firstName}
+                    onChange={(e) => setGuestForm({ ...guestForm, firstName: e.target.value })}
+                    placeholder="John"
+                    className={fieldClass(!!guestFormErrors.firstName)}
                   />
-                  {guestFormErrors.email && (
-                    <p className="text-red-500 text-xs mt-1">{guestFormErrors.email}</p>
+                  {guestFormErrors.firstName && (
+                    <p className="mt-1 text-xs text-[#FF263D]">{guestFormErrors.firstName}</p>
                   )}
                 </div>
-
                 <div>
-                  <label className="text-sm font-medium text-gray-400 block mb-1.5">
-                    Phone Number <span className="text-red-500">*</span>
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.16em] text-white/45">
+                    Last name <span className="text-[#FF263D]">*</span>
                   </label>
                   <Input
-                    value={guestForm.phone}
-                    onChange={(e) => setGuestForm({ ...guestForm, phone: e.target.value })}
-                    placeholder="+44 1234 567890"
-                    className={`bg-[rgba(255,255,255,0.05)] border ${guestFormErrors.phone ? 'border-red-500' : 'border-[rgba(255,185,0,0.2)]'} text-white rounded-xl py-3`}
+                    value={guestForm.lastName}
+                    onChange={(e) => setGuestForm({ ...guestForm, lastName: e.target.value })}
+                    placeholder="Doe"
+                    className={fieldClass(!!guestFormErrors.lastName)}
                   />
-                  {guestFormErrors.phone && (
-                    <p className="text-red-500 text-xs mt-1">{guestFormErrors.phone}</p>
+                  {guestFormErrors.lastName && (
+                    <p className="mt-1 text-xs text-[#FF263D]">{guestFormErrors.lastName}</p>
                   )}
                 </div>
-
-                <div className="bg-[rgba(0,207,255,0.06)] border border-[rgba(0,207,255,0.15)] rounded-xl p-4 flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-gray-400">
-                    Your details are safe and will be used to confirm your purchase and send your winnings.
-                  </p>
-                </div>
-
-                <Button
-                  onClick={handleGuestFormSubmit}
-                  disabled={!isFormValid}
-                  className="w-full bg-gradient-to-r from-[#FFC300] to-[#FF8C00] text-black font-bold py-4 rounded-xl hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-base"
-                >
-                  Continue to Payment
-                </Button>
               </div>
+
+              <div>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.16em] text-white/45">
+                  Email address <span className="text-[#FF263D]">*</span>
+                </label>
+                <Input
+                  value={guestForm.email}
+                  onChange={(e) => setGuestForm({ ...guestForm, email: e.target.value })}
+                  placeholder="john@example.com"
+                  type="email"
+                  className={fieldClass(!!guestFormErrors.email)}
+                />
+                {guestFormErrors.email && (
+                  <p className="mt-1 text-xs text-[#FF263D]">{guestFormErrors.email}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.16em] text-white/45">
+                  Phone number <span className="text-[#FF263D]">*</span>
+                </label>
+                <Input
+                  value={guestForm.phone}
+                  onChange={(e) => setGuestForm({ ...guestForm, phone: e.target.value })}
+                  placeholder="+44 1234 567890"
+                  className={fieldClass(!!guestFormErrors.phone)}
+                />
+                {guestFormErrors.phone && (
+                  <p className="mt-1 text-xs text-[#FF263D]">{guestFormErrors.phone}</p>
+                )}
+              </div>
+
+              <div className="flex items-start gap-3 rounded-xl border border-[#F1D47A]/20 bg-[#F1D47A]/5 p-4">
+                <Shield className="mt-0.5 h-5 w-5 shrink-0 text-[#F1D47A]" />
+                <p className="text-sm text-white/55">
+                  Your details are used to confirm this purchase and send your winnings. We do not share them.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGuestFormSubmit}
+                disabled={!isFormValid}
+                className="rr-cta w-full py-3.5 text-base disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Continue to payment
+              </button>
+
+              <p className="flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white/35">
+                <Lock className="h-3 w-3 text-[#F1D47A]" />
+                SSL checkout
+              </p>
             </div>
           </div>
-        ) : (
-          <UnifiedBilling
-            orderId={orderId} 
-            orderType={gameType as any} 
-            isGuest={true}
-            guestData={guestForm}
-          />
-        )}
-      </div>
+        </div>
+      </main>
       <Footer />
     </div>
   );

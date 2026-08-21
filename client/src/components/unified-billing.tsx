@@ -13,13 +13,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
-/* ═══════ COLOURS ═══════ */
-const BG    = "#0a0800";
-const PANEL = "#0e0a02";
-const GOLD  = "#FFC300";
-const AMBER = "#FF8C00";
-const BORDER = "rgba(255,185,0,0.2)";
+/* ═══════ COLOURS (overridable via --ub-* on .rr-billing) ═══════ */
+const BG    = "var(--ub-bg, #0a0800)";
+const PANEL = "var(--ub-panel, #0e0a02)";
+const GOLD  = "var(--ub-gold, #FFC300)";
+const AMBER = "var(--ub-amber, #FF8C00)";
+const BORDER = "var(--ub-border, rgba(var(--ub-gold-rgb, 255, 185, 0),0.2))";
+const PLAY  = "var(--ub-play, #00CFFF)";
+const CTA_HI = "var(--ub-cta-hi, #FFE066)";
+const CTA_FG = "var(--ub-cta-fg, #000)";
 const P: React.CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 14 };
+const goldA = (a: number) => `rgba(var(--ub-gold-rgb, 255, 185, 0), ${a})`;
 
 interface UnifiedBillingProps {
   orderId: string;
@@ -464,25 +468,25 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
   const qty = order?.quantity || 1;
 
   if (isLoading) return (
-    <div style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: BG }}>
-      <div style={{ width: 48, height: 48, border: "2px solid rgba(255,185,0,0.15)", borderTopColor: GOLD, borderRadius: "50%", animation: "ub-spin 0.8s linear infinite" }} />
-      <p style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,185,0,0.4)" }}>Loading Order...</p>
+    <div className="ub-root" style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: BG }}>
+      <div style={{ width: 48, height: 48, border: "2px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.15)", borderTopColor: GOLD, borderRadius: "50%", animation: "ub-spin 0.8s linear infinite" }} />
+      <p style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.4)" }}>Loading Order...</p>
       <style>{`@keyframes ub-spin { to { transform:rotate(360deg) } }`}</style>
     </div>
   );
 
   if (!order) return (
-    <div style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, background: BG, color: "#fff" }}>
+    <div className="ub-root" style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, background: BG, color: "#fff" }}>
       <AlertCircle style={{ width: 48, height: 48, color: "#FF3B30" }} />
       <p style={{ fontSize: 16, fontWeight: 700 }}>Invalid or expired order.</p>
     </div>
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: BG, color: "#fff", fontFamily: "inherit" }}>
+    <div className="ub-root" style={{ minHeight: "100vh", background: BG, color: "#fff", fontFamily: "inherit" }}>
 
       {/* ══ PROGRESS BAR ══ */}
-      <div style={{ background: "#060500", borderBottom: `1px solid ${BORDER}` }}>
+      <div style={{ background: BG, borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 50 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
             {[
@@ -503,9 +507,9 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
               </div>
             ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: "rgba(0,207,255,0.08)", border: "1px solid rgba(0,207,255,0.25)" }}>
-            <Lock style={{ width: 11, height: 11, color: "#00CFFF" }} />
-            <span style={{ fontSize: 8.5, fontWeight: 900, color: "#00CFFF", textTransform: "uppercase", letterSpacing: "0.16em" }}>256-BIT SSL ENCRYPTED</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: goldA(0.1), border: `1px solid ${goldA(0.28)}` }}>
+            <Lock style={{ width: 11, height: 11, color: GOLD }} />
+            <span style={{ fontSize: 8.5, fontWeight: 900, color: GOLD, textTransform: "uppercase", letterSpacing: "0.16em" }}>256-BIT SSL ENCRYPTED</span>
           </div>
         </div>
       </div>
@@ -529,7 +533,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                 {prizeVal && (
                   <div style={{ position: "absolute", bottom: 10, left: 0, right: 0, textAlign: "center" }}>
                     {[prizeVal, prizeVal, prizeVal].slice(0, 3).map((v, i) => (
-                      <span key={i} style={{ fontSize: 11, fontWeight: 900, color: GOLD, textShadow: `0 0 14px rgba(255,185,0,0.9)`, marginRight: 4 }}>{v}</span>
+                      <span key={i} style={{ fontSize: 11, fontWeight: 900, color: GOLD, textShadow: `0 0 14px rgba(var(--ub-gold-rgb, 255, 185, 0),0.9)`, marginRight: 4 }}>{v}</span>
                     ))}
                   </div>
                 )}
@@ -541,7 +545,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                     <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#00E676", boxShadow: "0 0 6px #00E676", animation: "ub-blink 1.5s ease-in-out infinite" }} />
                     <span style={{ fontSize: 8, fontWeight: 900, color: "#00E676", textTransform: "uppercase", letterSpacing: "0.18em" }}>LIVE DRAW</span>
                   </div>
-                  <div style={{ padding: "3px 9px", borderRadius: 20, background: "rgba(255,185,0,0.1)", border: `1px solid rgba(255,185,0,0.25)` }}>
+                  <div style={{ padding: "3px 9px", borderRadius: 20, background: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.1)", border: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.25)` }}>
                     <span style={{ fontSize: 8, fontWeight: 900, color: GOLD, textTransform: "uppercase", letterSpacing: "0.16em" }}>FINAL STEP →</span>
                   </div>
                 </div>
@@ -549,7 +553,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                 <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.22em", marginBottom: 4 }}>
                   YOU'RE ABOUT TO ACTIVATE
                 </div>
-                <h2 style={{ fontSize: "clamp(1.4rem, 3vw, 2.1rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 30px rgba(255,185,0,0.5)`, lineHeight: 1.05, marginBottom: 8, textTransform: "uppercase" }}>
+                <h2 style={{ fontSize: "clamp(1.4rem, 3vw, 2.1rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 30px rgba(var(--ub-gold-rgb, 255, 185, 0),0.5)`, lineHeight: 1.05, marginBottom: 8, textTransform: "uppercase" }}>
                   {orderType === "competition" && competition ? competition.title.replace(/^WIN\s+/i, "").replace(/[🎁🎄🚰🎮💷📱⚡️🔥💥🏆]/g, "").split("–")[0].trim() : getTitle()}
                 </h2>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 16 }}>
@@ -563,10 +567,10 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                   {[
                     { icon: Zap,     label: "Instant", sub: "Results",           color: GOLD    },
                     { icon: Trophy,  label: prizeVal === "PRIZES" ? "Instant" : (prizeVal || "Top"),  sub: "Prize",    color: AMBER   },
-                    { icon: Shield,  label: "Secure &", sub: "Fair Draw",        color: "#00CFFF" },
+                    { icon: Shield,  label: "Secure &", sub: "Fair Draw",        color: PLAY    },
                     { icon: Sparkles,label: "Bonus", sub: "Points",              color: "#8B5CF6" },
                   ].map((f, i) => {
-                    const rgb = f.color === GOLD ? "255,185,0" : f.color === AMBER ? "255,140,0" : f.color === "#00CFFF" ? "0,207,255" : "139,92,246";
+                    const rgb = f.color === GOLD ? "var(--ub-gold-rgb, 255, 185, 0)" : f.color === AMBER ? "var(--ub-amber-rgb, 255, 140, 0)" : f.color === PLAY ? "var(--ub-play-rgb, 0, 207, 255)" : "139,92,246";
                     return (
                       <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "8px 4px", borderRadius: 9, background: `rgba(${rgb},0.06)`, border: `1px solid rgba(${rgb},0.15)` }}>
                         <f.icon style={{ width: 18, height: 18, color: f.color }} />
@@ -584,7 +588,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
 
           {/* ENTRY ACTIVATION */}
           <div style={{ ...P, overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: `1px solid rgba(255,185,0,0.1)` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.1)` }}>
               <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                 <Zap style={{ width: 15, height: 15, color: GOLD }} />
                 <span style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(255,255,255,0.7)" }}>ENTRY ACTIVATION</span>
@@ -599,16 +603,16 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                   </button>
                 </div>
               ) : (
-                <button onClick={() => setShowDiscountDialog(true)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 11px", borderRadius: 9, background: "rgba(255,185,0,0.06)", border: `1px solid rgba(255,185,0,0.2)`, color: GOLD, fontSize: 8.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.14em", cursor: "pointer" }}>
+                <button onClick={() => setShowDiscountDialog(true)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 11px", borderRadius: 9, background: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.06)", border: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.2)`, color: GOLD, fontSize: 8.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.14em", cursor: "pointer" }}>
                   <Tag style={{ width: 10, height: 10 }} />APPLY DISCOUNT
                 </button>
               )}
             </div>
 
             <div style={{ padding: "4px 0" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 18px", borderBottom: `1px solid rgba(255,185,0,0.06)` }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 18px", borderBottom: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.06)` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,185,0,0.1)", border: `1px solid rgba(255,185,0,0.2)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.1)", border: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.2)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Ticket style={{ width: 15, height: 15, color: GOLD }} />
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{getItemName()}</span>
@@ -616,19 +620,19 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                 <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.65)" }}>{qty} Entr{qty === 1 ? "y" : "ies"}</span>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 18px", borderBottom: `1px solid rgba(255,185,0,0.06)` }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 18px", borderBottom: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.06)` }}>
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Price per Entry</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>£{itemCost.toFixed(2)}</span>
               </div>
 
               {discountType === "percentage" && percentageDiscount > 0 && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 18px", borderBottom: `1px solid rgba(255,185,0,0.06)` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 18px", borderBottom: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.06)` }}>
                   <span style={{ fontSize: 12, color: "#00E676" }}>{percentageDiscount}% Discount</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "#00E676" }}>-£{percentageDiscountCashValue.toFixed(2)}</span>
                 </div>
               )}
               {discountType === "cash" && appliedDiscount > 0 && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 18px", borderBottom: `1px solid rgba(255,185,0,0.06)` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 18px", borderBottom: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.06)` }}>
                   <span style={{ fontSize: 12, color: "#00E676" }}>Cash Discount</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "#00E676" }}>-£{appliedDiscount.toFixed(2)}</span>
                 </div>
@@ -640,7 +644,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                   {(appliedDiscount > 0 || percentageDiscount > 0) && (
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textDecoration: "line-through", marginBottom: 2 }}>£{originalTotalAmount.toFixed(2)}</div>
                   )}
-                  <div style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 28px rgba(255,185,0,0.6)`, lineHeight: 1 }}>£{totalAmount.toFixed(2)}</div>
+                  <div style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 28px rgba(var(--ub-gold-rgb, 255, 185, 0),0.6)`, lineHeight: 1 }}>£{totalAmount.toFixed(2)}</div>
                 </div>
               </div>
             </div>
@@ -648,7 +652,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
 
           {/* PAYMENT TERMINAL */}
           <div style={{ ...P, overflow: "hidden" }}>
-            <div style={{ padding: "12px 16px 6px", borderBottom: `1px solid rgba(255,185,0,0.1)` }}>
+            <div style={{ padding: "12px 16px 6px", borderBottom: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.1)` }}>
               <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2 }}>
                 <CreditCard style={{ width: 15, height: 15, color: GOLD }} />
                 <span style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(255,255,255,0.7)" }}>PAYMENT TERMINAL</span>
@@ -660,14 +664,14 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
 
               {/* WALLET BALANCE */}
               <div onClick={() => handleMethodToggle("walletBalance")} data-testid="checkbox-wallet"
-                style={{ padding: "13px 16px", borderRadius: 12, border: `2px solid ${selectedMethods.walletBalance ? GOLD : "rgba(255,255,255,0.1)"}`, background: selectedMethods.walletBalance ? "rgba(255,185,0,0.07)" : "rgba(255,255,255,0.02)", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, transition: "all 0.18s" }}>
-                <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(255,185,0,0.1)", border: `1px solid rgba(255,185,0,0.25)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                style={{ padding: "13px 16px", borderRadius: 12, border: `2px solid ${selectedMethods.walletBalance ? GOLD : "rgba(255,255,255,0.1)"}`, background: selectedMethods.walletBalance ? "rgba(var(--ub-gold-rgb, 255, 185, 0),0.07)" : "rgba(255,255,255,0.02)", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, transition: "all 0.18s" }}>
+                <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.1)", border: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.25)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <Wallet style={{ width: 20, height: 20, color: GOLD }} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
                     <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>Wallet Balance</span>
-                    <div style={{ padding: "1px 8px", borderRadius: 20, fontSize: 7.5, fontWeight: 900, background: "rgba(255,185,0,0.12)", border: `1px solid rgba(255,185,0,0.3)`, color: GOLD, letterSpacing: "0.1em" }}>FAST ⚡</div>
+                    <div style={{ padding: "1px 8px", borderRadius: 20, fontSize: 7.5, fontWeight: 900, background: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.12)", border: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.3)`, color: GOLD, letterSpacing: "0.1em" }}>FAST ⚡</div>
                   </div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>Available: <span style={{ color: GOLD, fontWeight: 800 }}>£{walletBalance.toFixed(2)}</span></div>
                   {selectedMethods.walletBalance && walletUsed > 0 && <div style={{ fontSize: 9.5, color: "#00E676", marginTop: 2 }}>✓ Using £{walletUsed.toFixed(2)} from wallet</div>}
@@ -707,8 +711,8 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                   style={{ 
                     padding: "13px 16px", 
                     borderRadius: 12, 
-                    border: `2px solid ${selectedMethods.instaplay ? "#00CFFF" : "rgba(255,255,255,0.1)"}`, 
-                    background: selectedMethods.instaplay ? "rgba(0,207,255,0.06)" : "rgba(255,255,255,0.02)", 
+                    border: `2px solid ${selectedMethods.instaplay ? PLAY : "rgba(255,255,255,0.1)"}`, 
+                    background: selectedMethods.instaplay ? "rgba(var(--ub-play-rgb, 0, 207, 255), 0.06)" : "rgba(255,255,255,0.02)", 
                     cursor: "pointer", 
                     display: "flex", 
                     alignItems: "center", 
@@ -716,13 +720,13 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                     transition: "all 0.18s" 
                   }}
                 >
-                  <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(0,207,255,0.1)", border: "1px solid rgba(0,207,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Zap style={{ width: 20, height: 20, color: "#00CFFF" }} />
+                  <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(var(--ub-play-rgb, 0, 207, 255), 0.1)", border: "1px solid rgba(var(--ub-play-rgb, 0, 207, 255), 0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Zap style={{ width: 20, height: 20, color: PLAY }} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
                       <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>Instant Play</span>
-                      <div style={{ padding: "1px 8px", borderRadius: 20, fontSize: 7.5, fontWeight: 900, background: "rgba(0,207,255,0.1)", border: "1px solid rgba(0,207,255,0.25)", color: "#00CFFF", letterSpacing: "0.08em" }}>
+                      <div style={{ padding: "1px 8px", borderRadius: 20, fontSize: 7.5, fontWeight: 900, background: "rgba(var(--ub-play-rgb, 0, 207, 255), 0.1)", border: "1px solid rgba(var(--ub-play-rgb, 0, 207, 255), 0.25)", color: PLAY, letterSpacing: "0.08em" }}>
                         FAST & INSTANT
                       </div>
                     </div>
@@ -750,8 +754,8 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                   
                   <div style={{ 
                     width: 20, height: 20, borderRadius: "50%", 
-                    border: `2px solid ${selectedMethods.instaplay ? "#00CFFF" : "rgba(255,255,255,0.25)"}`, 
-                    background: selectedMethods.instaplay ? "#00CFFF" : "transparent", 
+                    border: `2px solid ${selectedMethods.instaplay ? PLAY : "rgba(255,255,255,0.25)"}`, 
+                    background: selectedMethods.instaplay ? PLAY : "transparent", 
                     display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 
                   }}>
                     {selectedMethods.instaplay && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#000" }} />}
@@ -797,17 +801,17 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                   : selectedMethods.instaplay && totalAmount < MIN_PURCHASE
                     ? "rgba(255,122,0,0.2)"
                     : selectedMethods.instaplay
-                      ? "linear-gradient(135deg,#00B4CC,#0070F3,#00B4CC)"
-                      : `linear-gradient(135deg,#FFE066 0%,${GOLD} 25%,${AMBER} 55%,${GOLD} 80%,#FFE066 100%)`,
+                      ? `linear-gradient(135deg, ${PLAY}, #0070F3, ${PLAY})`
+                      : `linear-gradient(135deg,${CTA_HI} 0%,${GOLD} 25%,${AMBER} 55%,${GOLD} 80%,${CTA_HI} 100%)`,
                 backgroundSize: "250% 100%",
                 color: (isProcessing || !agreeToTerms || !hasSelectedMethod) 
                   ? "rgba(255,255,255,0.2)" 
                   : selectedMethods.instaplay && totalAmount < MIN_PURCHASE
                     ? "#FF9500"
-                    : "#000",
+                    : CTA_FG,
                 boxShadow: (isProcessing || !agreeToTerms || !hasSelectedMethod || (selectedMethods.instaplay && totalAmount < MIN_PURCHASE)) 
                   ? "none" 
-                  : `0 0 40px rgba(255,185,0,0.45), 0 8px 30px rgba(255,140,0,0.3)`,
+                  : `0 0 40px rgba(var(--ub-gold-rgb, 255, 185, 0),0.45), 0 8px 30px rgba(var(--ub-amber-rgb, 255, 140, 0),0.3)`,
                 animation: (isProcessing || !agreeToTerms || !hasSelectedMethod || (selectedMethods.instaplay && totalAmount < MIN_PURCHASE)) 
                   ? "none" 
                   : "ub-plasma 3s ease infinite",
@@ -818,7 +822,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
               )}
               <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
                 {isProcessing ? (
-                  <><div style={{ width: 20, height: 20, border: "2px solid rgba(0,0,0,0.3)", borderTopColor: "transparent", borderRadius: "50%", animation: "ub-spin 0.7s linear infinite" }} />PROCESSING...</>
+                  <><div style={{ width: 20, height: 20, border: "2px solid currentColor", borderTopColor: "transparent", borderRadius: "50%", animation: "ub-spin 0.7s linear infinite" }} />PROCESSING...</>
                 ) : selectedMethods.instaplay && totalAmount < MIN_PURCHASE ? (
                   <><AlertCircle style={{ width: 20, height: 20 }} />MINIMUM £{MIN_PURCHASE} REQUIRED</>
                 ) : selectedMethods.instaplay ? (
@@ -848,12 +852,12 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <Lock style={{ width: 10, height: 10, color: "rgba(255,185,0,0.45)" }} />
+                <Lock style={{ width: 10, height: 10, color: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.45)" }} />
                 <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.14em" }}>Safe. Secure. Encrypted.</span>
               </div>
               <div style={{ width: 3, height: 3, borderRadius: "50%", background: "rgba(255,255,255,0.15)" }} />
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <Shield style={{ width: 10, height: 10, color: "rgba(255,185,0,0.45)" }} />
+                <Shield style={{ width: 10, height: 10, color: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.45)" }} />
                 <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.14em" }}>256-Bit SSL Protection</span>
               </div>
             </div>
@@ -866,16 +870,16 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
           {/* PRIZE POOL - ✅ FIXED with imageSrc */}
           <div style={{ ...P, overflow: "hidden" }}>
             <div style={{ height: 2, background: `linear-gradient(90deg,transparent,${GOLD},${AMBER},transparent)` }} />
-            <div style={{ padding: "12px 14px 6px", borderBottom: `1px solid rgba(255,185,0,0.1)`, display: "flex", alignItems: "center", gap: 7 }}>
+            <div style={{ padding: "12px 14px 6px", borderBottom: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.1)`, display: "flex", alignItems: "center", gap: 7 }}>
               <span style={{ fontSize: 12 }}>🏆</span>
-              <span style={{ fontSize: 8.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(255,185,0,0.6)" }}>PRIZE POOL</span>
+              <span style={{ fontSize: 8.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.6)" }}>PRIZE POOL</span>
             </div>
             <div style={{ position: "relative", overflow: "hidden", textAlign: "center", padding: "10px 14px 0" }}>
               <img src={imageSrc} alt="" onError={e => { (e.target as HTMLImageElement).src = FALLBACK; }}
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.25, filter: "saturate(1.4) blur(4px)" }} />
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,rgba(14,10,2,0.6) 0%,rgba(14,10,2,0.92) 100%)" }} />
               <div style={{ position: "relative", zIndex: 2, padding: "4px 0 12px" }}>
-                <div style={{ fontSize: prizeVal?.startsWith("£") ? "clamp(2rem, 6vw, 3rem)" : "clamp(1.4rem, 4vw, 2.2rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 40px rgba(255,185,0,0.8), 0 0 80px rgba(255,185,0,0.4)`, lineHeight: 1, padding: "0 8px" }}>
+                <div style={{ fontSize: prizeVal?.startsWith("£") ? "clamp(2rem, 6vw, 3rem)" : "clamp(1.4rem, 4vw, 2.2rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 40px rgba(var(--ub-gold-rgb, 255, 185, 0),0.8), 0 0 80px rgba(var(--ub-gold-rgb, 255, 185, 0),0.4)`, lineHeight: 1, padding: "0 8px" }}>
                   {prizeVal || "PRIZE"}
                 </div>
                 <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.22em", color: "rgba(255,255,255,0.45)", marginTop: 4, padding: "0 10px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -883,7 +887,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 10, marginBottom: 4 }}>
                   {["💰", "💰", "💰"].map((e, i) => (
-                    <span key={i} style={{ fontSize: 24, filter: "drop-shadow(0 0 12px rgba(255,185,0,0.5))", animation: `ub-float ${2.5 + i * 0.4}s ease-in-out ${i * 0.3}s infinite` }}>{e}</span>
+                    <span key={i} style={{ fontSize: 24, filter: "drop-shadow(0 0 12px rgba(var(--ub-gold-rgb, 255, 185, 0),0.5))", animation: `ub-float ${2.5 + i * 0.4}s ease-in-out ${i * 0.3}s infinite` }}>{e}</span>
                   ))}
                 </div>
               </div>
@@ -893,20 +897,20 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
           {/* ENTRY RESERVED TIMER */}
           <div style={{ ...P, padding: "14px 16px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
-              <div style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(255,185,0,0.1)", border: `1px solid rgba(255,185,0,0.3)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: GOLD }}>1</div>
-              <span style={{ fontSize: 8.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.2em", color: "rgba(255,185,0,0.6)" }}>ENTRY RESERVED</span>
+              <div style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.1)", border: `1px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.3)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: GOLD }}>1</div>
+              <span style={{ fontSize: 8.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.2em", color: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.6)" }}>ENTRY RESERVED</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
               <div style={{ position: "relative", width: 120, height: 120 }}>
                 <svg width="120" height="120" viewBox="0 0 120 120" style={{ position: "absolute", inset: 0 }}>
-                  <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,185,0,0.08)" strokeWidth="6" />
+                  <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(var(--ub-gold-rgb, 255, 185, 0),0.08)" strokeWidth="6" />
                   <circle cx="60" cy="60" r="52" fill="none" stroke={GOLD} strokeWidth="6"
                     strokeDasharray={2 * Math.PI * 52} strokeDashoffset={2 * Math.PI * 52 * (1 - entryTimer / 600)}
                     strokeLinecap="round" transform="rotate(-90 60 60)"
-                    style={{ filter: `drop-shadow(0 0 8px rgba(255,185,0,0.6))` }} />
+                    style={{ filter: `drop-shadow(0 0 8px rgba(var(--ub-gold-rgb, 255, 185, 0),0.6))` }} />
                 </svg>
                 <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ fontSize: "clamp(1.4rem, 4vw, 1.9rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 20px rgba(255,185,0,0.7)`, fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}>
+                  <div style={{ fontSize: "clamp(1.4rem, 4vw, 1.9rem)", fontWeight: 900, color: GOLD, textShadow: `0 0 20px rgba(var(--ub-gold-rgb, 255, 185, 0),0.7)`, fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}>
                     {fmtTimer(entryTimer)}
                   </div>
                 </div>
@@ -938,7 +942,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                 onKeyDown={e => e.key === "Enter" && applyDiscountMutation.mutate(discountCode.trim().toUpperCase())}
               />
               <button onClick={() => applyDiscountMutation.mutate(discountCode.trim().toUpperCase())} disabled={applyDiscountMutation.isPending || !discountCode.trim()}
-                style={{ padding: "12px 0", borderRadius: 10, border: "none", background: `linear-gradient(135deg,#FFE066,${GOLD})`, color: "#000", fontWeight: 900, fontSize: 13, cursor: "pointer", opacity: !discountCode.trim() ? 0.5 : 1 }}>
+                style={{ padding: "12px 0", borderRadius: 10, border: "none", background: `linear-gradient(135deg,${CTA_HI},${GOLD})`, color: CTA_FG, fontWeight: 900, fontSize: 13, cursor: "pointer", opacity: !discountCode.trim() ? 0.5 : 1 }}>
                 {applyDiscountMutation.isPending ? "Applying..." : "Apply Code"}
               </button>
             </div>
@@ -957,7 +961,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
               <p>You need <strong style={{ color: GOLD }}>£{remainingAmount.toFixed(2)}</strong> more to complete this purchase.</p>
               <div style={{ display: "flex", gap: 10 }}>
                 <button onClick={() => { setShowTopUpModal(false); setLocation("/wallet?tab=topup"); }}
-                  style={{ flex: 1, padding: "11px 0", borderRadius: 10, border: "none", background: `linear-gradient(135deg,#FFE066,${GOLD})`, color: "#000", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
+                  style={{ flex: 1, padding: "11px 0", borderRadius: 10, border: "none", background: `linear-gradient(135deg,${CTA_HI},${GOLD})`, color: CTA_FG, fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
                   Top Up Wallet
                 </button>
                 <button onClick={() => setShowTopUpModal(false)}
@@ -977,7 +981,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
         @keyframes ub-shimmer { 0%{transform:translateX(-120%)} 100%{transform:translateX(220%)} }
         @keyframes ub-plasma  { 0%,100%{background-position:0% center} 50%{background-position:100% center} }
         @keyframes ub-float   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
-        .ub-cta:hover:not(:disabled) { transform:translateY(-2px); box-shadow: 0 0 55px rgba(255,185,0,0.55), 0 14px 40px rgba(255,140,0,0.38) !important; }
+        .ub-cta:hover:not(:disabled) { transform:translateY(-2px); box-shadow: 0 0 55px rgba(var(--ub-gold-rgb, 255, 185, 0),0.55), 0 14px 40px rgba(var(--ub-amber-rgb, 255, 140, 0),0.38) !important; }
         .ub-cta:active:not(:disabled) { transform:translateY(0); }
         @media(max-width:760px){
           .ub-main  { grid-template-columns:1fr !important; }

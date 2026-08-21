@@ -1,6 +1,5 @@
 import { useLocation } from "wouter";
 import { Competition } from "@shared/schema";
-import { Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
@@ -89,7 +88,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
     >
       <ChaserBorder variant="card" className="h-full transition-[box-shadow] duration-300 group-hover:shadow-[0_22px_50px_rgba(200,16,46,0.22)]">
         <article className="flex h-full flex-col">
-          <div className="rr-comp-media" style={{ aspectRatio: "4 / 3.1" }}>
+          <div className="rr-comp-media">
             <img
               src={imageSrc || getFallbackImage(competition.type)}
               alt={competition.title}
@@ -115,48 +114,42 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                 {badge}
               </span>
             </div>
+            <span className="rr-comp-price-tag">
+              {stats.isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
+            </span>
             {stats.isClosed && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/55">
-                <span className="rotate-[-8deg] rounded-md border border-white/20 bg-black/80 px-4 py-2 font-prize text-2xl text-[#FF263D]">
+                <span className="rr-comp-soldout rotate-[-8deg] rounded-md border border-white/20 bg-black/80 px-4 py-2 font-prize text-2xl text-[#FF263D]">
                   {stats.isExpired ? "EXPIRED" : "SOLD OUT"}
                 </span>
               </div>
             )}
           </div>
 
-          <div className="flex flex-1 flex-col px-3.5 pb-3.5 pt-2.5">
-            <p className="font-prize text-[1.7rem] leading-none text-white sm:text-[1.9rem]">
+          <div className="rr-comp-body flex flex-1 flex-col px-3.5 pb-3.5 pt-2.5">
+            <p className="rr-comp-prize font-prize text-[1.7rem] leading-none text-white sm:text-[1.9rem]">
               {prize.prizeDisplay || competition.title.split(" ").slice(0, 3).join(" ")}
             </p>
             {prize.prizeDisplay && (
-              <p className="mt-1 truncate text-[11px] font-semibold text-white/45">{competition.title}</p>
+              <p className="rr-comp-title mt-1 truncate text-[11px] font-semibold text-white/45">{competition.title}</p>
             )}
 
-            <div className="mt-3 flex items-end justify-between gap-2 rounded-xl border border-white/5 bg-black/30 px-2.5 py-2">
+            <div className="rr-comp-meta mt-3 flex items-end justify-between gap-2 rounded-xl border border-white/5 bg-black/30 px-2.5 py-2">
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-white/40">Entry</p>
                 <p className="font-prize text-xl text-[#F1D47A]">
                   {stats.isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
                 </p>
               </div>
-              {stats.hasTickets && (
-                <div className="text-right">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/40">Remaining</p>
-                  <p className="inline-flex items-center gap-1 text-sm font-black text-white">
-                    {stats.remaining.toLocaleString()}
-                    <Users className="h-3 w-3 text-white/50" />
-                  </p>
-                </div>
-              )}
             </div>
 
             {stats.hasTickets && (
-              <div className="mt-2.5">
-                <SoldProgress pct={stats.pct} remaining={stats.remaining} maxT={stats.maxT} compact />
+              <div className="rr-comp-sold mt-2.5">
+                <SoldProgress pct={stats.pct} sold={stats.soldT} compact />
               </div>
             )}
 
-            <div className="mt-3">
+            <div className="rr-comp-timer mt-3">
               {stats.endDate ? (
                 <CountdownBlocks time={cd} ended={stats.isExpired} />
               ) : (
@@ -164,9 +157,14 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
               )}
             </div>
 
-            <div className="mt-auto flex items-center gap-2 pt-3">
+            <div className="rr-comp-actions mt-auto flex items-center gap-2 pt-3 max-md:flex-col max-md:items-stretch max-md:gap-2">
               {!stats.isClosed && (
-                <QuantitySelector value={qty} max={maxQty} onChange={setQty} />
+                <QuantitySelector
+                  value={qty}
+                  max={maxQty}
+                  onChange={setQty}
+                  className="max-md:w-full max-md:justify-between"
+                />
               )}
               <button
                 type="button"
@@ -176,7 +174,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                   e.stopPropagation();
                   goToCompetition(true);
                 }}
-                className="rr-cta h-10 min-w-0 flex-1 rounded-lg px-3 text-[11px] font-black uppercase tracking-wider whitespace-nowrap disabled:opacity-50"
+                className="rr-cta h-10 min-w-0 flex-1 rounded-lg px-3 text-[11px] font-black uppercase tracking-wider whitespace-nowrap disabled:opacity-50 max-md:!flex max-md:!h-11 max-md:!w-full max-md:!flex-none max-md:!items-center max-md:!justify-center max-md:!rounded-md max-md:!px-2 max-md:!text-[11px] max-md:!leading-none max-md:!tracking-[0.14em]"
               >
                 {cta}
               </button>

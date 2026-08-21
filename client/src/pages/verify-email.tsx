@@ -1,5 +1,7 @@
 import { useSearch } from "wouter";
+import { Link } from "wouter";
 import { VerificationForm } from "@/pages/verification-form";
+import AuthShell from "@/components/auth/AuthShell";
 
 export default function VerifyEmailPage() {
   const search = useSearch();
@@ -8,22 +10,22 @@ export default function VerifyEmailPage() {
 
   if (!email) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background/90 flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="bg-black/40 border-ringtone-900/20 backdrop-blur-sm shadow-2xl rounded-2xl p-8 text-center">
-            <h1 className="text-2xl font-bold text-red-400 mb-4">Email Not Found</h1>
-            <p className="text-gray-300 mb-6">
-              Please register first or check your verification link.
-            </p>
-            <a 
-              href="/register" 
-              className="inline-block bg-yellow-600 hover:bg-ringtone-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-            >
-              Go to Registration
-            </a>
+      <AuthShell
+        kicker="Verify email"
+        title="EMAIL MISSING"
+        sub="We need the address this code was sent to."
+      >
+        <div className="rr-auth-form">
+          <div className="rr-auth-note rr-auth-note--warn">
+            Register first, or open the verification link from your email.
           </div>
+          <Link href="/register">
+            <span className="rr-cta inline-flex h-12 w-full cursor-pointer items-center justify-center rounded-xl text-sm font-black uppercase tracking-[0.12em]">
+              Go to registration
+            </span>
+          </Link>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
