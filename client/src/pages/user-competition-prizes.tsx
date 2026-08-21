@@ -3,14 +3,9 @@ import { useState, useMemo } from "react";
 import {
   Gift,
   Trophy,
-  Star,
-  TrendingUp,
-  Package,
-  Sparkles,
   Award,
   Crown,
   Gem,
-  Flame,
   Zap,
   ChevronDown,
   ChevronUp,
@@ -90,31 +85,20 @@ interface UserCompetitionPrizesProps {
   competitionName?: string;
 }
 
-// Premium gradient backgrounds for cards
-const gradientStyles = [
-  "from-amber-500/10 via-orange-500/5 to-red-500/10 border-orange-500/20",
-  "from-emerald-500/10 via-teal-500/5 to-cyan-500/10 border-emerald-500/20",
-  "from-purple-500/10 via-pink-500/5 to-rose-500/10 border-purple-500/20",
-  "from-blue-500/10 via-indigo-500/5 to-violet-500/10 border-blue-500/20",
-  "from-rose-500/10 via-red-500/5 to-pink-500/10 border-rose-500/20",
-  "from-cyan-500/10 via-sky-500/5 to-blue-500/10 border-cyan-500/20",
-];
-
-// Prize icons based on value/name
 const getPrizeIcon = (prizeName: string, value: number) => {
   const name = prizeName.toLowerCase();
-  if (name.includes("gold") || name.includes("platinum") || value > 1000) return <Crown className="w-8 h-8 text-yellow-500" />;
-  if (name.includes("silver") || value > 500) return <Gem className="w-8 h-8 text-gray-400" />;
-  if (name.includes("bronze") || value > 250) return <Award className="w-8 h-8 text-amber-600" />;
-  return <Trophy className="w-8 h-8 text-primary" />;
+  if (name.includes("gold") || name.includes("platinum") || value > 1000) return <Crown className="w-8 h-8 text-[#F1D47A]" />;
+  if (name.includes("silver") || value > 500) return <Gem className="w-8 h-8 text-[#D4AF37]" />;
+  if (name.includes("bronze") || value > 250) return <Award className="w-8 h-8 text-[#C8102E]" />;
+  return <Trophy className="w-8 h-8 text-[#F1D47A]" />;
 };
 
 // Get stock status with color
 const getStockStatus = (remaining: number, total: number) => {
   const percentage = (remaining / total) * 100;
-  if (percentage === 0) return { label: "All Claimed", color: "bg-red-500", textColor: "text-red-400", variant: "destructive" };
-  if (percentage < 25) return { label: "Low Stock", color: "bg-yellow-500", textColor: "text-yellow-400", variant: "warning" };
-  return { label: "Available", color: "bg-green-500", textColor: "text-green-400", variant: "default" };
+  if (percentage === 0) return { label: "All Claimed", color: "bg-[#C8102E]", textColor: "text-[#FF263D]", variant: "destructive" };
+  if (percentage < 25) return { label: "Low Stock", color: "bg-[#D4AF37]", textColor: "text-[#F1D47A]", variant: "warning" };
+  return { label: "Available", color: "bg-[#C8102E]", textColor: "text-[#F1D47A]", variant: "default" };
 };
 
 // Format number with commas
@@ -124,7 +108,7 @@ const formatNumber = (num: number) => {
 
 export default function UserCompetitionPrizes({ competitionId }: UserCompetitionPrizesProps) {
   const [hoveredPrize, setHoveredPrize] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [openGroup, setOpenGroup] = useState<PrizeGroup | null>(null);
 
   // Fetch prizes
@@ -198,137 +182,109 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
 
   if (isLoading || ticketLoading) {
     return (
-      <div className="space-y-6">
-        <div className="text-center space-y-2">
-          <Skeleton className="h-12 w-64 mx-auto" />
-          <Skeleton className="h-6 w-96 mx-auto" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-64 rounded-xl" />
-          ))}
-        </div>
+      <div className="grid grid-cols-2 gap-3 py-4 md:grid-cols-3 md:gap-6">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-40 rounded-2xl bg-white/10" />
+        ))}
       </div>
     );
   }
 
   if (error) {
     return (
-      <Card className="bg-red-500/10 border-red-500/20">
-        <CardContent className="pt-6">
-          <div className="text-center text-red-400">
-            <p>Failed to load prizes. Please try again later.</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl border border-[#C8102E]/30 bg-[#C8102E]/10 p-6 text-center text-sm text-[#FF263D]">
+        Failed to load prizes. Please try again later.
+      </div>
     );
   }
 
   if ((useGroups ? groups.length : sortedPrizes.length) === 0) {
-    return (
-      <Card className="bg-gradient-to-br from-gray-500/10 to-gray-600/5 border-gray-500/20">
-        <CardContent className="pt-12 pb-12 text-center">
-          <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4 opacity-50" />
-          <h3 className="text-xl font-semibold mb-2">No Prizes Announced Yet</h3>
-          <p className="text-muted-foreground">
-            Prizes for this competition will be revealed soon. Stay tuned!
-          </p>
-        </CardContent>
-      </Card>
-    );
+    return null;
   }
 
   return (
-    <div className="space-y-8 my-5">
-      {/* Hero Section */}
-      <div className="text-center space-y-4">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
-          <Sparkles className="w-5 h-5 text-primary" />
-          <span className="text-[30px] font-medium text-primary">Prize Pool</span>
-        </div>
-        <p className="text-muted-foreground max-w-2xl mx-auto">
-          Amazing prizes await the winners! Check out what you could win.
+    <div className="space-y-8 py-4">
+      <div className="space-y-4 text-center">
+        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">On this draw</p>
+        <h2 className="font-prize text-3xl text-white sm:text-5xl">INSTANT WINS</h2>
+        <p className="mx-auto max-w-2xl text-sm text-white/50">
+          Extra prizes sitting in this competition. Claimed or remaining, all shown here.
         </p>
-        
-        {/* Ticket Info Card */}
+
         {isControlled && prizeTable?.pool ? (
-          <Card className="max-w-2xl mx-auto bg-gradient-to-r from-amber-500/5 to-yellow-500/5 border-amber-500/20">
-            <CardContent className="p-4 sm:p-6">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <Ticket className="w-5 h-5 text-amber-400" />
-                    <span className="text-sm text-muted-foreground">Tickets sold</span>
-                  </div>
-                  <p className="text-2xl font-bold text-amber-400">
-                    {prizeTable.pool.soldTickets} / {prizeTable.pool.maxTickets}
-                  </p>
+          <div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-[#0A0A0D] p-4 sm:p-6">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <div className="text-center">
+                <div className="mb-1 flex items-center justify-center gap-2">
+                  <Ticket className="h-4 w-4 text-[#F1D47A]" />
+                  <span className="text-xs uppercase tracking-wider text-white/45">Tickets sold</span>
                 </div>
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <Gift className="w-5 h-5 text-blue-500" />
-                    <span className="text-sm text-muted-foreground">Remaining</span>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-500">{prizeTable.pool.remaining}</p>
-                </div>
-                <div className="text-center col-span-2 sm:col-span-1">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <Zap className="w-5 h-5 text-purple-500" />
-                    <span className="text-sm text-muted-foreground">Pool</span>
-                  </div>
-                  <p className="text-2xl font-bold text-purple-400">{prizeTable.pool.percentSold}% sold</p>
-                </div>
+                <p className="font-prize text-2xl text-[#F1D47A]">
+                  {prizeTable.pool.soldTickets} / {prizeTable.pool.maxTickets}
+                </p>
               </div>
-            </CardContent>
-          </Card>
+              <div className="text-center">
+                <div className="mb-1 flex items-center justify-center gap-2">
+                  <Gift className="h-4 w-4 text-[#FF263D]" />
+                  <span className="text-xs uppercase tracking-wider text-white/45">Remaining</span>
+                </div>
+                <p className="font-prize text-2xl text-white">{prizeTable.pool.remaining}</p>
+              </div>
+              <div className="col-span-2 text-center sm:col-span-1">
+                <div className="mb-1 flex items-center justify-center gap-2">
+                  <Zap className="h-4 w-4 text-[#F1D47A]" />
+                  <span className="text-xs uppercase tracking-wider text-white/45">Pool</span>
+                </div>
+                <p className="font-prize text-2xl text-white">{prizeTable.pool.percentSold}% sold</p>
+              </div>
+            </div>
+          </div>
         ) : ticketInfo ? (
-          <Card className="max-w-2xl mx-auto bg-gradient-to-r from-blue-500/5 to-purple-500/5 border-blue-500/20">
-            <CardContent className="p-4 sm:p-6">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <Percent className="w-5 h-5 text-green-500" />
-                    <span className="text-sm text-muted-foreground">Win Rate</span>
-                  </div>
-                  <p className="text-2xl font-bold text-green-500">{ticketInfo.winPercentage}%</p>
+          <div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-[#0A0A0D] p-4 sm:p-6">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="text-center">
+                <div className="mb-1 flex items-center justify-center gap-2">
+                  <Percent className="h-4 w-4 text-[#F1D47A]" />
+                  <span className="text-xs uppercase tracking-wider text-white/45">Win rate</span>
                 </div>
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <Coins className="w-5 h-5 text-yellow-500" />
-                    <span className="text-sm text-muted-foreground">Ticket Cost</span>
-                  </div>
-                  <p className="text-2xl font-bold text-yellow-500">{ticketInfo.ticketCost}</p>
-                </div>
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <Gift className="w-5 h-5 text-blue-500" />
-                    <span className="text-sm text-muted-foreground">Prizes Left</span>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-500">{ticketInfo.totalRemainingPrizes}</p>
-                </div>
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <Zap className="w-5 h-5 text-purple-500" />
-                    <span className="text-sm text-muted-foreground">Status</span>
-                  </div>
-                  <Badge 
-                    variant={ticketInfo.isActive && ticketInfo.prizesAvailable ? "default" : "destructive"}
-                    className="mt-1"
-                  >
-                    {ticketInfo.isActive && ticketInfo.prizesAvailable ? "Active" : "Inactive"}
-                  </Badge>
-                </div>
+                <p className="font-prize text-2xl text-[#F1D47A]">{ticketInfo.winPercentage}%</p>
               </div>
-            </CardContent>
-          </Card>
+              <div className="text-center">
+                <div className="mb-1 flex items-center justify-center gap-2">
+                  <Coins className="h-4 w-4 text-[#D4AF37]" />
+                  <span className="text-xs uppercase tracking-wider text-white/45">Ticket cost</span>
+                </div>
+                <p className="font-prize text-2xl text-white">{ticketInfo.ticketCost}</p>
+              </div>
+              <div className="text-center">
+                <div className="mb-1 flex items-center justify-center gap-2">
+                  <Gift className="h-4 w-4 text-[#FF263D]" />
+                  <span className="text-xs uppercase tracking-wider text-white/45">Prizes left</span>
+                </div>
+                <p className="font-prize text-2xl text-white">{ticketInfo.totalRemainingPrizes}</p>
+              </div>
+              <div className="text-center">
+                <div className="mb-1 flex items-center justify-center gap-2">
+                  <Zap className="h-4 w-4 text-[#F1D47A]" />
+                  <span className="text-xs uppercase tracking-wider text-white/45">Status</span>
+                </div>
+                <Badge
+                  variant={ticketInfo.isActive && ticketInfo.prizesAvailable ? "default" : "destructive"}
+                  className="mt-1"
+                >
+                  {ticketInfo.isActive && ticketInfo.prizesAvailable ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+            </div>
+          </div>
         ) : null}
       </div>
 
       {/* Prizes Grid with Collapsible Animation */}
       <div
         className={cn(
-          "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mx-4 sm:mx-28 gap-6 transition-all duration-500 ease-in-out overflow-hidden",
-         isOpen ? "max-h-none opacity-100" : "max-h-0 opacity-0"
+          "grid grid-cols-2 gap-3 transition-all duration-500 ease-in-out md:grid-cols-3 md:gap-6 overflow-hidden",
+          isOpen ? "max-h-none opacity-100" : "max-h-0 opacity-0"
         )}
       >
         {(useGroups ? groups : sortedPrizes).map((item, index) => {
@@ -346,15 +302,13 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
           const percentageRemaining = prize.totalQuantity > 0
             ? (prize.remainingQuantity / prize.totalQuantity) * 100
             : 0;
-          const gradientIndex = index % gradientStyles.length;
-          
+
           return (
             <Card
               key={prize.id}
               className={cn(
-                "relative overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-2xl cursor-pointer border-2",
-                `bg-gradient-to-br ${gradientStyles[gradientIndex]}`,
-                hoveredPrize === prize.id && "shadow-2xl scale-105"
+                "rr-prize-card relative overflow-hidden rounded-2xl border-white/10 transition-transform duration-300 hover:-translate-y-1 cursor-pointer",
+                hoveredPrize === prize.id && "border-[#C8102E]/40"
               )}
               onMouseEnter={() => setHoveredPrize(prize.id)}
               onMouseLeave={() => setHoveredPrize(null)}
@@ -369,20 +323,20 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
               
               <CardHeader>
                 <div className="space-y-2">
-                  <Badge 
-                    variant="outline" 
-                    className="w-fit border-primary/30 text-primary text-xs"
+                  <Badge
+                    variant="outline"
+                    className="w-fit border-[#D4AF37]/30 text-[10px] uppercase tracking-widest text-[#F1D47A]"
                   >
                     Prize #{index + 1}
                   </Badge>
-                  <CardTitle className="text-2xl font-bold line-clamp-2">
+                  <CardTitle className="line-clamp-2 text-lg font-bold text-white sm:text-2xl">
                     {prize.prizeName}
                   </CardTitle>
                   <CardDescription className="flex items-baseline gap-1">
-                    <span className="text-3xl font-bold text-green-500">
+                    <span className="font-prize text-2xl text-[#F1D47A] sm:text-3xl">
                       £{prize.prizeValue.toLocaleString()}
                     </span>
-                    <span className="text-muted-foreground">value</span>
+                    <span className="text-white/40">value</span>
                   </CardDescription>
                 </div>
               </CardHeader>
@@ -436,7 +390,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                   <button
                     type="button"
                     onClick={() => setOpenGroup(group)}
-                    className="w-full text-sm font-semibold text-amber-400 hover:text-amber-300 pt-1"
+                    className="w-full pt-1 text-sm font-semibold text-[#F1D47A] hover:text-[#F1D47A]/80"
                   >
                     Check ticket numbers →
                   </button>
@@ -482,27 +436,27 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
         <Button
           onClick={() => setIsOpen(!isOpen)}
           variant="outline"
-          className="gap-2 px-6 py-2 mx-auto hover:bg-yellow-600 text-md font-semibold transition-all hover:scale-105"
+          className="mx-auto gap-2 border-white/15 bg-transparent px-6 py-2 text-sm font-black uppercase tracking-widest text-white hover:border-[#C8102E] hover:bg-[#C8102E]/15"
         >
           {isOpen ? (
             <>
-              <ChevronUp className="w-5 h-5" />
-              Hide Prizes
+              <ChevronUp className="h-5 w-5" />
+              Hide prizes
             </>
           ) : (
             <>
-              <ChevronDown className="w-5 h-5" />
-              Show Prizes
+              <ChevronDown className="h-5 w-5" />
+              Show prizes
             </>
           )}
         </Button>
       </div>
 
       <Dialog open={!!openGroup} onOpenChange={(open) => { if (!open) setOpenGroup(null); }}>
-        <DialogContent className="max-w-lg bg-zinc-950 border-amber-500/20">
+        <DialogContent className="max-w-lg border-white/10 bg-[#0A0A0D]">
           <DialogHeader>
-            <p className="text-xs font-bold tracking-[0.2em] text-amber-400 uppercase">Ticket assignments</p>
-            <DialogTitle className="text-2xl">{openGroup?.prizeName}</DialogTitle>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#F1D47A]">Ticket assignments</p>
+            <DialogTitle className="font-prize text-2xl text-white">{openGroup?.prizeName}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             {(openGroup?.tickets || []).map((ticket) => (

@@ -1,10 +1,12 @@
 import { useParams } from "wouter";
-import Header from "@/components/layout/header";
-import Footer from "@/components/layout/footer";
 import UnifiedBilling from "@/components/unified-billing";
+import BillingChrome from "@/components/billing/BillingChrome";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Trophy } from "lucide-react";
+import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
+import Header from "@/components/layout/header";
 
 export default function Checkout() {
   const { orderId } = useParams();
@@ -26,8 +28,12 @@ export default function Checkout() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-950 via-black to-zinc-900">
-        <div className="animate-spin w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full" />
+      <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+        <DigitalAtmosphere />
+        <Header />
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C8102E] border-t-transparent" />
+        </div>
       </div>
     );
   }
@@ -35,12 +41,14 @@ export default function Checkout() {
   if (!isAuthenticated) return null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-zinc-950 via-black to-zinc-900">
-      <Header />
-      <main className="flex-1 py-8">
-        {orderId && <UnifiedBilling orderId={orderId} orderType="competition" />}
-      </main>
-      <Footer />
-    </div>
+    <BillingChrome
+      kicker="Prize draw · checkout"
+      title="CHECKOUT"
+      subtitle="Confirm payment and lock in your tickets."
+      facts={["Secure payment", "Fair draw"]}
+      Icon={Trophy}
+    >
+      {orderId && <UnifiedBilling orderId={orderId} orderType="competition" />}
+    </BillingChrome>
   );
 }

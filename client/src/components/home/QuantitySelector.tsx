@@ -7,6 +7,7 @@ type Props = {
   onChange: (next: number) => void;
   disabled?: boolean;
   size?: "sm" | "md" | "lg";
+  className?: string;
 };
 
 export default function QuantitySelector({
@@ -16,6 +17,7 @@ export default function QuantitySelector({
   onChange,
   disabled = false,
   size = "sm",
+  className = "",
 }: Props) {
   const box =
     size === "lg"
@@ -34,7 +36,7 @@ export default function QuantitySelector({
 
   return (
     <div
-      className={`inline-flex shrink-0 items-center rounded-lg border border-white/10 bg-black/50 ${box}`}
+      className={`inline-flex shrink-0 items-center rounded-lg border border-white/10 bg-black/50 ${box} ${className}`}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
     >

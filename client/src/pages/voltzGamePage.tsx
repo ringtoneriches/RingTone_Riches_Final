@@ -3,8 +3,7 @@ import { useParams } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import VoltzGameComponent from "@/components/games/voltz-game";
-import Header from "@/components/layout/header";
-import Footer from "@/components/layout/footer";
+import { GameDisclaimer, GameEmpty, GameHero, GameShell, GameStatus } from "@/components/games/GameChrome";
 import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -704,37 +703,21 @@ export default function VoltzGamePage() {
     refetchOrder();
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background text-foreground">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
-          <p>Loading your Ringtone Voltz game...</p>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
+  if (isLoading) return <GameStatus message="Loading your Ringtone Voltz game..." />;
 
   if (!orderData?.order) {
     return (
-      <div className="min-h-screen bg-background text-foreground">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <p className="text-red-500">Invalid order. Please try again.</p>
-          <Button className="mt-4" onClick={() => navigate("/")} data-testid="button-go-home">
-            Go Home
-          </Button>
-        </div>
-        <Footer />
-      </div>
+      <GameEmpty
+        title="INVALID ORDER"
+        message="This voltz order could not be found. Please try again."
+        actionLabel="Go home"
+        href="/"
+      />
     );
   }
 
   return (
-    <div className="min-h-screen text-foreground relative overflow-hidden"
-         style={{ background: 'linear-gradient(165deg, #1a1145 0%, #15204e 18%, #1b1650 32%, #132048 48%, #1a1352 65%, #111d4a 82%, #181248 100%)' }}>
+    <GameShell>
       <style dangerouslySetInnerHTML={{ __html: voltzKeyframes }} />
 
       <video
@@ -742,271 +725,55 @@ export default function VoltzGamePage() {
         loop
         muted
         playsInline
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-        style={{ opacity: 0.35 }}
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+        style={{ opacity: 0.22 }}
       >
         <source src="/voltz-bg-loop.mp4" type="video/mp4" />
       </video>
 
-      <div className="absolute inset-0 pointer-events-none">
+      <main className="relative z-10 mx-auto max-w-4xl px-4 py-6 sm:py-8">
+        <button
+          type="button"
+          className="mb-4 inline-flex items-center text-sm text-white/45 hover:text-[#F1D47A]"
+          onClick={() => navigate("/")}
+          data-testid="button-back"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </button>
 
-        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[120%] h-[60%]"
-             style={{ background: 'radial-gradient(ellipse at 50% 20%, rgba(234,179,8,0.25) 0%, rgba(234,179,8,0.08) 25%, transparent 55%)', filter: 'blur(40px)' }} />
+        <GameHero
+          kicker="Voltz · play"
+          title="RINGTONE VOLTZ"
+          subtitle="Press a switch. Surge the power. Win electric prizes."
+          remaining={remainingPlays}
+          remainingLabel={remainingPlays === 1 ? "play left" : "plays left"}
+          Icon={Zap}
+        />
 
-        <div className="absolute top-[5%] left-[-5%] w-[55%] h-[50%]"
-             style={{ background: 'radial-gradient(ellipse at 20% 30%, rgba(239,68,68,0.2) 0%, rgba(239,68,68,0.06) 30%, transparent 55%)', filter: 'blur(30px)' }} />
-        <div className="absolute top-[5%] right-[-5%] w-[55%] h-[50%]"
-             style={{ background: 'radial-gradient(ellipse at 80% 30%, rgba(34,197,94,0.2) 0%, rgba(34,197,94,0.06) 30%, transparent 55%)', filter: 'blur(30px)' }} />
+        <VoltzGameComponent
+          orderId={orderId!}
+          competitionId={competitionId!}
+          playsRemaining={remainingPlays}
+          onPlayComplete={handlePlayComplete}
+        />
 
-        <div className="absolute top-[30%] left-1/2 -translate-x-1/2 w-[80%] h-[45%]"
-             style={{ background: 'radial-gradient(ellipse at 50% 50%, rgba(99,102,241,0.15) 0%, rgba(99,102,241,0.04) 35%, transparent 60%)', filter: 'blur(25px)' }} />
-
-        <div className="absolute bottom-[-5%] left-[-5%] w-[55%] h-[45%]"
-             style={{ background: 'radial-gradient(ellipse at 15% 80%, rgba(59,130,246,0.18) 0%, rgba(59,130,246,0.05) 35%, transparent 55%)', filter: 'blur(30px)' }} />
-        <div className="absolute bottom-[-5%] right-[-5%] w-[55%] h-[45%]"
-             style={{ background: 'radial-gradient(ellipse at 85% 80%, rgba(168,85,247,0.18) 0%, rgba(168,85,247,0.05) 35%, transparent 55%)', filter: 'blur(30px)' }} />
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[70%] h-[30%]"
-             style={{ background: 'radial-gradient(ellipse at 50% 100%, rgba(234,179,8,0.12) 0%, transparent 50%)', filter: 'blur(20px)' }} />
-
-        <div className="absolute inset-0" style={{
-          backgroundImage: `
-            linear-gradient(rgba(234,179,8,0.045) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(234,179,8,0.045) 1px, transparent 1px)
-          `,
-          backgroundSize: '60px 60px',
-          animation: 'voltz-flicker 8s ease-in-out infinite',
-        }} />
-
-        <div className="absolute inset-0" style={{
-          backgroundImage: `
-            linear-gradient(rgba(139,92,246,0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(139,92,246,0.03) 1px, transparent 1px)
-          `,
-          backgroundSize: '20px 20px',
-        }} />
-
-        <div className="absolute top-[12%] left-[8%] w-[2px] h-[100px]"
-             style={{ background: 'linear-gradient(180deg, transparent, rgba(239,68,68,0.6), rgba(239,68,68,0.2), transparent)', animation: 'voltz-pulse 3s ease-in-out infinite' }} />
-        <div className="absolute top-[22%] right-[10%] w-[2px] h-[80px]"
-             style={{ background: 'linear-gradient(180deg, transparent, rgba(34,197,94,0.6), rgba(34,197,94,0.2), transparent)', animation: 'voltz-pulse 4s ease-in-out infinite 1s' }} />
-        <div className="absolute top-[45%] left-[4%] w-[2px] h-[120px]"
-             style={{ background: 'linear-gradient(180deg, transparent, rgba(59,130,246,0.5), rgba(59,130,246,0.15), transparent)', animation: 'voltz-pulse 5s ease-in-out infinite 0.5s' }} />
-        <div className="absolute top-[55%] right-[6%] w-[2px] h-[90px]"
-             style={{ background: 'linear-gradient(180deg, transparent, rgba(234,179,8,0.5), rgba(234,179,8,0.12), transparent)', animation: 'voltz-pulse 3.5s ease-in-out infinite 2s' }} />
-        <div className="absolute top-[70%] left-[15%] w-[2px] h-[60px]"
-             style={{ background: 'linear-gradient(180deg, transparent, rgba(168,85,247,0.5), transparent)', animation: 'voltz-pulse 4.5s ease-in-out infinite 1.5s' }} />
-        <div className="absolute top-[35%] right-[18%] w-[2px] h-[70px]"
-             style={{ background: 'linear-gradient(180deg, transparent, rgba(99,102,241,0.4), transparent)', animation: 'voltz-pulse 3s ease-in-out infinite 0.5s' }} />
-
-        <div className="absolute top-[18%] left-[7%] w-3 h-3 rounded-full"
-             style={{ background: '#ef4444', boxShadow: '0 0 20px rgba(239,68,68,0.9), 0 0 50px rgba(239,68,68,0.4), 0 0 80px rgba(239,68,68,0.15)', animation: 'voltz-pulse 2s ease-in-out infinite' }} />
-        <div className="absolute top-[30%] right-[9%] w-3 h-3 rounded-full"
-             style={{ background: '#22c55e', boxShadow: '0 0 20px rgba(34,197,94,0.9), 0 0 50px rgba(34,197,94,0.4), 0 0 80px rgba(34,197,94,0.15)', animation: 'voltz-pulse 2.5s ease-in-out infinite 0.5s' }} />
-        <div className="absolute top-[65%] left-[10%] w-2.5 h-2.5 rounded-full"
-             style={{ background: '#3b82f6', boxShadow: '0 0 18px rgba(59,130,246,0.8), 0 0 45px rgba(59,130,246,0.35)', animation: 'voltz-pulse 3s ease-in-out infinite 1s' }} />
-        <div className="absolute top-[50%] right-[12%] w-2.5 h-2.5 rounded-full"
-             style={{ background: '#fbbf24', boxShadow: '0 0 18px rgba(234,179,8,0.8), 0 0 45px rgba(234,179,8,0.4)', animation: 'voltz-pulse 2s ease-in-out infinite 1.5s' }} />
-        <div className="absolute top-[78%] left-[18%] w-2 h-2 rounded-full"
-             style={{ background: '#a855f7', boxShadow: '0 0 14px rgba(168,85,247,0.7), 0 0 35px rgba(168,85,247,0.3)', animation: 'voltz-pulse 4s ease-in-out infinite 2s' }} />
-        <div className="absolute top-[42%] right-[22%] w-2 h-2 rounded-full"
-             style={{ background: '#6366f1', boxShadow: '0 0 12px rgba(99,102,241,0.6)', animation: 'voltz-pulse 3.5s ease-in-out infinite 0.8s' }} />
-        <div className="absolute top-[85%] right-[15%] w-2 h-2 rounded-full"
-             style={{ background: '#22c55e', boxShadow: '0 0 12px rgba(34,197,94,0.6)', animation: 'voltz-pulse 3s ease-in-out infinite 1.2s' }} />
-        <div className="absolute top-[15%] left-[25%] w-1.5 h-1.5 rounded-full"
-             style={{ background: '#818cf8', boxShadow: '0 0 10px rgba(129,140,248,0.5)', animation: 'voltz-pulse 2.5s ease-in-out infinite 0.3s' }} />
-
-        <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: 'linear-gradient(90deg, rgba(239,68,68,0.5), rgba(234,179,8,0.7), rgba(250,204,21,0.5), rgba(99,102,241,0.6), rgba(34,197,94,0.5))' }} />
-
-        <div className="absolute inset-0 opacity-[0.03]"
-             style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'4\' height=\'4\' viewBox=\'0 0 4 4\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M1 3h1v1H1V3zm2-2h1v1H3V1z\' fill=\'%23ffffff\' fill-opacity=\'1\' fill-rule=\'evenodd\'/%3E%3C/svg%3E")'}} />
-      </div>
-
-      <div className="relative z-10">
-        <Header />
-
-        <main className="container mx-auto px-4 py-6 sm:py-8">
-          <Button variant="ghost" className="mb-4 text-yellow-500/40 hover:text-yellow-400 hover:bg-yellow-500/5" onClick={() => navigate("/")} data-testid="button-back">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className="text-center mb-8 relative">
-              <div className="relative inline-block mb-5">
-                <Zap className="absolute -left-6 sm:-left-9 top-[45%] -translate-y-1/2 w-7 h-7 sm:w-8 sm:h-8"
-                     style={{ color: '#facc15', filter: 'drop-shadow(0 0 18px rgba(250,204,21,1)) drop-shadow(0 0 40px rgba(250,204,21,0.6)) drop-shadow(0 0 60px rgba(234,179,8,0.3))', animation: 'voltz-zap-left 3.5s ease-in-out infinite' }} />
-
-                <Zap className="absolute -right-6 sm:-right-9 top-[45%] -translate-y-1/2 w-7 h-7 sm:w-8 sm:h-8"
-                     style={{ color: '#38bdf8', filter: 'drop-shadow(0 0 18px rgba(56,189,248,1)) drop-shadow(0 0 40px rgba(56,189,248,0.6)) drop-shadow(0 0 60px rgba(59,130,246,0.3))', animation: 'voltz-zap-right 3.5s ease-in-out infinite' }} />
-
-                <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-[-0.04em] leading-none relative">
-                  <span style={{
-                    background: 'linear-gradient(135deg, #fef3c7, #fde68a 20%, #fbbf24 40%, #f59e0b 60%, #fbbf24 80%, #fef3c7)',
-                    backgroundSize: '300% auto',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                    color: 'transparent',
-                    animation: 'surge-slide 5s linear infinite',
-                  }}>
-                    Ringtone
-                  </span>
-                  {' '}
-                  <span style={{
-                    background: 'linear-gradient(135deg, #67e8f9, #22d3ee 20%, #06b6d4 35%, #3b82f6 50%, #8b5cf6 65%, #3b82f6 80%, #22d3ee)',
-                    backgroundSize: '300% auto',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                    color: 'transparent',
-                    animation: 'surge-slide 4s linear infinite reverse',
-                  }}>
-                    Voltz
-                  </span>
-                </h1>
-
-                <div className="absolute top-1/2 left-0 right-0 -translate-y-1/2 h-[2px] pointer-events-none overflow-hidden">
-                  <div className="absolute w-8 h-full rounded-full" style={{
-                    background: 'linear-gradient(90deg, rgba(250,204,21,0.9), rgba(56,189,248,0.9))',
-                    filter: 'blur(2px)',
-                    boxShadow: '0 0 15px 4px rgba(250,204,21,0.5), 0 0 30px 8px rgba(56,189,248,0.3)',
-                    animation: 'voltz-arc-travel 2.5s ease-in-out infinite',
-                  }} />
-                </div>
-
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" style={{
-                  width: '120%',
-                  height: '160%',
-                  background: 'radial-gradient(ellipse at 35% 50%, rgba(250,204,21,0.15) 0%, transparent 50%), radial-gradient(ellipse at 65% 50%, rgba(56,189,248,0.12) 0%, transparent 50%)',
-                  filter: 'blur(40px)',
-                  animation: 'voltz-title-glow 4s ease-in-out infinite',
-                }} />
-
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="absolute w-1 h-1 rounded-full pointer-events-none" style={{
-                    background: i < 3 ? '#facc15' : '#38bdf8',
-                    left: `${15 + i * 14}%`,
-                    top: '80%',
-                    boxShadow: `0 0 6px 2px ${i < 3 ? 'rgba(250,204,21,0.8)' : 'rgba(56,189,248,0.8)'}`,
-                    animation: `voltz-particle-rise 2s ease-out infinite`,
-                    animationDelay: `${i * 0.4}s`,
-                  }} />
-                ))}
-              </div>
-
-              <div className="relative">
-                <div className="flex items-center justify-center gap-4 mb-2">
-                  <div className="h-[1px] w-10 sm:w-20" style={{ background: 'linear-gradient(90deg, transparent, rgba(250,204,21,0.6))' }} />
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#facc15', boxShadow: '0 0 8px rgba(250,204,21,0.8)' }} />
-                    <div className="w-1 h-1 rounded-full" style={{ background: '#22d3ee', boxShadow: '0 0 6px rgba(34,211,238,0.6)' }} />
-                  </div>
-                  <div className="h-[1px] w-10 sm:w-20" style={{ background: 'linear-gradient(270deg, transparent, rgba(56,189,248,0.6))' }} />
-                </div>
-
-                <p className="text-xs sm:text-sm tracking-wider uppercase font-semibold" style={{
-                  color: 'rgba(255,255,255,0.55)',
-                  animation: 'voltz-subtitle-glow 6s ease-in-out infinite',
-                }}>
-                  Press a switch · Surge the power ·{' '}
-                  <span className="font-black" style={{
-                    background: 'linear-gradient(90deg, #fbbf24, #f59e0b, #22d3ee, #3b82f6)',
-                    backgroundSize: '200% auto',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    animation: 'surge-slide 3s linear infinite',
-                  }}>Win Electric Prizes</span>
-                </p>
-              </div>
+        <div className="mt-6">
+          {gameHistory.length === 0 ? (
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0D]/80 py-16 text-center">
+              <Zap className="mx-auto mb-4 h-10 w-10 text-[#F1D47A]/40" />
+              <p className="text-sm font-black uppercase tracking-[0.2em] text-white/45" data-testid="text-empty-history">
+                No surges recorded
+              </p>
+              <p className="mt-1 text-xs text-white/30">Press a switch above to start playing</p>
             </div>
-
-            <VoltzGameComponent
-              orderId={orderId!}
-              competitionId={competitionId!}
-              playsRemaining={remainingPlays}
-              onPlayComplete={handlePlayComplete}
-            />
-
-            {gameHistory.length === 0 ? (
-              <div className="relative py-16 text-center rounded-2xl overflow-hidden"
-                   style={{
-                     background: 'linear-gradient(180deg, rgba(15,12,40,0.97), rgba(10,8,32,0.98))',
-                     backdropFilter: 'blur(24px)',
-                     border: '1px solid rgba(139,92,246,0.15)',
-                     boxShadow: '0 12px 48px rgba(0,0,0,0.4), 0 0 60px rgba(139,92,246,0.04)',
-                   }}>
-                <div className="absolute top-0 left-0 right-0 h-[2px] overflow-hidden">
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, #ef4444, #fbbf24, #22c55e, #3b82f6, #a855f7, #fbbf24, #ef4444)', backgroundSize: '200% 100%', animation: 'surge-slide 8s linear infinite', opacity: 0.6 }} />
-                </div>
-                <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, rgba(139,92,246,0.08) 0%, transparent 50%)' }} />
-                <div className="relative">
-                  <div className="w-18 h-18 mx-auto mb-6 rounded-2xl flex items-center justify-center" style={{ width: 72, height: 72 }}>
-                    <div className="w-full h-full rounded-2xl flex items-center justify-center"
-                         style={{
-                           background: 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(234,179,8,0.06), rgba(15,12,40,0.5))',
-                           border: '1px solid rgba(139,92,246,0.2)',
-                           boxShadow: '0 8px 24px rgba(139,92,246,0.08), inset 0 1px 0 rgba(255,255,255,0.05)',
-                         }}>
-                      <Zap className="w-8 h-8" style={{ color: 'rgba(139,92,246,0.35)', filter: 'drop-shadow(0 0 8px rgba(139,92,246,0.2))' }} />
-                    </div>
-                  </div>
-                  <p className="text-sm font-black tracking-[0.2em] uppercase mb-2" data-testid="text-empty-history"
-                     style={{ color: 'rgba(139,92,246,0.45)', textShadow: '0 0 20px rgba(139,92,246,0.15)' }}>No surges recorded</p>
-                  <p className="text-xs tracking-wide font-medium" style={{ color: 'rgba(139,92,246,0.25)' }}>Press a switch above to start playing</p>
-                </div>
-              </div>
-            ) : (
-              <VoltzGameHistory games={gameHistory} />
-            )}
-          </div>
-        </main>
-
-        <Footer />
-      </div>
-
-      {showDisclaimer && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:justify-center px-4">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-md transition-opacity" onClick={() => setShowDisclaimer(false)} />
-          <div className="relative w-full mb-2 max-w-md overflow-hidden rounded-2xl transform transition-all duration-300 scale-95 animate-slide-up"
-               style={{
-                 background: 'linear-gradient(180deg, rgba(20,18,50,0.98), rgba(15,15,42,0.99))',
-                 backdropFilter: 'blur(20px)',
-                 border: '1px solid rgba(139,92,246,0.2)',
-                 boxShadow: '0 8px 40px rgba(0,0,0,0.4), 0 0 60px rgba(99,102,241,0.08)',
-               }}>
-            <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(139,92,246,0.5), rgba(234,179,8,0.6), rgba(139,92,246,0.5), transparent)' }} />
-            <div className="relative p-6">
-              <div className="flex items-start gap-3 mb-5">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                     style={{
-                       background: 'linear-gradient(135deg, rgba(234,179,8,0.15), rgba(139,92,246,0.08))',
-                       border: '1px solid rgba(234,179,8,0.25)',
-                       boxShadow: '0 4px 12px rgba(234,179,8,0.06)',
-                     }}>
-                  <Zap className="w-5 h-5" style={{ color: '#fbbf24', filter: 'drop-shadow(0 0 6px rgba(234,179,8,0.6))' }} />
-                </div>
-                <div>
-                  <p className="text-white/90 font-bold text-sm mb-1.5" style={{ textShadow: '0 0 10px rgba(139,92,246,0.2)' }}>Game Disclaimer</p>
-                  <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                    All on-screen graphics are for entertainment purposes only. Prize outcomes are securely pre-selected before gameplay and are not influenced by animations.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowDisclaimer(false)}
-                className="w-full py-3.5 rounded-xl text-black font-black text-sm tracking-wider uppercase transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-                style={{
-                  background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fbbf24)',
-                  boxShadow: '0 4px 20px rgba(234,179,8,0.25), 0 0 40px rgba(234,179,8,0.1)',
-                }}
-                data-testid="button-dismiss-disclaimer"
-              >
-                I Understand — Let's Play!
-              </button>
-            </div>
-          </div>
+          ) : (
+            <VoltzGameHistory games={gameHistory} />
+          )}
         </div>
-      )}
-    </div>
+      </main>
+
+      <GameDisclaimer open={showDisclaimer} onClose={() => setShowDisclaimer(false)} />
+    </GameShell>
   );
 }

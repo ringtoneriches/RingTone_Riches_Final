@@ -4,8 +4,7 @@ import { useParams } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import RingtonePopGame from "@/components/games/ringtone-pop-game";
-import Header from "@/components/layout/header";
-import Footer from "@/components/layout/footer";
+import { GameDisclaimer, GameEmpty, GameHero, GameShell, GameStatus } from "@/components/games/GameChrome";
 import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -22,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trophy, ArrowLeft, Sparkles, Star, Zap, History, Check, X, RotateCcw, ChevronLeft, ChevronRight, Music, Package } from "lucide-react";
+import { Loader2, Trophy, ArrowLeft, Sparkles, Star, Zap, History, Check, X, RotateCcw, ChevronLeft, ChevronRight, Music, Package, Gift } from "lucide-react";
 
 function GameHistoryCarousel({ games }: { games: any[] }) {
   console.log(games)
@@ -46,18 +45,15 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
   
   return (
     <div className="p-3 sm:p-4">
-      <div className="relative mb-4 sm:mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/30 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent" />
-        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
-        
+      <div className="relative mb-4 overflow-hidden rounded-2xl border border-[#C8102E]/30 bg-[#C8102E]/10 p-4 sm:mb-6 sm:p-5">
         <div className="relative flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/30">
-              <History className="w-6 h-6 sm:w-7 sm:h-7 text-primary-foreground" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#F1D47A]/30 bg-[#F1D47A]/15 sm:h-14 sm:w-14">
+              <History className="h-6 w-6 text-[#F1D47A] sm:h-7 sm:w-7" />
             </div>
             <div>
-              <h3 className="text-lg sm:text-xl font-black text-foreground">Game History</h3>
-              <p className="text-xs sm:text-sm text-muted-foreground">{games.length} rounds played</p>
+              <h3 className="font-prize text-xl text-white sm:text-2xl">GAME HISTORY</h3>
+              <p className="text-xs text-white/45 sm:text-sm">{games.length} rounds played</p>
             </div>
           </div>
           
@@ -124,7 +120,7 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
                   key={i}
                   onClick={() => setCurrentPage(i)}
                   className={`h-2 rounded-full transition-all ${
-                    i === currentPage ? 'bg-primary w-6' : 'bg-muted-foreground/30 w-2 hover:bg-muted-foreground/50'
+                    i === currentPage ? 'bg-[#C8102E] w-6' : 'bg-white/20 w-2 hover:bg-white/40'
                   }`}
                 />
               ))}
@@ -144,7 +140,7 @@ function GameHistoryCarousel({ games }: { games: any[] }) {
       )}
       
       <div className="relative">
-        <div className="absolute left-5 sm:left-6 top-0 bottom-0 w-0.5 bg-gradient-to-b from-primary/50 via-primary/20 to-transparent" />
+        <div className="absolute left-5 top-0 h-full w-0.5 bg-gradient-to-b from-[#C8102E]/60 via-[#C8102E]/20 to-transparent sm:left-6" />
         
         <div className="space-y-2">
           {visibleGames.map((game: any, index: number) => {
@@ -395,74 +391,42 @@ export default function PopGamePage() {
   const totalCashAmount = totalCashWins.reduce((sum: number, g: any) => sum + parseFloat(g.rewardValue || 0), 0);
   const totalPointsAmount = totalPointsWins.reduce((sum: number, g: any) => sum + parseInt(g.rewardValue || 0), 0);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background text-foreground">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
-          <p>Loading your Ringtone Pop game...</p>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
+  if (isLoading) return <GameStatus message="Loading your Ringtone Pop game..." />;
 
   if (!orderData?.order) {
     return (
-      <div className="min-h-screen bg-background text-foreground">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <p className="text-red-500">Invalid order. Please try again.</p>
-          <Button className="mt-4" onClick={() => navigate("/")}>
-            Go Home
-          </Button>
-        </div>
-        <Footer />
-      </div>
+      <GameEmpty
+        title="INVALID ORDER"
+        message="This pop order could not be found. Please try again."
+        actionLabel="Go home"
+        href="/"
+      />
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Header />
-      
-      <main className="container mx-auto px-4 py-8">
-        <Button
-          variant="ghost"
-          className="mb-6"
+    <GameShell>
+      <main className="mx-auto max-w-4xl px-4 py-6 sm:py-8">
+        <button
+          type="button"
+          className="mb-6 inline-flex items-center text-sm text-white/45 hover:text-white"
           onClick={() => navigate("/")}
           data-testid="button-back"
         >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Competitions
-        </Button>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to competitions
+        </button>
 
-        <div className="max-w-4xl mx-auto space-y-6">
-          <div className="text-center mb-8">
-            {/* Premium Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 border border-violet-500/30 mb-4">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-              <span className="text-xs sm:text-sm font-semibold text-slate-300 tracking-wide">RINGTONE POP 2026</span>
-            </div>
-            
-            {/* Main Title */}
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight mb-4">
-              <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-violet-400 bg-clip-text text-transparent">
-                Ringtone
-              </span>{" "}
-              <span className="bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 bg-clip-text text-transparent">
-                Pop!
-              </span>
-            </h1>
-            
-            {/* Subtitle */}
-            <p className="text-base md:text-lg text-muted-foreground max-w-md mx-auto">
-              Pop all 3 balloons and match to{" "}
-              <span className="text-amber-400 font-bold">WIN CASH PRIZES!</span>
-            </p>
-          </div>
+        <GameHero
+          kicker="Balloon pop · play"
+          title="RINGTONE POP"
+          subtitle="Pop all 3 balloons and match to win."
+          remaining={remainingPlays}
+          remainingLabel={remainingPlays === 1 ? "play left" : "plays left"}
+          Icon={Gift}
+        />
 
+        <div className="space-y-6">
           <RingtonePopGame
             orderId={orderId!}
             competitionId={competitionId!}
@@ -473,108 +437,66 @@ export default function PopGamePage() {
 
           {remainingPlays > 1 && (
             <div className="flex justify-center py-4">
-              <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-500 to-yellow-500 rounded-2xl blur-lg opacity-75 group-hover:opacity-100 transition-opacity duration-300 animate-pulse" />
-                <Button
-                  size="lg"
-                  onClick={() => setShowRevealAllDialog(true)}
-                  disabled={isRevealingAll}
-                  className="relative px-8 py-6 text-lg font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-yellow-500 text-white border-0 rounded-xl shadow-2xl transform transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                  data-testid="button-reveal-all"
-                >
-                  {isRevealingAll ? (
-                    <div className="flex items-center gap-3">
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                      <span>Revealing All...</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <Sparkles className="w-6 h-6 animate-bounce" />
-                        <div className="absolute inset-0 w-6 h-6 bg-yellow-300 rounded-full blur-md opacity-50 animate-ping" />
-                      </div>
-                      <span className="tracking-wide">REVEAL ALL</span>
-                      <div className="px-3 py-1 bg-white/20 rounded-full text-base">
-                        {remainingPlays} plays
-                      </div>
-                    </div>
-                  )}
-                </Button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowRevealAllDialog(true)}
+                disabled={isRevealingAll}
+                className="rr-cta px-8 py-3.5 text-base disabled:cursor-not-allowed disabled:opacity-50"
+                data-testid="button-reveal-all"
+              >
+                {isRevealingAll ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Revealing all...
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-3">
+                    <Sparkles className="h-5 w-5" />
+                    Reveal all
+                    <span className="rounded-full bg-white/15 px-3 py-0.5 text-sm">
+                      {remainingPlays} plays
+                    </span>
+                  </span>
+                )}
+              </button>
             </div>
           )}
 
-          <Card className="bg-gradient-to-b from-card to-card/80 border-yellow-500/20 overflow-hidden">
-            {/* <CardHeader className="bg-gradient-to-r from-yellow-500/10 via-transparent to-yellow-500/10 border-b border-yellow-500/10">
-              <CardTitle className="flex items-center gap-3 text-xl">
-                <div className="p-2 rounded-lg bg-yellow-500/20">
-                  <History className="w-5 h-5 text-yellow-500" />
-                </div>
-                Game History
-              </CardTitle>
-            </CardHeader> */}
-            <CardContent className="p-0">
-              {gameHistory.length === 0 ? (
-                <div className="py-16 text-center">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted/50 flex items-center justify-center">
-                    <Sparkles className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                  <p className="text-muted-foreground text-lg mb-2">No games played yet</p>
-                  <p className="text-muted-foreground/60 text-sm">Start popping balloons to see your history!</p>
-                </div>
-              ) : (
-                <GameHistoryCarousel games={gameHistory} />
-              )}
-            </CardContent>
-          </Card>
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0D]/80">
+            {gameHistory.length === 0 ? (
+              <div className="py-16 text-center">
+                <Sparkles className="mx-auto mb-4 h-10 w-10 text-white/20" />
+                <p className="text-lg text-white/60">No games played yet</p>
+                <p className="mt-1 text-sm text-white/35">Start popping balloons to see your history.</p>
+              </div>
+            ) : (
+              <GameHistoryCarousel games={gameHistory} />
+            )}
+          </div>
         </div>
       </main>
 
       <AlertDialog open={showRevealAllDialog} onOpenChange={setShowRevealAllDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="border-white/10 bg-[#0A0A0D] text-white">
           <AlertDialogHeader>
-            <AlertDialogTitle>Reveal All Games?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will instantly reveal all {remainingPlays} remaining games. 
+            <AlertDialogTitle className="font-prize text-2xl">Reveal all games?</AlertDialogTitle>
+            <AlertDialogDescription className="text-white/50">
+              This will instantly reveal all {remainingPlays} remaining games.
               Any prizes won will be credited to your account.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRevealAll}>
-              Reveal All
+            <AlertDialogCancel className="border-white/15 bg-transparent text-white hover:bg-white/10">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleRevealAll} className="bg-[#C8102E] text-white hover:bg-[#FF263D]">
+              Reveal all
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <Footer />
-      {showDisclaimer && (
-  <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:justify-center px-4">
-    {/* Backdrop */}
-    <div 
-      className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
-      onClick={() => setShowDisclaimer(false)}
-    ></div>
-
-    {/* Disclaimer Card */}
-    <div className="relative w-full mb-2 max-w-md bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 rounded-2xl p-5 sm:p-6 shadow-2xl border border-gray-700 transform transition-all duration-300 scale-95 animate-slide-up">
-      <div className="flex flex-col items-start gap-4 ">
-        <p className="text-white text-sm sm:text-base font-medium leading-snug">
-          ⚠️ <span className="font-semibold">Disclaimer:</span> All on-screen graphics are for entertainment purposes only. Prize outcomes are securely pre-selected before gameplay and are not influenced by animations.
-        </p>
-        <button
-          onClick={() => setShowDisclaimer(false)}
-          className="self-end bg-indigo-500 hover:bg-indigo-400 text-white px-6 py-2 rounded-full font-semibold text-sm sm:text-base shadow-lg transition-transform duration-200 hover:scale-105"
-        >
-          Got it
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
-
-    </div>
+      <GameDisclaimer open={showDisclaimer} onClose={() => setShowDisclaimer(false)} />
+    </GameShell>
   );
 }

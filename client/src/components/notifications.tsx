@@ -1,14 +1,19 @@
-// client/src/pages/user/notifications.tsx
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { 
-  Bell, CheckCheck, Trash2, Clock, Info, AlertCircle, 
-  CheckCircle, Award, Megaphone, ArrowLeft, Filter
+import {
+  Bell,
+  CheckCheck,
+  Trash2,
+  Clock,
+  Info,
+  AlertCircle,
+  CheckCircle,
+  Award,
+  Megaphone,
+  ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,18 +24,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { format, formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 import Header from "./layout/header";
+import Footer from "./layout/footer";
+import DigitalAtmosphere from "./home/DigitalAtmosphere";
 
 interface Notification {
   id: string;
@@ -48,6 +48,34 @@ interface Notification {
   };
 }
 
+const TYPE_META = {
+  info: {
+    icon: Info,
+    badge: "bg-sky-500/15 text-sky-300 border-sky-500/25",
+    iconWrap: "bg-sky-500/15 text-sky-300",
+  },
+  success: {
+    icon: CheckCircle,
+    badge: "bg-emerald-500/15 text-emerald-300 border-emerald-500/25",
+    iconWrap: "bg-emerald-500/15 text-emerald-300",
+  },
+  warning: {
+    icon: AlertCircle,
+    badge: "bg-[#F1D47A]/15 text-[#F1D47A] border-[#F1D47A]/25",
+    iconWrap: "bg-[#F1D47A]/15 text-[#F1D47A]",
+  },
+  promotion: {
+    icon: Award,
+    badge: "bg-[#C8102E]/15 text-[#FF263D] border-[#C8102E]/30",
+    iconWrap: "bg-[#C8102E]/15 text-[#FF263D]",
+  },
+  system: {
+    icon: Megaphone,
+    badge: "bg-white/10 text-white/60 border-white/15",
+    iconWrap: "bg-white/10 text-white/55",
+  },
+} as const;
+
 export default function UserNotifications() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -55,7 +83,6 @@ export default function UserNotifications() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [clearAllDialog, setClearAllDialog] = useState(false);
 
-  // Fetch user's notifications
   const { data: notifications, isLoading } = useQuery<Notification[]>({
     queryKey: ["/api/user/notifications"],
     queryFn: async () => {
@@ -65,7 +92,6 @@ export default function UserNotifications() {
     },
   });
 
-  // Mark as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async (notificationId: string) => {
       return apiRequest(`/api/user/notifications/${notificationId}/read`, "POST");
@@ -75,7 +101,6 @@ export default function UserNotifications() {
     },
   });
 
-  // Mark all as read mutation
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
       return apiRequest("/api/user/notifications/read-all", "POST");
@@ -89,7 +114,6 @@ export default function UserNotifications() {
     },
   });
 
-  // Clear/delete notification mutation
   const clearNotificationMutation = useMutation({
     mutationFn: async (notificationId: string) => {
       return apiRequest(`/api/user/notifications/${notificationId}`, "DELETE");
@@ -103,7 +127,6 @@ export default function UserNotifications() {
     },
   });
 
-  // Clear all notifications mutation
   const clearAllMutation = useMutation({
     mutationFn: async () => {
       return apiRequest("/api/user/notifications/clear-all", "POST");
@@ -124,230 +147,253 @@ export default function UserNotifications() {
     }
   };
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case "info": return <Info className="w-5 h-5 text-blue-500" />;
-      case "success": return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case "warning": return <AlertCircle className="w-5 h-5 text-yellow-500" />;
-      case "promotion": return <Award className="w-5 h-5 text-purple-500" />;
-      case "system": return <Megaphone className="w-5 h-5 text-gray-500" />;
-      default: return <Bell className="w-5 h-5" />;
-    }
-  };
+  const filteredNotifications =
+    notifications?.filter((notification) => {
+      if (filter === "unread" && notification.status === "read") return false;
+      if (filter === "read" && notification.status !== "read") return false;
+      if (typeFilter !== "all" && notification.notification.type !== typeFilter) return false;
+      return true;
+    }) || [];
 
-  const getTypeBadge = (type: string) => {
-    const colors = {
-      info: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-      success: "bg-green-500/10 text-green-500 border-green-500/20",
-      warning: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-      promotion: "bg-purple-500/10 text-purple-500 border-purple-500/20",
-      system: "bg-gray-500/10 text-gray-500 border-gray-500/20",
-    };
-    return colors[type as keyof typeof colors] || colors.info;
-  };
+  const unreadCount = notifications?.filter((n) => n.status !== "read").length || 0;
 
-  // Filter notifications
-  const filteredNotifications = notifications?.filter((notification) => {
-    // Status filter
-    if (filter === "unread" && notification.status === "read") return false;
-    if (filter === "read" && notification.status !== "read") return false;
-    
-    // Type filter
-    if (typeFilter !== "all" && notification.notification.type !== typeFilter) return false;
-    
-    return true;
-  }) || [];
+  const statusChips = [
+    { id: "all", label: "All" },
+    { id: "unread", label: "Unread" },
+    { id: "read", label: "Read" },
+  ];
 
-  const unreadCount = notifications?.filter(n => n.status !== "read").length || 0;
+  const typeChips = [
+    { id: "all", label: "All types" },
+    { id: "info", label: "Info" },
+    { id: "success", label: "Success" },
+    { id: "warning", label: "Warning" },
+    { id: "promotion", label: "Promotion" },
+    { id: "system", label: "System" },
+  ];
 
   return (
-    <>
-    <Header/>
-    <div className="container max-w-4xl mx-auto py-6 px-4">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <Link href="/">
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold">Notifications</h1>
-          <p className="text-sm text-muted-foreground">
-            You have {unreadCount} unread notification{unreadCount !== 1 ? 's' : ''}
-          </p>
-        </div>
-      </div>
+    <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <DigitalAtmosphere />
+      <Header />
 
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="flex gap-2 flex-1">
-          <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="w-[140px]">
-              <Filter className="w-4 h-4 mr-2" />
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="unread">Unread</SelectItem>
-              <SelectItem value="read">Read</SelectItem>
-            </SelectContent>
-          </Select>
+      <main className="relative z-10 mx-auto max-w-3xl px-4 pb-16 pt-6 sm:px-6 sm:pt-8">
+        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Link href="/">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="mt-1 h-9 w-9 rounded-full border border-white/10 bg-white/[0.04] text-white hover:bg-white/10"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#C8102E]/40 bg-[#C8102E]/10 px-3 py-1">
+                <Bell className="h-3.5 w-3.5 text-[#F1D47A]" />
+                <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">
+                  Inbox
+                </span>
+              </div>
+              <h1 className="font-prize text-4xl text-white sm:text-5xl">NOTIFICATIONS</h1>
+              <p className="mt-1.5 text-sm text-white/50">
+                {unreadCount > 0
+                  ? `${unreadCount} unread ${unreadCount === 1 ? "message" : "messages"}`
+                  : "You're all caught up"}
+              </p>
+            </div>
+          </div>
 
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Filter by type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="info">Info</SelectItem>
-              <SelectItem value="success">Success</SelectItem>
-              <SelectItem value="warning">Warning</SelectItem>
-              <SelectItem value="promotion">Promotion</SelectItem>
-              <SelectItem value="system">System</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={() => markAllAsReadMutation.mutate()}
+                disabled={markAllAsReadMutation.isPending}
+                className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-white/80 hover:border-[#F1D47A]/40 hover:text-[#F1D47A] disabled:opacity-50"
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                Mark all read
+              </button>
+            )}
+            {notifications && notifications.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setClearAllDialog(true)}
+                className="inline-flex items-center gap-2 rounded-full border border-[#C8102E]/40 bg-[#C8102E]/10 px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-[#FF263D] hover:bg-[#C8102E]/20"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Clear all
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          {unreadCount > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => markAllAsReadMutation.mutate()}
-              disabled={markAllAsReadMutation.isPending}
-              className="gap-2"
-            >
-              <CheckCheck className="w-4 h-4" />
-              Mark all read
-            </Button>
-          )}
-          
-          {notifications && notifications.length > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setClearAllDialog(true)}
-              className="gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Clear all
-            </Button>
-          )}
+        <div className="mb-5 space-y-2.5">
+          <div className="flex flex-wrap gap-1.5">
+            {statusChips.map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => setFilter(chip.id)}
+                className={`rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition ${
+                  filter === chip.id
+                    ? "bg-[#C8102E] text-white"
+                    : "border border-white/10 bg-white/[0.04] text-white/50 hover:text-white"
+                }`}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {typeChips.map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => setTypeFilter(chip.id)}
+                className={`rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition ${
+                  typeFilter === chip.id
+                    ? "border border-[#F1D47A]/50 bg-[#F1D47A]/15 text-[#F1D47A]"
+                    : "border border-white/10 bg-white/[0.04] text-white/50 hover:text-white"
+                }`}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Notifications List */}
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-        </div>
-      ) : filteredNotifications.length > 0 ? (
-        <div className="space-y-3">
-          {filteredNotifications.map((notification) => (
-            <Card 
-              key={notification.id}
-              className={`hover:shadow-md transition-shadow cursor-pointer ${
-                notification.status === "read" ? "opacity-75" : ""
-              }`}
-              onClick={() => handleNotificationClick(notification)}
-            >
-              <CardContent className="p-4">
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 mt-1">
-                    {getIcon(notification.notification.type)}
+        {isLoading ? (
+          <div className="flex h-64 items-center justify-center">
+            <div className="h-9 w-9 animate-spin rounded-full border-2 border-[#C8102E] border-t-transparent" />
+          </div>
+        ) : filteredNotifications.length > 0 ? (
+          <div className="space-y-2.5">
+            {filteredNotifications.map((notification) => {
+              const type = notification.notification.type;
+              const meta = TYPE_META[type] || TYPE_META.info;
+              const Icon = meta.icon;
+              const unread = notification.status !== "read";
+
+              return (
+                <button
+                  key={notification.id}
+                  type="button"
+                  onClick={() => handleNotificationClick(notification)}
+                  className={`group flex w-full gap-4 rounded-2xl border p-4 text-left transition sm:p-5 ${
+                    unread
+                      ? "border-[#C8102E]/35 bg-[#C8102E]/[0.07] hover:border-[#C8102E]/55"
+                      : "border-white/8 bg-[#0A0A0D]/75 opacity-80 hover:opacity-100"
+                  }`}
+                >
+                  <div
+                    className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${meta.iconWrap}`}
+                  >
+                    <Icon className="h-5 w-5" />
                   </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold">
-                            {notification.notification.title}
-                          </h3>
-                          <Badge variant="outline" className={`text-xs ${getTypeBadge(notification.notification.type)}`}>
-                            {notification.notification.type}
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {unread && (
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF263D]" />
+                          )}
+                          <h3 className="font-semibold text-white">{notification.notification.title}</h3>
+                          <Badge variant="outline" className={`text-[10px] uppercase tracking-wide ${meta.badge}`}>
+                            {type}
                           </Badge>
-                          {notification.status === "read" ? (
-                            <Badge variant="secondary" className="text-xs">Read</Badge>
+                          {unread ? (
+                            <Badge className="border-0 bg-[#C8102E] text-[10px] uppercase text-white">New</Badge>
                           ) : (
-                            <Badge className="text-xs bg-blue-500">New</Badge>
+                            <Badge variant="secondary" className="bg-white/10 text-[10px] uppercase text-white/50">
+                              Read
+                            </Badge>
                           )}
                         </div>
-                        
-                        <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">
+
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/55">
                           {notification.notification.message}
                         </p>
-                        
-                        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
+
+                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-white/35">
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
                             {formatDistanceToNow(new Date(notification.sentAt), { addSuffix: true })}
                           </span>
-                          <span>
-                            {format(new Date(notification.sentAt), "MMM d, yyyy h:mm a")}
-                          </span>
+                          <span>{format(new Date(notification.sentAt), "MMM d, yyyy h:mm a")}</span>
                           {notification.readAt && (
-                            <span className="flex items-center gap-1">
-                              <CheckCheck className="w-3 h-3" />
+                            <span className="inline-flex items-center gap-1">
+                              <CheckCheck className="h-3 w-3" />
                               Read {formatDistanceToNow(new Date(notification.readAt), { addSuffix: true })}
                             </span>
                           )}
                         </div>
                       </div>
-                      
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 flex-shrink-0"
+
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/30 hover:bg-white/10 hover:text-[#FF263D]"
                         onClick={(e) => {
                           e.stopPropagation();
                           clearNotificationMutation.mutate(notification.notificationId);
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            clearNotificationMutation.mutate(notification.notificationId);
+                          }
+                        }}
+                        aria-label="Remove notification"
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                        <Trash2 className="h-4 w-4" />
+                      </span>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card className="p-12 text-center">
-          <div className="flex flex-col items-center justify-center">
-            <Bell className="w-12 h-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium">No notifications</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              {filter !== "all" ? "Try changing your filters" : "You're all caught up!"}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-[#0A0A0D]/80 px-6 py-16 text-center">
+            <Bell className="mx-auto mb-4 h-12 w-12 text-white/20" />
+            <h3 className="font-prize text-2xl">No notifications</h3>
+            <p className="mt-1.5 text-sm text-white/45">
+              {filter !== "all" || typeFilter !== "all"
+                ? "Try changing your filters"
+                : "You're all caught up"}
             </p>
           </div>
-        </Card>
-      )}
+        )}
 
-      {/* Clear All Confirmation Dialog */}
-      <AlertDialog open={clearAllDialog} onOpenChange={setClearAllDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Clear all notifications?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove all your notifications. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => clearAllMutation.mutate()}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {clearAllMutation.isPending ? "Clearing..." : "Clear all"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <AlertDialog open={clearAllDialog} onOpenChange={setClearAllDialog}>
+          <AlertDialogContent className="border-white/10 bg-[#0A0A0D] text-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-prize text-2xl">Clear all notifications?</AlertDialogTitle>
+              <AlertDialogDescription className="text-white/50">
+                This will permanently remove all your notifications. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => clearAllMutation.mutate()}
+                className="bg-[#C8102E] text-white hover:bg-[#FF263D]"
+              >
+                {clearAllMutation.isPending ? "Clearing..." : "Clear all"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </main>
+
+      <Footer />
     </div>
-    
-    </>
   );
 }

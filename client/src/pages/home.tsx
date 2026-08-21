@@ -19,6 +19,7 @@ import HowItWorks from "@/components/home/HowItWorks";
 import CommunitySection from "@/components/home/CommunitySection";
 import VipClub from "@/components/home/VipClub";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
+import BrandIntro from "@/components/home/BrandIntro";
 import { pickFeaturedCompetitions } from "@/lib/competition-display";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
@@ -86,6 +87,7 @@ export default function Home() {
       <DigitalAtmosphere className="rr-atmosphere--page" />
       <div className="relative z-10">
       <Header />
+      <BrandIntro />
 
       {featuredList.length > 0 ? (
         <FeaturedCompetition competitions={featuredList} />
@@ -148,7 +150,7 @@ export default function Home() {
                 <p className="text-sm font-medium text-white/40">Loading prizes...</p>
               </div>
             ) : filteredCompetitions.length > 0 ? (
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="rr-comp-grid grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
                 {filteredCompetitions.map((competition) => (
                   <CompetitionCard
                     key={competition.id}

@@ -3,7 +3,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import Header from "@/components/layout/header";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -341,10 +340,9 @@ export default function Wellbeing() {
   // If user is suspended or disabled, show a message and redirect
   if (isCurrentlySuspended || userData?.disabled) {
     return (
-      <div className="min-h-screen bg-background text-foreground">
-        <Header />
-        <div className="w-full px-3 sm:px-4 py-4 sm:py-8">
-          <Card className="max-w-2xl mx-auto mt-10">
+      <div className="w-full px-0 py-6 text-white">
+        <div className="mx-auto max-w-2xl">
+          <Card className="border-white/10 bg-[#0A0A0D]">
             <CardHeader>
               <CardTitle className="text-center text-2xl">
                 {userData?.disabled ? "Account Closed" : "Account Suspended"}
@@ -401,9 +399,7 @@ export default function Wellbeing() {
   }
 
   return (
-    <div className="min-h-screen text-foreground">
-      <Header />
-      <div className="w-full px-3 sm:px-4 py-4 sm:py-8">
+    <div className="w-full px-0 py-2 sm:py-4 text-white">
         {/* Suspension Alert */}
         {isCurrentlySuspended && userData?.selfSuspensionEndsAt && (
           <Card className="mb-6 bg-gradient-to-br from-amber-900/30 to-amber-950/20 border-amber-500/50 shadow-xl shadow-amber-500/20">
@@ -683,7 +679,7 @@ export default function Wellbeing() {
               <Dialog open={isSuspensionOpen} onOpenChange={setIsSuspensionOpen}>
                 <DialogTrigger asChild>
                   <Button 
-                    className="w-full bg-gradient-to-r from-amber-600 to-amber-500 text-black hover:from-amber-500 hover:to-amber-400 shadow-lg shadow-amber-500/50"
+                    className="w-full rr-cta shadow-lg"
                     disabled={isCurrentlySuspended}
                   >
                     {isCurrentlySuspended ? (
@@ -699,7 +695,7 @@ export default function Wellbeing() {
                     )}
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-zinc-900 border-amber-500/30">
+                <DialogContent className="rr-wallet border-[#C8102E]/30 bg-[#0A0A0D] text-white">
                   <DialogHeader>
                     <DialogTitle className="text-amber-400 text-2xl">Confirm Account Suspension</DialogTitle>
                     <DialogDescription className="text-gray-400">
@@ -726,7 +722,7 @@ export default function Wellbeing() {
                       Cancel
                     </Button>
                     <Button
-                      className="bg-gradient-to-r from-amber-600 to-amber-500 text-black hover:from-amber-500 hover:to-amber-400"
+                      className="rr-cta"
                       onClick={handleSuspendAccount}
                       disabled={suspendAccountMutation.isPending}
                     >
@@ -800,7 +796,7 @@ export default function Wellbeing() {
                     Close Account Permanently
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-zinc-900 border-red-500/30">
+                <DialogContent className="rr-wallet border-[#C8102E]/30 bg-[#0A0A0D] text-white">
                   <DialogHeader>
                     <DialogTitle className="text-red-400 text-2xl">Final Warning: Account Closure</DialogTitle>
                     <DialogDescription className="text-gray-400">
@@ -967,7 +963,6 @@ export default function Wellbeing() {
             </div>
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }

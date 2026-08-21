@@ -63,7 +63,7 @@ let browser;
     
     if (match) {
       const countStr = match[1];
-      let totalMembers = 6700;
+      let totalMembers = 10300;
       
       if (countStr.includes('K') || countStr.includes('k')) {
         totalMembers = parseFloat(countStr.replace(',', '')) * 1000;
@@ -81,8 +81,8 @@ let browser;
     } else {
       // Fallback
       res.json({
-        totalMembers: 7300,
-        formattedCount: '7.3K',
+        totalMembers: 10300,
+        formattedCount: '10.3K',
         isFallback: true,
         success: true
       });
@@ -92,8 +92,8 @@ let browser;
     console.error('Facebook error:', err.message);
     
     res.json({
-      totalMembers: 6700,
-      formattedCount: '6.7K',
+      totalMembers: 10300,
+      formattedCount: '10.3K',
       isFallback: true,
       success: false
     });

@@ -134,7 +134,7 @@ function Section({
       {kicker ? <span className="rr-legal-kicker">{kicker}</span> : null}
       <h2>{title}</h2>
       {children}
-    </section>
+          </section>
   );
 }
 
@@ -199,7 +199,7 @@ export default function TermsAndConditions() {
               <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">
                 Legal
               </span>
-            </div>
+              </div>
             <h1 className="font-prize text-[2.15rem] leading-[0.92] text-white sm:text-6xl">
               TERMS & CONDITIONS
             </h1>
@@ -229,7 +229,7 @@ export default function TermsAndConditions() {
           </details>
 
           <div className="mt-10 grid gap-10 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start lg:gap-14">
-            <aside className="hidden lg:block lg:sticky lg:top-[5.5rem] lg:self-start">
+            <aside className="hidden lg:block lg:sticky lg:top-[7.25rem] lg:self-start">
               <Toc activeId={activeId} />
             </aside>
 
@@ -254,9 +254,9 @@ export default function TermsAndConditions() {
                   </p>
                   <p className="mt-3 mb-0">
                     Email: <MailLink />
-                  </p>
-                </div>
-                <p>
+                </p>
+              </div>
+              <p>
                   Ringtone Riches may operate multiple competitions, draws, instant-win competitions and promotional games at any one time.
                 </p>
                 <p>
@@ -444,8 +444,8 @@ export default function TermsAndConditions() {
                     South Shields<br />
                     Tyne & Wear<br />
                     NE33 5AF
-                  </p>
-                </div>
+              </p>
+            </div>
                 <p>6.3 Each postal Entry must clearly include:</p>
                 <Bullets
                   items={[
@@ -1175,10 +1175,10 @@ export default function TermsAndConditions() {
                 <p>38.3 Subject to those mandatory rights, the courts of England and Wales shall have jurisdiction over disputes arising from or in connection with these Terms or a Ringtone Riches Competition.</p>
               </Section>
             </article>
-          </div>
-        </main>
+        </div>
+      </main>
 
-        <Footer />
+      <Footer />
       </div>
     </div>
   );

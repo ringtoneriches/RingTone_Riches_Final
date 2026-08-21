@@ -1,5 +1,5 @@
-import logoImage from "@assets/Ringtone_Riches_Logo.png";
 import { Facebook, Headphones, Instagram } from "lucide-react";
+import BrandLogo from "@/components/layout/BrandLogo";
 import { Link } from "wouter";
 
 function TikTokIcon({ className }: { className?: string }) {
@@ -17,9 +17,8 @@ export default function Footer() {
         <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
           <div className="space-y-5">
             <Link href="/">
-              <img
-                src={logoImage}
-                alt="RingToneRiches Logo"
+              <BrandLogo
+                force="night"
                 className="h-16 w-auto cursor-pointer object-contain sm:h-20"
               />
             </Link>

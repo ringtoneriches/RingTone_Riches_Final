@@ -1,13 +1,11 @@
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Lock } from "lucide-react";
+import { CheckCircle2, Loader2, ShieldAlert } from "lucide-react";
+import AuthShell from "@/components/auth/AuthShell";
+import AuthPasswordInput from "@/components/auth/AuthPasswordInput";
 
 export default function ResetPassword() {
   const [, navigate] = useLocation();
@@ -127,178 +125,141 @@ export default function ResetPassword() {
     resetMutation.mutate({ token, newPassword });
   };
 
+  const reqs = [
+    { ok: newPassword.length >= 8, label: "At least 8 characters" },
+    { ok: /[A-Z]/.test(newPassword), label: "One uppercase letter" },
+    { ok: /[a-z]/.test(newPassword), label: "One lowercase letter" },
+    { ok: /[0-9]/.test(newPassword), label: "One number" },
+  ];
+
   if (!token) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background/90 flex items-center justify-center p-4">
-        <Card className="bg-black/40 border-ringtone-900/20 backdrop-blur-sm shadow-2xl max-w-md w-full">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-4xl mb-4">⚠️</div>
-              <h3 className="text-xl font-bold text-white mb-2">Invalid Reset Link</h3>
-              <p className="text-gray-300 mb-4">
-                This password reset link is invalid or incomplete.
-              </p>
-              <Link href="/forgot-password">
-                <Button className="bg-yellow-600 hover:bg-ringtone-700" data-testid="button-request-new-link">
-                  REQUEST NEW RESET LINK
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <AuthShell kicker="Account recovery" title="INVALID LINK" sub="This reset link is missing or incomplete.">
+        <div className="rr-auth-form">
+          <div className="rr-auth-note rr-auth-note--warn rr-auth-status">
+            <ShieldAlert className="mx-auto h-7 w-7 text-[#FF263D]" />
+            <h3>Invalid reset link</h3>
+            <p>Request a new one and we’ll email a fresh link.</p>
+          </div>
+          <Link href="/forgot-password">
+            <span className="rr-cta inline-flex h-12 w-full cursor-pointer items-center justify-center rounded-xl text-sm font-black uppercase tracking-[0.12em]" data-testid="button-request-new-link">
+              Request new reset link
+            </span>
+          </Link>
+        </div>
+      </AuthShell>
     );
   }
 
   if (verifyingToken) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background/90 flex items-center justify-center p-4">
-        <Card className="bg-black/40 border-ringtone-900/20 backdrop-blur-sm shadow-2xl max-w-md w-full">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="animate-spin text-4xl mb-4">⏳</div>
-              <p className="text-white">Verifying reset link...</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <AuthShell kicker="Account recovery" title="CHECKING LINK" sub="Hang on — we’re verifying this reset link.">
+        <div className="rr-auth-status">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#F1D47A]" />
+          <p className="mt-4">Verifying reset link…</p>
+        </div>
+      </AuthShell>
     );
   }
 
   if (tokenError) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background/90 flex items-center justify-center p-4">
-        <Card className="bg-black/40 border-ringtone-900/20 backdrop-blur-sm shadow-2xl max-w-md w-full">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-4xl mb-4">❌</div>
-              <h3 className="text-xl font-bold text-white mb-2">Reset Link Expired</h3>
-              <p className="text-gray-300 mb-4">
-                {(tokenError as Error).message || "This reset link has expired or is invalid."}
-              </p>
-              <Link href="/forgot-password">
-                <Button className="bg-yellow-600 hover:bg-ringtone-700" data-testid="button-request-new-link-error">
-                  REQUEST NEW RESET LINK
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <AuthShell kicker="Account recovery" title="LINK EXPIRED" sub="This reset link is no longer valid.">
+        <div className="rr-auth-form">
+          <div className="rr-auth-note rr-auth-note--warn rr-auth-status">
+            <ShieldAlert className="mx-auto h-7 w-7 text-[#FF263D]" />
+            <h3>Reset link expired</h3>
+            <p>{(tokenError as Error).message || "This reset link has expired or is invalid."}</p>
+          </div>
+          <Link href="/forgot-password">
+            <span className="rr-cta inline-flex h-12 w-full cursor-pointer items-center justify-center rounded-xl text-sm font-black uppercase tracking-[0.12em]" data-testid="button-request-new-link-error">
+              Request new reset link
+            </span>
+          </Link>
+        </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background/90 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold gradient-text">RESET PASSWORD</h1>
+    <AuthShell
+      kicker="Account recovery"
+      title="NEW PASSWORD"
+      sub="Set a strong password, then you’re back in."
+    >
+      {!resetComplete ? (
+        <form onSubmit={handleSubmit} className="rr-auth-form">
+          {tokenData?.email ? (
+            <div className="rr-auth-note">
+              Resetting password for <strong>{tokenData.email}</strong>
+            </div>
+          ) : null}
+
+          <div className="rr-auth-field">
+            <label htmlFor="newPassword" className="rr-auth-label">New password</label>
+            <AuthPasswordInput
+              id="newPassword"
+              value={newPassword}
+              onChange={setNewPassword}
+              placeholder="Enter new password"
+              autoComplete="new-password"
+              required
+              testId="input-new-password"
+            />
+          </div>
+
+          <div className="rr-auth-field">
+            <label htmlFor="confirmPassword" className="rr-auth-label">Confirm password</label>
+            <AuthPasswordInput
+              id="confirmPassword"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              placeholder="Confirm new password"
+              autoComplete="new-password"
+              required
+              testId="input-confirm-password"
+            />
+          </div>
+
+          <ul className="rr-auth-reqs">
+            {reqs.map((req) => (
+              <li key={req.label} className={req.ok ? "is-met" : undefined}>
+                {req.ok ? "✓" : "•"} {req.label}
+              </li>
+            ))}
+          </ul>
+
+          <button
+            type="submit"
+            className="rr-cta inline-flex h-12 w-full items-center justify-center rounded-xl text-sm font-black uppercase tracking-[0.12em]"
+            disabled={resetMutation.isPending}
+            data-testid="button-reset-password"
+          >
+            {resetMutation.isPending ? "Resetting…" : "Reset password"}
+          </button>
+
+          <div className="rr-auth-footer">
+            <Link href="/login">
+              <span className="rr-auth-ghost cursor-pointer" data-testid="button-back-to-login">
+                Back to login
+              </span>
+            </Link>
+          </div>
+        </form>
+      ) : (
+        <div className="rr-auth-form">
+          <div className="rr-auth-note rr-auth-note--ok rr-auth-status">
+            <CheckCircle2 className="mx-auto h-7 w-7 text-[#00b67a]" />
+            <h3>Password reset</h3>
+            <p>Your password is updated. Taking you to login…</p>
+          </div>
+          <Link href="/login">
+            <span className="rr-cta inline-flex h-12 w-full cursor-pointer items-center justify-center rounded-xl text-sm font-black uppercase tracking-[0.12em]" data-testid="button-go-to-login">
+              Go to login
+            </span>
+          </Link>
         </div>
-
-        <Card className="bg-black/40 border-ringtone-900/20 backdrop-blur-sm shadow-2xl">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold gradient-text text-center flex items-center justify-center gap-2">
-              <Lock className="w-6 h-6" />
-              Create New Password
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!resetComplete ? (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {tokenData?.email && (
-                  <div className="p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-                    <p className="text-sm text-gray-300">
-                      Resetting password for: <strong className="text-white">{tokenData.email}</strong>
-                    </p>
-                  </div>
-                )}
-
-                <div>
-                  <Label htmlFor="newPassword" className="text-white">
-                    New Password
-                  </Label>
-                  <Input
-                    id="newPassword"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Enter new password"
-                    className="bg-white text-black border-gray-300 mt-2"
-                    required
-                    data-testid="input-new-password"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="confirmPassword" className="text-white">
-                    Confirm New Password
-                  </Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
-                    className="bg-white text-black border-gray-300 mt-2"
-                    required
-                    data-testid="input-confirm-password"
-                  />
-                </div>
-
-                <div className="p-3 bg-gray-900/50 border border-gray-600 rounded-lg">
-                  <p className="text-xs text-gray-400 font-semibold mb-1">Password Requirements:</p>
-                  <ul className="text-xs text-gray-400 space-y-1">
-                    <li>• At least 8 characters long</li>
-                    <li>• Contains uppercase letter (A-Z)</li>
-                    <li>• Contains lowercase letter (a-z)</li>
-                    <li>• Contains number (0-9)</li>
-                  </ul>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-yellow-600 hover:bg-ringtone-700 text-white font-bold"
-                  disabled={resetMutation.isPending}
-                  data-testid="button-reset-password"
-                >
-                  {resetMutation.isPending ? "RESETTING..." : "RESET PASSWORD"}
-                </Button>
-
-                <div className="text-center border-t border-gray-600 pt-4">
-                  <Link href="/login">
-                    <Button
-                      variant="outline"
-                      className="border-ringtone-600 text-ringtone-400 hover:bg-ringtone-600/10"
-                      data-testid="button-back-to-login"
-                    >
-                      BACK TO LOGIN
-                    </Button>
-                  </Link>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-4 text-center">
-                <div className="p-6 bg-green-900/20 border border-green-500/30 rounded-lg">
-                  <div className="text-4xl mb-4">✅</div>
-                  <h3 className="text-xl font-bold text-white mb-2">Password Reset Complete!</h3>
-                  <p className="text-gray-300 mb-4">
-                    Your password has been successfully reset.
-                  </p>
-                  <p className="text-sm text-gray-400">
-                    Redirecting you to login page...
-                  </p>
-                </div>
-
-                <Link href="/login">
-                  <Button className="bg-yellow-600 hover:bg-ringtone-700" data-testid="button-go-to-login">
-                    GO TO LOGIN
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      )}
+    </AuthShell>
   );
 }
