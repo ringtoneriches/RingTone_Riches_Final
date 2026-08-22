@@ -24,9 +24,9 @@ GameIcon.displayName = 'GameIcon';
 // Memoized color getter with pre-computed values
 const getGameColor = (type: string) => {
   switch (type) {
-    case "spin": return { accent: '#f59e0b', glow: 'rgba(245,158,11,0.2)', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.3)', label: 'Spin to Win', neon: '#ffb800' };
-    case "scratch": return { accent: '#00ff88', glow: 'rgba(0,255,136,0.2)', bg: 'rgba(0,255,136,0.06)', border: 'rgba(0,255,136,0.25)', label: 'Scratch Card', neon: '#00ff88' };
-    default: return { accent: '#f5d76e', glow: 'rgba(245,215,110,0.2)', bg: 'rgba(245,215,110,0.06)', border: 'rgba(245,215,110,0.25)', label: 'Instant Win', neon: '#f5d76e' };
+    case "spin": return { accent: '#B98928', glow: 'rgba(185,137,40,0.22)', bg: 'rgba(185,137,40,0.08)', border: 'rgba(185,137,40,0.32)', label: 'Spin to Win', neon: '#F1D47A' };
+    case "scratch": return { accent: '#C8102E', glow: 'rgba(200,16,46,0.22)', bg: 'rgba(200,16,46,0.08)', border: 'rgba(200,16,46,0.32)', label: 'Scratch Card', neon: '#FF263D' };
+    default: return { accent: '#B98928', glow: 'rgba(241,212,122,0.2)', bg: 'rgba(241,212,122,0.06)', border: 'rgba(241,212,122,0.28)', label: 'Instant Win', neon: '#F1D47A' };
   }
 };
 
@@ -77,18 +77,18 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
 
             <div className="flex items-center gap-2">
               <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{
-                background: 'rgba(0,255,136,0.05)',
-                border: '1px solid rgba(0,255,136,0.15)',
+                background: 'rgba(185,137,40,0.08)',
+                border: '1px solid rgba(185,137,40,0.22)',
               }}>
-                <Users className="w-3.5 h-3.5" style={{ color: '#00ff88', opacity: 0.7 }} />
+                <Users className="w-3.5 h-3.5" style={{ color: '#F1D47A', opacity: 0.7 }} />
                 <span className="text-white/70 text-[11px] font-semibold">{competition.soldTickets || 0} players</span>
               </div>
               <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full" style={{
-                background: 'rgba(0,255,136,0.08)',
-                border: '1px solid rgba(0,255,136,0.3)',
+                background: 'rgba(200,16,46,0.12)',
+                border: '1px solid rgba(200,16,46,0.4)',
               }}>
-                <div className="w-1.5 h-1.5 rounded-full bg-[#00ff88]" />
-                <span className="text-[10px] font-black uppercase tracking-wider text-[#00ff88]">Live</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-[#FF263D]" />
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#FF263D]">Live</span>
               </div>
             </div>
           </div>
@@ -140,17 +140,16 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
 
               <div className="grid grid-cols-2 gap-2 sm:gap-2.5 mb-5 sm:mb-6">
                 {[
-                  { icon: Shield, text: "Secure Play", color: '#00ff88' },
-                  { icon: Trophy, text: "Instant Prizes", color: '#f5d76e' },
-                  { icon: Target, text: "Fair Odds", color: '#60a5fa' },
-                  { icon: Zap, text: "Quick Wins", color: '#f59e0b' }
+                  { icon: Shield, text: "Secure Play", color: '#F1D47A' },
+                  { icon: Trophy, text: "Instant Prizes", color: '#FF263D' },
+                  { icon: Target, text: "Fair Odds", color: '#B98928' },
+                  { icon: Zap, text: "Quick Wins", color: '#C8102E' }
                 ].map((chip, i) => (
                   <div key={i} className="flex items-center gap-2 px-3 py-2.5 sm:py-3 rounded-xl" style={{
-                    background: chip.color === '#00ff88' ? 'rgba(0,255,136,0.05)' : 
-                               chip.color === '#f5d76e' ? 'rgba(245,215,110,0.05)' :
-                               chip.color === '#60a5fa' ? 'rgba(96,165,250,0.05)' :
-                               'rgba(245,158,11,0.05)',
-                    border: `1px solid ${chip.color}20`,
+                    background: chip.color === '#FF263D' || chip.color === '#C8102E'
+                      ? 'rgba(200,16,46,0.08)'
+                      : 'rgba(185,137,40,0.08)',
+                    border: `1px solid ${chip.color}33`,
                   }}>
                     <chip.icon className="w-4 h-4 flex-shrink-0" style={{ color: chip.color }} />
                     <span className="text-white/80 text-[10px] sm:text-xs font-bold">{chip.text}</span>
@@ -172,11 +171,7 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
                 <div className="flex gap-2.5 w-full sm:w-auto">
                   <Button
                     onClick={handleClick}
-                    className="flex-1 sm:flex-none h-11 sm:h-12 px-5 sm:px-8 text-sm sm:text-base font-black rounded-xl border-0 uppercase tracking-wide"
-                    style={{
-                      background: `linear-gradient(135deg, ${colors.neon}, ${colors.accent})`,
-                      color: '#0a0a0a',
-                    }}
+                    className="rr-cta flex-1 sm:flex-none h-11 sm:h-12 px-5 sm:px-8 text-sm sm:text-base"
                   >
                     <Gamepad2 className="w-4 h-4 mr-2" />
                     Play Now
@@ -203,9 +198,9 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
           <div className="mt-5 sm:mt-6 pt-4 border-t border-white/5">
             <div className="flex items-center justify-center gap-4 sm:gap-8">
               {[
-                { icon: Zap, text: "Instant Payout", color: '#00ff88' },
-                { icon: Shield, text: "Fair Play", color: '#f5d76e' },
-                { icon: Gamepad2, text: "Multi-Game", color: '#60a5fa' }
+                { icon: Zap, text: "Instant Payout", color: '#FF263D' },
+                { icon: Shield, text: "Fair Play", color: '#F1D47A' },
+                { icon: Gamepad2, text: "Multi-Game", color: '#B98928' }
               ].map((item, i) => (
                 <div key={i} className="flex items-center gap-1.5 sm:gap-2">
                   <item.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: item.color }} />
@@ -293,7 +288,7 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
   if (!instantCompetitions.length) return null;
 
   return (
-    <div className="w-full relative py-12 sm:py-16 overflow-hidden bg-[#070709]">
+    <div className="rr-featured-slider w-full relative py-12 sm:py-16 overflow-hidden bg-[#070709]">
       <StaticBackground />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -302,31 +297,24 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center" style={{
-                background: 'linear-gradient(135deg, rgba(0,255,136,0.1), rgba(245,215,110,0.05))',
-                border: '1px solid rgba(0,255,136,0.2)',
+                background: 'linear-gradient(135deg, rgba(200,16,46,0.16), rgba(185,137,40,0.08))',
+                border: '1px solid rgba(200,16,46,0.35)',
               }}>
-                <Gamepad2 className="w-6 h-6 sm:w-7 sm:h-7 text-[#00ff88]" />
+                <Gamepad2 className="w-6 h-6 sm:w-7 sm:h-7 text-[#FF263D]" />
               </div>
               <div>
-               <h2 
-  className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-transparent bg-clip-text"
-  style={{
-    background: 'linear-gradient(90deg, #00ff88, #f5d76e, #60a5fa)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-  }}
->
+               <h2 className="font-prize text-xl sm:text-2xl md:text-3xl tracking-tight text-white">
   Featured Games
 </h2>
                 <p className="text-white/50 text-[11px] sm:text-sm font-medium hidden sm:block">Play & win premium prizes instantly</p>
               </div>
             </div>
             <div className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full" style={{
-              background: 'rgba(0,255,136,0.08)',
-              border: '1px solid rgba(0,255,136,0.3)',
+              background: 'rgba(200,16,46,0.12)',
+              border: '1px solid rgba(200,16,46,0.4)',
             }}>
-              <div className="w-1.5 h-1.5 rounded-full bg-[#00ff88]" />
-              <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#00ff88]">Live</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-[#FF263D]" />
+              <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#FF263D]">Live</span>
             </div>
           </div>
         </div>
@@ -359,7 +347,7 @@ export default function FeaturedCompetitions({ competitions }: FeaturedCompetiti
                   : 'w-1.5 h-1.5 hover:w-3'
               }`} style={{
                 background: i === activeSlide
-                  ? 'linear-gradient(90deg, #00ff88, #f5d76e)'
+                  ? 'linear-gradient(90deg, #C8102E, #F1D47A)'
                   : 'rgba(255,255,255,0.2)',
               }} />
             </button>

@@ -13,7 +13,7 @@ type Props = {
 
 export default function AuthShell({ kicker, title, sub, children, wide = false }: Props) {
   return (
-    <div className="rr-auth-page min-h-screen text-foreground relative overflow-x-hidden">
+    <div className="rr-auth-page min-h-screen text-foreground relative overflow-x-clip">
       <DigitalAtmosphere className="rr-atmosphere--page" />
       <div className="relative z-10">
         <Header />

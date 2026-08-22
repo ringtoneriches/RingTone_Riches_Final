@@ -6,8 +6,8 @@ type Props = {
 };
 
 export default function ThemeToggle({ className = "" }: Props) {
-  const { theme, toggle } = useSiteTheme();
-  const isDay = theme === "day";
+  const { effective, toggle } = useSiteTheme();
+  const isDay = effective === "day";
 
   return (
     <button

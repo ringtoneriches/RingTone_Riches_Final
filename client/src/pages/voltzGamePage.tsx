@@ -189,7 +189,7 @@ function VoltzGameHistory({ games }: { games: any[] }) {
 
   return (
     <div className="w-full" data-testid="voltz-history">
-      <div className="relative rounded-2xl overflow-hidden"
+      <div className="rr-voltz-panel relative rounded-2xl overflow-hidden"
            style={{
              background: 'linear-gradient(180deg, rgba(15,12,40,0.97) 0%, rgba(10,8,32,0.98) 50%, rgba(8,6,28,0.97) 100%)',
              backdropFilter: 'blur(24px)',
@@ -253,11 +253,11 @@ function VoltzGameHistory({ games }: { games: any[] }) {
                    style={{
                      background: stat.active
                        ? `linear-gradient(145deg, rgba(${stat.color},0.15), rgba(${stat.color},0.04), rgba(15,12,40,0.6))`
-                       : 'linear-gradient(145deg, rgba(139,92,246,0.05), rgba(15,12,40,0.4))',
-                     border: `1px solid ${stat.active ? `rgba(${stat.color},0.3)` : 'rgba(139,92,246,0.1)'}`,
+                       : 'linear-gradient(145deg, rgba(255,255,255,0.06), rgba(15,12,40,0.55))',
+                     border: `1px solid ${stat.active ? `rgba(${stat.color},0.3)` : 'rgba(255,255,255,0.14)'}`,
                      boxShadow: stat.active
                        ? `0 6px 20px rgba(${stat.color},0.08), 0 0 40px rgba(${stat.color},0.04), inset 0 1px 0 rgba(255,255,255,0.06)`
-                       : 'inset 0 1px 0 rgba(255,255,255,0.02)',
+                       : 'inset 0 1px 0 rgba(255,255,255,0.06)',
                      transition: 'all 0.3s ease',
                    }}>
                 {stat.active && (
@@ -274,18 +274,18 @@ function VoltzGameHistory({ games }: { games: any[] }) {
                 <div className="relative flex items-center gap-1.5 mb-2.5">
                   <div style={stat.active
                     ? { color: stat.hex, filter: `drop-shadow(0 0 8px rgba(${stat.color},0.7))` }
-                    : { color: 'rgba(139,92,246,0.2)' }
+                    : { color: 'rgba(232,226,245,0.55)' }
                   }>
                     {stat.icon}
                   </div>
                   <span className="text-[9px] font-black uppercase tracking-[0.2em]"
-                        style={{ color: stat.active ? `rgba(${stat.color},0.7)` : 'rgba(139,92,246,0.2)' }}>
+                        style={{ color: stat.active ? `rgba(${stat.color},0.7)` : 'rgba(232,226,245,0.55)' }}>
                     {stat.label}
                   </span>
                 </div>
                 <p className="relative text-2xl font-black tabular-nums leading-none"
                    style={{
-                     color: stat.active ? stat.hex : 'rgba(139,92,246,0.08)',
+                     color: stat.active ? stat.hex : 'rgba(245,240,255,0.78)',
                      textShadow: stat.active ? `0 0 25px rgba(${stat.color},0.6), 0 0 50px rgba(${stat.color},0.2)` : 'none',
                    }}>
                   {stat.value}
@@ -760,7 +760,7 @@ export default function VoltzGamePage() {
 
         <div className="mt-6">
           {gameHistory.length === 0 ? (
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0D]/80 py-16 text-center">
+            <div className="rr-voltz-panel relative overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0D]/80 py-16 text-center">
               <Zap className="mx-auto mb-4 h-10 w-10 text-[#F1D47A]/40" />
               <p className="text-sm font-black uppercase tracking-[0.2em] text-white/45" data-testid="text-empty-history">
                 No surges recorded

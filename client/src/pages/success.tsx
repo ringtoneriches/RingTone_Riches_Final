@@ -1,12 +1,27 @@
 import { useEffect, useState } from "react";
-import { useSearch } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import PaymentResult, { PaymentResultVariant } from "@/components/billing/PaymentResult";
+
+function variantFromMessage(message: string): PaymentResultVariant {
+  if (message.toLowerCase().includes("successfully")) return "success";
+  if (
+    message.toLowerCase().includes("failed") ||
+    message.toLowerCase().includes("error") ||
+    message.toLowerCase().includes("missing")
+  ) {
+    return "failed";
+  }
+  if (message.toLowerCase().includes("taking longer")) return "waiting";
+  return "processing";
+}
 
 export default function WalletSuccess() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const [statusMessage, setStatusMessage] = useState("Processing your payment...");
 
   useEffect(() => {
@@ -78,12 +93,24 @@ export default function WalletSuccess() {
     confirmPayment();
   }, [queryClient, toast]);
 
+  const variant = variantFromMessage(statusMessage);
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold mb-4">{statusMessage}</h1>
-        <p>Please wait a moment while we confirm your wallet top-up.</p>
-      </div>
-    </div>
+    <PaymentResult
+      kicker="Wallet · top-up"
+      title={
+        variant === "success"
+          ? "PAYMENT RECEIVED"
+          : variant === "failed"
+            ? "PAYMENT ISSUE"
+            : variant === "waiting"
+              ? "STILL CONFIRMING"
+              : "CONFIRMING"
+      }
+      message={statusMessage}
+      variant={variant}
+      actionLabel={variant === "failed" ? "Back to wallet" : undefined}
+      onAction={variant === "failed" ? () => setLocation("/wallet") : undefined}
+    />
   );
 }

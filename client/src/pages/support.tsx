@@ -345,7 +345,7 @@ export default function Support() {
             <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
           </div>
         ) : tickets.length === 0 ? (
-          <Card className="bg-[#2a2a2a] border-gray-700">
+          <Card className="rr-wallet-island bg-[#2a2a2a] border-gray-700">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <MessageSquare className="h-16 w-16 text-gray-500 mb-4" />
               <h3 className="text-xl font-semibold text-white mb-2">No Support Tickets</h3>
@@ -559,7 +559,7 @@ export default function Support() {
 
             {selectedTicket.status !== "closed" && (
               <div className="border-t border-gray-700 pt-4 mt-4">
-                <div className="bg-gradient-to-r from-yellow-500/10 via-yellow-500/5 to-transparent border border-yellow-500/30 rounded-xl p-4">
+                <div className="rr-wallet-island bg-gradient-to-r from-yellow-500/10 via-yellow-500/5 to-transparent border border-yellow-500/30 rounded-xl p-4">
                   {replyImages.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-3">
                       {replyImages.map((url, index) => (
@@ -646,7 +646,7 @@ export default function Support() {
             {tickets.map((ticket) => (
               <Card
                 key={ticket.id}
-                className={`bg-[#2a2a2a] border-gray-700 cursor-pointer transition-all hover:border-yellow-500/50 ${
+                className={`rr-wallet-island bg-[#2a2a2a] border-gray-700 cursor-pointer transition-all hover:border-yellow-500/50 ${
                   ticket.userHasUnread ? "border-l-4 border-l-yellow-500" : ""
                 }`}
                 onClick={() => setSelectedTicket(ticket)}
@@ -687,7 +687,7 @@ export default function Support() {
         )}
 
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="rr-wallet max-w-lg border-white/10 bg-[#0A0A0D] text-white">
+        <DialogContent className="rr-wallet-island max-w-lg border-white/10 bg-[#0A0A0D] text-white">
           <DialogHeader>
             <DialogTitle className="text-yellow-500">Create Support Ticket</DialogTitle>
           </DialogHeader>

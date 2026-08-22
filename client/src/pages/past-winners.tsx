@@ -161,7 +161,7 @@ export default function PastWinners() {
 
   if (error) {
     return (
-      <div className="min-h-screen text-foreground relative overflow-x-hidden" style={{ backgroundColor: "#050505" }}>
+      <div className="rr-winners rr-page min-h-screen text-foreground relative overflow-x-clip bg-[#050505]">
         <DigitalAtmosphere className="rr-atmosphere--page" />
         <div className="relative z-10">
           <Header />
@@ -176,7 +176,7 @@ export default function PastWinners() {
   }
 
   return (
-    <div className="min-h-screen text-foreground relative overflow-x-hidden" style={{ backgroundColor: "#050505" }}>
+    <div className="rr-winners rr-page min-h-screen text-foreground relative overflow-x-clip bg-[#050505]">
       <DigitalAtmosphere className="rr-atmosphere--page" />
       <div className="relative z-10">
         <Header />

@@ -56,7 +56,6 @@ export function getTicketStats(competition: Competition) {
     isFree: competition.ticketPrice === "0.00",
     isAlmostGone: pct > 85 && !isClosed,
     isHot: pct > 60 && !isClosed,
-    isNew: pct < 12 && !isClosed,
   };
 }
 
@@ -80,18 +79,27 @@ export function getPrizeDisplay(competition: Competition) {
   return { prizeNum, isMysteryPrize, prizeDisplay };
 }
 
+export function getPrizeOffer(competition: Competition) {
+  const prize = getPrizeDisplay(competition);
+  if (prize.isMysteryPrize) {
+    return { kicker: "Instantly win a", amount: "MYSTERY PRIZE", prize };
+  }
+  if (prize.prizeDisplay) {
+    return { kicker: "Instantly win up to", amount: prize.prizeDisplay, prize };
+  }
+  return { kicker: null, amount: null, prize };
+}
+
 export function getStatusBadge(opts: {
   isExpired: boolean;
   isSoldOut: boolean;
   isAlmostGone: boolean;
   isHot: boolean;
-  isNew: boolean;
 }) {
   if (opts.isExpired) return "EXPIRED";
   if (opts.isSoldOut) return "SOLD OUT";
   if (opts.isAlmostGone) return "SELLING FAST";
   if (opts.isHot) return "HOT";
-  if (opts.isNew) return "NEW";
   return "LIVE";
 }
 

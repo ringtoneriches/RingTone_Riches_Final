@@ -13,7 +13,7 @@ import {
   getCompetitionTypeConfig,
   getCtaLabel,
   getFallbackImage,
-  getPrizeDisplay,
+  getPrizeOffer,
   getStatusBadge,
   getTicketStats,
 } from "@/lib/competition-display";
@@ -36,7 +36,7 @@ function FeaturedSlide({
   const [, setLocation] = useLocation();
   const stats = getTicketStats(competition);
   const typeCfg = getCompetitionTypeConfig(competition.type);
-  const prize = getPrizeDisplay(competition);
+  const offer = getPrizeOffer(competition);
   const cd = useCountdown(active ? competition.endDate : null);
   const badge = getStatusBadge(stats);
   const cta = getCtaLabel(competition.type, stats.isClosed);
@@ -90,15 +90,14 @@ function FeaturedSlide({
           </span>
         </div>
 
-        <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.22em] text-white/40">Win</p>
-        <h1 className="font-prize text-[2rem] sm:text-5xl lg:text-6xl leading-[0.95] text-white break-words">
-          {prize.prizeDisplay || competition.title}
-        </h1>
-        {prize.prizeDisplay && (
-          <p className="mt-2 text-sm font-semibold text-white/55 line-clamp-2">{competition.title}</p>
+        {offer.kicker && (
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.22em] text-white/40">{offer.kicker}</p>
         )}
-        {competition.description && (
-          <p className="mt-3 text-sm leading-relaxed text-white/50 line-clamp-2 lg:line-clamp-3">{competition.description}</p>
+        <h1 className="font-prize text-[2rem] sm:text-5xl lg:text-6xl leading-[0.95] text-white break-words">
+          {offer.amount || competition.title}
+        </h1>
+        {offer.amount && (
+          <p className="mt-2 text-sm font-semibold text-white/55 line-clamp-2">{competition.title}</p>
         )}
 
         <div className="mt-5 flex flex-wrap items-end justify-between gap-3 sm:gap-4">
@@ -188,7 +187,7 @@ export default function FeaturedCompetition({ competitions }: Props) {
   const atLast = activeIndex === count - 1;
 
   return (
-    <section ref={sectionRef} className="relative overflow-hidden pt-1 pb-8 sm:py-16 lg:py-20" data-testid="section-featured-competition">
+    <section ref={sectionRef} className="relative overflow-hidden pt-6 pb-8 sm:pt-8 sm:pb-12 lg:pb-16" data-testid="section-featured-competition">
       {starsOn && <DigitalAtmosphere stars layers={false} />}
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <ChaserBorder variant="featured" className="shadow-[0_24px_80px_rgba(0,0,0,0.55)]">

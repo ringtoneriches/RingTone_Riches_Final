@@ -637,7 +637,7 @@ const RevealAllSummary = () => {
   const isNoWin = lastResult?.outcome === "noWin";
 
   return (
-    <div className="relative w-full" data-testid="voltz-game-container">
+    <div className="rr-voltz-panel relative w-full" data-testid="voltz-game-container">
       {/* ── Scoped styles ─────────────────────────────────────────────────── */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&display=swap');
@@ -767,7 +767,7 @@ const RevealAllSummary = () => {
   <button
     onClick={() => handleRevealAll(playsRemaining)}
     disabled={isRevealingAll}
-    className="vg-root mt-4 w-full max-w-[512px] mx-auto py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all hover:brightness-110 active:scale-[0.98]"
+    className="vg-root vg-reveal-all mt-4 w-full max-w-[512px] mx-auto py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all hover:brightness-110 active:scale-[0.98]"
     style={{
       background: 'linear-gradient(90deg, rgba(234,179,8,0.12) 0%, rgba(180,100,0,0.08) 100%)',
       border: '1px solid rgba(234,179,8,0.25)',
@@ -1408,7 +1408,7 @@ const RevealAllSummary = () => {
 
       {/* ── VoltZ-themed No Plays Dialog ─────────────────────────────────────── */}
       <AlertDialog open={showNoPlaysDialog} onOpenChange={setShowNoPlaysDialog}>
-        <AlertDialogContent className="vg-root max-w-[360px] p-0 overflow-hidden border-0 bg-transparent">
+        <AlertDialogContent className="rr-voltz-panel vg-root max-w-[360px] p-0 overflow-hidden border-0 bg-transparent">
           <div
             className="relative overflow-hidden"
             style={{

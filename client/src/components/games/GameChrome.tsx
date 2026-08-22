@@ -7,7 +7,7 @@ import { Link } from "wouter";
 
 export function GameShell({ children }: { children: ReactNode }) {
   return (
-    <div className="relative min-h-screen bg-[#050505] text-white">
+    <div className="rr-game rr-page relative min-h-screen bg-[#050505] text-white">
       <DigitalAtmosphere />
       <Header />
       <div className="relative z-10">{children}</div>
@@ -46,7 +46,7 @@ export function GameHero({
         <p className="mx-auto mt-2 max-w-xl text-sm text-white/50 sm:text-base">{subtitle}</p>
       ) : null}
       {remaining !== undefined && (
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#F1D47A]/30 bg-[#F1D47A]/10 px-4 py-1.5">
+        <div className="rr-game-remaining mt-4 inline-flex items-center gap-2 rounded-full border border-[#F1D47A]/30 bg-[#F1D47A]/10 px-4 py-1.5">
           <span className="font-prize text-2xl leading-none text-[#F1D47A]">{remaining}</span>
           <span className="text-[10px] font-black uppercase tracking-[0.16em] text-white/50">
             {remainingLabel}

@@ -406,7 +406,7 @@ export default function CompetitionPage() {
 
   if (isLoading) {
     return (
-      <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <div className="rr-competition rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
         <DigitalAtmosphere />
         <Header />
         <div className="flex min-h-[60vh] items-center justify-center">
@@ -421,7 +421,7 @@ export default function CompetitionPage() {
 
   if (!competition) {
     return (
-      <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <div className="rr-competition rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
         <DigitalAtmosphere />
         <Header />
         <div className="relative z-10 mx-auto max-w-lg px-4 py-24 text-center">
@@ -491,7 +491,7 @@ export default function CompetitionPage() {
         : playNoun(competitionType, quantity, "cta");
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+    <div className="rr-competition rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
       <DigitalAtmosphere />
       <Header />
 

@@ -6,6 +6,7 @@ import BrandLogo from "@/components/layout/BrandLogo";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Menu, X, Wallet, Music, User as UserIcon, LogOut, ChevronRight, Bell } from "lucide-react";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import AnnouncementTicker from "@/components/home/AnnouncementTicker";
@@ -29,6 +30,7 @@ export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const [location] = useLocation();
 
   // Optimize scroll handler with passive event listener
@@ -50,6 +52,29 @@ export default function Header() {
     
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // iOS Safari: rubber-band / URL-bar at scrollY ≈ 0 shifts the visual
+  // viewport. Keep the bar pinned to the visible area (desktop is unaffected).
+  useEffect(() => {
+    const header = headerRef.current;
+    const vv = window.visualViewport;
+    if (!header || !vv) return;
+    if (!window.matchMedia("(hover: none) and (pointer: coarse)").matches) return;
+
+    const pin = () => {
+      const y = vv.offsetTop;
+      header.style.transform = y ? `translate3d(0, ${y}px, 0)` : "";
+    };
+
+    pin();
+    vv.addEventListener("scroll", pin, { passive: true });
+    vv.addEventListener("resize", pin);
+    return () => {
+      vv.removeEventListener("scroll", pin);
+      vv.removeEventListener("resize", pin);
+      header.style.transform = "";
+    };
   }, []);
 
   // Prevent body scroll when mobile menu is open
@@ -113,9 +138,10 @@ export default function Header() {
   const ringtonePoints = userData?.ringtonePoints ?? user?.ringtonePoints ?? 0;
   const userBalance = getValidBalance(userData?.balance ?? user?.balance);
 
-  return (
+  const chrome = (
     <>
       <header
+        ref={headerRef}
         className={`fixed top-0 left-0 right-0 z-50 rr-header transition-shadow duration-300 ${
           scrolled ? "is-scrolled" : ""
         }`}
@@ -124,34 +150,35 @@ export default function Header() {
         <div className="rr-header-line" aria-hidden />
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
           <nav className="flex h-16 items-center justify-between lg:h-[4.5rem]">
-            {/* Mobile: menu | logo | wallet */}
-            <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center lg:hidden">
-              <div className="justify-self-start">
-                <button
-                  ref={menuButtonRef}
-                  className="rr-header-menu"
-                  onClick={toggleMobileMenu}
-                  data-testid="button-mobile-menu"
-                  aria-label="Menu"
-                  style={{
-                    touchAction: "manipulation",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                </button>
-              </div>
+            {/* Mobile: menu | centered logo | wallet */}
+            <div className="relative flex h-16 w-full items-center lg:hidden">
+              <button
+                ref={menuButtonRef}
+                className="relative z-10 rr-header-menu shrink-0"
+                onClick={toggleMobileMenu}
+                data-testid="button-mobile-menu"
+                aria-label="Menu"
+                style={{
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
 
-              <Link href="/">
-                <div className="flex min-w-0 cursor-pointer items-center justify-center px-2">
+              <Link
+                href="/"
+                className="pointer-events-none absolute inset-0 flex items-center justify-center"
+              >
+                <span className="pointer-events-auto flex max-w-[32vw] cursor-pointer items-center justify-center">
                   <BrandLogo
-                    className="h-11 w-auto max-w-[46vw] object-contain"
+                    className="h-8 w-auto max-w-full object-contain"
                     testId="img-logo"
                   />
-                </div>
+                </span>
               </Link>
 
-              <div className="justify-self-end">
+              <div className="relative z-10 ml-auto shrink-0">
                 <Link href={isAuthenticated ? "/wallet?tab=wallet" : "/login"}>
                   <div className="rr-header-chip rr-header-chip--balance cursor-pointer" data-testid="button-wallet">
                     <Wallet className="h-3.5 w-3.5 shrink-0 text-[#F1D47A]" />
@@ -247,6 +274,10 @@ export default function Header() {
           </nav>
         </div>
       </header>
+
+      <div className={`rr-theme-dock ${mobileOpen ? "invisible pointer-events-none" : ""}`}>
+        <ThemeToggle />
+      </div>
 
       {/* Mobile Menu - Optimized for performance */}
       <div 
@@ -385,4 +416,6 @@ export default function Header() {
       </div>
     </>
   );
+
+  return createPortal(chrome, document.body);
 }

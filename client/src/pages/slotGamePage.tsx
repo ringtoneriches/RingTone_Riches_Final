@@ -92,7 +92,7 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
       <Confetti active={show} />
       <FloatingCoins active={show} />
 
-      <div className={`fixed inset-0 z-[55] flex items-center justify-center p-4 transition-all duration-400 ${show ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+      <div className={`rr-slot-panel fixed inset-0 z-[55] flex items-center justify-center p-4 transition-all duration-400 ${show ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         style={{ background: show ? "rgba(2,0,10,0.88)" : "rgba(0,0,0,0)", backdropFilter: show ? "blur(8px)" : "none" }}>
         
         <div className="relative w-full max-w-[360px] animate-[winCardPop_0.6s_cubic-bezier(0.34,1.56,0.64,1)_both]">
@@ -244,7 +244,7 @@ function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show:
 // ─── Lose Overlay (Responsive, No External Images) ──────────────────────
 function LoseOverlay({ show, onDismiss }: { show: boolean; onDismiss: () => void }) {
   return (
-    <div className={`fixed inset-0 z-[55] flex items-center justify-center p-4 transition-all duration-300 ${show ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+    <div className={`rr-slot-panel fixed inset-0 z-[55] flex items-center justify-center p-4 transition-all duration-300 ${show ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
       style={{ background: show ? "rgba(10,0,5,0.80)" : "rgba(0,0,0,0)", backdropFilter: show ? "blur(6px)" : "none" }}>
       
       <div className="relative w-full max-w-[360px] animate-[winCardPop_0.5s_cubic-bezier(0.34,1.56,0.64,1)_both]">
@@ -325,7 +325,7 @@ function LoseOverlay({ show, onDismiss }: { show: boolean; onDismiss: () => void
 // ─── Casino Stat Card (Responsive) ───────────────────────────────────────
 function StatCard({ label, value, icon, accent }: { label: string; value: string | number; icon: string; accent?: boolean }) {
   return (
-    <div className="relative p-3 sm:p-4 md:p-5 rounded-2xl text-center overflow-hidden"
+    <div className="rr-slot-panel relative p-3 sm:p-4 md:p-5 rounded-2xl text-center overflow-hidden"
       style={{
         background: accent
           ? "linear-gradient(145deg,rgba(200,16,46,0.18),rgba(10,10,13,0.95))"
@@ -352,7 +352,7 @@ function SpinsCounter({ used, total }: { used: number; total: number }) {
   const percentage = total > 0 ? Math.round((used / total) * 100) : 0;
   
   return (
-    <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl"
+    <div className="rr-slot-panel flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl"
       style={{ background: "linear-gradient(135deg,rgba(200,16,46,0.18),rgba(10,10,13,0.9))", border: "1px solid rgba(200,16,46,0.35)" }}>
       <div className="flex items-center gap-1.5">
         <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" style={{ color: GOLD }} />
@@ -414,7 +414,7 @@ function SpinsExhaustedOverlay({
   };
 
   return (
-    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 sm:p-6"
+    <div className="rr-slot-panel absolute inset-0 z-20 flex flex-col items-center justify-center p-4 sm:p-6"
       style={{
         background: "linear-gradient(165deg,rgba(5,5,5,0.97) 0%,rgba(10,10,13,0.98) 100%)",
         backdropFilter: "blur(6px)"
@@ -471,7 +471,7 @@ function SpinHistoryTable({ history }: { history: any[] }) {
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 sm:rounded-3xl"
+    <div className="rr-slot-panel overflow-hidden rounded-2xl border border-white/10 sm:rounded-3xl"
       style={{
         background: "linear-gradient(160deg,#0A0A0D 0%,#111115 100%)",
         boxShadow: "0 24px 80px rgba(0,0,0,0.8)"
@@ -849,7 +849,7 @@ export default function SlotGamePage() {
           {/* ─── Game Component ─── */}
           <div className="flex justify-center mb-5 sm:mb-6">
             <div className="w-full" style={{ maxWidth: 960 }}>
-              <div className="relative w-full rounded-xl sm:rounded-2xl overflow-hidden aspect-[9/14] sm:aspect-video min-h-[520px] sm:min-h-[280px]"
+              <div className="rr-slot-panel relative w-full rounded-xl sm:rounded-2xl overflow-hidden aspect-[9/14] sm:aspect-video min-h-[520px] sm:min-h-[280px]"
                 style={{
                   background: "#050505",
                   border: "1.5px solid rgba(200,16,46,0.35)",

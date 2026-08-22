@@ -71,19 +71,29 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const sync = () => {
+    const syncHidden = () => {
       document.documentElement.classList.toggle("rr-motion-paused", document.hidden);
     };
-    sync();
-    document.addEventListener("visibilitychange", sync);
+    const syncZoom = () => {
+      const scale = window.visualViewport?.scale ?? 1;
+      document.documentElement.classList.toggle("rr-zoomed", scale > 1.02);
+    };
+    syncHidden();
+    syncZoom();
+    document.addEventListener("visibilitychange", syncHidden);
+    window.visualViewport?.addEventListener("resize", syncZoom);
+    window.visualViewport?.addEventListener("scroll", syncZoom);
     return () => {
-      document.removeEventListener("visibilitychange", sync);
+      document.removeEventListener("visibilitychange", syncHidden);
+      window.visualViewport?.removeEventListener("resize", syncZoom);
+      window.visualViewport?.removeEventListener("scroll", syncZoom);
       document.documentElement.classList.remove("rr-motion-paused");
+      document.documentElement.classList.remove("rr-zoomed");
     };
   }, []);
 
   return (
-    <div className="min-h-screen text-foreground relative overflow-x-hidden" style={{ backgroundColor: "#050505" }}>
+    <div className="min-h-screen text-foreground relative overflow-x-clip" style={{ backgroundColor: "#050505" }}>
       <DigitalAtmosphere className="rr-atmosphere--page" />
       <div className="relative z-10">
       <Header />

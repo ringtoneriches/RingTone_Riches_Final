@@ -24,7 +24,7 @@ export default function BillingChrome({
   children,
 }: Props) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+    <div className="rr-billing-page rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
       <DigitalAtmosphere />
       <Header />
       <main className="relative z-10 flex-1 pb-12 pt-5 sm:pt-8">

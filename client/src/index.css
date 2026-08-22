@@ -183,7 +183,6 @@ canvas {
 
   html {
     scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
   }
 }
 
@@ -925,33 +924,28 @@ canvas {
 }
 
 .payment-icons {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: -webkit-box;
-    display: -ms-flexbox;
-    display: flex;
-    gap: 5px
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-
 .payment-icons li span {
-    background-color: #FFFFFF;
-    height: 27.2px;
-    width: 37px;
-    display: -webkit-box;
-    display: -ms-flexbox;
-    display: flex;
-    -webkit-box-pack: center;
-    -ms-flex-pack: center;
-    justify-content: center;
-    -webkit-box-align: center;
-    -ms-flex-align: center;
-    align-items: center
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  width: 52px;
+  border-radius: 6px;
+  background: #fff;
 }
-
+.payment-icons li span.is-wide {
+  width: 64px;
+}
 .payment-icons li span svg {
-    max-width: 35px;
-    height: auto
+  display: block;
+  flex-shrink: 0;
 }
 
 /* Print styles */
@@ -1776,26 +1770,6 @@ button, a, [role="button"] {
   touch-action: manipulation;
 }
 /* ========================================
-   SIGNATURE — "The Sound of Winning"
-   Gold equaliser / soundwave motif
-   ======================================== */
-@keyframes rr-eq {
-  0%, 100% { transform: scaleY(0.32); }
-  50%      { transform: scaleY(1); }
-}
-.rr-eq-bar {
-  transform-origin: bottom;
-  animation: rr-eq 1.2s ease-in-out infinite;
-  will-change: transform;
-}
-@media (hover: none) and (pointer: coarse) {
-  .rr-eq-bar { animation: none !important; transform: scaleY(0.7) !important; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .rr-eq-bar { animation: none !important; }
-}
-
-/* ========================================
    RINGTONE RICHES — HIGH-ENERGY HOMEPAGE
    ======================================== */
 
@@ -1813,6 +1787,23 @@ button, a, [role="button"] {
 .rr-header {
   background: rgba(5, 5, 5, 0.96);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: env(safe-area-inset-top, 0px);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+.rr-header-spacer {
+  padding-top: calc(6rem + env(safe-area-inset-top, 0px));
+}
+.rr-header-spacer--maintenance {
+  padding-top: calc(7.5rem + env(safe-area-inset-top, 0px));
+}
+@media (min-width: 1024px) {
+  .rr-header-spacer {
+    padding-top: calc(6.5rem + env(safe-area-inset-top, 0px));
+  }
+  .rr-header-spacer--maintenance {
+    padding-top: calc(8.5rem + env(safe-area-inset-top, 0px));
+  }
 }
 .rr-header.is-scrolled {
   background: rgba(5, 5, 5, 0.97);
@@ -1892,6 +1883,19 @@ button, a, [role="button"] {
   to { transform: translateX(-50%); }
 }
 
+.rr-theme-dock {
+  display: none;
+}
+@media (max-width: 1023px) {
+  .rr-theme-dock {
+    display: flex;
+    position: fixed;
+    top: calc(6rem + env(safe-area-inset-top, 0px) + 0.4rem);
+    right: 0.75rem;
+    z-index: 40;
+  }
+}
+
 .rr-theme-toggle {
   display: inline-flex;
   height: 2.5rem;
@@ -1913,29 +1917,12 @@ button, a, [role="button"] {
 .rr-brand-intro {
   position: relative;
   overflow: hidden;
-  padding: 1.15rem 0 0.35rem;
+  padding: 1.25rem 0 0;
 }
 @media (min-width: 640px) {
   .rr-brand-intro {
-    padding: 1.75rem 0 0.5rem;
+    padding: 1.5rem 0 0;
   }
-}
-.rr-brand-eq {
-  position: absolute;
-  left: 50%;
-  top: 58%;
-  display: flex;
-  height: 36px;
-  align-items: flex-end;
-  gap: 3px;
-  transform: translate(-50%, -50%);
-  opacity: 0.28;
-  pointer-events: none;
-}
-.rr-brand-eq-bar {
-  width: 3px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, #f1d47a, #c8102e);
 }
 .rr-brand-kicker {
   margin-bottom: 0.45rem;
@@ -1947,14 +1934,18 @@ button, a, [role="button"] {
 }
 .rr-brand-title {
   font-family: "Oswald", "Inter", system-ui, sans-serif;
-  font-size: clamp(1.7rem, 6vw, 3.6rem);
+  font-size: clamp(1.45rem, 5.4vw, 3.6rem);
   font-weight: 700;
   line-height: 0.92;
   letter-spacing: 0.04em;
   color: #fff8ee;
 }
-.rr-brand-title span {
-  display: inline;
+.rr-brand-title-lead {
+  display: block;
+  white-space: nowrap;
+}
+.rr-brand-title > span:not(.rr-brand-title-lead) {
+  display: block;
   background: linear-gradient(90deg, #f1d47a 0%, #fff4d2 28%, #ff263d 58%, #f1d47a 100%);
   background-size: 220% 100%;
   -webkit-background-clip: text;
@@ -2030,16 +2021,10 @@ html.rr-day .rr-header-ghost {
 html.rr-day .rr-brand-kicker {
   color: #7a5b12;
 }
-html.rr-day .rr-brand-eq {
-  opacity: 0.58;
-}
-html.rr-day .rr-brand-eq-bar {
-  background: linear-gradient(180deg, #c8102e, #8e0b20);
-}
 html.rr-day .rr-brand-title {
   color: var(--rr-ink);
 }
-html.rr-day .rr-brand-title span {
+html.rr-day .rr-brand-title > span:not(.rr-brand-title-lead) {
   background: linear-gradient(90deg, #9a0e24 0%, #c8102e 32%, #c4962a 68%, #7a5b12 100%);
   background-size: 220% 100%;
   -webkit-background-clip: text;
@@ -2095,9 +2080,45 @@ html.rr-day .rr-page-btn.is-active {
   color: #fff8ee !important;
 }
 html.rr-day .rr-mobile-sheet .text-white { color: #fff !important; }
-html.rr-day .rr-footer .text-white { color: #fff !important; }
-html.rr-day .rr-footer .text-white\/45 { color: rgba(255, 255, 255, 0.45) !important; }
-html.rr-day .rr-footer .text-white\/40 { color: rgba(255, 255, 255, 0.4) !important; }
+html.rr-day .rr-footer {
+  background: #f4efe4;
+  border-top-color: rgba(80, 50, 20, 0.12);
+}
+html.rr-day .rr-footer-link {
+  color: var(--rr-ink-soft);
+}
+html.rr-day .rr-footer-link:hover {
+  color: #7a5b12;
+}
+html.rr-day .rr-footer-heading {
+  color: #7a5b12;
+}
+html.rr-day .rr-footer-social {
+  background: rgba(255, 255, 255, 0.7);
+  color: #7a5b12;
+  border-color: rgba(80, 50, 20, 0.16);
+}
+html.rr-day .rr-footer-legal {
+  color: var(--rr-ink-soft);
+  border-color: rgba(80, 50, 20, 0.12);
+}
+html.rr-day .rr-footer-legal a {
+  color: #7a5b12;
+}
+.rr-hof-all {
+  color: #f1d47a;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.rr-hof-all:hover {
+  color: #fff8ee;
+}
+html.rr-day .rr-hof-all {
+  color: #7a5b12;
+}
+html.rr-day .rr-hof-all:hover {
+  color: #16151a;
+}
 
 html.rr-day .rr-comp-card .text-white,
 html.rr-day [data-testid="section-featured-competition"] .text-white,
@@ -2132,8 +2153,9 @@ html.rr-day .rr-comp-card .text-white\/45,
 html.rr-day [data-testid="section-featured-competition"] .text-white\/45,
 html.rr-day .rr-hiw-card .text-white\/45,
 html.rr-day .rr-winner-card .text-white\/45,
+html.rr-day .rr-winner-card .text-white\/40,
 html.rr-day .rr-community-panel .text-white\/45 {
-  color: rgba(255, 255, 255, 0.45) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
 }
 html.rr-day .rr-comp-card .text-white\/40,
 html.rr-day [data-testid="section-featured-competition"] .text-white\/40,
@@ -2197,13 +2219,32 @@ html.rr-day .rr-trust-chip--pilot .text-white\/20 {
   color: rgba(22, 21, 26, 0.22) !important;
 }
 html.rr-day .rr-filter-chip {
-  color: rgba(255, 255, 255, 0.55);
+  background: #fffdf8;
+  color: rgba(22, 21, 26, 0.58);
+  border-color: rgba(80, 50, 20, 0.16);
 }
 html.rr-day .rr-filter-chip:hover {
-  color: #fff8ee;
+  color: #16151a;
+  background: #fff;
+  border-color: rgba(122, 91, 18, 0.35);
+}
+html.rr-day .rr-filter-chip.is-active,
+html.rr-day .rr-filter-chip.is-active:hover {
+  background: linear-gradient(180deg, #C8102E 0%, #8e0b20 100%) !important;
+  color: #fff8ee !important;
+  border-color: rgba(212, 175, 55, 0.7);
+  box-shadow:
+    0 8px 22px rgba(200, 16, 46, 0.35),
+    0 0 16px rgba(212, 175, 55, 0.12);
+}
+html.rr-day .rr-filter-chip.is-active .rr-filter-icon {
+  color: #f1d47a;
+  border-color: rgba(241, 212, 122, 0.55);
+  background: rgba(0, 0, 0, 0.28);
 }
 html.rr-day .rr-filter-count {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(22, 21, 26, 0.5);
+  background: rgba(22, 21, 26, 0.06);
 }
 html.rr-day .rr-vip-input {
   color: #fff8ee;
@@ -2666,6 +2707,12 @@ html.rr-day .rr-legal-faq h3 {
   position: relative;
   overflow: hidden;
   aspect-ratio: 4 / 3.1;
+  background: #0A0A0D;
+}
+.rr-comp-media img,
+.rr-comp-media video {
+  object-fit: contain;
+  object-position: center;
 }
 .rr-comp-media::after {
   content: "";
@@ -2898,6 +2945,11 @@ html.rr-day .rr-legal-faq h3 {
     radial-gradient(ellipse 80% 50% at 50% 0%, rgba(200, 16, 46, 0.12), transparent 55%),
     #0A0A0D;
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+@media (hover: none) {
+  .rr-prize-card {
+    transform: none !important;
+  }
 }
 
 /* Slot / themed checkout — only applied when wrapped in .rr-billing */
@@ -3535,7 +3587,618 @@ html.rr-day .rr-auth-reqs li.is-met {
   color: #0f7a52;
 }
 
+/* ========================================
+   DAY MODE — ALL PUBLIC PAGES
+   Cream shells + ink copy. Dark islands
+   (cards, checkout, canvases, footer) keep
+   light type.
+   ======================================== */
+html.rr-day .rr-page,
+html.rr-day .rr-listing,
+html.rr-day .rr-game,
+html.rr-day .rr-wallet,
+html.rr-day .rr-billing-page,
+html.rr-day .rr-auth-page,
+html.rr-day .bg-\[\#050505\] {
+  background-color: #f4efe4 !important;
+  color: var(--rr-ink);
+}
+
+html.rr-day .rr-page-btn {
+  background: #fffdf8;
+  color: #7a5b12;
+  border-color: rgba(122, 91, 18, 0.28);
+}
+html.rr-day .rr-page-btn:hover:not(:disabled) {
+  color: #16151a;
+  border-color: #7a5b12;
+  background: #fff;
+}
+html.rr-day .rr-legal-jump summary {
+  background: #fffdf8;
+  color: #7a5b12;
+  border-color: rgba(122, 91, 18, 0.28);
+}
+
+html.rr-day .rr-wallet-tabs {
+  background: #fffdf8;
+  border-color: rgba(80, 50, 20, 0.14);
+}
+html.rr-day .rr-wallet-tab {
+  color: rgba(22, 21, 26, 0.5) !important;
+}
+html.rr-day .rr-wallet-tab[data-state="active"] {
+  color: #fff8ee !important;
+}
+
+html.rr-day .text-gray-100,
+html.rr-day .text-gray-200,
+html.rr-day .text-gray-300 {
+  color: rgba(22, 21, 26, 0.78) !important;
+}
+html.rr-day .text-gray-400,
+html.rr-day .text-gray-500,
+html.rr-day .text-muted-foreground {
+  color: var(--rr-ink-mute) !important;
+}
+html.rr-day .placeholder\:text-white\/40::placeholder,
+html.rr-day .placeholder\:text-white\/50::placeholder,
+html.rr-day .placeholder-white\/30::placeholder,
+html.rr-day .placeholder-gray-500::placeholder {
+  color: rgba(22, 21, 26, 0.38) !important;
+}
+
+html.rr-day .border-white\/5,
+html.rr-day .border-white\/10,
+html.rr-day .border-white\/15 {
+  border-color: rgba(80, 50, 20, 0.14);
+}
+html.rr-day .bg-white\/\[0\.03\],
+html.rr-day .bg-white\/\[0\.04\],
+html.rr-day .bg-white\/5 {
+  background-color: rgba(255, 255, 255, 0.72);
+}
+
+html.rr-day input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.rr-day textarea,
+html.rr-day select {
+  color: var(--rr-ink);
+}
+html.rr-day input::placeholder,
+html.rr-day textarea::placeholder {
+  color: rgba(22, 21, 26, 0.38);
+}
+
+/* Featured listing slider stays a night island */
+html.rr-day .rr-featured-slider {
+  background-color: #070709 !important;
+  color: #fff8ee;
+}
+html.rr-day .rr-featured-slider .text-white { color: #fff !important; }
+html.rr-day .rr-featured-slider .text-white\/80 { color: rgba(255, 255, 255, 0.8) !important; }
+html.rr-day .rr-featured-slider .text-white\/70 { color: rgba(255, 255, 255, 0.7) !important; }
+html.rr-day .rr-featured-slider .text-white\/60 { color: rgba(255, 255, 255, 0.6) !important; }
+html.rr-day .rr-featured-slider .text-white\/55 { color: rgba(255, 255, 255, 0.55) !important; }
+html.rr-day .rr-featured-slider .text-white\/50 { color: rgba(255, 255, 255, 0.5) !important; }
+html.rr-day .rr-featured-slider .text-white\/45 { color: rgba(255, 255, 255, 0.45) !important; }
+html.rr-day .rr-featured-slider .text-white\/40 { color: rgba(255, 255, 255, 0.4) !important; }
+
+/* Dark panels / dialogs / checkout / game stages keep light type */
+html.rr-day .bg-\[\#0A0A0D\] .text-white,
+html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white,
+html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white,
+html.rr-day .bg-\[\#0A0A0D\]\/75 .text-white,
+html.rr-day .bg-\[\#2a2a2a\] .text-white,
+html.rr-day .bg-zinc-900 .text-white,
+html.rr-day .bg-zinc-800 .text-white,
+html.rr-day .rr-billing .text-white,
+html.rr-day .rr-prize-card .text-white,
+html.rr-day [role="dialog"] .text-white,
+html.rr-day [data-radix-dialog-content] .text-white,
+html.rr-day [data-radix-alert-dialog-content] .text-white {
+  color: #fff !important;
+}
+html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/80,
+html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/80,
+html.rr-day .bg-zinc-900 .text-white\/80,
+html.rr-day .rr-billing .text-white\/80,
+html.rr-day [role="dialog"] .text-white\/80,
+html.rr-day [data-radix-dialog-content] .text-white\/80 {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/70,
+html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/70,
+html.rr-day .bg-\[\#0A0A0D\] .text-white\/70,
+html.rr-day .bg-zinc-900 .text-white\/70,
+html.rr-day .rr-billing .text-white\/70,
+html.rr-day [role="dialog"] .text-white\/70,
+html.rr-day [data-radix-dialog-content] .text-white\/70 {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/60,
+html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/60,
+html.rr-day .bg-\[\#0A0A0D\] .text-white\/60,
+html.rr-day .bg-zinc-900 .text-white\/60,
+html.rr-day .rr-billing .text-white\/60,
+html.rr-day [role="dialog"] .text-white\/60,
+html.rr-day [data-radix-dialog-content] .text-white\/60 {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/55,
+html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/55,
+html.rr-day .bg-\[\#0A0A0D\] .text-white\/55,
+html.rr-day .bg-zinc-900 .text-white\/55,
+html.rr-day .rr-billing .text-white\/55,
+html.rr-day [role="dialog"] .text-white\/55,
+html.rr-day [data-radix-dialog-content] .text-white\/55 {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/50,
+html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/50,
+html.rr-day .bg-\[\#0A0A0D\]\/75 .text-white\/50,
+html.rr-day .bg-zinc-900 .text-white\/50,
+html.rr-day .rr-billing .text-white\/50,
+html.rr-day [role="dialog"] .text-white\/50,
+html.rr-day [data-radix-dialog-content] .text-white\/50 {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/45,
+html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/45,
+html.rr-day .bg-zinc-900 .text-white\/45,
+html.rr-day .rr-billing .text-white\/45,
+html.rr-day [role="dialog"] .text-white\/45,
+html.rr-day [data-radix-dialog-content] .text-white\/45 {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/40,
+html.rr-day .bg-\[\#0A0A0D\] .text-white\/40,
+html.rr-day .bg-zinc-900 .text-white\/40,
+html.rr-day .rr-billing .text-white\/40,
+html.rr-day [role="dialog"] .text-white\/40,
+html.rr-day [data-radix-dialog-content] .text-white\/40 {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+html.rr-day .bg-\[\#0A0A0D\] .text-white\/35,
+html.rr-day .bg-zinc-900 .text-white\/35,
+html.rr-day .rr-billing .text-white\/35,
+html.rr-day [role="dialog"] .text-white\/35 {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+html.rr-day .bg-\[\#0A0A0D\] .text-gray-100,
+html.rr-day .bg-\[\#0A0A0D\] .text-gray-200,
+html.rr-day .bg-\[\#0A0A0D\] .text-gray-300,
+html.rr-day .bg-zinc-900 .text-gray-100,
+html.rr-day .bg-zinc-900 .text-gray-200,
+html.rr-day .bg-zinc-900 .text-gray-300,
+html.rr-day .rr-billing .text-gray-100,
+html.rr-day .rr-billing .text-gray-200,
+html.rr-day .rr-billing .text-gray-300,
+html.rr-day [role="dialog"] .text-gray-200,
+html.rr-day [role="dialog"] .text-gray-300 {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+html.rr-day .bg-\[\#0A0A0D\] .text-gray-400,
+html.rr-day .bg-\[\#0A0A0D\] .text-gray-500,
+html.rr-day .bg-\[\#0A0A0D\] .text-muted-foreground,
+html.rr-day .bg-zinc-900 .text-gray-400,
+html.rr-day .bg-zinc-900 .text-muted-foreground,
+html.rr-day .rr-billing .text-muted-foreground,
+html.rr-day [role="dialog"] .text-muted-foreground {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+html.rr-day .bg-\[\#0A0A0D\] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.rr-day .bg-\[\#0A0A0D\] textarea,
+html.rr-day .bg-\[\#0A0A0D\] select,
+html.rr-day .bg-zinc-900 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.rr-day .bg-zinc-900 textarea,
+html.rr-day .rr-billing input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.rr-day .rr-billing textarea,
+html.rr-day .rr-billing select,
+html.rr-day [role="dialog"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.rr-day [role="dialog"] textarea,
+html.rr-day [role="dialog"] select {
+  color: #fff8ee;
+}
+html.rr-day .bg-\[\#0A0A0D\] input::placeholder,
+html.rr-day .bg-\[\#0A0A0D\] textarea::placeholder,
+html.rr-day .bg-zinc-900 input::placeholder,
+html.rr-day .rr-billing input::placeholder,
+html.rr-day [role="dialog"] input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+html.rr-day .bg-\[\#0A0A0D\] .border-white\/5,
+html.rr-day .bg-\[\#0A0A0D\] .border-white\/10,
+html.rr-day .bg-\[\#0A0A0D\] .border-white\/15,
+html.rr-day .rr-billing .border-white\/10,
+html.rr-day [role="dialog"] .border-white\/10 {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+html.rr-day .bg-\[\#0A0A0D\] .bg-white\/\[0\.03\],
+html.rr-day .bg-\[\#0A0A0D\] .bg-white\/\[0\.04\],
+html.rr-day .bg-\[\#0A0A0D\] .bg-white\/5,
+html.rr-day [role="dialog"] .bg-white\/\[0\.04\] {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+html.rr-day .rr-winner-share {
+  color: #f1d47a;
+  border-color: rgba(212, 175, 55, 0.4);
+  background: rgba(8, 8, 10, 0.7);
+}
+html.rr-day .rr-winner-share:hover {
+  color: #fff8ee;
+  border-color: #f1d47a;
+}
+
+html.rr-day .rr-winners .text-\[\#F1D47A\] {
+  color: #7a5b12 !important;
+}
+html.rr-day .rr-winners .text-white\/35 {
+  color: rgba(22, 21, 26, 0.58) !important;
+}
+html.rr-day .rr-winners .rr-winner-card .text-white,
+html.rr-day .rr-winners .rr-winner-card h3 {
+  color: #fff8ee !important;
+}
+html.rr-day .rr-winners .rr-winner-card .text-white\/40,
+html.rr-day .rr-winners .rr-winner-card .text-white\/35 {
+  color: rgba(255, 255, 255, 0.58) !important;
+}
+html.rr-day .rr-winners .rr-winner-card .text-\[\#F1D47A\],
+html.rr-day .rr-winners .rr-winner-card .text-\[\#F1D47A\]\/70 {
+  color: #f1d47a !important;
+}
+
+html.rr-day .rr-qty-slider {
+  accent-color: #c8102e;
+}
+
+/* Slot play: dark machine / history / overlays keep light type */
+html.rr-day .rr-slot-panel,
+html.rr-day .rr-slot-panel .text-white,
+html.rr-day .rr-slot-panel h1,
+html.rr-day .rr-slot-panel h2,
+html.rr-day .rr-slot-panel h3 {
+  color: #fff8ee;
+}
+html.rr-day .rr-slot-panel .text-white {
+  color: #fff !important;
+}
+html.rr-day .rr-slot-panel .text-white\/80 {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+html.rr-day .rr-slot-panel .text-white\/50 {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+html.rr-day .rr-slot-panel .text-white\/40 {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+html.rr-day .rr-slot-panel .text-white\/35 {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+html.rr-day .rr-slot-panel .border-white\/10,
+html.rr-day .rr-slot-panel .border-white\/15 {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Competition detail: cream page copy, dark purchase islands keep light type */
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .text-white\/45,
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .text-white\/30,
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .text-white\/25,
+html.rr-day .rr-competition .bg-black\/40 .text-white,
+html.rr-day .rr-competition .bg-black\/40 .text-white\/45,
+html.rr-day .rr-competition .bg-black\/40 .text-white\/40,
+html.rr-day .rr-competition .bg-black\/40 .text-white\/35,
+html.rr-day .rr-competition .bg-black\/50 .text-white,
+html.rr-day .rr-competition .bg-black\/70 .text-white,
+html.rr-day .rr-competition .bg-black\/70 .text-white\/40 {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .text-white,
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] h1,
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] h2,
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] h3,
+html.rr-day .rr-competition .bg-black\/50 .text-white,
+html.rr-day .rr-competition .rr-prize-card .text-white,
+html.rr-day .rr-competition .rr-prize-card [class*="CardTitle"] {
+  color: #fff8ee !important;
+}
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .text-white\/80,
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .text-white\/70,
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .text-white\/65,
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .text-white\/55,
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .text-white\/50 {
+  color: rgba(255, 255, 255, 0.62) !important;
+}
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .text-\[\#F1D47A\],
+html.rr-day .rr-competition .rr-prize-card .text-\[\#F1D47A\],
+html.rr-day .rr-competition .rr-tick {
+  color: #f1d47a !important;
+}
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .bg-\[\#C8102E\],
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .bg-\[\#C8102E\] .text-white,
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .bg-\[\#C8102E\] * {
+  color: #fff8ee !important;
+}
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .bg-white\/\[0\.03\],
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .bg-white\/\[0\.02\],
+html.rr-day .rr-competition .bg-\[\#0A0A0D\] .bg-white\/5 {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  color: #fff8ee;
+}
+html.rr-day .rr-competition .rr-prize-card {
+  color: #fff8ee;
+}
+html.rr-day .rr-competition .rr-prize-card .text-white\/40,
+html.rr-day .rr-competition .rr-prize-card .text-muted-foreground {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+html.rr-day .rr-competition .rr-hiw-card .text-white\/45,
+html.rr-day .rr-competition .rr-hiw-card .bg-black\/40 {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+html.rr-day .rr-competition [role="dialog"] .text-white\/70,
+html.rr-day .rr-competition [role="dialog"] .text-white\/65,
+html.rr-day .rr-competition [data-radix-dialog-content] .text-white\/70,
+html.rr-day .rr-competition [data-radix-dialog-content] .text-white\/65 {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+html.rr-day .rr-competition [role="dialog"] .text-white,
+html.rr-day .rr-competition [data-radix-dialog-content] .text-white {
+  color: #fff8ee !important;
+}
+
+html.rr-day .rr-slot-panel,
+html.rr-day .rr-pop-panel,
+html.rr-day .rr-slot-panel h1,
+html.rr-day .rr-pop-panel h1,
+html.rr-day .rr-slot-panel h2,
+html.rr-day .rr-pop-panel h2,
+html.rr-day .rr-slot-panel h3,
+html.rr-day .rr-pop-panel h3 {
+  color: #fff8ee !important;
+}
+html.rr-day .rr-slot-panel .text-white,
+html.rr-day .rr-pop-panel .text-white,
+html.rr-day .rr-slot-panel.text-white,
+html.rr-day .rr-pop-panel.text-white {
+  color: #fff !important;
+}
+html.rr-day .rr-slot-panel .text-white\/80,
+html.rr-day .rr-pop-panel .text-white\/80,
+html.rr-day .rr-pop-panel .text-white\/75 {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+html.rr-day .rr-slot-panel .text-white\/70,
+html.rr-day .rr-pop-panel .text-white\/70,
+html.rr-day .rr-pop-panel .text-white\/60 {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+html.rr-day .rr-slot-panel .text-white\/50,
+html.rr-day .rr-pop-panel .text-white\/50 {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+html.rr-day .rr-slot-panel .text-white\/45,
+html.rr-day .rr-pop-panel .text-white\/45,
+html.rr-day .rr-slot-panel .text-white\/40,
+html.rr-day .rr-pop-panel .text-white\/40 {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+html.rr-day .rr-slot-panel .text-white\/35,
+html.rr-day .rr-pop-panel .text-white\/35,
+html.rr-day .rr-pop-panel .text-white\/30,
+html.rr-day .rr-pop-panel .text-white\/20 {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+html.rr-day .rr-slot-panel .text-muted-foreground,
+html.rr-day .rr-pop-panel .text-muted-foreground,
+html.rr-day .rr-slot-panel .text-gray-400,
+html.rr-day .rr-pop-panel .text-gray-400,
+html.rr-day .rr-slot-panel .text-gray-500,
+html.rr-day .rr-pop-panel .text-gray-500,
+html.rr-day .rr-pop-panel .text-foreground\/70 {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+html.rr-day .rr-slot-panel .border-white\/10,
+html.rr-day .rr-pop-panel .border-white\/10,
+html.rr-day .rr-slot-panel .border-white\/15,
+html.rr-day .rr-pop-panel .border-white\/15 {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+html.rr-day .rr-pop-panel .bg-white\/5,
+html.rr-day .rr-pop-panel .bg-white\/10,
+html.rr-day .rr-pop-panel .hover\:bg-white\/10:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+html.rr-day .rr-voltz-panel,
+html.rr-day .rr-voltz-panel h1,
+html.rr-day .rr-voltz-panel h2,
+html.rr-day .rr-voltz-panel h3 {
+  color: #fff8ee !important;
+}
+html.rr-day .rr-voltz-panel .text-white,
+html.rr-day .vg-root .text-white,
+html.rr-day .rr-voltz-panel.text-white,
+html.rr-day .vg-root.text-white {
+  color: #fff !important;
+}
+html.rr-day .rr-voltz-panel .text-white\/80,
+html.rr-day .vg-root .text-white\/80,
+html.rr-day .rr-voltz-panel .text-white\/75,
+html.rr-day .vg-root .text-white\/75 {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+html.rr-day .rr-voltz-panel .text-white\/70,
+html.rr-day .vg-root .text-white\/70,
+html.rr-day .rr-voltz-panel .text-white\/60,
+html.rr-day .vg-root .text-white\/60 {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+html.rr-day .rr-voltz-panel .text-white\/50,
+html.rr-day .vg-root .text-white\/50,
+html.rr-day .rr-voltz-panel .text-white\/45,
+html.rr-day .vg-root .text-white\/45,
+html.rr-day .rr-voltz-panel .text-white\/40,
+html.rr-day .vg-root .text-white\/40 {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+html.rr-day .rr-voltz-panel .text-white\/35,
+html.rr-day .vg-root .text-white\/35,
+html.rr-day .rr-voltz-panel .text-white\/30,
+html.rr-day .vg-root .text-white\/30,
+html.rr-day .rr-voltz-panel .text-white\/20,
+html.rr-day .vg-root .text-white\/20 {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+html.rr-day .rr-voltz-panel .text-muted-foreground,
+html.rr-day .vg-root .text-muted-foreground {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+html.rr-day .rr-voltz-panel .border-white\/10,
+html.rr-day .vg-root .border-white\/10,
+html.rr-day .rr-voltz-panel .border-white\/15,
+html.rr-day .vg-root .border-white\/15 {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+html.rr-day .rr-voltz-panel .bg-white\/5,
+html.rr-day .vg-root .bg-white\/5 {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Voltz / game HUD gold chips sit on cream — use dark islands */
+html.rr-day .rr-game-remaining {
+  background: #16151a;
+  border-color: rgba(185, 137, 40, 0.55);
+  box-shadow: 0 8px 24px rgba(22, 21, 26, 0.12);
+}
+html.rr-day .rr-game-remaining .text-\[\#F1D47A\] {
+  color: #e4c15a !important;
+}
+html.rr-day .rr-game-remaining .text-white\/50 {
+  color: rgba(255, 248, 238, 0.68) !important;
+}
+html.rr-day .vg-reveal-all {
+  background: #16151a !important;
+  border-color: rgba(185, 137, 40, 0.55) !important;
+  color: #e4c15a !important;
+  box-shadow: 0 8px 24px rgba(22, 21, 26, 0.14);
+}
+
+html.rr-day .rr-scratch-panel {
+  color: #fff8ee !important;
+}
+html.rr-day .rr-scratch-panel .text-white,
+html.rr-day .rr-scratch-panel .text-white\/70 {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+html.rr-day .rr-scratch-panel .text-white\/45 {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+html.rr-day .rr-scratch-panel .text-gray-300,
+html.rr-day .rr-scratch-panel .text-gray-400,
+html.rr-day .rr-scratch-panel .text-gray-500 {
+  color: rgba(255, 255, 255, 0.62) !important;
+}
+html.rr-day .rr-scratch-panel .text-gray-900 {
+  color: #16151a !important;
+}
+html.rr-day .rr-scratch-panel .bg-white\/10 {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+html.rr-day .rr-scratch-panel .border-white\/15 {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+html.rr-day .rr-wallet-island {
+  color: #fff8ee !important;
+}
+html.rr-day [data-radix-dialog-content].rr-wallet-island,
+html.rr-day [data-radix-alert-dialog-content].rr-wallet-island {
+  background-color: #0a0a0d !important;
+  color: #fff8ee !important;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+html.rr-day .rr-wallet [class*="from-zinc-900"] .text-white,
+html.rr-day .rr-wallet [class*="from-zinc-800"] .text-white,
+html.rr-day .rr-wallet [class*="to-zinc-800"] .text-white,
+html.rr-day .rr-wallet .bg-zinc-900\/50 .text-white,
+html.rr-day .rr-wallet-island .text-white {
+  color: #fff !important;
+}
+html.rr-day .rr-wallet [class*="from-zinc-900"] .text-gray-100,
+html.rr-day .rr-wallet [class*="from-zinc-900"] .text-gray-200,
+html.rr-day .rr-wallet [class*="from-zinc-900"] .text-gray-300,
+html.rr-day .rr-wallet [class*="to-zinc-800"] .text-gray-300,
+html.rr-day .rr-wallet .bg-zinc-800.text-gray-300,
+html.rr-day .rr-wallet-island .text-gray-300 {
+  color: rgba(255, 248, 238, 0.88) !important;
+}
+html.rr-day .rr-wallet-island .bg-zinc-800.text-gray-300 {
+  background-color: #2a2a2e;
+}
+html.rr-day .rr-wallet [class*="from-zinc-900"] .text-gray-400,
+html.rr-day .rr-wallet [class*="from-zinc-900"] .text-gray-500,
+html.rr-day .rr-wallet [class*="from-zinc-900"] .text-muted-foreground,
+html.rr-day .rr-wallet [class*="to-zinc-800"] .text-gray-400,
+html.rr-day .rr-wallet .bg-zinc-900\/50 .text-gray-400,
+html.rr-day .rr-wallet-island .text-gray-400,
+html.rr-day .rr-wallet-island .text-gray-500,
+html.rr-day .rr-wallet-island .text-muted-foreground {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+html.rr-day .rr-wallet-island input:not([type="checkbox"]):not([type="radio"]),
+html.rr-day .rr-wallet-island [data-radix-select-trigger] {
+  color: #fff8ee !important;
+}
+html.rr-day .rr-wallet-island .placeholder-gray-500::placeholder,
+html.rr-day .rr-wallet-island textarea::placeholder,
+html.rr-day .rr-wallet-island input::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+html.rr-day .bg-\[\#2a2a2a\].text-white,
+html.rr-day .bg-\[\#1a1a1a\].text-white,
+html.rr-day .rr-wallet-island textarea,
+html.rr-day textarea.bg-\[\#1a1a1a\],
+html.rr-day input.bg-\[\#1a1a1a\] {
+  color: #fff8ee !important;
+}
+html.rr-day .bg-gray-800.text-gray-400 {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+html.rr-day .rr-wallet-island .bg-black\/50.text-white,
+html.rr-day .rr-wallet-island .bg-black\/50 .text-white {
+  color: #fff !important;
+}
+html.rr-day .rr-wallet [class*="from-zinc-900"] input:not([type="checkbox"]):not([type="radio"]),
+html.rr-day .rr-wallet [class*="from-zinc-900"] textarea,
+html.rr-day .rr-wallet [class*="from-zinc-900"] select,
+html.rr-day .rr-wallet .bg-black\/50,
+html.rr-day .rr-wallet .bg-zinc-900 input:not([type="checkbox"]):not([type="radio"]),
+html.rr-day .rr-wallet .bg-zinc-900 textarea,
+html.rr-day .rr-wallet .bg-zinc-900 select {
+  color: #fff8ee !important;
+}
+html.rr-day .rr-wallet [class*="from-zinc-900"] input::placeholder,
+html.rr-day .rr-wallet .bg-zinc-900 input::placeholder,
+html.rr-day .rr-wallet .placeholder-gray-500::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+html.rr-day .rr-wallet [class*="from-zinc-900"] .border-white\/10,
+html.rr-day .rr-wallet .bg-zinc-900 .border-white\/10 {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+html.rr-day .bg-\[\#2a2a2a\] .text-gray-300,
+html.rr-day .bg-\[\#2a2a2a\] .text-gray-400,
+html.rr-day .bg-\[\#2a2a2a\] .text-muted-foreground {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
 /* Featured slider arrows */
+
 .rr-slide-arrow {
   display: inline-flex;
   height: 44px;
@@ -4247,6 +4910,18 @@ html.rr-day .rr-auth-reqs li.is-met {
   text-transform: uppercase;
   color: #f1d47a;
 }
+.rr-footer-legal {
+  color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.rr-footer-legal a {
+  color: #f1d47a;
+  text-underline-offset: 2px;
+}
+.rr-footer-legal a:hover {
+  color: #fff8ee;
+  text-decoration: underline;
+}
 
 .rr-section-defer {
   content-visibility: auto;
@@ -4265,6 +4940,29 @@ html.rr-motion-paused .rr-progress-fill::after,
 html.rr-motion-paused .rr-ticker-track,
 html.rr-motion-paused .rr-hiw-line {
   animation-play-state: paused !important;
+}
+
+html.rr-zoomed .rr-warp,
+html.rr-zoomed .rr-atmosphere-streaks,
+html.rr-zoomed .rr-atmosphere-gold {
+  display: none !important;
+}
+html.rr-zoomed .rr-brand-title span,
+html.rr-zoomed .rr-art-drift,
+html.rr-zoomed .rr-art-sweep::after {
+  animation: none !important;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  html {
+    overscroll-behavior-y: none;
+  }
+  .rr-brand-title span {
+    animation: none !important;
+  }
+  .rr-atmosphere-streaks {
+    animation: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

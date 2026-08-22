@@ -1,27 +1,12 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Competition } from "@shared/schema";
-import { useLiveWinners } from "@/hooks/useLiveWinners";
-
-function parsePrizePounds(value: string | null | undefined) {
-  if (!value) return 0;
-  const n = parseFloat(String(value).replace(/[^0-9.]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
-
-function formatPayout(amount: number) {
-  if (amount >= 1_000_000) return `£${(amount / 1_000_000).toFixed(1)}M`;
-  if (amount >= 1_000) return `£${Math.round(amount / 1000)}K`;
-  if (amount > 0) return `£${Math.round(amount).toLocaleString("en-GB")}`;
-  return null;
-}
 
 export default function AnnouncementTicker() {
   const { data: competitions = [] } = useQuery<Competition[]>({
     queryKey: ["/api/competitions"],
     staleTime: 30_000,
   });
-  const { data: winners = [] } = useLiveWinners(80);
 
   const items = useMemo(() => {
     const live = competitions.filter((c) => {
@@ -36,20 +21,17 @@ export default function AnnouncementTicker() {
       ["scratch", "pop", "plinko", "voltz", "slot", "royal", "spin", "instant"].includes(c.type)
     ).length;
 
-    const paid = winners.reduce((sum, w) => sum + parsePrizePounds(w.prizeValue || w.prizeDescription), 0);
-    const payout = formatPayout(paid);
-
     const line = (label: string, value?: string) => ({ label, value });
 
     return [
       line("Real winners. Real payouts."),
-      live > 0 ? line("Live competitions", String(live)) : line("Prize competitions live now"),
+      live > 0 ? line("Live competitions") : line("Prize competitions live now"),
       instantLive > 0 ? line("Instant win prizes live now") : line("Instant wins on the floor"),
-      payout ? line("Paid out to date", payout) : line("Winners paid in cash"),
+      line("Winners paid in cash"),
       line("UK based prize competitions"),
       line("Fair draws. Transparent results."),
     ];
-  }, [competitions, winners]);
+  }, [competitions]);
 
   const loop = [...items, ...items];
 

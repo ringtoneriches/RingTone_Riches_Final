@@ -28,7 +28,7 @@ export default function Checkout() {
 
   if (isLoading) {
     return (
-      <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <div className="rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
         <DigitalAtmosphere />
         <Header />
         <div className="flex min-h-[60vh] items-center justify-center">

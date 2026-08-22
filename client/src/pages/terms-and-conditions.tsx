@@ -187,7 +187,7 @@ export default function TermsAndConditions() {
   const activeId = useActiveSection(TOC_IDS);
 
   return (
-    <div className="min-h-screen text-foreground relative overflow-x-clip" style={{ backgroundColor: "#050505" }}>
+    <div className="rr-page min-h-screen text-foreground relative overflow-x-clip bg-[#050505]">
       <DigitalAtmosphere className="rr-atmosphere--page" />
       <div className="relative z-10">
         <Header />

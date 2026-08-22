@@ -4,28 +4,22 @@ import type { MouseEvent } from "react";
 const STEPS = [
   {
     n: "01",
-    kicker: "See it. Want it.",
-    title: "PICK YOUR PRIZE",
-    body: "Lock onto a prize you’d actually take home. Cash, gadgets, big draws — if it’s live, you can enter it.",
-    hint: "Live board",
+    title: "CHOOSE YOUR PRIZE",
+    body: "Browse our live competitions and choose from cash, holidays, gadgets and more.",
     Icon: Trophy,
     accent: "red",
   },
   {
     n: "02",
-    kicker: "In, in seconds.",
-    title: "GRAB YOUR TICKETS",
-    body: "Choose your ticket count and enter. That’s the whole move. More tickets, more chances — still this simple.",
-    hint: "Your shot",
+    title: "SECURE YOUR ENTRY",
+    body: "Choose your tickets and complete your entry securely in just a few simple steps.",
     Icon: Ticket,
     accent: "gold",
   },
   {
     n: "03",
-    kicker: "The bit you came for.",
-    title: "PLAY · DRAW · CLAIM",
-    body: "Instant games play there and then. Draws land when the competition closes. If your name comes up, you claim.",
-    hint: "Real winners",
+    title: "SEE IF YOU’VE WON",
+    body: "Instant Win results are revealed straight away. Draw winners are announced after the competition closes and contacted directly.",
     Icon: Zap,
     accent: "win",
   },
@@ -49,7 +43,7 @@ export default function HowItWorks() {
           </div>
           <h2 className="font-prize text-[2rem] sm:text-5xl text-white">HOW IT WORKS</h2>
           <p className="mx-auto mt-3 max-w-xl text-sm sm:text-base text-white/50">
-            Three moves. One shot at the prize you actually want.
+            Three simple steps could make you Ringtone Richer.
           </p>
         </div>
 
@@ -72,18 +66,11 @@ export default function HowItWorks() {
                   <step.Icon className="h-5 w-5" strokeWidth={2.2} />
                 </div>
               </div>
-              <p className="relative z-[1] mt-6 text-[11px] font-black uppercase tracking-[0.2em] text-[#F1D47A]">
-                {step.kicker}
-              </p>
-              <h3 className="relative z-[1] mt-1.5 font-prize text-2xl sm:text-[1.7rem] leading-none text-white">
+              <h3 className="relative z-[1] mt-6 font-prize text-2xl sm:text-[1.7rem] leading-none text-white">
                 {step.title}
               </h3>
               <p className="relative z-[1] mt-3 text-sm leading-relaxed text-white/55">
                 {step.body}
-              </p>
-              <p className="relative z-[1] mt-5 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
-                <span className="rr-hiw-dot" />
-                {step.hint}
               </p>
             </article>
           ))}
@@ -91,7 +78,7 @@ export default function HowItWorks() {
 
         <div className="mt-10 flex flex-col items-center gap-3 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
-            Real competitions. Real winners. Your move.
+            Real competitions. Real winners. Real rewards.
           </p>
           <a
             href="#competitions"

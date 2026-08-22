@@ -87,10 +87,10 @@ interface UserCompetitionPrizesProps {
 
 const getPrizeIcon = (prizeName: string, value: number) => {
   const name = prizeName.toLowerCase();
-  if (name.includes("gold") || name.includes("platinum") || value > 1000) return <Crown className="w-8 h-8 text-[#F1D47A]" />;
-  if (name.includes("silver") || value > 500) return <Gem className="w-8 h-8 text-[#D4AF37]" />;
-  if (name.includes("bronze") || value > 250) return <Award className="w-8 h-8 text-[#C8102E]" />;
-  return <Trophy className="w-8 h-8 text-[#F1D47A]" />;
+  if (name.includes("gold") || name.includes("platinum") || value > 1000) return <Crown className="h-5 w-5 text-[#F1D47A] sm:h-8 sm:w-8" />;
+  if (name.includes("silver") || value > 500) return <Gem className="h-5 w-5 text-[#D4AF37] sm:h-8 sm:w-8" />;
+  if (name.includes("bronze") || value > 250) return <Award className="h-5 w-5 text-[#C8102E] sm:h-8 sm:w-8" />;
+  return <Trophy className="h-5 w-5 text-[#F1D47A] sm:h-8 sm:w-8" />;
 };
 
 // Get stock status with color
@@ -182,7 +182,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
 
   if (isLoading || ticketLoading) {
     return (
-      <div className="grid grid-cols-2 gap-3 py-4 md:grid-cols-3 md:gap-6">
+      <div className="grid grid-cols-1 gap-3 py-4 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 lg:gap-6">
         {[1, 2, 3].map((i) => (
           <Skeleton key={i} className="h-40 rounded-2xl bg-white/10" />
         ))}
@@ -283,7 +283,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
       {/* Prizes Grid with Collapsible Animation */}
       <div
         className={cn(
-          "grid grid-cols-2 gap-3 transition-all duration-500 ease-in-out md:grid-cols-3 md:gap-6 overflow-hidden",
+          "grid grid-cols-1 gap-3 transition-all duration-500 ease-in-out sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 lg:gap-6 overflow-hidden",
           isOpen ? "max-h-none opacity-100" : "max-h-0 opacity-0"
         )}
       >
@@ -307,7 +307,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
             <Card
               key={prize.id}
               className={cn(
-                "rr-prize-card relative overflow-hidden rounded-2xl border-white/10 transition-transform duration-300 hover:-translate-y-1 cursor-pointer",
+                "rr-prize-card relative overflow-hidden rounded-xl border-white/10 sm:rounded-2xl sm:transition-transform sm:duration-300 sm:hover:-translate-y-1",
                 hoveredPrize === prize.id && "border-[#C8102E]/40"
               )}
               onMouseEnter={() => setHoveredPrize(prize.id)}
@@ -317,36 +317,36 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-1000" />
               
               {/* Prize Icon */}
-              <div className="absolute top-4 right-4">
+              <div className="absolute right-3 top-3 sm:right-4 sm:top-4">
                 {getPrizeIcon(prize.prizeName, prize.prizeValue)}
               </div>
               
-              <CardHeader>
-                <div className="space-y-2">
+              <CardHeader className="space-y-1.5 p-4 pr-11 sm:p-6 sm:pr-14">
+                <div className="space-y-1.5 sm:space-y-2">
                   <Badge
                     variant="outline"
-                    className="w-fit border-[#D4AF37]/30 text-[10px] uppercase tracking-widest text-[#F1D47A]"
+                    className="w-fit border-[#D4AF37]/30 px-1.5 py-0 text-[9px] uppercase tracking-widest text-[#F1D47A] sm:px-2.5 sm:py-0.5 sm:text-[10px]"
                   >
                     Prize #{index + 1}
                   </Badge>
-                  <CardTitle className="line-clamp-2 text-lg font-bold text-white sm:text-2xl">
+                  <CardTitle className="line-clamp-2 break-words text-base font-bold leading-snug text-white sm:text-lg md:text-2xl">
                     {prize.prizeName}
                   </CardTitle>
                   <CardDescription className="flex items-baseline gap-1">
-                    <span className="font-prize text-2xl text-[#F1D47A] sm:text-3xl">
+                    <span className="font-prize text-xl text-[#F1D47A] sm:text-2xl md:text-3xl">
                       £{prize.prizeValue.toLocaleString()}
                     </span>
-                    <span className="text-white/40">value</span>
+                    <span className="text-[11px] text-white/40 sm:text-sm">value</span>
                   </CardDescription>
                 </div>
               </CardHeader>
               
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3 p-4 pt-0 sm:space-y-4 sm:p-6 sm:pt-0">
                 {/* Progress Section */}
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Availability</span>
-                    <span className={cn("font-semibold", stockStatus.textColor)}>
+                  <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-[11px] text-muted-foreground sm:text-sm">Availability</span>
+                    <span className={cn("text-xs font-semibold leading-snug sm:text-sm", stockStatus.textColor)}>
                       {group
                         ? `${group.leftCount} OF ${group.totalQuantity} PRIZES REMAINING`
                         : `${prize.remainingQuantity} / ${prize.totalQuantity} remaining`}
@@ -354,15 +354,15 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                   </div>
                   <Progress 
                     value={percentageRemaining} 
-                    className="h-3"
+                    className="h-2 sm:h-3"
                     indicatorClassName={stockStatus.color}
                   />
-                  <div className="flex justify-between items-center text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground sm:text-xs">
                     <span>{Math.round(percentageRemaining)}% available</span>
                     <Badge 
                       variant={stockStatus.variant as any}
                       className={cn(
-                        "text-xs",
+                        "shrink-0 text-[10px] sm:text-xs",
                         stockStatus.variant === "warning" && "bg-yellow-500/20 text-yellow-500",
                         stockStatus.variant === "info" && "bg-blue-500/20 text-blue-500"
                       )}
@@ -373,14 +373,14 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                 </div>
                 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <div className="text-center p-2 rounded-lg bg-background/50 backdrop-blur">
-                    <p className="text-xs text-muted-foreground">{group ? "Won" : "Total Available"}</p>
-                    <p className="text-lg font-bold">{formatNumber(group ? group.wonCount : prize.totalQuantity)}</p>
+                <div className="grid grid-cols-2 gap-2 pt-1 sm:gap-3 sm:pt-2">
+                  <div className="rounded-lg bg-background/50 p-2 text-center backdrop-blur">
+                    <p className="text-[10px] text-muted-foreground sm:text-xs">{group ? "Won" : "Total"}</p>
+                    <p className="text-base font-bold sm:text-lg">{formatNumber(group ? group.wonCount : prize.totalQuantity)}</p>
                   </div>
-                  <div className="text-center p-2 rounded-lg bg-background/50 backdrop-blur">
-                    <p className="text-xs text-muted-foreground">{group ? "Left" : "Remaining"}</p>
-                    <p className={cn("text-lg font-bold", stockStatus.textColor)}>
+                  <div className="rounded-lg bg-background/50 p-2 text-center backdrop-blur">
+                    <p className="text-[10px] text-muted-foreground sm:text-xs">{group ? "Left" : "Remaining"}</p>
+                    <p className={cn("text-base font-bold sm:text-lg", stockStatus.textColor)}>
                       {formatNumber(group ? group.leftCount : prize.remainingQuantity)}
                     </p>
                   </div>
@@ -390,7 +390,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                   <button
                     type="button"
                     onClick={() => setOpenGroup(group)}
-                    className="w-full pt-1 text-sm font-semibold text-[#F1D47A] hover:text-[#F1D47A]/80"
+                    className="w-full pt-1 text-xs font-semibold text-[#F1D47A] hover:text-[#F1D47A]/80 sm:text-sm"
                   >
                     Check ticket numbers →
                   </button>
@@ -417,9 +417,9 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                 )}
                 {!isControlled && ticketInfo && (
                   <div className="text-center pt-2">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20">
-                      <Ticket className="w-4 h-4 text-green-500" />
-                      <span className="text-sm text-green-500 font-medium">
+                    <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-green-500/20 bg-green-500/10 px-2.5 py-1 sm:gap-2 sm:px-3">
+                      <Ticket className="h-3.5 w-3.5 shrink-0 text-green-500 sm:h-4 sm:w-4" />
+                      <span className="text-xs font-medium text-green-500 sm:text-sm">
                         {((prize.remainingQuantity / ticketInfo.totalRemainingPrizes) * ticketInfo.winPercentage).toFixed(1)}% chance
                       </span>
                     </div>
