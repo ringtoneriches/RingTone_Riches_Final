@@ -59,13 +59,29 @@ export function getTicketStats(competition: Competition) {
   };
 }
 
+export function parsePrizeAmount(value?: string | number | null): number | null {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : parseFloat(String(value).replace(/,/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+export function serializePrizeAmount(value?: string | null): string | null {
+  const n = parsePrizeAmount(value);
+  return n == null ? null : n.toFixed(2);
+}
+
+export function formatPrizeAmountInput(value?: string | number | null): string {
+  const n = parsePrizeAmount(value);
+  return n == null ? "" : String(n);
+}
+
 export function getPrizeDisplay(competition: Competition) {
-  const prizeNum = (competition as Competition & { prizeAmount?: string }).prizeAmount
-    ? parseFloat((competition as Competition & { prizeAmount?: string }).prizeAmount as string)
-    : (() => {
-        const m = competition.title.match(/£([\d,]+)/);
-        return m ? parseFloat(m[1].replace(/,/g, "")) : null;
-      })();
+  const fromField = parsePrizeAmount(competition.prizeAmount);
+  const fromTitle = (() => {
+    const m = competition.title.match(/£([\d,]+(?:\.\d+)?)/);
+    return m ? parseFloat(m[1].replace(/,/g, "")) : null;
+  })();
+  const prizeNum = fromField ?? (Number.isFinite(fromTitle) ? fromTitle : null);
 
   const isMysteryPrize = competition.title.toLowerCase().includes("mystery");
 

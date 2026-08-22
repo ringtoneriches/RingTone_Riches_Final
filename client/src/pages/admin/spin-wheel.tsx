@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Competition } from "@shared/schema";
+import { formatPrizeAmountInput, serializePrizeAmount } from "@/lib/competition-display";
 import WinnerDrawDialog from "@/components/admin/winner-draw-dialog";
 import PrizeConfigSpin, {
   SpinPrizeData,
@@ -37,6 +38,7 @@ interface CompetitionFormData {
   imageUrl: string;
   type: "spin" | "scratch" | "instant";
   ticketPrice: string;
+  prizeAmount: string;
   maxTickets: string;
   ringtonePoints: string;
   endDate?: string;
@@ -65,6 +67,7 @@ function CompetitionForm({
     imageUrl: data?.imageUrl || "",
     type: fixedType || data?.type || "instant",
     ticketPrice: data?.ticketPrice || "0.99",
+    prizeAmount: formatPrizeAmountInput(data?.prizeAmount),
     maxTickets: data?.maxTickets?.toString() || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     wheelType: data?.wheelType || "wheel1",
@@ -286,6 +289,22 @@ function CompetitionForm({
         </div>
 
         <div>
+          <Label>Win up to (£)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="e.g. 2000"
+            value={form.prizeAmount}
+            onChange={(e) => setForm({ ...form, prizeAmount: e.target.value })}
+            data-testid="input-prizeAmount"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Shown on cards as Instantly win up to. Leave empty to use a £ amount in the title.
+          </p>
+        </div>
+
+        <div>
           <Label>Competition End Date & Time (Optional)</Label>
           <Input
             type="datetime-local"
@@ -384,6 +403,7 @@ export default function AdminSpinWheel() {
       const payload: any = {
         ...formData,
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
+        prizeAmount: serializePrizeAmount(formData.prizeAmount),
         maxTickets: parseInt(formData.maxTickets),
         ringtonePoints: parseInt(formData.ringtonePoints),
         wheelType: formData.wheelType || "wheel1",
@@ -423,6 +443,7 @@ export default function AdminSpinWheel() {
       const payload: any = {
         ...data,
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
+        prizeAmount: serializePrizeAmount(data.prizeAmount),
         maxTickets: parseInt(data.maxTickets),
         ringtonePoints: parseInt(data.ringtonePoints),
         wheelType: data.wheelType || "wheel1",
