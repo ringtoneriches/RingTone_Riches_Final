@@ -154,7 +154,7 @@ export default function GuestBilling() {
 
   if (orderLoading) {
     return (
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] text-white">
+      <div className="rr-page relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] text-white">
         <DigitalAtmosphere />
         <Loader2 className="relative z-10 h-8 w-8 animate-spin text-[#C8102E]" />
         <p className="relative z-10 ml-3 text-white/50">Loading order...</p>
@@ -164,7 +164,7 @@ export default function GuestBilling() {
 
   if (!orderData?.order) {
     return (
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] text-white">
+      <div className="rr-page relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] text-white">
         <DigitalAtmosphere />
         <div className="relative z-10 px-6 text-center">
           <UserCircle className="mx-auto mb-4 h-16 w-16 text-white/20" />
@@ -183,7 +183,7 @@ export default function GuestBilling() {
 
   if (!orderId) {
     return (
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] text-white">
+      <div className="rr-page relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] text-white">
         <DigitalAtmosphere />
         <div className="relative z-10 px-6 text-center">
           <h2 className="font-prize text-3xl">Invalid order</h2>
@@ -208,7 +208,7 @@ export default function GuestBilling() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+    <div className="rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
       <DigitalAtmosphere />
       <Header />
       <main className="relative z-10 flex-1 pb-12 pt-5 sm:pt-8">

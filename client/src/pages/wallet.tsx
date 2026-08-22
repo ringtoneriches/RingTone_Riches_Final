@@ -1315,7 +1315,7 @@ const handleDeleteBankAccount = (
 
   if (isLoading) {
     return (
-      <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <div className="rr-wallet rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
         <DigitalAtmosphere />
         <Header />
         <div className="relative z-10 flex min-h-[60vh] items-center justify-center">
@@ -1347,7 +1347,7 @@ const handleDeleteBankAccount = (
 };
 
   return (
-    <div className="rr-wallet relative min-h-screen overflow-hidden bg-[#050505] text-white">
+    <div className="rr-wallet rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
       <DigitalAtmosphere />
       <Header />
 
@@ -1517,7 +1517,7 @@ const handleDeleteBankAccount = (
             >
               <div className="grid lg:grid-cols-2 gap-6">
                 {/* Wallet Balance Card */}
-               <Card className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
+               <Card className="rr-wallet-island bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
                 <CardHeader className="border-b border-yellow-500/20 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-0">
                   <div className="flex items-center gap-2 text-yellow-400 justify-center sm:justify-start">
                     <WalletIcon className="h-6 w-6" />
@@ -1625,7 +1625,7 @@ const handleDeleteBankAccount = (
               </Card>
 
                 {/* Transaction History */}
-                <Card className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
+                <Card className="rr-wallet-island bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
                   <CardHeader className="border-b border-yellow-500/20">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-2xl text-yellow-400">
@@ -1820,7 +1820,7 @@ const handleDeleteBankAccount = (
               {/* Incomplete Games */}
               {incompleteGames.length > 0 && (
                 <div ref={incompleteGamesRef}>
-                <Card className="bg-gradient-to-br from-yellow-900/20 via-zinc-900 to-zinc-900 border-yellow-500/40 shadow-xl shadow-yellow-500/20">
+                <Card className="rr-wallet-island bg-gradient-to-br from-yellow-900/20 via-zinc-900 to-zinc-900 border-yellow-500/40 shadow-xl shadow-yellow-500/20">
                   <CardHeader className="border-b border-yellow-500/30">
                     <CardTitle className="text-2xl text-yellow-400 flex items-center gap-2">
                       <span>🎮</span> GAMES IN PROGRESS
@@ -1997,7 +1997,7 @@ const handleDeleteBankAccount = (
               )}
 
               {/* Past Orders */}
-              <Card className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
+              <Card className="rr-wallet-island bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
                 <CardHeader className="border-b border-yellow-500/20">
                   <CardTitle className="text-2xl text-yellow-400">
                     Past Orders
@@ -2256,7 +2256,7 @@ const handleDeleteBankAccount = (
               className="space-y-6 pt-2 relative z-0"
               data-testid="content-entries"
             >
-              <Card className="bg-gradient-to-br from-yellow-900/10 via-zinc-900 to-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
+              <Card className="rr-wallet-island bg-gradient-to-br from-yellow-900/10 via-zinc-900 to-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
                 <CardContent className="p-8">
                   <div className="text-center space-y-3">
                     <h2 className="text-3xl font-bold text-yellow-400">
@@ -2284,7 +2284,7 @@ const handleDeleteBankAccount = (
               </Card>
 
               {tickets.length > 100 && (
-                <Card className="bg-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
+                <Card className="rr-wallet-island bg-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
                   <CardContent className="p-6">
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
@@ -2340,7 +2340,7 @@ const handleDeleteBankAccount = (
 
               <div className="space-y-6">
                 {groupedEntries.length === 0 ? (
-                  <Card className="bg-zinc-900 border-yellow-500/30">
+                  <Card className="rr-wallet-island bg-zinc-900 border-yellow-500/30">
                     <CardContent className="p-12">
                       <div className="text-center space-y-4">
                         <p className="text-xl text-gray-400">No entries yet</p>
@@ -2359,7 +2359,7 @@ const handleDeleteBankAccount = (
                   groupedEntries.map((entry, groupIndex) => (
                     <Card
                       key={entry.competition.id}
-                      className={`bg-zinc-900 border-yellow-500/30 overflow-hidden shadow-xl shadow-yellow-500/10 transition-all ${
+                      className={`rr-wallet-island bg-zinc-900 border-yellow-500/30 overflow-hidden shadow-xl shadow-yellow-500/10 transition-all ${
                         searchResult?.competition.id === entry.competition.id && searchTicketNumber
                           ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-zinc-900'
                           : ''
@@ -2440,7 +2440,7 @@ const handleDeleteBankAccount = (
               className="space-y-6 pt-2 relative z-0"
               data-testid="content-points"
             >
-              <Card className="bg-gradient-to-br from-yellow-900/20 via-zinc-900 to-zinc-900 border-yellow-500/40 shadow-xl shadow-yellow-500/20">
+              <Card className="rr-wallet-island bg-gradient-to-br from-yellow-900/20 via-zinc-900 to-zinc-900 border-yellow-500/40 shadow-xl shadow-yellow-500/20">
                 <CardContent className="p-8">
                   <div className="text-center space-y-4">
                     <h2 className="text-3xl font-bold text-yellow-400">
@@ -2468,7 +2468,7 @@ const handleDeleteBankAccount = (
                 </CardContent>
               </Card>
 
-              <Card className="bg-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
+              <Card className="rr-wallet-island bg-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
                 <CardHeader className="border-b border-yellow-500/20">
                   <CardTitle className="text-2xl text-yellow-400">
                     Points Transaction History
@@ -2530,7 +2530,7 @@ const handleDeleteBankAccount = (
                 </CardContent>
               </Card>
 
-              <Card className="bg-zinc-900/50 border-yellow-500/20">
+              <Card className="rr-wallet-island bg-zinc-900/50 border-yellow-500/20">
                 <CardContent className="p-6">
                   <h4 className="text-lg font-semibold text-yellow-400 mb-4">
                     How to Earn Ringtone Points
@@ -2568,7 +2568,7 @@ const handleDeleteBankAccount = (
               data-testid="content-referral"
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 hover:border-yellow-500/50 transition-all shadow-xl shadow-yellow-500/10">
+                <Card className="rr-wallet-island bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 hover:border-yellow-500/50 transition-all shadow-xl shadow-yellow-500/10">
                   <CardHeader className="border-b border-yellow-500/20">
                     <CardTitle className="flex items-center gap-2 text-xl text-yellow-400">
                       <Users className="h-6 w-6" />
@@ -2585,7 +2585,7 @@ const handleDeleteBankAccount = (
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 hover:border-yellow-500/50 transition-all shadow-xl shadow-yellow-500/10">
+                <Card className="rr-wallet-island bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 hover:border-yellow-500/50 transition-all shadow-xl shadow-yellow-500/10">
                   <CardHeader className="border-b border-yellow-500/20">
                     <CardTitle className="flex items-center gap-2 text-xl text-yellow-400">
                       <PoundSterling className="h-6 w-6" />
@@ -2603,7 +2603,7 @@ const handleDeleteBankAccount = (
                 </Card>
               </div>
 
-              <Card className="bg-gradient-to-br from-yellow-900/20 via-zinc-900 to-zinc-900 border-yellow-500/40 shadow-xl shadow-yellow-500/20">
+              <Card className="rr-wallet-island bg-gradient-to-br from-yellow-900/20 via-zinc-900 to-zinc-900 border-yellow-500/40 shadow-xl shadow-yellow-500/20">
                 <CardHeader className="border-b border-yellow-500/30">
                   <CardTitle className="flex items-center gap-2 text-2xl text-yellow-400">
                     <Gift className="h-6 w-6" />
@@ -2668,7 +2668,7 @@ const handleDeleteBankAccount = (
                 </CardContent>
               </Card>
 
-              <Card className="bg-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
+              <Card className="rr-wallet-island bg-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
                 <CardHeader className="border-b border-yellow-500/20">
                   <CardTitle className="text-2xl text-yellow-400">
                     Your Referrals
@@ -2885,7 +2885,7 @@ const handleDeleteBankAccount = (
                   delivery. Save your address here for faster processing.
                 </p>
               </div>
-              <Card className="bg-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
+              <Card className="rr-wallet-island bg-zinc-900 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
                 <CardHeader className="border-b border-yellow-500/20">
                   <CardTitle className="flex items-center gap-2 text-2xl text-yellow-400">
                     <MapPin className="h-6 w-6" />
@@ -2971,7 +2971,7 @@ const handleDeleteBankAccount = (
                       >
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-zinc-900 border-yellow-500/20">
+                      <SelectContent className="rr-wallet-island bg-zinc-900 border-yellow-500/20">
                         <SelectItem value="United Kingdom">
                           United Kingdom
                         </SelectItem>

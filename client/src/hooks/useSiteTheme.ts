@@ -7,9 +7,7 @@ const STORAGE_KEY = "rr-theme";
 const EVENT = "rr-theme-change";
 
 function isLockedRoute(path: string) {
-  return /^(?:\/admin|\/competition|\/wallet|\/account|\/spin|\/scratch|\/pop|\/plinko|\/voltz|\/slot|\/royal|\/play|\/checkout|\/guest-billing|\/notifications)/.test(
-    path
-  );
+  return path === "/admin" || path.startsWith("/admin/");
 }
 
 function readTheme(): SiteTheme {
@@ -37,6 +35,7 @@ export function useSiteTheme() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("rr-day", effective === "day");
+    document.documentElement.style.colorScheme = effective === "day" ? "light" : "dark";
   }, [effective]);
 
   const toggle = useCallback(() => {

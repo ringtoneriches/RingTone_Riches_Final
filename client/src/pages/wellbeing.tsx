@@ -340,7 +340,7 @@ export default function Wellbeing() {
   // If user is suspended or disabled, show a message and redirect
   if (isCurrentlySuspended || userData?.disabled) {
     return (
-      <div className="w-full px-0 py-6 text-white">
+      <div className="rr-wallet-island w-full px-0 py-6 text-white">
         <div className="mx-auto max-w-2xl">
           <Card className="border-white/10 bg-[#0A0A0D]">
             <CardHeader>
@@ -399,7 +399,7 @@ export default function Wellbeing() {
   }
 
   return (
-    <div className="w-full px-0 py-2 sm:py-4 text-white">
+    <div className="rr-wallet-island w-full px-0 py-2 sm:py-4 text-white">
         {/* Suspension Alert */}
         {isCurrentlySuspended && userData?.selfSuspensionEndsAt && (
           <Card className="mb-6 bg-gradient-to-br from-amber-900/30 to-amber-950/20 border-amber-500/50 shadow-xl shadow-amber-500/20">
@@ -695,7 +695,7 @@ export default function Wellbeing() {
                     )}
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="rr-wallet border-[#C8102E]/30 bg-[#0A0A0D] text-white">
+                <DialogContent className="rr-wallet rr-wallet-island border-[#C8102E]/30 bg-[#0A0A0D] text-white">
                   <DialogHeader>
                     <DialogTitle className="text-amber-400 text-2xl">Confirm Account Suspension</DialogTitle>
                     <DialogDescription className="text-gray-400">
@@ -796,7 +796,7 @@ export default function Wellbeing() {
                     Close Account Permanently
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="rr-wallet border-[#C8102E]/30 bg-[#0A0A0D] text-white">
+                <DialogContent className="rr-wallet rr-wallet-island border-[#C8102E]/30 bg-[#0A0A0D] text-white">
                   <DialogHeader>
                     <DialogTitle className="text-red-400 text-2xl">Final Warning: Account Closure</DialogTitle>
                     <DialogDescription className="text-gray-400">

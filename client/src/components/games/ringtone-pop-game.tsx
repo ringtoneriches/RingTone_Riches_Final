@@ -631,7 +631,7 @@ export default function RingtonePopGame({
 
   return (
     <>
-      <Card className="relative overflow-hidden border-0 shadow-[0_0_60px_rgba(168,85,247,0.3)]">
+      <Card className="rr-pop-panel relative overflow-hidden border-0 bg-[#0c0a1d] shadow-[0_0_60px_rgba(168,85,247,0.3)]">
         {/* Premium gradient background */}
         <div 
           className="absolute inset-0"
@@ -1007,7 +1007,7 @@ export default function RingtonePopGame({
 
       {/* Ringtone Pop-themed No Plays Dialog */}
       <AlertDialog open={showOutOfPlaysDialog} onOpenChange={setShowOutOfPlaysDialog}>
-        <AlertDialogContent className="max-w-[360px] p-0 overflow-hidden border-0 bg-transparent">
+        <AlertDialogContent className="rr-pop-panel max-w-[360px] p-0 overflow-hidden border-0 bg-transparent">
           <div
             className="relative overflow-hidden"
             style={{
@@ -1154,7 +1154,7 @@ export default function RingtonePopGame({
 
       {/* Premium Prize Modal - Styled like Voltz winner modal */}
       <Dialog open={showResultModal} onOpenChange={setShowResultModal}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md border-0 p-0 overflow-hidden max-h-[calc(100vh-4rem)] bg-transparent">
+        <DialogContent className="rr-pop-panel max-w-[calc(100vw-2rem)] sm:max-w-md border-0 p-0 overflow-hidden max-h-[calc(100vh-4rem)] bg-transparent">
           <div
             className={`relative overflow-hidden transition-all duration-500 ${
               resultAnimStage >= 1 ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-95'

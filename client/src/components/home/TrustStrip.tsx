@@ -16,18 +16,18 @@ const BADGES = [
   },
   {
     Icon: Scale,
-    title: "Straight game",
-    sub: "Every ticket can win",
+    title: "Fair chance",
+    sub: "Every valid ticket has a chance",
   },
   {
     Icon: Zap,
-    title: "Instant call",
+    title: "Instant results",
     sub: "You'll know right away",
   },
   {
     Icon: Wallet,
-    title: "Paid fast",
-    sub: "Winners get their cash",
+    title: "Fast payouts",
+    sub: "Winners receive their cash quickly",
   },
 ] as const;
 

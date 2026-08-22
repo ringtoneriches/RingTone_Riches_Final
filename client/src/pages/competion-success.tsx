@@ -3,7 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle } from "lucide-react";
+import PaymentResult from "@/components/billing/PaymentResult";
 
 export default function CheckoutSuccess() {
   const { toast } = useToast();
@@ -104,24 +104,19 @@ export default function CheckoutSuccess() {
     confirmPayment();
   }, [setLocation, toast, queryClient]);
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-950 via-black to-zinc-900">
-      <div className="text-center max-w-md mx-auto p-8">
-        {isProcessing ? (
-          <>
-            <div className="animate-spin w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full mx-auto mb-6"></div>
-            <h1 className="text-3xl font-bold mb-4 text-yellow-400">Processing your payment...</h1>
-            <p className="text-gray-300">Please wait while we confirm your purchase.</p>
-          </>
-        ) : (
-          <>
-            <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
-            <h1 className="text-3xl font-bold mb-4 text-green-400">Payment Successful!</h1>
-            <p className="text-gray-300 mb-4">Your tickets have been added to your account.</p>
-            <p className="text-sm text-gray-400">Redirecting...</p>
-          </>
-        )}
-      </div>
-    </div>
+  return isProcessing ? (
+    <PaymentResult
+      kicker="Checkout · confirm"
+      title="CONFIRMING"
+      message="Please wait while we confirm your purchase."
+      variant="processing"
+    />
+  ) : (
+    <PaymentResult
+      kicker="Checkout · confirm"
+      title="PAYMENT SUCCESSFUL"
+      message="Your tickets have been added to your account. Redirecting..."
+      variant="success"
+    />
   );
 }

@@ -16,7 +16,7 @@ import {
   getCompetitionTypeConfig,
   getCtaLabel,
   getFallbackImage,
-  getPrizeDisplay,
+  getPrizeOffer,
   getStatusBadge,
   getTicketStats,
 } from "@/lib/competition-display";
@@ -51,7 +51,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
   if (HIDDEN_COMPETITION_IDS.includes(competition.id)) return null;
 
   const typeCfg = getCompetitionTypeConfig(competition.type);
-  const prize = getPrizeDisplay(competition);
+  const offer = getPrizeOffer(competition);
   const badge = getStatusBadge(stats);
   const cta = getCtaLabel(competition.type, stats.isClosed);
   const TypeIcon = typeCfg.Icon;
@@ -98,11 +98,10 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                 img.dataset.fallbackApplied = "1";
                 img.src = getFallbackImage(competition.type);
               }}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+              className="h-full w-full object-contain object-center"
               loading="lazy"
               decoding="async"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0D] via-[#0A0A0D]/20 to-black/25" />
             <div className="absolute left-2.5 top-2.5 flex flex-wrap items-center gap-1.5">
               <span className="rr-comp-badge">
                 <TypeIcon className="h-3 w-3" />
@@ -127,10 +126,13 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
           </div>
 
           <div className="rr-comp-body flex flex-1 flex-col px-3.5 pb-3.5 pt-2.5">
+            {offer.kicker && (
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">{offer.kicker}</p>
+            )}
             <p className="rr-comp-prize font-prize text-[1.7rem] leading-none text-white sm:text-[1.9rem]">
-              {prize.prizeDisplay || competition.title.split(" ").slice(0, 3).join(" ")}
+              {offer.amount || competition.title.split(" ").slice(0, 3).join(" ")}
             </p>
-            {prize.prizeDisplay && (
+            {offer.amount && (
               <p className="rr-comp-title mt-1 truncate text-[11px] font-semibold text-white/45">{competition.title}</p>
             )}
 

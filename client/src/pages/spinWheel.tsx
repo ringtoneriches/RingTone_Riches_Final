@@ -1,12 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import Header from "@/components/layout/header";
-import Footer from "@/components/layout/footer";
 import { Competition } from "@shared/schema";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import FeaturedCompetitions from "./featuredCompetitions";
 import CompetitionCard from "@/components/competition-card";
+import {
+  DEFAULT_LISTING_FILTERS,
+  ListingEmpty,
+  ListingFilters,
+  ListingHero,
+  ListingShell,
+} from "@/components/home/ListingChrome";
 
 export default function SpinWheelPage() {
   const { isAuthenticated } = useAuth();
@@ -19,7 +24,6 @@ export default function SpinWheelPage() {
   const [filteredCompetitions, setFilteredCompetitions] = useState<Competition[]>([]);
   const [activeFilter, setActiveFilter] = useState("spin");
 
-  // 🔹 Filter competitions by type and auth state
   useEffect(() => {
     if (!isAuthenticated) {
       setFilteredCompetitions(
@@ -39,58 +43,34 @@ export default function SpinWheelPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Header />
-
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-background to-accent/5">
-        <div className="container mx-auto px-4 py-12 text-center">
+    <ListingShell>
+      <section className="relative px-4 py-10 sm:py-14">
+        <div className="mx-auto max-w-7xl">
+          <ListingHero
+            kicker="Spin to win"
+            title="SPIN WHEELS"
+            subtitle="Every spin is a shot at the prize."
+          />
           {competitions.length > 0 ? (
             <FeaturedCompetitions competitions={competitions} />
           ) : (
-            <div className="text-muted-foreground py-12">
-              Loading featured competitions...
-            </div>
+            <p className="py-12 text-center text-white/45">Loading featured competitions...</p>
           )}
         </div>
       </section>
 
-      {/* Filter Buttons */}
-      <section className="bg-card border-y border-border">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex flex-wrap justify-center gap-4">
-            {["all", "spin", "scratch", "instant"].map((type) => (
-              <button
-                key={type}
-                onClick={() => handleFilterChange(type)}
-                className={`competition-filter px-6 py-3 rounded-lg font-medium transition-colors ${
-                  activeFilter === type
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted hover:bg-primary hover:text-primary-foreground"
-                }`}
-              >
-                {type === "all"
-                  ? "ALL"
-                  : type === "spin"
-                  ? "SPIN WHEELS"
-                  : type === "scratch"
-                  ? "SCRATCH CARDS"
-                  : "COMPETITIONS"}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
+      <section className="relative px-4 pb-20">
+        <div className="mx-auto max-w-7xl">
+          <ListingFilters
+            filters={DEFAULT_LISTING_FILTERS}
+            active={activeFilter}
+            onChange={handleFilterChange}
+          />
 
-      {/* 🔹 Competitions Grid */}
-      <section className="py-16">
-        <div className="container mx-auto px-4">
           {isLoading ? (
-            <p className="text-center text-muted-foreground">
-              Loading competitions...
-            </p>
+            <p className="py-16 text-center text-white/45">Loading competitions...</p>
           ) : filteredCompetitions.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="rr-comp-grid grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
               {filteredCompetitions.map((competition) => (
                 <CompetitionCard
                   key={competition.id}
@@ -100,14 +80,13 @@ export default function SpinWheelPage() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground">
-              No spin wheel competitions found.
-            </p>
+            <ListingEmpty
+              title="NO SPIN WHEELS"
+              message="No spin wheel competitions found."
+            />
           )}
         </div>
       </section>
-
-      <Footer />
-    </div>
+    </ListingShell>
   );
 }

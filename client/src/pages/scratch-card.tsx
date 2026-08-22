@@ -1,9 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Header from "@/components/layout/header";
-import Footer from "@/components/layout/footer";
-import ScratchCardTest from "@/components/games/scratch-card-test";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import CompetitionCard from "@/components/competition-card";
-import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -17,6 +13,13 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import FeaturedCompetitions from "./featuredCompetitions";
 import { Competition } from "@shared/schema";
+import {
+  DEFAULT_LISTING_FILTERS,
+  ListingEmpty,
+  ListingFilters,
+  ListingHero,
+  ListingShell,
+} from "@/components/home/ListingChrome";
 
 export default function ScratchCardPage() {
   const { toast } = useToast();
@@ -70,80 +73,36 @@ export default function ScratchCardPage() {
     }
   };
 
-  // const playScratchCardMutation = useMutation({
-  //   mutationFn: async (data: { winnerPrize: any }) => {
-  //     const response = await apiRequest("POST", "/api/play-scratch-card", data);
-  //     return response.json();
-  //   },
-  //   onSuccess: (result) => {
-  //     setGameResult(result);
-  //     setIsResultModalOpen(true);
-  //     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-  //   },
-  //   onError: (error: any) => {
-  //     toast({
-  //       title: "Error",
-  //       description: error.message || "Failed to play scratch card",
-  //       variant: "destructive",
-  //     });
-  //   },
-  // });
-
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Header />
-
-      {/* Featured Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-background to-accent/5">
-        <div className="container mx-auto px-4 py-12">
-          <div className="text-center space-y-6">
-            <div className="relative">
-              {competitions.length > 0 ? (
-                <FeaturedCompetitions competitions={competitions} />
-              ) : (
-                <div className="text-center text-muted-foreground py-12">
-                  Loading featured competitions...
-                </div>
-              )}
-            </div>
-          </div>
+    <ListingShell>
+      <section className="relative px-4 py-10 sm:py-14">
+        <div className="mx-auto max-w-7xl">
+          <ListingHero
+            kicker="Scratch cards"
+            title="SCRATCH CARDS"
+            subtitle="Scratch to reveal. Instant cash or points on the card."
+          />
+          {competitions.length > 0 ? (
+            <FeaturedCompetitions competitions={competitions} />
+          ) : (
+            <p className="py-12 text-center text-white/45">Loading featured competitions...</p>
+          )}
         </div>
       </section>
 
-      {/* Filter Buttons */}
-      <section className="bg-card border-y border-border">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex flex-wrap justify-center gap-4">
-            {["all", "spin", "scratch", "instant"].map((type) => (
-              <button
-                key={type}
-                onClick={() => handleFilterChange(type)}
-                className={`competition-filter px-6 py-3 rounded-lg font-medium transition-colors ${
-                  activeFilter === type
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted gradient hover:bg-primary hover:text-primary-foreground"
-                }`}
-              >
-                {type === "all"
-                  ? "ALL"
-                  : type === "spin"
-                  ? "SPIN WHEELS"
-                  : type === "scratch"
-                  ? "SCRATCH CARDS"
-                  : "COMPETITIONS"}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
+      <section className="relative px-4 pb-20">
+        <div className="mx-auto max-w-7xl">
+          <ListingFilters
+            filters={DEFAULT_LISTING_FILTERS}
+            active={activeFilter}
+            onChange={handleFilterChange}
+          />
 
-      
-
-      {/* Scratch Competitions Grid */}
-      <section id="competitions" className="py-16 min-h-[60vh] flex items-center justify-center">
-        <div className="container mx-auto px-4 text-center">
           {filteredCompetitions.filter((comp) => comp.type === "scratch").length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="competitionsGrid">
+            <div
+              className="rr-comp-grid grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4"
+              id="competitionsGrid"
+            >
               {filteredCompetitions
                 .filter((comp) => comp.type === "scratch")
                 .map((competition) => (
@@ -151,33 +110,33 @@ export default function ScratchCardPage() {
                 ))}
             </div>
           ) : (
-            <p className="text-muted-foreground">No scratch card competitions found.</p>
+            <ListingEmpty
+              title="NO SCRATCH CARDS"
+              message="No scratch card competitions found."
+            />
           )}
         </div>
       </section>
 
-      {/* Result Modal */}
       <Dialog open={isResultModalOpen} onOpenChange={setIsResultModalOpen}>
-        <DialogContent className="max-w-md flex flex-col justify-center items-center text-center">
+        <DialogContent className="max-w-md flex flex-col justify-center items-center text-center border-[#C8102E]/30 bg-[#0A0A0D] text-white">
           <DialogHeader>
-            <DialogTitle className="text-3xl font-bold">
+            <DialogTitle className="font-prize text-3xl text-white">
               {gameResult?.prize?.amount > 0
-                ? "🎉 You Won!"
-                : "😔 Better Luck Next Time"}
+                ? "You Won!"
+                : "Better Luck Next Time"}
             </DialogTitle>
           </DialogHeader>
           <DialogFooter>
             <button
               onClick={() => setIsResultModalOpen(false)}
-              className="bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:opacity-90"
+              className="rr-cta px-6 py-3"
             >
               Close
             </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Footer />
-    </div>
+    </ListingShell>
   );
 }

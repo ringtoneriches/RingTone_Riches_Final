@@ -1375,7 +1375,7 @@ useEffect(() => {
           {/* Premium glow effect around table */}
           <div className="absolute -inset-2 bg-gradient-to-r from-[#FACC15]/20 via-[#F59E0B]/20 to-[#FACC15]/20 rounded-2xl blur-xl"></div>
 
-          <div className="relative bg-gradient-to-br from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-xl rounded-xl sm:rounded-2xl border-2 border-[#FACC15]/40 shadow-2xl overflow-hidden">
+          <div className="rr-scratch-panel relative bg-gradient-to-br from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-xl rounded-xl sm:rounded-2xl border-2 border-[#FACC15]/40 shadow-2xl overflow-hidden">
             {/* Header with premium styling */}
             <div className="bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] px-3 sm:px-6 py-3 sm:py-4">
               <h3 className="text-center text-base sm:text-xl md:text-2xl font-black text-gray-900 flex items-center justify-center gap-1 sm:gap-2">
@@ -1418,7 +1418,7 @@ useEffect(() => {
             ? "bg-green-500/20 text-green-400 border border-green-500/30" 
             : item.status === "Scratching" // ✅ Add this case
             ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 animate-pulse"
-            : "bg-gray-700/50 text-gray-400 border border-gray-600/30"
+            : "bg-white/10 text-white/70 border border-white/15"
         }`}>
           <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${
             item.status === "Scratched" ? "bg-green-400" 
@@ -1436,7 +1436,7 @@ useEffect(() => {
       
       <td className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-right font-bold rounded-r-lg">
         {item.status === "Not Scratched" ? (
-          <span className="text-gray-500 text-xs sm:text-sm">-</span>
+          <span className="text-white/45 text-xs sm:text-sm">-</span>
         ) : item.status === "Scratching" ? ( // ✅ Add this case
           <span className="text-yellow-400 text-xs sm:text-sm animate-pulse">
             Scratching...

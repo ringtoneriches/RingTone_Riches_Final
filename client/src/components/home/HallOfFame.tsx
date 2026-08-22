@@ -22,7 +22,7 @@ export default function HallOfFame() {
               <p className="mt-2 text-sm text-white/50">People are winning on Ringtone Riches right now.</p>
             </div>
             <Link href="/winners">
-              <span className="text-xs font-bold uppercase tracking-widest text-[#F1D47A] hover:text-white transition-colors cursor-pointer">
+              <span className="rr-hof-all text-xs font-bold uppercase tracking-widest">
                 View all winners →
               </span>
             </Link>

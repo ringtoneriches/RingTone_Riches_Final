@@ -173,7 +173,7 @@ export default function UserNotifications() {
   ];
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+    <div className="rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
       <DigitalAtmosphere />
       <Header />
 

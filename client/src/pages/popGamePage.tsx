@@ -462,7 +462,7 @@ export default function PopGamePage() {
             </div>
           )}
 
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0D]/80">
+          <div className="rr-pop-panel overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0D]/80">
             {gameHistory.length === 0 ? (
               <div className="py-16 text-center">
                 <Sparkles className="mx-auto mb-4 h-10 w-10 text-white/20" />
@@ -477,7 +477,7 @@ export default function PopGamePage() {
       </main>
 
       <AlertDialog open={showRevealAllDialog} onOpenChange={setShowRevealAllDialog}>
-        <AlertDialogContent className="border-white/10 bg-[#0A0A0D] text-white">
+        <AlertDialogContent className="rr-pop-panel border-white/10 bg-[#0A0A0D] text-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-prize text-2xl">Reveal all games?</AlertDialogTitle>
             <AlertDialogDescription className="text-white/50">
