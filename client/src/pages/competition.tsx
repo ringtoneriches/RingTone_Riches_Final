@@ -500,21 +500,23 @@ export default function CompetitionPage() {
           <ChaserBorder variant="featured" className="rounded-2xl lg:rounded-3xl">
           <div className="overflow-hidden rounded-2xl bg-[#0A0A0D] lg:rounded-3xl">
             <div className="grid lg:grid-cols-2">
-              <div className="relative min-h-[240px] overflow-hidden sm:min-h-[380px] lg:min-h-[560px]">
-                <img
-                  src={competition.imageUrl || getFallbackImage(competitionType)}
-                  alt={competition.title}
-                  className="absolute inset-0 h-full w-full object-cover"
-                  data-testid={`img-competition-${competition.id}`}
-                  onError={(e) => {
-                    const img = e.currentTarget;
-                    if (img.dataset.fallbackApplied === "1") return;
-                    img.dataset.fallbackApplied = "1";
-                    img.src = getFallbackImage(competitionType);
-                  }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0D] via-transparent to-black/20 lg:bg-gradient-to-r lg:from-transparent lg:via-transparent lg:to-[#0A0A0D]/80" />
-                <div className="absolute left-3 top-3 flex flex-wrap items-center gap-2 sm:left-4 sm:top-4">
+              <div className="relative overflow-hidden bg-[#0A0A0D] lg:min-h-[560px]">
+                <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#0A0A0D] sm:aspect-[4/3] lg:absolute lg:inset-0 lg:aspect-auto">
+                  <img
+                    src={competition.imageUrl || getFallbackImage(competitionType)}
+                    alt={competition.title}
+                    className="h-full w-full object-cover object-top lg:object-center"
+                    data-testid={`img-competition-${competition.id}`}
+                    onError={(e) => {
+                      const img = e.currentTarget;
+                      if (img.dataset.fallbackApplied === "1") return;
+                      img.dataset.fallbackApplied = "1";
+                      img.src = getFallbackImage(competitionType);
+                    }}
+                  />
+                </div>
+                <div className="absolute inset-0 hidden bg-gradient-to-r from-transparent via-transparent to-[#0A0A0D]/80 lg:block" />
+                <div className="absolute left-3 top-3 z-[2] flex flex-wrap items-center gap-2 sm:left-4 sm:top-4">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-[#C8102E]/50 bg-black/70 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-[#FF263D]">
                     <span className="h-1.5 w-1.5 rounded-full bg-[#FF263D]" />
                     {statusBadge}
@@ -527,7 +529,7 @@ export default function CompetitionPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col justify-center p-5 sm:p-8 lg:p-10">
+              <div className="flex flex-col justify-center border-t border-white/10 p-5 sm:p-8 lg:border-t-0 lg:p-10">
                 <div className="mb-3 inline-flex items-center gap-2 self-start rounded-full border border-white/10 bg-black/40 px-3 py-1">
                   <TypeIcon className="h-3.5 w-3.5 text-[#F1D47A]" />
                   <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#F1D47A]">

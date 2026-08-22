@@ -320,6 +320,7 @@ async incrementCompetitionSoldTickets(competitionId: string, qty: number): Promi
         imageUrl: competition.imageUrl,
         type: competition.type,
         ticketPrice: competition.ticketPrice,
+        prizeAmount: competition.prizeAmount ?? null,
         maxTickets: competition.maxTickets ?? null,
         soldTickets: competition.soldTickets ?? 0,
         nextTicketNumber: competition.nextTicketNumber ?? 1,

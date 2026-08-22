@@ -261,6 +261,7 @@ export const competitions = pgTable("competitions", {
   imageUrl: text("image_url"),
   type: varchar("type", { enum: ["spin", "scratch", "instant", "pop", "plinko","voltz","slot","royal"] }).notNull(),
   ticketPrice: decimal("ticket_price", { precision: 10, scale: 2 }).notNull(),
+  prizeAmount: decimal("prize_amount", { precision: 10, scale: 2 }),
   maxTickets: integer("max_tickets"),
   soldTickets: integer("sold_tickets").default(0),
   nextTicketNumber: integer("next_ticket_number").default(1),

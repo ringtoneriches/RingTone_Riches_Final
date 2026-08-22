@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Competition } from "@shared/schema";
+import { formatPrizeAmountInput, serializePrizeAmount } from "@/lib/competition-display";
 import { Link } from "wouter";
 
 interface CompetitionFormData {
@@ -24,6 +25,7 @@ interface CompetitionFormData {
   imageUrl: string;
   type: "voltz";
   ticketPrice: string;
+  prizeAmount: string;
   maxTickets: string;
   ringtonePoints: string;
   endDate?: string;
@@ -48,6 +50,7 @@ function CompetitionForm({
     imageUrl: data?.imageUrl || "",
     type: "voltz",
     ticketPrice: data?.ticketPrice || "2.00",
+    prizeAmount: formatPrizeAmountInput(data?.prizeAmount),
     maxTickets: data?.maxTickets?.toString() || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     endDate: data?.endDate ? new Date(data.endDate).toISOString().slice(0, 16) : "",
@@ -127,6 +130,11 @@ function CompetitionForm({
         </div>
       </div>
       <div>
+        <Label>Win up to (£)</Label>
+        <Input type="number" step="0.01" min="0" placeholder="e.g. 2000" value={form.prizeAmount} onChange={(e) => setForm({ ...form, prizeAmount: e.target.value })} data-testid="input-prizeAmount" />
+        <p className="text-xs text-muted-foreground mt-1">Shown on cards as Instantly win up to. Leave empty to use a £ amount in the title.</p>
+      </div>
+      <div>
         <Label>End Date & Time (Optional)</Label>
         <Input type="datetime-local" value={form.endDate || ""} onChange={(e) => setForm({ ...form, endDate: e.target.value })} data-testid="input-endDate" />
         <p className="text-xs text-muted-foreground mt-1">Leave empty for no end date</p>
@@ -164,6 +172,7 @@ export default function AdminVoltz() {
         ...formData,
         type: "voltz",
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
+        prizeAmount: serializePrizeAmount(formData.prizeAmount),
         maxTickets: formData.maxTickets ? parseInt(formData.maxTickets) : null,
         ringtonePoints: parseInt(formData.ringtonePoints),
       };
@@ -188,6 +197,7 @@ export default function AdminVoltz() {
         ...data,
         type: "voltz",
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
+        prizeAmount: serializePrizeAmount(data.prizeAmount),
         maxTickets: data.maxTickets ? parseInt(data.maxTickets) : null,
         ringtonePoints: parseInt(data.ringtonePoints),
       };

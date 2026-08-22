@@ -50,23 +50,24 @@ function FeaturedSlide({
 
   return (
     <div className="grid lg:grid-cols-2 gap-0">
-      <div className={`relative min-h-[210px] sm:min-h-[340px] lg:min-h-[520px] overflow-hidden ${active ? "rr-art-sweep" : ""}`}>
-        <img
-          src={competition.imageUrl || getFallbackImage(competition.type)}
-          alt={competition.title}
-          className={`absolute inset-0 h-full w-full object-cover ${active ? "rr-art-drift" : ""}`}
-          loading={active ? "eager" : "lazy"}
-          decoding="async"
-          onError={(e) => {
-            const img = e.currentTarget;
-            if (img.dataset.fallbackApplied === "1") return;
-            img.dataset.fallbackApplied = "1";
-            img.src = getFallbackImage(competition.type);
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-[#0A0A0D]/80 hidden lg:block" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0D] via-transparent to-black/20 lg:hidden" />
-        <div className="absolute top-4 left-4 flex flex-wrap items-center gap-2">
+      <div className={`relative overflow-hidden bg-[#0A0A0D] lg:min-h-[520px] ${active ? "lg:rr-art-sweep" : ""}`}>
+        <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#0A0A0D] sm:aspect-[4/3] lg:absolute lg:inset-0 lg:aspect-auto">
+          <img
+            src={competition.imageUrl || getFallbackImage(competition.type)}
+            alt={competition.title}
+            className={`h-full w-full object-cover object-top lg:object-center ${active ? "lg:rr-art-drift" : ""}`}
+            loading={active ? "eager" : "lazy"}
+            decoding="async"
+            onError={(e) => {
+              const img = e.currentTarget;
+              if (img.dataset.fallbackApplied === "1") return;
+              img.dataset.fallbackApplied = "1";
+              img.src = getFallbackImage(competition.type);
+            }}
+          />
+        </div>
+        <div className="absolute inset-0 hidden bg-gradient-to-r from-transparent via-transparent to-[#0A0A0D]/80 lg:block" />
+        <div className="absolute top-4 left-4 z-[2] flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#C8102E] px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
             Featured
           </span>
@@ -79,7 +80,7 @@ function FeaturedSlide({
         </div>
       </div>
 
-      <div className="relative flex flex-col justify-center p-4 sm:p-8 lg:p-10 lg:pb-20">
+      <div className="relative flex flex-col justify-center border-t border-white/10 p-4 pb-6 sm:p-8 lg:border-t-0 lg:p-10 lg:pb-20">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-[#F1D47A]">
             <TypeIcon className="h-3 w-3" />
