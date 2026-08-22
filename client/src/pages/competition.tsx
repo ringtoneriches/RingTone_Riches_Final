@@ -549,7 +549,7 @@ export default function CompetitionPage() {
                 </h1>
 
                 {competition.description?.trim() ? (
-                  <p className="mt-3 max-h-24 overflow-y-auto whitespace-pre-line text-sm leading-relaxed text-white/55">
+                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-white/55">
                     {competition.description}
                   </p>
                 ) : null}
