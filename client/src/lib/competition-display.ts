@@ -25,7 +25,7 @@ export function getCompetitionTypeConfig(type: string): CompetitionTypeConfig {
     case "voltz":
       return { Icon: Zap, label: "RINGTONE VOLTZ", accent: "#E31B36" };
     case "slot":
-      return { Icon: Trophy, label: "SLOT SPIN", accent: "#D4AF37" };
+      return { Icon: Trophy, label: "ROYAL REELS", accent: "#D4AF37" };
     case "royal":
       return { Icon: Trophy, label: "ROYAL REELS", accent: "#E3C15A" };
     default:

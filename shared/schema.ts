@@ -337,6 +337,7 @@ export const competitionPrizes = pgTable("competition_prizes", {
   competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
   prizeName: varchar("prize_name").notNull(),
   prizeValue: decimal("prize_value", { precision: 10, scale: 2 }).notNull(),
+  ringtonePoints: integer("ringtone_points").notNull().default(0),
   totalQuantity: integer("total_quantity").notNull(),
   remainingQuantity: integer("remaining_quantity").notNull(),
   gameType: varchar("game_type", { length: 50 }),
