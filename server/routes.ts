@@ -19748,13 +19748,14 @@ app.get("/api/competitions/:competitionId/prizes", isAuthenticated, isAdmin , as
 app.post("/api/competitions/:competitionId/prizes", isAuthenticated, isAdmin , async (req, res) => {
   try {
     const { competitionId } = req.params;
-    const { prizeName, prizeValue, totalQuantity, remainingQuantity  } = req.body;
+    const { prizeName, prizeValue, totalQuantity, remainingQuantity, ringtonePoints } = req.body;
     
    
    
     
     const qty = Math.max(1, Number(totalQuantity || 1));
     const remaining = remainingQuantity == null ? qty : Number(remainingQuantity);
+    const points = Math.max(0, Math.floor(Number(ringtonePoints ?? 0)) || 0);
 
     const [newPrize] = await db
       .insert(competitionPrizes)
@@ -19762,6 +19763,7 @@ app.post("/api/competitions/:competitionId/prizes", isAuthenticated, isAdmin , a
         competitionId,
         prizeName,
         prizeValue,
+        ringtonePoints: points,
         totalQuantity: qty,
         remainingQuantity: remaining,
       })
@@ -19769,7 +19771,12 @@ app.post("/api/competitions/:competitionId/prizes", isAuthenticated, isAdmin , a
 
     try {
       const sync = await onTablePrizeCreated(newPrize, (req as any).user?.id);
-      res.json({ ...newPrize, instantPoolSpawned: sync.spawned });
+      const [freshPrize] = await db
+        .update(competitionPrizes)
+        .set({ ringtonePoints: points, updatedAt: new Date() })
+        .where(eq(competitionPrizes.id, newPrize.id))
+        .returning();
+      res.json({ ...(freshPrize || newPrize), instantPoolSpawned: sync.spawned });
     } catch (syncError) {
       await db.delete(competitionPrizes).where(eq(competitionPrizes.id, newPrize.id));
       throw syncError;
@@ -19787,7 +19794,8 @@ app.post("/api/competitions/:competitionId/prizes", isAuthenticated, isAdmin , a
 app.put("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
   try {
     const { prizeId } = req.params;
-    const { prizeName, prizeValue, totalQuantity, remainingQuantity } = req.body;
+    const { prizeName, prizeValue, totalQuantity, remainingQuantity, ringtonePoints } = req.body;
+    const points = Math.max(0, Math.floor(Number(ringtonePoints ?? 0)) || 0);
     
     
     const [updatedPrize] = await db
@@ -19795,6 +19803,7 @@ app.put("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
       .set({
         prizeName,
         prizeValue,
+        ringtonePoints: points,
         totalQuantity,
         remainingQuantity,
         updatedAt: new Date(),
@@ -19804,6 +19813,12 @@ app.put("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
 
     if (updatedPrize) {
       await onTablePrizeUpdated(updatedPrize, (req as any).user?.id);
+      const [freshPrize] = await db
+        .update(competitionPrizes)
+        .set({ ringtonePoints: points, updatedAt: new Date() })
+        .where(eq(competitionPrizes.id, prizeId))
+        .returning();
+      return res.json(freshPrize || { ...updatedPrize, ringtonePoints: points });
     }
     
     res.json(updatedPrize);

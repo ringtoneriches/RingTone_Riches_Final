@@ -70,6 +70,7 @@ interface Prize {
   competitionId: string;
   prizeName: string;
   prizeValue: number;
+  ringtonePoints?: number;
   totalQuantity: number;
   remainingQuantity: number;
   gameType?: string;
@@ -114,6 +115,7 @@ export default function AdminPrizes() {
   const [formData, setFormData] = useState({
     prizeName: "",
     prizeValue: "",
+    ringtonePoints: "",
     totalQuantity: "",
     remainingQuantity: ""
   });
@@ -323,6 +325,7 @@ const filteredAndSortedPrizes = useMemo(() => {
   let filtered = prizes.filter((prize) =>
     prize.prizeName.toLowerCase().includes(search.toLowerCase()) ||
     prize.prizeValue.toString().includes(search) ||
+    String(prize.ringtonePoints ?? 0).includes(search) ||
     prize.totalQuantity.toString().includes(search)
   );
 
@@ -342,6 +345,7 @@ const filteredAndSortedPrizes = useMemo(() => {
     setFormData({
       prizeName: "",
       prizeValue: "",
+      ringtonePoints: "",
       totalQuantity: "",
       remainingQuantity: ""
     });
@@ -352,6 +356,7 @@ const filteredAndSortedPrizes = useMemo(() => {
     setFormData({
       prizeName: prize.prizeName,
       prizeValue: prize.prizeValue.toString(),
+      ringtonePoints: String(prize.ringtonePoints ?? 0),
       totalQuantity: prize.totalQuantity.toString(),
       remainingQuantity: prize.remainingQuantity.toString(),
     });
@@ -372,6 +377,7 @@ const filteredAndSortedPrizes = useMemo(() => {
     createMutation.mutate({
       prizeName: formData.prizeName,
       prizeValue: parseFloat(formData.prizeValue),
+      ringtonePoints: parseInt(formData.ringtonePoints || "0", 10) || 0,
       totalQuantity: qty,
       remainingQuantity: isControlled ? qty : parseInt(formData.remainingQuantity),
     });
@@ -385,6 +391,7 @@ const filteredAndSortedPrizes = useMemo(() => {
       data: {
         prizeName: formData.prizeName,
         prizeValue: parseFloat(formData.prizeValue),
+        ringtonePoints: parseInt(formData.ringtonePoints || "0", 10) || 0,
         totalQuantity: parseInt(formData.totalQuantity),
         remainingQuantity: parseInt(formData.remainingQuantity),
       },
@@ -593,6 +600,20 @@ const filteredAndSortedPrizes = useMemo(() => {
                           />
                         </div>
                         <div className="grid gap-2">
+                          <Label htmlFor="ringtonePoints">Ringtone Points</Label>
+                          <Input
+                            id="ringtonePoints"
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="0"
+                            value={formData.ringtonePoints}
+                            onChange={(e) =>
+                              setFormData({ ...formData, ringtonePoints: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-2">
                           <Label htmlFor="totalQuantity">Total Quantity</Label>
                           <Input
                             id="totalQuantity"
@@ -702,6 +723,7 @@ const filteredAndSortedPrizes = useMemo(() => {
                               </div>
                             </TableHead>
                             <TableHead className="whitespace-nowrap">Value</TableHead>
+                            <TableHead className="whitespace-nowrap">Points</TableHead>
                             <TableHead className="whitespace-nowrap">Total</TableHead>
                             <TableHead className="whitespace-nowrap">Remaining</TableHead>
                             <TableHead className="whitespace-nowrap">Game</TableHead>
@@ -725,6 +747,11 @@ const filteredAndSortedPrizes = useMemo(() => {
                                     £{typeof prize.prizeValue === 'number' 
                                       ? prize.prizeValue.toFixed(2) 
                                       : Number(prize.prizeValue || 0).toFixed(2)}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="font-medium text-amber-400">
+                                    {(prize.ringtonePoints ?? 0).toLocaleString()}
                                   </span>
                                 </TableCell>
                                 <TableCell>{prize.totalQuantity}</TableCell>
@@ -975,6 +1002,19 @@ const filteredAndSortedPrizes = useMemo(() => {
                 />
               </div>
               <div className="grid gap-2">
+                <Label htmlFor="edit-ringtonePoints">Ringtone Points</Label>
+                <Input
+                  id="edit-ringtonePoints"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.ringtonePoints}
+                  onChange={(e) =>
+                    setFormData({ ...formData, ringtonePoints: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
                 <Label htmlFor="edit-totalQuantity">Total Quantity</Label>
                 <Input
                   id="edit-totalQuantity"
@@ -1041,6 +1081,9 @@ const filteredAndSortedPrizes = useMemo(() => {
                 Value: £{typeof selectedPrize.prizeValue === 'number' 
                   ? selectedPrize.prizeValue.toFixed(2) 
                   : Number(selectedPrize.prizeValue || 0).toFixed(2)}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Ringtone points: {(selectedPrize.ringtonePoints ?? 0).toLocaleString()}
               </p>
               <p className="text-sm text-muted-foreground">
                 Remaining: {selectedPrize.remainingQuantity} of {selectedPrize.totalQuantity}
