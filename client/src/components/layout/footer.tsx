@@ -23,7 +23,7 @@ export default function Footer() {
               />
             </Link>
             <p className="max-w-xs text-sm leading-relaxed text-white/45">
-              Real competitions. Real winners. Play for prizes you actually want.
+              Real competitions. Real winners. Real prizes.
             </p>
             <div className="flex items-center gap-2.5">
               <a

@@ -3606,13 +3606,24 @@ html.rr-day .bg-\[\#050505\] {
 
 html.rr-day .rr-page-btn {
   background: #fffdf8;
-  color: #7a5b12;
-  border-color: rgba(122, 91, 18, 0.28);
+  color: #16151a !important;
+  border-color: rgba(80, 50, 20, 0.22);
 }
 html.rr-day .rr-page-btn:hover:not(:disabled) {
-  color: #16151a;
+  color: #16151a !important;
   border-color: #7a5b12;
   background: #fff;
+}
+html.rr-day .rr-page-btn:disabled {
+  opacity: 1;
+  color: rgba(22, 21, 26, 0.42) !important;
+  border-color: rgba(80, 50, 20, 0.14);
+  background: #efe8d8;
+}
+html.rr-day .rr-page-btn.is-active {
+  color: #fff8ee !important;
+  border-color: #8e0b20;
+  background: linear-gradient(180deg, #c8102e 0%, #8e0b20 100%);
 }
 html.rr-day .rr-legal-jump summary {
   background: #fffdf8;
