@@ -8,6 +8,8 @@ import {
   InstantWinError,
   activateInstantWinPrize,
   createInstantWinPrize,
+  clearUnusedInstantWinPrizes,
+  deleteInstantWinPrize,
   disableInstantWinPrize,
   getAdminExposure,
   getPublicPrizePool,
@@ -182,6 +184,39 @@ export function registerInstantWinRoutes(app: Express) {
       try {
         const prize = await disableInstantWinPrize(req.params.prizeId, req.user?.id);
         res.json(prize);
+      } catch (error) {
+        handleInstantWinError(res, error);
+      }
+    }
+  );
+
+  app.delete(
+    "/api/admin/instant-win/prizes/:prizeId",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const result = await deleteInstantWinPrize(req.params.prizeId, req.user?.id);
+        res.json(result);
+      } catch (error) {
+        handleInstantWinError(res, error);
+      }
+    }
+  );
+
+  app.post(
+    "/api/admin/competitions/:competitionId/instant-win/prizes/clear",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const prizeIds = Array.isArray(req.body?.prizeIds)
+          ? req.body.prizeIds.filter((id: unknown) => typeof id === "string")
+          : undefined;
+        const result = await clearUnusedInstantWinPrizes(req.params.competitionId, {
+          prizeIds,
+        });
+        res.json(result);
       } catch (error) {
         handleInstantWinError(res, error);
       }
