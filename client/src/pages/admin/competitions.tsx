@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Competition } from "@shared/schema";
-import { formatPrizeAmountInput, serializePrizeAmount } from "@/lib/competition-display";
+import { formatPrizeAmountInput, getDefaultBadgeLabel, serializeBadgeLabel, serializePrizeAmount } from "@/lib/competition-display";
 import WinnerDrawDialog from "@/components/admin/winner-draw-dialog";
 import PrizeConfigSpin, { SpinPrizeData } from "@/components/admin/prize-config-spin";
 import PrizeConfigScratch, { ScratchPrizeData } from "@/components/admin/prize-config-scratch";
@@ -29,6 +29,7 @@ interface CompetitionFormData {
   type: "spin" | "scratch" | "instant";
   ticketPrice: string;
   prizeAmount: string;
+  badgeLabel: string;
   maxTickets: string;
   ringtonePoints: string;
   endDate?: string;
@@ -57,6 +58,7 @@ function CompetitionForm({
     type: fixedType || data?.type || "instant",
     ticketPrice: data?.ticketPrice || "0.99",
     prizeAmount: formatPrizeAmountInput(data?.prizeAmount),
+    badgeLabel: data?.badgeLabel || getDefaultBadgeLabel(fixedType || data?.type || "instant"),
     maxTickets: data?.maxTickets?.toString() || "1000",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     endDate: data?.endDate ? new Date(data.endDate).toISOString().slice(0, 16) : "",
@@ -195,9 +197,18 @@ function CompetitionForm({
             <select
               className="w-full p-2 border border-border rounded-md bg-background text-foreground"
               value={form.type}
-              onChange={(e) =>
-                setForm({ ...form, type: e.target.value as "spin" | "scratch" | "instant" })
-              }
+              onChange={(e) => {
+                const nextType = e.target.value as "spin" | "scratch" | "instant";
+                const prevDefault = getDefaultBadgeLabel(form.type);
+                setForm({
+                  ...form,
+                  type: nextType,
+                  badgeLabel:
+                    !form.badgeLabel.trim() || form.badgeLabel === prevDefault
+                      ? getDefaultBadgeLabel(nextType)
+                      : form.badgeLabel,
+                });
+              }}
               data-testid="select-type"
             >
               <option value="instant">Regular Competition</option>
@@ -240,6 +251,19 @@ function CompetitionForm({
             />
             <p className="text-xs text-muted-foreground mt-1">
               Shown on cards as Instantly win up to. Leave empty to use a £ amount in the title.
+            </p>
+          </div>
+
+          <div>
+            <Label>Card badge</Label>
+            <Input
+              value={form.badgeLabel}
+              maxLength={40}
+              onChange={(e) => setForm({ ...form, badgeLabel: e.target.value })}
+              data-testid="input-badgeLabel"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Top-left label on listing cards. Defaults to the game type name.
             </p>
           </div>
 
@@ -339,6 +363,7 @@ export default function AdminCompetitions() {
         ...formData,
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
         prizeAmount: serializePrizeAmount(formData.prizeAmount),
+        badgeLabel: serializeBadgeLabel(formData.badgeLabel, formData.type),
         maxTickets: parseInt(formData.maxTickets),
         ringtonePoints: parseInt(formData.ringtonePoints),
       };
@@ -378,6 +403,7 @@ export default function AdminCompetitions() {
         ...data,
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
         prizeAmount: serializePrizeAmount(data.prizeAmount),
+        badgeLabel: serializeBadgeLabel(data.badgeLabel, data.type),
         maxTickets: parseInt(data.maxTickets),
         ringtonePoints: parseInt(data.ringtonePoints),
       };

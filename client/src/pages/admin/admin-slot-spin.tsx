@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Competition } from "@shared/schema";
-import { formatPrizeAmountInput, serializePrizeAmount } from "@/lib/competition-display";
+import { formatPrizeAmountInput, getDefaultBadgeLabel, serializeBadgeLabel, serializePrizeAmount } from "@/lib/competition-display";
 import { Textarea } from "@/components/ui/textarea";
 import { Link } from "wouter";
 
@@ -29,6 +29,7 @@ interface CompetitionFormData {
   type: "slot";
   ticketPrice: string;
   prizeAmount: string;
+  badgeLabel: string;
   maxTickets: string;
   ringtonePoints: string;
   endDate?: string;
@@ -54,6 +55,7 @@ function CompetitionForm({
     type: "slot",
     ticketPrice: data?.ticketPrice || "2.00",
     prizeAmount: formatPrizeAmountInput(data?.prizeAmount),
+    badgeLabel: data?.badgeLabel || getDefaultBadgeLabel("slot"),
     maxTickets: data?.maxTickets?.toString() || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     endDate: data?.endDate
@@ -233,6 +235,19 @@ function CompetitionForm({
       </div>
 
       <div>
+        <Label>Card badge</Label>
+        <Input
+          value={form.badgeLabel}
+          maxLength={40}
+          onChange={(e) => setForm({ ...form, badgeLabel: e.target.value })}
+          data-testid="input-badgeLabel"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Top-left label on listing cards. Defaults to the game type name.
+        </p>
+      </div>
+
+      <div>
         <Label>End Date & Time (Optional)</Label>
         <Input
           type="datetime-local"
@@ -292,6 +307,7 @@ export default function AdminSlotGame() {
         type: "slot",
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
         prizeAmount: serializePrizeAmount(formData.prizeAmount),
+        badgeLabel: serializeBadgeLabel(formData.badgeLabel, "slot"),
         maxTickets: formData.maxTickets ? parseInt(formData.maxTickets) : null,
         ringtonePoints: parseInt(formData.ringtonePoints),
       };
@@ -331,6 +347,7 @@ export default function AdminSlotGame() {
         type: "slot",
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
         prizeAmount: serializePrizeAmount(data.prizeAmount),
+        badgeLabel: serializeBadgeLabel(data.badgeLabel, "slot"),
         maxTickets: data.maxTickets ? parseInt(data.maxTickets) : null,
         ringtonePoints: parseInt(data.ringtonePoints),
       };

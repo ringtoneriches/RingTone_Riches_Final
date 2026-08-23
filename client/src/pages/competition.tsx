@@ -27,6 +27,7 @@ import SoldProgress from "@/components/home/SoldProgress";
 import CommunitySection from "@/components/home/CommunitySection";
 import { useCountdown } from "@/hooks/useCountdown";
 import {
+  getCompetitionBadgeLabel,
   getCompetitionTypeConfig,
   getFallbackImage,
   getPrizeDisplay,
@@ -469,6 +470,7 @@ export default function CompetitionPage() {
     : 100;
   const isAlmostGone = remainingPercentage < 15;
   const typeCfg = getCompetitionTypeConfig(competitionType);
+  const badgeLabel = getCompetitionBadgeLabel(competition);
   const TypeIcon = typeCfg.Icon;
   const prizeMeta = getPrizeDisplay(competition);
   const stats = getTicketStats(competition);
@@ -533,7 +535,7 @@ export default function CompetitionPage() {
                 <div className="mb-3 inline-flex items-center gap-2 self-start rounded-full border border-white/10 bg-black/40 px-3 py-1">
                   <TypeIcon className="h-3.5 w-3.5 text-[#F1D47A]" />
                   <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#F1D47A]">
-                    {typeCfg.label}
+                    {badgeLabel}
                   </span>
                 </div>
 

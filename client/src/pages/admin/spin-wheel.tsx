@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Competition } from "@shared/schema";
-import { formatPrizeAmountInput, serializePrizeAmount } from "@/lib/competition-display";
+import { formatPrizeAmountInput, getDefaultBadgeLabel, serializeBadgeLabel, serializePrizeAmount } from "@/lib/competition-display";
 import WinnerDrawDialog from "@/components/admin/winner-draw-dialog";
 import PrizeConfigSpin, {
   SpinPrizeData,
@@ -39,6 +39,7 @@ interface CompetitionFormData {
   type: "spin" | "scratch" | "instant";
   ticketPrice: string;
   prizeAmount: string;
+  badgeLabel: string;
   maxTickets: string;
   ringtonePoints: string;
   endDate?: string;
@@ -68,6 +69,7 @@ function CompetitionForm({
     type: fixedType || data?.type || "instant",
     ticketPrice: data?.ticketPrice || "0.99",
     prizeAmount: formatPrizeAmountInput(data?.prizeAmount),
+    badgeLabel: data?.badgeLabel || getDefaultBadgeLabel(fixedType || data?.type || "spin"),
     maxTickets: data?.maxTickets?.toString() || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     wheelType: data?.wheelType || "wheel1",
@@ -305,6 +307,19 @@ function CompetitionForm({
         </div>
 
         <div>
+          <Label>Card badge</Label>
+          <Input
+            value={form.badgeLabel}
+            maxLength={40}
+            onChange={(e) => setForm({ ...form, badgeLabel: e.target.value })}
+            data-testid="input-badgeLabel"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Top-left label on listing cards. Defaults to the game type name.
+          </p>
+        </div>
+
+        <div>
           <Label>Competition End Date & Time (Optional)</Label>
           <Input
             type="datetime-local"
@@ -404,6 +419,7 @@ export default function AdminSpinWheel() {
         ...formData,
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
         prizeAmount: serializePrizeAmount(formData.prizeAmount),
+        badgeLabel: serializeBadgeLabel(formData.badgeLabel, formData.type),
         maxTickets: parseInt(formData.maxTickets),
         ringtonePoints: parseInt(formData.ringtonePoints),
         wheelType: formData.wheelType || "wheel1",
@@ -444,6 +460,7 @@ export default function AdminSpinWheel() {
         ...data,
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
         prizeAmount: serializePrizeAmount(data.prizeAmount),
+        badgeLabel: serializeBadgeLabel(data.badgeLabel, data.type),
         maxTickets: parseInt(data.maxTickets),
         ringtonePoints: parseInt(data.ringtonePoints),
         wheelType: data.wheelType || "wheel1",

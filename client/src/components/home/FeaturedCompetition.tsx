@@ -10,6 +10,7 @@ import CountdownBlocks from "./CountdownBlocks";
 import SoldProgress from "./SoldProgress";
 import { useCountdown } from "@/hooks/useCountdown";
 import {
+  getCompetitionBadgeLabel,
   getCompetitionTypeConfig,
   getCtaLabel,
   getFallbackImage,
@@ -36,6 +37,7 @@ function FeaturedSlide({
   const [, setLocation] = useLocation();
   const stats = getTicketStats(competition);
   const typeCfg = getCompetitionTypeConfig(competition.type);
+  const badgeLabel = getCompetitionBadgeLabel(competition);
   const offer = getPrizeOffer(competition);
   const cd = useCountdown(active ? competition.endDate : null);
   const badge = getStatusBadge(stats);
@@ -84,7 +86,7 @@ function FeaturedSlide({
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-[#F1D47A]">
             <TypeIcon className="h-3 w-3" />
-            {typeCfg.label}
+            {badgeLabel}
           </span>
           <span className="rounded-md bg-[#C8102E]/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-[#FF263D]">
             {badge}
