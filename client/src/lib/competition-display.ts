@@ -33,6 +33,24 @@ export function getCompetitionTypeConfig(type: string): CompetitionTypeConfig {
   }
 }
 
+export function getDefaultBadgeLabel(type: string) {
+  return getCompetitionTypeConfig(type).label;
+}
+
+export function getCompetitionBadgeLabel(competition: {
+  type: string;
+  badgeLabel?: string | null;
+}) {
+  const custom = String(competition.badgeLabel || "").trim();
+  return custom || getDefaultBadgeLabel(competition.type);
+}
+
+export function serializeBadgeLabel(value?: string | null, type?: string) {
+  const trimmed = String(value || "").trim();
+  if (trimmed) return trimmed.slice(0, 40);
+  return type ? getDefaultBadgeLabel(type) : null;
+}
+
 export function getTicketStats(competition: Competition) {
   const maxT = competition.maxTickets ?? 0;
   const soldT = competition.soldTickets ?? 0;

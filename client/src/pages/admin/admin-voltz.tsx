@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Competition } from "@shared/schema";
-import { formatPrizeAmountInput, serializePrizeAmount } from "@/lib/competition-display";
+import { formatPrizeAmountInput, getDefaultBadgeLabel, serializeBadgeLabel, serializePrizeAmount } from "@/lib/competition-display";
 import { Link } from "wouter";
 
 interface CompetitionFormData {
@@ -26,6 +26,7 @@ interface CompetitionFormData {
   type: "voltz";
   ticketPrice: string;
   prizeAmount: string;
+  badgeLabel: string;
   maxTickets: string;
   ringtonePoints: string;
   endDate?: string;
@@ -51,6 +52,7 @@ function CompetitionForm({
     type: "voltz",
     ticketPrice: data?.ticketPrice || "2.00",
     prizeAmount: formatPrizeAmountInput(data?.prizeAmount),
+    badgeLabel: data?.badgeLabel || getDefaultBadgeLabel("voltz"),
     maxTickets: data?.maxTickets?.toString() || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     endDate: data?.endDate ? new Date(data.endDate).toISOString().slice(0, 16) : "",
@@ -135,6 +137,11 @@ function CompetitionForm({
         <p className="text-xs text-muted-foreground mt-1">Shown on cards as Instantly win up to. Leave empty to use a £ amount in the title.</p>
       </div>
       <div>
+        <Label>Card badge</Label>
+        <Input value={form.badgeLabel} maxLength={40} onChange={(e) => setForm({ ...form, badgeLabel: e.target.value })} data-testid="input-badgeLabel" />
+        <p className="text-xs text-muted-foreground mt-1">Top-left label on listing cards. Defaults to the game type name.</p>
+      </div>
+      <div>
         <Label>End Date & Time (Optional)</Label>
         <Input type="datetime-local" value={form.endDate || ""} onChange={(e) => setForm({ ...form, endDate: e.target.value })} data-testid="input-endDate" />
         <p className="text-xs text-muted-foreground mt-1">Leave empty for no end date</p>
@@ -173,6 +180,7 @@ export default function AdminVoltz() {
         type: "voltz",
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
         prizeAmount: serializePrizeAmount(formData.prizeAmount),
+        badgeLabel: serializeBadgeLabel(formData.badgeLabel, "voltz"),
         maxTickets: formData.maxTickets ? parseInt(formData.maxTickets) : null,
         ringtonePoints: parseInt(formData.ringtonePoints),
       };
@@ -198,6 +206,7 @@ export default function AdminVoltz() {
         type: "voltz",
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
         prizeAmount: serializePrizeAmount(data.prizeAmount),
+        badgeLabel: serializeBadgeLabel(data.badgeLabel, "voltz"),
         maxTickets: data.maxTickets ? parseInt(data.maxTickets) : null,
         ringtonePoints: parseInt(data.ringtonePoints),
       };

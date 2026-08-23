@@ -13,6 +13,7 @@ import SoldProgress from "@/components/home/SoldProgress";
 import { useCountdown } from "@/hooks/useCountdown";
 import {
   HIDDEN_COMPETITION_IDS,
+  getCompetitionBadgeLabel,
   getCompetitionTypeConfig,
   getCtaLabel,
   getFallbackImage,
@@ -51,6 +52,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
   if (HIDDEN_COMPETITION_IDS.includes(competition.id)) return null;
 
   const typeCfg = getCompetitionTypeConfig(competition.type);
+  const badgeLabel = getCompetitionBadgeLabel(competition);
   const offer = getPrizeOffer(competition);
   const badge = getStatusBadge(stats);
   const cta = getCtaLabel(competition.type, stats.isClosed);
@@ -105,7 +107,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
             <div className="absolute left-2.5 top-2.5 flex flex-wrap items-center gap-1.5">
               <span className="rr-comp-badge">
                 <TypeIcon className="h-3 w-3" />
-                {typeCfg.label}
+                {badgeLabel}
               </span>
             </div>
             <div className="absolute right-2.5 top-2.5">

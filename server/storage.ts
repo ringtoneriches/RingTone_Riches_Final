@@ -321,6 +321,9 @@ async incrementCompetitionSoldTickets(competitionId: string, qty: number): Promi
         type: competition.type,
         ticketPrice: competition.ticketPrice,
         prizeAmount: competition.prizeAmount ?? null,
+        badgeLabel: competition.badgeLabel
+          ? String(competition.badgeLabel).trim().slice(0, 40) || null
+          : null,
         maxTickets: competition.maxTickets ?? null,
         soldTickets: competition.soldTickets ?? 0,
         nextTicketNumber: competition.nextTicketNumber ?? 1,
