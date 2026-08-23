@@ -35,43 +35,6 @@ import {
   getTicketStats,
 } from "@/lib/competition-display";
 
-function InstantProgressBar({ competition }: { competition: Competition }) {
-  const sold = competition.soldTickets ?? 0;
-  const total = competition.maxTickets ?? 0;
-  const remaining = total - sold;
-  const percentage = total > 0 ? (sold / total) * 100 : 0;
-  const isAlmostFull = percentage > 85;
-
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[#0A0A0D] p-5 md:p-7">
-      <div className="mb-4 flex items-end justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#F1D47A]">Ticket pool</p>
-          <p className="mt-1 font-prize text-3xl text-white">{percentage.toFixed(1)}% sold</p>
-        </div>
-        <p className="text-sm font-semibold tabular-nums text-white/50">
-          {total.toLocaleString()} capacity
-        </p>
-      </div>
-      <SoldProgress pct={percentage} sold={sold} remaining={remaining} maxT={total} showRemaining />
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/8 pt-3">
-        <p className="text-xs text-white/50">
-          {remaining === 0
-            ? "All tickets sold. Winner announcement coming soon."
-            : remaining < 50
-              ? `Only ${remaining.toLocaleString()} tickets remaining.`
-              : `${remaining.toLocaleString()} spots left.`}
-        </p>
-        {isAlmostFull && remaining > 0 && (
-          <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-[#FF263D]">
-            Last chance
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function playNoun(type: string, quantity: number, mode: "cta" | "label" = "label") {
   const many = quantity !== 1;
   if (mode === "cta") {
@@ -553,7 +516,7 @@ export default function CompetitionPage() {
                 </h1>
 
                 {competition.description?.trim() ? (
-                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-white/55">
+                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-white/55 lg:max-h-[5.7rem] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
                     {competition.description}
                   </p>
                 ) : null}
@@ -671,14 +634,6 @@ export default function CompetitionPage() {
           </ChaserBorder>
         </div>
       </section>
-
-      {competition.maxTickets ? (
-        <section className="relative z-10 py-4 sm:py-6">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <InstantProgressBar competition={competition} />
-          </div>
-        </section>
-      ) : null}
 
       {competitionType === "instant" && videoUrl && (
         <section className="relative z-10 py-2">

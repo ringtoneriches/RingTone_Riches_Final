@@ -53,7 +53,7 @@ function FeaturedSlide({
   return (
     <div className="grid lg:grid-cols-2 gap-0">
       <div className={`relative overflow-hidden bg-[#0A0A0D] lg:min-h-[520px] ${active ? "lg:rr-art-sweep" : ""}`}>
-        <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#0A0A0D] sm:aspect-[4/3] lg:absolute lg:inset-0 lg:aspect-auto">
+        <div className="relative aspect-[4/3] max-h-[240px] w-full overflow-hidden bg-[#0A0A0D] sm:max-h-none sm:aspect-[4/3] lg:absolute lg:inset-0 lg:aspect-auto lg:max-h-none">
           <img
             src={competition.imageUrl || getFallbackImage(competition.type)}
             alt={competition.title}
@@ -82,8 +82,8 @@ function FeaturedSlide({
         </div>
       </div>
 
-      <div className="relative flex flex-col justify-center border-t border-white/10 p-4 pb-6 sm:p-8 lg:border-t-0 lg:p-10 lg:pb-20">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="relative flex flex-col justify-center border-t border-white/10 p-4 pb-5 sm:p-8 lg:border-t-0 lg:p-10 lg:pb-20">
+        <div className="mb-3 flex flex-wrap items-center gap-2 sm:mb-4">
           <span className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-[#F1D47A]">
             <TypeIcon className="h-3 w-3" />
             {badgeLabel}
@@ -96,14 +96,14 @@ function FeaturedSlide({
         {offer.kicker && (
           <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.22em] text-white/40">{offer.kicker}</p>
         )}
-        <h1 className="font-prize text-[2rem] sm:text-5xl lg:text-6xl leading-[0.95] text-white break-words">
+        <h1 className="font-prize text-[1.7rem] sm:text-5xl lg:text-6xl leading-[0.95] text-white break-words">
           {offer.amount || competition.title}
         </h1>
         {offer.amount && (
-          <p className="mt-2 text-sm font-semibold text-white/55 line-clamp-2">{competition.title}</p>
+          <p className="mt-1.5 text-sm font-semibold text-white/55 line-clamp-2 sm:mt-2">{competition.title}</p>
         )}
 
-        <div className="mt-5 flex flex-wrap items-end justify-between gap-3 sm:gap-4">
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-3 sm:mt-5 sm:gap-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Entry</p>
             <p className="font-prize text-2xl sm:text-4xl text-[#F1D47A]">
@@ -121,12 +121,12 @@ function FeaturedSlide({
         </div>
 
         {stats.hasTickets && (
-          <div className="mt-5">
+          <div className="mt-4 sm:mt-5">
             <SoldProgress pct={stats.pct} sold={stats.soldT} />
           </div>
         )}
 
-        <div className="mt-5 sm:mt-6 flex items-center gap-2 sm:gap-3">
+        <div className="mt-4 flex items-center gap-2 sm:mt-6 sm:gap-3">
           {!stats.isClosed && (
             <QuantitySelector
               value={qty}
@@ -190,9 +190,9 @@ export default function FeaturedCompetition({ competitions }: Props) {
   const atLast = activeIndex === count - 1;
 
   return (
-    <section ref={sectionRef} className="relative overflow-hidden pt-6 pb-8 sm:pt-8 sm:pb-12 lg:pb-16" data-testid="section-featured-competition">
+    <section ref={sectionRef} className="relative overflow-hidden pt-8 pb-10 sm:pt-8 sm:pb-12 lg:pb-16" data-testid="section-featured-competition">
       {starsOn && <DigitalAtmosphere stars layers={false} />}
-      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="relative z-10 mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         <ChaserBorder variant="featured" className="shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
           <div className="relative overflow-hidden bg-[#0A0A0D] lg:pb-8">
             <div className="pointer-events-none absolute inset-0 z-[1]" style={{ boxShadow: "inset 0 0 80px rgba(200,16,46,0.08)" }} />

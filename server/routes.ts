@@ -13474,6 +13474,52 @@ app.get(
     }
   );
 
+  // Homepage featured slider order (null = not featured)
+  app.patch(
+    "/api/admin/competitions/:id/featured-order",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const raw = req.body?.featuredOrder;
+        const featuredOrder =
+          raw === null || raw === "" || raw === undefined
+            ? null
+            : Number(raw);
+
+        if (featuredOrder !== null && (!Number.isInteger(featuredOrder) || featuredOrder < 1)) {
+          return res.status(400).json({ message: "Featured order must be a positive integer or empty" });
+        }
+
+        if (featuredOrder !== null) {
+          await db
+            .update(competitions)
+            .set({ featuredOrder: null, updatedAt: new Date() })
+            .where(eq(competitions.featuredOrder, featuredOrder));
+        }
+
+        const [updatedCompetition] = await db
+          .update(competitions)
+          .set({
+            featuredOrder,
+            updatedAt: new Date(),
+          })
+          .where(eq(competitions.id, id))
+          .returning();
+
+        if (!updatedCompetition) {
+          return res.status(404).json({ message: "Competition not found" });
+        }
+
+        res.json(updatedCompetition);
+      } catch (error) {
+        console.error("Error updating featured order:", error);
+        res.status(500).json({ message: "Failed to update featured order" });
+      }
+    }
+  );
+
   // Delete competition
   // In your backend routes file (e.g., routes.ts or server.ts)
 

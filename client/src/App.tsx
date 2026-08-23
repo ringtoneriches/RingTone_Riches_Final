@@ -42,6 +42,7 @@ import RingtonePopPage from "./pages/ringtone-pop";
 import AdminLogin from "./pages/admin/login";
 import AdminDashboard from "./pages/admin/dashboard";
 import AdminCompetitions from "./pages/admin/competitions";
+import AdminFeatured from "./pages/admin/admin-featured";
 import AdminSpinWheel from "./pages/admin/spin-wheel";
 import AdminScratchCard from "./pages/admin/scratch-card";
 import AdminUsers from "./pages/admin/users";
@@ -164,6 +165,7 @@ function Router() {
       <Route path="/admin/wheel-2-settings" component={AdminSpinWheelSettings} />
       <Route path="/admin/scratch-card" component={AdminScratchCard} />
       <Route path="/admin/competitions" component={AdminCompetitions} />
+      <Route path="/admin/featured" component={AdminFeatured} />
       <Route path="/admin/entries" component={AdminEntries} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/orders" component={AdminOrders} />

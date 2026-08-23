@@ -4,8 +4,10 @@ import { GameEmpty, GameShell, GameStatus } from "@/components/games/GameChrome"
 import { useState, useEffect, useRef, useCallback } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, Clock, ChevronDown, RefreshCw } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, ChevronDown, RefreshCw, Trophy, X } from "lucide-react";
 import SlotGameComponent from "@/components/games/slot-game";
+import ChaserBorder from "@/components/home/ChaserBorder";
+import confetti from "canvas-confetti";
 
 interface SlotSpinResult {
   isWin: boolean;
@@ -25,297 +27,184 @@ interface SlotSpinResult {
 
 const GOLD = "#F1D47A";
 const AMBER = "#C8102E";
+const WIN_CONFETTI_COLORS = ["#C8102E", "#FF263D", "#F1D47A", "#B98928", "#fff8ee"];
 
-// ─── Confetti ──────────────────────────────────────────────────────────────
-const CONFETTI_COLORS = ["#F1D47A","#C8102E","#FF263D","#B98928","#fff8ee","#E63946","#FFE066"];
+function fireSlotWinConfetti() {
+  const duration = 3200;
+  const animationEnd = Date.now() + duration;
+  const defaults = { startVelocity: 32, spread: 360, ticks: 70, zIndex: 80, colors: WIN_CONFETTI_COLORS };
 
-function Confetti({ active }: { active: boolean }) {
-  const pieces = Array.from({ length: 110 }, (_, i) => ({
-    id: i,
-    left: Math.random() * 100,
-    delay: Math.random() * 1.8,
-    duration: 2.8 + Math.random() * 2.4,
-    color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-    size: 7 + Math.random() * 11,
-    isCircle: Math.random() > 0.4,
-  }));
-  if (!active) return null;
-  return (
-    <div className="fixed inset-0 pointer-events-none z-[60] overflow-hidden">
-      {pieces.map(p => (
-        <div key={p.id} style={{
-          position: "absolute", left: `${p.left}%`, top: "-20px",
-          width: p.size, height: p.isCircle ? p.size : p.size * 1.7,
-          backgroundColor: p.color,
-          borderRadius: p.isCircle ? "50%" : "2px",
-          animation: `confettiFall ${p.duration}s ${p.delay}s ease-in forwards, confettiSway ${p.duration * 0.55}s ${p.delay}s ease-in-out infinite`,
-          opacity: 0,
-        }} />
-      ))}
-    </div>
-  );
+  const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+  const interval = window.setInterval(() => {
+    const timeLeft = animationEnd - Date.now();
+    if (timeLeft <= 0) {
+      window.clearInterval(interval);
+      return;
+    }
+    const particleCount = 42 * (timeLeft / duration);
+    confetti({
+      ...defaults,
+      particleCount,
+      origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+    });
+    confetti({
+      ...defaults,
+      particleCount,
+      origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+    });
+  }, 250);
+
+  confetti({
+    particleCount: 160,
+    spread: 110,
+    origin: { y: 0.42 },
+    colors: WIN_CONFETTI_COLORS,
+    startVelocity: 48,
+    zIndex: 80,
+  });
+
+  return () => window.clearInterval(interval);
 }
 
-// ─── Floating Coins ────────────────────────────────────────────────────────
-function FloatingCoins({ active }: { active: boolean }) {
-  const coins = Array.from({ length: 12 }, (_, i) => ({
-    id: i,
-    left: 5 + Math.random() * 90,
-    delay: Math.random() * 2,
-    duration: 2.2 + Math.random() * 1.8,
-    size: 18 + Math.random() * 22,
-  }));
-  if (!active) return null;
-  return (
-    <div className="fixed inset-0 pointer-events-none z-[58] overflow-hidden">
-      {coins.map(c => (
-        <img key={c.id} src="/slot_win_coins.png" alt="" style={{
-          position: "absolute", left: `${c.left}%`, top: "-40px",
-          width: c.size, height: c.size, objectFit: "contain",
-          animation: `confettiFall ${c.duration}s ${c.delay}s ease-in forwards`,
-          opacity: 0,
-          filter: "drop-shadow(0 0 4px rgba(255,200,0,0.7))",
-        }} />
-      ))}
-    </div>
-  );
-}
-
-// ─── Win Overlay (Responsive) ───────────────────────────────────────────
-function WinOverlay({ show, coinsWon, prizeType, prizeName, onDismiss }: { show: boolean; coinsWon: number; prizeType: "cash" | "points"; prizeName: string; onDismiss: () => void }) {
-  const winLabel = coinsWon >= 1000 ? "JACKPOT WIN! 🎉" : coinsWon >= 500 ? "BIG WIN! 🔥" : "AMAZING WIN!";
+function WinOverlay({
+  show,
+  coinsWon,
+  prizeType,
+  prizeName,
+  onDismiss,
+}: {
+  show: boolean;
+  coinsWon: number;
+  prizeType: "cash" | "points";
+  prizeName: string;
+  onDismiss: () => void;
+}) {
   const isCash = prizeType === "cash";
-  const DOTS = 3;
+  const winLabel = coinsWon >= 1000 ? "Jackpot" : coinsWon >= 500 ? "Big win" : "Instant win";
+  const headline = isCash
+    ? `+£${Number(coinsWon).toLocaleString()}`
+    : `+${Number(coinsWon).toLocaleString()} pts`;
+
+  useEffect(() => {
+    if (!show) return;
+    return fireSlotWinConfetti();
+  }, [show]);
+
+  if (!show) return null;
 
   return (
-    <>
-      <Confetti active={show} />
-      <FloatingCoins active={show} />
+    <div
+      className="rr-slot-panel fixed inset-0 z-[55] flex items-center justify-center p-4"
+      style={{ background: "rgba(5,5,5,0.88)", backdropFilter: "blur(10px)" }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="slot-win-title"
+    >
+      <div className="relative w-full max-w-[400px] animate-bounce-in">
+        <div
+          className="pointer-events-none absolute -inset-8 rounded-[2rem] blur-3xl"
+          style={{ background: "radial-gradient(circle at 50% 40%, rgba(200,16,46,0.28), rgba(241,212,122,0.08) 46%, transparent 72%)" }}
+        />
 
-      <div className={`rr-slot-panel fixed inset-0 z-[55] flex items-center justify-center p-4 transition-all duration-400 ${show ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-        style={{ background: show ? "rgba(2,0,10,0.88)" : "rgba(0,0,0,0)", backdropFilter: show ? "blur(8px)" : "none" }}>
-        
-        <div className="relative w-full max-w-[360px] animate-[winCardPop_0.6s_cubic-bezier(0.34,1.56,0.64,1)_both]">
-          <div className="relative overflow-hidden rounded-3xl border-2 border-[#C8102E]/50"
-            style={{
-              background: "linear-gradient(165deg,#0A0A0D 0%,#050505 55%,#111115 100%)",
-              boxShadow: "0 0 0 1px rgba(241,212,122,0.15), 0 0 55px rgba(200,16,46,0.25), 0 60px 160px rgba(0,0,0,0.99)"
-            }}>
-            
-            <button onClick={onDismiss} className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full border border-white/15 bg-[#0A0A0D]/85 text-[#F1D47A] flex items-center justify-center text-sm font-black hover:bg-white/10 transition-colors"
-              style={{ lineHeight: 1 }}>✕</button>
+        <ChaserBorder variant="featured">
+          <div className="relative bg-gradient-to-b from-[#111115] via-[#0A0A0D] to-[#050505] px-6 pb-6 pt-8 text-center sm:px-8 sm:pb-7 sm:pt-9">
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-[#050505]/80 text-white/55 transition-colors hover:border-[#F1D47A]/40 hover:text-[#F1D47A]"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
 
-            {/* Trophy Section - CSS Only */}
-            <div className="relative flex flex-col items-center px-6 sm:px-8 pt-8 sm:pt-8 pb-2"
-              style={{ background: "linear-gradient(180deg,#1a0508 0%,#0A0A0D 100%)", overflow: "hidden" }}>
-              
-              <div className="absolute inset-0 pointer-events-none"
-                style={{ background: "radial-gradient(ellipse 85% 75% at 50% 85%, rgba(255,180,0,0.22) 0%, rgba(140,40,255,0.14) 45%, transparent 75%)" }} />
-              
-              {/* CSS Trophy Icon */}
-              <div className="relative w-32 sm:w-40 h-32 sm:h-40 flex items-center justify-center animate-[trophyBounce_2.5s_ease-in-out_infinite]"
-                style={{
-                  filter: "drop-shadow(0 0 36px rgba(255,215,0,0.85)) drop-shadow(0 0 14px rgba(255,215,0,0.55)) drop-shadow(0 14px 22px rgba(0,0,0,0.75))"
-                }}>
-                <div className="relative">
-                  {/* Trophy cup */}
-                  <div className="w-20 sm:w-24 h-24 sm:h-28 relative mx-auto"
-                    style={{
-                      background: "linear-gradient(180deg, #FFD700 0%, #FFA500 40%, #FF8C00 100%)",
-                      clipPath: "polygon(20% 0%, 80% 0%, 90% 30%, 85% 70%, 60% 100%, 40% 100%, 15% 70%, 10% 30%)",
-                      boxShadow: "inset 0 2px 10px rgba(255,255,255,0.4), 0 0 30px rgba(255,215,0,0.5)"
-                    }}>
-                    {/* Shine effect */}
-                    <div className="absolute top-2 left-4 w-3 h-12 bg-white/30 rounded-full rotate-12" />
-                  </div>
-                  
-                  {/* Trophy handles */}
-                  <div className="absolute -left-3 sm:-left-4 top-8 sm:top-10 w-8 sm:w-10 h-8 sm:h-10 rounded-full border-4 sm:border-[5px] border-[#FFD700] bg-transparent"
-                    style={{ boxShadow: "0 0 15px rgba(255,215,0,0.5)" }} />
-                  <div className="absolute -right-3 sm:-right-4 top-8 sm:top-10 w-8 sm:w-10 h-8 sm:h-10 rounded-full border-4 sm:border-[5px] border-[#FFD700] bg-transparent"
-                    style={{ boxShadow: "0 0 15px rgba(255,215,0,0.5)" }} />
-                  
-                  {/* Trophy base */}
-                  <div className="w-24 sm:w-28 h-4 sm:h-5 mx-auto mt-1 rounded-b-lg"
-                    style={{ background: "linear-gradient(180deg, #FFD700, #B8860B)", boxShadow: "0 4px 10px rgba(0,0,0,0.5)" }} />
-                  <div className="w-28 sm:w-32 h-3 sm:h-4 mx-auto rounded-b-lg"
-                    style={{ background: "linear-gradient(180deg, #B8860B, #8B6914)", boxShadow: "0 4px 10px rgba(0,0,0,0.5)" }} />
-                </div>
-              </div>
-            </div>
-
-            {/* YOU WON Banner */}
-            <div className="relative px-5 sm:px-5 py-3 flex items-center justify-center gap-1.5 overflow-hidden"
-              style={{ background: "linear-gradient(135deg,#7a5408,#5c3c07,#7a5408)", borderTop: "2px solid #DAA520", borderBottom: "2px solid #DAA520" }}>
-              
-              {/* Decorative edge gradients */}
-              <div className="absolute left-0 top-0 bottom-0 w-4 sm:w-[18px]" style={{ background: "linear-gradient(90deg,rgba(60,0,100,0.8),transparent)" }} />
-              <div className="absolute right-0 top-0 bottom-0 w-4 sm:w-[18px]" style={{ background: "linear-gradient(270deg,rgba(60,0,100,0.8),transparent)" }} />
-              
-              {Array.from({ length: DOTS }).map((_, i) => (
-                <div key={`l${i}`} className="w-2 h-2 rounded-full flex-shrink-0 animate-[dotBlink_1.3s_ease-in-out_infinite]"
-                  style={{ background: "#FFE566", boxShadow: "0 0 8px #FFD700, 0 0 3px #FFF", animationDelay: `${i * 0.15}s` }} />
-              ))}
-              <span className="font-black text-2xl sm:text-3xl tracking-[4px] mx-2 text-[#FFE566] uppercase"
-                style={{ textShadow: "0 0 25px rgba(255,200,0,1), 2px 2px 0 rgba(0,0,0,0.7)", fontFamily: "'Impact','Arial Black',sans-serif" }}>
-                YOU WON!
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#C8102E]/40 bg-[#C8102E]/10 px-3 py-1">
+              <Trophy className="h-3.5 w-3.5 text-[#F1D47A]" />
+              <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">
+                Congratulations
               </span>
-              {Array.from({ length: DOTS }).map((_, i) => (
-                <div key={`r${i}`} className="w-2 h-2 rounded-full flex-shrink-0 animate-[dotBlink_1.3s_ease-in-out_infinite]"
-                  style={{ background: "#FFE566", boxShadow: "0 0 8px #FFD700, 0 0 3px #FFF", animationDelay: `${(DOTS - i) * 0.15}s` }} />
-              ))}
             </div>
 
-            {/* Prize Amount Section */}
-            <div className="px-5 sm:px-7 py-4 sm:py-5 text-center"
-              style={{ background: "linear-gradient(180deg,#0c0020,#060012)" }}>
-              
-              {/* Congratulations divider */}
-              <div className="flex items-center gap-2 justify-center mb-3">
-                <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg,transparent,rgba(255,200,0,0.4))" }} />
-                <span className="text-[11px] font-black tracking-[2.5px] text-[#FCD34D] uppercase whitespace-nowrap">★ Congratulations ★</span>
-                <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg,rgba(255,200,0,0.4),transparent)" }} />
-              </div>
-
-              {/* Coins and Amount */}
-              <div className="flex items-center gap-0 mb-3">
-                {/* Amount Box */}
-                <div className="flex-1 px-3 sm:px-3 py-3 sm:py-3.5 rounded-2xl border border-[rgba(255,180,0,0.45)] flex flex-col items-center justify-center z-1"
-                  style={{
-                    background: "linear-gradient(145deg,rgba(18,4,40,1),rgba(10,2,28,1))",
-                    boxShadow: "0 0 40px rgba(255,160,0,0.15), 0 0 80px rgba(140,40,255,0.08), inset 0 1px 0 rgba(255,200,0,0.08)"
-                  }}>
-                  
-                  {/* Decorative dots */}
-                  <div className="flex justify-between w-full mb-1">
-                    <span className="text-[10px] text-[rgba(255,200,0,0.5)] animate-[dotBlink_2s_0.3s_ease-in-out_infinite]">✦</span>
-                    <span className="text-[10px] text-[rgba(255,200,0,0.5)] animate-[dotBlink_2s_0.8s_ease-in-out_infinite]">✦</span>
-                  </div>
-                  
-                  <div className="text-3xl sm:text-[44px] lg:text-[56px] font-black leading-none text-center w-full animate-[winPop_0.6s_0.3s_ease-out_both] tabular-nums"
-                    style={{
-                      background: "linear-gradient(180deg,#FFF5AA 0%,#FFD700 35%,#FF9500 75%,#FF6000 100%)",
-                      WebkitBackgroundClip: "text",
-                      WebkitTextFillColor: "transparent",
-                      filter: "drop-shadow(0 0 20px rgba(255,200,0,0.65))",
-                      fontFamily: "'Impact','Arial Black',sans-serif"
-                    }}>
-                    {isCash ? `+£${coinsWon.toLocaleString()}` : `+${coinsWon.toLocaleString()} pts`}
-                  </div>
-
-                  <div className="text-[11px] font-black tracking-[5px] text-[rgba(252,211,77,0.8)] uppercase mt-1.5 text-center">
-                    <span className="text-[rgba(255,180,0,0.35)] mr-2">◆</span>
-                    {isCash ? "CASH PRIZE" : "RINGTONE POINTS"}
-                    <span className="text-[rgba(255,180,0,0.35)] ml-2">◆</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="text-xs text-[rgba(220,190,255,0.45)] mb-3 tracking-[0.3px]">Credits added to your balance</div>
-
-              {/* Win Label Badge */}
-              <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-[22px] border border-[rgba(255,210,0,0.38)] bg-[rgba(80,30,0,0.2)] mb-4">
-                <span className="text-[15px]">👑</span>
-                <span className="text-[11px] font-black tracking-[2.5px] text-[#FFD700] uppercase">{winLabel}</span>
-              </div>
-
-              {/* Continue Button */}
-              <button onClick={onDismiss}
-                className="w-full py-4 px-6 rounded-[50px] border-2 border-[#22c55e] text-white font-black text-[17px] tracking-[3.5px] uppercase flex items-center justify-center gap-3 transition-all duration-200 hover:scale-[1.02] active:scale-95"
-                style={{
-                  background: "linear-gradient(135deg,#16a34a 0%,#15803d 50%,#14532d 100%)",
-                  boxShadow: "0 0 40px rgba(22,163,74,0.45), 0 8px 28px rgba(0,0,0,0.7)",
-                  fontFamily: "'Impact','Arial Black',sans-serif"
-                }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = "0 0 65px rgba(22,163,74,0.7), 0 8px 28px rgba(0,0,0,0.7)"}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = "0 0 40px rgba(22,163,74,0.45), 0 8px 28px rgba(0,0,0,0.7)"}>
-                <span className="text-[22px] leading-none">»</span>
-                Continue
-                <span className="text-[22px] leading-none">«</span>
-              </button>
+            <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full border border-[#F1D47A]/35 bg-[#F1D47A]/10 shadow-[0_0_28px_rgba(241,212,122,0.22)]">
+              <Trophy className="h-9 w-9 text-[#F1D47A]" />
             </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
 
-// ─── Lose Overlay (Responsive, No External Images) ──────────────────────
-function LoseOverlay({ show, onDismiss }: { show: boolean; onDismiss: () => void }) {
-  return (
-    <div className={`rr-slot-panel fixed inset-0 z-[55] flex items-center justify-center p-4 transition-all duration-300 ${show ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-      style={{ background: show ? "rgba(10,0,5,0.80)" : "rgba(0,0,0,0)", backdropFilter: show ? "blur(6px)" : "none" }}>
-      
-      <div className="relative w-full max-w-[360px] animate-[winCardPop_0.5s_cubic-bezier(0.34,1.56,0.64,1)_both]">
-        <div className="rounded-3xl overflow-hidden border-2 border-[rgba(220,38,38,0.6)]"
-          style={{
-            background: "linear-gradient(165deg,#1a0005 0%,#0d0003 55%,#050001 100%)",
-            boxShadow: "0 0 0 1px rgba(0,0,0,0.5), 0 0 55px rgba(220,38,38,0.2), 0 0 120px rgba(180,0,30,0.12), inset 0 1px 0 rgba(255,80,80,0.08), 0 60px 160px rgba(0,0,0,0.99)"
-          }}>
-          
-          <button onClick={onDismiss} className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full border border-[rgba(220,80,80,0.45)] bg-[rgba(60,5,10,0.85)] text-[#F87171] flex items-center justify-center text-sm font-black hover:bg-[rgba(80,5,15,0.9)] transition-colors">✕</button>
+            <h2 id="slot-win-title" className="font-prize text-4xl leading-none text-white sm:text-5xl">
+              YOU WON
+            </h2>
+            {prizeName ? (
+              <p className="mt-2 text-sm text-white/50">{prizeName}</p>
+            ) : null}
 
-          {/* Sad Face Section - CSS Only */}
-          <div className="flex flex-col items-center px-8 pt-8 pb-4"
-            style={{ background: "linear-gradient(180deg,#200008 0%,#100004 100%)" }}>
-            <div className="w-24 sm:w-[100px] h-24 sm:h-[100px] rounded-full flex items-center justify-center text-4xl sm:text-[42px] animate-[trophyBounce_2.5s_ease-in-out_infinite]"
-              style={{
-                background: "linear-gradient(135deg,#7f1d1d,#450a0a)",
-                border: "3px solid rgba(239,68,68,0.5)",
-                boxShadow: "0 0 40px rgba(220,38,38,0.35), 0 0 80px rgba(180,0,30,0.15)"
-              }}>
-              {/* CSS Slot Machine Sad Icon */}
-              <div className="relative">
-                <span className="text-2xl sm:text-3xl">🎰</span>
-                <span className="absolute -top-1 -right-1 text-lg sm:text-xl">❌</span>
-              </div>
+            <div className="mt-5 rounded-2xl border border-[#F1D47A]/25 bg-[#F1D47A]/[0.06] px-4 py-5">
+              <p className="font-prize text-5xl leading-none text-[#F1D47A] sm:text-6xl">{headline}</p>
+              <p className="mt-2 text-[11px] font-black uppercase tracking-[0.2em] text-[#FF263D]">
+                {isCash ? "Cash prize" : "Ringtone points"}
+              </p>
             </div>
-          </div>
 
-          {/* NO MATCH Banner */}
-          <div className="px-5 py-3 text-center"
-            style={{
-              background: "linear-gradient(135deg,#6b0f0f,#450a0a,#6b0f0f)",
-              borderTop: "2px solid rgba(220,38,38,0.6)",
-              borderBottom: "2px solid rgba(220,38,38,0.6)"
-            }}>
-            {/* Decorative elements */}
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <span className="text-[10px] text-red-400/50 animate-pulse">✕</span>
-              <span className="text-[10px] text-red-400/50 animate-pulse" style={{ animationDelay: "0.2s" }}>✕</span>
-              <span className="text-[10px] text-red-400/50 animate-pulse" style={{ animationDelay: "0.4s" }}>✕</span>
-            </div>
-            <span className="font-black text-2xl sm:text-[26px] tracking-[3px] text-[#FCA5A5] uppercase"
-              style={{ textShadow: "0 0 20px rgba(220,38,38,0.8), 2px 2px 0 rgba(0,0,0,0.7)", fontFamily: "'Impact','Arial Black',sans-serif" }}>
-              NO MATCH!
-            </span>
-          </div>
+            <p className="mt-3 text-xs text-white/45">
+              {isCash ? "Credits added to your balance" : "Points added to your account"}
+            </p>
 
-          {/* Message and Button */}
-          <div className="px-7 py-5 sm:py-6 text-center" style={{ background: "linear-gradient(180deg,#0c0002,#060001)" }}>
-            <div className="text-[15px] text-[rgba(255,160,160,0.75)] mb-4 font-medium">
-              Better luck on your next spin!<br />
-              <span className="text-xs text-[rgba(255,120,120,0.45)]">Your jackpot is just around the corner 🎰</span>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#F1D47A]/30 bg-[#F1D47A]/10 px-3.5 py-1">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#F1D47A]">{winLabel}</span>
             </div>
-            
-            {/* Decorative divider */}
-            <div className="flex items-center gap-2 justify-center mb-4">
-              <div className="w-8 h-px bg-red-500/20" />
-              <span className="text-sm">🍀</span>
-              <div className="w-8 h-px bg-red-500/20" />
-            </div>
-            
-            <button onClick={onDismiss}
-              className="w-full py-3.5 px-6 rounded-[50px] border-2 border-[rgba(220,38,38,0.7)] text-white font-black text-base tracking-[3px] uppercase transition-all duration-200 hover:scale-[1.02] active:scale-95"
-              style={{
-                background: "linear-gradient(135deg,#7f1d1d 0%,#991b1b 50%,#7f1d1d 100%)",
-                boxShadow: "0 0 30px rgba(220,38,38,0.3), 0 8px 24px rgba(0,0,0,0.6)",
-                fontFamily: "'Impact','Arial Black',sans-serif"
-              }}>
-              Try Again
+
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="rr-cta mt-6 h-12 w-full rounded-xl text-sm font-black uppercase tracking-[0.16em]"
+            >
+              Continue
             </button>
           </div>
+        </ChaserBorder>
+      </div>
+    </div>
+  );
+}
+
+function LoseOverlay({ show, onDismiss }: { show: boolean; onDismiss: () => void }) {
+  if (!show) return null;
+
+  return (
+    <div
+      className="rr-slot-panel fixed inset-0 z-[55] flex items-center justify-center p-4"
+      style={{ background: "rgba(5,5,5,0.86)", backdropFilter: "blur(10px)" }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="slot-lose-title"
+    >
+      <div className="relative w-full max-w-[400px] animate-bounce-in">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#111115] via-[#0A0A0D] to-[#050505] px-6 pb-6 pt-8 text-center sm:px-8">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-[#050505]/80 text-white/55 transition-colors hover:border-white/25 hover:text-white"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
+            <X className="h-7 w-7 text-white/40" />
+          </div>
+
+          <h2 id="slot-lose-title" className="font-prize text-4xl leading-none text-white">
+            NO MATCH
+          </h2>
+          <p className="mt-3 text-sm text-white/50">
+            Better luck on your next spin. The next reel could be yours.
+          </p>
+
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="mt-6 h-12 w-full rounded-xl border border-white/15 bg-white/8 text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white/12"
+          >
+            Try again
+          </button>
         </div>
       </div>
     </div>
@@ -325,7 +214,8 @@ function LoseOverlay({ show, onDismiss }: { show: boolean; onDismiss: () => void
 // ─── Casino Stat Card (Responsive) ───────────────────────────────────────
 function StatCard({ label, value, icon, accent }: { label: string; value: string | number; icon: string; accent?: boolean }) {
   return (
-    <div className="rr-slot-panel relative p-3 sm:p-4 md:p-5 rounded-2xl text-center overflow-hidden"
+    <div
+      className="rr-slot-panel relative overflow-hidden rounded-2xl p-3 text-center sm:p-4 md:p-5"
       style={{
         background: accent
           ? "linear-gradient(145deg,rgba(200,16,46,0.18),rgba(10,10,13,0.95))"
@@ -333,15 +223,18 @@ function StatCard({ label, value, icon, accent }: { label: string; value: string
         border: accent ? "1px solid rgba(241,212,122,0.4)" : "1px solid rgba(255,255,255,0.1)",
         boxShadow: accent
           ? "0 0 30px rgba(200,16,46,0.12), inset 0 1px 0 rgba(241,212,122,0.15)"
-          : "inset 0 1px 0 rgba(255,255,255,0.06)"
-      }}>
-      <div className="text-lg sm:text-xl md:text-[22px] mb-1.5">{icon}</div>
-      <div className="text-xl sm:text-2xl md:text-[26px] font-black leading-none mb-1 tabular-nums"
-        style={{
-          background: accent ? "linear-gradient(180deg,#F1D47A,#B98928)" : "linear-gradient(180deg,#fff,#d4d4d8)",
-          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent"
-        }}>{value}</div>
-      <div className="text-[9px] sm:text-[10px] font-black tracking-[2px] uppercase text-[rgba(255,255,255,0.35)]">{label}</div>
+          : "inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+    >
+      <div className="mb-1.5 text-lg sm:text-xl md:text-[22px]">{icon}</div>
+      <div
+        className={`font-prize mb-1 text-2xl leading-none tabular-nums sm:text-3xl ${
+          accent ? "text-[#F1D47A]" : "text-white"
+        }`}
+      >
+        {value}
+      </div>
+      <div className="text-[9px] font-black uppercase tracking-[0.16em] text-white/35 sm:text-[10px]">{label}</div>
     </div>
   );
 }
@@ -390,70 +283,87 @@ interface SpinsExhaustedOverlayProps {
   onBack: () => void;
 }
 
-function SpinsExhaustedOverlay({ 
-  totalSpins, 
-  wins, 
-  totalWon, 
-  prizeType, 
-  onBack 
+function SpinsExhaustedOverlay({
+  totalSpins,
+  wins,
+  totalWon,
+  prizeType,
+  onBack,
 }: SpinsExhaustedOverlayProps) {
-  // Format the won value based on prize type
-  const formatWonValue = () => {
-    if (totalWon <= 0) return "—";
-    if (prizeType === 'cash') {
-      return `£${totalWon}`;
-    } else {
-      return `${totalWon} pts`;
-    }
-  };
+  const wonValue =
+    totalWon <= 0 ? "—" : prizeType === "cash" ? `£${totalWon}` : `${totalWon} pts`;
 
-  // Get the appropriate icon for the prize type
-  const getPrizeIcon = () => {
-    if (totalWon <= 0) return "💰";
-    return prizeType === 'cash' ? "💰" : "⭐";
-  };
+  const stats = [
+    { label: "Spins", value: totalSpins },
+    { label: "Wins", value: wins },
+    { label: prizeType === "cash" ? "Won" : "Points", value: wonValue, accent: true },
+  ];
 
   return (
-    <div className="rr-slot-panel absolute inset-0 z-20 flex flex-col items-center justify-center p-4 sm:p-6"
+    <div
+      className="rr-slot-panel absolute inset-0 z-20 flex items-center justify-center p-4 sm:p-6"
       style={{
-        background: "linear-gradient(165deg,rgba(5,5,5,0.97) 0%,rgba(10,10,13,0.98) 100%)",
-        backdropFilter: "blur(6px)"
-      }}>
-      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 70% 50% at 50% 40%,rgba(200,16,46,0.12) 0%,transparent 70%)" }} />
-      <div className="text-4xl sm:text-5xl md:text-[56px] mb-3" style={{ filter: "drop-shadow(0 0 18px rgba(241,212,122,0.5))" }}>🎰</div>
-      <div className="text-lg sm:text-xl md:text-[22px] font-black tracking-[2px] uppercase mb-1"
-        style={{ background: "linear-gradient(180deg,#F1D47A,#B98928)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-        All Spins Used!
-      </div>
-      <div className="text-xs sm:text-[13px] text-white/50 mb-5 text-center">
-        You've completed all {totalSpins} spin{totalSpins !== 1 ? "s" : ""} for this game.
-      </div>
+        background: "linear-gradient(165deg,rgba(5,5,5,0.96) 0%,rgba(10,10,13,0.97) 100%)",
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ background: "radial-gradient(ellipse 70% 50% at 50% 38%,rgba(200,16,46,0.16) 0%,transparent 70%)" }}
+      />
 
-      <div className="flex gap-2 sm:gap-3 mb-6">
-        {[
-          { label: "Spins", value: totalSpins, icon: "🎰" },
-          { label: "Wins", value: wins, icon: "🏆" },
-          { 
-            label: prizeType === 'cash' ? "Won" : "Points Won", 
-            value: formatWonValue(), 
-            icon: getPrizeIcon() 
-          },
-        ].map(s => (
-          <div key={s.label} className="text-center px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl min-w-[60px] sm:min-w-[72px]"
-            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(200,150,255,0.2)" }}>
-            <div className="text-base sm:text-lg mb-1">{s.icon}</div>
-            <div className="text-base sm:text-lg font-black text-[#E0B0FF]">{s.value}</div>
-            <div className="text-[9px] sm:text-[10px] font-bold tracking-[1.5px] text-[rgba(255,255,255,0.35)] uppercase">{s.label}</div>
+      <div className="relative w-full max-w-[400px] animate-bounce-in">
+        <ChaserBorder variant="featured">
+          <div className="bg-gradient-to-b from-[#111115] via-[#0A0A0D] to-[#050505] px-6 py-7 text-center sm:px-8 sm:py-8">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#C8102E]/40 bg-[#C8102E]/10 px-3 py-1">
+              <Trophy className="h-3.5 w-3.5 text-[#F1D47A]" />
+              <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">
+                Session complete
+              </span>
+            </div>
+
+            <h2 className="font-prize text-4xl leading-none text-white sm:text-5xl">
+              ALL SPINS USED
+            </h2>
+            <p className="mt-3 text-sm text-white/50">
+              You've finished all {totalSpins} spin{totalSpins !== 1 ? "s" : ""} for this game.
+            </p>
+
+            <div className="mt-5 grid grid-cols-3 gap-2">
+              {stats.map((s) => (
+                <div
+                  key={s.label}
+                  className="rounded-xl border px-2 py-3"
+                  style={{
+                    background: s.accent ? "rgba(241,212,122,0.06)" : "rgba(255,255,255,0.04)",
+                    borderColor: s.accent ? "rgba(241,212,122,0.28)" : "rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <div
+                    className={`font-prize text-2xl leading-none tabular-nums ${
+                      s.accent ? "text-[#F1D47A]" : "text-white"
+                    }`}
+                  >
+                    {s.value}
+                  </div>
+                  <div className="mt-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-white/40">
+                    {s.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={onBack}
+              className="rr-cta mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-black uppercase tracking-[0.14em]"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to competitions
+            </button>
           </div>
-        ))}
+        </ChaserBorder>
       </div>
-
-      <button onClick={onBack} className="px-6 sm:px-8 py-3 rounded-[50px] font-black text-sm tracking-[1px] uppercase text-white transition-all hover:scale-105"
-        style={{
-          background: "linear-gradient(135deg,#7c3aed,#4c1d95)",
-          border: "1px solid rgba(200,150,255,0.5)",
-          boxShadow: "0 0 24px rgba(140,50,255,0.4)"
-        }}>← Back to Competitions</button>
     </div>
   );
 }
