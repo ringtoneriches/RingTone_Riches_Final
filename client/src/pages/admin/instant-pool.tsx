@@ -6,8 +6,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -26,13 +26,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Gift,
   Lock,
@@ -49,6 +46,7 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 
 const statusStyles: Record<string, string> = {
@@ -74,9 +72,11 @@ export default function AdminInstantPool() {
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [groupPages, setGroupPages] = useState<Record<string, number>>({});
+  const [openPrizeId, setOpenPrizeId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<{
-    type: "activate" | "lock" | "disable";
-    prize: any;
+    type: "activate" | "lock" | "disable" | "delete" | "clear" | "delete-group";
+    prize?: any;
+    prizes?: any[];
   } | null>(null);
   const [confirmHighValue, setConfirmHighValue] = useState(false);
 
@@ -245,10 +245,60 @@ export default function AdminInstantPool() {
       setConfirmOpen(false);
       setPendingAction(null);
       setConfirmHighValue(false);
+      setOpenPrizeId(null);
       refetch();
     },
     onError: (error: any) => {
       toast({ title: "Action failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (prizeId: string) => {
+      const res = await apiRequest(`/api/admin/instant-win/prizes/${prizeId}`, "DELETE");
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.message || "Delete failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Prize deleted" });
+      setConfirmOpen(false);
+      setPendingAction(null);
+      setOpenPrizeId(null);
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const clearMutation = useMutation({
+    mutationFn: async (prizeIds?: string[]) => {
+      const res = await apiRequest(
+        `/api/admin/competitions/${selectedId}/instant-win/prizes/clear`,
+        "POST",
+        prizeIds ? { prizeIds } : {}
+      );
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.message || "Clear failed");
+      }
+      return res.json();
+    },
+    onSuccess: (result: { deleted?: number; kept?: number }) => {
+      toast({
+        title: "Instant Pool updated",
+        description: `${result.deleted || 0} unused prize${result.deleted === 1 ? "" : "s"} removed. Won and sold prizes were kept.`,
+      });
+      setConfirmOpen(false);
+      setPendingAction(null);
+      setOpenPrizeId(null);
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({ title: "Clear failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -494,7 +544,7 @@ export default function AdminInstantPool() {
               <div>
                 <CardTitle>Prizes</CardTitle>
                 <CardDescription>
-                  Add prizes from Tools → Prize Table (quantity creates these rows). Then set each range and Activate here. Winning numbers stay hidden from customers while locked.
+                  Add prizes from Tools → Prize Table (quantity creates these rows). Open a group to activate, lock, disable, or delete individual copies. Won prizes stay.
                 </CardDescription>
               </div>
               <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto">
@@ -516,6 +566,21 @@ export default function AdminInstantPool() {
                     <SelectItem value="disabled">Disabled</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button
+                  variant="outline"
+                  disabled={!isControlled || prizes.filter((p: any) => p.status !== "won").length === 0}
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    setPendingAction({
+                      type: "clear",
+                      prizes: prizes.filter((p: any) => p.status !== "won"),
+                    });
+                    setConfirmOpen(true);
+                  }}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Clear unused
+                </Button>
                 <Button
                   onClick={() => setCreateOpen(true)}
                   disabled={!isControlled}
@@ -569,7 +634,9 @@ export default function AdminInstantPool() {
                       active: group.prizes.filter((p) => p.status === "active").length,
                       locked: group.prizes.filter((p) => p.status === "locked").length,
                       won: group.prizes.filter((p) => p.status === "won").length,
+                      disabled: group.prizes.filter((p) => p.status === "disabled").length,
                     };
+                    const removable = group.prizes.filter((p) => p.status !== "won");
                     const innerPage = groupPages[group.key] || 1;
                     const innerTotal = Math.max(1, Math.ceil(group.prizes.length / pageSize));
                     const innerSafe = Math.min(innerPage, innerTotal);
@@ -583,13 +650,27 @@ export default function AdminInstantPool() {
                             <div className="text-sm text-muted-foreground">
                               £{group.value.toLocaleString("en-GB")} · {group.prizes.length} prize{group.prizes.length === 1 ? "" : "s"}
                               <span className="hidden sm:inline">
-                                {" "}· {counts.active} active · {counts.locked} locked · {counts.won} won
+                                {" "}· {counts.active} active · {counts.locked} locked · {counts.won} won · {counts.disabled} disabled
                               </span>
                             </div>
                             <div className="sm:hidden text-xs text-muted-foreground mt-1">
-                              {counts.active} active · {counts.locked} locked · {counts.won} won
+                              {counts.active} active · {counts.locked} locked · {counts.won} won · {counts.disabled} disabled
                             </div>
                           </div>
+                          {removable.length > 0 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full sm:w-auto"
+                              onClick={() => {
+                                setPendingAction({ type: "delete-group", prizes: removable });
+                                setConfirmOpen(true);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4 mr-1" />
+                              Delete unused
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -605,73 +686,55 @@ export default function AdminInstantPool() {
 
                         {isOpen && (
                           <div className="border-t border-border">
-                            <div className="hidden md:block overflow-x-auto">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Winning ticket</TableHead>
-                                    <TableHead>Range</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Activation</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {innerRows.map((prize: any) => (
-                                    <TableRow key={prize.id}>
-                                      <TableCell className="font-mono text-sm">
-                                        {prize.status === "locked" ? "Hidden" : prize.winningTicketLabel}
-                                      </TableCell>
-                                      <TableCell className="text-sm">{prize.rangeFrom}–{prize.rangeTo}</TableCell>
-                                      <TableCell>
-                                        <Badge variant="outline" className={statusStyles[prize.status] || ""}>
-                                          {prize.status}
-                                        </Badge>
-                                      </TableCell>
-                                      <TableCell className="text-sm">
-                                        {prize.activationType.replace("_", " ")}
-                                        {prize.allocationMethod === "a_pregen" ? " · Method A" : " · Method B"}
-                                      </TableCell>
-                                      <TableCell className="text-right">
-                                        <PrizeActions
-                                          prize={prize}
-                                          onAction={(type) => {
-                                            setPendingAction({ type, prize });
-                                            setConfirmOpen(true);
-                                          }}
-                                        />
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </div>
-
-                            <div className="md:hidden divide-y divide-border">
-                              {innerRows.map((prize: any) => (
-                                <div key={prize.id} className="p-3 space-y-2">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="font-mono text-sm">
-                                      {prize.status === "locked" ? "Ticket hidden" : prize.winningTicketLabel}
-                                    </span>
-                                    <Badge variant="outline" className={statusStyles[prize.status] || ""}>
-                                      {prize.status}
-                                    </Badge>
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    Range {prize.rangeFrom}–{prize.rangeTo} · {prize.activationType.replace("_", " ")}
-                                    {prize.allocationMethod === "a_pregen" ? " · Method A" : " · Method B"}
-                                  </div>
-                                  <PrizeActions
-                                    prize={prize}
-                                    stacked
-                                    onAction={(type) => {
-                                      setPendingAction({ type, prize });
-                                      setConfirmOpen(true);
-                                    }}
-                                  />
-                                </div>
-                              ))}
+                            <p className="px-3 pt-3 text-xs text-muted-foreground">
+                              Click a tile to activate, lock, disable, or delete. Grid is 5 across.
+                            </p>
+                            <div className="grid grid-cols-3 gap-2 p-3 sm:grid-cols-5">
+                              {innerRows.map((prize: any, rowIndex: number) => {
+                                const number = (innerSafe - 1) * pageSize + rowIndex + 1;
+                                return (
+                                  <Popover
+                                    key={prize.id}
+                                    open={openPrizeId === prize.id}
+                                    onOpenChange={(open) => setOpenPrizeId(open ? prize.id : null)}
+                                  >
+                                    <PopoverTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className={cn(
+                                          "rounded-lg border px-2 py-2 text-left transition-colors",
+                                          statusStyles[prize.status] || "border-border",
+                                          openPrizeId === prize.id && "ring-2 ring-amber-400"
+                                        )}
+                                      >
+                                        <div className="text-[10px] font-semibold uppercase tracking-wide">
+                                          #{number} · {prize.status}
+                                        </div>
+                                        <div className="mt-1 font-mono text-xs">
+                                          {prize.status === "locked" ? "Hidden" : prize.winningTicketLabel}
+                                        </div>
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 space-y-3">
+                                      <div>
+                                        <div className="font-semibold">{group.name}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Range {prize.rangeFrom}–{prize.rangeTo} · {prize.activationType.replace("_", " ")}
+                                          {prize.allocationMethod === "a_pregen" ? " · Method A" : " · Method B"}
+                                        </div>
+                                      </div>
+                                      <PrizeActions
+                                        prize={prize}
+                                        stacked
+                                        onAction={(type) => {
+                                          setPendingAction({ type, prize });
+                                          setConfirmOpen(true);
+                                        }}
+                                      />
+                                    </PopoverContent>
+                                  </Popover>
+                                );
+                              })}
                             </div>
 
                             {group.prizes.length > pageSize && (
@@ -829,10 +892,24 @@ export default function AdminInstantPool() {
         <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle className="capitalize">{pendingAction?.type} prize</DialogTitle>
+              <DialogTitle className="capitalize">
+                {pendingAction?.type === "delete-group"
+                  ? "Delete unused prizes"
+                  : pendingAction?.type === "clear"
+                  ? "Clear unused prizes"
+                  : pendingAction?.type === "lock" && pendingAction.prize?.status === "disabled"
+                  ? "Enable prize"
+                  : `${pendingAction?.type || "Update"} prize`}
+              </DialogTitle>
               <DialogDescription>
                 {pendingAction?.type === "activate"
                   ? "Activation picks an unsold ticket number in the prize range. Sold loser tickets are never converted."
+                  : pendingAction?.type === "delete"
+                  ? "This permanently removes this unused prize copy. Won prizes and sold winning tickets cannot be deleted."
+                  : pendingAction?.type === "delete-group"
+                  ? `This permanently removes ${pendingAction.prizes?.length || 0} unused copies in this group. Won prizes stay. Prize Table quantity will update.`
+                  : pendingAction?.type === "clear"
+                  ? `This permanently removes ${pendingAction.prizes?.length || 0} unused Instant Pool copies on this game. Won prizes stay. Prize Table quantities will update.`
                   : "This updates prize status only. Sold ticket results cannot be rewritten."}
               </DialogDescription>
             </DialogHeader>
@@ -845,6 +922,19 @@ export default function AdminInstantPool() {
                 className="bg-amber-500 hover:bg-amber-600 text-black"
                 onClick={() => {
                   if (!pendingAction) return;
+                  if (pendingAction.type === "delete" && pendingAction.prize) {
+                    deleteMutation.mutate(pendingAction.prize.id);
+                    return;
+                  }
+                  if (pendingAction.type === "clear") {
+                    clearMutation.mutate(undefined);
+                    return;
+                  }
+                  if (pendingAction.type === "delete-group") {
+                    clearMutation.mutate((pendingAction.prizes || []).map((p) => p.id));
+                    return;
+                  }
+                  if (!pendingAction.prize) return;
                   actionMutation.mutate({
                     prizeId: pendingAction.prize.id,
                     type: pendingAction.type,
@@ -868,12 +958,12 @@ function PrizeActions({
   stacked,
 }: {
   prize: any;
-  onAction: (type: "activate" | "lock" | "disable") => void;
+  onAction: (type: "activate" | "lock" | "disable" | "delete") => void;
   stacked?: boolean;
 }) {
   return (
     <div className={stacked ? "flex flex-col gap-2" : "flex flex-wrap justify-end gap-1"}>
-      {prize.status !== "won" && prize.status !== "active" && (
+      {prize.status !== "won" && prize.status !== "active" && prize.status !== "disabled" && (
         <Button size="sm" variant="outline" className={stacked ? "w-full" : ""} onClick={() => onAction("activate")}>
           <Unlock className="w-3.5 h-3.5 mr-1" /> Activate
         </Button>
@@ -883,9 +973,19 @@ function PrizeActions({
           <Lock className="w-3.5 h-3.5 mr-1" /> Lock
         </Button>
       )}
+      {prize.status === "disabled" && (
+        <Button size="sm" variant="outline" className={stacked ? "w-full" : ""} onClick={() => onAction("lock")}>
+          <Unlock className="w-3.5 h-3.5 mr-1" /> Enable
+        </Button>
+      )}
       {prize.status !== "won" && prize.status !== "disabled" && (
         <Button size="sm" variant="ghost" className={stacked ? "w-full" : ""} onClick={() => onAction("disable")}>
           <Ban className="w-3.5 h-3.5 mr-1" /> Disable
+        </Button>
+      )}
+      {prize.status !== "won" && (
+        <Button size="sm" variant="ghost" className={stacked ? "w-full text-red-400" : "text-red-400"} onClick={() => onAction("delete")}>
+          <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
         </Button>
       )}
     </div>

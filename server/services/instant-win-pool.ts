@@ -995,6 +995,120 @@ export async function disableInstantWinPrize(prizeId: string, adminId?: string) 
   });
 }
 
+async function loadLinkedPrizeIds(tx: DbTx, competitionId: string) {
+  const userLinked = await tx
+    .select({ id: tickets.instantWinPrizeId })
+    .from(tickets)
+    .where(
+      and(eq(tickets.competitionId, competitionId), isNotNull(tickets.instantWinPrizeId))
+    );
+  const guestLinked = await tx
+    .select({ id: guestTickets.instantWinPrizeId })
+    .from(guestTickets)
+    .where(
+      and(eq(guestTickets.competitionId, competitionId), isNotNull(guestTickets.instantWinPrizeId))
+    );
+  return new Set(
+    [...userLinked, ...guestLinked]
+      .map((row) => row.id)
+      .filter((id): id is string => Boolean(id))
+  );
+}
+
+function canRemoveInstantWinPrize(
+  prize: typeof instantWinPrizes.$inferSelect,
+  sold: Set<number>,
+  linkedPrizeIds: Set<string>
+) {
+  if (prize.status === "won") return false;
+  if (linkedPrizeIds.has(prize.id)) return false;
+  if (prize.winningTicketNumber && sold.has(Number(prize.winningTicketNumber))) return false;
+  return true;
+}
+
+async function removeInstantWinPrizes(
+  tx: DbTx,
+  prizes: Array<typeof instantWinPrizes.$inferSelect>
+) {
+  if (prizes.length === 0) return 0;
+  const ids = prizes.map((p) => p.id);
+  await tx.delete(instantWinPrizes).where(inArray(instantWinPrizes.id, ids));
+  const parentIds = [...new Set(prizes.map((p) => p.competitionPrizeId).filter(Boolean))] as string[];
+  for (const parentId of parentIds) {
+    await syncTablePrizeCounts(tx, parentId);
+  }
+  return prizes.length;
+}
+
+export async function deleteInstantWinPrize(prizeId: string, _adminId?: string) {
+  return db.transaction(async (tx) => {
+    const [prize] = await tx
+      .select()
+      .from(instantWinPrizes)
+      .where(eq(instantWinPrizes.id, prizeId))
+      .limit(1);
+    if (!prize) throw new InstantWinError("Prize not found", 404);
+    if (prize.status === "won") {
+      throw new InstantWinError("Won prizes cannot be deleted", 400, "already_won");
+    }
+
+    const [competition] = await tx
+      .select()
+      .from(competitions)
+      .where(eq(competitions.id, prize.competitionId))
+      .limit(1);
+    const maxTickets = Number(competition?.maxTickets || prize.rangeTo || 0);
+    const sold = await soldSeqsInRange(tx, prize.competitionId, 1, Math.max(1, maxTickets));
+    const linkedPrizeIds = await loadLinkedPrizeIds(tx, prize.competitionId);
+
+    if (!canRemoveInstantWinPrize(prize, sold, linkedPrizeIds)) {
+      throw new InstantWinError(
+        "Cannot delete a prize after its winning ticket has been sold",
+        400,
+        "ticket_sold"
+      );
+    }
+
+    await removeInstantWinPrizes(tx, [prize]);
+    return { deleted: 1, id: prizeId };
+  });
+}
+
+export async function clearUnusedInstantWinPrizes(
+  competitionId: string,
+  opts?: { prizeIds?: string[] }
+) {
+  return db.transaction(async (tx) => {
+    const [competition] = await tx
+      .select()
+      .from(competitions)
+      .where(eq(competitions.id, competitionId))
+      .limit(1);
+    if (!competition) throw new InstantWinError("Competition not found", 404);
+
+    const rows = await tx
+      .select()
+      .from(instantWinPrizes)
+      .where(eq(instantWinPrizes.competitionId, competitionId));
+
+    const requested = opts?.prizeIds?.length
+      ? new Set(opts.prizeIds)
+      : null;
+    const scoped = requested ? rows.filter((p) => requested.has(p.id)) : rows;
+
+    const maxTickets = Number(competition.maxTickets || 0);
+    const sold = await soldSeqsInRange(tx, competitionId, 1, Math.max(1, maxTickets || 1));
+    const linkedPrizeIds = await loadLinkedPrizeIds(tx, competitionId);
+    const removable = scoped.filter((p) => canRemoveInstantWinPrize(p, sold, linkedPrizeIds));
+
+    const deleted = await removeInstantWinPrizes(tx, removable);
+    return {
+      deleted,
+      kept: scoped.length - deleted,
+    };
+  });
+}
+
 export async function listInstantWinPrizes(
   competitionId: string,
   opts?: { status?: string; revealLockedTickets?: boolean }
@@ -1036,6 +1150,17 @@ export async function getPublicPrizePool(competitionId: string) {
     .from(instantWinPrizes)
     .where(eq(instantWinPrizes.competitionId, competitionId));
 
+  const tablePrizes = await db
+    .select({
+      id: competitionPrizes.id,
+      ringtonePoints: competitionPrizes.ringtonePoints,
+    })
+    .from(competitionPrizes)
+    .where(eq(competitionPrizes.competitionId, competitionId));
+  const pointsByTableId = new Map(
+    tablePrizes.map((row) => [row.id, Math.max(0, Number(row.ringtonePoints || 0))])
+  );
+
   const publicPrizes = prizes
     .filter((p) => p.status !== "disabled")
     .map((p) => {
@@ -1047,6 +1172,7 @@ export async function getPublicPrizePool(competitionId: string) {
         competitionPrizeId: p.competitionPrizeId,
         prizeName: p.name,
         prizeValue: Number(p.value),
+        ringtonePoints: p.competitionPrizeId ? pointsByTableId.get(p.competitionPrizeId) || 0 : 0,
         rewardType: p.rewardType,
         status: unavailable ? "unavailable" : p.status,
         publicStatus:
@@ -1075,6 +1201,7 @@ export async function getPublicPrizePool(competitionId: string) {
       id,
       prizeName: first.prizeName,
       prizeValue: first.prizeValue,
+      ringtonePoints: first.ringtonePoints,
       rewardType: first.rewardType,
       totalQuantity: items.length,
       remainingQuantity: leftItems.length,

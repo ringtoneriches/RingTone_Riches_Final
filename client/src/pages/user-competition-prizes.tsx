@@ -31,6 +31,7 @@ interface Prize {
   competitionId: string;
   prizeName: string;
   prizeValue: number;
+  ringtonePoints?: number;
   totalQuantity: number;
   remainingQuantity: number;
   createdAt?: string;
@@ -52,6 +53,7 @@ interface PrizeGroup {
   id: string;
   prizeName: string;
   prizeValue: number;
+  ringtonePoints?: number;
   totalQuantity: number;
   remainingQuantity: number;
   wonCount: number;
@@ -106,6 +108,15 @@ const formatNumber = (num: number) => {
   return num.toLocaleString();
 };
 
+function getPrizeOfferLabel(prize: { prizeValue: number; ringtonePoints?: number }) {
+  const points = Number(prize.ringtonePoints || 0);
+  const cash = Number(prize.prizeValue || 0);
+  if (points > 0 && cash <= 0) {
+    return { amount: points.toLocaleString(), suffix: "Ringtone Points" };
+  }
+  return { amount: `£${cash.toLocaleString()}`, suffix: "value" };
+}
+
 export default function UserCompetitionPrizes({ competitionId }: UserCompetitionPrizesProps) {
   const [hoveredPrize, setHoveredPrize] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(true);
@@ -126,6 +137,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
           prizes: data.map((prize: any) => ({
             ...prize,
             prizeValue: Number(prize.prizeValue),
+            ringtonePoints: Number(prize.ringtonePoints || 0),
             totalQuantity: Number(prize.totalQuantity),
             remainingQuantity: Number(prize.remainingQuantity),
           })),
@@ -137,6 +149,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
         groups: (data.groups || []).map((group: any) => ({
           ...group,
           prizeValue: Number(group.prizeValue),
+          ringtonePoints: Number(group.ringtonePoints || 0),
           totalQuantity: Number(group.totalQuantity ?? 1),
           remainingQuantity: Number(group.remainingQuantity ?? 0),
           wonCount: Number(group.wonCount ?? 0),
@@ -146,6 +159,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
         prizes: (data.prizes || []).map((prize: any) => ({
           ...prize,
           prizeValue: Number(prize.prizeValue),
+          ringtonePoints: Number(prize.ringtonePoints || 0),
           totalQuantity: Number(prize.totalQuantity ?? 1),
           remainingQuantity: Number(prize.remainingQuantity ?? 0),
         })),
@@ -293,10 +307,12 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                 id: (item as PrizeGroup).id,
                 prizeName: (item as PrizeGroup).prizeName,
                 prizeValue: (item as PrizeGroup).prizeValue,
+                ringtonePoints: (item as PrizeGroup).ringtonePoints,
                 totalQuantity: (item as PrizeGroup).totalQuantity,
                 remainingQuantity: (item as PrizeGroup).remainingQuantity,
               }
             : (item as Prize);
+          const offer = getPrizeOfferLabel(prize);
           const group = useGroups ? (item as PrizeGroup) : null;
           const stockStatus = getStockStatus(prize.remainingQuantity, prize.totalQuantity);
           const percentageRemaining = prize.totalQuantity > 0
@@ -334,9 +350,9 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                   </CardTitle>
                   <CardDescription className="flex items-baseline gap-1">
                     <span className="font-prize text-xl text-[#F1D47A] sm:text-2xl md:text-3xl">
-                      £{prize.prizeValue.toLocaleString()}
+                      {offer.amount}
                     </span>
-                    <span className="text-[11px] text-white/40 sm:text-sm">value</span>
+                    <span className="text-[11px] text-white/40 sm:text-sm">{offer.suffix}</span>
                   </CardDescription>
                 </div>
               </CardHeader>
