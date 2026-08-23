@@ -273,6 +273,7 @@ export const competitions = pgTable("competitions", {
   isActive: boolean("is_active").default(true),
   ringtonePoints: integer("ringtone_points").default(0),
   displayOrder: integer("display_order").default(999), // Lower numbers appear first
+  featuredOrder: integer("featured_order"), // Homepage featured slider: 1 = first. Null = not featured.
   endDate: timestamp("end_date"), // Optional countdown timer end date
   wheelType: varchar("wheel_type", { enum: ["wheel1", "wheel2"] }).default("wheel1"),
   status: text("status").default("active"),

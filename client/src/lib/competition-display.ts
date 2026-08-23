@@ -160,9 +160,24 @@ export function isFeaturedCandidate(competition: Competition) {
   return true;
 }
 
-/** Live competitions with real prize/artwork/ticket data, in admin display order. */
+function featuredRank(competition: Competition) {
+  const n = Number(competition.featuredOrder);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Live competitions chosen for the homepage slider, in admin featured order. */
 export function pickFeaturedCompetitions(competitions: Competition[], limit = 4) {
-  return competitions.filter(isFeaturedCandidate).slice(0, limit);
+  const eligible = competitions.filter(isFeaturedCandidate);
+  const pinned = eligible
+    .filter((c) => featuredRank(c) != null)
+    .sort((a, b) => (featuredRank(a) as number) - (featuredRank(b) as number));
+  if (pinned.length >= limit) return pinned.slice(0, limit);
+
+  const used = new Set(pinned.map((c) => c.id));
+  const fill = eligible
+    .filter((c) => !used.has(c.id))
+    .sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
+  return [...pinned, ...fill].slice(0, limit);
 }
 
 export function pickFeaturedCompetition(competitions: Competition[]) {
