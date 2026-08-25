@@ -25,6 +25,8 @@ import {
   voltzWins,
   plinkoUsage,
   plinkoWins,
+  gameSpinConfig,
+  spinWheel2Configs,
 } from "@shared/schema";
 
 export const HIGH_VALUE_THRESHOLD = 1000;
@@ -591,9 +593,20 @@ async function issuePlayTicketsInner(tx: DbTx, opts: IssueTicketsOpts) {
   const controlled = isControlledMode(competition.instantWinMode);
   const maxTickets = Number(competition.maxTickets || 0);
   const sold = Number(competition.soldTickets || 0);
-  const startSeq = Number(competition.nextTicketNumber || 1);
+  const configuredStart = Number(competition.nextTicketNumber || 1);
   const blockSize = Number(competition.ticketBlockSize || 0);
   const useBlocks = controlled && blockSize >= 1;
+
+  let startSeq = configuredStart;
+  if (controlled && !useBlocks) {
+    const [maxRow] = await tx
+      .select({
+        maxSeq: sql<number>`coalesce(max(${tickets.ticketSeq}), 0)`,
+      })
+      .from(tickets)
+      .where(eq(tickets.competitionId, opts.competitionId));
+    startSeq = Math.max(configuredStart, Number(maxRow?.maxSeq || 0) + 1);
+  }
 
   if (controlled) {
     if (!maxTickets) {
@@ -1702,6 +1715,74 @@ export async function tryRevealControlledSlot(opts: {
   };
 }
 
+type WheelSegment = {
+  id?: string;
+  label?: string;
+  color?: string;
+  iconKey?: string;
+  rewardType?: string;
+  rewardValue?: string | number;
+};
+
+async function loadWheelSegments(competitionId: string): Promise<WheelSegment[]> {
+  const [competition] = await db
+    .select({ wheelType: competitions.wheelType })
+    .from(competitions)
+    .where(eq(competitions.id, competitionId))
+    .limit(1);
+  const wheelType = competition?.wheelType || "wheel1";
+  if (wheelType === "wheel2") {
+    const [config] = await db
+      .select()
+      .from(spinWheel2Configs)
+      .where(eq(spinWheel2Configs.id, "active"));
+    return ((config?.segments as WheelSegment[]) || []).filter((s) => s?.id);
+  }
+  const [config] = await db
+    .select()
+    .from(gameSpinConfig)
+    .where(eq(gameSpinConfig.id, "active"));
+  return ((config?.segments as WheelSegment[]) || []).filter((s) => s?.id);
+}
+
+function pickWheelSegment(segments: WheelSegment[], details: any, prizeId?: string | null) {
+  if (!segments.length) return null;
+  const storedId = details?.spin?.segmentId;
+  const byStored = storedId ? segments.find((s) => s.id === storedId) : null;
+  if (byStored) return byStored;
+  const byPrizeId = prizeId ? segments.find((s) => s.id === prizeId) : null;
+  if (byPrizeId) return byPrizeId;
+
+  const type = details?.spin?.type || details?.rewardType || "lose";
+  const valueNum = Number(details?.spin?.value ?? details?.rewardValue ?? 0);
+  const isLose = type === "lose" || details?.isWin === false;
+
+  if (isLose) {
+    const loseSegs = segments.filter((s) => s.rewardType === "lose");
+    if (loseSegs.length) {
+      return loseSegs[randomInt(loseSegs.length)];
+    }
+  } else {
+    const sameType = segments.filter((s) => s.rewardType === type);
+    const exact = sameType.find((s) => Number(s.rewardValue) === valueNum);
+    if (exact) return exact;
+    if (sameType.length) {
+      return sameType.reduce((best, s) =>
+        Math.abs(Number(s.rewardValue) - valueNum) < Math.abs(Number(best.rewardValue) - valueNum)
+          ? s
+          : best
+      );
+    }
+    const label = String(details?.spin?.label || details?.prizeName || "");
+    const byLabel = segments.find(
+      (s) => s.label && label && (s.label === label || label.includes(s.label) || s.label.includes(label))
+    );
+    if (byLabel) return byLabel;
+  }
+
+  return segments[0];
+}
+
 export async function tryRevealControlledSpin(opts: {
   competitionId: string;
   orderId: string;
@@ -1711,6 +1792,15 @@ export async function tryRevealControlledSpin(opts: {
   const { ticket, remaining, total } = await nextFrozenTicket({ orderId: opts.orderId });
   if (!ticket) return { handled: true, noTickets: true, remaining: 0, total };
   const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+  const wheelSegment = pickWheelSegment(
+    await loadWheelSegments(opts.competitionId),
+    details,
+    ticket.instantWinPrizeId
+  );
+  const winningSegmentId = wheelSegment?.id;
+  if (!winningSegmentId) {
+    throw new InstantWinError("Wheel configuration is missing segments", 500, "wheel_config");
+  }
   await markTicketRevealed(ticket.id, false);
   await db.insert(spinUsage).values({
     orderId: opts.orderId,
@@ -1719,7 +1809,7 @@ export async function tryRevealControlledSpin(opts: {
   });
   await db.insert(spinWins).values({
     userId: opts.userId,
-    segmentId: ticket.instantWinPrizeId || "controlled",
+    segmentId: winningSegmentId,
     rewardType: details.rewardType === "points" || details.rewardType === "cash" ? details.rewardType : "lose",
     rewardValue: String(details.rewardValue ?? "0"),
     wonAt: new Date(),
@@ -1732,14 +1822,14 @@ export async function tryRevealControlledSpin(opts: {
       success: true,
       controlledPool: true,
       result: {
-        segmentId: ticket.instantWinPrizeId || "controlled",
-        label: spin.label || details.prizeName,
+        segmentId: winningSegmentId,
+        label: spin.label || details.prizeName || wheelSegment?.label,
         type: spin.type || details.rewardType,
         value: spin.value || details.rewardValue,
-        iconKey: null,
-        color: spin.color || "#eab308",
+        iconKey: wheelSegment?.iconKey || null,
+        color: spin.color || wheelSegment?.color || "#eab308",
       },
-      winningSegmentId: ticket.instantWinPrizeId || "controlled",
+      winningSegmentId,
       prize: {
         brand: details.prizeName,
         amount:

@@ -18,6 +18,7 @@ import Footer from "@/components/layout/footer";
 import { Link } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import RedeemCodeCard from "@/components/wallet/RedeemCodeCard";
 
   export function UpdateProfileModal({ user }: { user: any }) {
   const { toast } = useToast();
@@ -358,6 +359,8 @@ export default function Account() {
                   </Link>
                 </div>
               </div>
+
+              <RedeemCodeCard variant="account" />
 
               <div className="bg-card rounded-xl border border-border p-6">
                 <h3 className="text-xl font-bold mb-4">Account Options</h3>

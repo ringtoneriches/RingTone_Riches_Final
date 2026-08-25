@@ -33,21 +33,26 @@ import centerVideo from "../../../../attached_assets/spinweel2video.mp4"
 import congrats from "../../../../attached_assets/sounds/congrats.mp3"
 import { useLocation } from "wouter";
 
-// Icon mapping for admin configuration - uses car PNG images
-export const ARCADE_ICON_MAP: Record<string, any> = {
-  Bomb: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/bomb.svg",
-  Chemical: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/chemical.svg",
-  Coin: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/coin.svg",
-  Current: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/current.svg",
-  Diamond: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/diamond.svg",
-  Fire: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/fire.svg",
-  Heart: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/heart.svg",
-  Key: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/key.svg",
-  Shield: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/shield.svg",
-  Star: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/star.svg",
-  Treasure: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/treasure.svg",
-  Dead: "https://pub-8ee6681709ff46c18f6e8ff4543d7d3b.r2.dev/Arcade/dead.svg",
+// Bundled local assets — same-origin, no CDN round-trip on mobile
+export const ARCADE_ICON_MAP: Record<string, string> = {
+  Bomb: prize1,
+  Chemical: prize2,
+  Coin: prize3,
+  Current: prize4,
+  Diamond: prize5,
+  Fire: prize6,
+  Heart: prize7,
+  Key: prize8,
+  Shield: prize9,
+  Star: prize10,
+  Treasure: prize11,
+  Dead: prize12,
 };
+
+Object.values(ARCADE_ICON_MAP).forEach((src) => {
+  const img = new Image();
+  img.src = src;
+});
 
 interface SpinWheelProps {
   onSpinComplete: (
@@ -126,6 +131,7 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
   const backgroundVideoRef = useRef<HTMLVideoElement>(null);
   const [winner, setWinner] = useState<string | null>(null);
   const [loadedImages, setLoadedImages] = useState<HTMLImageElement[]>([]);
+  const loadedImagesRef = useRef<HTMLImageElement[]>([]);
   const [allImagesLoaded, setAllImagesLoaded] = useState(false);
 
   // 🛡️ CRITICAL SAFEGUARD: Prevent rapid-fire spins
@@ -149,8 +155,9 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
   const [showOutOfSpinDialog, setShowOutOfSpinDialog] = useState(false);
     const [,setLocation] = useLocation();
   
-  // Check if all spins are used
-  const allSpinsUsed = spinHistory.length > 0 && spinHistory.every(s => s.status === "SPUN");
+  const allSpinsUsed =
+    ticketCount === 0 ||
+    (spinHistory.length > 0 && spinHistory.every((s) => s.status === "SPUN"));
 
   // Transform admin wheel config to component format (memoized to prevent infinite re-renders)
   const segments = useMemo(() => {
@@ -230,136 +237,51 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
     }
   }, [spinHistory, orderId]);
 
-  // ✅ ROBUST IMAGE PRELOAD - Wait for actual completion, trigger redraws on late loads
   useEffect(() => {
     if (segments.length === 0) return;
-
-    setLoadedImages([]);
-    setAllImagesLoaded(false);
 
     let isMounted = true;
     const imagesArray: HTMLImageElement[] = new Array(segments.length);
     let loadedCount = 0;
 
-    // Create array of promises for parallel image loading
-    const imageLoadPromises = segments.map((segment, index) => {
-      return new Promise<void>((resolve, reject) => {
-        // Handle cross/lose segments immediately
-        if (segment.icon) {
-  // Load the image even for "lose" segments
-  const img = new Image();
-  
-  img.onload = async () => {
-    try {
-      await img.decode();
-      if (isMounted) {
-        imagesArray[index] = img;
-        loadedCount++;
-        setLoadedImages([...imagesArray]);
-        if (loadedCount === segments.length) {
-          setAllImagesLoaded(true);
-        }
-      }
-      resolve();
-    } catch (decodeError) {
-      // Handle error
-      if (isMounted) {
-        imagesArray[index] = img;
-        loadedCount++;
-        setLoadedImages([...imagesArray]);
-        if (loadedCount === segments.length) {
-          setAllImagesLoaded(true);
-        }
-      }
-      resolve();
-    }
-  };
-  
-  img.onerror = () => {
-    // Handle error
-    if (isMounted) {
-      imagesArray[index] = new Image();
-      loadedCount++;
+    const commit = (index: number, img: HTMLImageElement) => {
+      if (!isMounted) return;
+      imagesArray[index] = img;
+      loadedCount += 1;
+      loadedImagesRef.current = [...imagesArray];
       setLoadedImages([...imagesArray]);
-      if (loadedCount === segments.length) {
+      if (loadedCount >= segments.length) {
         setAllImagesLoaded(true);
       }
-    }
-    resolve();
-  };
-  
-  img.src = segment.icon as string;
-} else {
-  // No icon, use blank
-  imagesArray[index] = new Image();
-  loadedCount++;
-  resolve();
-}
+    };
 
-        const img = new Image();
-        // Remove crossOrigin for local files - it can cause issues
-        // img.crossOrigin = "anonymous";
-        
-        img.onload = async () => {
-          try {
-            // Use decode() to ensure image is fully ready for canvas
-            await img.decode();
-            if (isMounted) {
-              imagesArray[index] = img;
-              loadedCount++;
-              // Trigger incremental update for smooth loading
-              setLoadedImages([...imagesArray]);
-              if (loadedCount === segments.length) {
-                setAllImagesLoaded(true);
-              }
-            }
-            resolve();
-          } catch (decodeError) {
-            // decode() failed, but image loaded - still usable
-            if (isMounted) {
-              imagesArray[index] = img;
-              loadedCount++;
-              setLoadedImages([...imagesArray]);
-              if (loadedCount === segments.length) {
-                setAllImagesLoaded(true);
-              }
-            }
-            resolve();
-          }
-        };
-        
-        img.onerror = () => {
-          console.warn(`Failed to load image for segment ${index}: ${segment.icon}`);
-          if (isMounted) {
-            imagesArray[index] = new Image(); // Use blank fallback
-            loadedCount++;
-            setLoadedImages([...imagesArray]);
-            if (loadedCount === segments.length) {
-              setAllImagesLoaded(true);
-            }
-          }
-          reject(new Error(`Image load failed: ${segment.icon}`));
-        };
-        
-        // Start loading immediately - ALL images load in parallel
-        img.src = segment.icon as string;
-      });
-    });
+    setLoadedImages([]);
+    loadedImagesRef.current = [];
+    setAllImagesLoaded(false);
 
-    // Wait for all images - with generous 10 second timeout as safety net
-    Promise.allSettled(imageLoadPromises).then(() => {
-      if (isMounted && loadedCount === segments.length) {
-        setAllImagesLoaded(true);
+    segments.forEach((segment, index) => {
+      const src = typeof segment.icon === "string" ? segment.icon : "";
+      if (!src) {
+        commit(index, new Image());
+        return;
       }
+
+      const img = new Image();
+      img.onload = () => commit(index, img);
+      img.onerror = () => {
+        console.warn(`Failed to load image for segment ${index}: ${src}`);
+        commit(index, new Image());
+      };
+      img.src = src;
     });
 
-    // Safety timeout: if nothing loads after 10 seconds, show wheel anyway
     const safetyTimeout = setTimeout(() => {
-      if (isMounted && !allImagesLoaded) {
-        console.warn('Image loading timeout - showing wheel with loaded images');
+      if (isMounted) {
+        loadedImagesRef.current = [...imagesArray];
+        setLoadedImages([...imagesArray]);
         setAllImagesLoaded(true);
       }
-    }, 10000);
+    }, 8000);
 
     return () => {
       isMounted = false;
@@ -408,8 +330,7 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
   // Responsiveness + sharpness - Crystal clear on all devices
   const isMobile = window.innerWidth < 768;
   const baseDpr = window.devicePixelRatio || 1;
-  // 4x DPR for crystal-clear images on both mobile and desktop
-  const dpr = Math.min(baseDpr * 2, 4);
+  const dpr = isMobile ? Math.min(baseDpr, 2) : Math.min(baseDpr * 2, 3);
 
   
   // INCREASE CANVAS SIZE FOR BIGGER ICONS
@@ -489,15 +410,16 @@ ctx.restore();
     ctx.translate(imageX, imageY);
     ctx.rotate(midAngle + Math.PI / 2);
 
-    // ALWAYS show the icon if we have it loaded (even for "lose" segments)
-    if (loadedImages[index]) {
-      // MUCH BIGGER ICON SIZES
-      let imgWidth = isMobile ? 95 : 110; // Increased from 28/55
-      let imgHeight = isMobile ? 95 : 110; // Increased from 28/55
+    const iconImage = loadedImagesRef.current[index];
+    const iconReady = iconImage && iconImage.width > 0 && iconImage.height > 0;
+
+    if (iconReady) {
+      let imgWidth = isMobile ? 95 : 110;
+      let imgHeight = isMobile ? 95 : 110;
 
       try {
         ctx.drawImage(
-          loadedImages[index],
+          iconImage,
           -imgWidth / 2,
           -imgHeight / 2,
           imgWidth,
@@ -508,7 +430,6 @@ ctx.restore();
         drawFallbackText(ctx, segment.label, isMobile);
       }
     } else {
-      // Fallback: Draw text label
       drawFallbackText(ctx, segment.label, isMobile);
     }
 
@@ -767,7 +688,8 @@ ctx.stroke();
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get spin result from server");
+        const errBody = await response.json().catch(() => null);
+        throw new Error(errBody?.message || "Failed to get spin result from server");
       }
 
       const result = await response.json();
@@ -775,8 +697,19 @@ ctx.stroke();
       const winningSegmentId = result.winningSegmentId;
 
       // Find the winning segment index in our segments array
-      const winningIndex = freshSegments.findIndex((seg: any) => seg.id === winningSegmentId);
-      
+      let winningIndex = freshSegments.findIndex((seg: any) => seg.id === winningSegmentId);
+      if (winningIndex === -1) {
+        const resultType = result.result?.type || result.prize?.type;
+        const isLose = !resultType || resultType === "lose" || resultType === "none";
+        if (isLose) {
+          winningIndex = freshSegments.findIndex((seg: any) => seg.isCross);
+        } else {
+          const value = Number(result.result?.value ?? result.prize?.amount);
+          if (!Number.isNaN(value)) {
+            winningIndex = freshSegments.findIndex((seg: any) => Number(seg.amount) === value);
+          }
+        }
+      }
       if (winningIndex === -1) {
         console.error("Winning segment not found:", winningSegmentId, "in", freshSegments);
         throw new Error("Invalid winning segment received from server");
@@ -898,7 +831,7 @@ if (congratsAudioRef.current) {
   congratsAudioRef.current.currentTime = 0;
 }
       // Show error to user
-      alert("Failed to spin. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to spin. Please try again.");
     }
   };
 
@@ -907,7 +840,7 @@ if (congratsAudioRef.current) {
     if (segments.length > 0 && allImagesLoaded) {
       drawWheel();
     }
-  }, [allImagesLoaded, rotation, segments]);
+  }, [allImagesLoaded, rotation, segments, loadedImages]);
 
   // Handle window resize - only redraw if images are loaded
   useEffect(() => {
@@ -1021,7 +954,9 @@ if (congratsAudioRef.current) {
         <img
         onClick={spinWheel}
           src="/attached_assets/Arcade/spin-cropped.svg"
-          className="absolute spin-name w-[120px] md:w-[170px] bottom-[39%] sm:bottom-[38%] md:h-[160px] z-10 cursor-pointer"
+          className={`absolute spin-name w-[120px] md:w-[170px] bottom-[39%] sm:bottom-[38%] md:h-[160px] z-10 ${
+            isSpinning || allSpinsUsed ? "pointer-events-none opacity-50" : "cursor-pointer"
+          }`}
           alt="Center Circle"
           />
         

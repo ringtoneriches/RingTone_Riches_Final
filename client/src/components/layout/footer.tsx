@@ -1,6 +1,7 @@
 import { Facebook, Headphones, Instagram } from "lucide-react";
 import BrandLogo from "@/components/layout/BrandLogo";
 import PaymentMethodIcons from "@/components/layout/PaymentMethodIcons";
+import SupportOrganisations from "@/components/layout/SupportOrganisations";
 import { Link } from "wouter";
 
 function TikTokIcon({ className }: { className?: string }) {
@@ -98,7 +99,9 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="rr-footer-legal mt-10 flex flex-col items-center gap-1.5 border-t pt-6 text-center text-xs sm:text-sm">
+        <SupportOrganisations />
+
+        <div className="rr-footer-legal mt-8 flex flex-col items-center gap-1.5 border-t pt-6 text-center text-xs sm:text-sm">
           <p>&copy; 2026 Ringtone Riches. All rights reserved.</p>
           <p>
             Please play responsibly. 18+ Only.{" "}

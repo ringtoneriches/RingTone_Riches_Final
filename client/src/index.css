@@ -2105,6 +2105,48 @@ html.rr-day .rr-footer-legal {
 html.rr-day .rr-footer-legal a {
   color: #7a5b12;
 }
+html.rr-day .rr-support-strip {
+  --rr-support-knockout: #f4efe4;
+  border-top-color: rgba(80, 50, 20, 0.12);
+}
+html.rr-day .rr-support-copy {
+  color: var(--rr-ink-soft);
+}
+html.rr-day .rr-support-copy-lead {
+  color: var(--rr-ink);
+}
+html.rr-day .rr-support-org {
+  color: rgba(42, 34, 26, 0.74);
+}
+html.rr-day .rr-support-org:hover,
+html.rr-day .rr-support-org:focus-visible {
+  color: #7a5b12;
+  background: rgba(122, 91, 18, 0.08);
+}
+html.rr-day .rr-support-logo {
+  filter: grayscale(1) brightness(0.22) contrast(1.05);
+  opacity: 0.86;
+}
+html.rr-day .rr-support-logo--day {
+  display: block;
+  filter: none;
+  opacity: 0.92;
+}
+html.rr-day .rr-support-logo--night.rr-support-logo--ca,
+html.rr-day .rr-support-logo--night.rr-support-logo--ndl,
+html.rr-day .rr-support-logo--night.rr-support-logo--samaritans {
+  display: none;
+}
+html.rr-day .rr-support-org:hover .rr-support-logo,
+html.rr-day .rr-support-org:focus-visible .rr-support-logo {
+  opacity: 1;
+  filter: grayscale(1) brightness(0.28) contrast(1.05) sepia(0.35) saturate(1.4);
+}
+html.rr-day .rr-support-org:hover .rr-support-logo--day,
+html.rr-day .rr-support-org:focus-visible .rr-support-logo--day {
+  filter: none;
+  opacity: 1;
+}
 .rr-hof-all {
   color: #f1d47a;
   cursor: pointer;
@@ -3064,6 +3106,16 @@ html.rr-day .rr-legal-faq h3 {
   background: linear-gradient(180deg, #FF263D 0%, #C8102E 55%, #8e0b20 100%) !important;
   color: #fff8ee !important;
   border-color: rgba(241, 212, 122, 0.55) !important;
+}
+@keyframes rr-redeem-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+.rr-redeem-shake {
+  animation: rr-redeem-shake 0.35s ease;
 }
 
 .rr-progress-fill {
@@ -4921,6 +4973,90 @@ html.rr-day .bg-\[\#2a2a2a\] .text-muted-foreground {
   text-transform: uppercase;
   color: #f1d47a;
 }
+.rr-support-strip {
+  --rr-support-knockout: #050505;
+  margin-top: 2.75rem;
+  padding: 3.1rem 0 0.35rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+@media (min-width: 640px) {
+  .rr-support-strip {
+    padding-top: 3.75rem;
+  }
+}
+.rr-support-copy {
+  max-width: 28rem;
+  margin: 0 auto 1.65rem;
+  text-align: center;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.44);
+}
+.rr-support-copy-lead {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+.rr-support-orgs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 1.25rem 2.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rr-support-org {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.4rem 0.55rem;
+  border-radius: 10px;
+  transition: transform 0.22s ease, background-color 0.22s ease;
+}
+.rr-support-org:hover {
+  background: rgba(241, 212, 122, 0.06);
+  transform: translateY(-2px);
+}
+.rr-support-org:focus-visible {
+  outline: 2px solid #f1d47a;
+  outline-offset: 3px;
+}
+.rr-support-logo {
+  display: block;
+  width: auto;
+  height: 2.35rem;
+  object-fit: contain;
+  filter: grayscale(1) brightness(1.18) contrast(1.02);
+  opacity: 0.9;
+  transition: filter 0.22s ease, opacity 0.22s ease;
+}
+.rr-support-logo--day {
+  display: none;
+}
+.rr-support-org:hover .rr-support-logo,
+.rr-support-org:focus-visible .rr-support-logo {
+  opacity: 1;
+  filter: grayscale(1) brightness(1.28) contrast(1.04) sepia(0.22) saturate(1.35);
+}
+.rr-support-logo--ca {
+  height: 3.15rem;
+}
+.rr-support-logo--mind {
+  height: 2.55rem;
+}
+.rr-support-logo--samaritans {
+  height: 2.05rem;
+}
+.rr-support-logo--ndl {
+  height: 2.7rem;
+}
+.rr-support-logo--mat {
+  height: 2.45rem;
+}
+
 .rr-footer-legal {
   color: rgba(255, 255, 255, 0.5);
   border-color: rgba(255, 255, 255, 0.1);
@@ -4995,8 +5131,10 @@ html.rr-zoomed .rr-art-sweep::after {
   .rr-hiw-card::after {
     animation: none !important;
   }
-  .rr-featured-track {
+  .rr-featured-track,
+  .rr-support-org:hover {
     transition: none !important;
+    transform: none !important;
   }
   .rr-warp {
     display: none;

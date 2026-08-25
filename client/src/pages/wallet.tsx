@@ -60,6 +60,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OrderDetailsDialog } from "@/components/order-details-dialog";
+import RedeemCodeCard from "@/components/wallet/RedeemCodeCard";
 import {
   Dialog,
   DialogContent,
@@ -1516,6 +1517,7 @@ const handleDeleteBankAccount = (
               data-testid="content-wallet"
             >
               <div className="grid lg:grid-cols-2 gap-6">
+                <div className="space-y-6">
                 {/* Wallet Balance Card */}
                <Card className="rr-wallet-island bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">
                 <CardHeader className="border-b border-yellow-500/20 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-0">
@@ -1623,6 +1625,8 @@ const handleDeleteBankAccount = (
                   </div>
                 </CardContent>
               </Card>
+                <RedeemCodeCard />
+                </div>
 
                 {/* Transaction History */}
                 <Card className="rr-wallet-island bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 shadow-xl shadow-yellow-500/10">

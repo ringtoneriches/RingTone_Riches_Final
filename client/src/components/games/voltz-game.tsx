@@ -2,12 +2,12 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
-import { Zap, Trophy, RotateCcw, PowerOff, ShieldCheck, Sparkles, X, Bolt, Swords, Gauge, Package } from "lucide-react";
+import { Zap, Trophy, RotateCcw, PowerOff, Sparkles, X, Package } from "lucide-react";
 import confetti from "canvas-confetti";
 import { playWinSound, playPowerDown, playBackupPower, disposeAudioContext } from "@/lib/voltz-sounds";
 import surgeSoundUrl from "@assets/surgessound_1772193798276.mp3";
-import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogAction, AlertDialogCancel, AlertDialogFooter } from "../ui/alert-dialog";
 import { useLocation } from "wouter";
+import GameResultOverlay from "@/components/games/GameResultOverlay";
 
 interface VoltzGameProps {
   orderId: string;
@@ -78,6 +78,7 @@ export default function VoltzGameComponent({
   const [showResult, setShowResult] = useState(false);
   const [resultAnimStage, setResultAnimStage] = useState(0);
   const [showNoPlaysDialog, setShowNoPlaysDialog] = useState(false);
+  const [noPlaysDismissed, setNoPlaysDismissed] = useState(false);
   const [isRevealingAll, setIsRevealingAll] = useState(false);
 const [revealAllResults, setRevealAllResults] = useState<PlayResult[] | null>(null);
 const [showRevealAllSummary, setShowRevealAllSummary] = useState(false);
@@ -111,14 +112,14 @@ const [showRevealAllSummary, setShowRevealAllSummary] = useState(false);
   useEffect(() => { onPlayCompleteRef.current = onPlayComplete; }, [onPlayComplete]);
   useEffect(() => { toastRef.current = toast; }, [toast]);
 
-  // Show dialog when plays run out
   useEffect(() => {
-    if (playsRemaining <= 0 && isGameReady && !isProcessing && !showResult) {
+    if (playsRemaining > 0) setNoPlaysDismissed(false);
+    if (playsRemaining <= 0 && isGameReady && !isProcessing && !showResult && !noPlaysDismissed) {
       setShowNoPlaysDialog(true);
-    } else {
+    } else if (playsRemaining > 0 || showResult || isProcessing || noPlaysDismissed) {
       setShowNoPlaysDialog(false);
     }
-  }, [playsRemaining, isGameReady, isProcessing, showResult]);
+  }, [playsRemaining, isGameReady, isProcessing, showResult, noPlaysDismissed]);
 
   const closeResult = useCallback(() => {
     resultTimersRef.current.forEach(t => clearTimeout(t));
@@ -993,536 +994,153 @@ const RevealAllSummary = () => {
         </div>
       )}
 
-      {/* ── Result overlay ───────────────────────────────────────────────────── */}
-      {showResult && lastResult && (
-        <div
-          className="vg-root absolute inset-0 flex items-center justify-center rounded-2xl z-20"
-          style={{
-            background: isWin
-              ? 'radial-gradient(ellipse at 50% 40%, rgba(234,179,8,0.22) 0%, rgba(0,0,0,0.94) 65%)'
-              : isPhysicalWin
-              ? 'radial-gradient(ellipse at 50% 40%, rgba(168,85,247,0.2) 0%, rgba(0,0,0,0.94) 65%)'
+      {/* Result overlay */}
+      {lastResult && (
+      <GameResultOverlay
+        open={!!(showResult && lastResult)}
+        contained
+        overlayTestId="result-overlay"
+        kind={isPhysicalWin ? "physical" : isWin ? "win" : isFreeReplay ? "extra" : "lose"}
+        onClose={closeResult}
+        kicker={
+          isPhysicalWin
+            ? "Physical prize — 3 match"
+            : isWin
+              ? "Power surge — 3 match"
               : isFreeReplay
-              ? 'radial-gradient(ellipse at 50% 40%, rgba(6,182,212,0.18) 0%, rgba(0,0,0,0.94) 65%)'
-              : 'radial-gradient(ellipse at 50% 40%, rgba(239,68,68,0.14) 0%, rgba(0,0,0,0.94) 65%)',
-          }}
-          data-testid="result-overlay"
-        >
-          {/* win particle field */}
-          {(isWin || isPhysicalWin) && (
-            <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
-              {particlePositions.map((pos, i) => (
+                ? "Backup power — free play"
+                : "No match — so close"
+        }
+        kickerTestId={
+          isPhysicalWin
+            ? "text-result-label-physical"
+            : isWin
+              ? "text-result-label"
+              : isFreeReplay
+                ? "text-result-free-replay"
+                : "text-result-no-win"
+        }
+        title={
+          isPhysicalWin || isWin
+            ? "YOU WON"
+            : isFreeReplay
+              ? "FREE PLAY"
+              : "UNLUCKY"
+        }
+        titleTestId={
+          isPhysicalWin
+            ? "text-prize-name-physical"
+            : isWin
+              ? "text-prize-name"
+              : isFreeReplay
+                ? "text-backup-title"
+                : "text-modal-title"
+        }
+        subtitle={
+          isPhysicalWin
+            ? lastResult?.prizeName
+            : isWin
+              ? lastResult?.prizeName
+              : isFreeReplay
+                ? "Power stabilized"
+                : "Switches didn't align"
+        }
+        prizeText={
+          isPhysicalWin
+            ? "Physical prize"
+            : isWin
+              ? lastResult?.rewardType === "cash"
+                ? `£${lastResult.rewardValue}`
+                : `${lastResult.rewardValue} pts`
+              : isFreeReplay
+                ? "+1 Free Play"
+                : undefined
+        }
+        prizeTestId={
+          isPhysicalWin
+            ? "text-physical-prize-badge"
+            : isWin
+              ? "text-prize-value"
+              : isFreeReplay
+                ? "text-free-play-badge"
+                : "text-prize-value"
+        }
+        prizeSub={
+          isPhysicalWin
+            ? "Contact support to claim"
+            : isWin
+              ? "Verified & credited"
+              : isFreeReplay
+                ? "Use it on your next flip"
+                : undefined
+        }
+        prizeSubTestId={isPhysicalWin ? "text-verified-physical" : isWin ? "text-verified" : undefined}
+        icon={
+          isPhysicalWin ? (
+            <Package className="h-9 w-9 text-[#F1D47A]" data-testid="icon-physical-prize" />
+          ) : isWin ? (
+            <Zap className="h-9 w-9 text-[#F1D47A]" data-testid="icon-win" />
+          ) : isFreeReplay ? (
+            <RotateCcw className="h-8 w-8 text-[#F1D47A]" data-testid="icon-free-replay" />
+          ) : (
+            <PowerOff className="h-7 w-7 text-white/40" data-testid="icon-no-win" />
+          )
+        }
+        extra={
+          lastResult ? (
+            <div className="mb-4 flex justify-center gap-2">
+              {lastResult.switchTexts.map((text, i) => (
                 <div
                   key={i}
-                  className={`absolute ${pos.size} rounded-full`}
-                  style={{
-                    left: pos.left, top: pos.top,
-                    animationDelay: pos.delay, animationDuration: '1.6s',
-                    animation: `vg-ping-gold 1.6s ${pos.delay} ease-out infinite`,
-                    backgroundColor: isPhysicalWin ? (i % 2 === 0 ? '#a855f7' : '#c084fc') : (i % 2 === 0 ? '#eab308' : '#fbbf24'),
-                    opacity: 0.7,
-                  }}
-                />
-              ))}
-              {/* top / bottom accent lines */}
-              <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-purple-400/60 to-transparent" />
-              <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-purple-400/30 to-transparent" />
-            </div>
-          )}
-
-          {/* card */}
-          <div
-            className={`vg-glass relative w-full max-w-[320px] mx-4 transition-all duration-500 ${
-              resultAnimStage >= 1 ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-95'
-            }`}
-          >
-            <div
-              className="relative overflow-hidden"
-              style={{
-                borderRadius: '24px',
-                border: isWin
-                  ? '1px solid rgba(234,179,8,0.45)'
-                  : isPhysicalWin
-                  ? '1px solid rgba(168,85,247,0.45)'
-                  : isFreeReplay
-                  ? '1px solid rgba(6,182,212,0.35)'
-                  : '1px solid rgba(239,68,68,0.25)',
-                background: isWin
-                  ? 'linear-gradient(170deg, rgba(40,28,0,0.97) 0%, rgba(10,8,0,0.99) 100%)'
-                  : isPhysicalWin
-                  ? 'linear-gradient(170deg, rgba(40,20,60,0.97) 0%, rgba(10,5,20,0.99) 100%)'
-                  : isFreeReplay
-                  ? 'linear-gradient(170deg, rgba(0,30,40,0.97) 0%, rgba(0,8,12,0.99) 100%)'
-                  : 'linear-gradient(170deg, rgba(30,5,5,0.97) 0%, rgba(8,0,0,0.99) 100%)',
-                boxShadow: isWin
-                  ? '0 0 80px rgba(234,179,8,0.18), 0 0 0 1px rgba(255,255,255,0.03), 0 32px 64px rgba(0,0,0,0.6)'
-                  : isPhysicalWin
-                  ? '0 0 80px rgba(168,85,247,0.18), 0 0 0 1px rgba(255,255,255,0.03), 0 32px 64px rgba(0,0,0,0.6)'
-                  : isFreeReplay
-                  ? '0 0 60px rgba(6,182,212,0.14), 0 0 0 1px rgba(255,255,255,0.02), 0 32px 64px rgba(0,0,0,0.6)'
-                  : '0 0 50px rgba(239,68,68,0.1), 0 0 0 1px rgba(255,255,255,0.02), 0 32px 64px rgba(0,0,0,0.6)',
-              }}
-            >
-              {/* hex corners inside card */}
-              <span className={`vg-hex-corner vg-hex-corner-tl ${isWin ? 'text-yellow-500/40' : isPhysicalWin ? 'text-purple-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
-              <span className={`vg-hex-corner vg-hex-corner-tr ${isWin ? 'text-yellow-500/40' : isPhysicalWin ? 'text-purple-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
-              <span className={`vg-hex-corner vg-hex-corner-bl ${isWin ? 'text-yellow-500/40' : isPhysicalWin ? 'text-purple-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
-              <span className={`vg-hex-corner vg-hex-corner-br ${isWin ? 'text-yellow-500/40' : isPhysicalWin ? 'text-purple-500/40' : isFreeReplay ? 'text-cyan-500/40' : 'text-red-500/30'}`} />
-
-              {/* top accent line */}
-              <div
-                className="absolute top-0 inset-x-0 h-[2px]"
-                style={{
-                  background: isWin
-                    ? 'linear-gradient(90deg, transparent, #eab308, transparent)'
-                    : isPhysicalWin
-                    ? 'linear-gradient(90deg, transparent, #a855f7, transparent)'
-                    : isFreeReplay
-                    ? 'linear-gradient(90deg, transparent, #06b6d4, transparent)'
-                    : 'linear-gradient(90deg, transparent, rgba(239,68,68,0.6), transparent)',
-                }}
-              />
-
-              {/* close button */}
-              <button
-                onClick={closeResult}
-                className="absolute top-4 right-4 z-30 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-150 hover:scale-110 active:scale-95"
-                style={{
-                  background: isWin ? 'rgba(234,179,8,0.1)' : isPhysicalWin ? 'rgba(168,85,247,0.1)' : isFreeReplay ? 'rgba(6,182,212,0.1)' : 'rgba(239,68,68,0.1)',
-                  border: isWin ? '1px solid rgba(234,179,8,0.25)' : isPhysicalWin ? '1px solid rgba(168,85,247,0.25)' : isFreeReplay ? '1px solid rgba(6,182,212,0.25)' : '1px solid rgba(239,68,68,0.2)',
-                  color: isWin ? '#eab308' : isPhysicalWin ? '#a855f7' : isFreeReplay ? '#06b6d4' : '#ef4444',
-                }}
-                data-testid="button-close-result"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              <div className="px-6 pt-10 pb-2 text-center">
-                {/* switch pills */}
-                <div className="flex justify-center gap-2 mb-6">
-                  {lastResult.switchTexts.map((text, i) => (
-                    <div
-                      key={i}
-                      className="vg-switch-pill px-3 py-2 text-sm min-w-[62px] text-center"
-                      style={{
-                        borderRadius: '10px',
-                        background: isWin
-                          ? 'rgba(234,179,8,0.08)'
-                          : isPhysicalWin
-                          ? 'rgba(168,85,247,0.08)'
-                          : isFreeReplay
-                          ? 'rgba(6,182,212,0.08)'
-                          : 'rgba(239,68,68,0.07)',
-                        border: isWin
-                          ? '1px solid rgba(234,179,8,0.28)'
-                          : isPhysicalWin
-                          ? '1px solid rgba(168,85,247,0.28)'
-                          : isFreeReplay
-                          ? '1px solid rgba(6,182,212,0.28)'
-                          : '1px solid rgba(239,68,68,0.2)',
-                        color: isWin ? '#fbbf24' : isPhysicalWin ? '#c084fc' : isFreeReplay ? '#22d3ee' : '#f87171',
-                        boxShadow: isWin || isPhysicalWin ? '0 0 8px rgba(168,85,247,0.1) inset' : isFreeReplay ? '0 0 8px rgba(6,182,212,0.1) inset' : 'none',
-                      }}
-                      data-testid={`text-switch-result-${i}`}
-                      title={text}
-                    >
-                      {formatSwitchText(text)}
-                    </div>
-                  ))}
+                  className="min-w-[62px] rounded-xl border border-[#F1D47A]/25 bg-[#F1D47A]/[0.06] px-3 py-2 text-center text-sm font-semibold text-[#F1D47A]"
+                  data-testid={`text-switch-result-${i}`}
+                  title={text}
+                >
+                  {formatSwitchText(text)}
                 </div>
-
-                {/* ── PHYSICAL PRIZE WIN ── */}
-                {isPhysicalWin && (
-                  <>
-                    <div
-                      className={`relative w-24 h-24 mx-auto mb-6 transition-all duration-600 ${resultAnimStage >= 2 ? 'scale-100' : 'scale-0'}`}
-                      style={{ animationFillMode: 'both' }}
-                    >
-                      <div
-                        className="absolute inset-0 rounded-full vg-anim-ping-gold"
-                        style={{ background: 'rgba(168,85,247,0.15)' }}
-                      />
-                      <div
-                        className="relative w-24 h-24 rounded-full flex items-center justify-center vg-anim-glow-purple"
-                        style={{
-                          background: 'radial-gradient(circle at 38% 32%, rgba(168,85,247,0.3) 0%, rgba(100,50,150,0.12) 60%, transparent 100%)',
-                          border: '1px solid rgba(168,85,247,0.5)',
-                        }}
-                      >
-                        <Package
-                          className="w-12 h-12 text-purple-400"
-                          strokeWidth={1.5}
-                          style={{ filter: 'drop-shadow(0 0 14px rgba(168,85,247,0.7))' }}
-                          data-testid="icon-physical-prize"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-2 mb-3">
-                      <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                      <p
-                        className="text-purple-400/80 text-[10px] font-bold tracking-[0.35em] uppercase"
-                        data-testid="text-result-label-physical"
-                      >PHYSICAL PRIZE — 3 MATCH!</p>
-                      <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                    </div>
-
-                    <p
-                      className="vg-title text-2xl text-white mb-2"
-                      style={{ textShadow: '0 0 24px rgba(168,85,247,0.35)' }}
-                      data-testid="text-prize-name-physical"
-                    >
-                      {lastResult.prizeName}
-                    </p>
-
-                    <div
-                      className="inline-flex items-center gap-2.5 px-5 py-3 mb-5"
-                      style={{
-                        borderRadius: '14px',
-                        background: 'linear-gradient(135deg, rgba(168,85,247,0.12) 0%, rgba(100,50,150,0.08) 100%)',
-                        border: '1px solid rgba(168,85,247,0.28)',
-                        boxShadow: '0 0 24px rgba(168,85,247,0.08) inset',
-                      }}
-                      data-testid="text-physical-prize-badge"
-                    >
-                      <Package className="w-5 h-5 text-purple-400" strokeWidth={1.5} />
-                      <span
-                        className="vg-title text-xl text-purple-300"
-                        style={{ textShadow: '0 0 12px rgba(168,85,247,0.4)' }}
-                      >
-                        Physical Prize Won!
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-1.5 text-gray-700 text-[10px] mb-1">
-                      <ShieldCheck className="w-3 h-3" />
-                      <span data-testid="text-verified-physical">Contact support to claim</span>
-                    </div>
-                  </>
-                )}
-
-                {/* ── CASH/POINTS WIN ── */}
-                {isWin && (
-                  <>
-                    <div
-                      className={`relative w-24 h-24 mx-auto mb-6 transition-all duration-600 ${resultAnimStage >= 2 ? 'scale-100' : 'scale-0'}`}
-                      style={{ animationFillMode: 'both' }}
-                    >
-                      <div
-                        className="absolute inset-0 rounded-full vg-anim-ping-gold"
-                        style={{ background: 'rgba(234,179,8,0.15)' }}
-                      />
-                      <div
-                        className="relative w-24 h-24 rounded-full flex items-center justify-center vg-anim-glow-gold"
-                        style={{
-                          background: 'radial-gradient(circle at 38% 32%, rgba(234,179,8,0.3) 0%, rgba(180,120,0,0.12) 60%, transparent 100%)',
-                          border: '1px solid rgba(234,179,8,0.5)',
-                        }}
-                      >
-                        <Zap
-                          className="w-12 h-12 text-yellow-400"
-                          strokeWidth={1.5}
-                          style={{ filter: 'drop-shadow(0 0 14px rgba(234,179,8,0.7))' }}
-                          data-testid="icon-win"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-2 mb-3">
-                      <Sparkles className="w-3.5 h-3.5 text-yellow-600" />
-                      <p
-                        className="text-yellow-400/80 text-[10px] font-bold tracking-[0.35em] uppercase"
-                        data-testid="text-result-label"
-                      >POWER SURGE — 3 MATCH!</p>
-                      <Sparkles className="w-3.5 h-3.5 text-yellow-600" />
-                    </div>
-
-                    <p
-                      className="vg-title text-3xl text-white mb-4"
-                      style={{ textShadow: '0 0 24px rgba(234,179,8,0.35)' }}
-                      data-testid="text-prize-name"
-                    >
-                      {lastResult.prizeName}
-                    </p>
-
-                    <div
-                      className="inline-flex items-center gap-2.5 px-5 py-3 mb-5"
-                      style={{
-                        borderRadius: '14px',
-                        background: 'linear-gradient(135deg, rgba(234,179,8,0.12) 0%, rgba(180,100,0,0.08) 100%)',
-                        border: '1px solid rgba(234,179,8,0.28)',
-                        boxShadow: '0 0 24px rgba(234,179,8,0.08) inset',
-                      }}
-                      data-testid="text-prize-value"
-                    >
-                      <Trophy className="w-5 h-5 text-yellow-400" strokeWidth={1.5} />
-                      <span
-                        className="vg-title text-2xl text-yellow-300"
-                        style={{ textShadow: '0 0 12px rgba(234,179,8,0.4)' }}
-                      >
-                        {lastResult.rewardType === "cash" ? `£${lastResult.rewardValue}` : `${lastResult.rewardValue} pts`}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-1.5 text-gray-700 text-[10px] mb-1">
-                      <ShieldCheck className="w-3 h-3" />
-                      <span data-testid="text-verified">Verified & Credited</span>
-                    </div>
-                  </>
-                )}
-
-                {/* ── FREE REPLAY ── */}
-                {isFreeReplay && (
-                  <>
-                    <div
-                      className={`relative w-24 h-24 mx-auto mb-6 transition-all duration-600 ${resultAnimStage >= 2 ? 'scale-100' : 'scale-0'}`}
-                    >
-                      <div
-                        className="absolute -inset-3 rounded-full blur-xl"
-                        style={{ background: 'rgba(6,182,212,0.15)' }}
-                      />
-                      <div
-                        className="relative w-24 h-24 rounded-full flex items-center justify-center vg-anim-glow-cyan"
-                        style={{
-                          background: 'radial-gradient(circle at 38% 32%, rgba(6,182,212,0.25) 0%, rgba(0,100,120,0.1) 60%, transparent 100%)',
-                          border: '1px solid rgba(6,182,212,0.4)',
-                        }}
-                      >
-                        <RotateCcw
-                          className="w-12 h-12 text-cyan-400 vg-anim-spin-slow"
-                          strokeWidth={1.5}
-                          style={{ filter: 'drop-shadow(0 0 12px rgba(6,182,212,0.6))' }}
-                          data-testid="icon-free-replay"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-2 mb-3">
-                      <Zap className="w-3.5 h-3.5 text-cyan-600" />
-                      <p
-                        className="text-cyan-400/80 text-[10px] font-bold tracking-[0.35em] uppercase"
-                        data-testid="text-result-free-replay"
-                      >BACKUP POWER — FREE PLAY!</p>
-                      <Zap className="w-3.5 h-3.5 text-cyan-600" />
-                    </div>
-
-                    <p
-                      className="vg-title text-3xl text-white mb-4"
-                      style={{ textShadow: '0 0 20px rgba(6,182,212,0.3)' }}
-                      data-testid="text-backup-title"
-                    >
-                      Power Stabilized!
-                    </p>
-
-                    <div
-                      className="inline-flex items-center gap-2.5 px-5 py-3 mb-5"
-                      style={{
-                        borderRadius: '14px',
-                        background: 'linear-gradient(135deg, rgba(6,182,212,0.12) 0%, rgba(0,80,100,0.08) 100%)',
-                        border: '1px solid rgba(6,182,212,0.28)',
-                        boxShadow: '0 0 24px rgba(6,182,212,0.08) inset',
-                      }}
-                      data-testid="text-free-play-badge"
-                    >
-                      <RotateCcw className="w-5 h-5 text-cyan-400" strokeWidth={1.5} />
-                      <span
-                        className="vg-title text-2xl text-cyan-300"
-                        style={{ textShadow: '0 0 12px rgba(6,182,212,0.4)' }}
-                      >
-                        +1 Free Play
-                      </span>
-                    </div>
-                  </>
-                )}
-
-                {/* ── NO WIN ── */}
-                {isNoWin && (
-                  <>
-                    <div
-                      className={`relative w-24 h-24 mx-auto mb-6 transition-all duration-600 ${resultAnimStage >= 2 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`}
-                    >
-                      <div
-                        className="absolute -inset-3 rounded-full blur-xl"
-                        style={{ background: 'rgba(239,68,68,0.08)' }}
-                      />
-                      <div
-                        className="relative w-24 h-24 rounded-full flex items-center justify-center vg-anim-glow-red"
-                        style={{
-                          background: 'radial-gradient(circle at 38% 32%, rgba(239,68,68,0.18) 0%, rgba(120,0,0,0.06) 60%, transparent 100%)',
-                          border: '1px solid rgba(239,68,68,0.3)',
-                        }}
-                      >
-                        <PowerOff
-                          className="w-12 h-12 text-red-400/75"
-                          strokeWidth={1.5}
-                          data-testid="icon-no-win"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-2 mb-3">
-                      <Zap className="w-3.5 h-3.5 text-red-600/60" />
-                      <p
-                        className="text-red-400/70 text-[10px] font-bold tracking-[0.35em] uppercase"
-                        data-testid="text-result-no-win"
-                      >NO MATCH — SO CLOSE!</p>
-                      <Zap className="w-3.5 h-3.5 text-red-600/60" />
-                    </div>
-
-                    <p className="vg-title text-2xl text-white/75 mb-1">Switches Didn't Align</p>
-                    <p className="text-red-400/35 text-sm tracking-wide mb-5">Match all 3 to win — try again</p>
-                  </>
-                )}
-              </div>
-
-              {/* CTA button */}
-              <button
-                onClick={closeResult}
-                className="w-full py-4 text-sm font-bold tracking-[0.18em] uppercase transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
-                style={{
-                  background: isWin
-                    ? 'linear-gradient(90deg, rgba(234,179,8,0.14) 0%, rgba(180,100,0,0.1) 100%)'
-                    : isPhysicalWin
-                    ? 'linear-gradient(90deg, rgba(168,85,247,0.14) 0%, rgba(100,50,150,0.1) 100%)'
-                    : isFreeReplay
-                    ? 'linear-gradient(90deg, rgba(6,182,212,0.14) 0%, rgba(0,80,100,0.1) 100%)'
-                    : 'linear-gradient(90deg, rgba(239,68,68,0.1) 0%, rgba(120,0,0,0.08) 100%)',
-                  borderTop: isWin
-                    ? '1px solid rgba(234,179,8,0.18)'
-                    : isPhysicalWin
-                    ? '1px solid rgba(168,85,247,0.18)'
-                    : isFreeReplay
-                    ? '1px solid rgba(6,182,212,0.18)'
-                    : '1px solid rgba(239,68,68,0.15)',
-                  color: isWin ? '#eab308' : isPhysicalWin ? '#a855f7' : isFreeReplay ? '#06b6d4' : '#ef4444',
-                  letterSpacing: '0.15em',
-                }}
-                data-testid="button-continue"
-              >
-                {isWin || isPhysicalWin ? 'COLLECT & CONTINUE' : isFreeReplay ? 'USE FREE PLAY' : 'TRY AGAIN'}
-              </button>
+              ))}
             </div>
-          </div>
-        </div>
+          ) : null
+        }
+        body={
+          isNoWin
+            ? "Match all 3 to win — try again."
+            : undefined
+        }
+        primaryLabel={isWin || isPhysicalWin ? "Collect & continue" : isFreeReplay ? "Use free play" : "Try again"}
+        onPrimary={closeResult}
+        closeTestId="button-close-result"
+        primaryTestId="button-continue"
+      />
       )}
 
-      {/* ── VoltZ-themed No Plays Dialog ─────────────────────────────────────── */}
-      <AlertDialog open={showNoPlaysDialog} onOpenChange={setShowNoPlaysDialog}>
-        <AlertDialogContent className="rr-voltz-panel vg-root max-w-[360px] p-0 overflow-hidden border-0 bg-transparent">
-          <div
-            className="relative overflow-hidden"
-            style={{
-              borderRadius: '24px',
-              border: '1px solid rgba(239,68,68,0.35)',
-              background: 'linear-gradient(170deg, rgba(30,5,5,0.98) 0%, rgba(8,0,0,0.99) 100%)',
-              boxShadow: '0 0 80px rgba(239,68,68,0.15), 0 0 0 1px rgba(255,255,255,0.03), 0 32px 64px rgba(0,0,0,0.7)',
-            }}
-          >
-            {/* Hex corners */}
-            <span className="vg-hex-corner vg-hex-corner-tl text-red-500/40" />
-            <span className="vg-hex-corner vg-hex-corner-tr text-red-500/40" />
-            <span className="vg-hex-corner vg-hex-corner-bl text-red-500/40" />
-            <span className="vg-hex-corner vg-hex-corner-br text-red-500/40" />
-
-            {/* Top accent line */}
-            <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-red-500/60 to-transparent" />
-
-            {/* Scanlines overlay */}
-            <div className="absolute inset-0 pointer-events-none opacity-20" style={{
-              background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,0,0,0.1) 2px, rgba(255,0,0,0.1) 4px)',
-            }} />
-
-            <div className="px-6 pt-10 pb-6 text-center relative z-10">
-              {/* Animated icon */}
-              <div className="relative w-28 h-28 mx-auto mb-6">
-                <div className="absolute inset-0 rounded-full vg-anim-ping-gold" style={{ background: 'rgba(239,68,68,0.15)' }} />
-                <div
-                  className="relative w-28 h-28 rounded-full flex items-center justify-center vg-anim-glow-red"
-                  style={{
-                    background: 'radial-gradient(circle at 38% 32%, rgba(239,68,68,0.25) 0%, rgba(120,0,0,0.1) 60%, transparent 100%)',
-                    border: '1px solid rgba(239,68,68,0.4)',
-                  }}
-                >
-                  <Gauge className="w-14 h-14 text-red-400 vg-anim-flicker" strokeWidth={1.5} style={{ filter: 'drop-shadow(0 0 14px rgba(239,68,68,0.5))' }} />
-                </div>
-                {/* Energy bolts around */}
-                <Bolt className="absolute -top-2 -right-2 w-6 h-6 text-red-500/40 rotate-45" />
-                <Bolt className="absolute -bottom-2 -left-2 w-6 h-6 text-red-500/40 -rotate-45" />
-              </div>
-
-              <AlertDialogHeader className="space-y-2">
-                <AlertDialogTitle className="vg-title text-4xl text-center text-white mb-2" style={{ textShadow: '0 0 24px rgba(239,68,68,0.4)' }}>
-                  POWER DEPLETED
-                </AlertDialogTitle>
-                <AlertDialogDescription className="text-red-400/80 text-sm tracking-wide font-medium">
-                  <div className="flex items-center justify-center gap-2 mb-3">
-                    <Zap className="w-4 h-4" />
-                    <span className="text-[10px] tracking-[0.25em]">SYSTEM OFFLINE — RECHARGE REQUIRED</span>
-                    <Zap className="w-4 h-4" />
-                  </div>
-                  <div className="flex justify-center gap-1.5 mb-4">
-                    {[...Array(5)].map((_, i) => (
-                      <div
-                        key={i}
-                        className="h-1.5 w-6 rounded-full"
-                        style={{
-                          background: i < 1 ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.06)',
-                          border: '1px solid rgba(239,68,68,0.15)',
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <p className="text-gray-400 text-xs">
-                    Your energy cells are empty. Boost your power to continue playing VoltZ.
-                  </p>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-
-              <div className="mt-8 space-y-3">
-                <AlertDialogAction
-                  className="w-full py-4 text-sm font-bold tracking-[0.18em] uppercase transition-all duration-200 hover:brightness-110 active:scale-[0.98] rounded-xl"
-                  style={{
-                    background: 'linear-gradient(90deg, rgba(239,68,68,0.15) 0%, rgba(180,0,0,0.1) 100%)',
-                    border: '1px solid rgba(239,68,68,0.3)',
-                    color: '#ef4444',
-                    boxShadow: '0 0 20px rgba(239,68,68,0.1) inset',
-                  }}
-                  onClick={() => {
-                    setTimeout(() => {
-                      if (orderId) {
-                        localStorage.removeItem(`voltzHistory_${orderId}`);
-                      }
-                      setLocation(`/competition/${competitionId}`);
-                    }, 200);
-                  }}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <Bolt className="w-4 h-4" />
-                    <span>BOOST POWER</span>
-                    <Swords className="w-4 h-4" />
-                  </div>
-                </AlertDialogAction>
-
-                <AlertDialogCancel
-                  className="w-full py-4 text-sm font-medium tracking-wider transition-all duration-200 hover:brightness-110 rounded-xl border-0"
-                  style={{
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid rgba(255,255,255,0.05)',
-                    color: '#9ca3af',
-                  }}
-                >
-                  EXIT SYSTEM
-                </AlertDialogCancel>
-              </div>
-
-              {/* Small system text */}
-              <p className="text-[8px] text-red-900/50 mt-4 tracking-widest font-mono">
-                POWER CELLS: 0/5 • SYSTEM STANDBY
-              </p>
-            </div>
-          </div>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Out of plays */}
+      <GameResultOverlay
+        open={showNoPlaysDialog}
+        kind="empty"
+        overlayTestId="no-plays-overlay"
+        onClose={() => setNoPlaysDismissed(true)}
+        kicker="Power depleted"
+        title="OUT OF PLAYS"
+        subtitle="You've used every play in this pack."
+        prizeText="0"
+        prizeSub="Plays remaining"
+        primaryLabel="Get more plays"
+        onPrimary={() => {
+          setNoPlaysDismissed(true);
+          setTimeout(() => {
+            if (orderId) {
+              localStorage.removeItem(`voltzHistory_${orderId}`);
+            }
+            setLocation(`/competition/${competitionId}`);
+          }, 200);
+        }}
+        secondaryLabel="Close"
+        onSecondary={() => setNoPlaysDismissed(true)}
+        closeTestId="button-close-no-plays"
+        primaryTestId="button-boost-power"
+        secondaryTestId="button-exit-system"
+      />
     </div>
   );
 }
