@@ -5102,9 +5102,39 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
           paymentMethodText = "Points";
         }
   
-        // Update order with payment info and mark as completed
+        let spinEntries: any[] = [];
+        try {
+          const issued = await issuePlayTickets({
+            competitionId: order.competitionId,
+            quantity: order.quantity,
+            userId,
+            orderId: order.id,
+            gameType: "spin",
+            incrementSold: true,
+            makeLegacyNumber: () => `SPIN-${nanoid(8).toUpperCase()}`,
+          });
+          spinEntries = issued.tickets;
+        } catch (ticketError) {
+          if (walletUsed > 0 || pointsUsed > 0) {
+            const [freshUser] = await db.select().from(users).where(eq(users.id, userId));
+            if (freshUser) {
+              await db.update(users)
+                .set({
+                  balance: walletUsed > 0
+                    ? (Number(freshUser.balance || 0) + walletUsed).toString()
+                    : freshUser.balance,
+                  ringtonePoints: pointsUsed > 0
+                    ? Number(freshUser.ringtonePoints || 0) + pointsUsed
+                    : freshUser.ringtonePoints,
+                })
+                .where(eq(users.id, userId));
+            }
+          }
+          throw ticketError;
+        }
+
         await db.update(orders)
-          .set({ 
+          .set({
             status: "completed",
             paymentMethod: paymentMethodText,
             walletAmount: walletUsed.toString(),
@@ -5114,17 +5144,6 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
             updatedAt: new Date()
           })
           .where(eq(orders.id, orderId));
-  
-        // Create spin entries
-        const { tickets: spinEntries } = await issuePlayTickets({
-          competitionId: order.competitionId,
-          quantity: order.quantity,
-          userId,
-          orderId: order.id,
-          gameType: "spin",
-          incrementSold: true,
-          makeLegacyNumber: () => `SPIN-${nanoid(8).toUpperCase()}`,
-        });
   
         // Get discount info for audit log
         let discountInfo = '';

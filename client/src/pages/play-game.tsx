@@ -9,14 +9,8 @@ import { Target } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import SpinWheel from "@/components/games/spinwheeltest";
-import ScratchCardTest from "@/components/games/scratch-card-test"; // Import your scratch card component
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import ScratchCardTest from "@/components/games/scratch-card-test";
+import GameResultOverlay from "@/components/games/GameResultOverlay";
 
 export default function PlayGamePage() {
   const { id } = useParams();
@@ -232,81 +226,64 @@ const playScratchCardMutation = useMutation({
         </div>
       </div>
 
-      <Dialog open={isResultModalOpen} onOpenChange={setIsResultModalOpen}>
-        <DialogContent className="flex max-w-md flex-col items-center justify-center border-white/10 bg-[#0A0A0D] text-center text-white md:max-w-xl">
-          <DialogHeader className="text-center">
-            <DialogTitle className="w-full text-center font-prize text-3xl">
-              {gameResult?.success ? "CONGRATULATIONS" : "TRY AGAIN"}
-            </DialogTitle>
-          </DialogHeader>
-
-          {gameResult?.prize && (
-            <div className="mt-4 space-y-4">
-              {competition.type === "spin" && gameResult.prize.brand && (
-                <p className="text-lg text-white/70">
-                  You landed on: <strong className="text-white">{gameResult.prize.brand}</strong>
-                </p>
-              )}
-
-              <p className="font-prize text-3xl text-[#F1D47A]">
-                {competition.type === "spin" ? (
-                  typeof gameResult.prize.amount === "number"
-                    ? `£${gameResult.prize.amount}`
-                    : gameResult.prize.amount || gameResult.prize
-                ) : gameResult.prize.type === "cash" ? (
-                  `£${gameResult.prize.value}`
-                ) : (
-                  `${gameResult.prize.value} Ringtone Points`
-                )}
-              </p>
-
-              {(competition.type === "spin" &&
-                typeof gameResult.prize.amount === "number" &&
-                gameResult.prize.amount > 0) ||
-              (competition.type === "scratch" &&
-                gameResult.prize.type === "cash" &&
-                parseFloat(gameResult.prize.value.replace(/[^0-9.]/g, "")) > 0) ? (
-                <p className="text-sm text-emerald-400">Prize has been added to your wallet!</p>
-              ) : competition.type === "scratch" && gameResult.prize.type === "points" ? (
-                <p className="text-sm text-emerald-400">
-                  Ringtone points have been added to your account!
-                </p>
-              ) : null}
-            </div>
-          )}
-
-          <DialogFooter className="mt-6 flex justify-center gap-3">
-            {ticketCount > 0 ? (
-              <button
-                onClick={() => {
-                  handlePlayAgain();
-                  setIsResultModalOpen(false);
-                }}
-                className="rr-cta px-6 py-3 text-sm"
-              >
-                Play again ({ticketCount - 1}{" "}
-                {competition.type === "spin" ? "spins" : "scratch"} left)
-              </button>
-            ) : (
-              <button
-                onClick={() => setLocation(`/competition/${id}`)}
-                className="rr-cta px-6 py-3 text-sm"
-              >
-                Purchase more tickets
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setIsResultModalOpen(false);
-                setLocation("/");
-              }}
-              className="rounded-full border border-white/15 px-6 py-3 text-sm font-black uppercase tracking-wide text-white/70 hover:bg-white/10"
-            >
-              Back to competitions
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <GameResultOverlay
+        open={isResultModalOpen}
+        kind={gameResult?.success ? "win" : "lose"}
+        onClose={() => setIsResultModalOpen(false)}
+        kicker={gameResult?.success ? "Congratulations" : "No win"}
+        title={gameResult?.success ? "YOU WON" : "UNLUCKY"}
+        subtitle={
+          competition.type === "spin" && gameResult?.prize?.brand
+            ? `You landed on ${gameResult.prize.brand}`
+            : undefined
+        }
+        prizeText={
+          gameResult?.prize
+            ? competition.type === "spin"
+              ? typeof gameResult.prize.amount === "number"
+                ? `£${gameResult.prize.amount}`
+                : gameResult.prize.amount || String(gameResult.prize)
+              : gameResult.prize.type === "cash"
+                ? `£${gameResult.prize.value}`
+                : `${gameResult.prize.value} Ringtone Points`
+            : undefined
+        }
+        prizeSub={
+          (competition.type === "spin" &&
+            typeof gameResult?.prize?.amount === "number" &&
+            gameResult.prize.amount > 0) ||
+          (competition.type === "scratch" &&
+            gameResult?.prize?.type === "cash" &&
+            parseFloat(String(gameResult.prize.value).replace(/[^0-9.]/g, "")) > 0)
+            ? "Prize has been added to your wallet"
+            : competition.type === "scratch" && gameResult?.prize?.type === "points"
+              ? "Ringtone points have been added to your account"
+              : undefined
+        }
+        body={
+          gameResult?.success || gameResult?.prize
+            ? undefined
+            : "No luck this time. The next play could be yours."
+        }
+        primaryLabel={
+          ticketCount > 0
+            ? `Play again (${ticketCount - 1} ${competition.type === "spin" ? "spins" : "scratch"} left)`
+            : "Purchase more tickets"
+        }
+        onPrimary={() => {
+          if (ticketCount > 0) {
+            handlePlayAgain();
+            setIsResultModalOpen(false);
+          } else {
+            setLocation(`/competition/${id}`);
+          }
+        }}
+        secondaryLabel="Back to competitions"
+        onSecondary={() => {
+          setIsResultModalOpen(false);
+          setLocation("/");
+        }}
+      />
     </GameShell>
   );
 }

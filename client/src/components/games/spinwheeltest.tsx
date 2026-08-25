@@ -167,7 +167,9 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     const [,setLocation] = useLocation();
   
   // Check if all spins are used
-  const allSpinsUsed = spinHistory.length > 0 && spinHistory.every(s => s.status === "SPUN");
+  const allSpinsUsed =
+    ticketCount === 0 ||
+    (spinHistory.length > 0 && spinHistory.every((s) => s.status === "SPUN"));
 
   // Transform admin wheel config to component format (memoized to prevent infinite re-renders)
   const segments = useMemo(() => {
@@ -790,7 +792,8 @@ ctx.stroke();
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get spin result from server");
+        const errBody = await response.json().catch(() => null);
+        throw new Error(errBody?.message || "Failed to get spin result from server");
       }
 
       const result = await response.json();
@@ -798,8 +801,19 @@ ctx.stroke();
       const winningSegmentId = result.winningSegmentId;
 
       // Find the winning segment index in our segments array
-      const winningIndex = freshSegments.findIndex((seg: any) => seg.id === winningSegmentId);
-      
+      let winningIndex = freshSegments.findIndex((seg: any) => seg.id === winningSegmentId);
+      if (winningIndex === -1) {
+        const resultType = result.result?.type || result.prize?.type;
+        const isLose = !resultType || resultType === "lose" || resultType === "none";
+        if (isLose) {
+          winningIndex = freshSegments.findIndex((seg: any) => seg.isCross);
+        } else {
+          const value = Number(result.result?.value ?? result.prize?.amount);
+          if (!Number.isNaN(value)) {
+            winningIndex = freshSegments.findIndex((seg: any) => Number(seg.amount) === value);
+          }
+        }
+      }
       if (winningIndex === -1) {
         console.error("Winning segment not found:", winningSegmentId, "in", freshSegments);
         throw new Error("Invalid winning segment received from server");
@@ -922,7 +936,7 @@ if (congratsAudioRef.current) {
   congratsAudioRef.current.currentTime = 0;
 }
       // Show error to user
-      alert("Failed to spin. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to spin. Please try again.");
     }
   };
 

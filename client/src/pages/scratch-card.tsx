@@ -2,17 +2,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import CompetitionCard from "@/components/competition-card";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import FeaturedCompetitions from "./featuredCompetitions";
 import { Competition } from "@shared/schema";
+import GameResultOverlay from "@/components/games/GameResultOverlay";
 import {
   DEFAULT_LISTING_FILTERS,
   ListingEmpty,
@@ -118,25 +112,16 @@ export default function ScratchCardPage() {
         </div>
       </section>
 
-      <Dialog open={isResultModalOpen} onOpenChange={setIsResultModalOpen}>
-        <DialogContent className="max-w-md flex flex-col justify-center items-center text-center border-[#C8102E]/30 bg-[#0A0A0D] text-white">
-          <DialogHeader>
-            <DialogTitle className="font-prize text-3xl text-white">
-              {gameResult?.prize?.amount > 0
-                ? "You Won!"
-                : "Better Luck Next Time"}
-            </DialogTitle>
-          </DialogHeader>
-          <DialogFooter>
-            <button
-              onClick={() => setIsResultModalOpen(false)}
-              className="rr-cta px-6 py-3"
-            >
-              Close
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <GameResultOverlay
+        open={isResultModalOpen}
+        kind={gameResult?.prize?.amount > 0 ? "win" : "lose"}
+        onClose={() => setIsResultModalOpen(false)}
+        title={gameResult?.prize?.amount > 0 ? "YOU WON" : "UNLUCKY"}
+        subtitle={gameResult?.prize?.amount > 0 ? undefined : "Better luck next time"}
+        prizeText={gameResult?.prize?.amount > 0 ? String(gameResult.prize.amount) : undefined}
+        primaryLabel="Close"
+        onPrimary={() => setIsResultModalOpen(false)}
+      />
     </ListingShell>
   );
 }

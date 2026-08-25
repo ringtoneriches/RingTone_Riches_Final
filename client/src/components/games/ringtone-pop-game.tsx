@@ -5,12 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Volume2, VolumeX, PartyPopper, RotateCcw, Gift, Trophy, X, Sparkles, Star, Zap, Target, Flame, Crown, Music, Sparkle, Gauge, Swords, Popcorn, ShieldCheck } from "lucide-react";
 import confetti from "canvas-confetti";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -21,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useLocation } from "wouter";
+import GameResultOverlay from "@/components/games/GameResultOverlay";
 
 type PopHistoryItem = {
   status: "NOT PLAYED" | "PLAYED";
@@ -1152,320 +1147,65 @@ export default function RingtonePopGame({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Premium Prize Modal - Styled like Voltz winner modal */}
-      <Dialog open={showResultModal} onOpenChange={setShowResultModal}>
-        <DialogContent className="rr-pop-panel max-w-[calc(100vw-2rem)] sm:max-w-md border-0 p-0 overflow-hidden max-h-[calc(100vh-4rem)] bg-transparent">
-          <div
-            className={`relative overflow-hidden transition-all duration-500 ${
-              resultAnimStage >= 1 ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-95'
-            }`}
-            style={{
-              borderRadius: '28px',
-              border: isWin
-                ? '2px solid rgba(251,191,36,0.6)'
-                : isPhysicalWin
-                ? '2px solid rgba(168,85,247,0.6)'
-                : isFreeReplay
-                ? '2px solid rgba(6,182,212,0.5)'
-                : '2px solid rgba(239,68,68,0.4)',
-              background: isWin
-                ? 'linear-gradient(170deg, rgba(40,28,0,0.98) 0%, rgba(10,8,0,0.99) 100%)'
-                : isPhysicalWin
-                ? 'linear-gradient(170deg, rgba(40,20,60,0.98) 0%, rgba(10,5,20,0.99) 100%)'
-                : isFreeReplay
-                ? 'linear-gradient(170deg, rgba(0,30,40,0.98) 0%, rgba(0,8,12,0.99) 100%)'
-                : 'linear-gradient(170deg, rgba(30,5,5,0.98) 0%, rgba(8,0,0,0.99) 100%)',
-              boxShadow: isWin
-                ? '0 0 80px rgba(251,191,36,0.2), 0 0 0 1px rgba(255,255,255,0.03), 0 32px 64px rgba(0,0,0,0.6)'
-                : isPhysicalWin
-                ? '0 0 80px rgba(168,85,247,0.2), 0 0 0 1px rgba(255,255,255,0.03), 0 32px 64px rgba(0,0,0,0.6)'
-                : isFreeReplay
-                ? '0 0 60px rgba(6,182,212,0.15), 0 0 0 1px rgba(255,255,255,0.02), 0 32px 64px rgba(0,0,0,0.6)'
-                : '0 0 50px rgba(239,68,68,0.12), 0 0 0 1px rgba(255,255,255,0.02), 0 32px 64px rgba(0,0,0,0.6)',
-            }}
-          >
-            {/* Hex corners */}
-            <span className={`absolute w-5 h-5 border-t-2 border-l-2 ${isWin ? 'border-yellow-500/50' : isPhysicalWin ? 'border-purple-500/50' : isFreeReplay ? 'border-cyan-500/50' : 'border-red-500/40'} rounded-tl-xl top-3 left-3`} />
-            <span className={`absolute w-5 h-5 border-t-2 border-r-2 ${isWin ? 'border-yellow-500/50' : isPhysicalWin ? 'border-purple-500/50' : isFreeReplay ? 'border-cyan-500/50' : 'border-red-500/40'} rounded-tr-xl top-3 right-3`} />
-            <span className={`absolute w-5 h-5 border-b-2 border-l-2 ${isWin ? 'border-yellow-500/50' : isPhysicalWin ? 'border-purple-500/50' : isFreeReplay ? 'border-cyan-500/50' : 'border-red-500/40'} rounded-bl-xl bottom-3 left-3`} />
-            <span className={`absolute w-5 h-5 border-b-2 border-r-2 ${isWin ? 'border-yellow-500/50' : isPhysicalWin ? 'border-purple-500/50' : isFreeReplay ? 'border-cyan-500/50' : 'border-red-500/40'} rounded-br-xl bottom-3 right-3`} />
-
-            {/* Top accent line */}
-            <div
-              className="absolute top-0 inset-x-0 h-[2px]"
-              style={{
-                background: isWin
-                  ? 'linear-gradient(90deg, transparent, #eab308, #fbbf24, #eab308, transparent)'
-                  : isPhysicalWin
-                  ? 'linear-gradient(90deg, transparent, #a855f7, #c084fc, #a855f7, transparent)'
-                  : isFreeReplay
-                  ? 'linear-gradient(90deg, transparent, #06b6d4, #22d3ee, #06b6d4, transparent)'
-                  : 'linear-gradient(90deg, transparent, rgba(239,68,68,0.6), rgba(239,68,68,0.3), transparent)',
-              }}
-            />
-
-            {/* Scanlines overlay */}
-            <div className="absolute inset-0 pointer-events-none opacity-10" style={{
-              background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px)',
-            }} />
-
-            {/* Particle field for wins */}
-            {(isWin || isPhysicalWin) && (
-              <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
-                {[...Array(20)].map((_, i) => (
-                  <div
-                    key={i}
-                    className={`absolute w-1.5 h-1.5 rounded-full`}
-                    style={{
-                      left: `${5 + ((i * 7 + 13) % 90)}%`,
-                      top: `${5 + ((i * 11 + 7) % 90)}%`,
-                      animationDelay: `${i * 0.1}s`,
-                      animation: `particle-float 1.6s ${i * 0.1}s ease-out infinite`,
-                      backgroundColor: isPhysicalWin ? (i % 2 === 0 ? '#a855f7' : '#c084fc') : (i % 2 === 0 ? '#eab308' : '#fbbf24'),
-                      opacity: 0.6,
-                    }}
-                  />
-                ))}
+      {/* Result overlay */}
+      <GameResultOverlay
+        open={showResultModal && !!gameResult}
+        kind={isPhysicalWin ? "physical" : isWin ? "win" : isFreeReplay ? "extra" : "lose"}
+        onClose={closeModalAndReset}
+        kicker={
+          isPhysicalWin
+            ? "Physical prize"
+            : isWin
+              ? "3 match"
+              : isFreeReplay
+                ? "Free play"
+                : "No match"
+        }
+        title={isPhysicalWin || isWin ? "YOU WON" : isFreeReplay ? "FREE PLAY" : "UNLUCKY"}
+        subtitle={
+          isPhysicalWin
+            ? gameResult?.prizeName || "Physical prize"
+            : isWin
+              ? "Match complete — prize credited"
+              : isFreeReplay
+                ? "You earned another pop"
+                : "Pops didn't match"
+        }
+        prizeText={isWin || isPhysicalWin || isFreeReplay ? (isFreeReplay ? "+1 Free Play" : getPrizeDisplay()) : undefined}
+        prizeSub={
+          isPhysicalWin
+            ? "Contact support to claim"
+            : isWin
+              ? "Verified & credited"
+              : isFreeReplay
+                ? "Use it on your next pop"
+                : undefined
+        }
+        extra={
+          <div className="mb-4 flex justify-center gap-2">
+            {balloonValues.map((value, i) => (
+              <div
+                key={i}
+                className="min-w-[64px] rounded-xl border border-[#F1D47A]/25 bg-[#F1D47A]/[0.06] px-3 py-2 text-sm font-semibold text-[#F1D47A]"
+              >
+                {value}
               </div>
-            )}
-
-            {/* Close button */}
-            <button
-              onClick={closeModalAndReset}
-              className="absolute top-4 right-4 z-30 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-150 hover:scale-110 active:scale-95"
-              style={{
-                background: isWin ? 'rgba(234,179,8,0.1)' : isPhysicalWin ? 'rgba(168,85,247,0.1)' : isFreeReplay ? 'rgba(6,182,212,0.1)' : 'rgba(239,68,68,0.1)',
-                border: isWin ? '1px solid rgba(234,179,8,0.25)' : isPhysicalWin ? '1px solid rgba(168,85,247,0.25)' : isFreeReplay ? '1px solid rgba(6,182,212,0.25)' : '1px solid rgba(239,68,68,0.2)',
-                color: isWin ? '#eab308' : isPhysicalWin ? '#a855f7' : isFreeReplay ? '#06b6d4' : '#ef4444',
-              }}
-              data-testid="button-close-result"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="px-6 pt-10 pb-2 text-center relative z-10">
-              {/* Balloon values display */}
-              <div className="flex justify-center gap-3 mb-6">
-                {balloonValues.map((value, i) => (
-                  <div
-                    key={i}
-                    className="px-3 py-2 text-sm min-w-[70px] text-center rounded-xl"
-                    style={{
-                      background: isWin
-                        ? 'rgba(234,179,8,0.08)'
-                        : isPhysicalWin
-                        ? 'rgba(168,85,247,0.08)'
-                        : isFreeReplay
-                        ? 'rgba(6,182,212,0.08)'
-                        : 'rgba(239,68,68,0.07)',
-                      border: isWin
-                        ? '1px solid rgba(234,179,8,0.28)'
-                        : isPhysicalWin
-                        ? '1px solid rgba(168,85,247,0.28)'
-                        : isFreeReplay
-                        ? '1px solid rgba(6,182,212,0.28)'
-                        : '1px solid rgba(239,68,68,0.2)',
-                      color: isWin ? '#fbbf24' : isPhysicalWin ? '#c084fc' : isFreeReplay ? '#22d3ee' : '#f87171',
-                    }}
-                  >
-                    {value}
-                  </div>
-                ))}
-              </div>
-
-              {/* PHYSICAL PRIZE WIN */}
-              {isPhysicalWin && (
-                <>
-                  <div className={`relative w-24 h-24 mx-auto mb-6 transition-all duration-600 ${resultAnimStage >= 2 ? 'scale-100' : 'scale-0'}`}>
-                    <div className="absolute inset-0 rounded-full animate-ping" style={{ background: 'rgba(168,85,247,0.15)' }} />
-                    <div
-                      className="relative w-24 h-24 rounded-full flex items-center justify-center"
-                      style={{
-                        background: 'radial-gradient(circle at 38% 32%, rgba(168,85,247,0.3) 0%, rgba(100,50,150,0.12) 60%, transparent 100%)',
-                        border: '1px solid rgba(168,85,247,0.5)',
-                        boxShadow: '0 0 30px rgba(168,85,247,0.3)',
-                      }}
-                    >
-                      <Gift className="w-12 h-12 text-purple-400" strokeWidth={1.5} style={{ filter: 'drop-shadow(0 0 14px rgba(168,85,247,0.7))' }} />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-2 mb-3">
-                    <Sparkles className="w-3.5 h-3.5 text-purple-500" />
-                    <p className="text-purple-400/80 text-[10px] font-bold tracking-[0.35em] uppercase">PHYSICAL PRIZE — 3 MATCH!</p>
-                    <Sparkles className="w-3.5 h-3.5 text-purple-500" />
-                  </div>
-
-                  <p className="text-2xl text-white mb-2 font-black" style={{ textShadow: '0 0 24px rgba(168,85,247,0.35)' }}>
-                    {gameResult?.prizeName || getPrizeDisplay()}
-                  </p>
-
-                  <div className="inline-flex items-center gap-2.5 px-5 py-3 mb-5 rounded-2xl" style={{
-                    background: 'linear-gradient(135deg, rgba(168,85,247,0.12) 0%, rgba(100,50,150,0.08) 100%)',
-                    border: '1px solid rgba(168,85,247,0.28)',
-                  }}>
-                    <Gift className="w-5 h-5 text-purple-400" />
-                    <span className="text-xl text-purple-300 font-black">Physical Prize Won!</span>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-1.5 text-gray-500 text-[10px] mb-1">
-                    <ShieldCheck className="w-3 h-3" />
-                    <span>Contact support to claim</span>
-                  </div>
-                </>
-              )}
-
-              {/* CASH/POINTS WIN */}
-              {isWin && (
-                <>
-                  <div className={`relative w-24 h-24 mx-auto mb-6 transition-all duration-600 ${resultAnimStage >= 2 ? 'scale-100' : 'scale-0'}`}>
-                    <div className="absolute inset-0 rounded-full animate-ping" style={{ background: 'rgba(234,179,8,0.15)' }} />
-                    <div
-                      className="relative w-24 h-24 rounded-full flex items-center justify-center"
-                      style={{
-                        background: 'radial-gradient(circle at 38% 32%, rgba(234,179,8,0.3) 0%, rgba(180,120,0,0.12) 60%, transparent 100%)',
-                        border: '1px solid rgba(234,179,8,0.5)',
-                        boxShadow: '0 0 30px rgba(234,179,8,0.3)',
-                      }}
-                    >
-                      <Trophy className="w-12 h-12 text-yellow-400" strokeWidth={1.5} style={{ filter: 'drop-shadow(0 0 14px rgba(234,179,8,0.7))' }} />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-2 mb-3">
-                    <Sparkles className="w-3.5 h-3.5 text-yellow-500" />
-                    <p className="text-yellow-400/80 text-[10px] font-bold tracking-[0.35em] uppercase">POWER SURGE — 3 MATCH!</p>
-                    <Sparkles className="w-3.5 h-3.5 text-yellow-500" />
-                  </div>
-
-                  <p className="text-3xl text-white mb-4 font-black" style={{ textShadow: '0 0 24px rgba(234,179,8,0.35)' }}>
-                    {getPrizeDisplay()}
-                  </p>
-
-                  <div className="inline-flex items-center gap-2.5 px-5 py-3 mb-5 rounded-2xl" style={{
-                    background: 'linear-gradient(135deg, rgba(234,179,8,0.12) 0%, rgba(180,100,0,0.08) 100%)',
-                    border: '1px solid rgba(234,179,8,0.28)',
-                  }}>
-                    <Trophy className="w-5 h-5 text-yellow-400" />
-                    <span className="text-2xl text-yellow-300 font-black">{getPrizeDisplay()}</span>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-1.5 text-gray-500 text-[10px] mb-1">
-                    <ShieldCheck className="w-3 h-3" />
-                    <span>Verified & Credited</span>
-                  </div>
-                </>
-              )}
-
-              {/* FREE REPLAY */}
-              {isFreeReplay && (
-                <>
-                  <div className={`relative w-24 h-24 mx-auto mb-6 transition-all duration-600 ${resultAnimStage >= 2 ? 'scale-100' : 'scale-0'}`}>
-                    <div className="absolute -inset-3 rounded-full blur-xl" style={{ background: 'rgba(6,182,212,0.15)' }} />
-                    <div
-                      className="relative w-24 h-24 rounded-full flex items-center justify-center"
-                      style={{
-                        background: 'radial-gradient(circle at 38% 32%, rgba(6,182,212,0.25) 0%, rgba(0,100,120,0.1) 60%, transparent 100%)',
-                        border: '1px solid rgba(6,182,212,0.4)',
-                        boxShadow: '0 0 30px rgba(6,182,212,0.2)',
-                      }}
-                    >
-                      <RotateCcw className="w-12 h-12 text-cyan-400" strokeWidth={1.5} style={{ filter: 'drop-shadow(0 0 12px rgba(6,182,212,0.6))', animation: 'spin-slow 2s linear infinite' }} />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-2 mb-3">
-                    <Zap className="w-3.5 h-3.5 text-cyan-500" />
-                    <p className="text-cyan-400/80 text-[10px] font-bold tracking-[0.35em] uppercase">BACKUP POWER — FREE PLAY!</p>
-                    <Zap className="w-3.5 h-3.5 text-cyan-500" />
-                  </div>
-
-                  <p className="text-3xl text-white mb-4 font-black" style={{ textShadow: '0 0 20px rgba(6,182,212,0.3)' }}>
-                    Power Stabilized!
-                  </p>
-
-                  <div className="inline-flex items-center gap-2.5 px-5 py-3 mb-5 rounded-2xl" style={{
-                    background: 'linear-gradient(135deg, rgba(6,182,212,0.12) 0%, rgba(0,80,100,0.08) 100%)',
-                    border: '1px solid rgba(6,182,212,0.28)',
-                  }}>
-                    <RotateCcw className="w-5 h-5 text-cyan-400" />
-                    <span className="text-2xl text-cyan-300 font-black">+1 Free Play</span>
-                  </div>
-                </>
-              )}
-
-              {/* NO WIN */}
-              {isNoWin && (
-                <>
-                  <div className={`relative w-24 h-24 mx-auto mb-6 transition-all duration-600 ${resultAnimStage >= 2 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`}>
-                    <div className="absolute -inset-3 rounded-full blur-xl" style={{ background: 'rgba(239,68,68,0.08)' }} />
-                    <div
-                      className="relative w-24 h-24 rounded-full flex items-center justify-center"
-                      style={{
-                        background: 'radial-gradient(circle at 38% 32%, rgba(239,68,68,0.18) 0%, rgba(120,0,0,0.06) 60%, transparent 100%)',
-                        border: '1px solid rgba(239,68,68,0.3)',
-                        boxShadow: '0 0 30px rgba(239,68,68,0.1)',
-                      }}
-                    >
-                      <Target className="w-12 h-12 text-red-400/75" strokeWidth={1.5} />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-2 mb-3">
-                    <Zap className="w-3.5 h-3.5 text-red-500/60" />
-                    <p className="text-red-400/70 text-[10px] font-bold tracking-[0.35em] uppercase">NO MATCH — SO CLOSE!</p>
-                    <Zap className="w-3.5 h-3.5 text-red-500/60" />
-                  </div>
-
-                  <p className="text-2xl text-white/75 mb-1 font-black">Pops Didn't Match</p>
-                  <p className="text-red-400/35 text-sm tracking-wide mb-5">Match all 3 to win — try again</p>
-                </>
-              )}
-            </div>
-
-            {/* CTA button */}
-            <button
-              onClick={closeModalAndReset}
-              disabled={localPlaysRemaining < 1 && !isWin && !isPhysicalWin && !isFreeReplay}
-              className="w-full py-4 text-sm font-bold tracking-[0.18em] uppercase transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
-              style={{
-                background: isWin
-                  ? 'linear-gradient(90deg, rgba(234,179,8,0.14) 0%, rgba(180,100,0,0.1) 100%)'
-                  : isPhysicalWin
-                  ? 'linear-gradient(90deg, rgba(168,85,247,0.14) 0%, rgba(100,50,150,0.1) 100%)'
-                  : isFreeReplay
-                  ? 'linear-gradient(90deg, rgba(6,182,212,0.14) 0%, rgba(0,80,100,0.1) 100%)'
-                  : 'linear-gradient(90deg, rgba(239,68,68,0.1) 0%, rgba(120,0,0,0.08) 100%)',
-                borderTop: isWin
-                  ? '1px solid rgba(234,179,8,0.18)'
-                  : isPhysicalWin
-                  ? '1px solid rgba(168,85,247,0.18)'
-                  : isFreeReplay
-                  ? '1px solid rgba(6,182,212,0.18)'
-                  : '1px solid rgba(239,68,68,0.15)',
-                color: isWin ? '#eab308' : isPhysicalWin ? '#a855f7' : isFreeReplay ? '#06b6d4' : '#ef4444',
-                borderRadius: '0 0 28px 28px',
-              }}
-              data-testid="button-continue"
-            >
-              {isWin || isPhysicalWin ? 'COLLECT & CONTINUE' : isFreeReplay ? 'USE FREE PLAY' : 'TRY AGAIN'}
-            </button>
+            ))}
           </div>
-        </DialogContent>
-      </Dialog>
+        }
+        body={
+          isNoWin
+            ? "You didn't win this time but the next pop could be your moment."
+            : undefined
+        }
+        primaryLabel={isWin || isPhysicalWin ? "Collect & continue" : isFreeReplay ? "Use free play" : "Try again"}
+        onPrimary={closeModalAndReset}
+        primaryDisabled={localPlaysRemaining < 1 && !isWin && !isPhysicalWin && !isFreeReplay}
+        closeTestId="button-close-result"
+        primaryTestId="button-continue"
+      />
 
       <style>{`
-        @keyframes particle-float {
-          0%, 100% { transform: translateY(0) translateX(0); opacity: 0.6; }
-          25% { transform: translateY(-20px) translateX(10px); opacity: 0.3; }
-          75% { transform: translateY(10px) translateX(-10px); opacity: 0.8; }
-        }
-        
-        @keyframes spin-slow {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        
         .animate-float-slow {
           animation: float-slow 3s ease-in-out infinite;
         }
