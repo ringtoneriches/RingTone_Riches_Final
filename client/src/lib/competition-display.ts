@@ -37,6 +37,16 @@ export function getDefaultBadgeLabel(type: string) {
   return getCompetitionTypeConfig(type).label;
 }
 
+export function getDefaultQuantity(
+  competition: { defaultQuantity?: number | null },
+  maxQty = 500
+) {
+  const raw = Number(competition.defaultQuantity);
+  const n = Number.isFinite(raw) ? Math.floor(raw) : 1;
+  const cap = Math.max(1, maxQty);
+  return Math.min(cap, Math.max(1, n || 1));
+}
+
 export function getCompetitionBadgeLabel(competition: {
   type: string;
   badgeLabel?: string | null;

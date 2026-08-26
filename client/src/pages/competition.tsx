@@ -17,7 +17,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, Sparkles, Zap, Crown, Ticket, Trophy, Lock, Mail } from "lucide-react";
+import { Minus, Plus, Sparkles, Zap, Crown, Ticket, Trophy, Lock, Mail, ShoppingCart } from "lucide-react";
+import { useBasket } from "@/hooks/useBasket";
 import UserCompetitionPrizes from "./user-competition-prizes";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
 import ChaserBorder from "@/components/home/ChaserBorder";
@@ -29,6 +30,7 @@ import { useCountdown } from "@/hooks/useCountdown";
 import {
   getCompetitionBadgeLabel,
   getCompetitionTypeConfig,
+  getDefaultQuantity,
   getFallbackImage,
   getPrizeDisplay,
   getStatusBadge,
@@ -125,6 +127,7 @@ export default function CompetitionPage() {
     user: User | null;
   };
   const [quantity, setQuantity] = useState(1);
+  const { add: addToBasket } = useBasket();
   const [showQuiz, setShowQuiz] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
@@ -191,6 +194,14 @@ export default function CompetitionPage() {
 
   const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
   const countdown = useCountdown(competition?.endDate);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = parseInt(params.get("qty") || "", 10);
+    if (Number.isFinite(fromUrl) && fromUrl >= 1) return;
+    if (!competition) return;
+    setQuantity(getDefaultQuantity(competition, maxTicketsAllowed));
+  }, [competition?.id, competition?.defaultQuantity, maxTicketsAllowed]);
 
   // ✅ FIXED: Pass competition image through order creation
   const purchaseTicketMutation = useMutation({
@@ -365,6 +376,26 @@ export default function CompetitionPage() {
     purchaseTicketMutation.mutate({
       competitionId: competition.id,
       quantity,
+    });
+  };
+
+  const handleAddToBasket = () => {
+    if (!competition || isSoldOut || (isFreeGiveaway && !canBuyMore)) return;
+    addToBasket(
+      {
+        competitionId: competition.id,
+        type: competitionType,
+        title: competition.title,
+        imageUrl: competition.imageUrl || undefined,
+        ticketPrice: competition.ticketPrice,
+        quantity,
+        wheelType: competition.wheelType,
+      },
+      maxTicketsAllowed
+    );
+    toast({
+      title: "Added to cart",
+      description: `${quantity} × ${competition.title}. Pay once from Cart, or keep using ENTER NOW.`,
     });
   };
 
@@ -569,8 +600,7 @@ export default function CompetitionPage() {
                 )}
 
                 {!isFreeGiveaway && (
-                  <div className="mt-5 flex items-center justify-between gap-3">
-                    <span className="text-xs font-black uppercase tracking-widest text-white/45">Quantity</span>
+                  <div className="mt-5 flex items-center gap-3">
                     <QuantitySelector
                       value={quantity}
                       min={1}
@@ -579,6 +609,17 @@ export default function CompetitionPage() {
                       disabled={stats.isClosed}
                       size="lg"
                     />
+                    {!isSoldOut && (
+                      <button
+                        type="button"
+                        onClick={handleAddToBasket}
+                        className="rr-header-ghost flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl text-xs sm:h-14"
+                        data-testid="button-add-basket"
+                      >
+                        <ShoppingCart className="h-4 w-4 shrink-0" />
+                        Add to cart
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -591,7 +632,7 @@ export default function CompetitionPage() {
                 <button
                   onClick={handleOpenQuiz}
                   disabled={purchaseLocked}
-                  className={`rr-cta mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-sm font-black uppercase tracking-[0.14em] ${
+                  className={`rr-cta mt-4 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-sm font-black uppercase tracking-[0.14em] ${
                     isSoldOut || (isFreeGiveaway && !canBuyMore) ? "opacity-50" : ""
                   }`}
                   data-testid="button-purchase"
@@ -901,6 +942,18 @@ export default function CompetitionPage() {
               <span className="text-sm font-bold opacity-80">· £{displayTotal.toFixed(2)}</span>
             )}
           </button>
+
+          {!isSoldOut && !(isFreeGiveaway && !canBuyMore) && (
+          <button
+            type="button"
+            onClick={handleAddToBasket}
+            className="rr-header-ghost mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-xs"
+            data-testid="button-add-basket-range"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            Add to cart · pay later
+          </button>
+          )}
 
           {isGameType && discountPercent > 0 && (
             <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/25 bg-[#D4AF37]/8 px-4 py-2">

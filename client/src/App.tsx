@@ -43,6 +43,7 @@ import AdminLogin from "./pages/admin/login";
 import AdminDashboard from "./pages/admin/dashboard";
 import AdminCompetitions from "./pages/admin/competitions";
 import AdminFeatured from "./pages/admin/admin-featured";
+import AdminCardQuantity from "./pages/admin/admin-card-quantity";
 import AdminSpinWheel from "./pages/admin/spin-wheel";
 import AdminScratchCard from "./pages/admin/scratch-card";
 import AdminUsers from "./pages/admin/users";
@@ -98,6 +99,8 @@ import AdminSlotMachineSettings from "./pages/admin/admin-slot-machine";
 import AdminBulkPoints from "./pages/admin/admin-bulk-points";
 import AdminSlotGame from "./pages/admin/admin-slot-spin";
 import GuestBilling from "./pages/guestbillling";
+import BasketPage from "./pages/basket";
+import MyPlaysPage from "./pages/my-plays";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -139,6 +142,8 @@ function Router() {
       {/* Authenticated routes - always registered, auth checked in component */}
       <Route path="/instant" component={instant} />
       <Route path="/wallet" component={Wallet} />
+      <Route path="/basket" component={BasketPage} />
+      <Route path="/my-plays" component={MyPlaysPage} />
       <Route path="/checkout/:orderId" component={Checkout} />
       <Route path="/spin-wheel" component={spinWheel} />
       <Route path="/scratch-card" component={ScratchCardPage} />
@@ -166,6 +171,7 @@ function Router() {
       <Route path="/admin/scratch-card" component={AdminScratchCard} />
       <Route path="/admin/competitions" component={AdminCompetitions} />
       <Route path="/admin/featured" component={AdminFeatured} />
+      <Route path="/admin/card-quantity" component={AdminCardQuantity} />
       <Route path="/admin/entries" component={AdminEntries} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/orders" component={AdminOrders} />

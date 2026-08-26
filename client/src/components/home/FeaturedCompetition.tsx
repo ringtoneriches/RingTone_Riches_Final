@@ -1,7 +1,9 @@
 import { Competition } from "@shared/schema";
 import { useLocation } from "wouter";
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Ticket } from "lucide-react";
+import { ChevronLeft, ChevronRight, Ticket, ShoppingCart } from "lucide-react";
+import { useBasket } from "@/hooks/useBasket";
+import { useToast } from "@/hooks/use-toast";
 import ChaserBorder from "./ChaserBorder";
 import DigitalAtmosphere from "./DigitalAtmosphere";
 import TrustStrip from "./TrustStrip";
@@ -13,6 +15,7 @@ import {
   getCompetitionBadgeLabel,
   getCompetitionTypeConfig,
   getCtaLabel,
+  getDefaultQuantity,
   getFallbackImage,
   getPrizeOffer,
   getStatusBadge,
@@ -35,6 +38,8 @@ function FeaturedSlide({
   active: boolean;
 }) {
   const [, setLocation] = useLocation();
+  const { add } = useBasket();
+  const { toast } = useToast();
   const stats = getTicketStats(competition);
   const typeCfg = getCompetitionTypeConfig(competition.type);
   const badgeLabel = getCompetitionBadgeLabel(competition);
@@ -126,20 +131,48 @@ function FeaturedSlide({
           </div>
         )}
 
-        <div className="mt-4 flex items-center gap-2 sm:mt-6 sm:gap-3">
+        <div className="mt-4 flex flex-col gap-2 sm:mt-6">
           {!stats.isClosed && (
-            <QuantitySelector
-              value={qty}
-              max={maxQty}
-              onChange={setQty}
-              size="lg"
-            />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <QuantitySelector
+                value={qty}
+                max={maxQty}
+                onChange={setQty}
+                size="lg"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  add(
+                    {
+                      competitionId: competition.id,
+                      type: competition.type || "instant",
+                      title: competition.title,
+                      imageUrl: competition.imageUrl || undefined,
+                      ticketPrice: competition.ticketPrice,
+                      quantity: qty,
+                      wheelType: competition.wheelType,
+                    },
+                    maxQty
+                  );
+                  toast({
+                    title: "Added to cart",
+                    description: `${qty} × ${competition.title}`,
+                  });
+                }}
+                className="rr-header-ghost flex h-12 min-w-0 flex-1 items-center justify-center rounded-xl text-[11px] sm:h-14 sm:text-xs"
+                data-testid={`button-featured-basket-${competition.id}`}
+              >
+                <ShoppingCart className="mr-2 h-4 w-4 shrink-0" />
+                Add to cart
+              </button>
+            </div>
           )}
           <button
             type="button"
             disabled={stats.isClosed}
             onClick={goEnter}
-            className="rr-cta h-12 sm:h-14 min-w-0 flex-1 rounded-xl px-3 sm:px-6 text-[12px] sm:text-base font-black uppercase tracking-[0.1em] sm:tracking-[0.16em] whitespace-nowrap disabled:opacity-50 disabled:hover:transform-none"
+            className="rr-cta h-12 w-full rounded-xl px-3 text-[12px] font-black uppercase tracking-[0.1em] sm:h-14 sm:px-6 sm:text-base sm:tracking-[0.16em] whitespace-nowrap disabled:opacity-50 disabled:hover:transform-none"
             data-testid={`button-featured-enter-${competition.id}`}
           >
             {cta}
@@ -160,12 +193,26 @@ function FeaturedSlide({
 }
 
 export default function FeaturedCompetition({ competitions }: Props) {
-  const [qty, setQty] = useState(1);
   const [activeIndex, setActiveIndex] = useState(0);
   const [starsOn, setStarsOn] = useState(true);
   const sectionRef = useRef<HTMLElement>(null);
   const count = competitions.length;
   const competition = competitions[Math.min(activeIndex, Math.max(count - 1, 0))];
+  const featuredMax = competition
+    ? getTicketStats(competition).hasTickets
+      ? Math.max(1, getTicketStats(competition).remaining)
+      : 20
+    : 20;
+  const [qty, setQty] = useState(() =>
+    competition ? getDefaultQuantity(competition, featuredMax) : 1
+  );
+
+  useEffect(() => {
+    if (!competition) return;
+    const stats = getTicketStats(competition);
+    const maxQty = stats.hasTickets ? Math.max(1, stats.remaining) : 20;
+    setQty(getDefaultQuantity(competition, maxQty));
+  }, [competition?.id, competition?.defaultQuantity]);
 
   useEffect(() => {
     const el = sectionRef.current;
@@ -183,7 +230,6 @@ export default function FeaturedCompetition({ competitions }: Props) {
   const goToSlide = (index: number) => {
     if (index < 0 || index >= count || index === activeIndex) return;
     setActiveIndex(index);
-    setQty(1);
   };
 
   const atFirst = activeIndex === 0;

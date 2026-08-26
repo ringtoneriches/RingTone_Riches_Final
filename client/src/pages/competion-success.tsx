@@ -3,7 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
-import PaymentResult from "@/components/billing/PaymentResult";
+import { readBasket, takeCartCheckoutFlag } from "@/lib/basket";
 
 export default function CheckoutSuccess() {
   const { toast } = useToast();
@@ -79,6 +79,17 @@ export default function CheckoutSuccess() {
                 case "voltz":
                   redirectUrl = `/voltz/${data.competitionId}/${data.orderId}`;
                   break;
+              }
+
+              // Cart card checkout: finish remaining lines, or go play
+              if (takeCartCheckoutFlag()) {
+                queryClient.invalidateQueries({ queryKey: ["/api/user/orders"] });
+                const stillInCart = readBasket().length > 0;
+                setTimeout(
+                  () => setLocation(stillInCart ? "/basket" : "/my-plays"),
+                  2000
+                );
+                return;
               }
 
               // Small delay before redirect for UX

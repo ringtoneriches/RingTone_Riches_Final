@@ -51,6 +51,8 @@ import {
   plinkoUsage,
   userVerifications,
   voltzUsage,
+  slotUsage,
+  royalUsage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sum, sql, notInArray, lt } from "drizzle-orm";
@@ -422,6 +424,24 @@ async getUserRingtonePoints(userId: string): Promise<number> {
   
     return Number(result[0]?.count || 0);
   }
+
+  async getSlotUsed(orderId: string) {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(slotUsage)
+      .where(eq(slotUsage.orderId, orderId));
+
+    return Number(result[0]?.count || 0);
+  }
+
+  async getRoyalUsed(orderId: string) {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(royalUsage)
+      .where(eq(royalUsage.orderId, orderId));
+
+    return Number(result[0]?.count || 0);
+  }
   
 
  async getUserOrders(userId: string): Promise<any[]> {
@@ -464,6 +484,12 @@ async getUserRingtonePoints(userId: string): Promise<number> {
         }
         else if (competitionType === 'voltz' && order.orders.status === 'completed') {
           const used = await this.getVoltzUsed(order.orders.id);
+          remainingPlays = order.orders.quantity - used;
+        } else if (competitionType === 'slot' && order.orders.status === 'completed') {
+          const used = await this.getSlotUsed(order.orders.id);
+          remainingPlays = order.orders.quantity - used;
+        } else if (competitionType === 'royal' && order.orders.status === 'completed') {
+          const used = await this.getRoyalUsed(order.orders.id);
           remainingPlays = order.orders.quantity - used;
         }
 
