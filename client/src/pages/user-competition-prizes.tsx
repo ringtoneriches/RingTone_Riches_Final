@@ -1,17 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import {
-  Gift,
   Trophy,
   Award,
   Crown,
   Gem,
-  Zap,
   ChevronDown,
   ChevronUp,
   Ticket,
-  Percent,
-  Coins
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -218,82 +214,6 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
 
   return (
     <div className="space-y-8 py-4">
-      <div className="space-y-4 text-center">
-        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">On this draw</p>
-        <h2 className="font-prize text-3xl text-white sm:text-5xl">INSTANT WINS</h2>
-        <p className="mx-auto max-w-2xl text-sm text-white/50">
-          Extra prizes sitting in this competition. Claimed or remaining, all shown here.
-        </p>
-
-        {isControlled && prizeTable?.pool ? (
-          <div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-[#0A0A0D] p-4 sm:p-6">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <div className="text-center">
-                <div className="mb-1 flex items-center justify-center gap-2">
-                  <Ticket className="h-4 w-4 text-[#F1D47A]" />
-                  <span className="text-xs uppercase tracking-wider text-white/45">Tickets sold</span>
-                </div>
-                <p className="font-prize text-2xl text-[#F1D47A]">
-                  {prizeTable.pool.soldTickets} / {prizeTable.pool.maxTickets}
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="mb-1 flex items-center justify-center gap-2">
-                  <Gift className="h-4 w-4 text-[#FF263D]" />
-                  <span className="text-xs uppercase tracking-wider text-white/45">Remaining</span>
-                </div>
-                <p className="font-prize text-2xl text-white">{prizeTable.pool.remaining}</p>
-              </div>
-              <div className="col-span-2 text-center sm:col-span-1">
-                <div className="mb-1 flex items-center justify-center gap-2">
-                  <Zap className="h-4 w-4 text-[#F1D47A]" />
-                  <span className="text-xs uppercase tracking-wider text-white/45">Pool</span>
-                </div>
-                <p className="font-prize text-2xl text-white">{prizeTable.pool.percentSold}% sold</p>
-              </div>
-            </div>
-          </div>
-        ) : ticketInfo ? (
-          <div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-[#0A0A0D] p-4 sm:p-6">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div className="text-center">
-                <div className="mb-1 flex items-center justify-center gap-2">
-                  <Percent className="h-4 w-4 text-[#F1D47A]" />
-                  <span className="text-xs uppercase tracking-wider text-white/45">Win rate</span>
-                </div>
-                <p className="font-prize text-2xl text-[#F1D47A]">{ticketInfo.winPercentage}%</p>
-              </div>
-              <div className="text-center">
-                <div className="mb-1 flex items-center justify-center gap-2">
-                  <Coins className="h-4 w-4 text-[#D4AF37]" />
-                  <span className="text-xs uppercase tracking-wider text-white/45">Ticket cost</span>
-                </div>
-                <p className="font-prize text-2xl text-white">{ticketInfo.ticketCost}</p>
-              </div>
-              <div className="text-center">
-                <div className="mb-1 flex items-center justify-center gap-2">
-                  <Gift className="h-4 w-4 text-[#FF263D]" />
-                  <span className="text-xs uppercase tracking-wider text-white/45">Prizes left</span>
-                </div>
-                <p className="font-prize text-2xl text-white">{ticketInfo.totalRemainingPrizes}</p>
-              </div>
-              <div className="text-center">
-                <div className="mb-1 flex items-center justify-center gap-2">
-                  <Zap className="h-4 w-4 text-[#F1D47A]" />
-                  <span className="text-xs uppercase tracking-wider text-white/45">Status</span>
-                </div>
-                <Badge
-                  variant={ticketInfo.isActive && ticketInfo.prizesAvailable ? "default" : "destructive"}
-                  className="mt-1"
-                >
-                  {ticketInfo.isActive && ticketInfo.prizesAvailable ? "Active" : "Inactive"}
-                </Badge>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
       {/* Prizes Grid with Collapsible Animation */}
       <div
         className={cn(
