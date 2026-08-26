@@ -173,15 +173,17 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
 
             <div className="rr-comp-actions mt-auto flex flex-col gap-2 pt-3">
               {!stats.isClosed && (
-                <div className="flex items-center gap-2">
+                <div className="rr-comp-cart-row">
                   <QuantitySelector
                     value={qty}
                     max={maxQty}
                     onChange={setQty}
+                    className="rr-qty"
                   />
                   <button
                     type="button"
                     data-testid={`button-add-basket-${competition.id}`}
+                    aria-label="Add to cart"
                     onClick={(e) => {
                       e.stopPropagation();
                       add(
@@ -201,10 +203,12 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                         description: `${qty} × ${competition.title}`,
                       });
                     }}
-                    className="rr-header-ghost flex h-9 min-w-0 flex-1 items-center justify-center rounded-lg px-2 text-[10px]"
+                    className="rr-comp-add-cart"
                   >
-                    <ShoppingCart className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-                    Add to cart
+                    <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      Add<span className="rr-comp-add-cart-extra"> to cart</span>
+                    </span>
                   </button>
                 </div>
               )}
