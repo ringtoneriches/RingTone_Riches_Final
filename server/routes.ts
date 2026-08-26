@@ -13539,6 +13539,40 @@ app.get(
     }
   );
 
+  app.patch(
+    "/api/admin/competitions/:id/default-quantity",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const raw = Number(req.body?.defaultQuantity);
+        const defaultQuantity = Number.isInteger(raw) ? raw : NaN;
+        if (!Number.isInteger(defaultQuantity) || defaultQuantity < 1 || defaultQuantity > 500) {
+          return res.status(400).json({ message: "Default quantity must be a whole number from 1 to 500" });
+        }
+
+        const [updatedCompetition] = await db
+          .update(competitions)
+          .set({
+            defaultQuantity,
+            updatedAt: new Date(),
+          })
+          .where(eq(competitions.id, id))
+          .returning();
+
+        if (!updatedCompetition) {
+          return res.status(404).json({ message: "Competition not found" });
+        }
+
+        res.json(updatedCompetition);
+      } catch (error) {
+        console.error("Error updating default quantity:", error);
+        res.status(500).json({ message: "Failed to update default quantity" });
+      }
+    }
+  );
+
   // Delete competition
   // In your backend routes file (e.g., routes.ts or server.ts)
 

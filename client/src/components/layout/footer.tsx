@@ -67,6 +67,12 @@ export default function Footer() {
               <a href="/" className="rr-footer-link" data-testid="link-competitions">
                 Competitions
               </a>
+              <a href="/my-plays" className="rr-footer-link" data-testid="link-my-plays">
+                My Plays
+              </a>
+              <a href="/basket" className="rr-footer-link" data-testid="link-basket">
+                Cart
+              </a>
               <a href="/#how-it-works" className="rr-footer-link" data-testid="link-how-it-works">
                 How It Works
               </a>

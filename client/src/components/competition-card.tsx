@@ -2,7 +2,10 @@ import { useLocation } from "wouter";
 import { Competition } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { ShoppingCart } from "lucide-react";
+import { useBasket } from "@/hooks/useBasket";
+import { useToast } from "@/hooks/use-toast";
 import pop from "../../public/pop.jpeg";
 import voltz from "../../public/voltz.jpeg";
 import scratch from "../../public/scratch.jpeg";
@@ -16,6 +19,7 @@ import {
   getCompetitionBadgeLabel,
   getCompetitionTypeConfig,
   getCtaLabel,
+  getDefaultQuantity,
   getFallbackImage,
   getPrizeOffer,
   getStatusBadge,
@@ -29,9 +33,16 @@ interface CompetitionCardProps {
 
 export default function CompetitionCard({ competition }: CompetitionCardProps) {
   const [, setLocation] = useLocation();
-  const [qty, setQty] = useState(1);
+  const { add } = useBasket();
+  const { toast } = useToast();
   const stats = getTicketStats(competition);
   const cd = useCountdown(competition.endDate);
+  const maxQty = stats.hasTickets ? Math.max(1, stats.remaining) : 20;
+  const [qty, setQty] = useState(() => getDefaultQuantity(competition, maxQty));
+
+  useEffect(() => {
+    setQty(getDefaultQuantity(competition, maxQty));
+  }, [competition.id, competition.defaultQuantity]);
 
   const { data: plinkoConfig } = useQuery({
     queryKey: ["/api/plinko-config"],
@@ -57,7 +68,6 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
   const badge = getStatusBadge(stats);
   const cta = getCtaLabel(competition.type, stats.isClosed);
   const TypeIcon = typeCfg.Icon;
-  const maxQty = stats.hasTickets ? Math.max(1, stats.remaining) : 20;
 
   const imageSrc =
     competition.imageUrl ||
@@ -161,14 +171,42 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
               )}
             </div>
 
-            <div className="rr-comp-actions mt-auto flex items-center gap-2 pt-3 max-md:flex-col max-md:items-stretch max-md:gap-2">
+            <div className="rr-comp-actions mt-auto flex flex-col gap-2 pt-3">
               {!stats.isClosed && (
-                <QuantitySelector
-                  value={qty}
-                  max={maxQty}
-                  onChange={setQty}
-                  className="max-md:w-full max-md:justify-between"
-                />
+                <div className="flex items-center gap-2">
+                  <QuantitySelector
+                    value={qty}
+                    max={maxQty}
+                    onChange={setQty}
+                  />
+                  <button
+                    type="button"
+                    data-testid={`button-add-basket-${competition.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      add(
+                        {
+                          competitionId: competition.id,
+                          type: competition.type || "instant",
+                          title: competition.title,
+                          imageUrl: competition.imageUrl || undefined,
+                          ticketPrice: competition.ticketPrice,
+                          quantity: qty,
+                          wheelType: competition.wheelType,
+                        },
+                        maxQty
+                      );
+                      toast({
+                        title: "Added to cart",
+                        description: `${qty} × ${competition.title}`,
+                      });
+                    }}
+                    className="rr-header-ghost flex h-9 min-w-0 flex-1 items-center justify-center rounded-lg px-2 text-[10px]"
+                  >
+                    <ShoppingCart className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                    Add to cart
+                  </button>
+                </div>
               )}
               <button
                 type="button"
@@ -178,7 +216,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                   e.stopPropagation();
                   goToCompetition(true);
                 }}
-                className="rr-cta h-10 min-w-0 flex-1 rounded-lg px-3 text-[11px] font-black uppercase tracking-wider whitespace-nowrap disabled:opacity-50 max-md:!flex max-md:!h-11 max-md:!w-full max-md:!flex-none max-md:!items-center max-md:!justify-center max-md:!rounded-md max-md:!px-2 max-md:!text-[11px] max-md:!leading-none max-md:!tracking-[0.14em]"
+                className="rr-cta h-10 w-full rounded-lg px-3 text-[11px] font-black uppercase tracking-wider whitespace-nowrap disabled:opacity-50 max-md:!flex max-md:!h-11 max-md:!items-center max-md:!justify-center max-md:!rounded-md max-md:!text-[11px] max-md:!leading-none max-md:!tracking-[0.14em]"
               >
                 {cta}
               </button>

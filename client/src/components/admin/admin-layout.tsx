@@ -38,6 +38,7 @@ import {
   TicketCheck,
   Gift,
   Star,
+  Hash,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,6 +80,7 @@ const sidebarGroups = [
     items: [
       { name: "Competitions", path: "/admin/competitions", icon: Trophy },
       { name: "Featured slider", path: "/admin/featured", icon: Star },
+      { name: "Card quantity", path: "/admin/card-quantity", icon: Hash },
       { name: "Entries", path: "/admin/entries", icon: Ticket },
       { name: "Winners", path: "/admin/winners", icon: Trophy },
     ],

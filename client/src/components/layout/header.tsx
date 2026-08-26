@@ -7,10 +7,12 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Menu, X, Wallet, Music, User as UserIcon, LogOut, ChevronRight, Bell } from "lucide-react";
+import { Menu, X, Wallet, Music, User as UserIcon, LogOut, ChevronRight, Bell, ShoppingCart, Gamepad2 } from "lucide-react";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import AnnouncementTicker from "@/components/home/AnnouncementTicker";
 import ThemeToggle from "@/components/layout/ThemeToggle";
+import MyPlaysDock from "@/components/layout/MyPlaysDock";
+import { useBasket } from "@/hooks/useBasket";
 
 // Helper function to safely parse balance
 function getValidBalance(balance: string | null | undefined): number {
@@ -137,6 +139,7 @@ export default function Header() {
 
   const ringtonePoints = userData?.ringtonePoints ?? user?.ringtonePoints ?? 0;
   const userBalance = getValidBalance(userData?.balance ?? user?.balance);
+  const { count: basketCount } = useBasket();
 
   const chrome = (
     <>
@@ -178,7 +181,15 @@ export default function Header() {
                 </span>
               </Link>
 
-              <div className="relative z-10 ml-auto shrink-0">
+              <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1.5">
+                <Link href="/basket" aria-label="Cart">
+                  <div className="rr-header-cart" data-testid="button-basket">
+                    <ShoppingCart className="h-4 w-4" />
+                    {basketCount > 0 && (
+                      <span className="rr-header-cart-badge">{basketCount > 99 ? "99+" : basketCount}</span>
+                    )}
+                  </div>
+                </Link>
                 <Link href={isAuthenticated ? "/wallet?tab=wallet" : "/login"}>
                   <div className="rr-header-chip rr-header-chip--balance cursor-pointer" data-testid="button-wallet">
                     <Wallet className="h-3.5 w-3.5 shrink-0 text-[#F1D47A]" />
@@ -195,7 +206,7 @@ export default function Header() {
               </div>
             </Link>
 
-            <div className="hidden lg:flex items-center gap-10">
+            <div className="hidden lg:flex items-center gap-6 xl:gap-10">
               <Link href="/">
                 <span className={`rr-nav-link cursor-pointer ${location === "/" ? "is-active" : ""}`} data-testid="link-competitions">
                   Competitions
@@ -224,6 +235,14 @@ export default function Header() {
 
             <div className="hidden lg:flex items-center gap-3">
               <ThemeToggle />
+              <Link href="/basket" aria-label="Cart">
+                <div className="rr-header-cart" data-testid="button-basket-desktop">
+                  <ShoppingCart className="h-4 w-4" />
+                  {basketCount > 0 && (
+                    <span className="rr-header-cart-badge">{basketCount > 99 ? "99+" : basketCount}</span>
+                  )}
+                </div>
+              </Link>
               {isAuthenticated ? (
                 <>
                   <Link href="/wallet?tab=points">
@@ -278,6 +297,7 @@ export default function Header() {
       <div className={`rr-theme-dock ${mobileOpen ? "invisible pointer-events-none" : ""}`}>
         <ThemeToggle />
       </div>
+      <MyPlaysDock hidden={mobileOpen} />
 
       {/* Mobile Menu - Optimized for performance */}
       <div 
@@ -325,6 +345,25 @@ export default function Header() {
               <Link href="/" onClick={closeMobileMenu}>
                 <div className="rr-mobile-item group active:scale-98">
                   <span className="text-sm font-black uppercase tracking-[0.16em] text-white">Competitions</span>
+                  <ChevronRight className="w-5 h-5 text-[#F1D47A] group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+              <Link href="/my-plays" onClick={closeMobileMenu}>
+                <div className="rr-mobile-item group active:scale-98">
+                  <div className="flex items-center gap-3">
+                    <Gamepad2 className="w-5 h-5 text-[#F1D47A]" />
+                    <span className="text-sm font-black uppercase tracking-[0.16em] text-white">My Plays</span>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-[#F1D47A] group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+              <Link href="/basket" onClick={closeMobileMenu}>
+                <div className="rr-mobile-item group active:scale-98">
+                  <div className="flex items-center gap-3">
+                    <ShoppingCart className="w-5 h-5 text-[#F1D47A]" />
+                    <span className="text-sm font-black uppercase tracking-[0.16em] text-white">Cart</span>
+                    {basketCount > 0 && <span className="rr-nav-count">{basketCount}</span>}
+                  </div>
                   <ChevronRight className="w-5 h-5 text-[#F1D47A] group-hover:translate-x-1 transition-transform" />
                 </div>
               </Link>
