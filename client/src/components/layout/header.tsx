@@ -154,10 +154,10 @@ export default function Header() {
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
           <nav className="flex h-16 items-center justify-between lg:h-[4.5rem]">
             {/* Mobile: menu | centered logo | wallet */}
-            <div className="relative flex h-16 w-full items-center lg:hidden">
+            <div className="grid h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 lg:hidden">
               <button
                 ref={menuButtonRef}
-                className="relative z-10 rr-header-menu shrink-0"
+                className="rr-header-menu shrink-0"
                 onClick={toggleMobileMenu}
                 data-testid="button-mobile-menu"
                 aria-label="Menu"
@@ -169,20 +169,15 @@ export default function Header() {
                 {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
 
-              <Link
-                href="/"
-                className="pointer-events-none absolute inset-0 flex items-center justify-center"
-              >
-                <span className="pointer-events-auto flex max-w-[32vw] cursor-pointer items-center justify-center">
-                  <BrandLogo
-                    className="h-8 w-auto max-w-full object-contain"
-                    testId="img-logo"
-                  />
-                </span>
+              <Link href="/" className="flex min-w-0 items-center justify-center">
+                <BrandLogo
+                  className="h-7 w-auto max-h-7 max-w-full object-contain sm:h-8 sm:max-h-8"
+                  testId="img-logo"
+                />
               </Link>
 
-              <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1.5">
-                <Link href="/basket" aria-label="Cart">
+              <div className="rr-header-actions">
+                <Link href="/basket" aria-label="Cart" className="shrink-0">
                   <div className="rr-header-cart" data-testid="button-basket">
                     <ShoppingCart className="h-4 w-4" />
                     {basketCount > 0 && (
@@ -190,10 +185,10 @@ export default function Header() {
                     )}
                   </div>
                 </Link>
-                <Link href={isAuthenticated ? "/wallet?tab=wallet" : "/login"}>
+                <Link href={isAuthenticated ? "/wallet?tab=wallet" : "/login"} className="shrink-0">
                   <div className="rr-header-chip rr-header-chip--balance cursor-pointer" data-testid="button-wallet">
                     <Wallet className="h-3.5 w-3.5 shrink-0 text-[#F1D47A]" />
-                    <span className="whitespace-nowrap">£{userBalance.toFixed(2)}</span>
+                    <span className="whitespace-nowrap tabular-nums">£{userBalance.toFixed(2)}</span>
                   </div>
                 </Link>
               </div>

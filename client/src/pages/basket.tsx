@@ -264,9 +264,9 @@ export default function BasketPage() {
 
         <section className="px-4 pb-16 pt-28 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-6xl">
-            <div className="mb-8 max-w-2xl">
+            <div className="mb-6 max-w-2xl sm:mb-8">
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">Pay once</p>
-              <h1 className="mt-2 font-prize text-5xl leading-none text-white sm:text-6xl">CART</h1>
+              <h1 className="mt-2 font-prize text-[2.35rem] leading-none text-white sm:text-5xl lg:text-6xl">CART</h1>
               <p className="mt-3 text-sm text-white/50 sm:text-base">
                 ENTER NOW still buys a single game on the spot. Cart lets you collect a few, then pay in one go.
               </p>
@@ -274,11 +274,11 @@ export default function BasketPage() {
 
             {items.length === 0 ? (
               <ChaserBorder variant="card" className="max-w-xl">
-                <div className="flex flex-col items-center px-6 py-14 text-center">
+                <div className="flex flex-col items-center px-4 py-10 text-center sm:px-6 sm:py-14">
                   <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#D4AF37]/30 bg-[#D4AF37]/10">
                     <ShoppingBag className="h-7 w-7 text-[#F1D47A]" />
                   </div>
-                  <h2 className="font-prize text-3xl text-white">{emptyCopy.title}</h2>
+                  <h2 className="font-prize text-2xl text-white sm:text-3xl">{emptyCopy.title}</h2>
                   <p className="mt-3 max-w-sm text-sm text-white/50">{emptyCopy.body}</p>
                   <Link href="/">
                     <button className="rr-cta mt-7 inline-flex h-12 items-center justify-center rounded-xl px-7 text-sm font-black uppercase tracking-[0.14em]">
@@ -294,50 +294,54 @@ export default function BasketPage() {
                     const line = lineTotal(item.ticketPrice, item.quantity, item.type);
                     return (
                       <ChaserBorder key={item.competitionId} variant="card">
-                        <article className="flex gap-4 p-4 sm:p-5">
-                          <div className="h-24 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/40 sm:h-28 sm:w-24">
-                            {item.imageUrl ? (
-                              <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              <div className="flex h-full items-center justify-center text-[#F1D47A]">
-                                <ShoppingBag className="h-6 w-6" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#F1D47A]">
-                              {gameTypeLabel(item.type)}
-                            </p>
-                            <h3 className="mt-1 truncate font-prize text-2xl text-white">{item.title}</h3>
-                            <p className="mt-1 text-xs text-white/40">
-                              £{parseFloat(item.ticketPrice || "0").toFixed(2)} each
-                              {line.savings > 0 && (
-                                <span className="ml-2 text-[#F1D47A]">· {line.discountPercent}% bundle off</span>
+                        <article className="p-3.5 sm:p-5">
+                          <div className="flex items-start gap-3">
+                            <div className="h-[4.75rem] w-16 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/40 sm:h-28 sm:w-24">
+                              {item.imageUrl ? (
+                                <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full items-center justify-center text-[#F1D47A]">
+                                  <ShoppingBag className="h-6 w-6" />
+                                </div>
                               )}
-                            </p>
-                            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                              <QuantitySelector
-                                value={item.quantity}
-                                min={1}
-                                max={500}
-                                onChange={(qty) => setQty(item.competitionId, qty)}
-                              />
-                              <div className="text-right">
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#F1D47A]">
+                                {gameTypeLabel(item.type)}
+                              </p>
+                              <h3 className="mt-1 line-clamp-2 font-prize text-lg leading-tight text-white sm:text-2xl">
+                                {item.title}
+                              </h3>
+                              <p className="mt-1 text-xs text-white/40">
+                                £{parseFloat(item.ticketPrice || "0").toFixed(2)} each
                                 {line.savings > 0 && (
-                                  <p className="text-xs text-white/35 line-through">£{line.originalPrice.toFixed(2)}</p>
+                                  <span className="ml-2 text-[#F1D47A]">· {line.discountPercent}% bundle off</span>
                                 )}
-                                <p className="font-prize text-2xl text-[#F1D47A]">£{line.discountedPrice.toFixed(2)}</p>
-                              </div>
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => remove(item.competitionId)}
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 text-white/40 transition-colors hover:border-[#FF263D]/40 hover:text-[#FF263D]"
+                              aria-label={`Remove ${item.title}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
+                            <QuantitySelector
+                              value={item.quantity}
+                              min={1}
+                              max={500}
+                              onChange={(qty) => setQty(item.competitionId, qty)}
+                            />
+                            <div className="min-w-0 text-right">
+                              {line.savings > 0 && (
+                                <p className="text-xs text-white/35 line-through">£{line.originalPrice.toFixed(2)}</p>
+                              )}
+                              <p className="font-prize text-xl text-[#F1D47A] sm:text-2xl">£{line.discountedPrice.toFixed(2)}</p>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => remove(item.competitionId)}
-                            className="self-start rounded-lg border border-white/10 p-2 text-white/40 transition-colors hover:border-[#FF263D]/40 hover:text-[#FF263D]"
-                            aria-label={`Remove ${item.title}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
                         </article>
                       </ChaserBorder>
                     );
@@ -353,8 +357,8 @@ export default function BasketPage() {
 
                 <aside className="lg:sticky lg:top-28 lg:self-start">
                   <ChaserBorder variant="card">
-                    <div className="p-5 sm:p-6">
-                      <h2 className="font-prize text-3xl text-white">PAY ONCE</h2>
+                    <div className="p-4 sm:p-6">
+                      <h2 className="font-prize text-2xl text-white sm:text-3xl">PAY ONCE</h2>
                       <div className="mt-5 space-y-2 text-sm">
                         <div className="flex justify-between text-white/50">
                           <span>Lines</span>
@@ -368,9 +372,9 @@ export default function BasketPage() {
                             <span>−£{totals.savings.toFixed(2)}</span>
                           </div>
                         )}
-                        <div className="flex justify-between border-t border-white/10 pt-3">
+                        <div className="flex items-end justify-between gap-3 border-t border-white/10 pt-3">
                           <span className="text-xs font-black uppercase tracking-widest text-white/40">Total</span>
-                          <span className="font-prize text-4xl text-[#F1D47A]">£{totals.pay.toFixed(2)}</span>
+                          <span className="font-prize text-3xl leading-none text-[#F1D47A] sm:text-4xl">£{totals.pay.toFixed(2)}</span>
                         </div>
                       </div>
 
@@ -382,19 +386,19 @@ export default function BasketPage() {
                           type="button"
                           onClick={() => toggleMethod("wallet")}
                           data-testid="cart-pay-wallet"
-                          className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors ${
+                          className={`flex w-full items-center gap-2.5 rounded-xl border px-3 py-3 text-left transition-colors sm:gap-3 sm:px-3.5 ${
                             methods.wallet
                               ? "border-[#D4AF37]/55 bg-[#D4AF37]/10"
                               : "border-white/10 bg-black/30"
                           }`}
                         >
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/10">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/10 sm:h-10 sm:w-10">
                             <Wallet className="h-4 w-4 text-[#F1D47A]" />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-2">
-                              <span className="text-sm font-bold">Wallet balance</span>
-                              <span className="rounded-full border border-[#D4AF37]/30 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[#F1D47A]">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="truncate text-sm font-bold">Wallet balance</span>
+                              <span className="shrink-0 rounded-full border border-[#D4AF37]/30 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[#F1D47A]">
                                 Fast
                               </span>
                             </span>
@@ -417,7 +421,7 @@ export default function BasketPage() {
                           type="button"
                           onClick={() => toggleMethod("points")}
                           data-testid="cart-pay-points"
-                          className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors ${
+                          className={`flex w-full items-center gap-2.5 rounded-xl border px-3 py-3 text-left transition-colors sm:gap-3 sm:px-3.5 ${
                             !pointsAllowed
                               ? "cursor-not-allowed border-white/10 bg-black/20 opacity-50"
                               : methods.points
@@ -425,14 +429,14 @@ export default function BasketPage() {
                                 : "border-white/10 bg-black/30"
                           }`}
                         >
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/10">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/10 sm:h-10 sm:w-10">
                             <Music className="h-4 w-4 text-[#F1D47A]" />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-2">
-                              <span className="text-sm font-bold">Ringtone Points</span>
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="truncate text-sm font-bold">Ringtone Points</span>
                               {!pointsAllowed && (
-                                <span className="rounded-full bg-[#FF263D]/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[#FF263D]">
+                                <span className="shrink-0 rounded-full bg-[#FF263D]/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[#FF263D]">
                                   N/A
                                 </span>
                               )}
@@ -456,19 +460,19 @@ export default function BasketPage() {
                           type="button"
                           onClick={() => toggleMethod("instaplay")}
                           data-testid="cart-pay-card"
-                          className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors ${
+                          className={`flex w-full items-center gap-2.5 rounded-xl border px-3 py-3 text-left transition-colors sm:gap-3 sm:px-3.5 ${
                             methods.instaplay
                               ? "border-[#C8102E]/55 bg-[#C8102E]/10"
                               : "border-white/10 bg-black/30"
                           }`}
                         >
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#C8102E]/30 bg-[#C8102E]/10">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#C8102E]/30 bg-[#C8102E]/10 sm:h-10 sm:w-10">
                             <CreditCard className="h-4 w-4 text-[#FF263D]" />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-2">
-                              <span className="text-sm font-bold">Instant Play</span>
-                              <span className="rounded-full border border-[#C8102E]/30 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[#FF263D]">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="truncate text-sm font-bold">Instant Play</span>
+                              <span className="shrink-0 rounded-full border border-[#C8102E]/30 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[#FF263D]">
                                 Card
                               </span>
                             </span>
@@ -499,7 +503,7 @@ export default function BasketPage() {
                       {walletShort && (
                         <div className="mt-4 rounded-xl border border-[#FF263D]/30 bg-[#FF263D]/10 px-4 py-3 text-sm text-white/80">
                           Need £{remainingAmount.toFixed(2)} more, or switch to Instant Play.
-                          <Link href="/wallet?tab=wallet" className="ml-2 font-bold text-[#F1D47A] underline">
+                          <Link href="/wallet?tab=wallet" className="mt-1 block font-bold text-[#F1D47A] underline sm:ml-2 sm:mt-0 sm:inline">
                             Top up wallet
                           </Link>
                         </div>
@@ -509,7 +513,7 @@ export default function BasketPage() {
                         type="button"
                         disabled={checkout.isPending || !hasSelectedMethod || instaplayBlocked || walletShort}
                         onClick={startCheckout}
-                        className="rr-cta mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-sm font-black uppercase tracking-[0.14em] disabled:opacity-50"
+                        className="rr-cta mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-black uppercase tracking-[0.14em] disabled:opacity-50 sm:h-14"
                       >
                         {checkout.isPending
                           ? progress || "Paying…"

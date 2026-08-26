@@ -600,7 +600,7 @@ export default function CompetitionPage() {
                 )}
 
                 {!isFreeGiveaway && (
-                  <div className="mt-5 flex items-center gap-3">
+                  <div className="mt-5 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center">
                     <QuantitySelector
                       value={quantity}
                       min={1}
@@ -608,12 +608,13 @@ export default function CompetitionPage() {
                       onChange={setQuantity}
                       disabled={stats.isClosed}
                       size="lg"
+                      className="rr-qty w-full justify-between min-[420px]:w-auto min-[420px]:justify-start"
                     />
                     {!isSoldOut && (
                       <button
                         type="button"
                         onClick={handleAddToBasket}
-                        className="rr-header-ghost flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl text-xs sm:h-14"
+                        className="rr-header-ghost flex h-12 w-full min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 text-xs tracking-[0.08em] sm:h-14"
                         data-testid="button-add-basket"
                       >
                         <ShoppingCart className="h-4 w-4 shrink-0" />

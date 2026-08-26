@@ -133,12 +133,13 @@ function FeaturedSlide({
 
         <div className="mt-4 flex flex-col gap-2 sm:mt-6">
           {!stats.isClosed && (
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center">
               <QuantitySelector
                 value={qty}
                 max={maxQty}
                 onChange={setQty}
                 size="lg"
+                className="rr-qty w-full justify-between min-[420px]:w-auto min-[420px]:justify-start"
               />
               <button
                 type="button"
@@ -160,10 +161,10 @@ function FeaturedSlide({
                     description: `${qty} × ${competition.title}`,
                   });
                 }}
-                className="rr-header-ghost flex h-12 min-w-0 flex-1 items-center justify-center rounded-xl text-[11px] sm:h-14 sm:text-xs"
+                className="rr-header-ghost flex h-12 w-full min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 text-[11px] tracking-[0.08em] min-[420px]:h-12 sm:h-14 sm:text-xs"
                 data-testid={`button-featured-basket-${competition.id}`}
               >
-                <ShoppingCart className="mr-2 h-4 w-4 shrink-0" />
+                <ShoppingCart className="h-4 w-4 shrink-0" />
                 Add to cart
               </button>
             </div>
