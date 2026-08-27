@@ -1089,7 +1089,7 @@ if (congratsAudioRef.current) {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
               <h3 className="text-center sm:text-left text-base sm:text-xl md:text-2xl font-black text-gray-900 flex items-center gap-1 sm:gap-2">
                 {/* <span className="text-lg sm:text-2xl">🎡</span> */}
-                <span className="whitespace-nowrap">Spin Progress</span>
+                <span className="whitespace-nowrap">Spin Results</span>
               </h3>
               {spinHistory.filter(s => s.status === "NOT SPUN").length > 0 && (
                 <button

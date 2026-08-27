@@ -110,7 +110,7 @@ function getPrizeOfferLabel(prize: { prizeValue: number; ringtonePoints?: number
   if (points > 0 && cash <= 0) {
     return { amount: points.toLocaleString(), suffix: "Ringtone Points" };
   }
-  return { amount: `£${cash.toLocaleString()}`, suffix: "value" };
+  return { amount: `£${cash.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, suffix: "value" };
 }
 
 export default function UserCompetitionPrizes({ competitionId }: UserCompetitionPrizesProps) {

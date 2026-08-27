@@ -17,7 +17,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, Sparkles, Zap, Crown, Ticket, Trophy, Lock, Mail, ShoppingCart } from "lucide-react";
+import { Minus, Plus, Sparkles, Zap, Ticket, Trophy, Lock, Mail, ShoppingCart } from "lucide-react";
 import { useBasket } from "@/hooks/useBasket";
 import UserCompetitionPrizes from "./user-competition-prizes";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
@@ -101,20 +101,6 @@ function calculateDiscountedPrice(basePrice: number, quantity: number) {
     discountedPrice: parseFloat(discountedPrice.toFixed(2)),
     savings: parseFloat(savings.toFixed(2)),
   };
-}
-
-function getApplicableDiscount(quantity: number): number {
-  const cappedQuantity = Math.min(quantity, 15);
-  const sortedTiers = Object.keys(TICKET_DISCOUNTS)
-    .map(Number)
-    .sort((a, b) => b - a);
-  
-  for (const tier of sortedTiers) {
-    if (cappedQuantity >= tier) {
-      return TICKET_DISCOUNTS[tier] * 100;
-    }
-  }
-  return 0;
 }
 
 export default function CompetitionPage() {
@@ -393,10 +379,6 @@ export default function CompetitionPage() {
       },
       maxTicketsAllowed
     );
-    toast({
-      title: "Added to cart",
-      description: `${quantity} × ${competition.title}. Pay once from Cart, or keep using ENTER NOW.`,
-    });
   };
 
   if (isLoading) {
@@ -600,7 +582,7 @@ export default function CompetitionPage() {
                 )}
 
                 {!isFreeGiveaway && (
-                  <div className="mt-5 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center">
+                  <div className="mt-5 flex items-stretch gap-2">
                     <QuantitySelector
                       value={quantity}
                       min={1}
@@ -608,17 +590,19 @@ export default function CompetitionPage() {
                       onChange={setQuantity}
                       disabled={stats.isClosed}
                       size="lg"
-                      className="rr-qty w-full justify-between min-[420px]:w-auto min-[420px]:justify-start"
+                      className="rr-qty shrink-0"
                     />
                     {!isSoldOut && (
                       <button
                         type="button"
                         onClick={handleAddToBasket}
-                        className="rr-header-ghost flex h-12 w-full min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 text-xs tracking-[0.08em] sm:h-14"
+                        className="rr-add-cart-btn"
                         data-testid="button-add-basket"
                       >
                         <ShoppingCart className="h-4 w-4 shrink-0" />
-                        Add to cart
+                        <span>
+                          Add<span className="rr-add-cart-btn-extra"> to cart</span>
+                        </span>
                       </button>
                     )}
                   </div>
@@ -654,7 +638,7 @@ export default function CompetitionPage() {
                   onClick={scrollToRange}
                   className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.16em] text-white/40 transition-colors hover:text-[#F1D47A]"
                 >
-                  More quantities & bundles
+                  More quantities
                 </button>
 
                 {isAuthenticated && user && (
@@ -690,57 +674,22 @@ export default function CompetitionPage() {
       )}
 
       <section className="relative z-10 py-10 sm:py-14">
-        <div ref={rangeRef} className="mx-auto max-w-3xl px-4 text-center sm:px-6">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">Your shot</p>
-          <h2 className="mt-2 font-prize text-3xl text-white sm:text-4xl">SELECT ENTRIES</h2>
-          <p className="mt-2 text-sm text-white/50">Choose quantity, then enter. Same checkout as before.</p>
+        <div ref={rangeRef} className="mx-auto max-w-3xl px-4 sm:px-6">
+          <div className="text-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">Your shot</p>
+            <h2 className="mt-2 font-prize text-3xl text-white sm:text-4xl">SELECT ENTRIES</h2>
+            <p className="mt-2 text-sm text-white/50">
+              {isGameType
+                ? "Pick a quantity. 5, 10 and 15 unlock bundle savings automatically."
+                : "Choose quantity, then enter. Same checkout as before."}
+            </p>
+          </div>
 
-          {isGameType && (
-            <div className="mt-8 rounded-2xl border border-white/10 bg-[#0A0A0D] p-4 sm:p-6">
-              <div className="mb-5 flex items-center justify-center gap-2">
-                <Crown className="h-5 w-5 text-[#F1D47A]" />
-                <h3 className="font-prize text-xl text-[#F1D47A]">Bundle & save</h3>
-              </div>
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                {[
-                  { qty: 5, discount: 5, label: "Starter" },
-                  { qty: 10, discount: 10, label: "Popular" },
-                  { qty: 15, discount: 15, label: "Best value" },
-                ].map((tier) => {
-                  const isSelected = quantity === tier.qty;
-                  const savingsAmount = ((pricePerTicket * tier.qty) * (tier.discount / 100)).toFixed(2);
-                  return (
-                    <button
-                      key={tier.qty}
-                      onClick={() => setQuantity(tier.qty)}
-                      className={`relative rounded-xl border px-2 py-4 transition-all ${
-                        isSelected
-                          ? "border-[#F1D47A] bg-[#C8102E] text-white shadow-[0_8px_24px_rgba(200,16,46,0.35)]"
-                          : "border-white/10 bg-white/[0.03] text-white hover:border-[#C8102E]/50"
-                      }`}
-                    >
-                      <div className="text-xs font-black uppercase tracking-widest opacity-70">{tier.label}</div>
-                      <div className="mt-1 text-lg font-black">
-                        {tier.qty} {competitionType === "spin" ? "Spins" : competitionType === "scratch" ? "Scratches" : competitionType === "pop" ? "Pops" : competitionType === "plinko" ? "Drops" : competitionType === "slot" ? "Slots" : competitionType === "royal" ? "Plays" : "Plays"}
-                      </div>
-                      <div className={`mt-1 font-prize text-2xl ${isSelected ? "text-[#F1D47A]" : "text-[#F1D47A]"}`}>
-                        {tier.discount}%
-                      </div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-white/55">off</div>
-                      <div className="mt-2 text-[10px] font-semibold text-white/70">Save £{savingsAmount}</div>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-4 text-[10px] text-white/35">Discount automatically applied · Cannot be combined</p>
-            </div>
-          )}
-
-          <div className="mt-6 rounded-2xl border border-white/10 bg-[#0A0A0D] p-5 sm:p-8">
+          <div className="mt-7 overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0D]">
             {isFreeGiveaway ? (
-              <div className="space-y-4">
+              <div className="space-y-4 p-5 sm:p-8">
                 {userTicketCount >= maxTicketsForGiveaway ? (
-                  <div className="rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/8 p-4">
+                  <div className="rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/8 p-4 text-center">
                     <p className="font-semibold text-[#F1D47A]">You have {userTicketCount} tickets</p>
                     <p className="mt-1 text-xs text-white/50">Maximum {maxTicketsForGiveaway} per user</p>
                   </div>
@@ -764,99 +713,89 @@ export default function CompetitionPage() {
                         </button>
                       ))}
                     </div>
-                    <p className="text-xs text-white/50">
+                    <p className="text-center text-xs text-white/50">
                       {remainingTickets === 1 ? "1 ticket remaining" : `${remainingTickets} tickets remaining`}
                     </p>
                   </>
                 )}
               </div>
             ) : (
-              <div className="space-y-6">
-                <div className="flex flex-wrap justify-center gap-2">
-                  {[1, 5, 10, 15, 20, 30].map((num) => {
-                    const discount = isGameType ? getApplicableDiscount(num) : 0;
-                    const discountedPlays = num <= 15 ? num : 15;
-                    const fullPricePlays = num <= 15 ? 0 : num - 15;
-                    const pillPrice = isGameType
-                      ? (pricePerTicket * discountedPlays * (1 - discount / 100)) + (pricePerTicket * fullPricePlays)
-                      : pricePerTicket * num;
+              <div className="p-4 sm:p-6">
+                {isGameType && (
+                  <div className="mb-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40 sm:text-xs">
+                    <Sparkles className="h-3.5 w-3.5 text-[#F1D47A]" />
+                    <span>5 for 5%</span>
+                    <span>10 for 10%</span>
+                    <span>15 for 15%</span>
+                  </div>
+                )}
 
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  {[1, 5, 10, 15, 20, 30].map((num) => {
+                    const pill = isGameType
+                      ? calculateDiscountedPrice(pricePerTicket, num)
+                      : { discountedPrice: pricePerTicket * num, discountPercent: 0 };
+                    const selected = quantity === num;
                     return (
                       <button
                         key={num}
+                        type="button"
                         onClick={() => setQuantity(num)}
-                        className={`relative min-w-[65px] rounded-xl border-2 px-3 py-2.5 text-xs font-bold transition-all md:min-w-[75px] md:px-4 md:text-sm ${
-                          quantity === num
-                            ? "scale-105 border-transparent bg-[#C8102E] text-white shadow-[0_8px_24px_rgba(200,16,46,0.35)]"
-                            : "border-white/10 bg-transparent text-white hover:border-[#C8102E]/40"
+                        className={`relative rounded-xl border px-2 py-3 text-center transition-all sm:py-3.5 ${
+                          selected
+                            ? "border-[#F1D47A]/50 bg-[#C8102E] text-white shadow-[0_8px_24px_rgba(200,16,46,0.35)]"
+                            : "border-white/10 bg-white/[0.03] text-white hover:border-[#C8102E]/40"
                         }`}
                         data-testid={`button-quantity-${num}`}
                       >
-                        <div className="text-base font-black md:text-lg">{num}</div>
-                        {isGameType && discount > 0 && num <= 15 && (
-                          <div
-                            className={`absolute -right-2 -top-2 rounded-full px-1.5 py-0.5 text-[9px] font-black ${
-                              quantity === num ? "bg-black text-[#F1D47A]" : "bg-[#F1D47A] text-black"
+                        <div className="font-prize text-2xl leading-none">{num}</div>
+                        <div className={`mt-1 text-[10px] font-semibold ${selected ? "text-white/80" : "text-white/40"}`}>
+                          £{pill.discountedPrice.toFixed(2)}
+                        </div>
+                        {isGameType && pill.discountPercent > 0 && num <= 15 && (
+                          <span
+                            className={`absolute -right-1.5 -top-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-black ${
+                              selected ? "bg-black text-[#F1D47A]" : "bg-[#F1D47A] text-black"
                             }`}
                           >
-                            -{discount}%
-                          </div>
+                            -{pill.discountPercent}%
+                          </span>
                         )}
-                        <div className={`mt-0.5 text-[9px] font-medium ${quantity === num ? "text-white/80" : "text-white/40"}`}>
-                          £{pillPrice.toFixed(2)}
-                        </div>
                       </button>
                     );
                   })}
                 </div>
 
-                <div>
-                  <div className="font-prize text-5xl text-[#F1D47A] md:text-6xl">{quantity}</div>
-                  <div className="mt-1 text-sm font-medium uppercase tracking-wider text-white/45">
-                    {playNoun(competitionType, quantity)}
-                  </div>
-                  {isGameType && discountPercent > 0 && (
-                    <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-4 py-1.5">
-                      <Sparkles className="h-3.5 w-3.5 text-[#F1D47A]" />
-                      <span className="text-xs font-bold text-[#F1D47A] md:text-sm">
-                        {discountPercent}% discount active
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-4 md:gap-6">
+                <div className="mt-5 flex items-center gap-3 sm:gap-4">
                   <button
+                    type="button"
                     onClick={() => setQuantity((prev) => Math.max(prev - 1, 1))}
                     disabled={quantity <= 1}
-                    className={`rounded-xl p-3 font-semibold transition-all ${
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all ${
                       quantity <= 1
                         ? "cursor-not-allowed border border-white/5 bg-white/[0.03] text-white/25"
-                        : "bg-[#C8102E] text-white hover:scale-110"
+                        : "bg-[#C8102E] text-white hover:brightness-110"
                     }`}
                     data-testid="button-decrease"
                   >
                     <Minus className="h-5 w-5" />
                   </button>
-
-                  <div className="relative flex-1">
-                    <input
-                      type="range"
-                      min="1"
-                      max={maxTicketsAllowed}
-                      value={Math.min(quantity, maxTicketsAllowed)}
-                      onChange={(e) => setQuantity(Number(e.target.value))}
-                      className="rr-qty-slider w-full cursor-pointer"
-                      data-testid="slider-quantity"
-                      style={{
-                        background: `linear-gradient(to right, #C8102E ${((Math.min(quantity, maxTicketsAllowed) - 1) * 100) / (maxTicketsAllowed - 1)}%, rgba(255,255,255,0.1) ${((Math.min(quantity, maxTicketsAllowed) - 1) * 100) / (maxTicketsAllowed - 1)}%)`,
-                      }}
-                    />
-                  </div>
-
+                  <input
+                    type="range"
+                    min="1"
+                    max={maxTicketsAllowed}
+                    value={Math.min(quantity, maxTicketsAllowed)}
+                    onChange={(e) => setQuantity(Number(e.target.value))}
+                    className="rr-qty-slider min-w-0 flex-1 cursor-pointer"
+                    data-testid="slider-quantity"
+                    style={{
+                      background: `linear-gradient(to right, #C8102E ${((Math.min(quantity, maxTicketsAllowed) - 1) * 100) / Math.max(maxTicketsAllowed - 1, 1)}%, rgba(255,255,255,0.1) ${((Math.min(quantity, maxTicketsAllowed) - 1) * 100) / Math.max(maxTicketsAllowed - 1, 1)}%)`,
+                    }}
+                  />
                   <button
+                    type="button"
                     onClick={() => setQuantity((prev) => prev + 1)}
-                    className="rounded-xl bg-[#C8102E] p-3 font-semibold text-white transition-all hover:scale-110"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#C8102E] text-white transition-all hover:brightness-110"
                     data-testid="button-increase"
                   >
                     <Plus className="h-5 w-5" />
@@ -865,71 +804,47 @@ export default function CompetitionPage() {
               </div>
             )}
 
-            <div className="mt-6 rounded-xl border border-white/10 bg-black/40 p-4 md:p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium uppercase tracking-wider text-white/45">Total</span>
+            <div className="border-t border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="font-prize text-3xl leading-none text-white sm:text-4xl">{quantity}</p>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/40">
+                    {playNoun(competitionType, quantity)}
+                  </p>
+                </div>
                 <div className="text-right">
                   {isGameType && discountPercent > 0 && (
-                    <span className="mb-0.5 block text-xs text-white/35 line-through">
-                      £{originalPrice.toFixed(2)}
-                    </span>
+                    <p className="text-xs text-white/35 line-through">£{originalPrice.toFixed(2)}</p>
                   )}
-                  <span className="font-prize text-3xl text-[#F1D47A] md:text-4xl">
-                    £{displayTotal.toFixed(2)}
-                  </span>
+                  <p className="font-prize text-3xl leading-none text-[#F1D47A] sm:text-4xl">£{displayTotal.toFixed(2)}</p>
+                  <p className="mt-1 text-[11px] text-white/40">
+                    £{pricePerTicket.toFixed(2)} each
+                    {isGameType && discountPercent > 0 && (
+                      <span className="text-[#F1D47A]">
+                        {" "}
+                        → £{(discountedPrice / quantity).toFixed(2)}
+                      </span>
+                    )}
+                  </p>
                 </div>
               </div>
 
               {isGameType && discountPercent > 0 && (
-                <div className="mt-3 border-t border-white/10 pt-3">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Crown className="h-4 w-4 text-[#F1D47A]" />
-                      <span className="text-sm font-semibold text-[#F1D47A]">
-                        Bundle discount ({discountPercent}%)
-                      </span>
-                    </div>
-                    <span className="text-base font-bold text-[#F1D47A]">-£{savings.toFixed(2)}</span>
-                  </div>
-                  <div className="mt-2">
-                    <div className="mb-1 flex justify-between text-[10px] text-white/35">
-                      <span>5 for 5%</span>
-                      <span>10 for 10%</span>
-                      <span>15 for 15%</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-                      <div
-                        className="rr-progress-fill h-full rounded-full"
-                        style={{ width: `${Math.min((quantity / 15) * 100, 100)}%` }}
-                      />
-                    </div>
-                    {quantity > 15 && (
-                      <p className="mt-1 text-center text-[10px] text-white/40">
-                        Discount applies to first 15 plays only
-                      </p>
-                    )}
-                  </div>
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-[#F1D47A]">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {discountPercent}% off · save £{savings.toFixed(2)}
                 </div>
               )}
-
-              <div className="mt-3 flex items-center justify-center gap-2 text-xs text-white/40">
-                <span>Per entry: £{pricePerTicket.toFixed(2)}</span>
-                {isGameType && discountPercent > 0 && (
-                  <>
-                    <span className="text-[#F1D47A]">→</span>
-                    <span className="font-semibold text-[#F1D47A]">
-                      £{(discountedPrice / quantity).toFixed(2)}
-                    </span>
-                  </>
-                )}
-              </div>
+              {isGameType && quantity > 15 && (
+                <p className="mt-2 text-[11px] text-white/40">Bundle saving applies to the first 15 plays.</p>
+              )}
             </div>
           </div>
 
           <button
             onClick={handleOpenQuiz}
             disabled={purchaseLocked}
-            className={`rr-cta mt-6 flex h-14 w-full items-center justify-center gap-3 rounded-xl text-base font-black uppercase tracking-[0.14em] md:h-16 ${
+            className={`rr-cta mt-5 flex h-14 w-full items-center justify-center gap-3 rounded-xl text-base font-black uppercase tracking-[0.14em] md:h-16 ${
               isSoldOut || (isFreeGiveaway && !canBuyMore) ? "opacity-50" : ""
             }`}
           >
@@ -945,27 +860,20 @@ export default function CompetitionPage() {
           </button>
 
           {!isSoldOut && !(isFreeGiveaway && !canBuyMore) && (
-          <button
-            type="button"
-            onClick={handleAddToBasket}
-            className="rr-header-ghost mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-xs"
-            data-testid="button-add-basket-range"
-          >
-            <ShoppingCart className="h-4 w-4" />
-            Add to cart · pay later
-          </button>
-          )}
-
-          {isGameType && discountPercent > 0 && (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/25 bg-[#D4AF37]/8 px-4 py-2">
-              <Sparkles className="h-4 w-4 text-[#F1D47A]" />
-              <span className="text-sm font-bold text-[#F1D47A]">You're saving £{savings.toFixed(2)}</span>
-            </div>
+            <button
+              type="button"
+              onClick={handleAddToBasket}
+              className="rr-add-cart-btn mt-3 w-full"
+              data-testid="button-add-basket-range"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Add to cart · pay later
+            </button>
           )}
 
           <button
             type="button"
-            className="mt-4 inline-flex items-center gap-1.5 text-xs text-white/45 underline underline-offset-4 transition-colors hover:text-[#F1D47A] md:text-sm"
+            className="mx-auto mt-4 flex items-center gap-1.5 text-xs text-white/45 underline underline-offset-4 transition-colors hover:text-[#F1D47A] md:text-sm"
             onClick={() => setIsPostalModalOpen(true)}
           >
             <Mail className="h-3.5 w-3.5" />

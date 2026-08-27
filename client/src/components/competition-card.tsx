@@ -5,7 +5,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
 import { ShoppingCart } from "lucide-react";
 import { useBasket } from "@/hooks/useBasket";
-import { useToast } from "@/hooks/use-toast";
 import pop from "../../public/pop.jpeg";
 import voltz from "../../public/voltz.jpeg";
 import scratch from "../../public/scratch.jpeg";
@@ -34,7 +33,6 @@ interface CompetitionCardProps {
 export default function CompetitionCard({ competition }: CompetitionCardProps) {
   const [, setLocation] = useLocation();
   const { add } = useBasket();
-  const { toast } = useToast();
   const stats = getTicketStats(competition);
   const cd = useCountdown(competition.endDate);
   const maxQty = stats.hasTickets ? Math.max(1, stats.remaining) : 20;
@@ -198,10 +196,6 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                         },
                         maxQty
                       );
-                      toast({
-                        title: "Added to cart",
-                        description: `${qty} × ${competition.title}`,
-                      });
                     }}
                     className="rr-comp-add-cart"
                   >

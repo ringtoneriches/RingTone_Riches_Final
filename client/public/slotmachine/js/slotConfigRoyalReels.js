@@ -2,6 +2,12 @@
 //  ROYAL REELS  — Slot Config
 //  Red / Gold casino theme with custom royal symbols
 // ═══════════════════════════════════════════════
+
+// TEMP cabinet test — set to false (or revert this file) to restore the old machine art.
+var RR_TEMP_CABINET = false;
+var RR_CAB_IMG_W = 963;
+var RR_CAB_IMG_H = 1024;
+
 var slotConfigRoyalReels = {
     slotTextColor : 0xD4AF37,   // gold text
 
@@ -29,7 +35,7 @@ var slotConfigRoyalReels = {
     defaultCoins: 1000,
 
     localOffsetX: 0,
-    localOffsetY: 100,
+    localOffsetY: RR_TEMP_CABINET ? 0 : 100,
 
     fonts: [
         { fontName: 'gameFont',        filePNG: 'fonts/roboto_72.png',      fileXML: 'fonts/roboto_72.xml' },
@@ -148,12 +154,53 @@ var slotConfigRoyalReels = {
         scene.slot       = scene.addSpriteLocPos('slot',   0,   -100);
         scene.handle     = scene.addSpriteLocPos('handle', 550, -45).setOrigin(0.5, 1);
         scene.handleBall = scene.addSpriteLocPos('handle_ball', 550, -350);
+
+        // TEMP cabinet test: hide old chrome and overlay the new machine art
+        if (RR_TEMP_CABINET) {
+            scene.leftLamp.lamp.setVisible(false);
+            scene.rightLamp.lamp.setVisible(false);
+            scene.slot.setVisible(false);
+            scene.handle.setVisible(false);
+            scene.handleBall.setVisible(false);
+
+            var viewW = slotGame.config.width;
+            var viewH = slotGame.config.height;
+            var cabScale = Math.min(viewW / RR_CAB_IMG_W, viewH / RR_CAB_IMG_H);
+            scene.rrCabScale = cabScale;
+            scene.rrCabW = RR_CAB_IMG_W * cabScale;
+            scene.rrCabH = RR_CAB_IMG_H * cabScale;
+            scene.rrImgToLocal = function(ix, iy) {
+                return {
+                    x: (ix / RR_CAB_IMG_W - 0.5) * scene.rrCabW,
+                    y: (iy / RR_CAB_IMG_H - 0.5) * scene.rrCabH
+                };
+            };
+        }
     },
 
     createReels: function(scene) {
+        var sizeY = this.symbolSizeY;
+        if (RR_TEMP_CABINET && scene.rrImgToLocal) {
+            var p0 = scene.rrImgToLocal(254, 490);
+            var p1 = scene.rrImgToLocal(472, 490);
+            var p2 = scene.rrImgToLocal(689, 490);
+            this.reels[0].offsetX = p0.x; this.reels[0].offsetY = p0.y;
+            this.reels[1].offsetX = p1.x; this.reels[1].offsetY = p1.y;
+            this.reels[2].offsetX = p2.x; this.reels[2].offsetY = p2.y;
+            sizeY = ((196 * scene.rrCabScale) / 3) / 0.8;
+        }
         var _reels = [];
         for (var ri = 0; ri < this.reels.length; ri++) {
-            _reels.push(new Reel(scene, this.reels[ri], ri, this.symbolSizeY, this.reels[ri].windowsCount, false, this.spinTime, this.symbAnimFrameRate));
+            _reels.push(new Reel(scene, this.reels[ri], ri, sizeY, this.reels[ri].windowsCount, false, this.spinTime, this.symbAnimFrameRate));
+        }
+        if (RR_TEMP_CABINET && scene.rrCabScale) {
+            var cell = (196 * scene.rrCabScale) / 3;
+            var sprScale = Math.min(cell / 150, (158 * scene.rrCabScale) / 164);
+            _reels.forEach(function(reel, ri) {
+                var win = scene['reel' + ri];
+                if (win) win.setVisible(false);
+                reel.symbolSpites.forEach(function(sp) { sp.setScale(sprScale); });
+            });
         }
         return _reels;
     },
@@ -169,7 +216,25 @@ var slotConfigRoyalReels = {
         // Only the SPIN button — all other buttons removed
         slotControls.slotSpinButton = new SpinButton(scene, 'button_spin', 'button_spin_hover', false);
         slotControls.buttons.push(slotControls.slotSpinButton);
-        slotControls.slotSpinButton.create(0, 225, 0.5, 0.5);
+        if (RR_TEMP_CABINET && scene.rrImgToLocal) {
+            var spin = scene.rrImgToLocal(481, 900);
+            slotControls.slotSpinButton.create(spin.x, spin.y + 38, 0.5, 0.5);
+            slotControls.slotSpinButton.button.setAlpha(0.001);
+            var hit = 250 * scene.rrCabScale;
+            slotControls.slotSpinButton.button.setDisplaySize(hit, hit);
+            slotControls.slotSpinButton.button.setDepth(30);
+            var lever = scene.rrImgToLocal(880, 520);
+            var leverZone = scene.add.zone(scene.centerX + lever.x, scene.centerY + lever.y, 90 * scene.rrCabScale, 260 * scene.rrCabScale);
+            leverZone.setInteractive();
+            leverZone.setDepth(30);
+            leverZone.on('pointerup', function() {
+                if (slotControls.slotSpinButton && slotControls.slotSpinButton.interactable) {
+                    slotControls.slotSpinButton.clickEvent.invoke();
+                }
+            });
+        } else {
+            slotControls.slotSpinButton.create(0, 225, 0.5, 0.5);
+        }
         slotControls.slotSpinButton.clickEvent.add(scene.handleAnimation, scene);
 
         slotControls.slotAutoSpinButton = new SceneButton(scene, 'button_spin', 'button_spin_hover', false);
@@ -178,14 +243,22 @@ var slotConfigRoyalReels = {
         slotControls.slotAutoSpinButton.button.setVisible(false);
 
         slotControls.soundButton = new SceneButton(scene, 'button_soundson', 'button_soundsoff', true);
-        slotControls.soundButton.create(760, -570, 0.5, 0.5);
+        if (RR_TEMP_CABINET) {
+            slotControls.soundButton.create(slotGame.config.width / 2 - 36, -slotGame.config.height / 2 + 36, 0.5, 0.5);
+            slotControls.soundButton.button.setDepth(40);
+            slotControls.soundButton.button.setScale(0.7);
+        } else {
+            slotControls.soundButton.create(760, -570, 0.5, 0.5);
+        }
         slotControls.soundButton.addClickEvent(() => { scene.soundController.soundOn(!scene.soundController._soundOn); }, scene);
         slotControls.soundButton.button.setVisible(true);
 
-        // Cover the baked-in LINES / TOTAL BET / BET panel area with a dark rect
-        var coverBottom = scene.add.rectangle(scene.centerX, scene.centerY + 120, 760, 60, 0x0d0005, 1).setOrigin(0.5);
-        // Cover CREDIT area at top of machine
-        var coverTop = scene.add.rectangle(scene.centerX, scene.centerY - 515, 420, 50, 0x0d0005, 1).setOrigin(0.5);
+        if (!RR_TEMP_CABINET) {
+            // Cover the baked-in LINES / TOTAL BET / BET panel area with a dark rect
+            scene.add.rectangle(scene.centerX, scene.centerY + 120, 760, 60, 0x0d0005, 1).setOrigin(0.5);
+            // Cover CREDIT area at top of machine
+            scene.add.rectangle(scene.centerX, scene.centerY - 515, 420, 50, 0x0d0005, 1).setOrigin(0.5);
+        }
 
         // Dummy text nodes expected by the engine (kept invisible)
         slotControls.linesCountText    = scene.add.bitmapText(0, -9999, 'gameFont_skewm15', '', 40, 1);

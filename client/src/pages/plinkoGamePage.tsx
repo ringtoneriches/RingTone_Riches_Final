@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useParams, useSearch } from "wouter";
 import { GameDisclaimer, GameEmpty, GameHero, GameShell, GameStatus } from "@/components/games/GameChrome";
+import PlayResultsTable, { prizeFromReward } from "@/components/games/PlayResultsTable";
 import { PlinkoGame } from "@/components/games/plinko-game";
 import { useState, useEffect, useRef } from "react";
 import { queryClient } from "@/lib/queryClient";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trophy, Coins, Crown, Loader2, Star, Gem, Zap, Gift, Diamond, ChevronLeft, ChevronRight, Award, Sparkles, Target } from "lucide-react";
+import { ArrowLeft, Crown, Star, Gem, Zap, Gift, Sparkles, Target } from "lucide-react";
 import congrats from "../../../attached_assets/sounds/congrats.mp3";
 
 export default function PlinkoGamePage() {
@@ -16,8 +16,6 @@ const { competitionId, orderId } = params;
 //   const orderId = params.get("orderId") || "";
 //   const competitionId = params.get("competitionId") || "";
   const [, navigate] = useLocation();
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
   const [isBallDropping, setIsBallDropping] = useState(false);
   const confirmedHistoryCountRef = useRef<number>(0); // Track how many results were confirmed before current drop
   const [showDisclaimer, setShowDisclaimer] = useState(true);
@@ -65,7 +63,6 @@ const { competitionId, orderId } = params;
     refetchOrder();
     refetchUser();
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-    setCurrentPage(1); // Show latest result on first page
   };
   
   const handleDropStart = () => {
@@ -98,11 +95,6 @@ const { competitionId, orderId } = params;
   const history = isBallDropping && rawHistory.length > confirmedHistoryCountRef.current
     ? rawHistory.slice(rawHistory.length - confirmedHistoryCountRef.current) // Only show confirmed entries
     : rawHistory;
-  
-  // Pagination logic - newest first
-  const totalPages = Math.max(1, Math.ceil(history.length / itemsPerPage));
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedHistory = history.slice(startIndex, startIndex + itemsPerPage);
 
   return (
     <GameShell>
@@ -238,218 +230,22 @@ const { competitionId, orderId } = params;
             />
           </div>
           
-          {/* Results History - Right - Premium Showcase */}
           <div className="lg:col-span-4">
-            <div className="relative overflow-hidden rounded-3xl border-2 border-transparent bg-gradient-to-b from-slate-900 via-slate-900/98 to-slate-950">
-              {/* Animated border glow */}
-              <div className="absolute -inset-[2px] bg-gradient-to-r from-[#C8102E] via-[#FF263D] to-[#F1D47A] rounded-3xl opacity-60 blur-sm animate-gradient-shift" />
-              
-              {/* Inner container */}
-              <div className="relative bg-gradient-to-b from-slate-900 via-slate-900/98 to-slate-950 rounded-3xl m-[2px]">
-                {/* Header with shimmer effect */}
-                <div className="relative px-6 py-5 overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#C8102E]/30 via-[#FF263D]/20 to-[#F1D47A]/20" />
-                  <div className="absolute inset-0 shimmer-effect" />
-                  
-                  <div className="relative flex items-center gap-4">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl blur-md opacity-80" />
-                      <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 via-yellow-500 to-orange-500 flex items-center justify-center shadow-xl">
-                        <Award className="w-7 h-7 text-amber-900" />
-                      </div>
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black text-white tracking-tight">YOUR RESULTS</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="text-sm text-white/50">{history.length} total drops</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Divider with glow */}
-                <div className="h-px bg-gradient-to-r from-transparent via-[#C8102E]/50 to-transparent" />
-                
-                {/* Results List - Premium Cards */}
-                <div className="p-5">
-                  {history.length === 0 ? (
-                    <div className="text-center py-12">
-                      <div className="relative inline-flex">
-                        <div className="absolute inset-0 bg-[#C8102E]/30 rounded-full blur-2xl animate-pulse" />
-                        <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-[#0A0A0D] to-[#111] border-2 border-[#C8102E]/30 flex items-center justify-center">
-                          <Sparkles className="w-10 h-10 text-[#F1D47A]/60" />
-                        </div>
-                      </div>
-                      <p className="text-white/50 text-base mt-6 font-semibold">Ready to Play</p>
-                      <p className="text-white/30 text-sm mt-2">Your winning moments will appear here</p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Prize Cards */}
-                      <div className="space-y-3">
-                        {paginatedHistory.map((play: any, i: number) => {
-                          const isWin = play.isWin && play.rewardType !== "none";
-                          const isFreePlay = play.rewardType === "free_play";
-                          const isLatest = currentPage === 1 && i === 0;
-                          const dropNumber = history.length - (startIndex + i);
-                          
-                          return (
-                            <div
-                              key={startIndex + i}
-                              className={`relative group transition-all duration-300 ${isLatest ? 'scale-[1.02]' : ''}`}
-                            >
-                              {/* Outer glow for wins */}
-                              {isWin && (
-                                <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/50 via-yellow-400/40 to-orange-500/50 rounded-2xl blur-md opacity-70 group-hover:opacity-100 transition-opacity" />
-                              )}
-                              
-                              <div className={`relative rounded-2xl overflow-hidden ${
-                                isLatest ? 'ring-2 ring-white/30 ring-offset-2 ring-offset-slate-900' : ''
-                              }`}>
-                                {/* Background */}
-                                <div className={`absolute inset-0 ${
-                                  isWin 
-                                    ? "bg-gradient-to-r from-amber-600/30 via-yellow-500/25 to-orange-600/30"
-                                    : isFreePlay
-                                    ? "bg-gradient-to-r from-cyan-600/25 via-blue-500/20 to-indigo-600/25"
-                                    : "bg-gradient-to-r from-slate-800/90 via-slate-800/70 to-slate-800/90"
-                                }`} />
-                                
-                                <div className="relative p-4 flex items-center gap-4">
-                                  {/* Prize Icon Badge */}
-                                  <div className="relative shrink-0">
-                                    {isWin && (
-                                      <div className="absolute -inset-2 bg-amber-400/40 rounded-2xl blur-lg animate-pulse" />
-                                    )}
-                                    <div className={`relative w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl ${
-                                      isWin 
-                                        ? "bg-gradient-to-br from-amber-300 via-yellow-400 to-orange-500"
-                                        : isFreePlay
-                                        ? "bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-500"
-                                        : "bg-gradient-to-br from-slate-600 to-slate-700 border border-slate-500/50"
-                                    }`}>
-                                      {isWin ? (
-                                        play.rewardType === "cash" ? (
-                                          <Trophy className="w-6 h-6 text-amber-900" />
-                                        ) : (
-                                          <Coins className="w-6 h-6 text-amber-900" />
-                                        )
-                                      ) : isFreePlay ? (
-                                        <Gift className="w-6 h-6 text-white" />
-                                      ) : (
-                                        <span className="text-2xl font-black text-slate-400">X</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Prize Details */}
-                                  <div className="flex-1 min-w-0">
-                                    <div className={`text-xl font-black ${
-                                      isWin 
-                                        ? "text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-200" 
-                                        : isFreePlay
-                                        ? "text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-blue-300 to-cyan-200"
-                                        : "text-slate-400"
-                                    }`}>
-                                      {isWin ? (
-                                        play.rewardType === "cash" 
-                                          ? `£${play.rewardValue}` 
-                                          : `${play.rewardValue} Points`
-                                      ) : isFreePlay ? (
-                                        "+1 Free Play"
-                                      ) : (
-                                        "No Prize"
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <span className="text-xs text-white/40">Drop #{dropNumber}</span>
-                                      {isLatest && (
-                                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
-                                          LATEST
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Status Badge */}
-                                  <div className={`shrink-0 px-4 py-2 rounded-xl text-xs font-black tracking-wider ${
-                                    isWin 
-                                      ? "bg-gradient-to-r from-amber-500 to-orange-500 text-amber-900 shadow-lg shadow-amber-500/30"
-                                      : isFreePlay
-                                      ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30"
-                                      : "bg-slate-700/80 text-slate-400 border border-slate-600/50"
-                                  }`}>
-                                    {isWin ? "WON" : isFreePlay ? "BONUS" : "MISS"}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      
-                      {/* Pagination Controls */}
-                      {totalPages > 1 && (
-                        <div className="mt-6 flex items-center justify-center gap-3">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                            className="w-10 h-10 rounded-xl bg-[#0A0A0D]/80 border border-white/10 text-white disabled:opacity-30 hover:bg-[#C8102E]/20 hover:border-[#C8102E]/50"
-                            data-testid="button-prev-page"
-                          >
-                            <ChevronLeft className="w-5 h-5" />
-                          </Button>
-                          
-                          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C8102E]/15 border border-[#C8102E]/30">
-                            {Array.from({ length: Math.min(5, totalPages) }, (_, idx) => {
-                              let pageNum;
-                              if (totalPages <= 5) {
-                                pageNum = idx + 1;
-                              } else if (currentPage <= 3) {
-                                pageNum = idx + 1;
-                              } else if (currentPage >= totalPages - 2) {
-                                pageNum = totalPages - 4 + idx;
-                              } else {
-                                pageNum = currentPage - 2 + idx;
-                              }
-                              
-                              return (
-                                <button
-                                  key={pageNum}
-                                  onClick={() => setCurrentPage(pageNum)}
-                                  className={`w-8 h-8 rounded-lg font-bold text-sm transition-all ${
-                                    currentPage === pageNum
-                                      ? "bg-[#C8102E] text-white shadow-lg"
-                                      : "text-white/60 hover:text-white hover:bg-white/10"
-                                  }`}
-                                  data-testid={`button-page-${pageNum}`}
-                                >
-                                  {pageNum}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                            className="w-10 h-10 rounded-xl bg-[#0A0A0D]/80 border border-white/10 text-white disabled:opacity-30 hover:bg-[#C8102E]/20 hover:border-[#C8102E]/50"
-                            data-testid="button-next-page"
-                          >
-                            <ChevronRight className="w-5 h-5" />
-                          </Button>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+            <PlayResultsTable
+              title="Drop Results"
+              rows={history.map((play: any, i: number) => ({
+                id: play.id ?? i,
+                number: history.length - i,
+                ...prizeFromReward({
+                  isWin: play.isWin && play.rewardType !== "none",
+                  rewardType: play.rewardType,
+                  rewardValue: play.rewardValue,
+                  prizeName: play.prizeName,
+                }),
+              }))}
+              emptyTitle="READY TO PLAY"
+              emptyHint="Drop the ball — each result lands here."
+            />
           </div>
         </div>
       </main>
