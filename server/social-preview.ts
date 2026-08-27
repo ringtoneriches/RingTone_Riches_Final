@@ -36,7 +36,7 @@ function escapeHtml(str: string = ""): string {
 // path depending on which uploader wrote it. Handle both.
 const SITE_URL = "https://ringtoneriches.co.uk";
 function toAbsoluteImage(imageUrl: string | null): string {
-  if (!imageUrl) return `${SITE_URL}/og-image.png`;
+  if (!imageUrl) return `${SITE_URL}/ringtone.png`;
   if (imageUrl.startsWith("http")) return imageUrl;
   return `${SITE_URL}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
 }
