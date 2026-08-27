@@ -12,6 +12,7 @@ import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import AnnouncementTicker from "@/components/home/AnnouncementTicker";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import MyPlaysDock from "@/components/layout/MyPlaysDock";
+import CartDock from "@/components/layout/CartDock";
 import { useBasket } from "@/hooks/useBasket";
 
 // Helper function to safely parse balance
@@ -154,37 +155,31 @@ export default function Header() {
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
           <nav className="flex h-16 items-center justify-between lg:h-[4.5rem]">
             {/* Mobile: menu | centered logo | wallet */}
-            <div className="grid h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 lg:hidden">
-              <button
-                ref={menuButtonRef}
-                className="rr-header-menu shrink-0"
-                onClick={toggleMobileMenu}
-                data-testid="button-mobile-menu"
-                aria-label="Menu"
-                style={{
-                  touchAction: "manipulation",
-                  WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
+            <div className="grid h-16 w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center lg:hidden">
+              <div className="justify-self-start">
+                <button
+                  ref={menuButtonRef}
+                  className="rr-header-menu shrink-0"
+                  onClick={toggleMobileMenu}
+                  data-testid="button-mobile-menu"
+                  aria-label="Menu"
+                  style={{
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                </button>
+              </div>
 
-              <Link href="/" className="flex min-w-0 items-center justify-center">
+              <Link href="/" className="flex max-w-[46vw] items-center justify-center px-1">
                 <BrandLogo
                   className="h-7 w-auto max-h-7 max-w-full object-contain sm:h-8 sm:max-h-8"
                   testId="img-logo"
                 />
               </Link>
 
-              <div className="rr-header-actions">
-                <Link href="/basket" aria-label="Cart" className="shrink-0">
-                  <div className="rr-header-cart" data-testid="button-basket">
-                    <ShoppingCart className="h-4 w-4" />
-                    {basketCount > 0 && (
-                      <span className="rr-header-cart-badge">{basketCount > 99 ? "99+" : basketCount}</span>
-                    )}
-                  </div>
-                </Link>
+              <div className="rr-header-actions justify-self-end">
                 <Link href={isAuthenticated ? "/wallet?tab=wallet" : "/login"} className="shrink-0">
                   <div className="rr-header-chip rr-header-chip--balance cursor-pointer" data-testid="button-wallet">
                     <Wallet className="h-3.5 w-3.5 shrink-0 text-[#F1D47A]" />
@@ -230,14 +225,6 @@ export default function Header() {
 
             <div className="hidden lg:flex items-center gap-3">
               <ThemeToggle />
-              <Link href="/basket" aria-label="Cart">
-                <div className="rr-header-cart" data-testid="button-basket-desktop">
-                  <ShoppingCart className="h-4 w-4" />
-                  {basketCount > 0 && (
-                    <span className="rr-header-cart-badge">{basketCount > 99 ? "99+" : basketCount}</span>
-                  )}
-                </div>
-              </Link>
               {isAuthenticated ? (
                 <>
                   <Link href="/wallet?tab=points">
@@ -292,7 +279,10 @@ export default function Header() {
       <div className={`rr-theme-dock ${mobileOpen ? "invisible pointer-events-none" : ""}`}>
         <ThemeToggle />
       </div>
-      <MyPlaysDock hidden={mobileOpen} />
+      <div className={`rr-dock-stack ${mobileOpen ? "invisible pointer-events-none" : ""}`}>
+        <CartDock hidden={mobileOpen} />
+        <MyPlaysDock hidden={mobileOpen} />
+      </div>
 
       {/* Mobile Menu - Optimized for performance */}
       <div 

@@ -1715,6 +1715,52 @@ export async function tryRevealControlledSlot(opts: {
   };
 }
 
+export async function revealAllControlledSlot(opts: {
+  competitionId: string;
+  orderId: string;
+  userId: string;
+  count: number;
+}) {
+  if (!(await isCompetitionControlled(opts.competitionId))) return null;
+
+  const results: any[] = [];
+  const max = Math.max(0, Math.floor(opts.count));
+  for (let i = 0; i < max; i++) {
+    const one = await tryRevealControlledSlot({
+      competitionId: opts.competitionId,
+      orderId: opts.orderId,
+      userId: opts.userId,
+    });
+    if (!one?.handled) {
+      if (results.length) break;
+      return null;
+    }
+    if (one.noTickets) break;
+    results.push(one.response);
+  }
+
+  const leftoverQuery = await nextFrozenTicket({ orderId: opts.orderId });
+
+  return {
+    handled: true,
+    response: {
+      success: true,
+      controlledPool: true,
+      creditedAtSale: true,
+      processed: results.length,
+      results,
+      spinsRemaining: leftoverQuery.remaining,
+      winCount: results.filter((r) => r.isWin).length,
+      cashWon: results
+        .filter((r) => r.isWin && r.prizeType === "cash")
+        .reduce((sum, r) => sum + Number(r.coinsWon || 0), 0),
+      pointsWon: results
+        .filter((r) => r.isWin && r.prizeType === "points")
+        .reduce((sum, r) => sum + Number(r.coinsWon || 0), 0),
+    },
+  };
+}
+
 type WheelSegment = {
   id?: string;
   label?: string;

@@ -27,7 +27,7 @@ export default function AnnouncementTicker() {
       line("Real winners. Real payouts."),
       live > 0 ? line("Live competitions") : line("Prize competitions live now"),
       instantLive > 0 ? line("Instant win prizes live now") : line("Instant wins on the floor"),
-      line("Winners paid in cash"),
+      line("Fast & secure bank transfer payouts"),
       line("UK based prize competitions"),
       line("Fair draws. Transparent results."),
     ];

@@ -26,6 +26,7 @@ interface SlotGameProps {
   spinsRemaining: number;
   onSpinComplete: (result: SlotSpinResult) => void;
   onNoSpinsLeft: () => void;
+  onSpinStart?: () => void;
 }
 
 export default function SlotGameComponent({
@@ -35,6 +36,7 @@ export default function SlotGameComponent({
   spinsRemaining,
   onSpinComplete,
   onNoSpinsLeft,
+  onSpinStart,
 }: SlotGameProps) {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<any>(null);
@@ -47,6 +49,7 @@ export default function SlotGameComponent({
   const spinsRemainingRef = useRef(spinsRemaining);
   const onSpinCompleteRef = useRef(onSpinComplete);
   const onNoSpinsLeftRef = useRef(onNoSpinsLeft);
+  const onSpinStartRef = useRef(onSpinStart);
   const isProcessingRef = useRef(false);
   const pendingResultRef = useRef<SlotSpinResult | null>(null);
   const toastRef = useRef(toast);
@@ -56,6 +59,7 @@ export default function SlotGameComponent({
   useEffect(() => { spinsRemainingRef.current = spinsRemaining; }, [spinsRemaining]);
   useEffect(() => { onSpinCompleteRef.current = onSpinComplete; }, [onSpinComplete]);
   useEffect(() => { onNoSpinsLeftRef.current = onNoSpinsLeft; }, [onNoSpinsLeft]);
+  useEffect(() => { onSpinStartRef.current = onSpinStart; }, [onSpinStart]);
   useEffect(() => { toastRef.current = toast; }, [toast]);
 
   // Keep Phaser scene in sync so beginSpin can block audio when exhausted
@@ -89,6 +93,7 @@ export default function SlotGameComponent({
   
   console.log("[SPIN] ✅ No processing lock, proceeding with spin");
   isProcessingRef.current = true;
+  onSpinStartRef.current?.();
 
   try {
     console.log("[SPIN] 📡 Making API request to /api/play-slot");

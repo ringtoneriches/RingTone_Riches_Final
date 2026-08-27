@@ -124,6 +124,7 @@ import {
   tryRevealControlledPop,
   revealAllControlledPop,
   tryRevealControlledSlot,
+  revealAllControlledSlot,
   tryRevealControlledSpin,
   revealAllControlledSpin,
   peekControlledVoltz,
@@ -150,6 +151,7 @@ import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { calculateDiscountedTotal } from "./utils/discounts";
 import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
+import { processUncontrolledSlotSpin, revealAllUncontrolledSlot } from "./services/slot-play";
 import rateLimit ,{ ipKeyGenerator } from 'express-rate-limit';
 const supportUpload = createS3Uploader("support");
 const competitionUpload = createS3Uploader("competitions");
@@ -20480,343 +20482,89 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
       return res.json(controlledSlot.response);
     }
 
-    // ── Enforce spin limit ───────────────────────────────────────────────
-    const existingSpins = await db.select({ id: slotUsage.id }).from(slotUsage).where(eq(slotUsage.orderId, orderId));
-    console.log("[API] Existing spins:", existingSpins.length, "of", order.quantity);
-    
-    if (existingSpins.length >= order.quantity) {
-      console.log("[API] ⚠️ All spins used");
-      return res.status(403).json({ 
-        message: "All spins used", 
-        spinsUsed: existingSpins.length, 
-        spinsAllowed: order.quantity 
-      });
+    const result = await processUncontrolledSlotSpin({
+      userId,
+      order: { id: order.id, quantity: order.quantity, competitionId: order.competitionId },
+      coinsSpent: coinsSpent || 0,
+    });
+    if (!result.ok) {
+      return res.status(result.status).json(result.body);
     }
-    const spinNumber = existingSpins.length + 1;
-
-    // ── Get competition ID ──────────────────────────────────────────────
-    let competitionId = order.competitionId || "slot-default";
-    let competitionTitle = "Slot Machine";
-    
-    try {
-      if (order.competitionId) {
-        const [competition] = await db
-          .select({ 
-            id: competitions.id, 
-            title: competitions.title,
-            imageUrl: competitions.imageUrl 
-          })
-          .from(competitions)
-          .where(eq(competitions.id, order.competitionId))
-          .limit(1);
-        
-        if (competition) {
-          competitionTitle = competition.title || "Slot Machine";
-          console.log("[API] Found competition from order:", { 
-            id: competition.id, 
-            title: competition.title 
-          });
-        }
-      } else {
-        const [slotComp] = await db
-          .select({ 
-            id: competitions.id, 
-            title: competitions.title,
-            imageUrl: competitions.imageUrl 
-          })
-          .from(competitions)
-          .where(
-            and(
-              eq(competitions.isActive, true),
-              eq(competitions.type, "slot")
-            )
-          )
-          .limit(1);
-        
-        if (slotComp) {
-          competitionId = slotComp.id;
-          competitionTitle = slotComp.title || "Slot Machine";
-          console.log("[API] Found slot competition:", { 
-            id: slotComp.id, 
-            title: slotComp.title 
-          });
-        }
-      }
-    } catch (compError) {
-      console.log("[API] ⚠️ Could not get competition, using default:", compError);
-    }
-
-    // ── Server-side prize determination ─────────────────────────────────
-    let selectedPrize: any = null;
-    let config;
-    
-    try {
-      const configs = await db.select().from(gameSlotConfig);
-      console.log("[API] Configs found:", configs.length);
-      
-      config = configs.length > 0 ? configs[0] : null;
-      
-      if (!config) {
-        console.log("[API] ⚠️ No slot config found, using default");
-        selectedPrize = { id: "default", symbol: "Win", isEuro: true, pay: 1 };
-      } else {
-        console.log("[API] Config found:", { id: config.id });
-        
-        let allPrizes: any[] = [];
-        try {
-          allPrizes = config?.prizesConfig ? JSON.parse(config.prizesConfig) : [];
-          console.log("[API] Prizes loaded:", allPrizes.length);
-        } catch (parseError) {
-          console.error("[API] ❌ Failed to parse prizesConfig:", parseError);
-          allPrizes = [];
-        }
-
-        // ✅ Get win counts from slot_prize_wins table
-        let winsMap: Record<string, number> = {};
-        try {
-          const prizeWins = await db
-            .select()
-            .from(slotPrizeWins);
-          
-          for (const row of prizeWins) {
-            if (row.prizeId) winsMap[row.prizeId] = Number(row.winCount);
-          }
-          console.log("[API] Current wins per prize from slot_prize_wins:", winsMap);
-        } catch (winsError) {
-          console.error("[API] ❌ Failed to get wins map:", winsError);
-          winsMap = {};
-        }
-
-        // ─── STRICT PRIZE FILTERING (FIXED) ──────────────────────────
-        const eligible = allPrizes.filter((p: any) => {
-          // 1. Must be enabled
-          if (p.enabled === false) {
-            console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: DISABLED`);
-            return false;
-          }
-          
-          // 2. Must have probability > 0
-          const prob = Number(p.probability || 0);
-          if (prob <= 0) {
-            console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: PROBABILITY is ${prob}%`);
-            return false;
-          }
-          
-          // 3. Must have pay > 0 (no point winning 0)
-          const payAmount = Number(p.pay || 0);
-          if (payAmount <= 0) {
-            console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: PAY is ${payAmount}`);
-            return false;
-          }
-          
-          // 4. Check maxWins - STRICT: if maxWins is 0, prize is COMPLETELY disabled
-          if (p.maxWins !== null && p.maxWins !== undefined) {
-            const maxWinsValue = Number(p.maxWins);
-            
-            // If maxWins is 0 or negative, prize should NEVER win
-            if (maxWinsValue <= 0) {
-              console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: MAX WINS is ${maxWinsValue} (capped at 0)`);
-              return false;
-            }
-            
-            // If maxWins is set and reached, prize is NOT eligible
-            const currentWins = winsMap[p.id] || 0;
-            if (currentWins >= maxWinsValue) {
-              console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: MAX WINS REACHED (${currentWins}/${maxWinsValue})`);
-              return false;
-            }
-            
-            console.log(`[API] ✅ Prize "${p.symbol}" (${p.id}) wins: ${currentWins}/${maxWinsValue}`);
-          } else {
-            console.log(`[API] ✅ Prize "${p.symbol}" (${p.id}) wins: unlimited`);
-          }
-          
-          return true;
-        });
-
-        console.log("[API] 📊 Eligible prizes after filtering:", eligible.length);
-        
-        if (eligible.length === 0) {
-          console.log("[API] ⚠️ NO ELIGIBLE PRIZES - all either disabled, 0% probability, 0 pay, or maxWins reached");
-          selectedPrize = null;
-        } else {
-          // Weighted random selection
-          const totalProbability = eligible.reduce((sum, p) => sum + Number(p.probability), 0);
-          const rand = Math.random() * totalProbability;
-          let cumulative = 0;
-          
-          console.log(`[API] 🎲 Rolling: ${rand.toFixed(2)} out of ${totalProbability.toFixed(2)}`);
-          
-          for (const prize of eligible) {
-            cumulative += Number(prize.probability);
-            if (rand <= cumulative) { 
-              selectedPrize = prize; 
-              console.log(`[API] 🎉 SELECTED: "${prize.symbol}" (${prize.id}) at cumulative ${cumulative.toFixed(2)}`);
-              break; 
-            }
-          }
-          
-          // Fallback: if somehow no prize selected, take the last eligible one
-          if (!selectedPrize && eligible.length > 0) {
-            selectedPrize = eligible[eligible.length - 1];
-            console.log(`[API] ⚠️ Fallback selection: "${selectedPrize.symbol}"`);
-          }
-        }
-      }
-      
-      // If no config and no prize selected, it's a loss
-      if (!selectedPrize && config) {
-        console.log("[API] ❌ No prize selected - this spin is a LOSS");
-        selectedPrize = null;
-      }
-    } catch (configError) {
-      console.error("[API] ❌ Error processing config:", configError);
-      selectedPrize = null;
-    }
-
-    const isWin = selectedPrize !== null && Number(selectedPrize.pay || 0) > 0;
-    let coinsWon = 0;
-    let prizeId: string | null = null;
-    let prizeName: string | null = null;
-    let prizeType: string | null = null;
-    let prizeImage: string | null = null;
-
-    if (isWin && selectedPrize) {
-      prizeId = selectedPrize.id;
-      prizeName = selectedPrize.symbol;
-      prizeType = selectedPrize.isEuro ? "cash" : "points";
-      prizeImage = selectedPrize.image || null;
-      coinsWon = Number(selectedPrize.pay || 0);
-
-      console.log("[API] 🎉 WIN! Prize:", { prizeId, prizeName, prizeType, coinsWon });
-
-      try {
-        const user = await storage.getUser(userId);
-        if (selectedPrize.isEuro && coinsWon > 0) {
-          // Cash prize → add to wallet balance
-          const newBalance = parseFloat(user?.balance || "0") + coinsWon;
-          await db.update(users).set({ balance: newBalance.toFixed(2) }).where(eq(users.id, userId));
-          await storage.createTransaction({ 
-            userId, 
-            type: "prize", 
-            amount: coinsWon.toFixed(2), 
-            description: `Slot Machine Win - £${coinsWon.toFixed(2)}` 
-          });
-          console.log("[API] 💰 Cash prize added:", coinsWon, "New balance:", newBalance);
-        } else if (!selectedPrize.isEuro && coinsWon > 0) {
-          // Points prize → add to ringtonePoints
-          const newPoints = (user?.ringtonePoints || 0) + coinsWon;
-          await db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
-          await storage.createTransaction({ 
-            userId, 
-            type: "prize", 
-            amount: coinsWon.toString(),
-            description: `Slot Machine Win - ${coinsWon} Ringtone Points` 
-          });
-          console.log("[API] 🎯 Points prize added:", coinsWon, "New points:", newPoints);
-        }
-
-        // ✅ Increment win count in slot_prize_wins table
-        try {
-          const existingWin = await db
-            .select()
-            .from(slotPrizeWins)
-            .where(eq(slotPrizeWins.prizeId, prizeId))
-            .limit(1);
-
-          if (existingWin.length > 0) {
-            await db
-              .update(slotPrizeWins)
-              .set({ 
-                winCount: Number(existingWin[0].winCount) + 1,
-                updatedAt: new Date()
-              })
-              .where(eq(slotPrizeWins.prizeId, prizeId));
-            console.log(`[API] ✅ Updated win count for ${prizeId}: ${Number(existingWin[0].winCount) + 1}`);
-          } else {
-            await db
-              .insert(slotPrizeWins)
-              .values({
-                prizeId: prizeId,
-                winCount: 1,
-                updatedAt: new Date()
-              });
-            console.log(`[API] ✅ Created win count for ${prizeId}: 1`);
-          }
-        } catch (winCountError) {
-          console.error("[API] ❌ Error updating win count:", winCountError);
-        }
-
-        // ─── SYNC WITH COMPETITION PRIZES ───
-        const syncResult = await syncSlotPrize(
-          competitionId,
-          prizeId || "unknown",
-          prizeName || "Prize",
-          coinsWon,
-          selectedPrize.isEuro ? "cash" : "points",
-          selectedPrize.maxWins || null
-        );
-        console.log("[API] Slot prize sync result:", syncResult);
-
-        // ─── RECORD IN WINNERS TABLE ───
-        let prizeDescriptionText = `Slot Machine Win - ${competitionTitle}`;
-        let prizeValueText = selectedPrize.isEuro ? `£${coinsWon} Cash` : `${coinsWon} Points`;
-
-        await db.insert(winners).values({
-          userId,
-          competitionId: competitionId,
-          prizeDescription: prizeDescriptionText,
-          prizeValue: prizeValueText,
-          imageUrl: selectedPrize.image || null,
-          isShowcase: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-        console.log("[API] ✅ Winner recorded in winners table with competition:", competitionTitle);
-
-      } catch (prizeError) {
-        console.error("[API] ❌ Error processing prize:", prizeError);
-      }
-    } else {
-      console.log("[API] ❌ No win this spin");
-    }
-
-    // ── Record spin usage ──
-    try {
-      await db.insert(slotUsage).values({
-        orderId, 
-        userId, 
-        isWin,
-        coinsWon, 
-        coinsSpent: coinsSpent || 0,
-        spinNumber, 
-        prizeId: prizeId || null,
-        prizeName: prizeName || null,
-      } as any);
-      console.log("[API] ✅ Spin recorded:", { spinNumber, isWin, coinsWon, prizeId });
-    } catch (dbError) {
-      console.error("[API] ❌ Error recording spin:", dbError);
-    }
-
-    const response = { 
-      success: true, 
-      isWin, 
-      coinsWon, 
-      prizeId, 
-      prizeName, 
-      prizeType, 
-      prizeImage, 
-      spinNumber, 
-      spinsUsed: spinNumber, 
-      spinsAllowed: order.quantity 
-    };
-    
-    console.log("[API] ✅ Response:", response);
-    res.json(response);
+    console.log("[API] ✅ Response:", result.response);
+    res.json(result.response);
 
   } catch (error) {
     console.error("[API] 💥 Error in play-slot:", error);
     res.status(500).json({ message: "Failed to process spin", error: String(error) });
+  }
+});
+
+
+app.post("/api/reveal-all-slot", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, count, competitionId } = req.body;
+
+    if (!orderId || !count || count <= 0) {
+      return res.status(400).json({ success: false, message: "Valid orderId and count are required" });
+    }
+
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({ success: false, message: "No valid slot order found" });
+    }
+
+    if (competitionId && order.competitionId && competitionId !== order.competitionId) {
+      return res.status(400).json({ success: false, message: "Competition does not match this order" });
+    }
+
+    const controlledReveal = await revealAllControlledSlot({
+      competitionId: order.competitionId,
+      orderId,
+      userId,
+      count,
+    });
+    if (controlledReveal?.handled) {
+      return res.json(controlledReveal.response);
+    }
+
+    const [slotCfg] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
+    const coinsSpent = slotCfg?.creditsPerSpin || 20;
+
+    const batch = await revealAllUncontrolledSlot({
+      userId,
+      order: { id: order.id, quantity: order.quantity, competitionId: order.competitionId },
+      coinsSpent,
+      count,
+    });
+    if (!batch.ok) {
+      return res.status(batch.status).json({ success: false, ...batch.body });
+    }
+
+    const results = batch.results;
+    const winCount = results.filter((r) => r.isWin).length;
+    const cashWon = results
+      .filter((r) => r.isWin && r.prizeType === "cash")
+      .reduce((sum, r) => sum + Number(r.coinsWon || 0), 0);
+    const pointsWon = results
+      .filter((r) => r.isWin && r.prizeType === "points")
+      .reduce((sum, r) => sum + Number(r.coinsWon || 0), 0);
+
+    const used = await db.select({ id: slotUsage.id }).from(slotUsage).where(eq(slotUsage.orderId, orderId));
+    const spinsRemaining = Math.max(0, order.quantity - used.length);
+
+    res.json({
+      success: true,
+      processed: results.length,
+      results,
+      winCount,
+      cashWon,
+      pointsWon,
+      spinsRemaining,
+    });
+  } catch (error) {
+    console.error("[API] 💥 Error in reveal-all-slot:", error);
+    res.status(500).json({ success: false, message: "Failed to reveal all spins" });
   }
 });
 

@@ -265,10 +265,16 @@ export default function BasketPage() {
         <section className="px-4 pb-16 pt-28 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-6xl">
             <div className="mb-6 max-w-2xl sm:mb-8">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">Pay once</p>
-              <h1 className="mt-2 font-prize text-[2.35rem] leading-none text-white sm:text-5xl lg:text-6xl">CART</h1>
-              <p className="mt-3 text-sm text-white/50 sm:text-base">
-                ENTER NOW still buys a single game on the spot. Cart lets you collect a few, then pay in one go.
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">Cart</p>
+              <h1 className="mt-2 font-prize text-[2.15rem] leading-[0.92] text-white sm:text-5xl lg:text-[3.4rem]">
+                YOUR CART,
+                <span className="mt-1 block text-[#F1D47A]">YOUR CHOICE</span>
+              </h1>
+              <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/55 sm:text-base">
+                Add plays from multiple games, then check out in one simple payment.
+              </p>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/40 sm:text-base">
+                ENTER NOW is still there when you just want to jump straight into one game.
               </p>
             </div>
 
