@@ -78,8 +78,12 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
+  // Missing images/fonts must 404 — never return index.html.
+  // WhatsApp/Facebook treat a 200 HTML body as a broken share thumbnail.
+  app.use("*", (req, res) => {
+    if (/\.(png|jpe?g|gif|webp|ico|svg|woff2?|ttf|eot|map)$/i.test(req.path)) {
+      return res.status(404).end();
+    }
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
