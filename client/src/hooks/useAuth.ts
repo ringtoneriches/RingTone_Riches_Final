@@ -13,7 +13,7 @@ export function useAuth() {
     mutationFn: () => apiRequest("/api/auth/logout", "POST"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      window.location.href = "/"; // Redirect to home after logout
+      window.location.href = "/";
     },
   });
 

@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
+import BrandWait from "@/components/brand/BrandWait";
 import { Link, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -309,9 +310,12 @@ export default function Support() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#F1D47A]" />
-      </div>
+      <BrandWait
+        mode="embed"
+        kicker="Support"
+        headline="Opening support"
+        subtitle="Checking your account."
+      />
     );
   }
 

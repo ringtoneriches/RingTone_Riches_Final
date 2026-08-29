@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import BrandWait from "@/components/brand/BrandWait";
 
 /* ═══════ COLOURS (overridable via --ub-* on .rr-billing) ═══════ */
 const BG    = "var(--ub-bg, #0a0800)";
@@ -351,6 +352,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
       let result;
       try { result = JSON.parse(text); } catch { throw new Error(`Server error: ${text.slice(0, 100)}`); }
       if (!res.ok) throw new Error(result?.message || result?.error || "Payment failed");
+      if (result.redirectUrl) return result;
       if (data.useInstaplay) { if (!result.redirectUrl) throw new Error("No payment redirect URL received"); return result; }
       if (result.remainingAmount > 0) throw new Error(`Insufficient funds. You need £${result.remainingAmount.toFixed(2)} more.`);
       return result;
@@ -467,13 +469,16 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
   const prizeSubtitle = prizeDisplay.subtitle;
   const qty = order?.quantity || 1;
 
-  if (isLoading) return (
-    <div className="ub-root" style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: BG }}>
-      <div style={{ width: 48, height: 48, border: "2px solid rgba(var(--ub-gold-rgb, 255, 185, 0),0.15)", borderTopColor: GOLD, borderRadius: "50%", animation: "ub-spin 0.8s linear infinite" }} />
-      <p style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(var(--ub-gold-rgb, 255, 185, 0),0.4)" }}>Loading Order...</p>
-      <style>{`@keyframes ub-spin { to { transform:rotate(360deg) } }`}</style>
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <BrandWait
+        mode="overlay"
+        kicker="Checkout"
+        headline="Loading order"
+        subtitle="Getting your checkout ready."
+      />
+    );
+  }
 
   if (!order) return (
     <div className="ub-root" style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, background: BG, color: "#fff" }}>
@@ -484,6 +489,15 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
 
   return (
     <div className="ub-root" style={{ minHeight: "100vh", background: BG, color: "#fff", fontFamily: "inherit" }}>
+      {isProcessing && (
+        <BrandWait
+          mode="overlay"
+          kicker="Secure payment"
+          headline="Confirming"
+          subtitle="Stay on this page while we finish this payment."
+          trust="Don’t close this tab"
+        />
+      )}
 
       {/* ══ PROGRESS BAR ══ */}
       <div style={{ background: BG, borderBottom: `1px solid ${BORDER}` }}>

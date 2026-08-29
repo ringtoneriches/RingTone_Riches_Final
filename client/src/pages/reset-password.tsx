@@ -3,8 +3,9 @@ import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { CheckCircle2, Loader2, ShieldAlert } from "lucide-react";
+import { CheckCircle2, ShieldAlert } from "lucide-react";
 import AuthShell from "@/components/auth/AuthShell";
+import BrandWait from "@/components/brand/BrandWait";
 import AuthPasswordInput from "@/components/auth/AuthPasswordInput";
 
 export default function ResetPassword() {
@@ -154,10 +155,7 @@ export default function ResetPassword() {
   if (verifyingToken) {
     return (
       <AuthShell kicker="Account recovery" title="CHECKING LINK" sub="Hang on — we’re verifying this reset link.">
-        <div className="rr-auth-status">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#F1D47A]" />
-          <p className="mt-4">Verifying reset link…</p>
-        </div>
+        <BrandWait quiet headline="Checking reset link" />
       </AuthShell>
     );
   }

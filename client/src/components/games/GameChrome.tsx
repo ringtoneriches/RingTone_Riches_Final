@@ -2,8 +2,9 @@ import { ReactNode } from "react";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
-import { Loader2, LucideIcon } from "lucide-react";
+import { LucideIcon } from "lucide-react";
 import { Link } from "wouter";
+import BrandWait from "@/components/brand/BrandWait";
 
 export function GameShell({ children }: { children: ReactNode }) {
   return (
@@ -68,15 +69,19 @@ export function GameStatus({
 }) {
   return (
     <GameShell>
-      <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
-        <Loader2 className="mb-4 h-10 w-10 animate-spin text-[#C8102E]" />
-        <p className="text-white/55">{message}</p>
-        {actionLabel && onAction ? (
-          <button type="button" onClick={onAction} className="rr-cta mt-6 px-6 py-2.5 text-sm">
+      <BrandWait
+        mode="embed"
+        kicker="Loading play"
+        headline="Getting ready"
+        subtitle={message}
+      />
+      {actionLabel && onAction ? (
+        <div className="-mt-10 flex justify-center pb-16">
+          <button type="button" onClick={onAction} className="rr-cta px-6 py-2.5 text-sm">
             {actionLabel}
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </GameShell>
   );
 }

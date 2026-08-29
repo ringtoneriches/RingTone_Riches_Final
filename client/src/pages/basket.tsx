@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/layout/header";
@@ -17,7 +17,10 @@ import {
   gameTypeLabel,
   processPaymentEndpoint,
 } from "@/lib/play-paths";
-import { markCartCheckout } from "@/lib/basket";
+import { startCartCardCheckout, type CartCheckoutProgress } from "@/lib/cart-card-checkout";
+import CartCheckoutOverlay from "@/components/cart/CartCheckoutOverlay";
+import CheckoutLaunch from "@/components/cart/CheckoutLaunch";
+import type { BasketItem } from "@/lib/basket";
 import { MIN_PURCHASE, validateMinimumPurchase } from "@/components/unified-billing";
 import { User } from "@shared/schema";
 import {
@@ -64,9 +67,19 @@ export default function BasketPage() {
     points: false,
     instaplay: false,
   });
-  const [progress, setProgress] = useState("");
+  const [progress, setProgress] = useState<CartCheckoutProgress | null>(null);
+  const [checkoutItems, setCheckoutItems] = useState<BasketItem[]>([]);
   const [showQuiz, setShowQuiz] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [guestLaunch, setGuestLaunch] = useState(false);
+  const autoPayStarted = useRef(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("guestPay") === "1") {
+      setMethods({ wallet: false, points: false, instaplay: true });
+    }
+  }, []);
 
   const { data: userData } = useQuery<User>({
     queryKey: ["/api/auth/user"],
@@ -91,10 +104,7 @@ export default function BasketPage() {
   }
   remainingAmount = Math.max(0, remainingAmount);
   const hasSelectedMethod = methods.wallet || (methods.points && pointsAllowed) || methods.instaplay;
-  const instaplayBlocked =
-    methods.instaplay &&
-    (totals.pay < MIN_PURCHASE ||
-      items.some((item) => lineTotal(item.ticketPrice, item.quantity, item.type).discountedPrice < MIN_PURCHASE));
+  const instaplayBlocked = methods.instaplay && totals.pay < MIN_PURCHASE;
   const walletShort = hasSelectedMethod && !methods.instaplay && remainingAmount > 0.009;
 
   const checkout = useMutation({
@@ -109,10 +119,33 @@ export default function BasketPage() {
         throw new Error(`Need £${remainingAmount.toFixed(2)} more in your wallet.`);
       }
 
-      let paid = 0;
       const snapshot = [...items];
+      setCheckoutItems(snapshot);
+
+      if (methods.instaplay) {
+        setProgress({
+          phase: "adding",
+          step: 0,
+          total: snapshot.length,
+          message: "Preparing your cart…",
+        });
+        await startCartCardCheckout({
+          items: snapshot,
+          fromCart: true,
+          onProgress: setProgress,
+        });
+        return { paid: snapshot.length, redirected: true };
+      }
+
+      let paid = 0;
       for (const item of snapshot) {
-        setProgress(`Paying ${paid + 1} of ${snapshot.length}…`);
+        setProgress({
+          phase: "paying",
+          step: paid + 1,
+          total: snapshot.length,
+          title: item.title,
+          message: `Paying ${paid + 1} of ${snapshot.length}…`,
+        });
         const createRes = await apiRequest(createOrderEndpoint(item.type), "POST", {
           competitionId: item.competitionId,
           quantity: item.quantity,
@@ -127,18 +160,12 @@ export default function BasketPage() {
           orderId,
           competitionId: item.competitionId,
           quantity: item.quantity,
-          useWalletBalance: methods.instaplay ? false : methods.wallet,
-          useRingtonePoints: methods.instaplay ? false : methods.points && isGame,
-          useInstaplay: methods.instaplay,
+          useWalletBalance: methods.wallet,
+          useRingtonePoints: methods.points && isGame,
+          useInstaplay: false,
         });
         const paidOrder = await payRes.json();
-        if (paidOrder.redirectUrl) {
-          markCartCheckout();
-          remove(item.competitionId);
-          window.location.href = paidOrder.redirectUrl;
-          return { paid, redirected: true };
-        }
-        if (Number(paidOrder.remainingAmount || 0) > 0) {
+        if (paidOrder.redirectUrl || Number(paidOrder.remainingAmount || 0) > 0) {
           throw new Error(
             "This cart still needs a card payment. Select Instant Play, or top up your wallet."
           );
@@ -151,7 +178,7 @@ export default function BasketPage() {
       return { paid, redirected: false };
     },
     onSuccess: (result) => {
-      setProgress("");
+      setProgress(null);
       if (result.redirected) return;
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user/orders"] });
@@ -163,14 +190,14 @@ export default function BasketPage() {
       setLocation("/my-plays");
     },
     onError: (error) => {
-      setProgress("");
+      setProgress(null);
       if (apiErrorMessage(error) === "login-required" || /401/.test(String((error as Error)?.message))) {
         toast({
-          title: "Login required",
-          description: "Sign in to pay for your cart.",
-          variant: "destructive",
+          title: "Checkout as guest",
+          description: "Enter your details to pay without creating an account, or log in.",
         });
-        setLocation("/login");
+        setGuestLaunch(true);
+        setLocation("/guest-checkout?from=basket");
         return;
       }
       const message = apiErrorMessage(error);
@@ -184,7 +211,7 @@ export default function BasketPage() {
       }
       toast({
         title: "Checkout paused",
-        description: `${message} Paid lines were removed. Anything left is still in your cart.`,
+        description: message,
         variant: "destructive",
       });
     },
@@ -215,8 +242,8 @@ export default function BasketPage() {
 
   const startCheckout = () => {
     if (!isAuthenticated) {
-      toast({ title: "Login required", description: "Sign in to pay for your cart." });
-      setLocation("/login");
+      setGuestLaunch(true);
+      setLocation("/guest-checkout?from=basket");
       return;
     }
     if (!hasSelectedMethod) {
@@ -247,6 +274,21 @@ export default function BasketPage() {
     }
     checkout.mutate();
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("autoPay") !== "1") return;
+    if (!methods.instaplay || !isAuthenticated || !items.length || autoPayStarted.current) return;
+    if (instaplayBlocked) return;
+    autoPayStarted.current = true;
+    window.history.replaceState({}, "", "/basket");
+    if (hasInstant) {
+      setSelectedAnswer(null);
+      setShowQuiz(true);
+      return;
+    }
+    checkout.mutate();
+  }, [isAuthenticated, items.length, methods.instaplay, instaplayBlocked, hasInstant]);
 
   const emptyCopy = useMemo(
     () => ({
@@ -521,12 +563,10 @@ export default function BasketPage() {
                         onClick={startCheckout}
                         className="rr-cta mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-black uppercase tracking-[0.14em] disabled:opacity-50 sm:h-14"
                       >
-                        {checkout.isPending
-                          ? progress || "Paying…"
-                          : methods.instaplay
-                            ? "Pay by card"
-                            : `Pay £${totals.pay.toFixed(2)}`}
-                        {!checkout.isPending && <ArrowRight className="h-4 w-4" />}
+                        <span className="relative z-[1] min-w-0 truncate whitespace-nowrap">
+                          {methods.instaplay ? "Pay by card" : `Pay £${totals.pay.toFixed(2)}`}
+                        </span>
+                        {!checkout.isPending && <ArrowRight className="relative z-[1] h-4 w-4 shrink-0" />}
                       </button>
                       <p className="mt-3 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
                         <Lock className="mr-1 inline h-3 w-3 text-[#F1D47A]" />
@@ -549,6 +589,18 @@ export default function BasketPage() {
 
         <Footer />
       </div>
+
+      {guestLaunch && (
+        <CheckoutLaunch
+          headline="Opening checkout"
+          subtitle="Lining up a secure card page for the plays in your cart."
+        />
+      )}
+      <CartCheckoutOverlay
+        open={checkout.isPending}
+        items={checkoutItems.length ? checkoutItems : items}
+        progress={progress}
+      />
 
       <Dialog open={showQuiz} onOpenChange={setShowQuiz}>
         <DialogContent className="mx-auto w-[90vw] max-w-sm rounded-2xl border border-white/10 bg-[#0A0A0D] sm:max-w-md">

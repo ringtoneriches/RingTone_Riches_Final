@@ -43,7 +43,9 @@ export default function Login() {
       return responseData;
     },
     onSuccess: () => {
-      window.location.href = "/";
+      const next = new URLSearchParams(window.location.search).get("next");
+      window.location.href =
+        next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
     },
     onError: (error: any) => {
       const status = error.status;
@@ -62,6 +64,12 @@ export default function Login() {
           title: "Account Closed",
           description: "This account has been closed. Please contact support for assistance.",
         });
+      } else if (status === 403 && errorData.code === "GUEST_ACCOUNT") {
+        toast({
+          title: "Guest checkout found",
+          description: errorData.message,
+        });
+        setLocation("/register");
       } else if (status === 403 && errorData.message?.includes("temporarily suspended")) {
         const endsAt = errorData.endsAt ? new Date(errorData.endsAt).toLocaleDateString() : "later";
         toast({
@@ -158,6 +166,10 @@ export default function Login() {
           <p>Don’t have an account?</p>
           <Link href="/register">
             <span className="rr-auth-ghost cursor-pointer">Create account</span>
+          </Link>
+          <p className="mt-3">Paying once?</p>
+          <Link href="/">
+            <span className="rr-auth-ghost cursor-pointer">Enter a competition as guest</span>
           </Link>
         </div>
       </form>

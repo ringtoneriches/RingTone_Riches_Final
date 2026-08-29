@@ -1,3 +1,29 @@
+export function billingPath(
+  type: string | undefined,
+  orderId: string,
+  opts?: { wheelType?: string | null; imageUrl?: string | null },
+) {
+  const imageParam = opts?.imageUrl ? `?image=${encodeURIComponent(opts.imageUrl)}` : "";
+  switch ((type || "").toLowerCase()) {
+    case "spin":
+      return `/spin-billing/${orderId}/${opts?.wheelType || "default"}${imageParam}`;
+    case "scratch":
+      return `/scratch-billing/${orderId}${imageParam}`;
+    case "pop":
+      return `/pop-billing/${orderId}${imageParam}`;
+    case "plinko":
+      return `/plinko-billing/${orderId}${imageParam}`;
+    case "voltz":
+      return `/voltz-billing/${orderId}${imageParam}`;
+    case "slot":
+      return `/slot-billing/${orderId}${imageParam}`;
+    case "royal":
+      return `/royal-billing/${orderId}${imageParam}`;
+    default:
+      return `/checkout/${orderId}${imageParam}`;
+  }
+}
+
 export function playPath(type: string | undefined, competitionId: string, orderId: string) {
   switch ((type || "").toLowerCase()) {
     case "spin":

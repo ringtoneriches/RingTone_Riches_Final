@@ -2,40 +2,10 @@ import { ReactNode } from "react";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
-import { CheckCircle2, Clock, Loader2, XCircle, Ban, LucideIcon } from "lucide-react";
+import { Ban, Clock, XCircle } from "lucide-react";
+import { CheckoutPulse } from "@/components/brand/BrandWait";
 
 export type PaymentResultVariant = "processing" | "success" | "cancelled" | "failed" | "waiting";
-
-const VARIANT: Record<
-  PaymentResultVariant,
-  { Icon: LucideIcon; iconClass: string; ring: string }
-> = {
-  processing: {
-    Icon: Loader2,
-    iconClass: "animate-spin text-[#C8102E]",
-    ring: "border-[#C8102E]/35 bg-[#C8102E]/10",
-  },
-  waiting: {
-    Icon: Clock,
-    iconClass: "text-[#F1D47A]",
-    ring: "border-[#F1D47A]/35 bg-[#F1D47A]/10",
-  },
-  success: {
-    Icon: CheckCircle2,
-    iconClass: "text-[#F1D47A]",
-    ring: "border-[#F1D47A]/40 bg-[#F1D47A]/10",
-  },
-  cancelled: {
-    Icon: Ban,
-    iconClass: "text-[#F1D47A]",
-    ring: "border-[#F1D47A]/30 bg-[#F1D47A]/8",
-  },
-  failed: {
-    Icon: XCircle,
-    iconClass: "text-[#FF263D]",
-    ring: "border-[#C8102E]/40 bg-[#C8102E]/10",
-  },
-};
 
 type Props = {
   kicker: string;
@@ -47,6 +17,38 @@ type Props = {
   extra?: ReactNode;
 };
 
+function ProcessingMark() {
+  return <CheckoutPulse size="sm" force="night" />;
+}
+
+function SuccessMark() {
+  return (
+    <div className="rr-pay-success-wrap relative h-[5.5rem] w-[5.5rem]">
+      <svg viewBox="0 0 56 56" className="h-full w-full" aria-hidden>
+        <circle className="rr-pay-success-ring" cx="28" cy="28" r="24" fill="none" />
+        <path className="rr-pay-success-check" d="M17.5 29.2 24.2 36 38.5 20.5" fill="none" />
+      </svg>
+    </div>
+  );
+}
+
+function StatusMark({ variant }: { variant: PaymentResultVariant }) {
+  if (variant === "processing" || variant === "waiting") return <ProcessingMark />;
+  if (variant === "success") return <SuccessMark />;
+
+  const wrap =
+    variant === "failed"
+      ? "border-[#C8102E]/40 bg-[#C8102E]/10 text-[#FF263D]"
+      : "border-[#F1D47A]/35 bg-[#F1D47A]/10 text-[#F1D47A]";
+  const Icon = variant === "failed" ? XCircle : variant === "cancelled" ? Ban : Clock;
+
+  return (
+    <div className={`flex h-[5.5rem] w-[5.5rem] items-center justify-center rounded-full border ${wrap}`}>
+      <Icon className="h-10 w-10" />
+    </div>
+  );
+}
+
 export default function PaymentResult({
   kicker,
   title,
@@ -56,26 +58,28 @@ export default function PaymentResult({
   onAction,
   extra,
 }: Props) {
-  const { Icon, iconClass, ring } = VARIANT[variant];
-
   return (
     <div className="rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
       <DigitalAtmosphere />
       <Header />
       <main className="relative z-10 flex min-h-[70vh] items-center justify-center px-4 py-12 sm:py-16">
-        <div className="w-full max-w-md text-center">
+        <div className="relative w-full max-w-[26rem] overflow-hidden rounded-3xl border border-[#F1D47A]/25 bg-[#0A0A0D] px-6 py-10 text-center shadow-[0_24px_80px_rgba(0,0,0,0.55)] sm:px-8">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#F1D47A]/70 to-transparent" />
+
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#C8102E]/40 bg-[#C8102E]/10 px-3 py-1">
             <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">
               {kicker}
             </span>
           </div>
 
-          <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border ${ring}`}>
-            <Icon className={`h-10 w-10 ${iconClass}`} />
+          <div className="mx-auto mb-6 flex justify-center">
+            <StatusMark variant={variant} />
           </div>
 
-          <h1 className="font-prize text-4xl leading-tight text-white sm:text-5xl">{title}</h1>
-          <p className="mx-auto mt-3 max-w-sm text-sm text-white/50 sm:text-base">{message}</p>
+          <h1 className="font-prize text-4xl leading-none text-white sm:text-5xl">{title}</h1>
+          <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-white/50 sm:text-base">
+            {message}
+          </p>
           {extra}
 
           {actionLabel && onAction ? (

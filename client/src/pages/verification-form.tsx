@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { WelcomeBonusPopup } from "@/components/welcome-bonus-popup";
 import { Mail, RefreshCw, Lock, Loader2 } from "lucide-react";
 import AuthShell from "@/components/auth/AuthShell";
+import BrandWait from "@/components/brand/BrandWait";
 
 interface VerificationFormProps {
   email: string;
@@ -172,7 +173,7 @@ export const VerificationForm: React.FC<VerificationFormProps> = ({ email, onVer
         setShowBonusPopup(true);
       } else {
         setTimeout(() => {
-          setLocation("/login");
+          setLocation("/my-plays");
         }, 1500);
       }
       
@@ -279,7 +280,7 @@ export const VerificationForm: React.FC<VerificationFormProps> = ({ email, onVer
   const handleBonusPopupClose = () => {
     setShowBonusPopup(false);
     setTimeout(() => {
-      setLocation("/login");
+      setLocation("/my-plays");
     }, 1000);
   };
 
@@ -290,10 +291,7 @@ export const VerificationForm: React.FC<VerificationFormProps> = ({ email, onVer
   if (timeLeft === null && !statusData) {
     return (
       <AuthShell kicker="Verify email" title="CHECKING" sub="Loading your verification status.">
-        <div className="rr-auth-status">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#F1D47A]" />
-          <p className="mt-4">Loading verification status…</p>
-        </div>
+        <BrandWait quiet headline="Checking verification" />
       </AuthShell>
     );
   }

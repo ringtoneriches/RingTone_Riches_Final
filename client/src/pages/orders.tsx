@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
+import BrandWait from "@/components/brand/BrandWait";
 import { Link } from "wouter";
 import { OrderDetailsDialog } from "@/components/order-details-dialog";
 
@@ -105,9 +106,12 @@ export default function Orders() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" aria-label="Loading"/>
-      </div>
+      <BrandWait
+        mode="page"
+        kicker="Orders"
+        headline="Loading orders"
+        subtitle="Fetching your tickets and payments."
+      />
     );
   }
 

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
+import BrandWait, { PageWait } from "@/components/brand/BrandWait";
 import { Link, Router, useLocation } from "wouter";
 import { Transaction, User, Ticket, Competition } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -1316,16 +1317,12 @@ const handleDeleteBankAccount = (
 
   if (isLoading) {
     return (
-      <div className="rr-wallet rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
-        <DigitalAtmosphere />
-        <Header />
-        <div className="relative z-10 flex min-h-[60vh] items-center justify-center">
-          <div
-            className="h-10 w-10 animate-spin rounded-full border-2 border-[#C8102E] border-t-transparent"
-            aria-label="Loading"
-          />
-        </div>
-      </div>
+      <PageWait
+        className="rr-wallet rr-page bg-[#050505] text-white"
+        kicker="Wallet"
+        headline="Opening wallet"
+        subtitle="Loading your balance and plays."
+      />
     );
   }
 
@@ -1349,6 +1346,15 @@ const handleDeleteBankAccount = (
 
   return (
     <div className="rr-wallet rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      {topUpMutation.isPending && (
+        <BrandWait
+          mode="overlay"
+          kicker="Wallet"
+          headline="Opening payment"
+          subtitle="Taking you to secure card payment."
+          trust="SSL encrypted · Don’t close this tab"
+        />
+      )}
       <DigitalAtmosphere />
       <Header />
 

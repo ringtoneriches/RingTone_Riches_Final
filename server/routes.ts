@@ -13,6 +13,13 @@ import {
   hashPassword,
   verifyPassword,
 } from "./customAuth";
+import { registerGuestAuthRoutes } from "./guest-auth";
+import {
+  registerCartCardPaymentRoutes,
+  fulfillCartCardPayment,
+  failCartCardPayment,
+  cartOrderIdsFromMetadata,
+} from "./cart-card-payment";
 import {
   insertOrderSchema,
   insertTransactionSchema,
@@ -84,6 +91,7 @@ import {
   slotUsage,
   slotPrizeWins,
   ipBlocklist,
+  securityAuditLog,
   suspiciousActivities,
   guestPrizes,
   guestOrders,
@@ -147,6 +155,15 @@ import {
 } from "./cloudeflare/cloudeflareHelper";
 import { OTPGenerator } from "./otp";
 import { sendVerificationEmail } from "./emails/verification-email";
+import { issueEmailVerificationOtp } from "./email-otp";
+import {
+  applyReservedTender,
+  beginReservedCardCheckout,
+  firstQueryRow,
+  normalizeCashflowsStatus as readCashflowsStatus,
+  parseCashAmount,
+  refundEarlyTender,
+} from "./payment-settlement";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { calculateDiscountedTotal } from "./utils/discounts";
@@ -814,51 +831,7 @@ function normalizeCashflowsStatus(payment: any): {
   status: "PAID" | "PENDING" | "FAILED" | "UNKNOWN";
   paidAmount: number;
 } {
-  const raw =
-    payment?.status ||
-    payment?.data?.status ||
-    payment?.data?.paymentStatus ||
-    payment?.data?.payments?.[0]?.status ||
-    "";
-
-  const status = String(raw).toUpperCase();
-
-  const paidAmount = Number(
-    payment?.data?.paidAmount ||
-    payment?.data?.amountCollected ||
-    payment?.data?.payments?.[0]?.paidAmount ||
-    0
-  );
-
-  // ✅ Paid
-  if (
-    status.includes("PAID") ||
-    status.includes("SUCCESS") ||
-    status.includes("CAPTURE")
-  ) {
-    return { status: "PAID", paidAmount };
-  }
-
-  // ❌ Expired / Failed / Cancelled
-  if (
-    status.includes("FAIL") ||
-    status.includes("CANCEL") ||
-    status.includes("EXPIRE")
-  ) {
-    return { status: "FAILED", paidAmount: 0 };
-  }
-
-  // ⏳ Still pending
-  if (
-    status.includes("PENDING") ||
-    status.includes("PROCESS") ||
-    status.includes("AUTHOR")
-  ) {
-    return { status: "PENDING", paidAmount: 0 };
-  }
-
-  // ❓ Unknown = NEVER PAY
-  return { status: "UNKNOWN", paidAmount: 0 };
+  return readCashflowsStatus(payment);
 }
 
 
@@ -914,10 +887,13 @@ async function processWalletTopup(
   paymentRef: string,
   amount: number,
   shouldCheckReferral: boolean = true
-) {
+): Promise<{ credited: boolean; already: boolean }> {
   if (amount <= 0) {
     throw new Error("Invalid wallet credit amount");
   }
+
+  let credited = false;
+  let already = false;
 
   try {
     await db.transaction(async (tx) => {
@@ -928,22 +904,27 @@ async function processWalletTopup(
 
       if (existing) {
         console.warn("Duplicate wallet credit blocked:", pendingPaymentId);
+        already = true;
         return;
       }
 
       // Check pending payment status with FOR UPDATE lock using SQL
-      const pendingResult = await tx.execute<{
-        rows: Array<{ id: string; status: string }>
-      }>(sql`
+      const pendingResult = await tx.execute(sql`
         SELECT id, status 
         FROM pending_payments 
         WHERE id = ${pendingPaymentId}
         FOR UPDATE
       `);
       
-      const pending = Array.isArray(pendingResult) ? pendingResult[0] : pendingResult.rows?.[0];
+      const pending = firstQueryRow<{ id: string; status: string }>(pendingResult);
 
       if (!pending || pending.status !== "pending") {
+        const [existingRef] = await tx
+          .select()
+          .from(transactions)
+          .where(eq(transactions.paymentRef, paymentRef))
+          .limit(1);
+        already = Boolean(existingRef);
         console.warn("Pending payment not found or already processed:", pendingPaymentId);
         return;
       }
@@ -975,6 +956,7 @@ async function processWalletTopup(
         })
         .where(eq(pendingPayments.id, pendingPaymentId));
 
+      credited = true;
       console.log("Wallet credited successfully", {
         userId,
         pendingPaymentId,
@@ -989,6 +971,7 @@ async function processWalletTopup(
         console.log("Skipping referral check for this topup");
       }
     });
+    return { credited, already };
   } catch (err) {
     console.error("processWalletTopup FAILED", err);
     throw err;
@@ -1308,6 +1291,8 @@ const registerUserSchema = z.object({
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   setupCustomAuth(app);
+  registerGuestAuthRoutes(app);
+  registerCartCardPaymentRoutes(app);
 
   // File upload endpoint for competition images
   app.post(
@@ -1489,9 +1474,56 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
     // ===== CHECK EXISTING USER =====
     const normalizedEmail = email.toLowerCase().trim();
     const existingUser = await storage.getUserByEmail(normalizedEmail);
-    if (existingUser) {
+    if (existingUser && !existingUser.isGuestAccount) {
       console.log(`❌ [register] User already exists: ${normalizedEmail}`);
       return res.status(400).json({ message: "User already exists with this email" });
+    }
+
+    if (existingUser?.isGuestAccount) {
+      const hashedGuestPassword = await hashPassword(password);
+      const guestDob =
+        birthMonth && birthYear
+          ? `${birthYear}-${String(birthMonth).padStart(2, "0")}-01`
+          : existingUser.dateOfBirth;
+      await db
+        .update(users)
+        .set({
+          password: hashedGuestPassword,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          dateOfBirth: guestDob,
+          phoneNumber: phoneNumber.trim(),
+          receiveNewsletter: receiveNewsletter || existingUser.receiveNewsletter || false,
+          isGuestAccount: false,
+          emailVerified: false,
+          passwordChangedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, existingUser.id));
+
+      await issueEmailVerificationOtp({
+        id: existingUser.id,
+        email: existingUser.email,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+      });
+
+      (req as any).session.userId = existingUser.id;
+
+      return res.status(200).json({
+        message: "Account saved. Verify your email to finish.",
+        claimedGuest: true,
+        needsVerification: true,
+        email: existingUser.email,
+        user: {
+          id: existingUser.id,
+          email: existingUser.email,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          isAdmin: existingUser.isAdmin || false,
+          emailVerified: false,
+        },
+      });
     }
 
     // ===== VALIDATE REFERRAL CODE =====
@@ -1853,6 +1885,12 @@ app.post("/api/auth/login", async (req, res) => {
        console.log("❌ [login] User not found for:", normalizedEmail);
       return res.status(401).json({ message: "Invalid email or password" });
     }
+    if (user.isGuestAccount) {
+      return res.status(403).json({
+        code: "GUEST_ACCOUNT",
+        message: "This email was used for guest checkout. Create a password on the Create account page, using the same email, to log in.",
+      });
+    }
  console.log("✅ [login] User found:", user.email);
     // 1️⃣ Check admin disables first
     if (user.disabled) {
@@ -1903,6 +1941,12 @@ app.post("/api/auth/login", async (req, res) => {
     );
     if (!isValidPassword) {
       return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    if (!freshUser.emailVerified && !freshUser.isGuestAccount) {
+      return res.status(403).json({
+        message: "Please verify your email address before logging in. Check your inbox for the verification code.",
+      });
     }
 
     // Store user ID in session
@@ -1984,6 +2028,139 @@ app.post("/api/auth/login", async (req, res) => {
     } catch (error) {
       console.error("Status check error:", error);
       res.status(500).json({ message: "Failed to check status" });
+    }
+  });
+
+  app.post("/api/auth/verify-email", async (req: any, res) => {
+    try {
+      const email = String(req.body?.email || "").toLowerCase().trim();
+      const otp = String(req.body?.otp || "").trim();
+
+      if (!email || !otp) {
+        return res.status(400).json({ message: "Email and OTP are required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      if (user.isGuestAccount) {
+        return res.status(400).json({ message: "Save a password first, then verify this email." });
+      }
+      if (user.emailVerified) {
+        return res.status(400).json({ message: "Email already verified" });
+      }
+      if (!user.emailVerificationOtp || user.emailVerificationOtp !== otp) {
+        return res.status(400).json({ message: "Invalid OTP" });
+      }
+      if (!user.emailVerificationOtpExpiresAt || new Date() > new Date(user.emailVerificationOtpExpiresAt)) {
+        return res.status(400).json({ message: "OTP has expired. Please request a new one." });
+      }
+
+      await db
+        .update(users)
+        .set({
+          emailVerified: true,
+          emailVerificationOtp: null,
+          emailVerificationOtpExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+
+      const existingTicket = await db
+        .select({ id: tickets.id })
+        .from(tickets)
+        .where(eq(tickets.userId, user.id))
+        .limit(1);
+
+      let bonusCashCredited = 0;
+      let bonusPointsCredited = 0;
+      if (!existingTicket.length) {
+        try {
+          const settings = await storage.getPlatformSettings();
+          if (settings?.signupBonusEnabled) {
+            const bonusCash = parseFloat(settings.signupBonusCash || "0");
+            const bonusPoints = settings.signupBonusPoints || 0;
+            if (bonusCash > 0) {
+              await db
+                .update(users)
+                .set({ balance: sql`${users.balance} + ${bonusCash}` })
+                .where(eq(users.id, user.id));
+              bonusCashCredited = bonusCash;
+            }
+            if (bonusPoints > 0) {
+              await db
+                .update(users)
+                .set({ ringtonePoints: sql`${users.ringtonePoints} + ${bonusPoints}` })
+                .where(eq(users.id, user.id));
+              bonusPointsCredited = bonusPoints;
+            }
+          }
+        } catch (bonusError) {
+          console.error("Signup bonus on verify error:", bonusError);
+        }
+      }
+
+      req.session.userId = user.id;
+
+      return res.json({
+        message: "Email verified successfully.",
+        verified: true,
+        bonusesApplied: {
+          cash: bonusCashCredited,
+          points: bonusPointsCredited,
+          referral: false,
+        },
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          emailVerified: true,
+        },
+      });
+    } catch (error) {
+      console.error("Verification error:", error);
+      return res.status(500).json({ message: "Failed to verify email" });
+    }
+  });
+
+  app.post("/api/auth/resend-otp", async (req, res) => {
+    try {
+      const email = String(req.body?.email || "").toLowerCase().trim();
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      if (user.isGuestAccount) {
+        return res.status(400).json({ message: "Save a password first, then verify this email." });
+      }
+      if (user.emailVerified) {
+        return res.status(400).json({ message: "Email already verified" });
+      }
+
+      if (user.verificationSentAt) {
+        const waitMs = 60 * 1000;
+        const elapsed = Date.now() - new Date(user.verificationSentAt).getTime();
+        if (elapsed < waitMs) {
+          return res.status(429).json({
+            message: "Please wait a minute before requesting another code.",
+          });
+        }
+      }
+
+      await issueEmailVerificationOtp(user);
+      return res.json({
+        message: "New OTP sent successfully to your email",
+        expiresIn: "30 minutes",
+      });
+    } catch (error) {
+      console.error("Resend OTP error:", error);
+      return res.status(500).json({ message: "Failed to resend OTP" });
     }
   });
 
@@ -3676,62 +3853,34 @@ res.json({
           });
         }
 
-        // If there's remaining amount, create Cashflows session
-        const session = await cashflows.createCompetitionPaymentSession(
-          remainingAmount,
-          {
-            orderId,
-            competitionId: competition.id,
-            userId,
-            quantity: (quantity || order.quantity || 1).toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-          }
-        );
-
-        if (!session.hostedPageUrl) {
-          // If Cashflows fails, refund wallet + points
-          if (walletUsed > 0) {
-            await storage.updateUserBalance(
-              userId,
-              (walletBalance + walletUsed).toFixed(2)
-            );
-          }
-          if (pointsUsed > 0) {
-            await storage.updateUserRingtonePoints(
-              userId,
-              ringtonePoints + pointsUsed
-            );
-          }
-
-          return res
-            .status(500)
-            .json({ message: "Failed to get Cashflows checkout URL" });
-        }
-
-        // Save partial payment info
-        let paymentMethodText = "Cashflow";
-        if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Points+Cashflow";
-        } else if (walletUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Cashflow";
-        } else if (pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Points+Cashflow";
-        }
-
-        await storage.updateOrderPaymentInfo(orderId, {
-          paymentMethod: paymentMethodText,
-          walletAmount: walletUsed.toString(),
-          pointsAmount: pointsUsed.toString(),
-          cashflowsAmount: remainingAmount.toString(),
-          paymentBreakdown: JSON.stringify(paymentBreakdown),
+        await refundEarlyTender({
+          userId,
+          orderId,
+          walletUsed,
+          pointsUsed,
         });
-
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: competition.id,
+          quantity: quantity || order.quantity || 1,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
+          return res.status(500).json({ message: "Failed to get Cashflows checkout URL" });
+        }
         res.json({
           success: true,
-          redirectUrl: session.hostedPageUrl,
-          sessionId: session.paymentJobReference,
+          redirectUrl: started.redirectUrl,
+          sessionId: started.sessionId,
           fullyPaid: false,
-          paymentMethod: paymentMethodText,
           remainingAmount,
         });
       } catch (error: any) {
@@ -3771,21 +3920,14 @@ res.json({
           paymentRef
         );
   
-        const paymentStatus =
-          payment?.status ||
-          payment?.data?.status ||
-          payment?.data?.paymentStatus ||
-          payment?.paymentStatus;
+        const { status: paymentStatus, paidAmount } = normalizeCashflowsStatus(payment);
   
         console.log("📊 Payment Status:", paymentStatus);
-  
-        const successStatuses = ["SUCCESS", "COMPLETED", "PAID", "Paid"];
   
         const user = await storage.getUser(userId);
         const balance = parseFloat(user?.balance || "0");
   
-        // ❌ Payment failed
-        if (!successStatuses.includes(paymentStatus)) {
+        if (paymentStatus === "FAILED") {
           await db.insert(auditLogs).values({
             userId,
             userName:
@@ -3800,7 +3942,16 @@ res.json({
           });
   
           return res.status(400).json({
+            success: false,
             message: `Payment not completed. Status: ${paymentStatus}`,
+          });
+        }
+
+        if (paymentStatus !== "PAID") {
+          return res.status(202).json({
+            success: false,
+            waitingForWebhook: true,
+            message: "Payment is still confirming.",
           });
         }
   
@@ -3824,6 +3975,55 @@ res.json({
           return res
             .status(404)
             .json({ message: "Order not found or belongs to wrong user" });
+        }
+
+        const pendingAny = await db.query.pendingPayments.findFirst({
+          where: (p, { eq }) => eq(p.paymentJobReference, paymentJobRef),
+        });
+        const cartOrderIds = cartOrderIdsFromMetadata(pendingAny?.metadata);
+
+        if (pendingAny && cartOrderIds.length) {
+          if (!cartOrderIds.includes(orderId)) {
+            return res.status(404).json({ message: "Order not found for this payment" });
+          }
+          const issued = await fulfillCartCardPayment({
+            userId,
+            orderIds: cartOrderIds,
+            pendingPaymentId: pendingAny.id,
+            paymentRef,
+            paidAmount: Number(pendingAny.amount || order.totalAmount) || 0,
+          });
+
+          if (pendingAny.status === "pending") {
+            await db
+              .update(pendingPayments)
+              .set({
+                status: "completed",
+                paymentReference: paymentRef,
+                updatedAt: new Date(),
+              })
+              .where(eq(pendingPayments.id, pendingAny.id));
+          }
+
+          const firstIssued = issued[0];
+          const firstOrder = await storage.getOrder(cartOrderIds[0]);
+          const firstCompetition = firstOrder
+            ? await storage.getCompetition(firstOrder.competitionId)
+            : null;
+
+          return res.json({
+            success: true,
+            cart: cartOrderIds.length > 1,
+            orderIds: cartOrderIds,
+            orderId: cartOrderIds[0],
+            competitionId: firstOrder?.competitionId || order.competitionId,
+            competitionType: firstCompetition?.type || "competition",
+            tickets: firstIssued?.tickets || [],
+            cardsPurchased: firstOrder?.quantity || order.quantity,
+            quantity: firstOrder?.quantity || order.quantity,
+            totalAmount: pendingAny.amount || order.totalAmount,
+            generatedImmediately: true,
+          });
         }
   
         // Get competition
@@ -3852,7 +4052,7 @@ res.json({
         }
   
         // For instant play payments, generate tickets immediately
-        if (order.paymentMethod === "instaplay") {
+        if (order.paymentMethod === "instaplay" || String(order.paymentMethod || "").includes("Cashflow")) {
           // Check if there's a pending payment record or create one
           let pending = await db.query.pendingPayments.findFirst({
             where: (p, { eq, and }) => and(
@@ -3882,13 +4082,35 @@ res.json({
           // }
 
           if (!pending) {
-            console.warn("No pending payment found in success route");
-
-            return res.json({
-              success: true,
-              waitingForWebhook: true,
-              message: "Payment received, processing shortly",
-            });
+            const [anyPending] = await db
+              .select()
+              .from(pendingPayments)
+              .where(eq(pendingPayments.paymentJobReference, paymentJobRef))
+              .limit(1);
+            if (anyPending) {
+              pending = anyPending;
+            } else {
+              const [created] = await db
+                .insert(pendingPayments)
+                .values({
+                  userId,
+                  orderId,
+                  paymentType: "instant_play",
+                  paymentJobReference: paymentJobRef,
+                  paymentReference: paymentRef,
+                  amount: String(parseCashAmount(paidAmount, order.totalAmount)),
+                  status: "pending",
+                  metadata: {
+                    gameType: competition?.type || "scratch",
+                    competitionType: competition?.type,
+                    recovered: true,
+                  },
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .returning();
+              pending = created;
+            }
           }
   
           if (pending) {
@@ -3962,14 +4184,26 @@ res.json({
           createdAt: new Date(),
         });
   
-        console.log("✅ Payment verified — webhook will process order");
-  
+        const recoveredPending = await db.query.pendingPayments.findFirst({
+          where: (p, { eq }) => eq(p.paymentJobReference, paymentJobRef),
+        });
+        const tickets = await processInstantPlayPurchase(
+          userId,
+          orderId,
+          recoveredPending?.id || pendingAny?.id,
+          paymentRef,
+          order.quantity,
+          parseCashAmount(paidAmount, recoveredPending?.amount, order.totalAmount),
+          competition?.type || "competition",
+        );
+
         return res.json({
           success: true,
           orderId,
           competitionId: order.competitionId,
           competitionType: competition?.type || "competition",
-          waitingForWebhook: true,
+          tickets: tickets.map((t: any) => ({ ticketNumber: t.ticketNumber })),
+          generatedImmediately: true,
         });
       } catch (error: any) {
         console.error("❌ Error confirming competition payment:", error);
@@ -4079,21 +4313,53 @@ res.json({
           paymentType: string;
           orderId: string | null;
           metadata: any;
+          amount: string | number | null;
         }>
       }>(sql`
         SELECT id, user_id as "userId", status, payment_type as "paymentType", 
-               order_id as "orderId", metadata
+               order_id as "orderId", metadata, amount
         FROM pending_payments 
         WHERE payment_job_reference = ${paymentJobReference}
         LIMIT 1
       `);
       
-      const pending = Array.isArray(pendingResult) ? pendingResult[0] : pendingResult.rows?.[0];
+      const pending = firstQueryRow<{
+        id: string;
+        userId: string;
+        status: string;
+        paymentType: string;
+        orderId: string | null;
+        metadata: any;
+        amount: string | number | null;
+      }>(pendingResult);
   
       if (!pending) {
+        const [guestPending] = await db
+          .select()
+          .from(guestPendingPayments)
+          .where(eq(guestPendingPayments.paymentJobReference, paymentJobReference))
+          .limit(1);
+        if (guestPending) {
+          const payment = await cashflows.getPaymentStatus(
+            paymentJobReference,
+            paymentReference ?? undefined,
+          );
+          const { status, paidAmount } = normalizeCashflowsStatus(payment);
+          const creditAmount = parseCashAmount(paidAmount, guestPending.amount);
+          if (status === "PAID" && creditAmount > 0) {
+            await processGuestOrder(
+              guestPending.guestOrderId,
+              paymentReference ?? paymentJobReference,
+              creditAmount,
+            );
+          }
+          return;
+        }
         console.warn("No pending payment found:", paymentJobReference);
         return;
       }
+
+      const cartOrderIds = cartOrderIdsFromMetadata(pending.metadata);
 
       // 🛑 GLOBAL IDEMPOTENCY CHECK (VERY IMPORTANT)
         const [existingTx] = await db
@@ -4104,6 +4370,28 @@ res.json({
 
         if (existingTx) {
           console.log("⚠️ Already processed (webhook/success):", paymentReference);
+          if (pending.paymentType === "instant_play") {
+            if (cartOrderIds.length) {
+              await fulfillCartCardPayment({
+                userId: pending.userId,
+                orderIds: cartOrderIds,
+                pendingPaymentId: pending.id,
+                paymentRef: paymentReference ?? paymentJobReference,
+                paidAmount: Number(pending.amount || 0) || 0,
+              });
+            } else if (pending.orderId) {
+              const gameType = pending.metadata?.gameType || pending.metadata?.competitionType || "unknown";
+              await processInstantPlayPurchase(
+                pending.userId,
+                pending.orderId,
+                pending.id,
+                paymentReference ?? paymentJobReference,
+                1,
+                Number(pending.amount || 0) || 0,
+                gameType,
+              );
+            }
+          }
           return;
         }
   
@@ -4148,12 +4436,16 @@ res.json({
           WHERE id = ${pending.id}
         `);
   
-        if (pending.orderId && pending.paymentType === 'instant_play') {
-          await db.execute(sql`
-            UPDATE orders 
-            SET status = 'failed', updated_at = NOW()
-            WHERE id = ${pending.orderId}
-          `);
+        if (pending.paymentType === 'instant_play') {
+          if (cartOrderIds.length) {
+            await failCartCardPayment(cartOrderIds);
+          } else if (pending.orderId) {
+            await db.execute(sql`
+              UPDATE orders 
+              SET status = 'failed', updated_at = NOW()
+              WHERE id = ${pending.orderId}
+            `);
+          }
         }
   
         console.warn("Payment failed", {
@@ -4165,31 +4457,43 @@ res.json({
         return;
       }
   
+      const settledAmount = parseCashAmount(paidAmount, pending.amount);
+
       // ⏳ Still waiting for PAID status
-      if (status !== "PAID" || paidAmount <= 0) {
+      if (status !== "PAID" || settledAmount <= 0) {
         return;
       }
   
       // ✅ Payment is successful - handle based on payment type
-      if (pending.paymentType === 'wallet_topup') {
+      if (pending.paymentType === 'wallet_topup' || !pending.paymentType) {
         await processWalletTopup(
           pending.userId,
           pending.id,
           paymentReference ?? paymentJobReference,
-          paidAmount
+          settledAmount
         );
       } else if (pending.paymentType === 'instant_play') {
-        // Get quantity from orders table since it's not in pending_payments
-        if (pending.orderId) {
-          const orderResult = await db.execute<{
-            rows: Array<{ quantity: number }>
-          }>(sql`
+        if (cartOrderIds.length) {
+          await fulfillCartCardPayment({
+            userId: pending.userId,
+            orderIds: cartOrderIds,
+            pendingPaymentId: pending.id,
+            paymentRef: paymentReference ?? paymentJobReference,
+            paidAmount: settledAmount,
+          });
+          await db.execute(sql`
+            UPDATE pending_payments
+            SET status = 'completed', updated_at = NOW()
+            WHERE id = ${pending.id}
+          `);
+        } else if (pending.orderId) {
+          const orderResult = await db.execute(sql`
             SELECT quantity 
             FROM orders 
             WHERE id = ${pending.orderId}
           `);
           
-          const order = Array.isArray(orderResult) ? orderResult[0] : orderResult.rows?.[0];
+          const order = firstQueryRow<{ quantity: number }>(orderResult);
           const quantity = order?.quantity || 1;
           
           const gameType = pending.metadata?.gameType || 
@@ -4202,9 +4506,14 @@ res.json({
             pending.id,
             paymentReference ?? paymentJobReference,
             quantity,
-            paidAmount,
+            settledAmount,
             gameType
           );
+          await db.execute(sql`
+            UPDATE pending_payments
+            SET status = 'completed', updated_at = NOW()
+            WHERE id = ${pending.id}
+          `);
         }
       } else {
         console.warn("Unknown payment type:", pending.paymentType);
@@ -4229,22 +4538,55 @@ res.json({
     gameType: string,
     tx?: any // Make transaction optional for webhook usage
   ) {
-    if (amount <= 0) {
+    if (amount < 0) {
       throw new Error("Invalid payment amount");
     }
   
     // If tx is provided, use it (for webhook), otherwise create new transaction
     const executeInTx = async (transaction: any) => {
+      const [pendingRow] = pendingPaymentId
+        ? await transaction
+            .select()
+            .from(pendingPayments)
+            .where(eq(pendingPayments.id, pendingPaymentId))
+            .limit(1)
+        : [];
+      const pendingMeta =
+        pendingRow?.metadata && typeof pendingRow.metadata === "string"
+          ? JSON.parse(pendingRow.metadata)
+          : pendingRow?.metadata || {};
+      const reservedWallet = Number(pendingMeta.reservedWallet || 0);
+      const reservedPoints = Number(pendingMeta.reservedPoints || 0);
+
       // 🛑 Idempotency guard
       const [existing] = await transaction
         .select()
         .from(transactions)
           .where(eq(transactions.paymentRef, paymentRef))
         .limit(1);
-  
-      if (existing) {
+
+      const [order] = await transaction
+        .select()
+        .from(orders)
+        .where(eq(orders.id, orderId));
+
+      if (!order) {
+        throw new Error(`Order not found: ${orderId}`);
+      }
+
+      const existingTickets = await transaction
+        .select()
+        .from(tickets)
+        .where(eq(tickets.orderId, orderId));
+
+      if (existing && existingTickets.length) {
         console.warn("Duplicate instant play transaction blocked:", pendingPaymentId);
-        return;
+        if (pendingPaymentId) {
+          await transaction.update(pendingPayments)
+            .set({ status: "completed", updatedAt: new Date() })
+            .where(eq(pendingPayments.id, pendingPaymentId));
+        }
+        return { order, competition: null, generatedTickets: existingTickets };
       }
 
        // Get user before any changes
@@ -4256,43 +4598,51 @@ res.json({
     const oldBalance = Number(user.balance) || 0;
     const newBalance = oldBalance; 
   
-      // Get the order details
-      const [order] = await transaction
-        .select()
-        .from(orders)
-        .where(eq(orders.id, orderId));
-  
-      if (!order) {
-        throw new Error(`Order not found: ${orderId}`);
-      }
-  
+      await applyReservedTender({
+        tx: transaction,
+        userId,
+        orderId,
+        reservedWallet,
+        reservedPoints,
+      });
+
       // Get competition
       const [competition] = await transaction
         .select()
         .from(competitions)
         .where(eq(competitions.id, order.competitionId));
   
-      // Create transaction record
-      await transaction.insert(transactions).values({
-        userId,
-        type: "purchase",
-        amount: Math.round(amount * 100) / 100,
-        paymentRef,
-        pendingPaymentId,
-        orderId,
-        description: `Instant play purchase: ${competition?.title || gameType} - £${amount}`,
-        status: "completed",
-        createdAt: new Date(),
-      });
+      if (!existing) {
+        await transaction.insert(transactions).values({
+          userId,
+          type: "purchase",
+          amount: Math.round(amount * 100) / 100,
+          paymentRef,
+          pendingPaymentId,
+          orderId,
+          description: `Instant play purchase: ${competition?.title || gameType} - £${amount}`,
+          status: "completed",
+          createdAt: new Date(),
+        });
+      }
   
       // Update order status
       await transaction.update(orders)
         .set({
           status: "completed",
           updatedAt: new Date(),
-          paymentMethod: "instaplay",
+          paymentMethod: order.paymentMethod === "pending" ? "instaplay" : order.paymentMethod,
         })
         .where(eq(orders.id, orderId));
+
+      if (existingTickets.length) {
+        if (pendingPaymentId) {
+          await transaction.update(pendingPayments)
+            .set({ status: "completed", updatedAt: new Date() })
+            .where(eq(pendingPayments.id, pendingPaymentId));
+        }
+        return { order, competition, generatedTickets: existingTickets };
+      }
 
       const { tickets: generatedTickets } = await issuePlayTickets({
         tx: transaction,
@@ -4332,6 +4682,12 @@ await transaction.insert(auditLogs).values({
   competitionId: competition?.id || null,
   createdAt: new Date(),
 });
+
+    if (pendingPaymentId) {
+      await transaction.update(pendingPayments)
+        .set({ status: "completed", updatedAt: new Date() })
+        .where(eq(pendingPayments.id, pendingPaymentId));
+    }
 
     return { order, competition, generatedTickets };
   };
@@ -4607,63 +4963,33 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
       // -------------------------
       if (remainingAmount > 0) {
         cashflowsUsed = remainingAmount;
-  
-        const session = await cashflows.createCompetitionPaymentSession(
-          remainingAmount,
-          {
-            orderId,
-            competitionId,
-            userId,
-            quantity: quantity.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-          }
-        );
-  
-        // In case Cashflows fails: refund wallet + points
-        if (!session || !session.hostedPageUrl) {
-          if (walletUsed > 0) {
-            await db.update(users)
-              .set({ balance: (walletBalance + walletUsed).toString() })
-              .where(eq(users.id, userId));
-          }
-          if (pointsUsed > 0) {
-            await db.update(users)
-              .set({ ringtonePoints: ringtonePoints + pointsUsed })
-              .where(eq(users.id, userId));
-          }
-  
-          return res
-            .status(500)
-            .json({ message: "Failed to create payment session" });
+        await refundEarlyTender({
+          userId,
+          orderId,
+          walletUsed,
+          pointsUsed,
+        });
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId,
+          quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: compType || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
+          return res.status(500).json({ message: "Failed to create payment session" });
         }
-  
-        // Determine payment method text for mixed payment
-        let paymentMethodText = "Cashflow";
-        if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Points+Cashflow";
-        } else if (walletUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Cashflow";
-        } else if (pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Points+Cashflow";
-        }
-  
-        // Save partial payment info
-        await db.update(orders)
-          .set({ 
-            status: "processing",
-            paymentMethod: paymentMethodText,
-            walletAmount: walletUsed.toString(),
-            pointsAmount: pointsUsed.toString(),
-            cashflowsAmount: remainingAmount.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-            updatedAt: new Date()
-          })
-          .where(eq(orders.id, orderId));
-  
         return res.json({
           success: true,
-          redirectUrl: session.hostedPageUrl,
-          sessionId: session.paymentJobReference,
+          redirectUrl: started.redirectUrl,
+          sessionId: started.sessionId,
         });
       }
   
@@ -5028,63 +5354,33 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
       // Process remaining amount through Cashflows
       if (remainingAmount > 0) {
         cashflowsUsed = remainingAmount;
-  
-        const session = await cashflows.createCompetitionPaymentSession(
-          remainingAmount,
-          {
-            orderId,
-            competitionId: order.competitionId,
-            userId,
-            quantity: order.quantity.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-          }
-        );
-  
-        if (!session.hostedPageUrl) {
-          // Refund wallet and points if Cashflows fails
-          if (walletUsed > 0) {
-            const currentBalance = Number(user?.balance) || 0;
-            await db.update(users)
-              .set({ balance: (currentBalance + walletUsed).toString() })
-              .where(eq(users.id, userId));
-          }
-          if (pointsUsed > 0) {
-            const currentPoints = user?.ringtonePoints || 0;
-            await db.update(users)
-              .set({ ringtonePoints: currentPoints + pointsUsed })
-              .where(eq(users.id, userId));
-          }
-  
+        await refundEarlyTender({
+          userId,
+          orderId,
+          walletUsed,
+          pointsUsed,
+        });
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
           return res.status(500).json({ message: "Failed to create Cashflows session" });
         }
-  
-        // Determine payment method text for mixed payment
-        let paymentMethodText = "Discount";
-        if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Points+Cashflow";
-        } else if (walletUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Cashflow";
-        } else if (pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Points+Cashflow";
-        }
-  
-        // Update order with payment info
-        await db.update(orders)
-          .set({ 
-            status: "processing",
-            paymentMethod: paymentMethodText,
-            walletAmount: walletUsed.toString(),
-            pointsAmount: pointsUsed.toString(),
-            cashflowsAmount: cashflowsUsed.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-            updatedAt: new Date()
-          })
-          .where(eq(orders.id, orderId));
-  
         return res.json({
           success: true,
-          redirectUrl: session.hostedPageUrl,
-          sessionId: session.paymentJobReference,
+          redirectUrl: started.redirectUrl,
+          sessionId: started.sessionId,
           paymentBreakdown: {
             walletUsed,
             pointsUsed,
@@ -6509,63 +6805,33 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
       // Process remaining amount through Cashflows
       if (remainingAmount > 0) {
         cashflowsUsed = remainingAmount;
-  
-        const session = await cashflows.createCompetitionPaymentSession(
-          remainingAmount,
-          {
-            orderId,
-            competitionId: order.competitionId,
-            userId,
-            quantity: order.quantity.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-          }
-        );
-  
-        if (!session.hostedPageUrl) {
-          // Refund wallet and points if Cashflows fails
-          if (walletUsed > 0) {
-            const currentBalance = Number(user?.balance) || 0;
-            await db.update(users)
-              .set({ balance: (currentBalance + walletUsed).toString() })
-              .where(eq(users.id, userId));
-          }
-          if (pointsUsed > 0) {
-            const currentPoints = user?.ringtonePoints || 0;
-            await db.update(users)
-              .set({ ringtonePoints: currentPoints + pointsUsed })
-              .where(eq(users.id, userId));
-          }
-  
+        await refundEarlyTender({
+          userId,
+          orderId,
+          walletUsed,
+          pointsUsed,
+        });
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
           return res.status(500).json({ message: "Failed to create Cashflows session" });
         }
-  
-        // Determine payment method text for mixed payment
-        let paymentMethodText = "Discount";
-        if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Points+Cashflow";
-        } else if (walletUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Cashflow";
-        } else if (pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Points+Cashflow";
-        }
-  
-        // Update order with payment info
-        await db.update(orders)
-          .set({ 
-            status: "processing",
-            paymentMethod: paymentMethodText,
-            walletAmount: walletUsed.toString(),
-            pointsAmount: pointsUsed.toString(),
-            cashflowsAmount: cashflowsUsed.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-            updatedAt: new Date()
-          })
-          .where(eq(orders.id, orderId));
-  
         return res.json({
           success: true,
-          redirectUrl: session.hostedPageUrl,
-          sessionId: session.paymentJobReference,
+          redirectUrl: started.redirectUrl,
+          sessionId: started.sessionId,
           paymentBreakdown: {
             walletUsed,
             pointsUsed,
@@ -6585,7 +6851,16 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
           paymentMethodText = "Points";
         }
   
-        // Update order with payment info and mark as completed
+        const { tickets: scratchTickets } = await issuePlayTickets({
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          userId,
+          orderId: order.id,
+          gameType: "scratch",
+          incrementSold: true,
+          makeLegacyNumber: () => `SCRATCH-${nanoid(8).toUpperCase()}`,
+        });
+
         await db.update(orders)
           .set({ 
             status: "completed",
@@ -6597,17 +6872,6 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
             updatedAt: new Date()
           })
           .where(eq(orders.id, orderId));
-  
-        // Create scratch card entries
-        const { tickets: scratchTickets } = await issuePlayTickets({
-          competitionId: order.competitionId,
-          quantity: order.quantity,
-          userId,
-          orderId: order.id,
-          gameType: "scratch",
-          incrementSold: true,
-          makeLegacyNumber: () => `SCRATCH-${nanoid(8).toUpperCase()}`,
-        });
   
         // Get discount info for audit log
         let discountInfo = '';
@@ -7957,11 +8221,28 @@ app.post(
   
       // If remaining, need Cashflows
       if (remainingAmount > 0.01) {
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
+          return res.status(500).json({ message: "Failed to create payment session" });
+        }
         return res.json({
-          success: false,
-          message: "Card payment required for remaining balance",
+          success: true,
+          redirectUrl: started.redirectUrl,
+          sessionId: started.sessionId,
           remainingAmount,
-          requiresCashflows: true,
         });
       }
   
@@ -8147,7 +8428,24 @@ app.post(
       }
 
       if (remainingAmount > 0.01) {
-        return res.json({ success: false, message: "Card payment required for remaining balance", remainingAmount, requiresCashflows: true });
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
+          return res.status(500).json({ message: "Failed to create payment session" });
+        }
+        return res.json({ success: true, redirectUrl: started.redirectUrl, sessionId: started.sessionId, remainingAmount });
       }
 
       if (walletUsed > 0) {
@@ -9921,6 +10219,7 @@ app.get(
         userId,
         amount: Number(amount),
         status: "pending",
+        paymentType: "wallet_topup",
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -9943,27 +10242,25 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
 
     if (!paymentJobRef) {
       return res.status(400).json({
+        credited: false,
         message: "Missing paymentJobRef"
       });
     }
 
-    // Check if already processed
-    const existingResult = await db.execute<{
-      rows: Array<{ id: string }>
-    }>(sql`
-      SELECT id 
-      FROM transactions 
-      WHERE payment_ref = ${paymentRef ?? paymentJobRef} 
-      AND user_id = ${userId}
-      LIMIT 1
-    `);
-    
-    const existingTx = Array.isArray(existingResult) ? existingResult[0] : existingResult.rows?.[0];
+    const ref = paymentRef ?? paymentJobRef;
+
+    const [existingTx] = await db
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.paymentRef, ref), eq(transactions.userId, userId)))
+      .limit(1);
 
     if (existingTx) {
       return res.json({
         status: "PAID",
-        message: "Payment already processed.",
+        credited: true,
+        already: true,
+        message: "Wallet already updated.",
       });
     }
 
@@ -9974,47 +10271,69 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
 
     const { status, paidAmount } = normalizeCashflowsStatus(payment);
 
-    if (status === "PAID" && paidAmount > 0) {
-      // Find pending payment
-      const pendingResult = await db.execute<{
-        rows: Array<{ id: string; userId: string; status: string }>
-      }>(sql`
-        SELECT id, user_id as "userId", status 
-        FROM pending_payments 
-        WHERE payment_job_reference = ${paymentJobRef}
-        LIMIT 1
-      `);
-      
-      const pending = Array.isArray(pendingResult) ? pendingResult[0] : pendingResult.rows?.[0];
+    const [pending] = await db
+      .select()
+      .from(pendingPayments)
+      .where(eq(pendingPayments.paymentJobReference, paymentJobRef))
+      .limit(1);
 
+    const creditAmount = parseCashAmount(paidAmount, pending?.amount);
+
+    if (status === "FAILED") {
       if (pending && pending.status === "pending") {
-        // ✅ This will now handle referral bonus internally
-        await processWalletTopup(
-          pending.userId,
-          pending.id,
-          paymentRef ?? paymentJobRef,
-          paidAmount
-        );
-
-        return res.json({
-          status: "PAID",
-          message: "Payment received. Wallet updated.",
-        });
-      } else {
-        return res.json({
-          status: "PAID",
-          message: "Payment already processed.",
-        });
+        await db
+          .update(pendingPayments)
+          .set({ status: "failed", updatedAt: new Date() })
+          .where(eq(pendingPayments.id, pending.id));
       }
+      return res.status(402).json({
+        status: "FAILED",
+        credited: false,
+        message: "Payment failed or was cancelled.",
+      });
     }
 
-    return res.json({
+    if (status === "PAID" && creditAmount > 0) {
+      if (!pending || pending.userId !== userId) {
+        return res.status(202).json({
+          status: "PAID",
+          credited: false,
+          message: "Payment received. Wallet update is still confirming.",
+        });
+      }
+
+      const result = await processWalletTopup(
+        pending.userId,
+        pending.id,
+        ref,
+        creditAmount
+      );
+
+      if (result.credited || result.already) {
+        return res.json({
+          status: "PAID",
+          credited: true,
+          already: result.already,
+          message: "Payment received. Wallet updated.",
+        });
+      }
+
+      return res.status(202).json({
+        status: "PAID",
+        credited: false,
+        message: "Payment received. Wallet update is still confirming.",
+      });
+    }
+
+    return res.status(202).json({
       status,
-      message: "Payment not completed. Please try again manually.",
+      credited: false,
+      message: "Payment is still processing. Please wait...",
     });
   } catch (err: any) {
     console.error("Confirm top-up error:", err);
     return res.status(500).json({
+      credited: false,
       message: "Failed to confirm wallet top-up",
       error: err.message
     });
@@ -11408,11 +11727,28 @@ app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) =
 
     // If remaining, need Cashflows
     if (remainingAmount > 0.01) {
+      const started = await beginReservedCardCheckout({
+        userId,
+        orderId,
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        cardAmount: remainingAmount,
+        walletAmount: walletUsed,
+        pointsAmount: pointsUsed,
+        gameType: competition?.type || "competition",
+        paymentBreakdown,
+        firstName: user?.firstName,
+        lastName: user?.lastName,
+        email: user?.email,
+      });
+      if (!started.ok) {
+        return res.status(500).json({ message: "Failed to create payment session" });
+      }
       return res.json({
-        success: false,
-        message: "Card payment required for remaining balance",
+        success: true,
+        redirectUrl: started.redirectUrl,
+        sessionId: started.sessionId,
         remainingAmount,
-        requiresCashflows: true,
       });
     }
 
@@ -15885,81 +16221,133 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
   
       try {
         await db.transaction(async (tx) => {
-          // 🔍 Check user exists
           const user = await tx.query.users.findFirst({
             where: eq(users.id, id),
           });
-  
+
           if (!user) {
             throw new Error("USER_NOT_FOUND");
           }
-          
-           await tx
-          .delete(userIpLogs)
-          .where(eq(userIpLogs.userId, id));
 
+          await tx.delete(userIpLogs).where(eq(userIpLogs.userId, id));
+          await tx.delete(redeemCodeRedemptions).where(eq(redeemCodeRedemptions.userId, id));
+          await tx
+            .update(redeemCodes)
+            .set({ usedByUserId: null })
+            .where(eq(redeemCodes.usedByUserId, id));
+          await tx
+            .update(redeemCodes)
+            .set({ createdBy: null })
+            .where(eq(redeemCodes.createdBy, id));
+          await tx
+            .update(withdrawalRequests)
+            .set({ processedBy: null })
+            .where(eq(withdrawalRequests.processedBy, id));
+          await tx
+            .update(userVerifications)
+            .set({ reviewedBy: null })
+            .where(eq(userVerifications.reviewedBy, id));
+          await tx
+            .update(ipBlocklist)
+            .set({ blockedBy: null })
+            .where(eq(ipBlocklist.blockedBy, id));
+          await tx
+            .update(pushNotifications)
+            .set({ createdBy: null })
+            .where(eq(pushNotifications.createdBy, id));
+          await tx.delete(securityAuditLog).where(eq(securityAuditLog.userId, id));
+          await tx.delete(pushDeliveries).where(eq(pushDeliveries.userId, id));
+          await tx.delete(savedBankAccounts).where(eq(savedBankAccounts.userId, id));
+          await tx.delete(userVerifications).where(eq(userVerifications.userId, id));
 
-           await tx
-          .delete(redeemCodeRedemptions)
-          .where(eq(redeemCodeRedemptions.userId, id));
-
-           await tx
-          .update(redeemCodes)
-          .set({ usedByUserId: null })
-          .where(eq(redeemCodes.usedByUserId, id));
-
-          // 1️⃣ Get all order IDs for this user
           const ordersList = await tx
             .select({ id: orders.id })
             .from(orders)
             .where(eq(orders.userId, id));
-  
           const orderIds = ordersList.map((o) => o.id);
-  
-          // 2️⃣ Delete ALL order-dependent tables FIRST
+
           if (orderIds.length > 0) {
-            await tx
-              .delete(spinUsage)
-              .where(inArray(spinUsage.orderId, orderIds));
-  
-            await tx
-              .delete(scratchCardUsage)
-              .where(inArray(scratchCardUsage.orderId, orderIds));
-  
-            await tx
-              .delete(popUsage)
-              .where(inArray(popUsage.orderId, orderIds));
-  
-            await tx
-              .delete(popWins)
-              .where(inArray(popWins.orderId, orderIds));
-  
-            await tx
-              .delete(transactions)
-              .where(inArray(transactions.orderId, orderIds));
+            await tx.delete(spinUsage).where(inArray(spinUsage.orderId, orderIds));
+            await tx.delete(scratchCardUsage).where(inArray(scratchCardUsage.orderId, orderIds));
+            await tx.delete(popUsage).where(inArray(popUsage.orderId, orderIds));
+            await tx.delete(popWins).where(inArray(popWins.orderId, orderIds));
+            await tx.delete(plinkoUsage).where(inArray(plinkoUsage.orderId, orderIds));
+            await tx.delete(plinkoWins).where(inArray(plinkoWins.orderId, orderIds));
+            await tx.delete(voltzUsage).where(inArray(voltzUsage.orderId, orderIds));
+            await tx.delete(voltzWins).where(inArray(voltzWins.orderId, orderIds));
+            await tx.delete(slotUsage).where(inArray(slotUsage.orderId, orderIds));
+            await tx.delete(royalUsage).where(inArray(royalUsage.orderId, orderIds));
+            await tx.delete(royalWins).where(inArray(royalWins.orderId, orderIds));
+            await tx.delete(discountCodeUsages).where(inArray(discountCodeUsages.orderId, orderIds));
+            await tx.delete(tickets).where(inArray(tickets.orderId, orderIds));
           }
 
-          
-          // 🔹 Delete all transactions for this user
-          await tx.delete(transactions).where(eq(transactions.userId, id));
-
-          // 3️⃣ Delete tickets (user-owned)
+          await tx.delete(spinUsage).where(eq(spinUsage.userId, id));
+          await tx.delete(scratchCardUsage).where(eq(scratchCardUsage.userId, id));
+          await tx.delete(popUsage).where(eq(popUsage.userId, id));
+          await tx.delete(plinkoUsage).where(eq(plinkoUsage.userId, id));
+          await tx.delete(voltzUsage).where(eq(voltzUsage.userId, id));
+          await tx.delete(slotUsage).where(eq(slotUsage.userId, id));
+          await tx.delete(royalUsage).where(eq(royalUsage.userId, id));
+          await tx.delete(discountCodeUsages).where(eq(discountCodeUsages.userId, id));
+          await tx.delete(spinWins).where(eq(spinWins.userId, id));
+          await tx.delete(scratchCardWins).where(eq(scratchCardWins.userId, id));
+          await tx.delete(popWins).where(eq(popWins.userId, id));
+          await tx.delete(plinkoWins).where(eq(plinkoWins.userId, id));
+          await tx.delete(voltzWins).where(eq(voltzWins.userId, id));
+          await tx.delete(royalWins).where(eq(royalWins.userId, id));
           await tx.delete(tickets).where(eq(tickets.userId, id));
-  
-          // 4️⃣ Delete orders
+          await tx.delete(withdrawalRequests).where(eq(withdrawalRequests.userId, id));
+          await tx.delete(wellbeingRequests).where(eq(wellbeingRequests.userId, id));
+          await tx.delete(campaignEmails).where(eq(campaignEmails.userId, id));
+          await tx.delete(winners).where(eq(winners.userId, id));
+          await tx.delete(auditLogs).where(eq(auditLogs.userId, id));
+
+          const pendingRows = await tx
+            .select({ id: pendingPayments.id })
+            .from(pendingPayments)
+            .where(
+              orderIds.length > 0
+                ? or(eq(pendingPayments.userId, id), inArray(pendingPayments.orderId, orderIds))
+                : eq(pendingPayments.userId, id),
+            );
+          const pendingIds = pendingRows.map((row) => row.id);
+
+          await tx.delete(transactions).where(eq(transactions.userId, id));
+          if (pendingIds.length > 0) {
+            await tx.delete(transactions).where(inArray(transactions.pendingPaymentId, pendingIds));
+          }
+          if (orderIds.length > 0) {
+            await tx.delete(transactions).where(inArray(transactions.orderId, orderIds));
+          }
+          if (pendingIds.length > 0) {
+            await tx.delete(pendingPayments).where(inArray(pendingPayments.id, pendingIds));
+          }
+          await tx.delete(pendingPayments).where(eq(pendingPayments.userId, id));
+
+          const userTickets = await tx
+            .select({ id: supportTickets.id })
+            .from(supportTickets)
+            .where(eq(supportTickets.userId, id));
+          const ticketIds = userTickets.map((row) => row.id);
+          if (ticketIds.length > 0) {
+            await tx.delete(supportMessages).where(inArray(supportMessages.ticketId, ticketIds));
+            await tx.delete(supportTickets).where(inArray(supportTickets.id, ticketIds));
+          }
+
+          if (user.email) {
+            await tx.delete(passwordResetTokens).where(eq(passwordResetTokens.email, user.email));
+          }
+
           if (orderIds.length > 0) {
             await tx.delete(orders).where(inArray(orders.id, orderIds));
           }
-          // 🔹 Delete winners linked to this user
-          await tx.delete(winners).where(eq(winners.userId, id));
 
-          // 5️⃣ Remove this user as referrer
           await tx
             .update(users)
             .set({ referredBy: null })
             .where(eq(users.referredBy, id));
-  
-          // 6️⃣ Finally delete user
+
           await tx.delete(users).where(eq(users.id, id));
         });
   
@@ -19114,6 +19502,42 @@ app.post("/api/guest/process-payment", async (req: any, res) => {
 // 3. GUEST PAYMENT WEBHOOK (Same as before)
 // =============================================
 
+app.post("/api/guest/confirm-payment", async (req: any, res) => {
+  try {
+    const { paymentJobRef, paymentRef, orderId } = req.body || {};
+    if (!paymentJobRef || !orderId) {
+      return res.status(400).json({ success: false, message: "Missing payment details" });
+    }
+
+    const [guestPending] = await db
+      .select()
+      .from(guestPendingPayments)
+      .where(eq(guestPendingPayments.paymentJobReference, paymentJobRef))
+      .limit(1);
+
+    if (!guestPending || guestPending.guestOrderId !== orderId) {
+      return res.status(202).json({ success: false, message: "Payment is still confirming." });
+    }
+
+    const payment = await cashflows.getPaymentStatus(paymentJobRef, paymentRef ?? undefined);
+    const { status, paidAmount } = normalizeCashflowsStatus(payment);
+    const creditAmount = parseCashAmount(paidAmount, guestPending.amount);
+
+    if (status === "FAILED") {
+      return res.status(402).json({ success: false, message: "Payment failed or was cancelled." });
+    }
+    if (status !== "PAID" || creditAmount <= 0) {
+      return res.status(202).json({ success: false, message: "Payment is still processing." });
+    }
+
+    await processGuestOrder(guestPending.guestOrderId, paymentRef ?? paymentJobRef, creditAmount);
+    return res.json({ success: true, orderId: guestPending.guestOrderId });
+  } catch (error: any) {
+    console.error("Guest confirm error:", error);
+    return res.status(500).json({ success: false, message: "Failed to confirm guest payment" });
+  }
+});
+
 app.post("/api/guest/webhook", async (req, res) => {
   console.log("GUEST WEBHOOK HIT", req.body);
 
@@ -19195,6 +19619,10 @@ async function processGuestOrder(
 
     if (!guestOrder) {
       throw new Error("Guest order not found");
+    }
+
+    if (guestOrder.status === "completed") {
+      return { success: true, already: true, ticketNumbers: guestOrder.ticketNumbers };
     }
 
     // Update guest order
@@ -20359,7 +20787,24 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
         remainingAmount -= pointsAmount;
         paymentBreakdown.push({ method: "ringtone_points", amount: pointsAmount, pointsUsed: pointsNeeded, description: `Points: £${pointsAmount.toFixed(2)} (${pointsNeeded} pts)` });
       }
-      if (remainingAmount > 0.01) return res.json({ success: false, message: "Card payment required", remainingAmount, requiresCashflows: true });
+      if (remainingAmount > 0.01) {
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) return res.status(500).json({ message: "Failed to create payment session" });
+        return res.json({ success: true, redirectUrl: started.redirectUrl, sessionId: started.sessionId, remainingAmount });
+      }
 
       if (walletUsed > 0) await db.update(users).set({ balance: (Number(user?.balance || "0") - walletUsed).toString() }).where(eq(users.id, userId));
       if (pointsUsed > 0) await db.update(users).set({ ringtonePoints: (user?.ringtonePoints || 0) - pointsUsed }).where(eq(users.id, userId));
@@ -21043,7 +21488,24 @@ app.get("/api/debug/slot-wins", async (_req, res) => {
         remainingAmount -= pointsAmount;
         paymentBreakdown.push({ method: "ringtone_points", amount: pointsAmount, pointsUsed: pointsNeeded, description: `Points: £${pointsAmount.toFixed(2)} (${pointsNeeded} pts)` });
       }
-      if (remainingAmount > 0.01) return res.json({ success: false, message: "Card payment required", remainingAmount, requiresCashflows: true });
+      if (remainingAmount > 0.01) {
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) return res.status(500).json({ message: "Failed to create payment session" });
+        return res.json({ success: true, redirectUrl: started.redirectUrl, sessionId: started.sessionId, remainingAmount });
+      }
 
       if (walletUsed > 0) await db.update(users).set({ balance: (Number(user?.balance || "0") - walletUsed).toString() }).where(eq(users.id, userId));
       if (pointsUsed > 0) await db.update(users).set({ ringtonePoints: (user?.ringtonePoints || 0) - pointsUsed }).where(eq(users.id, userId));

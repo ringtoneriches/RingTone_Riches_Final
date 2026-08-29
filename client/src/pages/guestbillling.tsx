@@ -7,8 +7,9 @@ import Footer from "@/components/layout/footer";
 import UnifiedBilling from "@/components/unified-billing";
 import BillingChrome from "@/components/billing/BillingChrome";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
+import { PageWait } from "@/components/brand/BrandWait";
 import { Input } from "@/components/ui/input";
-import { UserCircle, Shield, Loader2, Lock } from "lucide-react";
+import { UserCircle, Shield, Lock } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -154,11 +155,12 @@ export default function GuestBilling() {
 
   if (orderLoading) {
     return (
-      <div className="rr-page relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] text-white">
-        <DigitalAtmosphere />
-        <Loader2 className="relative z-10 h-8 w-8 animate-spin text-[#C8102E]" />
-        <p className="relative z-10 ml-3 text-white/50">Loading order...</p>
-      </div>
+      <PageWait
+        className="rr-page bg-[#050505] text-white"
+        kicker="Guest · checkout"
+        headline="Loading order"
+        subtitle="Getting your tickets ready for payment."
+      />
     );
   }
 

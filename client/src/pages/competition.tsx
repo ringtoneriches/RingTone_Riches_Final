@@ -21,6 +21,7 @@ import { Minus, Plus, Sparkles, Zap, Ticket, Trophy, Lock, Mail, ShoppingCart } 
 import { useBasket } from "@/hooks/useBasket";
 import UserCompetitionPrizes from "./user-competition-prizes";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
+import { PageWait } from "@/components/brand/BrandWait";
 import ChaserBorder from "@/components/home/ChaserBorder";
 import QuantitySelector from "@/components/home/QuantitySelector";
 import CountdownBlocks from "@/components/home/CountdownBlocks";
@@ -317,6 +318,18 @@ export default function CompetitionPage() {
   const handlePurchase = () => {
     if (!competition) return;
 
+    if (!isAuthenticated) {
+      const params = new URLSearchParams({
+        competitionId: competition.id,
+        quantity: String(quantity),
+        type: competitionType || "instant",
+      });
+      if (competition.wheelType) params.set("wheelType", String(competition.wheelType));
+      if (competition.imageUrl) params.set("image", competition.imageUrl);
+      setLocation(`/guest-checkout?${params.toString()}`);
+      return;
+    }
+
     if (isFreeGiveaway) {
       if (userTicketCount >= maxTicketsForGiveaway) {
         toast({
@@ -383,16 +396,12 @@ export default function CompetitionPage() {
 
   if (isLoading) {
     return (
-      <div className="rr-competition rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
-        <DigitalAtmosphere />
-        <Header />
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <div
-            className="h-10 w-10 animate-spin rounded-full border-2 border-[#C8102E] border-t-transparent"
-            aria-label="Loading"
-          />
-        </div>
-      </div>
+      <PageWait
+        className="rr-competition rr-page bg-[#050505] text-white"
+        kicker="Competition"
+        headline="Loading prize"
+        subtitle="Getting the details for this play."
+      />
     );
   }
 

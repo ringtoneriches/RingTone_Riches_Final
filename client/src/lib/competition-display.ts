@@ -1,5 +1,44 @@
+import { createElement, type ComponentType } from "react";
 import type { Competition } from "@shared/schema";
-import { Gift, RotateCw, Sparkles, Target, Trophy, Zap } from "lucide-react";
+import { RotateCw, Sparkles, Target, Trophy, Zap } from "lucide-react";
+
+type BadgeIcon = ComponentType<{ className?: string }>;
+
+const svgProps = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  "aria-hidden": true,
+} as const;
+
+function BalloonIcon({ className }: { className?: string }) {
+  return createElement(
+    "svg",
+    { ...svgProps, className },
+    createElement("path", {
+      d: "M12 2.8c3.4 0 6.1 3.2 6.1 7.1 0 3.6-2.4 6.6-5.4 7.1l-.7 2.2h-1.8l-.7-2.2c-3-.5-5.4-3.5-5.4-7.1 0-3.9 2.7-7.1 6.1-7.1Z",
+    }),
+    createElement("path", { d: "M11.1 21.2c.6-1.1 1.8-1.1 2.4 0" }),
+  );
+}
+
+function SlotMachineIcon({ className }: { className?: string }) {
+  return createElement(
+    "svg",
+    { ...svgProps, className },
+    createElement("rect", { x: 3.5, y: 3, width: 14, height: 18, rx: 2 }),
+    createElement("rect", { x: 5.6, y: 6, width: 3, height: 5.4, rx: 0.4 }),
+    createElement("rect", { x: 9, y: 6, width: 3, height: 5.4, rx: 0.4 }),
+    createElement("rect", { x: 12.4, y: 6, width: 3, height: 5.4, rx: 0.4 }),
+    createElement("path", { d: "M17.5 8.2h1.8A1.6 1.6 0 0 1 21 9.8v1.4" }),
+    createElement("circle", { cx: 20.8, cy: 13.4, r: 1.4 }),
+    createElement("path", { d: "M6.4 14.8h8.2" }),
+    createElement("path", { d: "M7.4 18h6.2" }),
+  );
+}
 
 export const HIDDEN_COMPETITION_IDS = [
   "d54eee36-2280-4372-84f6-93d07343a970",
@@ -7,7 +46,7 @@ export const HIDDEN_COMPETITION_IDS = [
 ];
 
 export type CompetitionTypeConfig = {
-  Icon: typeof RotateCw;
+  Icon: BadgeIcon;
   label: string;
   accent: string;
 };
@@ -19,15 +58,15 @@ export function getCompetitionTypeConfig(type: string): CompetitionTypeConfig {
     case "scratch":
       return { Icon: Sparkles, label: "SCRATCH & WIN", accent: "#D4AF37" };
     case "pop":
-      return { Icon: Gift, label: "BALLOON POP", accent: "#FF263D" };
+      return { Icon: BalloonIcon, label: "BALLOON POP", accent: "#FF263D" };
     case "plinko":
       return { Icon: Target, label: "PLINKO DROP", accent: "#C8102E" };
     case "voltz":
       return { Icon: Zap, label: "RINGTONE VOLTZ", accent: "#E31B36" };
     case "slot":
-      return { Icon: Trophy, label: "ROYAL REELS", accent: "#D4AF37" };
+      return { Icon: SlotMachineIcon, label: "ROYAL REELS", accent: "#D4AF37" };
     case "royal":
-      return { Icon: Trophy, label: "ROYAL REELS", accent: "#E3C15A" };
+      return { Icon: SlotMachineIcon, label: "ROYAL REELS", accent: "#E3C15A" };
     default:
       return { Icon: Trophy, label: "PRIZE DRAW", accent: "#D4AF37" };
   }

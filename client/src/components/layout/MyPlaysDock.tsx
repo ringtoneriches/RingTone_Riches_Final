@@ -7,6 +7,8 @@ import { readyToPlayOrders, type UnplayedOrder } from "@/lib/unplayed-orders";
 const HIDDEN = [
   "/my-plays",
   "/basket",
+  "/guest-checkout",
+  "/create-password",
   "/admin",
   "/login",
   "/register",

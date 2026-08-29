@@ -36,6 +36,22 @@ export default function Header() {
   const headerRef = useRef<HTMLElement>(null);
   const [location] = useLocation();
 
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    const syncOffset = () => {
+      document.documentElement.style.setProperty("--rr-header-h", `${header.offsetHeight}px`);
+    };
+
+    syncOffset();
+    const observer = new ResizeObserver(syncOffset);
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+    };
+  }, [user?.isGuestAccount]);
+
   // Optimize scroll handler with passive event listener
   useEffect(() => {
     let ticking = false;
@@ -151,6 +167,14 @@ export default function Header() {
         }`}
       >
         <AnnouncementTicker />
+        {user?.isGuestAccount && (
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t border-[#F1D47A]/25 bg-[#0A0A0D] px-3 py-1.5 text-[11px] text-white/65">
+            <span>Guest checkout — save a password so you can come back on another phone.</span>
+            <Link href="/create-password" className="font-black uppercase tracking-[0.14em] text-[#F1D47A]">
+              Save account
+            </Link>
+          </div>
+        )}
         <div className="rr-header-line" aria-hidden />
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
           <nav className="flex h-16 items-center justify-between lg:h-[4.5rem]">
@@ -243,9 +267,9 @@ export default function Header() {
 
                   <NotificationsDropdown />
 
-                  <Link href="/wallet?tab=account">
+                  <Link href={user?.isGuestAccount ? "/create-password" : "/wallet?tab=account"}>
                     <button className="rr-cta rr-header-cta" data-testid="button-account">
-                      MY ACCOUNT
+                      {user?.isGuestAccount ? "SAVE ACCOUNT" : "MY ACCOUNT"}
                     </button>
                   </Link>
 
@@ -403,10 +427,10 @@ export default function Header() {
                   </Link>
                 </div>
 
-                <Link href="/wallet?tab=account" onClick={closeMobileMenu}>
+                <Link href={user?.isGuestAccount ? "/create-password" : "/wallet?tab=account"} onClick={closeMobileMenu}>
                   <button className="rr-cta mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-black uppercase tracking-[0.16em] active:scale-98">
                     <UserIcon className="w-5 h-5" />
-                    MY ACCOUNT
+                    {user?.isGuestAccount ? "SAVE ACCOUNT" : "MY ACCOUNT"}
                   </button>
                 </Link>
                 

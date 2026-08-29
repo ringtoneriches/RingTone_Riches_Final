@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { User } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/layout/header";
+import BrandWait from "@/components/brand/BrandWait";
 import {
   Dialog,
   DialogContent,
@@ -225,12 +226,12 @@ export default function Account() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div
-          className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
-          aria-label="Loading"
-        />
-      </div>
+      <BrandWait
+        mode="page"
+        kicker="Account"
+        headline="Opening account"
+        subtitle="Checking your session."
+      />
     );
   }
 

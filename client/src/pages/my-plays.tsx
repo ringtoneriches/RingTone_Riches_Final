@@ -15,6 +15,7 @@ import {
   type UnplayedOrder,
 } from "@/lib/unplayed-orders";
 import { Clock, Gamepad2, Play, ShoppingBag } from "lucide-react";
+import BrandWait from "@/components/brand/BrandWait";
 
 function formatWindow(ms: number) {
   if (ms <= 0) return null;
@@ -81,11 +82,12 @@ export default function MyPlaysPage() {
                 </div>
               </ChaserBorder>
             ) : isLoading || authLoading ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {[0, 1, 2].map((n) => (
-                  <div key={n} className="h-64 animate-pulse rounded-2xl border border-white/10 bg-white/5" />
-                ))}
-              </div>
+              <BrandWait
+                mode="embed"
+                kicker="My Plays"
+                headline="Loading plays"
+                subtitle="Finding games you’ve already paid for."
+              />
             ) : live.length === 0 && expired.length === 0 ? (
               <ChaserBorder variant="card" className="max-w-xl">
                 <div className="flex flex-col items-center px-4 py-10 text-center sm:px-6 sm:py-14">
