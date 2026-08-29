@@ -77,42 +77,79 @@ export class CashflowsService {
 
 async createCompetitionPaymentSession(amount: number, metadata: any) {
   const amountString = amount.toFixed(2);
-  const displayOrderNumber = `${metadata.orderId.replace(/-/g, '').substring(0, 12)}/${Date.now().toString().slice(-7)}`;
-  const shortOrderId = metadata.orderId
-    .replace(/-/g, '')          
-    .substring(0, 12);  
-  const payload = {
+  const displayOrderNumber = `${String(metadata.orderId || "cart")
+    .replace(/-/g, "")
+    .substring(0, 12)}/${Date.now().toString().slice(-7)}`;
+
+  const firstName = String(metadata.firstName || metadata.customerFirstName || "").trim();
+  const lastName = String(metadata.lastName || metadata.customerLastName || "").trim();
+  const emailAddress = String(metadata.email || metadata.customerEmail || "").trim();
+  const orderLines = Array.isArray(metadata.orderLines) ? metadata.orderLines : [];
+  const cartReturn = metadata.cartCheckout ? "&cart=1" : "";
+
+  const order: Record<string, unknown> = {
+    orderNumber: displayOrderNumber,
+  };
+  if (firstName || lastName) {
+    order.billingAddress = {
+      ...(firstName ? { firstName } : {}),
+      ...(lastName ? { lastName } : {}),
+    };
+  }
+  if (emailAddress) {
+    order.billingIdentity = { emailAddress };
+  }
+
+  const cashflowsMeta = { ...metadata };
+  delete cashflowsMeta.orderLines;
+  delete cashflowsMeta.firstName;
+  delete cashflowsMeta.lastName;
+  delete cashflowsMeta.email;
+  delete cashflowsMeta.customerFirstName;
+  delete cashflowsMeta.customerLastName;
+  delete cashflowsMeta.customerEmail;
+
+  const buildPayload = (includeLines: boolean) => ({
     amountToCollect: amountString,
     currency: "GBP",
-     order: {
-      orderNumber: displayOrderNumber,
-    },
-    
+    order: includeLines && orderLines.length ? { ...order, orderLines } : order,
     parameters: {
-      returnUrlSuccess: `${process.env.CLIENT_URL}/success/competition?orderId=${metadata.orderId}`,
+      returnUrlSuccess: `${process.env.CLIENT_URL}/success/competition?orderId=${metadata.orderId}${cartReturn}`,
       returnUrlFailed: `${process.env.CLIENT_URL}/failed?orderId=${metadata.orderId}`,
       returnUrlCancelled: `${process.env.CLIENT_URL}/cancelled?orderId=${metadata.orderId}`,
     },
-    metadata: {
-      ...metadata,
-    },
-  };
+    metadata: cashflowsMeta,
+  });
 
-  const jsonBody = JSON.stringify(payload);
-  const hash = crypto
-    .createHash("sha512")
-    .update(this.config.apiKey + jsonBody, "utf8")
-    .digest("hex")
-    .toUpperCase();
+  const postJob = async (payload: ReturnType<typeof buildPayload>) => {
+    const jsonBody = JSON.stringify(payload);
+    const hash = crypto
+      .createHash("sha512")
+      .update(this.config.apiKey + jsonBody, "utf8")
+      .digest("hex")
+      .toUpperCase();
 
-  const headers = {
-    ConfigurationId: this.config.configurationId,
-    Hash: hash,
-    "Content-Type": "application/json",
+    const headers = {
+      ConfigurationId: this.config.configurationId,
+      Hash: hash,
+      "Content-Type": "application/json",
+    };
+
+    return axios.post(`${this.config.baseUrl}/payment-jobs`, payload, { headers });
   };
 
   try {
-    const res = await axios.post(`${this.config.baseUrl}/payment-jobs`, payload, { headers });
+    let res;
+    try {
+      res = await postJob(buildPayload(true));
+    } catch (lineErr: any) {
+      if (!orderLines.length) throw lineErr;
+      console.warn(
+        "Cashflows rejected orderLines; retrying without them:",
+        lineErr.response?.data || lineErr.message,
+      );
+      res = await postJob(buildPayload(false));
+    }
 
     const hostedPageUrl =
       res.data?.links?.action?.url ||
@@ -121,11 +158,9 @@ async createCompetitionPaymentSession(amount: number, metadata: any) {
 
     console.log("🔗 Hosted page redirect URL:", hostedPageUrl);
     console.log("🔁 Full Cashflows Response:", JSON.stringify(res.data, null, 2));
-    
-    // ✅ Check what reference Cashflows is using
     console.log("📝 Cashflows Reference:", res.data?.data?.reference);
     console.log("📝 Our Order ID:", metadata.orderId);
-    
+
     return {
       success: true,
       hostedPageUrl,

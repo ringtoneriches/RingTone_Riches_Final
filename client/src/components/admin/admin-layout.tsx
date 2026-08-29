@@ -47,6 +47,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import BrandWait from "@/components/brand/BrandWait";
 import { User } from "@shared/schema";
 import {
   Dialog,
@@ -460,7 +461,16 @@ const disableMaintenance = useMutation({
     return supportCount > 0 || withdrawalCount > 0 || verificationCount > 0;
   };
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (isLoading) {
+    return (
+      <BrandWait
+        mode="page"
+        kicker="Admin"
+        headline="Loading admin"
+        subtitle="Checking your access."
+      />
+    );
+  }
   if (!user || !user.isAdmin) return null;
 
   return (

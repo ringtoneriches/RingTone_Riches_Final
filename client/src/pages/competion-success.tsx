@@ -3,13 +3,16 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
-import { readBasket, takeCartCheckoutFlag } from "@/lib/basket";
+import { takeCartCheckoutFlag, clearBasket } from "@/lib/basket";
+import PaymentResult from "@/components/billing/PaymentResult";
 
 export default function CheckoutSuccess() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [isProcessing, setIsProcessing] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [fromCart, setFromCart] = useState(false);
 
   useEffect(() => {
     const confirmPayment = async () => {
@@ -19,114 +22,144 @@ export default function CheckoutSuccess() {
       const paymentRef = urlParams.get("paymentref");
       const orderId = urlParams.get("orderId");
 
-      // ✅ Wallet-only case (no Cashflows redirect)
       if (orderId && !paymentJobRef && !paymentRef) {
         setIsProcessing(false);
-
         toast({
-          title: "Purchase Successful! 🎉",
-          description: "Your tickets have been added to your account!",
+          title: "Purchase Successful",
+          description: "Your tickets have been added to your account.",
         });
-
         queryClient.invalidateQueries({ queryKey: ["/api/user/tickets"] });
         queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
-
         setTimeout(() => setLocation("/wallet"), 2500);
         return;
       }
 
-      // ✅ Cashflows redirect: include delay for FB in-app browser
-      if (paymentJobRef && paymentRef && orderId) {
-        // Delay to ensure webhook has time to process first
-        setTimeout(async () => {
-          try {
-            const res = await apiRequest("/api/payment-success/competition", "POST", {
-              paymentJobRef,
-              paymentRef,
-              orderId,
-            });
+      if (!paymentJobRef || !orderId) {
+        setFailed(true);
+        setIsProcessing(false);
+        return;
+      }
 
-            const data = await res.json();
+      const finishSuccess = (data: any) => {
+        toast({
+          title: "Payment Successful",
+          description: "Your tickets have been issued.",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/user/tickets"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
 
-            if (data.success) {
-              toast({
-                title: "Payment Successful",
-                description: "Your tickets have been issued!",
+        let redirectUrl = `/competition/${data.competitionId}`;
+        switch (data.competitionType) {
+          case "spin":
+            redirectUrl = `/spin/${data.competitionId}/${data.orderId}`;
+            break;
+          case "scratch":
+            redirectUrl = `/scratch/${data.competitionId}/${data.orderId}`;
+            break;
+          case "pop":
+            redirectUrl = `/pop/${data.competitionId}/${data.orderId}`;
+            break;
+          case "plinko":
+            redirectUrl = `/plinko/${data.competitionId}/${data.orderId}`;
+            break;
+          case "slot":
+            redirectUrl = `/slot/${data.competitionId}/${data.orderId}`;
+            break;
+          case "voltz":
+            redirectUrl = `/voltz/${data.competitionId}/${data.orderId}`;
+            break;
+          case "royal":
+            redirectUrl = `/royal/${data.competitionId}/${data.orderId}`;
+            break;
+        }
+
+        const isCartCombo = urlParams.get("cart") === "1" || data.cart;
+        const cartCheckout = takeCartCheckoutFlag() || isCartCombo;
+        if (cartCheckout) clearBasket();
+        setFromCart(Boolean(isCartCombo));
+        setIsProcessing(false);
+        setTimeout(() => setLocation(isCartCombo ? "/my-plays" : redirectUrl), 1400);
+      };
+
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        try {
+          const res = await apiRequest("/api/payment-success/competition", "POST", {
+            paymentJobRef,
+            paymentRef,
+            orderId,
+          });
+          const data = await res.json();
+          if (res.status === 200 && data.success && !data.waitingForWebhook) {
+            finishSuccess(data);
+            return;
+          }
+        } catch (err: any) {
+          const message = String(err?.message || "");
+          if (message.includes("401") || message.includes("Unauthorized")) {
+            try {
+              const guestRes = await apiRequest("/api/guest/confirm-payment", "POST", {
+                paymentJobRef,
+                paymentRef,
+                orderId,
               });
-
-              // Refresh relevant queries
-              queryClient.invalidateQueries({ queryKey: ["/api/user/tickets"] });
-              queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
-
-              // Determine redirect URL based on competition type
-              let redirectUrl = `/competition/${data.competitionId}`;
-              switch (data.competitionType) {
-                case "spin":
-                  redirectUrl = `/spin/${data.competitionId}/${data.orderId}`;
-                  break;
-                case "scratch":
-                  redirectUrl = `/scratch/${data.competitionId}/${data.orderId}`;
-                  break;
-                case "pop":
-                  redirectUrl = `/pop/${data.competitionId}/${data.orderId}`;
-                  break;
-                case "plinko":
-                  redirectUrl = `/plinko/${data.competitionId}/${data.orderId}`;
-                  break;
-                case "slot":
-                  redirectUrl = `/slot/${data.competitionId}/${data.orderId}`;
-                  break;
-                case "voltz":
-                  redirectUrl = `/voltz/${data.competitionId}/${data.orderId}`;
-                  break;
-              }
-
-              // Cart card checkout: finish remaining lines, or go play
-              if (takeCartCheckoutFlag()) {
-                queryClient.invalidateQueries({ queryKey: ["/api/user/orders"] });
-                const stillInCart = readBasket().length > 0;
-                setTimeout(
-                  () => setLocation(stillInCart ? "/basket" : "/my-plays"),
-                  2000
-                );
+              const guestData = await guestRes.json();
+              if (guestRes.status === 200 && guestData.success) {
+                setIsProcessing(false);
+                toast({
+                  title: "Payment Successful",
+                  description: "Your tickets are ready.",
+                });
+                setTimeout(() => setLocation(`/guest-billing/${orderId}`), 1400);
                 return;
               }
-
-              // Small delay before redirect for UX
-              setTimeout(() => setLocation(redirectUrl), 2000);
-            } else {
-              toast({
-                title: "Error",
-                description: data.message || "Failed to confirm payment.",
-                variant: "destructive",
-              });
+            } catch {
+              // keep polling
             }
-          } catch (err: any) {
-            toast({
-              title: "Error",
-              description: err.message || "Payment confirmation failed.",
-              variant: "destructive",
-            });
+          } else if (message.includes("400") || message.includes("402")) {
+            setFailed(true);
+            setIsProcessing(false);
+            return;
           }
-        }, 5000); // 2s delay for webhook
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       }
+
+      setFailed(true);
+      setIsProcessing(false);
     };
 
     confirmPayment();
   }, [setLocation, toast, queryClient]);
 
+  if (failed) {
+    return (
+      <PaymentResult
+        kicker="Checkout · confirm"
+        title="COULD NOT CONFIRM"
+        message="We could not confirm that payment yet. If you were charged, your tickets will still appear on My Plays shortly."
+        variant="failed"
+        actionLabel="Go to My Plays"
+        onAction={() => setLocation("/my-plays")}
+      />
+    );
+  }
+
   return isProcessing ? (
     <PaymentResult
       kicker="Checkout · confirm"
       title="CONFIRMING"
-      message="Please wait while we confirm your purchase."
+      message="Hold on — we’re locking in your tickets."
       variant="processing"
     />
   ) : (
     <PaymentResult
-      kicker="Checkout · confirm"
-      title="PAYMENT SUCCESSFUL"
-      message="Your tickets have been added to your account. Redirecting..."
+      kicker="Checkout · confirmed"
+      title="CONFIRMED"
+      message={
+        fromCart
+          ? "You’re in. Taking you to My Plays."
+          : "Your tickets are ready. Taking you to play."
+      }
       variant="success"
     />
   );

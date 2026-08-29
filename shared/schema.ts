@@ -80,6 +80,7 @@ export const users = pgTable("users", {
   accountLockedAt: timestamp("account_locked_at"),
   accountUnlockAt: timestamp("account_unlock_at"),
   passwordChangedAt: timestamp("password_changed_at"),
+  isGuestAccount: boolean("is_guest_account").default(false),
   securityQuestion: varchar("security_question"),
   securityAnswer: varchar("security_answer"), // Should be hashed
   trustScore: integer("trust_score").default(0),

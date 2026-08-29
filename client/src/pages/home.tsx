@@ -60,6 +60,20 @@ export default function Home() {
     return counts;
   }, [competitions]);
 
+  const visibleFilters = useMemo(
+    () =>
+      COMPETITION_FILTERS.filter(
+        (filter) => filter.id === "all" || (filterCounts[filter.id] ?? 0) > 0,
+      ),
+    [filterCounts],
+  );
+
+  useEffect(() => {
+    if (!visibleFilters.some((filter) => filter.id === activeFilter)) {
+      setActiveFilter("all");
+    }
+  }, [activeFilter, visibleFilters]);
+
   const handleFilterChange = (filterType: string) => {
     setActiveFilter(filterType);
   };
@@ -130,7 +144,7 @@ export default function Home() {
             role="tablist"
             aria-label="Filter competitions"
           >
-            {COMPETITION_FILTERS.map((filter) => {
+            {visibleFilters.map((filter) => {
               const active = activeFilter === filter.id;
               const count = filterCounts[filter.id] ?? 0;
               return (

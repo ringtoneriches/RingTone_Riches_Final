@@ -99,8 +99,11 @@ import AdminSlotMachineSettings from "./pages/admin/admin-slot-machine";
 import AdminBulkPoints from "./pages/admin/admin-bulk-points";
 import AdminSlotGame from "./pages/admin/admin-slot-spin";
 import GuestBilling from "./pages/guestbillling";
+import GuestCheckoutPage from "./pages/guest-checkout";
+import CreatePasswordPage from "./pages/create-password";
 import BasketPage from "./pages/basket";
 import MyPlaysPage from "./pages/my-plays";
+import BrandWait from "@/components/brand/BrandWait";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -113,6 +116,8 @@ function Router() {
       {/* Public routes - always available */}
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/create-password" component={CreatePasswordPage} />
+      <Route path="/guest-checkout" component={GuestCheckoutPage} />
       <Route path="/verify-email" component={VerifyEmailPage} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
@@ -317,9 +322,12 @@ function AppWithMaintenance() {
     (maintenanceData?.maintenanceMode && authLoading && !isPublicRoute)
   ) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
+      <BrandWait
+        mode="page"
+        kicker="RingTone Riches"
+        headline="Loading"
+        subtitle="Getting the site ready."
+      />
     );
   }
 

@@ -284,6 +284,15 @@ const registerMutation = useMutation({
     return res.json();
   },
   onSuccess: (data) => {
+    if (data?.claimedGuest) {
+      toast({
+        title: "Account saved",
+        description: "Check your email for a 6-digit verification code.",
+      });
+      const email = encodeURIComponent(data.email || data.user?.email || "");
+      window.location.href = email ? `/verify-email?email=${email}` : "/verify-email";
+      return;
+    }
     toast({
       title: "✅ Registration Successful!",
       description: "Welcome to RingTone Riches! Please log in.",

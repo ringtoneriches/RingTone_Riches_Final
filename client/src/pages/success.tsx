@@ -6,15 +6,20 @@ import { useLocation } from "wouter";
 import PaymentResult, { PaymentResultVariant } from "@/components/billing/PaymentResult";
 
 function variantFromMessage(message: string): PaymentResultVariant {
-  if (message.toLowerCase().includes("successfully")) return "success";
+  if (message.toLowerCase().includes("successfully") || message.toLowerCase().includes("already updated")) {
+    return "success";
+  }
   if (
     message.toLowerCase().includes("failed") ||
     message.toLowerCase().includes("error") ||
-    message.toLowerCase().includes("missing")
+    message.toLowerCase().includes("missing") ||
+    message.toLowerCase().includes("cancelled")
   ) {
     return "failed";
   }
-  if (message.toLowerCase().includes("taking longer")) return "waiting";
+  if (message.toLowerCase().includes("taking longer") || message.toLowerCase().includes("still")) {
+    return "waiting";
+  }
   return "processing";
 }
 
@@ -30,14 +35,14 @@ export default function WalletSuccess() {
       const paymentJobRef = searchParams.get("paymentjobref");
       const paymentRef = searchParams.get("paymentref");
 
-      if (!paymentJobRef || !paymentRef) {
+      if (!paymentJobRef) {
         setStatusMessage("Missing payment confirmation information.");
         return;
       }
 
       let attempts = 0;
-      const maxAttempts = 10; // try for 10 times (~15s)
-      const pollInterval = 1500; // 1.5 seconds
+      const maxAttempts = 12;
+      const pollInterval = 1500;
 
       while (attempts < maxAttempts) {
         attempts += 1;
@@ -50,32 +55,49 @@ export default function WalletSuccess() {
 
           const data = await res.json();
 
-          if (res.status === 200) {
+          if (res.status === 200 && data.credited) {
             toast({
               title: "Payment Received",
               description: data.message || "Your wallet has been topped up!",
             });
 
-            // Refresh user balance & transactions
             queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
             queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
 
             setStatusMessage("Wallet successfully updated! Redirecting...");
             setTimeout(() => (window.location.href = "/wallet"), 1500);
             return;
-          } else if (res.status === 202) {
+          }
+
+          if (res.status === 202 || !data.credited) {
             setStatusMessage(data.message || "Payment is processing. Please wait...");
             await new Promise((resolve) => setTimeout(resolve, pollInterval));
-          } else {
+            continue;
+          }
+
+          toast({
+            title: "Payment Error",
+            description: data.message || "Could not confirm payment",
+            variant: "destructive",
+          });
+          setStatusMessage("Payment failed or cancelled.");
+          return;
+        } catch (err: any) {
+          const text = String(err?.message || "");
+          if (text.includes("402")) {
+            setStatusMessage("Payment failed or cancelled.");
             toast({
-              title: "Payment Error",
-              description: data.message || "Could not confirm payment",
+              title: "Payment failed",
+              description: "Your card was not charged.",
               variant: "destructive",
             });
-            setStatusMessage("Payment failed or cancelled.");
             return;
           }
-        } catch (err: any) {
+          if (attempts < maxAttempts) {
+            setStatusMessage("Still confirming your payment...");
+            await new Promise((resolve) => setTimeout(resolve, pollInterval));
+            continue;
+          }
           toast({
             title: "Error",
             description: err.message || "Failed to confirm payment",
@@ -86,8 +108,7 @@ export default function WalletSuccess() {
         }
       }
 
-      // If max attempts reached
-      setStatusMessage("Payment is taking longer than expected. It will update shortly.");
+      setStatusMessage("Payment is taking longer than expected. Check your wallet in a minute — if the balance is missing, contact support.");
     };
 
     confirmPayment();
@@ -109,8 +130,10 @@ export default function WalletSuccess() {
       }
       message={statusMessage}
       variant={variant}
-      actionLabel={variant === "failed" ? "Back to wallet" : undefined}
-      onAction={variant === "failed" ? () => setLocation("/wallet") : undefined}
+      actionLabel={variant === "failed" || variant === "waiting" ? "Back to wallet" : undefined}
+      onAction={
+        variant === "failed" || variant === "waiting" ? () => setLocation("/wallet") : undefined
+      }
     />
   );
 }

@@ -5,8 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Trophy } from "lucide-react";
-import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
-import Header from "@/components/layout/header";
+import { PageWait } from "@/components/brand/BrandWait";
 
 export default function Checkout() {
   const { orderId } = useParams();
@@ -28,13 +27,12 @@ export default function Checkout() {
 
   if (isLoading) {
     return (
-      <div className="rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
-        <DigitalAtmosphere />
-        <Header />
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C8102E] border-t-transparent" />
-        </div>
-      </div>
+      <PageWait
+        className="rr-page bg-[#050505] text-white"
+        kicker="Prize draw · checkout"
+        headline="Opening checkout"
+        subtitle="Confirming your session before payment."
+      />
     );
   }
 

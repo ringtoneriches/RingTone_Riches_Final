@@ -5,6 +5,8 @@ import { useBasket } from "@/hooks/useBasket";
 
 const HIDDEN = [
   "/basket",
+  "/guest-checkout",
+  "/create-password",
   "/admin",
   "/login",
   "/register",
