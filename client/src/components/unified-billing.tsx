@@ -192,7 +192,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
   const getTitle = () => {
     if (orderType === "spin") return wheelType === "wheel2" ? "RETRO RINGTONE SPIN" : "LUXURY CAR SPIN";
     switch (orderType) {
-      case "scratch": return "SCRATCH INTO SUMMER";
+      case "scratch": return "SCRATCH NATIONS";
       case "pop": return "RINGTONE POP";
       case "plinko": return "RINGTONE PLINKO";
       case "voltz": return "RINGTONE VOLTZ";

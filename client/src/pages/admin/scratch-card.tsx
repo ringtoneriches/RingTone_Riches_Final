@@ -690,6 +690,13 @@ export default function AdminScratchCard() {
           </div>
         </div>
 
+        <div className="rounded-lg border border-border bg-card p-4 md:p-6">
+          <p className="text-sm text-muted-foreground mb-4">
+            Change what each flag pays from here. Brazil, England, and the rest update on the next play — no developer needed.
+          </p>
+          <PrizeConfigScratch onSave={() => {}} />
+        </div>
+
         {/* Active Competitions Section */}
         <div className="space-y-4">
           <h2 className="text-lg font-semibold text-foreground">Active Scratch Card Competitions</h2>

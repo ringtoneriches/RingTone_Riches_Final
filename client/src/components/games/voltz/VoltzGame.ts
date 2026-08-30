@@ -12,6 +12,12 @@ interface RoundResult {
   rewardType?: string;
 }
 
+const LANE_THEME = [
+  { hex: 0xff4466, css: "#FF6688" },
+  { hex: 0x44aaff, css: "#44AAFF" },
+  { hex: 0x44ff88, css: "#44FF88" },
+] as const;
+
 export class VoltzGame extends Scene {
   private width!: number;
   private height!: number;
@@ -46,6 +52,8 @@ export class VoltzGame extends Scene {
   private btnGlows: { red: Phaser.GameObjects.Graphics | null; blue: Phaser.GameObjects.Graphics | null; green: Phaser.GameObjects.Graphics | null } = { red: null, blue: null, green: null };
   private floatingParticles: Phaser.GameObjects.Graphics[] = [];
   private electroGlow!: Phaser.GameObjects.Graphics;
+  private promptPlate: Phaser.GameObjects.Graphics | null = null;
+  private promptText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super("Game");
@@ -72,6 +80,8 @@ export class VoltzGame extends Scene {
     this.electroGlow.setAlpha(0);
 
     this.lightEffects();
+    this.createMachineChrome();
+    this.createPrompt();
 
     this.isPlaying = false;
     this.buttonsEnabled = true;
@@ -185,250 +195,136 @@ export class VoltzGame extends Scene {
     });
   }
 
-  private showRevealText(switchIdx: number, text: string) {
-    const xPositions = [this.width * 0.2, this.width * 0.5, this.width * 0.8];
-    const x = xPositions[switchIdx];
+  private getScreenSlot(switchIdx: number) {
     const preBaseW = Math.round(this.width * 0.224);
     const preBaseH = Math.round(preBaseW * 0.75);
-    const y = this.height * 0.32 - preBaseH * 0.035;
+    return {
+      x: this.width * [0.2, 0.5, 0.8][switchIdx],
+      y: this.height * 0.32 - preBaseH * 0.035,
+      boxW: Math.round(preBaseW * 1.18),
+      boxH: Math.round(preBaseH * 0.96),
+    };
+  }
 
-    // Premium glowing colors - Voltz signature
-    const coreColor = 0xffaa33;      // Rich amber gold
-    const midColor = 0xffdd77;       // Bright gold
-    const outerColor = 0xfff5cc;     // Soft radiant glow
-    const textColor = "#ffffff";
+  private showRevealText(switchIdx: number, text: string) {
+    const { x, y, boxW, boxH } = this.getScreenSlot(switchIdx);
+    const radius = 10;
+    const inset = 7;
+    const plateW = boxW - inset * 2;
+    const plateH = boxH - inset * 2;
+    const maxTextWidth = plateW - 22;
 
-    const scaleFactor = Math.min(this.width / 1024, this.height / 1536);
-    const sf = Math.max(scaleFactor, 0.45);
-    const baseW = Math.round(this.width * 0.224);
-    const baseH = Math.round(baseW * 0.75);
-    const boxW = Math.round(baseW * 1.105);
-    const boxH = Math.round(baseH * 0.87);
-    const boxXOffset = boxW * 0.0075;
-    const bx = x + boxXOffset;
-    const maxTextWidth = boxW - Math.round(14 * sf);
-    const radius = Math.round(Math.min(boxW, boxH) * 0.15);
+    const len = text.length;
+    let valueSize = 64;
+    if (len > 4) valueSize = 50;
+    if (len > 7) valueSize = 36;
+    if (len > 10) valueSize = 26;
+    if (len > 14) valueSize = 20;
 
-    let baseFontSize = Math.round(68 * sf);
-    if (text.length > 4) baseFontSize = Math.round(58 * sf);
-    if (text.length > 7) baseFontSize = Math.round(50 * sf);
-    if (text.length > 10) baseFontSize = Math.round(40 * sf);
-    if (text.length > 14) baseFontSize = Math.round(32 * sf);
-    baseFontSize = Math.max(baseFontSize, 22);
+    const lane = LANE_THEME[switchIdx];
 
-    // === PREMIUM MULTI-LAYER GLOW SYSTEM ===
-    
-    // Layer 5: Outermost aura (largest, softest)
-    const outerAura = this.add.graphics();
-    outerAura.fillStyle(outerColor, 0.08);
-    outerAura.fillRoundedRect(bx - boxW / 2 - 35, y - boxH / 2 - 35, boxW + 70, boxH + 70, radius + 18);
-    outerAura.setDepth(5);
-    outerAura.setAlpha(0);
+    const glow = this.add.graphics();
+    glow.fillStyle(lane.hex, 0.22);
+    glow.fillRoundedRect(x - plateW / 2 - 8, y - plateH / 2 - 8, plateW + 16, plateH + 16, radius + 4);
+    glow.setDepth(7);
+    glow.setAlpha(0);
 
-    // Layer 4: Wide glow
-    const wideGlow = this.add.graphics();
-    wideGlow.fillStyle(midColor, 0.15);
-    wideGlow.fillRoundedRect(bx - boxW / 2 - 22, y - boxH / 2 - 22, boxW + 44, boxH + 44, radius + 12);
-    wideGlow.setDepth(6);
-    wideGlow.setAlpha(0);
+    const plate = this.add.graphics();
+    plate.fillStyle(0x0A0A0D, 0.97);
+    plate.fillRoundedRect(x - plateW / 2, y - plateH / 2, plateW, plateH, radius);
+    plate.fillStyle(0x16161b, 0.92);
+    plate.fillRect(x - plateW / 2 + 2, y - plateH / 2 + 3, plateW - 4, plateH * 0.38);
+    plate.fillStyle(lane.hex, 1);
+    plate.fillRect(x - plateW / 2 + 14, y - plateH / 2, plateW - 28, 3);
+    plate.fillStyle(0xffffff, 0.1);
+    plate.fillRect(x - plateW / 2 + 10, y - plateH / 2 + 6, plateW - 20, 1);
+    plate.setDepth(8);
+    plate.setAlpha(0);
 
-    // Layer 3: Medium intense glow
-    const mediumGlow = this.add.graphics();
-    mediumGlow.fillStyle(coreColor, 0.3);
-    mediumGlow.fillRoundedRect(bx - boxW / 2 - 12, y - boxH / 2 - 12, boxW + 24, boxH + 24, radius + 7);
-    mediumGlow.setDepth(7);
-    mediumGlow.setAlpha(0);
+    const flash = this.add.graphics();
+    flash.lineStyle(2, lane.hex, 1);
+    flash.strokeRoundedRect(x - plateW / 2, y - plateH / 2, plateW, plateH, radius);
+    flash.setDepth(9);
+    flash.setAlpha(0);
 
-    // Layer 2: Inner hot glow
-    const innerHotGlow = this.add.graphics();
-    innerHotGlow.fillStyle(0xffaa44, 0.55);
-    innerHotGlow.fillRoundedRect(bx - boxW / 2 - 5, y - boxH / 2 - 5, boxW + 10, boxH + 10, radius + 3);
-    innerHotGlow.setDepth(7.5);
-    innerHotGlow.setAlpha(0);
+    const kicker = this.add
+      .text(x, y - plateH * 0.28, "REVEALED", {
+        fontFamily: "Oswald, Arial Black, sans-serif",
+        fontSize: "13px",
+        color: "#fff8ee",
+        fontStyle: "bold",
+        letterSpacing: 3.2,
+      })
+      .setOrigin(0.5)
+      .setAlpha(0)
+      .setDepth(12);
 
-    // Layer 1: Main solid metallic box with gradient feel
-    const mainBox = this.add.graphics();
-    mainBox.fillStyle(coreColor, 1);
-    mainBox.fillRoundedRect(bx - boxW / 2, y - boxH / 2, boxW, boxH, radius);
-    mainBox.setDepth(8);
-    mainBox.setAlpha(0);
-    mainBox.setScale(1, 0.02);
-    
-    // Premium shimmer line (top edge highlight)
-    const topShimmer = this.add.graphics();
-    topShimmer.fillStyle(0xffeedd, 0.7);
-    topShimmer.fillRoundedRect(bx - boxW / 2 + 5, y - boxH / 2 + 3, boxW - 10, 5, 2);
-    topShimmer.setDepth(9);
-    topShimmer.setAlpha(0);
-    
-    // Bottom accent glow
-    const bottomAccent = this.add.graphics();
-    bottomAccent.fillStyle(coreColor, 0.4);
-    bottomAccent.fillRoundedRect(bx - boxW / 2 + 5, y + boxH / 2 - 8, boxW - 10, 5, 2);
-    bottomAccent.setDepth(9);
-    bottomAccent.setAlpha(0);
-    
-    this.revealedBgs[switchIdx] = mainBox;
+    const main = this.add
+      .text(x, y + 6, text, {
+        fontFamily: "Oswald, Arial Black, sans-serif",
+        fontSize: `${valueSize}px`,
+        color: lane.css,
+        align: "center",
+        fontStyle: "bold",
+        letterSpacing: len <= 7 ? 1.4 : 0,
+        wordWrap: { width: maxTextWidth, useAdvancedWrap: true },
+        shadow: {
+          offsetX: 0,
+          offsetY: 3,
+          color: "rgba(0,0,0,0.7)",
+          blur: 10,
+          fill: true,
+        },
+      })
+      .setOrigin(0.5)
+      .setAlpha(0)
+      .setDepth(12);
+    main.y += 10;
 
-    // Main text with premium styling
-    const main = this.add.text(bx, y, text, {
-      fontFamily: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif",
-      fontSize: `${baseFontSize}px`,
-      color: textColor,
-      align: "center",
-      stroke: "#000000",
-      strokeThickness: Math.round(7 * sf),
-      wordWrap: { width: maxTextWidth, useAdvancedWrap: true },
-      shadow: {
-        offsetX: 0,
-        offsetY: Math.round(4 * sf),
-        color: 'rgba(0,0,0,0.98)',
-        blur: Math.round(15 * sf),
-        fill: true,
-      },
-    }).setOrigin(0.5).setAlpha(0).setScale(0.05).setDepth(12);
-
-    // Text inner glow effect (duplicate text with blur)
-    const textGlow = this.add.text(bx, y, text, {
-      fontFamily: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif",
-      fontSize: `${baseFontSize}px`,
-      color: "#ffdd99",
-      align: "center",
-      stroke: "#ffaa33",
-      strokeThickness: Math.round(3 * sf),
-    }).setOrigin(0.5).setAlpha(0).setBlendMode(Phaser.BlendModes.ADD).setDepth(11);
-
-    const switchLabels = ["⚡ RED ⚡", "⚡ BLUE ⚡", "⚡ GREEN ⚡"];
-    const labelColors = ["#ff6666", "#66aaff", "#66ff88"];
-    const subFontSize = Math.max(Math.round(13 * sf), 9);
-    const sub = this.add.text(bx, y + boxH / 2 + Math.round(14 * sf), switchLabels[switchIdx], {
-      fontFamily: "Impact, 'Arial Black', sans-serif",
-      fontSize: `${subFontSize}px`,
-      color: labelColors[switchIdx],
-      align: "center",
-      stroke: "#000000",
-      strokeThickness: Math.round(4 * sf),
-      letterSpacing: Math.round(8 * sf),
-    }).setOrigin(0.5).setAlpha(0).setDepth(11);
-
+    this.revealedBgs[switchIdx] = plate;
     this.revealedTexts[switchIdx] = main;
-    this.revealedSubs[switchIdx] = sub;
-    this.revealedBgExtras[switchIdx] = [mainBox, outerAura, wideGlow, mediumGlow, innerHotGlow, topShimmer, bottomAccent, textGlow];
+    this.revealedSubs[switchIdx] = kicker;
+    this.revealedBgExtras[switchIdx] = [glow, flash];
 
-    // === ANIMATION SEQUENCE ===
-    
-    // Main box pop
-    this.tweens.add({ 
-      targets: mainBox, 
-      scaleY: 1, 
-      alpha: 1, 
-      duration: 200, 
-      ease: "Back.easeOutCubic" 
+    this.tweens.add({
+      targets: [plate, glow],
+      alpha: 1,
+      duration: 200,
+      ease: "Cubic.easeOut",
+    });
+    this.tweens.add({
+      targets: flash,
+      alpha: { from: 0, to: 0.95 },
+      duration: 90,
+      yoyo: true,
+      hold: 40,
+      ease: "Sine.easeOut",
     });
 
-    // Glow layers fade in with cascade
-    this.time.delayedCall(20, () => {
-      this.tweens.add({ targets: outerAura, alpha: 0.8, duration: 250, ease: "Sine.easeOut" });
-    });
-    
-    this.time.delayedCall(45, () => {
-      this.tweens.add({ targets: wideGlow, alpha: 0.9, duration: 220, ease: "Sine.easeOut" });
-      this.tweens.add({ targets: topShimmer, alpha: 0.9, duration: 280, ease: "Sine.easeOut" });
-    });
-    
     this.time.delayedCall(70, () => {
-      this.tweens.add({ targets: mediumGlow, alpha: 1, duration: 200, ease: "Sine.easeOut" });
-      this.tweens.add({ targets: bottomAccent, alpha: 0.6, duration: 250, ease: "Sine.easeOut" });
-    });
-    
-    this.time.delayedCall(95, () => {
-      this.tweens.add({ targets: innerHotGlow, alpha: 1, duration: 180, ease: "Sine.easeOut" });
-    });
-
-    // Text reveal with bounce
-    this.time.delayedCall(110, () => {
-      this.tweens.add({ 
-        targets: main, 
-        alpha: 1, 
-        scaleX: 1, 
-        scaleY: 1, 
-        duration: 250, 
-        ease: "Back.easeOutCubic" 
+      this.tweens.add({
+        targets: kicker,
+        alpha: 0.42,
+        duration: 180,
+        ease: "Sine.easeOut",
       });
-      this.tweens.add({ 
-        targets: textGlow, 
-        alpha: 0.6, 
-        duration: 300, 
-        ease: "Power2" 
-      });
-      this.tweens.add({ 
-        targets: sub, 
-        alpha: 1, 
-        duration: 250, 
-        ease: "Back.easeOut" 
+      this.tweens.add({
+        targets: main,
+        alpha: 1,
+        y: y + 6,
+        duration: 320,
+        ease: "Cubic.easeOut",
       });
     });
 
-    // === PREMIUM SUSTAINED PULSING ===
-    this.time.delayedCall(400, () => {
-      // Outer aura gentle breathe
+    this.time.delayedCall(420, () => {
       this.tweens.add({
-        targets: outerAura,
-        alpha: { from: 0.08, to: 0.18 },
-        duration: 1500,
+        targets: glow,
+        alpha: { from: 0.4, to: 0.75 },
+        duration: 1600,
         ease: "Sine.easeInOut",
         yoyo: true,
-        repeat: -1
-      });
-      
-      // Wide glow pulse
-      this.tweens.add({
-        targets: wideGlow,
-        alpha: { from: 0.15, to: 0.28 },
-        duration: 1200,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1
-      });
-      
-      // Medium glow energetic pulse
-      this.tweens.add({
-        targets: mediumGlow,
-        alpha: { from: 0.3, to: 0.55 },
-        duration: 900,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1
-      });
-      
-      // Inner hot glow fast flicker
-      this.tweens.add({
-        targets: innerHotGlow,
-        alpha: { from: 0.55, to: 0.85 },
-        duration: 600,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1
-      });
-      
-      // Text glow shimmer
-      this.tweens.add({
-        targets: textGlow,
-        alpha: { from: 0.4, to: 0.9 },
-        duration: 800,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1
-      });
-      
-      // Top shimmer flowing
-      this.tweens.add({
-        targets: topShimmer,
-        alpha: { from: 0.5, to: 1 },
-        duration: 700,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1
+        repeat: -1,
       });
     });
   }
@@ -515,11 +411,81 @@ export class VoltzGame extends Scene {
     if (this.btnGlows.blue) this.btnGlows.blue.destroy();
     if (this.btnGlows.green) this.btnGlows.green.destroy();
     this.createButtonGlows();
+    this.setPromptVisible(true);
+  }
+
+  private createMachineChrome() {
+    const w = this.width;
+    const h = this.height;
+    const gold = 0xF1D47A;
+    const chrome = this.add.graphics();
+    chrome.setDepth(2.4);
+
+    [0, 1, 2].forEach((idx) => {
+      const { x, y, boxW, boxH } = this.getScreenSlot(idx);
+      const sx = x - boxW / 2;
+      const sy = y - boxH / 2;
+      chrome.lineStyle(3, gold, 0.8);
+      chrome.strokeRoundedRect(sx - 6, sy - 6, boxW + 12, boxH + 12, 10);
+      chrome.lineStyle(1, 0xD4AF37, 0.4);
+      chrome.strokeRoundedRect(sx - 10, sy - 10, boxW + 20, boxH + 20, 12);
+    });
+
+    chrome.lineStyle(5, gold, 0.18);
+    chrome.strokeRoundedRect(10, 10, w - 20, h - 20, 18);
+    chrome.lineStyle(1.5, gold, 0.45);
+    chrome.strokeRoundedRect(16, 16, w - 32, h - 32, 14);
+  }
+
+  private createPrompt() {
+    const y = this.height * 0.918;
+    const w = this.width * 0.86;
+    const h = this.height * 0.078;
+    const x = this.width / 2;
+
+    const cover = this.add.graphics();
+    cover.setDepth(17);
+    cover.fillStyle(0x0a0a0d, 1);
+    cover.fillRoundedRect(x - w / 2 - 12, y - h / 2 - 8, w + 24, h + 16, 16);
+
+    const plate = this.add.graphics();
+    plate.setDepth(18);
+    plate.fillStyle(0x050505, 0.97);
+    plate.fillRoundedRect(x - w / 2, y - h / 2, w, h, 14);
+    plate.lineStyle(2.5, 0xF1D47A, 0.9);
+    plate.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 14);
+    plate.lineStyle(1, 0xD4AF37, 0.4);
+    plate.strokeRoundedRect(x - w / 2 + 5, y - h / 2 + 5, w - 10, h - 10, 10);
+    this.promptPlate = plate;
+
+    this.promptText = this.add
+      .text(x, y, "TAP A SWITCH", {
+        fontFamily: "Oswald, Impact, Arial Black, sans-serif",
+        fontSize: `${Math.round(this.width * 0.034)}px`,
+        color: "#F1D47A",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setDepth(19);
+
+    this.tweens.add({
+      targets: this.promptText,
+      alpha: { from: 0.72, to: 1 },
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private setPromptVisible(visible: boolean) {
+    this.promptPlate?.setVisible(visible);
+    this.promptText?.setVisible(visible);
   }
 
   private createAmbientGlow() {
     // Dynamic ambient glow that pulses with energy
-    this.ambientGlow = this.add.rectangle(this.width / 2, this.height / 2, this.width, this.height, 0x2244aa, 0.05);
+    this.ambientGlow = this.add.rectangle(this.width / 2, this.height / 2, this.width, this.height, 0xC8102E, 0.04);
     this.ambientGlow.setDepth(1);
     this.ambientGlow.setBlendMode(Phaser.BlendModes.ADD);
     
@@ -541,21 +507,21 @@ export class VoltzGame extends Scene {
     const edgeGlowLeft = this.add.graphics();
     edgeGlowLeft.setDepth(3);
     for (let i = 0; i < 6; i++) {
-      edgeGlowLeft.fillStyle(0xff4488, 0.03 - i * 0.003);
+      edgeGlowLeft.fillStyle(0xC8102E, 0.03 - i * 0.003);
       edgeGlowLeft.fillRect(0, 0, 20 + i * 12, this.height);
     }
     const edgeGlowRight = this.add.graphics();
     edgeGlowRight.setDepth(3);
     for (let i = 0; i < 6; i++) {
-      edgeGlowRight.fillStyle(0x44aaff, 0.03 - i * 0.003);
+      edgeGlowRight.fillStyle(0xD4AF37, 0.03 - i * 0.003);
       edgeGlowRight.fillRect(this.width - 20 - i * 12, 0, 20 + i * 12, this.height);
     }
     this.tweens.add({ targets: edgeGlowLeft, alpha: { from: 0, to: 0.7 }, duration: 2500, ease: "Sine.easeInOut", yoyo: true, repeat: -1 });
     this.tweens.add({ targets: edgeGlowRight, alpha: { from: 0, to: 0.7 }, duration: 2800, ease: "Sine.easeInOut", yoyo: true, repeat: -1, delay: 800 });
 
     // === FLOATING ENERGY PARTICLES ===
-    const glowColors = [0xff3366, 0x33ff66, 0x3399ff, 0xffaa33, 0xff66cc, 0x66ffcc];
-    for (let i = 0; i < 35; i++) {
+    const glowColors = [0xC8102E, 0xFF263D, 0xD4AF37, 0xF1D47A, 0xfff8ee, 0x8A6E18];
+    for (let i = 0; i < 12; i++) {
       const px = Math.random() * this.width;
       const py = Math.random() * this.height;
       const pColor = glowColors[Math.floor(Math.random() * glowColors.length)];
@@ -635,8 +601,23 @@ export class VoltzGame extends Scene {
   private createBg() {
     const bg = this.add.sprite(this.width / 2, this.height / 2, "bg1").play("bgAnim");
     bg.setDisplaySize(this.width, this.height);
+    bg.setTint(0xa39e94);
     const bgUpper = this.add.sprite(this.width / 2, this.height / 2, "bg11").setDepth(2).play("bgUpperAnim");
     bgUpper.setDisplaySize(this.width, this.height);
+    bgUpper.setTint(0xb2ab9e);
+
+    const wash = this.add.rectangle(this.width / 2, this.height / 2, this.width, this.height, 0x1a1208, 0.22);
+    wash.setDepth(1.2);
+    wash.setBlendMode(Phaser.BlendModes.MULTIPLY);
+
+    const vignette = this.add.graphics();
+    vignette.setDepth(1.4);
+    vignette.fillStyle(0x050505, 0.42);
+    vignette.fillRect(0, 0, this.width * 0.06, this.height);
+    vignette.fillRect(this.width * 0.94, 0, this.width * 0.06, this.height);
+    vignette.fillStyle(0x050505, 0.28);
+    vignette.fillRect(0, 0, this.width, this.height * 0.05);
+    vignette.fillRect(0, this.height * 0.95, this.width, this.height * 0.05);
   }
 
   private createButtonGlows() {
@@ -645,21 +626,17 @@ export class VoltzGame extends Scene {
     const greenX = this.width * 0.8;
     const btnY = this.redBtnH + 330;
 
-    const redColor = 0xff4466;
-    const blueColor = 0x44aaff;
-    const greenColor = 0x44ff88;
-
     this.btnGlows.red = this.add.graphics();
     this.btnGlows.red.setDepth(0);
-    this.createGlowForButton(this.btnGlows.red, redX, btnY, redColor);
-    
+    this.createGlowForButton(this.btnGlows.red, redX, btnY, 0xff4466);
+
     this.btnGlows.blue = this.add.graphics();
     this.btnGlows.blue.setDepth(0);
-    this.createGlowForButton(this.btnGlows.blue, blueX, btnY, blueColor);
-    
+    this.createGlowForButton(this.btnGlows.blue, blueX, btnY, 0x44aaff);
+
     this.btnGlows.green = this.add.graphics();
     this.btnGlows.green.setDepth(0);
-    this.createGlowForButton(this.btnGlows.green, greenX, btnY, greenColor);
+    this.createGlowForButton(this.btnGlows.green, greenX, btnY, 0x44ff88);
   }
 
   private createGlowForButton(graphics: Phaser.GameObjects.Graphics, x: number, y: number, color: number) {
@@ -788,6 +765,7 @@ export class VoltzGame extends Scene {
   }
 
   private handleSwitchPress(switchIndex: number) {
+    this.setPromptVisible(false);
     if (this.callbacks) { this.callbacks.onSwitchPressed(switchIndex); }
   }
 }

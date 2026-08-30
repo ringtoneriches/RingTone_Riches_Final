@@ -92,7 +92,7 @@ export function gameTypeLabel(type?: string) {
     case "spin":
       return "Spin";
     case "scratch":
-      return "Scratch";
+      return "Scratch Nations";
     case "pop":
       return "Pop";
     case "plinko":

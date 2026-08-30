@@ -2754,6 +2754,12 @@ html.rr-day .rr-footer-legal {
 html.rr-day .rr-footer-legal a {
   color: #7a5b12;
 }
+html.rr-day .rr-footer-age-title {
+  color: #7a5b12;
+}
+html.rr-day .rr-footer-age-copy {
+  color: var(--rr-ink-soft);
+}
 html.rr-day .rr-support-strip {
   --rr-support-knockout: #f4efe4;
   border-top-color: rgba(80, 50, 20, 0.12);
@@ -2773,26 +2779,11 @@ html.rr-day .rr-support-org:focus-visible {
   background: rgba(122, 91, 18, 0.08);
 }
 html.rr-day .rr-support-logo {
-  filter: grayscale(1) brightness(0.22) contrast(1.05);
-  opacity: 0.86;
-}
-html.rr-day .rr-support-logo--day {
-  display: block;
   filter: none;
-  opacity: 0.92;
-}
-html.rr-day .rr-support-logo--night.rr-support-logo--ca,
-html.rr-day .rr-support-logo--night.rr-support-logo--ndl,
-html.rr-day .rr-support-logo--night.rr-support-logo--samaritans {
-  display: none;
+  opacity: 1;
 }
 html.rr-day .rr-support-org:hover .rr-support-logo,
 html.rr-day .rr-support-org:focus-visible .rr-support-logo {
-  opacity: 1;
-  filter: grayscale(1) brightness(0.28) contrast(1.05) sepia(0.35) saturate(1.4);
-}
-html.rr-day .rr-support-org:hover .rr-support-logo--day,
-html.rr-day .rr-support-org:focus-visible .rr-support-logo--day {
   filter: none;
   opacity: 1;
 }
@@ -3740,6 +3731,16 @@ html.rr-day .rr-comp-add-cart {
   .rr-comp-grid .rr-comp-timer {
     margin-top: 0.5rem;
   }
+  .rr-comp-grid .rr-ends-pill {
+    min-height: 1.7rem;
+    padding: 0.18rem 0.48rem 0.18rem 0.4rem;
+  }
+  .rr-comp-grid .rr-ends-num {
+    font-size: 12px;
+  }
+  .rr-comp-grid .rr-ends-units {
+    gap: 0.38rem;
+  }
   .rr-comp-grid .rr-countdown {
     gap: 0.2rem;
   }
@@ -4029,6 +4030,77 @@ html.rr-day .rr-comp-add-cart {
 /* Countdown digit change */
 .rr-tick {
   transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+/* Competition card — compact ENDS pill (D / H / M) */
+.rr-ends-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 1.85rem;
+  padding: 0.22rem 0.6rem 0.22rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(241, 212, 122, 0.22);
+  background: linear-gradient(180deg, #121214 0%, #08080a 100%);
+}
+.rr-ends-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.rr-ends-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f1d47a;
+  box-shadow: 0 0 7px rgba(241, 212, 122, 0.75);
+}
+.rr-ends-dot.is-ended {
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: none;
+}
+.rr-ends-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.46);
+}
+.rr-ends-units {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.rr-ends-unit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.16rem;
+}
+.rr-ends-num {
+  font-style: italic;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #f1d47a;
+}
+.rr-ends-unit-l {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+html.rr-day .rr-ends-pill {
+  border-color: rgba(122, 91, 18, 0.28);
+  background: linear-gradient(180deg, #2a2418 0%, #1a1610 100%);
+}
+html.rr-day .rr-ends-label,
+html.rr-day .rr-ends-unit-l {
+  color: rgba(255, 248, 238, 0.55);
 }
 
 /* CTA */
@@ -5932,19 +6004,18 @@ html.rr-day .bg-\[\#2a2a2a\] .text-muted-foreground {
   display: block;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.48);
-  transition: color 0.2s ease, transform 0.2s ease;
+  transition: color 0.2s ease;
 }
 .rr-footer-link:hover {
   color: #f1d47a;
-  transform: translateX(2px);
 }
 .rr-footer-social {
   display: inline-flex;
-  height: 2.5rem;
-  width: 2.5rem;
+  height: 2.15rem;
+  width: 2.15rem;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid rgba(212, 175, 55, 0.28);
   background: rgba(255, 255, 255, 0.04);
   color: #f1d47a;
@@ -5956,12 +6027,35 @@ html.rr-day .bg-\[\#2a2a2a\] .text-muted-foreground {
   box-shadow: 0 0 16px rgba(212, 175, 55, 0.18);
 }
 .rr-footer-heading {
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.75rem;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: #f1d47a;
+}
+.rr-footer-nav {
+  text-align: center;
+}
+.rr-footer-age-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #f1d47a;
+}
+.rr-footer-age-copy {
+  margin-top: 0.65rem;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.7;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
 }
 .rr-support-strip {
   --rr-support-knockout: #050505;
@@ -6019,24 +6113,8 @@ html.rr-day .bg-\[\#2a2a2a\] .text-muted-foreground {
   width: auto;
   height: 2.35rem;
   object-fit: contain;
-  filter: grayscale(1) brightness(1.18) contrast(1.02);
-  opacity: 0.9;
-  transition: filter 0.22s ease, opacity 0.22s ease;
-}
-.rr-support-logo--day {
-  display: none;
-}
-.rr-support-org:hover .rr-support-logo,
-.rr-support-org:focus-visible .rr-support-logo {
+  filter: none;
   opacity: 1;
-  filter: grayscale(1) brightness(1.28) contrast(1.04) sepia(0.22) saturate(1.35);
-}
-.rr-support-logo--night.rr-support-logo--samaritans {
-  filter: grayscale(1) brightness(1.02) contrast(1.08);
-}
-.rr-support-org:hover .rr-support-logo--night.rr-support-logo--samaritans,
-.rr-support-org:focus-visible .rr-support-logo--night.rr-support-logo--samaritans {
-  filter: grayscale(1) brightness(1.1) contrast(1.08) sepia(0.22) saturate(1.35);
 }
 .rr-support-logo--ca {
   height: 3.15rem;

@@ -1,4 +1,4 @@
-import { Facebook, Headphones, Instagram } from "lucide-react";
+import { Facebook, Headphones, Instagram, Shield } from "lucide-react";
 import BrandLogo from "@/components/layout/BrandLogo";
 import PaymentMethodIcons from "@/components/layout/PaymentMethodIcons";
 import SupportOrganisations from "@/components/layout/SupportOrganisations";
@@ -14,53 +14,62 @@ function TikTokIcon({ className }: { className?: string }) {
 
 export default function Footer() {
   return (
-    <footer className="rr-footer py-12 sm:py-16">
-      <div className="relative z-[1] mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
-          <div className="space-y-5">
-            <Link href="/">
-              <BrandLogo
-                className="h-16 w-auto cursor-pointer object-contain sm:h-20"
-              />
-            </Link>
-            <p className="max-w-xs text-sm leading-relaxed text-white/45">
-              Real competitions. Real winners. Real prizes.
-            </p>
-            <div className="flex items-center gap-2.5">
-              <a
-                href="https://www.facebook.com/profile.php?id=61579695463356"
-                className="rr-footer-social"
-                data-testid="link-facebook"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Facebook"
-              >
-                <Facebook className="h-4 w-4" />
-              </a>
-              <a
-                href="https://www.instagram.com/ringtoneriches?igsh=MTVyMnJvZ2w4dGZ2Zw%3D%3D&utm_source=qr"
-                className="rr-footer-social"
-                data-testid="link-instagram"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Instagram"
-              >
-                <Instagram className="h-4 w-4" />
-              </a>
-              <a
-                href="https://www.tiktok.com/@ringtone.riches?_t=ZN-90jrPt73hTi&_r=1"
-                className="rr-footer-social"
-                data-testid="link-tiktok"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="TikTok"
-              >
-                <TikTokIcon className="h-4 w-4" />
-              </a>
-            </div>
-            <PaymentMethodIcons />
+    <footer className="rr-footer py-10 sm:py-14">
+      <div className="relative z-[1] mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col items-center text-center">
+          <Link href="/">
+            <BrandLogo className="h-11 w-auto cursor-pointer object-contain sm:h-14" />
+          </Link>
+          <p className="mt-3 max-w-sm text-[13px] leading-relaxed text-white/45">
+            Real competitions. Real winners. Real prizes.
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <a
+              href="https://www.facebook.com/profile.php?id=61579695463356"
+              className="rr-footer-social"
+              data-testid="link-facebook"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Facebook"
+            >
+              <Facebook className="h-3.5 w-3.5" />
+            </a>
+            <a
+              href="https://www.instagram.com/ringtoneriches?igsh=MTVyMnJvZ2w4dGZ2Zw%3D%3D&utm_source=qr"
+              className="rr-footer-social"
+              data-testid="link-instagram"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Instagram"
+            >
+              <Instagram className="h-3.5 w-3.5" />
+            </a>
+            <a
+              href="https://www.tiktok.com/@ringtone.riches?_t=ZN-90jrPt73hTi&_r=1"
+              className="rr-footer-social"
+              data-testid="link-tiktok"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="TikTok"
+            >
+              <TikTokIcon className="h-3.5 w-3.5" />
+            </a>
           </div>
+          <PaymentMethodIcons className="mt-5 justify-center" />
 
+          <div className="rr-footer-age mt-8 max-w-lg">
+            <p className="rr-footer-age-title">
+              <Shield className="h-3.5 w-3.5" aria-hidden />
+              18+ Only
+            </p>
+            <p className="rr-footer-age-copy">
+              Please note: players must be over 18 years of age. If you win and you are under 18,
+              you will not be able to collect the prize and the competition will be drawn again.
+            </p>
+          </div>
+        </div>
+
+        <div className="rr-footer-nav mt-10 grid grid-cols-1 gap-7 sm:grid-cols-3 sm:gap-6">
           <div>
             <h4 className="rr-footer-heading">Useful information</h4>
             <div className="space-y-2.5">
@@ -97,7 +106,7 @@ export default function Footer() {
           <div>
             <h4 className="rr-footer-heading">Contact</h4>
             <Link href="/wallet?tab=support">
-              <span className="rr-header-ghost inline-flex h-11 cursor-pointer gap-2 px-4">
+              <span className="rr-header-ghost inline-flex h-10 cursor-pointer gap-2 px-3.5">
                 <Headphones className="h-4 w-4" />
                 Support
               </span>

@@ -476,9 +476,9 @@ export default function AdminSettings() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <h3 className="font-bold text-lg text-foreground mb-1">Scratch Card</h3>
+                  <h3 className="font-bold text-lg text-foreground mb-1">Scratch Nations</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Configure scratch card prizes and win rates
+                    Change flag prizes, weights, and win rates
                   </p>
                   <Button variant="outline" className="w-full" size="sm">
                     <ExternalLink className="w-4 h-4 mr-2" />

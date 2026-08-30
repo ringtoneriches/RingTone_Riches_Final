@@ -56,7 +56,7 @@ export function getCompetitionTypeConfig(type: string): CompetitionTypeConfig {
     case "spin":
       return { Icon: RotateCw, label: "RETRO SPIN", accent: "#E31B36" };
     case "scratch":
-      return { Icon: Sparkles, label: "SCRATCH & WIN", accent: "#D4AF37" };
+      return { Icon: Sparkles, label: "SCRATCH NATIONS", accent: "#D4AF37" };
     case "pop":
       return { Icon: BalloonIcon, label: "BALLOON POP", accent: "#FF263D" };
     case "plinko":

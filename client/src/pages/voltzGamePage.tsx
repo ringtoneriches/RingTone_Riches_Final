@@ -123,17 +123,6 @@ export default function VoltzGamePage() {
 
   return (
     <GameShell>
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-        style={{ opacity: 0.22 }}
-      >
-        <source src="/voltz-bg-loop.mp4" type="video/mp4" />
-      </video>
-
       <main className="relative z-10 mx-auto max-w-4xl px-4 py-6 sm:py-8">
         <button
           type="button"
@@ -148,7 +137,7 @@ export default function VoltzGamePage() {
         <GameHero
           kicker="Voltz · play"
           title="RINGTONE VOLTZ"
-          subtitle="Press a switch. Surge the power. Win electric prizes."
+          subtitle="Tap a switch. Match all 3. Instant prize."
           remaining={remainingPlays}
           remainingLabel={remainingPlays === 1 ? "play left" : "plays left"}
           Icon={Zap}
@@ -173,7 +162,7 @@ export default function VoltzGamePage() {
               ...prizeFromReward(g),
             }))}
             emptyTitle="NO SURGES RECORDED"
-            emptyHint="Press a switch above to start playing."
+            emptyHint="Tap a switch above to start playing."
           />
         </div>
       </main>

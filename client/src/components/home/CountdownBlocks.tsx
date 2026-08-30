@@ -4,9 +4,53 @@ type Props = {
   time: CountdownParts;
   size?: "sm" | "lg";
   ended?: boolean;
+  variant?: "blocks" | "ends";
 };
 
-export default function CountdownBlocks({ time, size = "sm", ended = false }: Props) {
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+export default function CountdownBlocks({ time, size = "sm", ended = false, variant = "blocks" }: Props) {
+  if (variant === "ends") {
+    if (ended) {
+      return (
+        <div className="rr-ends-pill" aria-label="Competition ended">
+          <span className="rr-ends-left">
+            <span className="rr-ends-dot is-ended" aria-hidden="true" />
+            <span className="rr-ends-label">Ended</span>
+          </span>
+        </div>
+      );
+    }
+
+    const units = [
+      { v: time.d, l: "D" },
+      { v: time.h, l: "H" },
+      { v: time.m, l: "M" },
+    ];
+
+    return (
+      <div
+        className="rr-ends-pill"
+        aria-label={`Ends in ${time.d} days, ${time.h} hours, ${time.m} minutes`}
+      >
+        <span className="rr-ends-left">
+          <span className="rr-ends-dot" aria-hidden="true" />
+          <span className="rr-ends-label">Ends</span>
+        </span>
+        <span className="rr-ends-units">
+          {units.map((u) => (
+            <span key={u.l} className="rr-ends-unit">
+              <span className="rr-ends-num font-prize">{pad2(u.v)}</span>
+              <span className="rr-ends-unit-l">{u.l}</span>
+            </span>
+          ))}
+        </span>
+      </div>
+    );
+  }
+
   const units = [
     { v: time.d, l: size === "lg" ? "Days" : "D" },
     { v: time.h, l: size === "lg" ? "Hours" : "H" },
