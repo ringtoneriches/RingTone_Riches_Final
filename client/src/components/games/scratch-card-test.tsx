@@ -10,77 +10,43 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import scratchSoundFile from "../../../../attached_assets/assets_sounds_sound_scratch.mp3";
-import beach_ball from "../../../../attached_assets/Land Mark/beach_ball.png";
-import beach_chair from "../../../../attached_assets/Land Mark/beach_chair.png";
-import coconut from "../../../../attached_assets/Land Mark/coconut.png";
-import crab from "../../../../attached_assets/Land Mark/crab.png";
-import hat from "../../../../attached_assets/Land Mark/hat.png";
-import heat from "../../../../attached_assets/Land Mark/heat.png";
-import ice_cream from "../../../../attached_assets/Land Mark/ice_cream.png";
-import palm_tree from "../../../../attached_assets/Land Mark/palm_tree.png";
-import shirt from "../../../../attached_assets/Land Mark/shirt.png";
-import sun from "../../../../attached_assets/Land Mark/sun.png";
-import sun_block from "../../../../attached_assets/Land Mark/sun_block.png";
-import swim_ring from "../../../../attached_assets/Land Mark/swim_ring.png";
-import umbrella from "../../../../attached_assets/Land Mark/umbrella.png";
-import watermelon from "../../../../attached_assets/Land Mark/watermelon.png";
-import wine_glass from "../../../../attached_assets/Land Mark/wine_glass.png";
-import scratchBackgroundVideo from "../../../../attached_assets/scratchbg.mp4";
+import { SCRATCH_NATION_FLAGS, getNationFlag } from "@/lib/scratch-nations";
 import confetti from 'canvas-confetti';
 
 import { useLocation, useParams } from "wouter";
+import { Sparkles } from "lucide-react";
 
 interface ScratchCardProps {
   onScratchReveal?: (prize: { type: string; value: string }) => void;
   onCommitSession?: (sessionId: string, payload: { orderId: string; prizeId: string; isWinner: boolean }) => Promise<void>;
   onRefreshBalance?: () => void;
+  onRemainingChange?: (remaining: number) => void;
   commitError?: string | null;
   mode?: "tight" | "loose";
   scratchTicketCount?: number;
   orderId?: string;
   congratsAudioRef: React.RefObject<HTMLAudioElement>;
   competitionId?: string;
+  resultModalOpen?: boolean;
 }
 
 const CSS_WIDTH = 500;
 const CSS_HEIGHT = 350;
-const AUTO_CLEAR_THRESHOLD = 0.60; // ✅ Changed from 0.7 to 0.85
+const AUTO_CLEAR_THRESHOLD = 0.225;
 const SAMPLE_GAP = 4;
 
-const landmarkImages = [
-  { name: "Beach Ball", src: beach_ball },
-  { name: "Beach Chair", src: beach_chair },
-  { name: "Coconut", src: coconut },
-  { name: "Crab", src: crab },
-  { name: "Hat", src: hat },
-  { name: "Heat", src: heat },
-  { name: "Ice Cream", src: ice_cream },
-  { name: "Palm Tree", src: palm_tree },
-  { name: "Shirt", src: shirt },
-  { name: "Sun", src: sun },
-  { name: "Sun Block", src: sun_block },
-  { name: "Swim Ring", src: swim_ring },
-  { name: "Umbrella", src: umbrella },
-  { name: "Watermelon", src: watermelon },
-  { name: "Wine Glass", src: wine_glass },
-];
-
-function normalizeName(str: string) {
-  return str.toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
+const nationFlags = SCRATCH_NATION_FLAGS.map((flag) => ({
+  name: flag.name,
+  src: flag.src,
+}));
 
 function getImageByBackendName(name: string) {
-  const normalized = normalizeName(name);
-
-  const found = landmarkImages.find(
-    (img) => normalizeName(img.name) === normalized
-  );
-
-  return found || null;
+  const found = getNationFlag(name);
+  return found ? { name: found.name, src: found.src } : null;
 }
 
 function getRandomImages(n: number) {
-  const shuffled = [...landmarkImages].sort(() => 0.5 - Math.random());
+  const shuffled = [...nationFlags].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, n);
 }
 
@@ -90,7 +56,7 @@ function generateScratchGrid(mode: "tight" | "loose" = "loose") {
   let images = getRandomImages(6);
 
   if (isWinner) {
-    const chosen = landmarkImages[Math.floor(Math.random() * landmarkImages.length)];
+    const chosen = nationFlags[Math.floor(Math.random() * nationFlags.length)];
     const winIndices = [0, 1, 4];
     winIndices.forEach((i) => (images[i] = chosen));
   }
@@ -117,7 +83,7 @@ const saveScratchHistory = (history: { status: string; prize: { type: string; va
   }
 };
 
-export default function ScratchCardTest({ onScratchReveal, onRefreshBalance,  competitionId , mode = "tight", scratchTicketCount, orderId ,congratsAudioRef }: ScratchCardProps) {
+export default function ScratchCardTest({ onScratchReveal, onRefreshBalance, onRemainingChange,  competitionId , mode = "tight", scratchTicketCount, orderId ,congratsAudioRef, resultModalOpen = false }: ScratchCardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const {id} = useParams()
   const drawingRef = useRef(false);
@@ -203,9 +169,13 @@ useEffect(() => {
 // Update this effect to check when all scratches are completed
 useEffect(() => {
   if (scratchHistory.length > 0) {
-    const completed = scratchHistory.every(s => 
+    const historyDone = scratchHistory.every(s =>
       s.status === "Scratched" || s.status === "Lost"
     );
+    // Server remaining is the source of truth. Stale local history must not lock the card.
+    const completed = scratchTicketCount === undefined
+      ? historyDone
+      : scratchTicketCount <= 0 && historyDone;
     setAllScratchesCompleted(completed);
     
     // If all completed, clear current session
@@ -214,7 +184,7 @@ useEffect(() => {
       setSessionState('completed');
     }
   }
-}, [scratchHistory, currentSession]);
+}, [scratchHistory, currentSession, scratchTicketCount]);
 
   // Fix canvas not rendering after Reveal All
 useEffect(() => {
@@ -260,12 +230,12 @@ useEffect(() => {
 
   // If we have saved history that matches current count, use it
   if (finalHistory.length === scratchTicketCount) {
-    setScratchHistory(finalHistory);
+    setScratchHistory(openRemainingSlots(finalHistory, scratchTicketCount));
   } 
   // If saved history exists but count doesn't match, adjust it
   else if (finalHistory.length > 0) {
     const adjustedHistory = adjustHistoryToCount(finalHistory, scratchTicketCount);
-    setScratchHistory(adjustedHistory);
+    setScratchHistory(openRemainingSlots(adjustedHistory, scratchTicketCount));
   }
   // No saved history, create fresh
   else {
@@ -277,6 +247,32 @@ useEffect(() => {
     );
   }
 }, [scratchTicketCount, orderId]);
+
+  // If the server still has cards, reopen locally-closed rows that were never used.
+  const openRemainingSlots = (history: any[], remaining: number) => {
+    const openCount = history.filter((s) => s.status === "Not Scratched").length;
+    if (openCount >= remaining) return history;
+
+    let needed = remaining - openCount;
+    const next = history.map((item) => {
+      if (needed <= 0) return item;
+      if (item.status === "Lost") {
+        needed -= 1;
+        return { status: "Not Scratched", prize: { type: "none", value: "-" } };
+      }
+      return item;
+    });
+
+    if (needed <= 0) return next;
+
+    return [
+      ...next,
+      ...Array.from({ length: needed }, () => ({
+        status: "Not Scratched",
+        prize: { type: "none", value: "-" },
+      })),
+    ];
+  };
 
   // Helper function to adjust history while preserving all data
   const adjustHistoryToCount = (history: any[], targetCount: number) => {
@@ -551,15 +547,44 @@ const completeScratchSession = async (): Promise<void> => {
 
   // 🎯 NEW: Fetch session on mount or when we need a new one
   useEffect(() => {
-    if (allScratchesCompleted) return;
+    if (allScratchesCompleted || resultModalOpen) return;
     // Only fetch if we have remaining cards and no current session
     if (orderId && scratchHistory.length > 0 && !currentSession) {
-      const hasRemaining = scratchHistory.some(s => s.status === "Not Scratched");
+      const hasRemaining =
+        scratchHistory.some(s => s.status === "Not Scratched") ||
+        (scratchTicketCount ?? 0) > 0;
       if (hasRemaining && sessionState === 'loading') {
         fetchScratchSession();
       }
     }
-  }, [orderId, scratchHistory, currentSession, sessionState , allScratchesCompleted]);
+  }, [orderId, scratchHistory, currentSession, sessionState , allScratchesCompleted, scratchTicketCount, resultModalOpen]);
+
+  // Start the next card only after the result popup is dismissed, and after
+  // this click ends, so GET IN cannot scratch the new foil in the same tap.
+  useEffect(() => {
+    if (resultModalOpen || sessionState !== "completed" || allScratchesCompleted) return;
+
+    const hasRemaining =
+      (scratchTicketCount ?? 0) > 0 ||
+      scratchHistory.some((s) => s.status === "Not Scratched");
+
+    if (!hasRemaining) {
+      setAllScratchesCompleted(true);
+      return;
+    }
+
+    const t = window.setTimeout(() => {
+      hasCompletedRef.current = false;
+      hasCommittedCurrentScratch.current = false;
+      setCurrentSession(null);
+      setSessionState("loading");
+      setRevealed(false);
+      scratchPathsRef.current = [];
+      currentScratchPathRef.current = [];
+    }, 280);
+
+    return () => window.clearTimeout(t);
+  }, [resultModalOpen, sessionState, scratchTicketCount, scratchHistory, allScratchesCompleted]);
 
   // ✅ Save to localStorage whenever scratchHistory changes (order-specific)
   useEffect(() => {
@@ -602,7 +627,7 @@ const completeScratchSession = async (): Promise<void> => {
         const img = getImageByBackendName(name);
         if (!img) {
           console.warn("Unknown backend image name:", name);
-          return landmarkImages[Math.floor(Math.random() * landmarkImages.length)];
+          return nationFlags[Math.floor(Math.random() * nationFlags.length)];
         }
         return img;
       });
@@ -767,31 +792,41 @@ function initCanvas() {
 
 function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: number) {
   const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, "#cca60eff");
-  gradient.addColorStop(1, "#e67e22");
+  gradient.addColorStop(0, "#2a2110");
+  gradient.addColorStop(0.45, "#8A6E18");
+  gradient.addColorStop(1, "#1a1208");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = "#fff";
-  const fontSize = Math.max(16, width * 0.05);
-  ctx.font = `bold ${fontSize}px Arial`;
+  ctx.fillStyle = "rgba(241, 212, 122, 0.12)";
+  for (let i = 0; i < width + height; i += 14) {
+    ctx.fillRect(i, 0, 5, height);
+  }
+
+  ctx.fillStyle = "#F1D47A";
+  const fontSize = Math.max(16, width * 0.048);
+  ctx.font = `700 ${fontSize}px Oswald, Arial Black, sans-serif`;
   ctx.textAlign = "center";
-  ctx.fillText("SCRATCH TO REVEAL", width / 2, height / 2);
+  ctx.fillText("SCRATCH TO REVEAL", width / 2, height / 2 - 8);
+  ctx.fillStyle = "rgba(255, 248, 238, 0.7)";
+  ctx.font = `600 ${Math.max(11, width * 0.028)}px Oswald, Arial, sans-serif`;
+  ctx.fillText("MATCH 3 FLAGS", width / 2, height / 2 + fontSize * 0.7);
 }
 
 function drawAllUsedOverlay(ctx: CanvasRenderingContext2D, width: number, height: number) {
-  ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+  ctx.fillStyle = "#050505";
   ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = "#fff";
-  const fontSize = Math.max(18, width * 0.06);
-  ctx.font = `bold ${fontSize}px Arial`;
+  ctx.fillStyle = "#F1D47A";
+  const fontSize = Math.max(18, width * 0.055);
+  ctx.font = `700 ${fontSize}px Oswald, Arial Black, sans-serif`;
   ctx.textAlign = "center";
-  ctx.fillText("ALL SCRATCHES USED", width / 2, height / 2 - 30);
+  ctx.fillText("ALL CARDS USED", width / 2, height / 2 - 16);
 
-  const smallFontSize = Math.max(14, width * 0.04);
-  ctx.font = `${smallFontSize}px Arial`;
-  ctx.fillText("Check your progress table for results", width / 2, height / 2 + 20);
+  ctx.fillStyle = "rgba(255, 248, 238, 0.55)";
+  const smallFontSize = Math.max(13, width * 0.032);
+  ctx.font = `600 ${smallFontSize}px Oswald, Arial, sans-serif`;
+  ctx.fillText("Check your results below", width / 2, height / 2 + 18);
 }
 
 
@@ -832,6 +867,7 @@ function scratchAt(x: number, y: number) {
 // Update your checkScratchCompletion function to save paths when complete
 function checkPercentScratched(force = false) {
   rafRef.current = null;
+  if (resultModalOpen) return;
   const canvas = canvasRef.current;
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -896,17 +932,8 @@ function checkPercentScratched(force = false) {
 
         // 🎉 Show popup IMMEDIATELY
         setSelectedPrize(prizeWon);
-
-        // Prepare for next scratch (fetch next session in background)
-        setTimeout(async () => {
-          hasCompletedRef.current = false;
-          setCurrentSession(null); // Clear current session
-          setSessionState('loading'); // Trigger fetch of next session
-          setRevealed(false);
-          // Clear scratch paths for next session
-          scratchPathsRef.current = [];
-          currentScratchPathRef.current = [];
-        }, 1000);
+        // Next card starts only after GET IN / close — a same-click prefetch
+        // would land on the new foil and instantly re-open the win popup.
       } catch (error) {
         console.error("Error completing scratch:", error);
         alert("Failed to complete scratch card. Please try again.");
@@ -967,8 +994,12 @@ function checkPercentScratched(force = false) {
   setRevealed(true);
   setPercentScratched(100);
 
-  // Get count of all remaining scratch cards
-  const remainingCount = scratchHistory.filter(s => s.status === "Not Scratched").length;
+  // Include in-progress rows. A started session is not "Not Scratched"
+  // and was being left behind, which showed "1 card left" + an empty foil.
+  const historyOpen = scratchHistory.filter(
+    (s) => s.status === "Not Scratched" || s.status === "Scratching",
+  ).length;
+  const remainingCount = Math.max(scratchTicketCount ?? 0, historyOpen);
 
   if (remainingCount === 0) {
     hasCompletedRef.current = false;
@@ -1009,19 +1040,20 @@ function checkPercentScratched(force = false) {
     let winCount = 0;
     let totalWon = 0;
     
-    // Update scratch history with all results and check for wins
     setScratchHistory(prev => {
       const updated = [...prev];
-      let notScratchedIndex = 0;
+      let openIndex = 0;
 
       results.scratches.forEach((scratch: any) => {
-        // Find the next Not Scratched entry
-        while (notScratchedIndex < updated.length && updated[notScratchedIndex].status === "Scratched") {
-          notScratchedIndex++;
+        while (
+          openIndex < updated.length &&
+          updated[openIndex].status !== "Not Scratched" &&
+          updated[openIndex].status !== "Scratching"
+        ) {
+          openIndex++;
         }
 
-        if (notScratchedIndex < updated.length) {
-          // Check if this scratch was a win
+        if (openIndex < updated.length) {
           const isWin = scratch.prize?.type !== "none" &&
                        scratch.prize?.type !== "try_again" &&
                        scratch.prize?.type !== "lose" &&
@@ -1033,41 +1065,52 @@ function checkPercentScratched(force = false) {
           if (isWin) {
             hasWins = true;
             winCount++;
-            // Add to total if it's a cash win
             if (scratch.prize?.type === "cash" && scratch.prize?.value) {
               const value = parseFloat(scratch.prize.value);
               if (!isNaN(value)) totalWon += value;
             }
           }
 
-          updated[notScratchedIndex] = {
+          updated[openIndex] = {
             status: "Scratched",
             prize: scratch.prize,
           };
-          notScratchedIndex++;
+          openIndex++;
         }
       });
 
-      return updated;
+      return updated.map((row) =>
+        row.status === "Not Scratched" || row.status === "Scratching"
+          ? { status: "Scratched", prize: row.prize }
+          : row
+      );
     });
 
-    // 🔒 CRITICAL: Invalidate queries to refresh balance and points in header
-    if (onRefreshBalance) {
-      onRefreshBalance();
-    }
+    const leftover = Math.max(0, Number(results.cardsRemaining) || 0);
+    onRemainingChange?.(leftover);
+    onRefreshBalance?.();
 
-    // 🔥 ADD CONFETTI FOR BATCH WINS
     if (hasWins) {
       triggerWinConfetti(winCount, totalWon);
     }
 
-    // Reset state
-    hasCompletedRef.current = false;
-    isScratching.current = false; // Reset scratching state
-    setRevealed(false);
-    setSessionKey((k) => k + 1);
+    setCurrentSession(null);
+    isScratching.current = false;
+    localStorage.removeItem(`scratchInProgress_${orderId}`);
 
-    // Show summary message
+    if (leftover <= 0) {
+      hasCompletedRef.current = true;
+      setRevealed(true);
+      setAllScratchesCompleted(true);
+      setSessionState("completed");
+    } else {
+      hasCompletedRef.current = false;
+      setHideImagesAfterRevealAll(false);
+      setRevealed(false);
+      setSessionState("loading");
+      setSessionKey((k) => k + 1);
+    }
+
     setShowRevealAllResultDialog(true);
 
   } catch (error) {
@@ -1136,113 +1179,71 @@ useEffect(() => {
   }
 }, [currentSession]);
 
+  const cardsLeft = allScratchesCompleted
+    ? 0
+    : scratchTicketCount !== undefined
+      ? scratchTicketCount
+      : scratchHistory.filter((s) => s.status === "Not Scratched" || s.status === "Scratching").length;
+
   return (
-  <div className="relative flex flex-col items-center justify-center p-4 min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* 🎯 NEW: Loading overlay while fetching session */}
-      {/* {sessionState === 'loading' && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-[#FACC15] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-white text-lg">Loading scratch card...</p>
-          </div>
-        </div>
-      )} */}
-        
-
-        <video
-      autoPlay
-      loop
-      muted
-      playsInline
-      preload="auto"
-      className="absolute inset-0 w-full h-full object-cover opacity-20"
+  <div className="rr-scratch-panel relative overflow-hidden rounded-2xl border border-[#C8102E]/35 bg-[#050505] text-left shadow-[0_0_0_1px_rgba(241,212,122,0.08),0_0_70px_rgba(200,16,46,0.14),0_28px_80px_rgba(0,0,0,0.7)]">
+    <div
+      className="pointer-events-none absolute inset-0"
       style={{
-        imageRendering: "auto",
-        transform: "scale(1.02)",
-        filter: "brightness(0.6)",
+        background: `
+          radial-gradient(ellipse at 50% 0%, rgba(200, 16, 46, 0.16) 0%, transparent 42%),
+          radial-gradient(ellipse at 80% 100%, rgba(241, 212, 122, 0.08) 0%, transparent 40%),
+          linear-gradient(180deg, #0A0A0D 0%, #050505 100%)
+        `,
       }}
-    >
-      <source
-        src={scratchBackgroundVideo}
-        type="video/mp4"
-      />
-    </video>
+    />
 
-    {/* Premium gradient overlay */}
-    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40"></div>
-
-    {/* Decorative glow effects - Brand Colors */}
-    <div className="absolute top-20 left-10 w-96 h-96 bg-[#FACC15]/20 rounded-full blur-3xl animate-pulse"></div>
-    <div className="absolute bottom-20 right-10 w-96 h-96 bg-[#F59E0B]/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-
-    <div className="relative z-10 p-4 sm:p-6 w-full max-w-5xl">
-      {/* Premium Scratches Badge */}
-      <div className="flex justify-center mb-6 sm:mb-8">
+    <div className="relative z-10 p-4 sm:p-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
         {scratchTicketCount !== undefined && (
-          <div className="relative group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-full blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
-            <div className="relative bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-gray-900 px-6 py-3 rounded-full text-sm sm:text-base font-black shadow-2xl flex items-center gap-2">
-              <span className="text-lg sm:text-xl">🎟️</span>
-              <span>Available Scratch Cards: {scratchHistory.filter(s => s.status === "Not Scratched").length}</span>
-            </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#F1D47A]/30 bg-[#F1D47A]/10 px-3 py-1.5">
+            <span className="font-prize text-2xl leading-none text-[#F1D47A]">{cardsLeft}</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-white/50">
+              {cardsLeft === 1 ? "card left" : "cards left"}
+            </span>
           </div>
         )}
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/40">
+          Match 3 flags
+        </span>
       </div>
 
-      {!allScratchesCompleted && (
-        <>
-          {/* PREMIUM Eye-Catching Title */}
-          <div className="text-center mb-6 sm:mb-10">
-            <div className="relative inline-block mb-4">
-              {/* Glow behind text */}
-              <div className="absolute inset-0 bg-gradient-to-r from-[#FACC15]/30 via-[#F59E0B]/30 to-[#FACC15]/30 blur-3xl"></div>
-              <h2 
-                className="relative text-3xl sm:text-4xl md:text-6xl font-black tracking-tight leading-[1.1]"
-                style={{ 
-                  background: "linear-gradient(135deg, #FACC15 0%, #F59E0B 50%, #FACC15 100%)",
-                  backgroundSize: "200% 100%",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                  filter: "drop-shadow(0 0 24px rgba(250, 204, 21, 0.4))"
-                }}
-              >
-                Scratch & Match
-              </h2>
-              <div className="h-1 mt-3 bg-gradient-to-r from-transparent via-[#FACC15] to-transparent rounded-full"></div>
-            </div>
-            <p className="text-white/90 text-base sm:text-lg md:text-xl font-semibold">
-              Match 3 same images to win amazing prizes! 🎁
-            </p>
-          </div>
-        </>
-      )}
+      <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[#F1D47A]/20 bg-black/40 px-4 py-2.5">
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/45">Top prize</span>
+        <div className="text-right">
+          <p className="font-prize text-2xl leading-none text-[#F1D47A] sm:text-3xl">£2,000</p>
+          <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.18em] text-white/35">England</p>
+        </div>
+      </div>
 
-      {/* PREMIUM Scratch Card Container with Gold Border & Glow */}
-      <div className="relative mx-auto mb-8 sm:mb-12 group">
-        {/* Premium outer glow effect - Brand Colors */}
-        <div className="absolute -inset-4 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-3xl blur-2xl opacity-40 group-hover:opacity-60 transition-all duration-700"></div>
-
-        {/* Card container with premium gold border */}
-        <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-[#FACC15]/60 shadow-[#FACC15]/30 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 w-full sm:w-[550px] md:w-[600px] mx-auto">
-          <div className="relative min-h-[350px] sm:min-h-[420px] md:min-h-[450px]">
+      <div className="relative mx-auto w-full max-w-[560px]">
+        <div className="relative overflow-hidden rounded-2xl border border-[#F1D47A]/30 bg-[#08080b] shadow-[0_0_40px_rgba(200,16,46,0.12)]">
+          <div className="pointer-events-none absolute inset-x-6 top-0 z-20 h-px bg-gradient-to-r from-transparent via-[#F1D47A]/70 to-transparent" />
+          <div className="relative min-h-[320px] sm:min-h-[400px]">
             
             {!allScratchesCompleted ? (
               <>
-                {/* UNDERLAY - Enhanced with premium background (2x3 grid = 6 tiles) */}
-                <div className="absolute inset-0 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center p-3 sm:p-5">
+                <div className="absolute inset-0 flex items-center justify-center bg-[#0A0A0D] p-3 sm:p-5">
                   {!hideImagesAfterRevealAll && (
-                    <div className="grid grid-cols-3 grid-rows-2 gap-2 sm:gap-3 md:gap-4 w-full h-full max-w-lg mx-auto p-2">
+                    <div className="mx-auto grid h-full w-full max-w-lg grid-cols-3 grid-rows-2 gap-2 p-2 sm:gap-3">
                       {images.slice(0, 6).map((img, i) => (
                         <div
                           key={i}
-                          className="bg-white rounded-lg sm:rounded-xl shadow-2xl flex items-center justify-center p-2 sm:p-3 border-2 border-gray-200 aspect-square overflow-hidden hover:scale-105 transition-transform duration-200"
+                          className="flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl border border-[#F1D47A]/25 bg-[#111115] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-3"
                         >
                           <img
                             src={img.src}
                             alt={img.name}
-                            className="w-full h-full object-contain select-none"
+                            className="h-[68%] w-full object-contain select-none"
                           />
+                          <span className="mt-1 font-prize text-[10px] uppercase tracking-[0.12em] text-[#fff8ee] sm:text-xs">
+                            {img.name}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -1253,7 +1254,9 @@ useEffect(() => {
                 <canvas
                   key={sessionKey}
                   ref={canvasRef}
-                  className="absolute inset-0 cursor-pointer touch-none w-full h-full"
+                  className={`absolute inset-0 touch-none w-full h-full ${
+                    resultModalOpen ? "pointer-events-none cursor-default" : "cursor-pointer"
+                  }`}
                   onMouseDown={(e) => {
                     if (allScratchesUsed) {
                       setShowOutOfScratchesDialog(true);
@@ -1312,118 +1315,97 @@ useEffect(() => {
               </>
             ) : (
               /* 🎯 ALL SCRATCHES COMPLETED - Replace canvas with message */
-              <div 
-                className="absolute inset-0 flex flex-col items-center justify-center p-6 cursor-pointer"
+              <div
+                className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center p-6"
                 onClick={() => {
-                  // Open dialog when clicked
                   setShowOutOfScratchesDialog(true);
                 }}
               >
-                {/* Background similar to scratch overlay */}
-                <div className="absolute inset-0 bg-gradient-to-br from-[#cca60e] to-[#e67e22]"></div>
-                
-                {/* Content */}
-                <div className="relative z-10 text-center p-8 max-w-md">
-                  {/* <div className="text-6xl mb-6">🎉</div> */}
-                  <h3 className=" text-lg sm:text-3xl font-bold text-white mb-4">
-                    All Scratches Used!
+                <div className="absolute inset-0 bg-[#050505]" />
+                <div className="relative z-10 max-w-md px-4 text-center">
+                  <h3 className="font-prize text-2xl text-[#F1D47A] sm:text-3xl">
+                    All cards used
                   </h3>
-                  <p className="text-white/90 text-sm sm:text-lg mb-6">
-                    You've used all your scratch cards. 
-                    Click to buy more or check your results below.
+                  <p className="mt-3 text-sm text-white/55 sm:text-base">
+                    You have used every card in this purchase. Tap to buy more, or check results below.
                   </p>
-                  {/* <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
-                    <span className="text-white text-sm">Click to continue </span>
-                  </div> */}
                 </div>
-                
-                {/* Subtle overlay effect */}
-                <div className="absolute inset-0 bg-black/10"></div>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Reveal All Button - Only show when not all completed */}
       {!allScratchesCompleted && (
-        <div className="flex justify-center mb-6 sm:mb-8">
+        <p className="mt-3 text-center text-sm text-white/50">
+          Scratch the foil to reveal the flags
+        </p>
+      )}
+
+      {!allScratchesCompleted && (
+        <div className="mt-5 flex justify-center">
           <button
             onClick={() => setShowRevealAllDialog(true)}
             disabled={revealed || hasCompletedRef.current}
             data-testid="button-reveal-all"
-            className={`relative group px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-black text-sm sm:text-base md:text-lg transition-all duration-300 ${
-              revealed || hasCompletedRef.current
-                ? "bg-gray-700 text-gray-500 cursor-not-allowed opacity-50"
-                : "bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] text-gray-900 hover:shadow-2xl hover:shadow-[#FACC15]/50 hover:scale-105"
-            }`}
+            className="rr-cta w-full max-w-sm rounded-xl px-8 py-4 text-base disabled:cursor-not-allowed disabled:opacity-50 sm:text-lg"
           >
-            {!revealed && !hasCompletedRef.current && (
-              <div className="absolute -inset-1 bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
-            )}
-            <span className="relative flex items-center gap-2">
-              <span className="text-lg sm:text-xl">✨</span>
-              <span>REVEAL ALL</span>
-              <span className="text-lg sm:text-xl">✨</span>
+            <span className="inline-flex items-center justify-center gap-2 font-prize tracking-wide">
+              <Sparkles className="h-5 w-5" />
+              Reveal all
             </span>
           </button>
         </div>
       )}
 
-        {/* PREMIUM Progress Table - Mobile Optimized */}
-        <div className="w-full max-w-3xl mx-auto relative px-2 sm:px-4">
-          {/* Premium glow effect around table */}
-          <div className="absolute -inset-2 bg-gradient-to-r from-[#FACC15]/20 via-[#F59E0B]/20 to-[#FACC15]/20 rounded-2xl blur-xl"></div>
-
-          <div className="rr-scratch-panel relative bg-gradient-to-br from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-xl rounded-xl sm:rounded-2xl border-2 border-[#FACC15]/40 shadow-2xl overflow-hidden">
-            {/* Header with premium styling */}
-            <div className="bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] px-3 sm:px-6 py-3 sm:py-4">
-              <h3 className="text-center text-base sm:text-xl md:text-2xl font-black text-gray-900 flex items-center justify-center gap-1 sm:gap-2">
-                {/* <span className="text-lg sm:text-2xl">📊</span> */}
-                <span className="whitespace-nowrap">Progress</span>
+        <div className="relative mx-auto mt-6 w-full max-w-3xl">
+          <div className="overflow-hidden rounded-2xl border border-[#F1D47A]/20 bg-black/40">
+            <div className="border-b border-[#F1D47A]/15 px-4 py-3 sm:px-6">
+              <h3 className="font-prize text-lg text-white sm:text-xl">
+                Progress
               </h3>
             </div>
 
             {/* Table container with scroll - Mobile Optimized */}
-            <div className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 max-h-[60vh] sm:max-h-80 overflow-y-auto custom-scrollbar">
-              <table className="w-full text-xs sm:text-sm md:text-base border-separate border-spacing-y-1 sm:border-spacing-y-2">
-                <thead className="sticky top-0 bg-gray-900/95 backdrop-blur-sm z-10">
-                  <tr className="text-[#FACC15] font-bold text-left">
-                    <th className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-xs sm:text-sm">#</th>
-                    <th className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-xs sm:text-sm">Status</th>
-                    <th className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-xs sm:text-sm text-right">Prize</th>
+            <div className="max-h-[60vh] overflow-y-auto px-3 py-3 custom-scrollbar sm:max-h-80 sm:px-5">
+              <table className="w-full border-separate border-spacing-y-1 text-xs sm:border-spacing-y-2 sm:text-sm">
+                <thead className="sticky top-0 z-10 bg-[#0A0A0D]">
+                  <tr className="text-left text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
+                    <th className="px-2 py-2 sm:px-3">#</th>
+                    <th className="px-2 py-2 sm:px-3">Status</th>
+                    <th className="px-2 py-2 text-right sm:px-3">Prize</th>
                   </tr>
                 </thead>
                 <tbody>
                   {scratchHistory.map((item, i) => (
                     <tr 
                       key={i} 
-                      className="bg-gray-800/60 hover:bg-gray-700/90 transition-all duration-200 rounded-lg group"
+                      className="rounded-lg bg-white/[0.03] transition-colors hover:bg-white/[0.06]"
                       data-testid={`row-scratch-${i}`}
                     >
-                      <td className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-[#FACC15] font-bold rounded-l-lg">
-                        <span className="flex items-center gap-1 sm:gap-2">
-                          <span className="hidden sm:flex w-6 h-6 rounded-full bg-[#FACC15]/20 items-center justify-center text-xs">
+                      <td className="rounded-l-lg px-2 py-2.5 font-prize text-[#F1D47A] sm:px-3">
+                        <span className="flex items-center gap-2">
+                          <span className="hidden h-6 w-6 items-center justify-center rounded-full border border-[#F1D47A]/25 bg-[#F1D47A]/10 text-xs sm:flex">
                             {i + 1}
                           </span>
-                          <span className="text-xs sm:text-sm whitespace-nowrap">
+                          <span className="whitespace-nowrap text-xs sm:text-sm">
                             <span className="sm:hidden">#{i + 1}</span>
-                            <span className="hidden sm:inline">Scratch {i + 1}</span>
+                            <span className="hidden sm:inline">Card {i + 1}</span>
                           </span>
                         </span>
                       </td>
                       <td className="px-1 sm:px-2 md:px-3 py-2 sm:py-3">
         <span className={`inline-flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold ${
           item.status === "Scratched" 
-            ? "bg-green-500/20 text-green-400 border border-green-500/30" 
-            : item.status === "Scratching" // ✅ Add this case
-            ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 animate-pulse"
-            : "bg-white/10 text-white/70 border border-white/15"
+            ? "border border-[#F1D47A]/30 bg-[#F1D47A]/10 text-[#F1D47A]" 
+            : item.status === "Scratching"
+            ? "border border-[#FF263D]/35 bg-[#C8102E]/15 text-[#FF263D] animate-pulse"
+            : "border border-white/10 text-white/55"
         }`}>
           <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${
-            item.status === "Scratched" ? "bg-green-400" 
-            : item.status === "Scratching" ? "bg-yellow-400 animate-pulse" // ✅ Add this
-            : "bg-gray-400"
+            item.status === "Scratched" ? "bg-[#F1D47A]" 
+            : item.status === "Scratching" ? "bg-[#FF263D] animate-pulse"
+            : "bg-white/35"
           }`}></span>
           <span className="hidden sm:inline">{item.status}</span>
           <span className="sm:hidden">
@@ -1438,7 +1420,7 @@ useEffect(() => {
         {item.status === "Not Scratched" ? (
           <span className="text-white/45 text-xs sm:text-sm">-</span>
         ) : item.status === "Scratching" ? ( // ✅ Add this case
-          <span className="text-yellow-400 text-xs sm:text-sm animate-pulse">
+          <span className="animate-pulse text-xs text-[#FF263D] sm:text-sm">
             Scratching...
           </span>
                         ) : (
@@ -1451,7 +1433,7 @@ useEffect(() => {
 
                               if (isLoss) {
                                 return (
-                                  <span className="text-red-400 text-xs sm:text-sm whitespace-nowrap">
+                                  <span className="whitespace-nowrap text-xs text-white/40 sm:text-sm">
                                     Lose
                                   </span>
                                 );
@@ -1459,24 +1441,24 @@ useEffect(() => {
 
                               if (item.prize.type === "cash") {
                                 return (
-                                  <span className="text-green-400 text-xs sm:text-sm whitespace-nowrap">
-                                    Win - £{item.prize.value}
+                                  <span className="whitespace-nowrap font-prize text-xs text-[#F1D47A] sm:text-sm">
+                                    £{item.prize.value}
                                   </span>
                                 );
                               }
 
                               if (item.prize.type === "points") {
                                 return (
-                                  <span className="text-green-400 text-xs sm:text-sm whitespace-nowrap">
-                                    Win - {item.prize.value} Points
+                                  <span className="whitespace-nowrap font-prize text-xs text-[#F1D47A] sm:text-sm">
+                                    {item.prize.value} pts
                                   </span>
                                 );
                               }
 
                               // Physical prize or other
                               return (
-                                <span className="text-green-400 text-xs sm:text-sm whitespace-nowrap">
-                                  Win - {item.prize.value}
+                                <span className="whitespace-nowrap font-prize text-xs text-[#F1D47A] sm:text-sm">
+                                  {item.prize.value}
                                 </span>
                               );
                             })()}
@@ -1490,28 +1472,27 @@ useEffect(() => {
             </div>
           </div>
         </div>
-      </div>
 
       {/* Reveal All Confirmation Dialog */}
       <AlertDialog open={showRevealAllDialog} onOpenChange={setShowRevealAllDialog}>
-        <AlertDialogContent className="bg-gray-900 w-[90vw] max-w-sm sm:max-w-md mx-auto   border-2 border-[#FACC15]">
+        <AlertDialogContent className="rr-scratch-panel mx-auto w-[90vw] max-w-sm border border-[#F1D47A]/25 bg-[#0A0A0D] text-white sm:max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#FACC15] text-xl font-bold">
-              Reveal All Scratch Cards?
+            <AlertDialogTitle className="font-prize text-2xl text-white">
+              Reveal all cards?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-300 text-base">
-              This will reveal all your remaining scratch cards at once. You will see all results in the progress table. Are you sure you want to continue?
+            <AlertDialogDescription className="text-white/50">
+              This will instantly reveal every remaining card. Results will show in the progress table.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-gray-800 text-white hover:bg-gray-700 border-gray-600">
+            <AlertDialogCancel className="border-white/15 bg-transparent text-white hover:bg-white/10">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRevealAll}
-              className="bg-[#FACC15] text-gray-900 hover:bg-[#F59E0B] font-bold"
+              className="bg-[#C8102E] text-white hover:bg-[#FF263D]"
             >
-              Yes, Reveal All
+              Reveal all
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1519,19 +1500,19 @@ useEffect(() => {
 
       {/* Reveal-All Result Dialog */}
 <AlertDialog open={showRevealAllResultDialog} onOpenChange={setShowRevealAllResultDialog}>
-  <AlertDialogContent className="bg-gray-900 w-[90vw] max-w-sm sm:max-w-md mx-auto  border-2 border-[#FACC15] text-white">
+  <AlertDialogContent className="rr-scratch-panel mx-auto w-[90vw] max-w-sm border border-[#F1D47A]/25 bg-[#0A0A0D] text-white sm:max-w-md">
     <AlertDialogHeader>
-      <AlertDialogTitle className="text-[#FACC15] text-2xl font-black text-center">
-        ✨ Reveal-All Complete!
+      <AlertDialogTitle className="text-center font-prize text-2xl text-[#F1D47A]">
+        Reveal complete
       </AlertDialogTitle>
-      <AlertDialogDescription className="text-gray-300 text-center text-lg">
-        Check the progress table below for full prize details.
+      <AlertDialogDescription className="text-center text-white/50">
+        Check the progress table below for every prize.
       </AlertDialogDescription>
     </AlertDialogHeader>
 
     <AlertDialogFooter>
       <AlertDialogAction
-        className="bg-[#FACC15] text-gray-900 hover:bg-[#F59E0B] font-bold px-6 py-3 rounded-lg"
+        className="bg-[#C8102E] text-white hover:bg-[#FF263D]"
         onClick={() => setShowRevealAllResultDialog(false)}
       >
         OK
@@ -1542,23 +1523,21 @@ useEffect(() => {
 
                   {/* OUT OF SCRATCHES DIALOG */}
 <AlertDialog open={showOutOfScratchesDialog} onOpenChange={setShowOutOfScratchesDialog}>
-  <AlertDialogContent className="bg-gray-900 w-[90vw] max-w-sm sm:max-w-md mx-auto border-2 border-[#FACC15] text-white">
+  <AlertDialogContent className="rr-scratch-panel mx-auto w-[90vw] max-w-sm border border-[#F1D47A]/25 bg-[#0A0A0D] text-white sm:max-w-md">
     <AlertDialogHeader>
-      <AlertDialogTitle className="text-[#FACC15] text-xl font-bold text-center">
-        No Scratch Cards Left
+      <AlertDialogTitle className="text-center font-prize text-2xl text-white">
+        No cards left
       </AlertDialogTitle>
-      <AlertDialogDescription className="text-gray-300 text-center text-base">
-        You have used all your scratch cards.  
-        Buy more to continue playing!
+      <AlertDialogDescription className="text-center text-white/50">
+        You have used every card in this purchase. Buy more to keep scratching.
       </AlertDialogDescription>
     </AlertDialogHeader>
 
     <AlertDialogFooter className="flex justify-center gap-2">
       <AlertDialogAction
-        className="bg-[#FACC15] text-gray-900 font-bold px-6 py-3 rounded-lg hover:bg-[#F59E0B]"
+        className="bg-[#C8102E] text-white hover:bg-[#FF263D]"
         onClick={() => {
          setTimeout(() => {
-        // Clear order-specific localStorage
         if (orderId) {
           localStorage.removeItem(`scratchCardHistory_${orderId}`);
         }
@@ -1566,10 +1545,10 @@ useEffect(() => {
       }, 2000);
         }}
       >
-        Buy More
+        Buy more
       </AlertDialogAction>
 
-      <AlertDialogCancel className="bg-gray-800  text-white hover:bg-gray-700 px-6 py-3 rounded-lg">
+      <AlertDialogCancel className="border-white/15 bg-transparent text-white hover:bg-white/10">
         Close
       </AlertDialogCancel>
     </AlertDialogFooter>
@@ -1577,5 +1556,6 @@ useEffect(() => {
 </AlertDialog>
 
     </div>
+  </div>
   );
 }

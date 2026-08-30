@@ -167,9 +167,9 @@ export default function Login() {
           <Link href="/register">
             <span className="rr-auth-ghost cursor-pointer">Create account</span>
           </Link>
-          <p className="mt-3">Paying once?</p>
+          <p className="mt-3">No account? No problem!</p>
           <Link href="/">
-            <span className="rr-auth-ghost cursor-pointer">Enter a competition as guest</span>
+            <span className="rr-auth-ghost cursor-pointer">Enter a competition as a guest</span>
           </Link>
         </div>
       </form>

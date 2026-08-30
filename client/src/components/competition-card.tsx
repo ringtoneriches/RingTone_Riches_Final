@@ -163,7 +163,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
 
             <div className="rr-comp-timer mt-3">
               {stats.endDate ? (
-                <CountdownBlocks time={cd} ended={stats.isExpired} />
+                <CountdownBlocks time={cd} ended={stats.isExpired} variant="ends" />
               ) : (
                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Draw ongoing</span>
               )}

@@ -109,7 +109,10 @@ export default function ScratchGamePage() {
   // Update remaining scratches when order data changes
   useEffect(() => {
     if (orderData?.order) {
-      const remaining = orderData.order.remainingPlays ?? orderData.order.quantity;
+      const remaining = Math.max(
+        0,
+        Number(orderData.order.remainingPlays ?? orderData.order.quantity) || 0,
+      );
       setRemainingScratches(remaining);
     }
   }, [orderData]);
@@ -136,28 +139,18 @@ export default function ScratchGamePage() {
   
   // 🎯 Callback 3: Refresh balance - used after reveal-all completes
   const handleRefreshBalance = () => {
-    // console.log("🔄 Refreshing user balance and order data");
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/scratch-order", orderId] });
+  };
+
+  const handleRemainingChange = (remaining: number) => {
+    setRemainingScratches(Math.max(0, remaining));
     queryClient.invalidateQueries({ queryKey: ["/api/scratch-order", orderId] });
   };
 
   const handleCloseResultModal = () => {
     setIsResultModalOpen(false);
-    
-    // If no scratches left, redirect to home page
-    if (remainingScratches <= 0) {
-      toast({
-        title: "All Scratch Cards Used",
-        description: "You've used all your scratch cards from this purchase.",
-      });
-      setTimeout(() => {
-        // Clear order-specific localStorage
-        if (orderId) {
-          localStorage.removeItem(`scratchCardHistory_${orderId}`);
-        }
-       navigate(`/scratch/${competitionId}/${orderId}`);
-      }, 2000);
-    }
+    queryClient.invalidateQueries({ queryKey: ["/api/scratch-order", orderId] });
   };
 
   if (isLoading) return <GameStatus message="Loading your scratch cards..." />;
@@ -175,11 +168,11 @@ export default function ScratchGamePage() {
 
   return (
     <GameShell>
-      <section className="mx-auto max-w-5xl px-4 py-6 text-center sm:py-8">
+      <section className="mx-auto max-w-4xl px-4 py-6 sm:py-8">
         <GameHero
-          kicker="Scratch & win · play"
-          title="SCRATCH INTO SUMMER"
-          subtitle={competition?.title || "Scratch to reveal. Outcome is locked in before you start."}
+          kicker="Scratch Nations · play"
+          title="SCRATCH NATIONS"
+          subtitle={competition?.title || "Scratch the card. Match 3 identical flags to win."}
           remaining={remainingScratches}
           remainingLabel={remainingScratches === 1 ? "card left" : "cards left"}
           Icon={Sparkles}
@@ -188,12 +181,14 @@ export default function ScratchGamePage() {
           onScratchReveal={handleScratchReveal}
           onCommitSession={handleCommitSession}
           onRefreshBalance={handleRefreshBalance}
+          onRemainingChange={handleRemainingChange}
           commitError={commitError}
           scratchTicketCount={remainingScratches}
           orderId={orderId}
           competitionId={competitionId}
           mode="loose"
           congratsAudioRef={winnerCongratsRef}
+          resultModalOpen={isResultModalOpen}
         />
       </section>
 

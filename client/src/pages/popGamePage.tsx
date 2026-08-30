@@ -19,7 +19,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, ArrowLeft, Sparkles, Zap, Gift } from "lucide-react";
+import { Loader2, ArrowLeft, Sparkles } from "lucide-react";
+import { getCompetitionTypeConfig } from "@/lib/competition-display";
 
 export default function PopGamePage() {
   const { competitionId, orderId } = useParams();
@@ -144,10 +145,10 @@ export default function PopGamePage() {
         <GameHero
           kicker="Balloon pop · play"
           title="RINGTONE POP"
-          subtitle="Pop all 3 balloons and match to win."
+          subtitle="Pop all 3. Match 3. Instant prize."
           remaining={remainingPlays}
           remainingLabel={remainingPlays === 1 ? "play left" : "plays left"}
-          Icon={Gift}
+          Icon={getCompetitionTypeConfig("pop").Icon}
         />
 
         <div className="space-y-6">

@@ -26,7 +26,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 const COMPETITION_FILTERS = [
   { id: "all", label: "All Games", icon: Trophy },
   { id: "spin", label: "Spin to Win", icon: RotateCw },
-  { id: "scratch", label: "Scratch Cards", icon: Sparkles },
+  { id: "scratch", label: "Scratch Nations", icon: Sparkles },
   { id: "instant", label: "Competitions", icon: Gift },
   { id: "plinko", label: "Ringtone Plinko", icon: Circle },
   { id: "voltz", label: "Ringtone Voltz", icon: Zap },

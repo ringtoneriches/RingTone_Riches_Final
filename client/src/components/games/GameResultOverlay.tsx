@@ -30,6 +30,7 @@ type Props = {
   prizeTestId?: string;
   kickerTestId?: string;
   prizeSubTestId?: string;
+  theme?: "default" | "voltz";
 };
 
 export default function GameResultOverlay({
@@ -58,12 +59,14 @@ export default function GameResultOverlay({
   prizeTestId = "text-prize-value",
   kickerTestId,
   prizeSubTestId,
+  theme = "default",
 }: Props) {
   if (!open) return null;
 
   const isWin = kind === "win" || kind === "physical";
   const featured = isWin || kind === "extra";
   const brandCta = featured || kind === "empty";
+  const voltz = theme === "voltz";
   const defaultIcon = isWin ? (
     kind === "physical" ? (
       <Gift className="h-9 w-9 text-[#F1D47A]" />
@@ -92,22 +95,30 @@ export default function GameResultOverlay({
           <div
             className="pointer-events-none absolute -inset-8 rounded-[2rem] blur-3xl"
             style={{
-              background:
-                "radial-gradient(circle at 50% 40%, rgba(200,16,46,0.28), rgba(241,212,122,0.08) 46%, transparent 72%)",
+              background: voltz
+                ? "radial-gradient(circle at 50% 40%, rgba(241,212,122,0.22), rgba(241,212,122,0.06) 46%, transparent 72%)"
+                : "radial-gradient(circle at 50% 40%, rgba(200,16,46,0.28), rgba(241,212,122,0.08) 46%, transparent 72%)",
             }}
           />
         ) : (
           <div
             className="pointer-events-none absolute -inset-6 rounded-[2rem] blur-3xl"
             style={{
-              background:
-                "radial-gradient(circle at 50% 30%, rgba(200,16,46,0.16), rgba(241,212,122,0.05) 48%, transparent 74%)",
+              background: voltz
+                ? "radial-gradient(circle at 50% 30%, rgba(241,212,122,0.12), transparent 70%)"
+                : "radial-gradient(circle at 50% 30%, rgba(200,16,46,0.16), rgba(241,212,122,0.05) 48%, transparent 74%)",
             }}
           />
         )}
 
-        <ChaserBorder variant={featured ? "featured" : "card"}>
-          <div className="relative bg-gradient-to-b from-[#111115] via-[#0A0A0D] to-[#050505] px-6 pb-6 pt-8 text-center sm:px-8 sm:pb-7 sm:pt-9">
+        <ChaserBorder variant={voltz ? "card" : featured ? "featured" : "card"}>
+          <div
+            className={`relative px-6 pb-6 pt-8 text-center sm:px-8 sm:pb-7 sm:pt-9 ${
+              voltz
+                ? "border border-[#F1D47A]/30 bg-[#050505]"
+                : "bg-gradient-to-b from-[#111115] via-[#0A0A0D] to-[#050505]"
+            }`}
+          >
             <button
               type="button"
               onClick={onClose}
@@ -122,19 +133,21 @@ export default function GameResultOverlay({
 
             <div
               className={`mb-4 inline-flex items-center gap-2 rounded-full px-3 py-1 ${
-                featured
-                  ? "border border-[#C8102E]/40 bg-[#C8102E]/10"
-                  : "border border-white/10 bg-white/[0.04]"
+                voltz
+                  ? "border border-[#F1D47A]/35 bg-[#F1D47A]/10"
+                  : featured
+                    ? "border border-[#C8102E]/40 bg-[#C8102E]/10"
+                    : "border border-white/10 bg-white/[0.04]"
               }`}
             >
-              {featured ? (
+              {featured || voltz ? (
                 <Trophy className="h-3.5 w-3.5 text-[#F1D47A]" />
               ) : (
                 <span className="h-1.5 w-1.5 rounded-full bg-[#FF263D]" />
               )}
               <span
                 className={`text-[10px] font-black uppercase tracking-[0.22em] ${
-                  featured ? "text-[#FF263D]" : "text-white/45"
+                  voltz ? "text-[#F1D47A]" : featured ? "text-[#FF263D]" : "text-white/45"
                 }`}
                 data-testid={kickerTestId}
               >
@@ -144,7 +157,7 @@ export default function GameResultOverlay({
 
             <div
               className={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${
-                featured
+                featured || voltz
                   ? "border border-[#F1D47A]/35 bg-[#F1D47A]/10 shadow-[0_0_28px_rgba(241,212,122,0.22)]"
                   : "border border-white/10 bg-white/[0.04]"
               }`}
@@ -154,13 +167,15 @@ export default function GameResultOverlay({
 
             <h2
               id="game-result-title"
-              className="font-prize text-4xl leading-none text-white sm:text-5xl"
+              className={`font-prize text-4xl leading-none sm:text-5xl ${voltz ? "text-[#F1D47A]" : "text-white"}`}
               data-testid={titleTestId}
             >
               {title}
             </h2>
 
-            {subtitle ? <p className="mt-3 text-sm text-white/50">{subtitle}</p> : null}
+            {subtitle ? (
+              <p className={`mt-3 text-sm ${voltz ? "text-[#F1D47A]/70" : "text-white/50"}`}>{subtitle}</p>
+            ) : null}
 
             {prizeText ? (
               <div className="mt-5 rounded-2xl border border-[#F1D47A]/25 bg-[#F1D47A]/[0.06] px-4 py-5">
@@ -172,7 +187,9 @@ export default function GameResultOverlay({
                 </p>
                 {prizeSub ? (
                   <p
-                    className="mt-2 text-[11px] font-black uppercase tracking-[0.2em] text-[#FF263D]"
+                    className={`mt-2 text-[11px] font-black uppercase tracking-[0.2em] ${
+                      voltz ? "text-[#F1D47A]/75" : "text-[#FF263D]"
+                    }`}
                     data-testid={prizeSubTestId}
                   >
                     {prizeSub}
@@ -180,8 +197,10 @@ export default function GameResultOverlay({
                 ) : null}
               </div>
             ) : body ? (
-              <div className="mt-5 rounded-2xl border border-white/10 bg-black/35 px-4 py-4">
-                <p className="text-sm leading-relaxed text-white/55">{body}</p>
+              <div className={`mt-5 rounded-2xl border px-4 py-4 ${
+                voltz ? "border-[#F1D47A]/20 bg-black/50" : "border-white/10 bg-black/35"
+              }`}>
+                <p className={`text-sm leading-relaxed ${voltz ? "text-[#F1D47A]/65" : "text-white/55"}`}>{body}</p>
               </div>
             ) : null}
 

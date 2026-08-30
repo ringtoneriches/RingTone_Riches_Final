@@ -28,9 +28,9 @@ const ScratchBilling = () => {
 
   return (
     <BillingChrome
-      kicker="Scratch & win · checkout"
-      title="SCRATCH INTO SUMMER"
-      subtitle="Pay here, then scratch. Instant prizes underneath."
+      kicker="Scratch Nations · checkout"
+      title="SCRATCH NATIONS"
+      subtitle="Pay here, then scratch. Match 3 identical flags to win."
       facts={["Instant results", "Reveal to win"]}
       Icon={Sparkles}
     >

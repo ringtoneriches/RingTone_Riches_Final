@@ -30,7 +30,7 @@ interface PlayResult {
 }
 
 function fireWinConfetti() {
-  const colors = ["#eab308", "#f59e0b", "#fbbf24", "#ffffff"];
+  const colors = ["#F1D47A", "#D4AF37", "#C8102E", "#fff8ee"];
   confetti({ particleCount: 40, spread: 90, origin: { y: 0.4, x: 0.5 }, colors, startVelocity: 35, gravity: 0.9, scalar: 1.1, ticks: 200 });
   setTimeout(() => {
     confetti({ particleCount: 20, angle: 60, spread: 60, origin: { x: 0, y: 0.5 }, colors, startVelocity: 40 });
@@ -42,7 +42,7 @@ function fireWinConfetti() {
 }
 
 function fireBackupConfetti() {
-  const colors = ["#06b6d4", "#22d3ee", "#ffffff"];
+  const colors = ["#F1D47A", "#D4AF37", "#fff8ee"];
   confetti({ particleCount: 40, spread: 100, origin: { y: 0.45, x: 0.5 }, colors, startVelocity: 30, gravity: 0.8, ticks: 200 });
   setTimeout(() => {
     confetti({ particleCount: 25, angle: 60, spread: 50, origin: { x: 0, y: 0.6 }, colors });
@@ -51,7 +51,7 @@ function fireBackupConfetti() {
 }
 
 function firePhysicalPrizeConfetti() {
-  const colors = ["#a855f7", "#d8b4fe", "#c084fc", "#ffffff"];
+  const colors = ["#F1D47A", "#D4AF37", "#C8102E", "#fff8ee"];
   confetti({ particleCount: 40, spread: 120, origin: { y: 0.4, x: 0.5 }, colors, startVelocity: 40, gravity: 0.7, scalar: 1.2, ticks: 300 });
   setTimeout(() => {
     confetti({ particleCount: 25, angle: 55, spread: 70, origin: { x: 0, y: 0.5 }, colors, startVelocity: 45 });
@@ -348,54 +348,54 @@ const RevealAllSummary = () => {
     <div
       className="vg-root absolute inset-0 flex items-center justify-center rounded-2xl z-30"
       style={{
-        background: 'radial-gradient(ellipse at 50% 40%, rgba(234,179,8,0.1) 0%, rgba(0,0,0,0.96) 70%)',
+        background: 'radial-gradient(ellipse at 50% 40%, rgba(241,212,122,0.08) 0%, rgba(5,5,5,0.96) 70%)',
       }}
     >
       <div
         className="vg-glass relative w-full max-w-[380px] mx-4 max-h-[85%] overflow-y-auto"
         style={{
           borderRadius: '24px',
-          border: '1px solid rgba(234,179,8,0.35)',
-          background: 'linear-gradient(170deg, rgba(25,18,0,0.98) 0%, rgba(8,5,0,0.99) 100%)',
-          boxShadow: '0 0 60px rgba(234,179,8,0.15), 0 0 0 1px rgba(255,255,255,0.03)',
+          border: '1px solid rgba(241,212,122,0.35)',
+          background: '#050505',
+          boxShadow: '0 0 60px rgba(241,212,122,0.12), 0 0 0 1px rgba(241,212,122,0.08)',
         }}
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 px-5 py-4 border-b border-yellow-500/20"
-          style={{ background: 'linear-gradient(180deg, rgba(25,18,0,0.98) 0%, rgba(25,18,0,0.95) 100%)' }}>
+        <div className="sticky top-0 z-10 px-5 py-4 border-b border-[#F1D47A]/20"
+          style={{ background: '#050505' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-yellow-500" />
-              <span className="vg-title text-xl text-white">BATCH COMPLETE</span>
+              <Zap className="w-5 h-5 text-[#F1D47A]" />
+              <span className="vg-title text-xl text-[#F1D47A]">BATCH COMPLETE</span>
             </div>
             <button
               onClick={() => {
                 setShowRevealAllSummary(false);
                 setRevealAllResults(null);
               }}
-              className="w-8 h-8 rounded-full flex items-center justify-center border border-yellow-500/30"
+              className="w-8 h-8 rounded-full flex items-center justify-center border border-[#F1D47A]/30"
             >
-              <X className="w-4 h-4 text-yellow-500/70" />
+              <X className="w-4 h-4 text-[#F1D47A]/70" />
             </button>
           </div>
           
           {/* Summary stats */}
           <div className="grid grid-cols-4 gap-2 mt-3">
-            <div className="text-center p-2 rounded-lg bg-yellow-500/5 border border-yellow-500/10">
-              <div className="text-yellow-400 text-lg font-bold">{revealAllResults.length}</div>
-              <div className="text-yellow-500/50 text-[9px] uppercase tracking-wider">Plays</div>
+            <div className="text-center p-2 rounded-lg bg-[#F1D47A]/5 border border-[#F1D47A]/15">
+              <div className="text-[#F1D47A] text-lg font-bold">{revealAllResults.length}</div>
+              <div className="text-[#F1D47A]/50 text-[9px] uppercase tracking-wider">Plays</div>
             </div>
-            <div className="text-center p-2 rounded-lg bg-green-500/5 border border-green-500/10">
-              <div className="text-green-400 text-lg font-bold">{wins.length + physicalWins.length}</div>
-              <div className="text-green-500/50 text-[9px] uppercase tracking-wider">Wins</div>
+            <div className="text-center p-2 rounded-lg bg-[#F1D47A]/5 border border-[#F1D47A]/15">
+              <div className="text-[#F1D47A] text-lg font-bold">{wins.length + physicalWins.length}</div>
+              <div className="text-[#F1D47A]/50 text-[9px] uppercase tracking-wider">Wins</div>
             </div>
-            <div className="text-center p-2 rounded-lg bg-cyan-500/5 border border-cyan-500/10">
-              <div className="text-cyan-400 text-lg font-bold">{freeReplays.length}</div>
-              <div className="text-cyan-500/50 text-[9px] uppercase tracking-wider">Replays</div>
+            <div className="text-center p-2 rounded-lg bg-[#F1D47A]/5 border border-[#F1D47A]/15">
+              <div className="text-[#F1D47A] text-lg font-bold">{freeReplays.length}</div>
+              <div className="text-[#F1D47A]/50 text-[9px] uppercase tracking-wider">Replays</div>
             </div>
-            <div className="text-center p-2 rounded-lg bg-red-500/5 border border-red-500/10">
-              <div className="text-red-400 text-lg font-bold">{noWins.length}</div>
-              <div className="text-red-500/50 text-[9px] uppercase tracking-wider">No Win</div>
+            <div className="text-center p-2 rounded-lg bg-white/5 border border-white/10">
+              <div className="text-[#fff8ee] text-lg font-bold">{noWins.length}</div>
+              <div className="text-white/40 text-[9px] uppercase tracking-wider">No Win</div>
             </div>
           </div>
         </div>
@@ -407,20 +407,12 @@ const RevealAllSummary = () => {
               key={idx}
               className="flex items-center gap-3 p-3 rounded-xl"
               style={{
-                background: result.isWin
-                  ? 'linear-gradient(90deg, rgba(234,179,8,0.08) 0%, transparent 100%)'
-                  : result.isPhysical
-                  ? 'linear-gradient(90deg, rgba(168,85,247,0.08) 0%, transparent 100%)'
-                  : result.outcome === "freeReplay"
-                  ? 'linear-gradient(90deg, rgba(6,182,212,0.08) 0%, transparent 100%)'
+                background: result.isWin || result.isPhysical || result.outcome === "freeReplay"
+                  ? 'linear-gradient(90deg, rgba(241,212,122,0.08) 0%, transparent 100%)'
                   : 'rgba(255,255,255,0.02)',
-                border: result.isWin
-                  ? '1px solid rgba(234,179,8,0.15)'
-                  : result.isPhysical
-                  ? '1px solid rgba(168,85,247,0.15)'
-                  : result.outcome === "freeReplay"
-                  ? '1px solid rgba(6,182,212,0.15)'
-                  : '1px solid rgba(255,255,255,0.05)',
+                border: result.isWin || result.isPhysical || result.outcome === "freeReplay"
+                  ? '1px solid rgba(241,212,122,0.18)'
+                  : '1px solid rgba(255,255,255,0.06)',
               }}
             >
               {/* Switch pills */}
@@ -444,26 +436,26 @@ const RevealAllSummary = () => {
               <div className="flex-1 flex items-center justify-end gap-2">
                 {result.isWin && (
                   <>
-                    <span className="text-yellow-400 text-sm font-bold">
+                    <span className="text-[#F1D47A] text-sm font-bold">
                       {result.rewardType === "cash" ? `£${result.rewardValue}` : `${result.rewardValue} pts`}
                     </span>
-                    <Trophy className="w-4 h-4 text-yellow-500" />
+                    <Trophy className="w-4 h-4 text-[#F1D47A]" />
                   </>
                 )}
                 {result.isPhysical && (
                   <>
-                    <span className="text-purple-400 text-xs truncate max-w-[80px]">{result.prizeName}</span>
-                    <Package className="w-4 h-4 text-purple-400" />
+                    <span className="text-[#F1D47A] text-xs truncate max-w-[80px]">{result.prizeName}</span>
+                    <Package className="w-4 h-4 text-[#F1D47A]" />
                   </>
                 )}
                 {result.outcome === "freeReplay" && (
                   <>
-                    <span className="text-cyan-400 text-sm">+1 Play</span>
-                    <RotateCcw className="w-4 h-4 text-cyan-400" />
+                    <span className="text-[#F1D47A] text-sm">+1 Play</span>
+                    <RotateCcw className="w-4 h-4 text-[#F1D47A]" />
                   </>
                 )}
                 {result.outcome === "noWin" && (
-                  <span className="text-red-400/50 text-xs">No Match</span>
+                  <span className="text-[#F1D47A]/40 text-xs">No Match</span>
                 )}
               </div>
             </div>
@@ -471,20 +463,20 @@ const RevealAllSummary = () => {
         </div>
         
         {/* Totals and CTA */}
-        <div className="sticky bottom-0 px-5 py-4 border-t border-yellow-500/20"
-          style={{ background: 'linear-gradient(0deg, rgba(25,18,0,0.98) 0%, rgba(25,18,0,0.95) 100%)' }}>
+        <div className="sticky bottom-0 px-5 py-4 border-t border-[#F1D47A]/20"
+          style={{ background: '#050505' }}>
           {(totalCash > 0 || totalPoints > 0) && (
-            <div className="flex items-center justify-center gap-4 mb-4 p-3 rounded-xl bg-yellow-500/5 border border-yellow-500/15">
+            <div className="flex items-center justify-center gap-4 mb-4 p-3 rounded-xl bg-[#F1D47A]/5 border border-[#F1D47A]/15">
               {totalCash > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-yellow-500/60 text-xs">CASH:</span>
-                  <span className="text-yellow-400 font-bold text-lg">£{totalCash.toFixed(2)}</span>
+                  <span className="text-[#F1D47A]/60 text-xs">CASH:</span>
+                  <span className="text-[#F1D47A] font-bold text-lg">£{totalCash.toFixed(2)}</span>
                 </div>
               )}
               {totalPoints > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-yellow-500/60 text-xs">POINTS:</span>
-                  <span className="text-yellow-400 font-bold text-lg">{totalPoints}</span>
+                  <span className="text-[#F1D47A]/60 text-xs">POINTS:</span>
+                  <span className="text-[#F1D47A] font-bold text-lg">{totalPoints}</span>
                 </div>
               )}
             </div>
@@ -495,12 +487,7 @@ const RevealAllSummary = () => {
               setShowRevealAllSummary(false);
               setRevealAllResults(null);
             }}
-            className="w-full py-3 text-sm font-bold tracking-wider uppercase rounded-xl transition-all"
-            style={{
-              background: 'linear-gradient(90deg, rgba(234,179,8,0.15) 0%, rgba(180,100,0,0.1) 100%)',
-              border: '1px solid rgba(234,179,8,0.3)',
-              color: '#eab308',
-            }}
+            className="rr-cta w-full py-3 text-sm font-black uppercase tracking-[0.16em] rounded-xl"
           >
             CONTINUE PLAYING
           </button>
@@ -638,7 +625,7 @@ const RevealAllSummary = () => {
   const isNoWin = lastResult?.outcome === "noWin";
 
   return (
-    <div className="rr-voltz-panel relative w-full" data-testid="voltz-game-container">
+    <div className="rr-voltz-panel relative mx-auto w-full max-w-[540px]" data-testid="voltz-game-container">
       {/* ── Scoped styles ─────────────────────────────────────────────────── */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&display=swap');
@@ -750,47 +737,26 @@ const RevealAllSummary = () => {
         .vg-dot { transition: background 0.3s, transform 0.3s; }
       `}</style>
 
-      {/* ── Game canvas ─────────────────────────────────────────────────────── */}
-      <div
-        ref={gameContainerRef}
-        className="vg-root vg-scanlines w-full aspect-[2/3] max-w-[512px] mx-auto overflow-hidden relative"
-        style={{
-          touchAction: 'pan-y',
-          borderRadius: '16px',
-          border: '1px solid rgba(234,179,8,0.18)',
-          boxShadow: '0 0 0 1px rgba(255,255,255,0.04), 0 8px 64px rgba(0,0,0,0.7), 0 0 80px rgba(234,179,8,0.06)',
-        }}
-        data-testid="voltz-game-canvas"
-      />
+      <div className="mb-3 flex items-center justify-between gap-3 px-1">
+        <div className="inline-flex items-center gap-2 rounded-full border border-[#F1D47A]/30 bg-[#F1D47A]/10 px-3 py-1.5">
+          <span className="font-prize text-2xl leading-none text-[#F1D47A]">{playsRemaining}</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-white/50">
+            {playsRemaining === 1 ? "play left" : "plays left"}
+          </span>
+        </div>
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/40">
+          Match 3 to win
+        </span>
+      </div>
 
-{/* Reveal All Button */}
-{playsRemaining > 0 && !isProcessing && !showResult && !showRevealAllSummary && (
-  <button
-    onClick={() => handleRevealAll(playsRemaining)}
-    disabled={isRevealingAll}
-    className="vg-root vg-reveal-all mt-4 w-full max-w-[512px] mx-auto py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all hover:brightness-110 active:scale-[0.98]"
-    style={{
-      background: 'linear-gradient(90deg, rgba(234,179,8,0.12) 0%, rgba(180,100,0,0.08) 100%)',
-      border: '1px solid rgba(234,179,8,0.25)',
-      color: '#fbbf24',
-      opacity: isRevealingAll ? 0.5 : 1,
-      cursor: isRevealingAll ? 'wait' : 'pointer',
-    }}
-  >
-    {isRevealingAll ? (
-      <>
-        <div className="w-4 h-4 border-2 border-yellow-500/30 border-t-yellow-500 rounded-full animate-spin" />
-        <span className="text-sm font-bold tracking-widest">REVEALING...</span>
-      </>
-    ) : (
-      <>
-        <Zap className="w-4 h-4" />
-        <span className="text-sm font-bold tracking-widest">REVEAL ALL ({playsRemaining} PLAYS)</span>
-        <Sparkles className="w-4 h-4" />
-      </>
-    )}
-  </button>
-)}
+      <div className="relative overflow-hidden rounded-2xl border border-[#C8102E]/35 bg-[#050505] shadow-[0_0_0_1px_rgba(241,212,122,0.08),0_0_70px_rgba(200,16,46,0.14),0_24px_70px_rgba(0,0,0,0.7)]">
+        <div className="pointer-events-none absolute inset-x-8 top-0 z-10 h-px bg-gradient-to-r from-transparent via-[#F1D47A]/70 to-transparent" />
+        <div
+          ref={gameContainerRef}
+          className="vg-root vg-scanlines relative w-full aspect-[2/3] overflow-hidden"
+          style={{ touchAction: "pan-y" }}
+          data-testid="voltz-game-canvas"
+        />
 
 {/* Revealing Overlay */}
 {isRevealingAll && (
@@ -942,53 +908,36 @@ const RevealAllSummary = () => {
       {/* ── Loading overlay ──────────────────────────────────────────────────── */}
       {!isGameReady && (
         <div
-          className="vg-root absolute inset-0 flex items-center justify-center rounded-2xl z-50"
-          style={{ background: 'radial-gradient(ellipse at 50% 40%, #0f0a00 0%, #000000 100%)' }}
+          className="absolute inset-0 z-50 flex items-center justify-center rounded-2xl bg-[#050505]"
           data-testid="loading-overlay"
         >
-          {/* hex corners */}
-          <span className="vg-hex-corner vg-hex-corner-tl text-yellow-500/40" />
-          <span className="vg-hex-corner vg-hex-corner-tr text-yellow-500/40" />
-          <span className="vg-hex-corner vg-hex-corner-bl text-yellow-500/40" />
-          <span className="vg-hex-corner vg-hex-corner-br text-yellow-500/40" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_38%,rgba(200,16,46,0.16),transparent_58%)]" />
+          <div className="relative text-center px-8">
+            <p className="font-prize text-[11px] tracking-[0.42em] text-white/55">RINGTONE</p>
+            <p className="mt-1 font-prize text-5xl leading-none text-[#F1D47A]">VOLTZ</p>
 
-          <div className="text-center px-8">
-            {/* ring stack */}
-            <div className="relative w-24 h-24 mx-auto mb-8">
-              <div className="absolute inset-0 rounded-full border border-yellow-500/10 vg-anim-ping-gold" />
-              <div className="absolute inset-0 rounded-full border border-yellow-500/20" style={{ animation: 'vg-ping-gold 1.4s 0.3s ease-out infinite' }} />
-              <div
-                className="relative w-24 h-24 rounded-full flex items-center justify-center"
-                style={{
-                  background: 'radial-gradient(circle at 40% 35%, rgba(234,179,8,0.25) 0%, rgba(234,179,8,0.05) 60%, transparent 100%)',
-                  border: '1px solid rgba(234,179,8,0.3)',
-                  boxShadow: '0 0 30px rgba(234,179,8,0.15) inset, 0 0 20px rgba(234,179,8,0.1)',
-                }}
-              >
-                <Zap className="w-11 h-11 text-yellow-400 vg-anim-surge" strokeWidth={1.5} />
-              </div>
+            <div className="relative mx-auto mt-8 h-16 w-16">
+              <div className="absolute inset-0 rounded-full border border-[#F1D47A]/25" />
+              <div className="absolute -inset-2 rounded-full border border-[#C8102E]/35" />
+              <div className="absolute inset-2 rounded-full border border-[#F1D47A]/70 border-t-transparent animate-spin" />
+              <Zap className="absolute inset-0 m-auto h-6 w-6 text-[#F1D47A]" strokeWidth={1.6} />
             </div>
 
             <p
-              className="vg-title text-3xl text-white mb-1 vg-anim-flicker"
+              className="mt-6 font-prize text-2xl tracking-[0.28em] text-[#F1D47A]"
               data-testid="text-loading"
-              style={{ textShadow: '0 0 20px rgba(234,179,8,0.5)' }}
             >
-              CHARGING UP
+              CHARGING
             </p>
-            <p className="text-yellow-500/50 text-xs tracking-[0.3em] mb-6 font-semibold">INITIALISING VOLTZ SYSTEM</p>
+            <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em] text-white/35">
+              Preparing your switches
+            </p>
 
-            {/* progress bar */}
-            <div className="w-48 mx-auto">
-              <div className="h-[2px] bg-white/5 rounded-full overflow-hidden mb-2">
-                <div
-                  className="h-full rounded-full vg-anim-bar"
-                  style={{ background: 'linear-gradient(90deg, #92400e, #eab308, #fbbf24)' }}
-                />
-              </div>
-              <div className="flex justify-between text-yellow-600/40 text-[10px] font-semibold tracking-widest">
-                <span>PWR</span><span>SYS</span><span>NET</span>
-              </div>
+            <div className="mx-auto mt-6 h-[3px] w-44 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full w-2/3 rounded-full vg-anim-bar"
+                style={{ background: "linear-gradient(90deg, #C8102E, #F1D47A)" }}
+              />
             </div>
           </div>
         </div>
@@ -999,6 +948,7 @@ const RevealAllSummary = () => {
       <GameResultOverlay
         open={!!(showResult && lastResult)}
         contained
+        theme="voltz"
         overlayTestId="result-overlay"
         kind={isPhysicalWin ? "physical" : isWin ? "win" : isFreeReplay ? "extra" : "lose"}
         onClose={closeResult}
@@ -1083,7 +1033,7 @@ const RevealAllSummary = () => {
           ) : isFreeReplay ? (
             <RotateCcw className="h-8 w-8 text-[#F1D47A]" data-testid="icon-free-replay" />
           ) : (
-            <PowerOff className="h-7 w-7 text-white/40" data-testid="icon-no-win" />
+            <PowerOff className="h-7 w-7 text-[#F1D47A]/50" data-testid="icon-no-win" />
           )
         }
         extra={
@@ -1113,11 +1063,43 @@ const RevealAllSummary = () => {
         primaryTestId="button-continue"
       />
       )}
+      </div>
+
+      {isGameReady && playsRemaining > 0 && !showResult && (
+        <p className="mt-3 text-center text-sm text-white/50">
+          Tap a switch
+          <span className="mx-1.5 text-[#F1D47A]">·</span>
+          <span className="font-prize text-[#F1D47A]">match 3 to win</span>
+        </p>
+      )}
+
+      {playsRemaining > 0 && !isProcessing && !showResult && !showRevealAllSummary && (
+        <button
+          type="button"
+          onClick={() => handleRevealAll(playsRemaining)}
+          disabled={isRevealingAll}
+          className="rr-cta vg-reveal-all mt-4 w-full py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 text-sm font-black uppercase tracking-[0.16em] disabled:opacity-50"
+        >
+          {isRevealingAll ? (
+            <>
+              <div className="w-4 h-4 border-2 border-[#F1D47A]/30 border-t-[#F1D47A] rounded-full animate-spin" />
+              <span>Revealing...</span>
+            </>
+          ) : (
+            <>
+              <Zap className="h-4 w-4" />
+              Reveal all
+              <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs">{playsRemaining} plays</span>
+            </>
+          )}
+        </button>
+      )}
 
       {/* Out of plays */}
       <GameResultOverlay
         open={showNoPlaysDialog}
         kind="empty"
+        theme="voltz"
         overlayTestId="no-plays-overlay"
         onClose={() => setNoPlaysDismissed(true)}
         kicker="Power depleted"

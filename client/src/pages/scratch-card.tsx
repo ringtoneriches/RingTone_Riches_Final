@@ -72,9 +72,9 @@ export default function ScratchCardPage() {
       <section className="relative px-4 py-10 sm:py-14">
         <div className="mx-auto max-w-7xl">
           <ListingHero
-            kicker="Scratch cards"
-            title="SCRATCH CARDS"
-            subtitle="Scratch to reveal. Instant cash or points on the card."
+            kicker="Scratch Nations"
+            title="SCRATCH NATIONS"
+            subtitle="Scratch the card. Match 3 identical flags to win cash or points."
           />
           {competitions.length > 0 ? (
             <FeaturedCompetitions competitions={competitions} />
@@ -105,8 +105,8 @@ export default function ScratchCardPage() {
             </div>
           ) : (
             <ListingEmpty
-              title="NO SCRATCH CARDS"
-              message="No scratch card competitions found."
+              title="NO SCRATCH NATIONS"
+              message="No Scratch Nations competitions found."
             />
           )}
         </div>

@@ -804,6 +804,45 @@ export const isAdmin = (req: any, res: any, next: any) => {
   next();
 };
 
+function scratchPrizeWeight(prize: { weight?: unknown }) {
+  const weight = Number(prize.weight);
+  return Number.isFinite(weight) ? weight : 0;
+}
+
+function isScratchPrizeEligible(
+  prize: { weight?: unknown; maxWins?: unknown; quantityWon?: unknown },
+  winsOverride?: number,
+) {
+  const weight = scratchPrizeWeight(prize);
+  if (weight <= 0) return false;
+  const maxWins =
+    prize.maxWins === null || prize.maxWins === undefined || prize.maxWins === ""
+      ? null
+      : Number(prize.maxWins);
+  const won = winsOverride !== undefined ? Number(winsOverride) : Number(prize.quantityWon) || 0;
+  if (maxWins !== null && Number.isFinite(maxWins) && won >= maxWins) return false;
+  return true;
+}
+
+function pickWeightedScratchPrize<T extends { weight?: unknown }>(eligiblePrizes: T[]): T | null {
+  if (eligiblePrizes.length === 0) return null;
+  const totalWeight = eligiblePrizes.reduce(
+    (sum, prize) => sum + scratchPrizeWeight(prize),
+    0,
+  );
+  if (totalWeight <= 0) return null;
+  let random = Math.random() * totalWeight;
+  let selected = eligiblePrizes[0];
+  for (const prize of eligiblePrizes) {
+    random -= scratchPrizeWeight(prize);
+    if (random <= 0) {
+      selected = prize;
+      break;
+    }
+  }
+  return selected;
+}
+
 async function guardControlledPurchase(res: any, competitionId: string, quantity: number) {
   try {
     await assertCanPurchaseTickets(competitionId, quantity);
@@ -7007,37 +7046,17 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
             throw new Error("No prizes configured");
           }
 
-          // Filter prizes that haven't reached maxWins
-          const eligiblePrizes = allPrizes.filter((prize) => {
-            if (!prize.weight || prize.weight <= 0) return false;
-            if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins)
-              return false;
-            return true;
-          });
+          const eligiblePrizes = allPrizes.filter((prize) =>
+            isScratchPrizeEligible(prize)
+          );
 
           if (eligiblePrizes.length === 0) {
             throw new Error("No prizes available");
           }
 
-          // Weighted random selection
-          const totalWeight = eligiblePrizes.reduce(
-            (sum, prize) => sum + prize.weight,
-            0
-          );
-          if (totalWeight <= 0) {
-            throw new Error("Invalid prize weights");
-          }
-
-          let random = Math.random() * totalWeight;
-          selectedPrize = eligiblePrizes[0];
-
-          for (const prize of eligiblePrizes) {
-            random -= prize.weight;
-            if (random <= 0) {
-              selectedPrize = prize;
-              break;
-            }
-          }
+          const pickedPrize = pickWeightedScratchPrize(eligiblePrizes);
+          if (!pickedPrize) throw new Error("Invalid prize weights");
+          selectedPrize = pickedPrize;
 
           // 🔒 Record scratch card usage INSIDE transaction (atomic operation)
           await tx.insert(scratchCardUsage).values({
@@ -7296,35 +7315,16 @@ app.post(
           // Pre-select all prizes using weighted random selection
           selectedPrizes = [];
           for (let i = 0; i < cardsToProcess; i++) {
-            const eligiblePrizes = allPrizes.filter((prize) => {
-              if (!prize.weight || prize.weight <= 0) return false;
-              const currentWins = prizeWinCounts.get(prize.id) || 0;
-              if (prize.maxWins !== null && currentWins >= prize.maxWins)
-                return false;
-              return true;
-            });
+            const eligiblePrizes = allPrizes.filter((prize) =>
+              isScratchPrizeEligible(prize, prizeWinCounts.get(prize.id) || 0)
+            );
 
             if (eligiblePrizes.length === 0) {
               selectedPrizes.push(null);
               continue;
             }
 
-            // Weighted random selection
-            const totalWeight = eligiblePrizes.reduce(
-              (sum, prize) => sum + prize.weight,
-              0
-            );
-            let random = Math.random() * totalWeight;
-            let selectedPrize = eligiblePrizes[0];
-
-            for (const prize of eligiblePrizes) {
-              random -= prize.weight;
-              if (random <= 0) {
-                selectedPrize = prize;
-                break;
-              }
-            }
-
+            const selectedPrize = pickWeightedScratchPrize(eligiblePrizes);
             selectedPrizes.push(selectedPrize);
 
             // Update win count for next iteration
@@ -7609,34 +7609,16 @@ app.post(
             if (!allPrizes || allPrizes.length === 0)
               throw new Error("No prizes configured");
 
-            // Filter prizes that haven't reached maxWins
-            const eligiblePrizes = allPrizes.filter((prize) => {
-              if (!prize.weight || prize.weight <= 0) return false;
-              if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins)
-                return false;
-              return true;
-            });
+            const eligiblePrizes = allPrizes.filter((prize) =>
+              isScratchPrizeEligible(prize)
+            );
 
             if (eligiblePrizes.length === 0)
               throw new Error("No prizes available");
 
-            // Weighted random selection
-            const totalWeight = eligiblePrizes.reduce(
-              (sum, prize) => sum + prize.weight,
-              0
-            );
-            if (totalWeight <= 0) throw new Error("Invalid prize weights");
-
-            let random = Math.random() * totalWeight;
-            selectedPrize = eligiblePrizes[0];
-
-            for (const prize of eligiblePrizes) {
-              random -= prize.weight;
-              if (random <= 0) {
-                selectedPrize = prize;
-                break;
-              }
-            }
+            const pickedPrize = pickWeightedScratchPrize(eligiblePrizes);
+            if (!pickedPrize) throw new Error("Invalid prize weights");
+            selectedPrize = pickedPrize;
           });
 
           // Determine winner strictly based on prize type
@@ -7660,10 +7642,9 @@ app.post(
           const activeImages = activePrizes
             .filter(
               (p) =>
+                p.rewardType !== "try_again" &&
                 p.imageName &&
-                p.imageName.trim() !== "" &&
-                p.weight &&
-                p.weight > 0
+                p.imageName.trim() !== ""
             )
             .map((p) => p.imageName as string);
 
@@ -7986,8 +7967,8 @@ app.post(
         }
 
         const user = await storage.getUser(userId);
-        const used = await storage.getScratchCardsUsed(orderId);
-        const remaining = order.quantity - used;
+        const used = Number(await storage.getScratchCardsUsed(orderId)) || 0;
+        const remaining = Math.max(0, order.quantity - used);
         res.json({
           order: {
             id: order.id,

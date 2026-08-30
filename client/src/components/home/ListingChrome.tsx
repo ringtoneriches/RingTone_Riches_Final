@@ -26,7 +26,7 @@ export type ListingFilter = {
 export const DEFAULT_LISTING_FILTERS: ListingFilter[] = [
   { id: "all", label: "All Games", icon: Trophy },
   { id: "spin", label: "Spin to Win", icon: RotateCw },
-  { id: "scratch", label: "Scratch Cards", icon: Sparkles },
+  { id: "scratch", label: "Scratch Nations", icon: Sparkles },
   { id: "instant", label: "Competitions", icon: Gift },
 ];
 

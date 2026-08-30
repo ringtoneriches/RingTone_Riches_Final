@@ -1,11 +1,8 @@
-import mindLogo from "@assets/support/mind.png";
-import nationalDebtlineLogo from "@assets/support/national-debtline.png";
-import nationalDebtlineDayLogo from "@assets/support/national-debtline-day.png";
-import samaritansLogo from "@assets/support/samaritans.png";
-import samaritansDayLogo from "@assets/support/samaritans-day.png";
-import citizensAdviceLogo from "@assets/support/citizens-advice.png";
-import citizensAdviceDayLogo from "@assets/support/citizens-advice-day.png";
-import moneyAdviceTrustLogo from "@assets/support/money-advice-trust.png";
+import mindLogo from "@assets/support/mind-official.png";
+import nationalDebtlineLogo from "@assets/support/national-debtline-official.svg";
+import samaritansLogo from "@assets/support/samaritans-official.svg";
+import citizensAdviceLogo from "@assets/support/citizens-advice-official.svg";
+import moneyAdviceTrustLogo from "@assets/support/money-advice-trust-official.svg";
 
 const ORGS = [
   {
@@ -20,7 +17,6 @@ const ORGS = [
     href: "https://nationaldebtline.org",
     testId: "link-support-national-debtline",
     src: nationalDebtlineLogo,
-    srcDay: nationalDebtlineDayLogo,
     className: "rr-support-logo--ndl",
   },
   {
@@ -28,7 +24,6 @@ const ORGS = [
     href: "https://www.samaritans.org",
     testId: "link-support-samaritans",
     src: samaritansLogo,
-    srcDay: samaritansDayLogo,
     className: "rr-support-logo--samaritans",
   },
   {
@@ -36,7 +31,6 @@ const ORGS = [
     href: "https://www.citizensadvice.org.uk",
     testId: "link-support-citizens-advice",
     src: citizensAdviceLogo,
-    srcDay: citizensAdviceDayLogo,
     className: "rr-support-logo--ca",
   },
   {
@@ -56,34 +50,20 @@ export default function SupportOrganisations() {
         Independent UK support is here if you ever need it.
       </p>
       <ul className="rr-support-orgs">
-        {ORGS.map(({ name, href, testId, src, className, ...rest }) => {
-          const srcDay = "srcDay" in rest ? rest.srcDay : null;
-          return (
-            <li key={name}>
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rr-support-org"
-                data-testid={testId}
-                aria-label={`${name} (opens in a new tab)`}
-              >
-                <img
-                  src={src}
-                  alt=""
-                  className={`rr-support-logo rr-support-logo--night ${className}`}
-                />
-                {srcDay ? (
-                  <img
-                    src={srcDay}
-                    alt=""
-                    className={`rr-support-logo rr-support-logo--day ${className}`}
-                  />
-                ) : null}
-              </a>
-            </li>
-          );
-        })}
+        {ORGS.map(({ name, href, testId, src, className }) => (
+          <li key={name}>
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rr-support-org"
+              data-testid={testId}
+              aria-label={`${name} (opens in a new tab)`}
+            >
+              <img src={src} alt="" className={`rr-support-logo ${className}`} />
+            </a>
+          </li>
+        ))}
       </ul>
     </section>
   );

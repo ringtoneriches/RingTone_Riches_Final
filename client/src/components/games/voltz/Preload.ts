@@ -35,32 +35,92 @@ export class Preload extends Scene {
 
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
-    const progressBar = this.add.graphics();
-    const progressBox = this.add.graphics();
-    progressBox.fillStyle(0x2222aa, 0.5);
-    progressBox.fillRect(width / 2 - 160, height / 2 - 25, 320, 50);
+    this.cameras.main.setBackgroundColor("#050505");
 
-    const loadingText = this.make.text({
-      x: width / 2,
-      y: height / 2 - 50,
-      text: "Loading...",
-      style: {
-        font: "20px monospace",
-        color: "#ffffff",
-      },
+    const cx = width / 2;
+    const cy = height / 2;
+
+    const wash = this.add.graphics();
+    wash.fillStyle(0xC8102E, 0.08);
+    wash.fillCircle(cx, cy - 40, 220);
+    wash.fillStyle(0xF1D47A, 0.05);
+    wash.fillCircle(cx, cy - 40, 140);
+
+    const ring = this.add.graphics();
+    ring.lineStyle(2, 0xF1D47A, 0.35);
+    ring.strokeCircle(cx, cy - 86, 54);
+    ring.lineStyle(1, 0xC8102E, 0.45);
+    ring.strokeCircle(cx, cy - 86, 66);
+
+    const kicker = this.add
+      .text(cx, cy - 168, "RINGTONE", {
+        fontFamily: "Oswald, Arial Black, sans-serif",
+        fontSize: "18px",
+        color: "#fff8ee",
+        fontStyle: "bold",
+        letterSpacing: 6,
+      })
+      .setOrigin(0.5)
+      .setAlpha(0.72);
+
+    const title = this.add
+      .text(cx, cy - 86, "VOLTZ", {
+        fontFamily: "Oswald, Arial Black, sans-serif",
+        fontSize: "52px",
+        color: "#F1D47A",
+        fontStyle: "bold",
+        letterSpacing: 4,
+      })
+      .setOrigin(0.5);
+
+    const status = this.add
+      .text(cx, cy - 18, "CHARGING", {
+        fontFamily: "Oswald, Arial Black, sans-serif",
+        fontSize: "20px",
+        color: "#F1D47A",
+        fontStyle: "bold",
+        letterSpacing: 5,
+      })
+      .setOrigin(0.5);
+
+    const trackW = 320;
+    const trackH = 4;
+    const trackX = cx - trackW / 2;
+    const trackY = cy + 28;
+
+    const track = this.add.graphics();
+    track.fillStyle(0xffffff, 0.08);
+    track.fillRoundedRect(trackX, trackY, trackW, trackH, 2);
+
+    const fill = this.add.graphics();
+
+    this.tweens.add({
+      targets: status,
+      alpha: { from: 0.45, to: 1 },
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
     });
-    loadingText.setOrigin(0.5, 0.5);
 
     this.load.on("progress", (value: number) => {
-      progressBar.clear();
-      progressBar.fillStyle(0xffffff, 1);
-      progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300 * value, 30);
+      fill.clear();
+      fill.fillStyle(0xF1D47A, 1);
+      fill.fillRoundedRect(trackX, trackY, Math.max(4, trackW * value), trackH, 2);
+      if (value > 0.08) {
+        fill.fillStyle(0xC8102E, 1);
+        fill.fillRoundedRect(trackX + trackW * value - 6, trackY, 6, trackH, 2);
+      }
     });
 
     this.load.on("complete", () => {
-      progressBar.destroy();
-      progressBox.destroy();
-      loadingText.destroy();
+      wash.destroy();
+      ring.destroy();
+      kicker.destroy();
+      title.destroy();
+      status.destroy();
+      track.destroy();
+      fill.destroy();
     });
   }
 
