@@ -724,6 +724,28 @@ const DEFAULT_VOLTZ_CONFIG = {
   isVisible: true,
 };
 
+function formatVoltzSwitchLabel(
+  rewardType: string,
+  prizeValue?: string | number | null,
+  prizeName?: string | null,
+) {
+  if (rewardType === "cash") {
+    const v = parseFloat(String(prizeValue || "0"));
+    if (!Number.isFinite(v)) return "£0";
+    if (Number.isInteger(v)) return `£${v.toLocaleString("en-GB")}`;
+    return `£${v.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  if (rewardType === "points") {
+    const n = Math.floor(parseFloat(String(prizeValue || "0")));
+    return `${Number.isFinite(n) ? n.toLocaleString("en-GB") : "0"} Ringtone Points`;
+  }
+  if (rewardType === "physical") {
+    const name = (prizeName || "Prize").trim();
+    return name.length > 16 ? `${name.slice(0, 14)}…` : name;
+  }
+  return "REPLAY";
+}
+
 async function checkDailyTicketCap(userId: string, competitionId: string, quantity: number, gameType: string) {
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   
@@ -18418,18 +18440,8 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
     }
 
     // --- GET ALL PRIZE DISPLAY VALUES FOR THE SWITCHES ---
-    const getPrizeDisplay = (p: typeof prizes[0]) => {
-      if (p.rewardType === "cash") return `£${parseFloat(p.prizeValue || "0").toFixed(2)}`;
-      if (p.rewardType === "points") return `${Math.floor(parseFloat(p.prizeValue || "0"))} PTS`;
-      if (p.rewardType === "physical") {
-        const prizeName = p.prizeName || "Prize";
-        if (prizeName.length > 12) {
-          return prizeName.substring(0, 10) + "…";
-        }
-        return prizeName;
-      }
-      return "REPLAY";
-    };
+    const getPrizeDisplay = (p: typeof prizes[0]) =>
+      formatVoltzSwitchLabel(p.rewardType, p.prizeValue, p.prizeName);
 
     const shuffleArray = <T,>(arr: T[]): T[] => {
       for (let i = arr.length - 1; i > 0; i--) {
@@ -18738,18 +18750,8 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
     prizes.forEach((p) => prizeWinCounts.set(p.id, p.quantityWon || 0));
 
     // Helper functions for switch text generation
-    const getPrizeDisplay = (p: typeof prizes[0]) => {
-      if (p.rewardType === "cash") return `£${parseFloat(p.prizeValue || "0").toFixed(2)}`;
-      if (p.rewardType === "points") return `${Math.floor(parseFloat(p.prizeValue || "0"))} PTS`;
-      if (p.rewardType === "physical") {
-        const prizeName = p.prizeName || "Prize";
-        if (prizeName.length > 12) {
-          return prizeName.substring(0, 10) + "…";
-        }
-        return prizeName;
-      }
-      return "REPLAY";
-    };
+    const getPrizeDisplay = (p: typeof prizes[0]) =>
+      formatVoltzSwitchLabel(p.rewardType, p.prizeValue, p.prizeName);
 
     const shuffleArray = <T,>(arr: T[]): T[] => {
       for (let i = arr.length - 1; i > 0; i--) {

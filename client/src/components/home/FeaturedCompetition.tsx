@@ -151,21 +151,11 @@ function FeaturedSlide({
           <p className="mt-1.5 text-sm font-semibold text-white/55 line-clamp-2 sm:mt-2">{competition.title}</p>
         )}
 
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-3 sm:mt-5 sm:gap-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Entry</p>
-            <p className="font-prize text-2xl sm:text-4xl text-[#F1D47A]">
-              {stats.isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
-            </p>
-          </div>
-          {stats.endDate && (
-            <div>
-              <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-white/40">
-                {stats.isExpired ? "Ended" : "Time left"}
-              </p>
-              <CountdownBlocks time={cd} size="lg" ended={stats.isExpired} />
-            </div>
-          )}
+        <div className="mt-4 sm:mt-5">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Entry</p>
+          <p className="font-prize text-2xl sm:text-4xl text-[#F1D47A]">
+            {stats.isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
+          </p>
         </div>
 
         {stats.hasTickets && (
@@ -173,6 +163,12 @@ function FeaturedSlide({
             <SoldProgress pct={stats.pct} sold={stats.soldT} />
           </div>
         )}
+
+        {stats.endDate ? (
+          <div className="mt-3 sm:mt-4">
+            <CountdownBlocks time={cd} ended={stats.isExpired} variant="ends" />
+          </div>
+        ) : null}
 
         <div className="mt-4 flex flex-col gap-2 sm:mt-6">
           {!stats.isClosed && (
@@ -322,7 +318,7 @@ export default function FeaturedCompetition({ competitions }: Props) {
   const atLast = activeIndex === count - 1;
 
   return (
-    <section ref={sectionRef} className="relative overflow-hidden pt-8 pb-10 sm:pt-8 sm:pb-12 lg:pb-16" data-testid="section-featured-competition">
+    <section ref={sectionRef} className="rr-featured relative overflow-hidden pt-8 pb-10 sm:pt-8 sm:pb-12 lg:pb-16" data-testid="section-featured-competition">
       {starsOn && <DigitalAtmosphere stars layers={false} />}
       <div className="relative z-10 mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         <ChaserBorder variant="featured" className="shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
