@@ -8,6 +8,7 @@ vite.config.ts.*
 
 # Local scratch / QA notes
 tmp/
+.tmp-checkout-shots/
 
 
 # Puppeteer profile/cache
