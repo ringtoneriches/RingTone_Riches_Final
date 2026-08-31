@@ -337,7 +337,7 @@ function buildPrizeDetails(prize: {
       rewardValue: "0",
       prizeName: "Better luck next time",
       balloonValues,
-      switchTexts: [String(balloonValues[0]), String(balloonValues[1]), String(balloonValues[2])],
+      switchTexts: balloonValues.map((v) => `£${Number(v).toLocaleString("en-GB")}`),
       slot: { isEuro: true, pay: 0, symbol: "No Win", enabled: true },
       spin: { label: "No Win", type: "lose", value: "0", color: "#334155" },
       voltz: { outcome: "noWin", isWin: false, isFreeReplay: false },
@@ -352,9 +352,11 @@ function buildPrizeDetails(prize: {
     rewardType === "physical" ? [0, 0, 0] : [valueNum, valueNum, valueNum];
   const display =
     rewardType === "cash"
-      ? `£${valueNum.toFixed(2)}`
+      ? Number.isInteger(valueNum)
+        ? `£${valueNum.toLocaleString("en-GB")}`
+        : `£${valueNum.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       : rewardType === "points"
-      ? `${Math.floor(valueNum)} PTS`
+      ? `${Math.floor(valueNum).toLocaleString("en-GB")} Ringtone Points`
       : prize.name;
 
   return {

@@ -4497,6 +4497,18 @@ html.rr-day .rr-ends-unit-l {
   color: rgba(255, 248, 238, 0.55);
 }
 
+.rr-featured .rr-ends-pill {
+  min-height: 2.15rem;
+  padding: 0.32rem 0.75rem 0.32rem 0.65rem;
+}
+.rr-featured .rr-ends-num {
+  font-size: 15px;
+}
+.rr-featured .rr-ends-label,
+.rr-featured .rr-ends-unit-l {
+  font-size: 10px;
+}
+
 /* CTA */
 .rr-cta {
   -webkit-appearance: none;

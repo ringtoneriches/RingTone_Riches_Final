@@ -8,6 +8,7 @@ import { playWinSound, playPowerDown, playBackupPower, disposeAudioContext } fro
 import surgeSoundUrl from "@assets/surgessound_1772193798276.mp3";
 import { useLocation } from "wouter";
 import GameResultOverlay from "@/components/games/GameResultOverlay";
+import { formatVoltzPrizeHeadline, formatVoltzSwitchCompact } from "@/lib/voltz-display";
 
 interface VoltzGameProps {
   orderId: string;
@@ -114,12 +115,35 @@ const [showRevealAllSummary, setShowRevealAllSummary] = useState(false);
 
   useEffect(() => {
     if (playsRemaining > 0) setNoPlaysDismissed(false);
-    if (playsRemaining <= 0 && isGameReady && !isProcessing && !showResult && !noPlaysDismissed) {
+    if (
+      playsRemaining <= 0 &&
+      isGameReady &&
+      !isProcessing &&
+      !showResult &&
+      !showRevealAllSummary &&
+      !isRevealingAll &&
+      !noPlaysDismissed
+    ) {
       setShowNoPlaysDialog(true);
-    } else if (playsRemaining > 0 || showResult || isProcessing || noPlaysDismissed) {
+    } else if (
+      playsRemaining > 0 ||
+      showResult ||
+      isProcessing ||
+      showRevealAllSummary ||
+      isRevealingAll ||
+      noPlaysDismissed
+    ) {
       setShowNoPlaysDialog(false);
     }
-  }, [playsRemaining, isGameReady, isProcessing, showResult, noPlaysDismissed]);
+  }, [
+    playsRemaining,
+    isGameReady,
+    isProcessing,
+    showResult,
+    showRevealAllSummary,
+    isRevealingAll,
+    noPlaysDismissed,
+  ]);
 
   const closeResult = useCallback(() => {
     resultTimersRef.current.forEach(t => clearTimeout(t));
@@ -335,14 +359,7 @@ const RevealAllSummary = () => {
     .filter(r => r.rewardType === "points")
     .reduce((sum, r) => sum + parseInt(r.rewardValue || "0"), 0);
   
-  const formatSwitchText = (text: string) => {
-    if (!isNaN(Number(text)) && text.length > 6) {
-      const num = parseInt(text);
-      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-      if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-    }
-    return text.length > 8 ? text.substring(0, 6) + '…' : text;
-  };
+  const formatSwitchText = (text: string) => formatVoltzSwitchCompact(text);
   
   return (
     <div
@@ -437,7 +454,9 @@ const RevealAllSummary = () => {
                 {result.isWin && (
                   <>
                     <span className="text-[#F1D47A] text-sm font-bold">
-                      {result.rewardType === "cash" ? `£${result.rewardValue}` : `${result.rewardValue} pts`}
+                      {result.rewardType === "points"
+                        ? `${formatVoltzPrizeHeadline("points", result.rewardValue)} Ringtone Points`
+                        : formatVoltzPrizeHeadline(result.rewardType, result.rewardValue)}
                     </span>
                     <Trophy className="w-4 h-4 text-[#F1D47A]" />
                   </>
@@ -608,15 +627,7 @@ const RevealAllSummary = () => {
     }
   }, [playsRemaining, isProcessing]);
 
-  const formatSwitchText = (text: string) => {
-    if (!isNaN(Number(text)) && text.length > 6) {
-      const num = parseInt(text);
-      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-      if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-    }
-    if (text.length > 8) return text.substring(0, 6) + '…';
-    return text;
-  };
+  const formatSwitchText = (text: string) => formatVoltzSwitchCompact(text);
 
   // ─── Determine current theme ───────────────────────────────────────────────
   const isWin = lastResult?.isWin && !lastResult?.isPhysical;
@@ -902,8 +913,7 @@ const RevealAllSummary = () => {
   </div>
 )}
 
-{/* Render summary modal */}
-{/* {showRevealAllSummary && <RevealAllSummary />} */}
+      {showRevealAllSummary && <RevealAllSummary />}
 
       {/* ── Loading overlay ──────────────────────────────────────────────────── */}
       {!isGameReady && (
@@ -999,9 +1009,7 @@ const RevealAllSummary = () => {
           isPhysicalWin
             ? "Physical prize"
             : isWin
-              ? lastResult?.rewardType === "cash"
-                ? `£${lastResult.rewardValue}`
-                : `${lastResult.rewardValue} pts`
+              ? formatVoltzPrizeHeadline(lastResult?.rewardType, lastResult?.rewardValue)
               : isFreeReplay
                 ? "+1 Free Play"
                 : undefined
@@ -1018,11 +1026,13 @@ const RevealAllSummary = () => {
         prizeSub={
           isPhysicalWin
             ? "Contact support to claim"
-            : isWin
-              ? "Verified & credited"
-              : isFreeReplay
-                ? "Use it on your next flip"
-                : undefined
+            : isWin && lastResult?.rewardType === "points"
+              ? "Ringtone Points"
+              : isWin
+                ? "Verified & credited"
+                : isFreeReplay
+                  ? "Use it on your next flip"
+                  : undefined
         }
         prizeSubTestId={isPhysicalWin ? "text-verified-physical" : isWin ? "text-verified" : undefined}
         icon={
