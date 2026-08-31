@@ -65,6 +65,21 @@ canvas {
   }
 }
 
+/* Slot machine: photoreal art — bilinear/high-quality, not pixelated */
+.rr-slot-panel canvas,
+.rr-slot-canvas canvas {
+  image-rendering: auto;
+  image-rendering: high-quality;
+}
+
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .rr-slot-panel canvas,
+  .rr-slot-canvas canvas {
+    image-rendering: auto;
+    image-rendering: high-quality;
+  }
+}
+
 :root {
   /* Royal Theme - Luxurious Dark Navy with Gold Accents */
   --background: hsl(222 47% 4%);

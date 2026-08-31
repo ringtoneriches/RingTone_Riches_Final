@@ -58,9 +58,8 @@ export class SlotGame extends Scene {
   private readonly MACHINE_FIT_WIDTH_RATIO = 0.98;
   private readonly MACHINE_FIT_HEIGHT_RATIO = 0.98;
 
-  // Your "slot" image already bakes in the frame, crown, jackpot
-  // banner, spin button, AND the handle — so we skip drawing separate
-  // handle/logo/lamp sprites entirely to avoid doubling them up.
+  // SlotMachine.png already includes the handle. Do not draw a
+  // separate handle sprite. Logo/lamps stay optional extras.
   private readonly DRAW_DECORATIVE_EXTRAS = true;
 
   private CX = 0;
@@ -239,36 +238,12 @@ for (const x of reelXs) {
   this.reelBgs.push(reel);
 }
 
+    this.handle = null;
+    this.handleBall = null;
+
     if (!this.DRAW_DECORATIVE_EXTRAS) {
-      this.handle = null;
-      this.handleBall = null;
       this.logo = null;
       return;
-    }
-
-    // These optional decorative pieces (handle, ball, logo) only get
-    // drawn if the textures were actually loaded. Wrap in try/catch so
-    // a themed asset pack that doesn't include them (like a baked
-    // "Royal Reels" card image) doesn't crash the scene.
-    this.handle = this.tryAddImage(
-      this.CX + this.machineDisplayW * 0.32,
-      this.CY + this.machineDisplayH * 0.13,
-      "handle"
-    );
-    if (this.handle) {
-      this.handle.setOrigin(0.5, 1.2);
-      this.handle.setScale(0.5 * fitScale * 1.6);
-      this.handle.setDepth(5);
-    }
-
-    this.handleBall = this.tryAddImage(
-      this.CX + this.machineDisplayW * 0.33,
-      this.CY - this.machineDisplayH * 0.13,
-      "handle_ball"
-    );
-    if (this.handleBall) {
-      this.handleBall.setScale(0.6 * fitScale * 1.6);
-      this.handleBall.setDepth(5);
     }
 
     this.logo = this.tryAddImage(this.CX, this.CY - this.machineDisplayH * 0.35, "logo");
