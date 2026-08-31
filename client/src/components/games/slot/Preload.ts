@@ -59,8 +59,6 @@ export class Preload extends Scene {
     this.load.image("background", "png/Background_2.png");
     console.log("Loading background...");
     this.load.image("reel", "png/Reel3x3.png");
-    this.load.image("handle", "png/SlotMachineHandle.png");
-    this.load.image("handle_ball", "png/red/HandleBall.png");
     this.load.image("button_spin", "png/red/ButtonSpinUp2.png");
     this.load.image("button_spin_hover", "png/red/ButtonSpinUp3.png");
     this.load.image("logo", "png/Symbols/logo.png");

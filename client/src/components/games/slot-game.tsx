@@ -325,7 +325,7 @@ export default function SlotGameComponent({
           </div>
         </div>
       )}
-      <div ref={gameContainerRef} className="w-full h-full" />
+      <div ref={gameContainerRef} className="rr-slot-canvas w-full h-full" />
     </div>
   );
 }
