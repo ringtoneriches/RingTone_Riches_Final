@@ -2649,14 +2649,20 @@ html.rr-day .rr-header-cart {
   color: #7a5b12;
 }
 html.rr-day .rr-plays-fab {
-  background: linear-gradient(180deg, #fff8ee 0%, #f4efe6 100%);
-  border-color: rgba(80, 50, 20, 0.18);
+  background: #fffdf8;
+  border-color: rgba(80, 50, 20, 0.28);
   color: #16151a;
-  box-shadow: 0 12px 28px rgba(80, 50, 20, 0.12);
+  box-shadow: 0 10px 26px rgba(80, 50, 20, 0.16);
+}
+html.rr-day .rr-plays-fab-kicker {
+  color: #7a5b12;
+}
+html.rr-day .rr-plays-fab-title {
+  color: #16151a;
 }
 html.rr-day .rr-cart-dock .rr-plays-fab.is-live {
-  border-color: rgba(184, 137, 40, 0.55);
-  box-shadow: 0 12px 28px rgba(80, 50, 20, 0.14), 0 0 18px rgba(200, 16, 46, 0.12);
+  border-color: rgba(122, 91, 18, 0.55);
+  box-shadow: 0 10px 26px rgba(80, 50, 20, 0.16), 0 0 16px rgba(200, 16, 46, 0.1);
 }
 html.rr-day .rr-plays-fab-badge {
   box-shadow: 0 0 0 2px #fff8ee;
@@ -3901,6 +3907,394 @@ html.rr-day .rr-comp-add-cart {
   min-height: 0 !important;
   background: transparent !important;
 }
+.rr-billing .rr-chaser {
+  background:
+    radial-gradient(ellipse 80% 40% at 50% 0%, rgba(200, 16, 46, 0.1), transparent 55%),
+    #0a0a0d;
+  color: #fff8ee;
+}
+
+.rr-billing .ub-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  padding-top: 0.15rem;
+}
+.rr-billing .ub-facts span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+.rr-billing .ub-facts span::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin-right: 0.55rem;
+  margin-bottom: 0.15rem;
+  border-radius: 50%;
+  background: #f1d47a;
+  vertical-align: middle;
+}
+.rr-billing .ub-facts span:first-child::before {
+  display: none;
+}
+.rr-billing .ub-pay {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+.rr-billing .ub-pay.is-on {
+  border-color: rgba(241, 212, 122, 0.42);
+  background: rgba(241, 212, 122, 0.06);
+}
+.rr-billing .ub-pay.is-off {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.rr-billing .ub-pay-ico {
+  display: flex;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid rgba(241, 212, 122, 0.2);
+  background: rgba(241, 212, 122, 0.08);
+  color: #f1d47a;
+}
+.rr-billing .ub-pay-dot {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rr-billing .ub-pay.is-on .ub-pay-dot {
+  border-color: #f1d47a;
+  background: #f1d47a;
+}
+.rr-billing .ub-pay.is-on .ub-pay-dot::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #0a0a0d;
+}
+.rr-billing .ub-pay:hover:not(.is-off) {
+  border-color: rgba(241, 212, 122, 0.28);
+  background: rgba(241, 212, 122, 0.045);
+}
+.rr-billing .ub-pay.is-on:hover {
+  border-color: rgba(241, 212, 122, 0.55);
+}
+.rr-billing .ub-terms-check {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+}
+.rr-billing .ub-terms-check.is-on {
+  border-color: #f1d47a;
+  background: #f1d47a;
+}
+.rr-billing .ub-cta-wait {
+  cursor: not-allowed;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.42);
+}
+.rr-billing .ub-cta-min {
+  cursor: pointer;
+  border: 1px solid rgba(232, 161, 74, 0.4);
+  background: rgba(232, 161, 74, 0.12);
+  color: #e8a14a;
+}
+html.rr-day .rr-billing .ub-terms-check {
+  border-color: rgba(80, 50, 20, 0.5);
+  background: #fffdf8;
+}
+html.rr-day .rr-billing .ub-terms-check.is-on {
+  border-color: #7a5b12;
+  background: #c4962a;
+}
+html.rr-day .rr-billing .ub-cta-wait {
+  border-color: rgba(80, 50, 20, 0.28);
+  background: #fffdf8;
+  color: #16151a;
+}
+html.rr-day .rr-billing .ub-cta-min {
+  border-color: rgba(184, 110, 20, 0.45);
+  background: rgba(184, 110, 20, 0.1);
+  color: #8a4b10;
+}
+.rr-billing .ub-cta-go {
+  border-color: #f1d47a;
+  letter-spacing: 0.14em;
+  box-shadow:
+    0 10px 32px rgba(200, 16, 46, 0.48),
+    0 0 26px rgba(212, 175, 55, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  animation: ub-cta-pulse 2.4s ease-in-out infinite;
+}
+.rr-billing .ub-cta-go::before {
+  animation: ub-cta-sheen 2.8s ease-in-out infinite;
+}
+.rr-billing .ub-cta-go:hover {
+  transform: translateY(-3px);
+  border-color: #f1d47a;
+  box-shadow:
+    0 14px 38px rgba(200, 16, 46, 0.58),
+    0 0 34px rgba(241, 212, 122, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+@keyframes ub-cta-sheen {
+  0%, 18% { transform: translateX(-130%); }
+  52%, 100% { transform: translateX(130%); }
+}
+@keyframes ub-cta-pulse {
+  0%, 100% {
+    box-shadow:
+      0 10px 32px rgba(200, 16, 46, 0.42),
+      0 0 18px rgba(212, 175, 55, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 12px 38px rgba(200, 16, 46, 0.58),
+      0 0 32px rgba(241, 212, 122, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  }
+}
+
+/* Purchase success toast — celebration card, both themes */
+.rr-toast-win {
+  --rr-toast-bg: #0a0a0d;
+  --rr-toast-ink: #fff7e6;
+  --rr-toast-mute: rgba(255, 247, 230, 0.62);
+  --rr-toast-gold: #f1d47a;
+  --rr-toast-red: #ff263d;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  border-radius: 1.15rem;
+  background: var(--rr-toast-bg);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(241, 212, 122, 0.38),
+    0 0 28px rgba(241, 212, 122, 0.18),
+    0 0 40px rgba(200, 16, 46, 0.16);
+  animation: rr-toast-win-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.rr-toast-win::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -40%;
+  width: 38%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(241, 212, 122, 0.14) 45%,
+    transparent 70%
+  );
+  animation: rr-toast-win-sheen 2.4s 0.35s ease-in-out both;
+  pointer-events: none;
+}
+
+.rr-toast-win::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #f1d47a 30%, #ff263d 70%, transparent);
+}
+
+.rr-toast-win-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 2.4rem 1rem 1.05rem;
+}
+
+.rr-toast-win-inner::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #f1d47a 0%, #c8102e 100%);
+}
+
+.rr-toast-win-mark {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 3.15rem;
+  height: 3.15rem;
+  animation: rr-pay-success-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.rr-toast-win-mark::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(241, 212, 122, 0.28) 0%, transparent 68%);
+  animation: rr-toast-win-glow 1.8s ease-in-out infinite;
+}
+
+.rr-toast-win-ring {
+  stroke: var(--rr-toast-gold);
+  stroke-width: 2.4;
+  opacity: 0.9;
+}
+
+.rr-toast-win-check {
+  stroke: var(--rr-toast-gold);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 36;
+  stroke-dashoffset: 36;
+  animation: rr-pay-success-draw 0.42s 0.18s ease forwards;
+}
+
+.rr-toast-win-copy {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.rr-toast-win-kicker {
+  display: inline-flex;
+  margin: 0 0 0.28rem;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(200, 16, 46, 0.45);
+  background: rgba(200, 16, 46, 0.14);
+  color: var(--rr-toast-red);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.rr-toast-win .rr-toast-win-title {
+  margin: 0;
+  color: var(--rr-toast-ink) !important;
+  font-family: Oswald, ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.45rem !important;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.rr-toast-win .rr-toast-win-desc {
+  margin: 0.28rem 0 0;
+  color: var(--rr-toast-mute) !important;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  opacity: 1 !important;
+}
+
+.rr-toast-win .rr-toast-win-close {
+  top: 0.55rem;
+  right: 0.55rem;
+  color: rgba(241, 212, 122, 0.78) !important;
+  opacity: 1 !important;
+}
+
+.rr-toast-win .rr-toast-win-close:hover {
+  color: #f1d47a !important;
+}
+
+.rr-toast-win-burst {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rr-toast-win-burst i {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: #f1d47a;
+  opacity: 0;
+  animation: rr-toast-win-spark 1.15s ease-out both;
+}
+
+.rr-toast-win-burst i:nth-child(1) { left: 18%; top: 18%; animation-delay: 0.08s; }
+.rr-toast-win-burst i:nth-child(2) { left: 72%; top: 22%; background: #ff263d; animation-delay: 0.14s; }
+.rr-toast-win-burst i:nth-child(3) { left: 88%; top: 58%; animation-delay: 0.2s; }
+.rr-toast-win-burst i:nth-child(4) { left: 12%; top: 70%; background: #ffd98a; animation-delay: 0.16s; }
+.rr-toast-win-burst i:nth-child(5) { left: 46%; top: 10%; width: 4px; height: 4px; animation-delay: 0.22s; }
+.rr-toast-win-burst i:nth-child(6) { left: 58%; top: 78%; background: #ff263d; animation-delay: 0.28s; }
+.rr-toast-win-burst i:nth-child(7) { left: 30%; top: 86%; animation-delay: 0.18s; }
+.rr-toast-win-burst i:nth-child(8) { left: 80%; top: 38%; background: #fff3c4; width: 3px; height: 3px; animation-delay: 0.3s; }
+
+html.rr-day .rr-toast-win {
+  box-shadow:
+    0 20px 52px rgba(16, 10, 4, 0.28),
+    0 0 0 1px rgba(241, 212, 122, 0.5),
+    0 0 30px rgba(241, 212, 122, 0.24),
+    0 0 40px rgba(200, 16, 46, 0.12);
+}
+
+@keyframes rr-toast-win-in {
+  0% {
+    transform: translateY(-12px) scale(0.96);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes rr-toast-win-sheen {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(380%); }
+}
+
+@keyframes rr-toast-win-glow {
+  0%, 100% { opacity: 0.55; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@keyframes rr-toast-win-spark {
+  0% { transform: translateY(6px) scale(0.4); opacity: 0; }
+  35% { opacity: 1; }
+  100% { transform: translateY(-14px) scale(1); opacity: 0; }
+}
+@media (max-width: 1023px) {
+  .rr-billing .ub-checkout-cta {
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    margin-inline: -1rem;
+    padding: 0.85rem 1rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, rgba(5, 5, 5, 0) 0%, #050505 28%);
+  }
+  html.rr-day .rr-billing .ub-checkout-cta {
+    background: linear-gradient(180deg, rgba(244, 239, 228, 0) 0%, #f4efe4 28%);
+  }
+}
 
 /* Wallet / account */
 .rr-wallet-tabs {
@@ -4616,6 +5010,23 @@ html.rr-day .bg-\[\#050505\] {
   color: var(--rr-ink);
 }
 
+/* Checkout chrome sits on cream — pale gold is unreadable. Dark cards keep #F1D47A below. */
+html.rr-day .rr-billing-page .text-\[\#F1D47A\],
+html.rr-day .rr-billing-page .text-\[\#F1D47A\]\/70,
+html.rr-day .rr-billing-page .text-\[\#F1D47A\]\/50 {
+  color: #7a5b12 !important;
+}
+html.rr-day .rr-billing-page .border-\[\#F1D47A\],
+html.rr-day .rr-billing-page .border-\[\#F1D47A\]\/25 {
+  border-color: rgba(122, 91, 18, 0.45);
+}
+html.rr-day .rr-billing-page .via-\[\#F1D47A\] {
+  --tw-gradient-stops: var(--tw-gradient-from), #c4962a, var(--tw-gradient-to);
+}
+html.rr-day .rr-billing .ub-steps .bg-\[\#F1D47A\]\/50 {
+  background-color: rgba(122, 91, 18, 0.4);
+}
+
 html.rr-day .rr-page-btn {
   background: #fffdf8;
   color: #16151a !important;
@@ -4714,7 +5125,7 @@ html.rr-day .bg-\[\#0A0A0D\]\/75 .text-white,
 html.rr-day .bg-\[\#2a2a2a\] .text-white,
 html.rr-day .bg-zinc-900 .text-white,
 html.rr-day .bg-zinc-800 .text-white,
-html.rr-day .rr-billing .text-white,
+html.rr-day .rr-billing .rr-chaser .text-white,
 html.rr-day .rr-prize-card .text-white,
 html.rr-day [role="dialog"] .text-white,
 html.rr-day [data-radix-dialog-content] .text-white,
@@ -4724,7 +5135,7 @@ html.rr-day [data-radix-alert-dialog-content] .text-white {
 html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/80,
 html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/80,
 html.rr-day .bg-zinc-900 .text-white\/80,
-html.rr-day .rr-billing .text-white\/80,
+html.rr-day .rr-billing .rr-chaser .text-white\/80,
 html.rr-day [role="dialog"] .text-white\/80,
 html.rr-day [data-radix-dialog-content] .text-white\/80 {
   color: rgba(255, 255, 255, 0.8) !important;
@@ -4733,7 +5144,7 @@ html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/70,
 html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/70,
 html.rr-day .bg-\[\#0A0A0D\] .text-white\/70,
 html.rr-day .bg-zinc-900 .text-white\/70,
-html.rr-day .rr-billing .text-white\/70,
+html.rr-day .rr-billing .rr-chaser .text-white\/70,
 html.rr-day [role="dialog"] .text-white\/70,
 html.rr-day [data-radix-dialog-content] .text-white\/70 {
   color: rgba(255, 255, 255, 0.7) !important;
@@ -4742,7 +5153,7 @@ html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/60,
 html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/60,
 html.rr-day .bg-\[\#0A0A0D\] .text-white\/60,
 html.rr-day .bg-zinc-900 .text-white\/60,
-html.rr-day .rr-billing .text-white\/60,
+html.rr-day .rr-billing .rr-chaser .text-white\/60,
 html.rr-day [role="dialog"] .text-white\/60,
 html.rr-day [data-radix-dialog-content] .text-white\/60 {
   color: rgba(255, 255, 255, 0.6) !important;
@@ -4751,7 +5162,7 @@ html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/55,
 html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/55,
 html.rr-day .bg-\[\#0A0A0D\] .text-white\/55,
 html.rr-day .bg-zinc-900 .text-white\/55,
-html.rr-day .rr-billing .text-white\/55,
+html.rr-day .rr-billing .rr-chaser .text-white\/55,
 html.rr-day [role="dialog"] .text-white\/55,
 html.rr-day [data-radix-dialog-content] .text-white\/55 {
   color: rgba(255, 255, 255, 0.55) !important;
@@ -4760,7 +5171,7 @@ html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/50,
 html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/50,
 html.rr-day .bg-\[\#0A0A0D\]\/75 .text-white\/50,
 html.rr-day .bg-zinc-900 .text-white\/50,
-html.rr-day .rr-billing .text-white\/50,
+html.rr-day .rr-billing .rr-chaser .text-white\/50,
 html.rr-day [role="dialog"] .text-white\/50,
 html.rr-day [data-radix-dialog-content] .text-white\/50 {
   color: rgba(255, 255, 255, 0.5) !important;
@@ -4768,7 +5179,7 @@ html.rr-day [data-radix-dialog-content] .text-white\/50 {
 html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/45,
 html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/45,
 html.rr-day .bg-zinc-900 .text-white\/45,
-html.rr-day .rr-billing .text-white\/45,
+html.rr-day .rr-billing .rr-chaser .text-white\/45,
 html.rr-day [role="dialog"] .text-white\/45,
 html.rr-day [data-radix-dialog-content] .text-white\/45 {
   color: rgba(255, 255, 255, 0.45) !important;
@@ -4776,14 +5187,14 @@ html.rr-day [data-radix-dialog-content] .text-white\/45 {
 html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/40,
 html.rr-day .bg-\[\#0A0A0D\] .text-white\/40,
 html.rr-day .bg-zinc-900 .text-white\/40,
-html.rr-day .rr-billing .text-white\/40,
+html.rr-day .rr-billing .rr-chaser .text-white\/40,
 html.rr-day [role="dialog"] .text-white\/40,
 html.rr-day [data-radix-dialog-content] .text-white\/40 {
   color: rgba(255, 255, 255, 0.4) !important;
 }
 html.rr-day .bg-\[\#0A0A0D\] .text-white\/35,
 html.rr-day .bg-zinc-900 .text-white\/35,
-html.rr-day .rr-billing .text-white\/35,
+html.rr-day .rr-billing .rr-chaser .text-white\/35,
 html.rr-day [role="dialog"] .text-white\/35 {
   color: rgba(255, 255, 255, 0.35) !important;
 }
@@ -4794,6 +5205,13 @@ html.rr-day .bg-\[\#0A0A0D\] .text-gray-300,
 html.rr-day .bg-zinc-900 .text-gray-100,
 html.rr-day .bg-zinc-900 .text-gray-200,
 html.rr-day .bg-zinc-900 .text-gray-300,
+html.rr-day .rr-billing .rr-chaser .text-white\/42,
+html.rr-day .rr-billing .rr-chaser .text-white\/30 {
+  color: rgba(255, 255, 255, 0.42) !important;
+}
+html.rr-day .rr-billing .rr-chaser .text-\[\#F1D47A\] {
+  color: #f1d47a !important;
+}
 html.rr-day .rr-billing .text-gray-100,
 html.rr-day .rr-billing .text-gray-200,
 html.rr-day .rr-billing .text-gray-300,
@@ -6217,6 +6635,14 @@ html.rr-zoomed .rr-art-sweep::after {
   .rr-ticker-track,
   .rr-hiw-line,
   .rr-cta::before,
+  .rr-billing .ub-cta-go,
+  .rr-billing .ub-cta-go::before,
+  .rr-toast-win,
+  .rr-toast-win::before,
+  .rr-toast-win-mark,
+  .rr-toast-win-mark::before,
+  .rr-toast-win-check,
+  .rr-toast-win-burst i,
   .rr-hiw-card::after,
   .rr-cart-dock .rr-plays-fab.is-bump,
   .rr-cart-dock .rr-plays-fab-badge.is-pop,

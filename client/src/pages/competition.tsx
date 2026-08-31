@@ -33,9 +33,11 @@ import {
   getCompetitionTypeConfig,
   getDefaultQuantity,
   getFallbackImage,
+  getDrawCardTitle,
   getPrizeDisplay,
   getStatusBadge,
   getTicketStats,
+  isInstantWinGame,
 } from "@/lib/competition-display";
 
 function playNoun(type: string, quantity: number, mode: "cta" | "label" = "label") {
@@ -524,17 +526,23 @@ export default function CompetitionPage() {
                   </span>
                 </div>
 
-                {prizeMeta.prizeDisplay && (
+                {prizeMeta.prizeDisplay && isInstantWinGame(competitionType) && (
                   <p className="font-prize text-4xl leading-none text-[#F1D47A] sm:text-5xl">
                     {prizeMeta.prizeDisplay}
                   </p>
                 )}
 
                 <h1
-                  className="mt-2 font-prize text-2xl leading-tight text-white sm:text-3xl lg:text-4xl"
+                  className={
+                    isInstantWinGame(competitionType)
+                      ? "mt-2 font-prize text-2xl leading-tight text-white sm:text-3xl lg:text-4xl"
+                      : "mt-2 text-xl font-semibold leading-snug tracking-[-0.02em] text-white sm:text-3xl"
+                  }
                   data-testid={`heading-${competition.id}`}
                 >
-                  {competition.title}
+                  {isInstantWinGame(competitionType)
+                    ? competition.title
+                    : getDrawCardTitle(competition.title)}
                 </h1>
 
                 {competition.description?.trim() ? (

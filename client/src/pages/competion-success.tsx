@@ -5,6 +5,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { takeCartCheckoutFlag, clearBasket } from "@/lib/basket";
 import PaymentResult from "@/components/billing/PaymentResult";
+import { showPurchaseSuccessToast } from "@/lib/purchase-toast";
 
 export default function CheckoutSuccess() {
   const { toast } = useToast();
@@ -24,10 +25,7 @@ export default function CheckoutSuccess() {
 
       if (orderId && !paymentJobRef && !paymentRef) {
         setIsProcessing(false);
-        toast({
-          title: "Purchase Successful",
-          description: "Your tickets have been added to your account.",
-        });
+        showPurchaseSuccessToast(toast, "competition");
         queryClient.invalidateQueries({ queryKey: ["/api/user/tickets"] });
         queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
         setTimeout(() => setLocation("/wallet"), 2500);
@@ -41,10 +39,7 @@ export default function CheckoutSuccess() {
       }
 
       const finishSuccess = (data: any) => {
-        toast({
-          title: "Payment Successful",
-          description: "Your tickets have been issued.",
-        });
+        showPurchaseSuccessToast(toast, data.competitionType || "competition");
         queryClient.invalidateQueries({ queryKey: ["/api/user/tickets"] });
         queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
 
@@ -105,10 +100,7 @@ export default function CheckoutSuccess() {
               const guestData = await guestRes.json();
               if (guestRes.status === 200 && guestData.success) {
                 setIsProcessing(false);
-                toast({
-                  title: "Payment Successful",
-                  description: "Your tickets are ready.",
-                });
+                showPurchaseSuccessToast(toast, guestData.competitionType || "competition");
                 setTimeout(() => setLocation(`/guest-billing/${orderId}`), 1400);
                 return;
               }
