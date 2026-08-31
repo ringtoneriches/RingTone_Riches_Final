@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import BrandWait from "@/components/brand/BrandWait";
+import { parsePrizeAmount } from "@/lib/competition-display";
 
 /* ═══════ COLOURS (overridable via --ub-* on .rr-billing) ═══════ */
 const BG    = "var(--ub-bg, #0a0800)";
@@ -129,6 +130,11 @@ function resolveCheckoutPrize(
 
   const fromPrizeData = pickFromPrizeData(competition?.prizeData);
   if (fromPrizeData) return fromPrizeData;
+
+  const winUpTo = parsePrizeAmount(competition?.prizeAmount);
+  if (winUpTo) {
+    return { headline: formatPrizeAmount(winUpTo), subtitle: "CASH PRIZE" };
+  }
 
   const title = String(competition?.title || "");
   const prizeMatch = title.match(/£[\d,]+(?:\.\d+)?/);
@@ -264,8 +270,18 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
 
   const order       = orderData?.order;
   const user        = orderData?.user;
-  const competition = orderData?.competition;
-  const competitionId = competition?.id || order?.competitionId;
+  const orderCompetition = orderData?.competition;
+  const competitionId = orderCompetition?.id || order?.competitionId;
+
+  const { data: listedCompetition } = useQuery({
+    queryKey: ["/api/competitions", competitionId],
+    enabled: !!competitionId,
+    staleTime: 30_000,
+  });
+
+  const competition = listedCompetition || orderCompetition
+    ? { ...(listedCompetition || {}), ...(orderCompetition || {}) }
+    : undefined;
 
   const { data: prizePool } = useQuery({
     queryKey: ["/api/competitions", competitionId, "instant-win-pool"],
@@ -544,13 +560,6 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                   onError={e => { (e.target as HTMLImageElement).src = FALLBACK; }}
                   style={{ width: "100%", height: "100%", objectFit: "cover", filter: "saturate(1.2) brightness(0.8)" }} />
                 <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg,transparent 60%,rgba(14,10,2,0.8) 100%)" }} />
-                {prizeVal && (
-                  <div style={{ position: "absolute", bottom: 10, left: 0, right: 0, textAlign: "center" }}>
-                    {[prizeVal, prizeVal, prizeVal].slice(0, 3).map((v, i) => (
-                      <span key={i} style={{ fontSize: 11, fontWeight: 900, color: GOLD, textShadow: `0 0 14px rgba(var(--ub-gold-rgb, 255, 185, 0),0.9)`, marginRight: 4 }}>{v}</span>
-                    ))}
-                  </div>
-                )}
               </div>
 
               <div style={{ padding: "18px 20px 20px" }}>

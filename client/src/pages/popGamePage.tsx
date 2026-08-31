@@ -6,7 +6,8 @@ import { useToast } from "@/hooks/use-toast";
 import RingtonePopGame from "@/components/games/ringtone-pop-game";
 import { GameDisclaimer, GameEmpty, GameHero, GameShell, GameStatus } from "@/components/games/GameChrome";
 import PlayResultsTable, { prizeFromReward } from "@/components/games/PlayResultsTable";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import PopRevealAllSummary, { type PopRevealResult } from "@/components/games/PopRevealAllSummary";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import {
@@ -33,6 +34,15 @@ export default function PopGamePage() {
   const [showRevealAllDialog, setShowRevealAllDialog] = useState(false);
   const [isRevealingAll, setIsRevealingAll] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
+  const [showRevealAllSummary, setShowRevealAllSummary] = useState(false);
+  const [holdEmptyPops, setHoldEmptyPops] = useState(false);
+  const [highlightResults, setHighlightResults] = useState(false);
+  const [revealAllResults, setRevealAllResults] = useState<PopRevealResult[]>([]);
+  const [revealAllProcessed, setRevealAllProcessed] = useState(0);
+  const [revealAllCash, setRevealAllCash] = useState(0);
+  const [revealAllPoints, setRevealAllPoints] = useState(0);
+  const [revealAllReplays, setRevealAllReplays] = useState(0);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const { data: popConfig } = useQuery<{ isVisible: boolean; isActive: boolean }>({
     queryKey: ["/api/pop-config"],
   });
@@ -96,13 +106,31 @@ export default function PopGamePage() {
       }
 
       const data = await response.json();
-      
-      const wins = data.results.filter((r: any) => r.isWin || r.isRPrize);
-      
-      toast({
-        title: "All Games Revealed!",
-        description: `Processed ${data.processed} games. ${wins.length > 0 ? `Won £${data.totalWon.toFixed(2)}!` : "No wins this time."}`,
-      });
+      const results: PopRevealResult[] = Array.isArray(data.results) ? data.results : [];
+      const processed = Number(data.processed ?? data.playsProcessed ?? results.length);
+      const cash = Number(data.totalWon ?? data.totalCashWon ?? 0);
+      const points = Number(data.totalPoints ?? data.totalPointsWon ?? 0);
+      const replays = Number(data.freeReplaysWon ?? 0);
+
+      setRevealAllResults(results);
+      setRevealAllProcessed(processed);
+      setRevealAllCash(cash);
+      setRevealAllPoints(points);
+      setRevealAllReplays(replays);
+      setHoldEmptyPops(true);
+      if (results.length > 0) {
+        setShowRevealAllSummary(true);
+      } else {
+        toast({
+          title: "All games revealed",
+          description: "Check your play results below.",
+        });
+        setHighlightResults(true);
+        window.setTimeout(() => {
+          resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
+        window.setTimeout(() => setHighlightResults(false), 2400);
+      }
 
       handleRefresh();
     } catch (error: any) {
@@ -114,6 +142,15 @@ export default function PopGamePage() {
     } finally {
       setIsRevealingAll(false);
     }
+  };
+
+  const viewRevealResults = () => {
+    setShowRevealAllSummary(false);
+    setHighlightResults(true);
+    window.setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    window.setTimeout(() => setHighlightResults(false), 2400);
   };
 
   if (isLoading) return <GameStatus message="Loading your Ringtone Pop game..." />;
@@ -156,11 +193,13 @@ export default function PopGamePage() {
             orderId={orderId!}
             competitionId={competitionId!}
             playsRemaining={remainingPlays}
+            ticketCount={orderData.order.quantity ?? 0}
             onPlayComplete={handlePlayComplete}
             onRefresh={handleRefresh}
+            suppressOutOfPlays={holdEmptyPops || showRevealAllSummary}
           />
 
-          {remainingPlays > 1 && (
+          {remainingPlays > 1 && !showRevealAllSummary && (
             <div className="flex justify-center py-4">
               <button
                 type="button"
@@ -187,19 +226,37 @@ export default function PopGamePage() {
             </div>
           )}
 
-          <PlayResultsTable
-            className="rr-pop-panel"
-            title="Play Results"
-            rows={gameHistory.map((g: any, i: number) => ({
-              id: g.id ?? i,
-              number: i + 1,
-              ...prizeFromReward(g),
-            }))}
-            emptyTitle="NO GAMES PLAYED YET"
-            emptyHint="Start popping balloons to see each result here."
-          />
+          <div
+            ref={resultsRef}
+            className={`scroll-mt-24 transition-[box-shadow,border-color] duration-500 ${
+              highlightResults ? "rr-pop-results-flash" : ""
+            }`}
+          >
+            <PlayResultsTable
+              className="rr-pop-panel"
+              title="Play Results"
+              rows={gameHistory.map((g: any, i: number) => ({
+                id: g.id ?? i,
+                number: i + 1,
+                ...prizeFromReward(g),
+              }))}
+              emptyTitle="NO GAMES PLAYED YET"
+              emptyHint="Start popping balloons to see each result here."
+            />
+          </div>
         </div>
       </main>
+
+      <PopRevealAllSummary
+        open={showRevealAllSummary}
+        results={revealAllResults}
+        processed={revealAllProcessed}
+        totalWon={revealAllCash}
+        totalPoints={revealAllPoints}
+        freeReplaysWon={revealAllReplays}
+        onViewResults={viewRevealResults}
+        onGetMore={() => navigate(`/competition/${competitionId}`)}
+      />
 
       <AlertDialog open={showRevealAllDialog} onOpenChange={setShowRevealAllDialog}>
         <AlertDialogContent className="rr-pop-panel border-white/10 bg-[#0A0A0D] text-white">
