@@ -426,10 +426,12 @@ interface RingtonePopGameProps {
   orderId: string;
   competitionId: string;
   playsRemaining: number;
-  ticketCount: number;
+  ticketCount?: number;
   onPlayComplete: (result: any) => void;
   onRefresh: () => void;
   onAllPlaysComplete?: () => void;
+  /** Keep the empty-pops overlay closed so players can read results first. */
+  suppressOutOfPlays?: boolean;
 }
 
 export default function RingtonePopGame({
@@ -440,6 +442,7 @@ export default function RingtonePopGame({
   onPlayComplete,
   onRefresh,
   onAllPlaysComplete,
+  suppressOutOfPlays = false,
 }: RingtonePopGameProps) {
   const [balloonValues, setBalloonValues] = useState<string[]>(["?", "?", "?"]);
   const [poppedBalloons, setPoppedBalloons] = useState<boolean[]>([false, false, false]);
@@ -474,14 +477,9 @@ export default function RingtonePopGame({
     }
   }, [playsRemaining, isPlaying, isLoading]);
 
-  // Show dialog when plays run out
   useEffect(() => {
-    if (localPlaysRemaining <= 0 && !isPlaying && !showResultModal) {
-      setShowOutOfPlaysDialog(true);
-    } else {
-      setShowOutOfPlaysDialog(false);
-    }
-  }, [localPlaysRemaining, isPlaying, showResultModal]);
+    if (suppressOutOfPlays) setShowOutOfPlaysDialog(false);
+  }, [suppressOutOfPlays]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -535,7 +533,11 @@ export default function RingtonePopGame({
   };
 
   const startGame = async () => {
-    if (localPlaysRemaining <= 0 || isPlaying || isLoading) return;
+    if (isPlaying || isLoading) return;
+    if (localPlaysRemaining <= 0) {
+      setShowOutOfPlaysDialog(true);
+      return;
+    }
 
     setIsLoading(true);
     setBalloonValues(["?", "?", "?"]);
@@ -618,29 +620,6 @@ export default function RingtonePopGame({
     } else {
       // All balloons popped - show results with staged animation
       setTimeout(() => {
-        const remainingAfterPlay =
-          typeof gameResult._fullResponse?.playsRemaining === "number"
-            ? gameResult._fullResponse.playsRemaining
-            : localPlaysRemaining;
-        const isLossResult =
-          !gameResult.isWin &&
-          !gameResult.isRPrize &&
-          gameResult.rewardType !== "physical";
-
-        // Last play used up with no win: skip "Try Again" and show No Pops Left
-        if (remainingAfterPlay <= 0 && isLossResult) {
-          if (!isMuted && loseSoundRef.current) {
-            loseSoundRef.current.currentTime = 0;
-            loseSoundRef.current.play().catch(() => {});
-          }
-          setShowResultModal(false);
-          setIsPlaying(false);
-          setLocalPlaysRemaining(0);
-          onPlayComplete(gameResult);
-          onRefresh();
-          return;
-        }
-
         if (gameResult.isWin) {
           triggerWinConfetti();
           if (!isMuted && winSoundRef.current) {
@@ -703,6 +682,14 @@ export default function RingtonePopGame({
   const isPhysicalWin = gameResult?.rewardType === "physical";
   const isFreeReplay = gameResult?.isRPrize === true;
   const isNoWin = !isWin && !isPhysicalWin && !isFreeReplay && gameResult !== null;
+  const lastPopGone = localPlaysRemaining < 1 && !isFreeReplay;
+
+  const handleResultPrimary = () => {
+    closeModalAndReset();
+    if (lastPopGone && isNoWin) {
+      setShowOutOfPlaysDialog(true);
+    }
+  };
 
   return (
     <>
@@ -854,7 +841,7 @@ export default function RingtonePopGame({
               <button
                 type="button"
                 onClick={startGame}
-                disabled={localPlaysRemaining <= 0 || isLoading}
+                disabled={isLoading}
                 className="rr-cta w-full max-w-sm rounded-xl px-8 py-4 text-base sm:text-lg"
                 data-testid="button-start-game"
               >
@@ -864,7 +851,7 @@ export default function RingtonePopGame({
                     Loading...
                   </span>
                 ) : localPlaysRemaining <= 0 ? (
-                  "No plays left"
+                  "Get more pops"
                 ) : (
                   <span className="inline-flex items-center justify-center gap-2 font-prize tracking-wide">
                     <Sparkles className="h-5 w-5" />
@@ -1200,7 +1187,7 @@ export default function RingtonePopGame({
                     color: '#9ca3af',
                   }}
                 >
-                  EXIT PARTY
+                  BACK TO RESULTS
                 </AlertDialogCancel>
               </div>
 
@@ -1260,12 +1247,21 @@ export default function RingtonePopGame({
         }
         body={
           isNoWin
-            ? "You didn't win this time but the next pop could be your moment."
+            ? lastPopGone
+              ? "That was your last pop. Check your results, or grab more to keep playing."
+              : "You didn't win this time but the next pop could be your moment."
             : undefined
         }
-        primaryLabel={isWin || isPhysicalWin ? "Collect & continue" : isFreeReplay ? "Use free play" : "Try again"}
-        onPrimary={closeModalAndReset}
-        primaryDisabled={localPlaysRemaining < 1 && !isWin && !isPhysicalWin && !isFreeReplay}
+        primaryLabel={
+          isWin || isPhysicalWin
+            ? "Collect & continue"
+            : isFreeReplay
+              ? "Use free play"
+              : lastPopGone
+                ? "Get more pops"
+                : "Try again"
+        }
+        onPrimary={handleResultPrimary}
         closeTestId="button-close-result"
         primaryTestId="button-continue"
       />

@@ -5076,6 +5076,10 @@ html.rr-day .rr-competition [data-radix-dialog-content] .text-white {
   color: #fff8ee !important;
 }
 
+.rr-pop-results-flash .rr-pop-panel {
+  box-shadow: 0 0 0 1px rgba(241, 212, 122, 0.45), 0 0 28px rgba(241, 212, 122, 0.18);
+}
+
 html.rr-day .rr-slot-panel,
 html.rr-day .rr-pop-panel,
 html.rr-day .rr-slot-panel h1,
