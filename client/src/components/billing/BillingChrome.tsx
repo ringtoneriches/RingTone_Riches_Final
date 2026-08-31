@@ -31,18 +31,23 @@ export default function BillingChrome({
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-6 text-center sm:mb-8">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#C8102E]/40 bg-[#C8102E]/10 px-3 py-1">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF263D] opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FF263D]" />
+              </span>
               {Icon ? <Icon className="h-3.5 w-3.5 text-[#F1D47A]" /> : null}
               <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">
                 {kicker}
               </span>
             </div>
             <h1
-              className="font-prize text-4xl text-white sm:text-5xl"
+              className="font-prize text-[2.1rem] leading-none text-white sm:text-5xl"
               data-testid={titleTestId}
             >
               {title}
             </h1>
-            <p className="mx-auto mt-2 max-w-xl text-sm text-white/50 sm:text-base">{subtitle}</p>
+            <div className="mx-auto mt-3 h-px w-24 bg-gradient-to-r from-transparent via-[#F1D47A] to-transparent" />
+            <p className="mx-auto mt-3 max-w-xl text-sm text-white/50 sm:text-base">{subtitle}</p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
               {facts.map((fact) => (
                 <span key={fact}>{fact}</span>
@@ -53,9 +58,7 @@ export default function BillingChrome({
               </span>
             </div>
           </div>
-          <div className="rr-billing overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0D]/80 lg:rounded-3xl">
-            {children}
-          </div>
+          <div className="rr-billing">{children}</div>
         </div>
       </main>
       <Footer />

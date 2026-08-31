@@ -15,10 +15,12 @@ import {
   getCompetitionTypeConfig,
   getCtaLabel,
   getDefaultQuantity,
+  getDrawCardTitle,
   getFallbackImage,
   getPrizeOffer,
   getStatusBadge,
   getTicketStats,
+  isInstantWinGame,
 } from "@/lib/competition-display";
 
 type Props = {
@@ -55,6 +57,7 @@ function FeaturedSlide({
   const typeCfg = getCompetitionTypeConfig(competition.type);
   const badgeLabel = getCompetitionBadgeLabel(competition);
   const offer = getPrizeOffer(competition);
+  const isDraw = !isInstantWinGame(competition.type);
   const cd = useCountdown(active ? competition.endDate : null);
   const badge = getStatusBadge(stats);
   const cta = getCtaLabel(competition.type, stats.isClosed);
@@ -132,13 +135,19 @@ function FeaturedSlide({
           </span>
         </div>
 
-        {offer.kicker && (
+        {!isDraw && offer.kicker && (
           <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.22em] text-white/40">{offer.kicker}</p>
         )}
-        <h1 className="font-prize text-[1.7rem] sm:text-5xl lg:text-6xl leading-[0.95] text-white break-words">
-          {offer.amount || competition.title}
+        <h1
+          className={
+            isDraw
+              ? "text-xl font-semibold leading-snug tracking-[-0.02em] text-white sm:text-3xl lg:text-4xl"
+              : "font-prize text-[1.7rem] leading-[0.95] text-white break-words sm:text-5xl lg:text-6xl"
+          }
+        >
+          {isDraw ? getDrawCardTitle(competition.title) : offer.amount || competition.title}
         </h1>
-        {offer.amount && (
+        {!isDraw && offer.amount && (
           <p className="mt-1.5 text-sm font-semibold text-white/55 line-clamp-2 sm:mt-2">{competition.title}</p>
         )}
 

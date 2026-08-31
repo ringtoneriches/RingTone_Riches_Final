@@ -7967,6 +7967,8 @@ app.post(
         }
 
         const user = await storage.getUser(userId);
+        const competition = await storage.getCompetition(order.competitionId);
+        const scratchImages = await storage.getScratchCardImages();
         const used = Number(await storage.getScratchCardsUsed(orderId)) || 0;
         const remaining = Math.max(0, order.quantity - used);
         res.json({
@@ -7987,6 +7989,8 @@ app.post(
             balance: user?.balance || "0",
             ringtonePoints: user?.ringtonePoints || 0,
           },
+          competition,
+          scratchImages,
           scratchCost: 2, // £2 per scratch
         });
       } catch (error) {

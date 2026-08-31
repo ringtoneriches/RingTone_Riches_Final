@@ -103,6 +103,7 @@ Enter now for just 99p, and you could have your Christmas fully paid for! ðŸŽ…ðŸ
         ticketPrice: "0.75",
         maxTickets: 55000,
         soldTickets: 0,
+        prizeAmount: "2000.00",
         prizeData: null,
         isActive: true,
         ringtonePoints: 0,

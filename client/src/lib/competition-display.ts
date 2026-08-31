@@ -162,8 +162,32 @@ export function getPrizeDisplay(competition: Competition) {
   return { prizeNum, isMysteryPrize, prizeDisplay };
 }
 
+export function getDrawCardTitle(title: string) {
+  let text = String(title || "")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}\u{20E3}]/gu, " ")
+    .replace(/^WIN\s+/i, "")
+    .replace(/\s+(?:FOR\s+)?JUST\s+[£$€]?\s*[\d,.]+.*$/i, "")
+    .replace(/\s*[–—-]\s*JUST\s+.+$/i, "")
+    .replace(/!+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!text) text = String(title || "").replace(/\s+/g, " ").trim();
+
+  if (text.length > 3 && text === text.toUpperCase()) {
+    text = text
+      .toLowerCase()
+      .replace(/(^|[^\p{L}])([\p{L}])/gu, (_, prefix: string, letter: string) => prefix + letter.toUpperCase());
+  }
+
+  return text;
+}
+
 export function getPrizeOffer(competition: Competition) {
   const prize = getPrizeDisplay(competition);
+  if (!isInstantWinGame(competition.type)) {
+    return { kicker: null, amount: null, prize };
+  }
   if (prize.isMysteryPrize) {
     return { kicker: "Instantly win a", amount: "MYSTERY PRIZE", prize };
   }
@@ -186,9 +210,23 @@ export function getStatusBadge(opts: {
   return "LIVE";
 }
 
+export const INSTANT_WIN_GAME_TYPES = [
+  "spin",
+  "scratch",
+  "pop",
+  "plinko",
+  "voltz",
+  "slot",
+  "royal",
+] as const;
+
+export function isInstantWinGame(type?: string | null) {
+  return !!type && (INSTANT_WIN_GAME_TYPES as readonly string[]).includes(type);
+}
+
 export function getCtaLabel(type: string, isClosed: boolean) {
   if (isClosed) return "SOLD OUT";
-  if (["spin", "scratch", "pop", "plinko", "voltz", "slot", "royal"].includes(type)) {
+  if (isInstantWinGame(type)) {
     return "ENTER NOW";
   }
   return "ENTER NOW";

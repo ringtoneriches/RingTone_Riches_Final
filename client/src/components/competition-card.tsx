@@ -20,9 +20,11 @@ import {
   getCtaLabel,
   getDefaultQuantity,
   getFallbackImage,
+  getDrawCardTitle,
   getPrizeOffer,
   getStatusBadge,
   getTicketStats,
+  isInstantWinGame,
 } from "@/lib/competition-display";
 
 interface CompetitionCardProps {
@@ -65,6 +67,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
   const offer = getPrizeOffer(competition);
   const badge = getStatusBadge(stats);
   const cta = getCtaLabel(competition.type, stats.isClosed);
+  const isDraw = !isInstantWinGame(competition.type);
   const TypeIcon = typeCfg.Icon;
 
   const imageSrc =
@@ -136,14 +139,22 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
           </div>
 
           <div className="rr-comp-body flex flex-1 flex-col px-3.5 pb-3.5 pt-2.5">
-            {offer.kicker && (
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">{offer.kicker}</p>
-            )}
-            <p className="rr-comp-prize font-prize text-[1.7rem] leading-none text-white sm:text-[1.9rem]">
-              {offer.amount || competition.title.split(" ").slice(0, 3).join(" ")}
-            </p>
-            {offer.amount && (
-              <p className="rr-comp-title mt-1 truncate text-[11px] font-semibold text-white/45">{competition.title}</p>
+            {isDraw ? (
+              <p className="line-clamp-2 text-[13px] font-semibold leading-snug tracking-[-0.01em] text-white/80">
+                {getDrawCardTitle(competition.title)}
+              </p>
+            ) : (
+              <>
+                {offer.kicker && (
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">{offer.kicker}</p>
+                )}
+                <p className="rr-comp-prize font-prize text-[1.7rem] leading-none text-white sm:text-[1.9rem]">
+                  {offer.amount || competition.title}
+                </p>
+                {offer.amount && (
+                  <p className="rr-comp-title mt-1 truncate text-[11px] font-semibold text-white/45">{competition.title}</p>
+                )}
+              </>
             )}
 
             <div className="rr-comp-meta mt-3 flex items-end justify-between gap-2 rounded-xl border border-white/5 bg-black/30 px-2.5 py-2">
