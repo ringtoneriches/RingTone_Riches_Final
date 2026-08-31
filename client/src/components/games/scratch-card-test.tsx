@@ -32,7 +32,7 @@ interface ScratchCardProps {
 
 const CSS_WIDTH = 500;
 const CSS_HEIGHT = 350;
-const AUTO_CLEAR_THRESHOLD = 0.225;
+const AUTO_CLEAR_THRESHOLD = 0.18;
 const SAMPLE_GAP = 4;
 
 const nationFlags = SCRATCH_NATION_FLAGS.map((flag) => ({
@@ -83,7 +83,7 @@ const saveScratchHistory = (history: { status: string; prize: { type: string; va
   }
 };
 
-export default function ScratchCardTest({ onScratchReveal, onRefreshBalance, onRemainingChange,  competitionId , mode = "tight", scratchTicketCount, orderId ,congratsAudioRef, resultModalOpen = false }: ScratchCardProps) {
+export default function ScratchCardTest({ onScratchReveal, onCommitSession, onRefreshBalance, onRemainingChange,  competitionId , mode = "tight", scratchTicketCount, orderId ,congratsAudioRef, resultModalOpen = false }: ScratchCardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const {id} = useParams()
   const drawingRef = useRef(false);
@@ -125,49 +125,48 @@ const [revealAllSummary, setRevealAllSummary] = useState<{ wins: number; losses:
 const [showOutOfScratchesDialog, setShowOutOfScratchesDialog] = useState(false);
 const outOfScratchClickCount = useRef(0);
 const hasCommittedCurrentScratch = useRef(false);
+const hasRecordedRef = useRef(false);
+const committedIndexRef = useRef<number | null>(null);
+const currentSessionRef = useRef<typeof currentSession>(null);
+const resultModalOpenRef = useRef(resultModalOpen);
+const revealedRef = useRef(false);
+const recordPromiseRef = useRef<Promise<void> | null>(null);
+const checkPercentRef = useRef<(force?: boolean) => void>(() => {});
 const [allScratchesCompleted, setAllScratchesCompleted] = useState(false);
+
+currentSessionRef.current = currentSession;
+resultModalOpenRef.current = resultModalOpen;
+revealedRef.current = revealed;
   // Check if all scratch cards are used
   const allScratchesUsed = scratchHistory.length > 0 && scratchHistory.every(s => s.status === "Scratched");
 
   // Add this useEffect at the beginning of your component
 useEffect(() => {
   if (!orderId) return;
-  
-  const checkIncompleteScratches = () => {
-    const inProgressData = localStorage.getItem(`scratchInProgress_${orderId}`);
-    
-    if (inProgressData) {
-      const { index, timestamp } = JSON.parse(inProgressData);
-      const now = Date.now();
-      const fiveMinutesAgo = now - (5 * 60 * 1000); // 5 minutes ago
-      
-      // If scratch was started more than 5 minutes ago, mark as lost
-      if (timestamp < fiveMinutesAgo) {
-        // console.log("⏰ Old incomplete scratch found, marking as lost");
-        
-        setScratchHistory(prev => {
-          const updated = [...prev];
-          if (index < updated.length) {
-            updated[index] = {
-              status: "Lost",
-              prize: { type: "none", value: "Lost" },
-            };
-          }
-          return updated;
-        });
-        
-        localStorage.removeItem(`scratchInProgress_${orderId}`);
-      } else {
-        // console.log("🔄 Scratch was in progress recently, keeping as Scratching");
-      }
+  const raw = localStorage.getItem(`scratchOpenSession_${orderId}`);
+  const inProgress = localStorage.getItem(`scratchInProgress_${orderId}`);
+  if (!raw || !inProgress) return;
+  try {
+    const saved = JSON.parse(raw);
+    if (saved?.sessionId && saved?.prizeId) {
+      setCurrentSession(saved);
+      currentSessionRef.current = saved;
+      hasCommittedCurrentScratch.current = true;
+      void recordPlayIfNeeded().catch((error) => {
+        console.error("Error finishing saved scratch session:", error);
+      });
     }
-  };
-  
-  checkIncompleteScratches();
+  } catch {
+    localStorage.removeItem(`scratchOpenSession_${orderId}`);
+  }
 }, [orderId]);
 
 // Update this effect to check when all scratches are completed
 useEffect(() => {
+  if (currentSession && sessionState !== "completed" && !revealed) {
+    setAllScratchesCompleted(false);
+    return;
+  }
   if (scratchHistory.length > 0) {
     const historyDone = scratchHistory.every(s =>
       s.status === "Scratched" || s.status === "Lost"
@@ -179,12 +178,11 @@ useEffect(() => {
     setAllScratchesCompleted(completed);
     
     // If all completed, clear current session
-    if (completed && currentSession) {
+    if (completed && currentSession && sessionState === "completed") {
       setCurrentSession(null);
-      setSessionState('completed');
     }
   }
-}, [scratchHistory, currentSession, scratchTicketCount]);
+}, [scratchHistory, currentSession, scratchTicketCount, sessionState, revealed]);
 
   // Fix canvas not rendering after Reveal All
 useEffect(() => {
@@ -314,55 +312,36 @@ useEffect(() => {
       const sessionData = await response.json();
 
       if (sessionData.success) {
-        setCurrentSession({
+        const next = {
           sessionId: sessionData.sessionId,
           isWinner: sessionData.isWinner,
           prize: sessionData.prize,
           tileLayout: sessionData.tileLayout,
           prizeId: sessionData.prizeId,
-        });
+        };
+        setCurrentSession(next);
+        if (orderId) {
+          localStorage.setItem(`scratchOpenSession_${orderId}`, JSON.stringify(next));
+        }
         setSessionState('ready');
       }
     } catch (error) {
       console.error('Error fetching scratch session:', error);
-      setSessionState('ready'); // Fallback to ready state
+      setSessionState('loading');
     }
   };
 
   useEffect(() => {
-  const handleVisibilityChange = () => {
-    if (document.hidden && 
-        hasCommittedCurrentScratch.current && 
-        !hasCompletedRef.current &&
-        orderId && 
-        localStorage.getItem(`scratchInProgress_${orderId}`)) {
-      
-      // console.log("👁️ User switched tabs while scratching!");
-      
-      // Mark as lost
-      const inProgressData = localStorage.getItem(`scratchInProgress_${orderId}`);
-      if (inProgressData) {
-        const { index } = JSON.parse(inProgressData);
-        
-        const lostScratches = JSON.parse(localStorage.getItem(`lostScratches_${orderId}`) || '[]');
-        lostScratches.push({ index, lostAt: Date.now() });
-        localStorage.setItem(`lostScratches_${orderId}`, JSON.stringify(lostScratches));
-        
-        localStorage.removeItem(`scratchInProgress_${orderId}`);
-        
-        // Update UI
-        setScratchHistory(prev => {
-          const updated = [...prev];
-          if (index < updated.length) {
-            updated[index] = {
-              status: "Lost",
-              prize: { type: "none", value: "Lost" },
-            };
-          }
-          return updated;
-        });
-      }
+  const persistOpenPlay = () => {
+    if (hasCommittedCurrentScratch.current) {
+      void recordPlayIfNeeded().catch((error) => {
+        console.error("Error recording scratch on hide:", error);
+      });
     }
+  };
+
+  const handleVisibilityChange = () => {
+    if (document.hidden) persistOpenPlay();
   };
 
   document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -386,33 +365,100 @@ useEffect(() => {
   }
 }, [scratchHistory, orderId]);
 
-const commitCurrentScratch = () => {
-  if (hasCommittedCurrentScratch.current) return;
-  
-  const firstUnscratched = scratchHistory.findIndex(s => s.status === "Not Scratched");
-  if (firstUnscratched === -1) return;
-  
-  // console.log("📝 Committing scratch at index:", firstUnscratched);
-  
-  setScratchHistory(prev => {
+const markHistoryRow = (
+  status: string,
+  prize: { type: string; value: string },
+) => {
+  setScratchHistory((prev) => {
     const updated = [...prev];
-    updated[firstUnscratched] = {
-      status: "Scratching",
-      prize: { type: "none", value: "In progress..." },
-    };
+    let index = committedIndexRef.current;
+    if (index == null || index < 0 || index >= updated.length) {
+      index = updated.findIndex((row) => row.status === "Scratching");
+    }
+    if (index < 0) {
+      index = updated.findIndex((row) => row.status === "Not Scratched");
+    }
+    if (index < 0) return prev;
+    committedIndexRef.current = index;
+    updated[index] = { status, prize };
+    if (orderId) saveScratchHistory(updated, orderId);
     return updated;
   });
-  
-  // 🎯 Save to localStorage IMMEDIATELY
+};
+
+const recordPlayIfNeeded = async (): Promise<void> => {
+  const session = currentSessionRef.current;
+  if (!session || !orderId) return;
+  if (hasRecordedRef.current) return recordPromiseRef.current || Promise.resolve();
+  if (recordPromiseRef.current) return recordPromiseRef.current;
+
+  const payload = {
+    orderId,
+    prizeId: session.prizeId,
+    isWinner: session.isWinner,
+  };
+
+  const run = (async () => {
+    if (onCommitSession) {
+      await onCommitSession(session.sessionId, payload);
+    } else {
+      const response = await fetch(`/api/scratch-session/${session.sessionId}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        credentials: "include",
+        keepalive: true,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to complete scratch session");
+      }
+    }
+    hasRecordedRef.current = true;
+    markHistoryRow("Scratched", session.prize);
+    if (orderId) {
+      localStorage.removeItem(`scratchInProgress_${orderId}`);
+      localStorage.removeItem(`scratchOpenSession_${orderId}`);
+    }
+  })();
+
+  recordPromiseRef.current = run;
+  try {
+    await run;
+  } catch (error) {
+    recordPromiseRef.current = null;
+    throw error;
+  } finally {
+    if (hasRecordedRef.current) recordPromiseRef.current = null;
+  }
+};
+
+const commitCurrentScratch = () => {
+  if (hasCommittedCurrentScratch.current) {
+    void recordPlayIfNeeded().catch((error) => {
+      console.error("Error recording scratch play:", error);
+    });
+    return;
+  }
+
+  const firstUnscratched = scratchHistory.findIndex((s) => s.status === "Not Scratched");
+  if (firstUnscratched === -1) return;
+
+  committedIndexRef.current = firstUnscratched;
+  hasCommittedCurrentScratch.current = true;
+  markHistoryRow("Scratching", { type: "none", value: "In progress..." });
+
   if (orderId) {
     localStorage.setItem(`scratchInProgress_${orderId}`, JSON.stringify({
       index: firstUnscratched,
       timestamp: Date.now(),
-      isInProgress: true
+      isInProgress: true,
     }));
   }
-  
-  hasCommittedCurrentScratch.current = true;
+
+  void recordPlayIfNeeded().catch((error) => {
+    console.error("Error recording scratch play:", error);
+  });
 };
 
 const triggerWinConfetti = (winCount: number, totalWon: number = 0) => {
@@ -468,81 +514,29 @@ const triggerWinConfetti = (winCount: number, totalWon: number = 0) => {
   }
 };
 
-// Then update completeScratchSession to use the tracked index:
 const completeScratchSession = async (): Promise<void> => {
-  if (!currentSession || !orderId) return;
+  const session = currentSessionRef.current;
+  if (!session || !orderId) return;
 
-  try {
-    // console.log("🎯 Starting completeScratchSession");
-    // console.log("Prize to set:", currentSession.prize);
+  await recordPlayIfNeeded();
 
-    const response = await fetch(`/api/scratch-session/${currentSession.sessionId}/complete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        orderId,
-        prizeId: currentSession.prizeId,
-        isWinner: currentSession.isWinner,
-      }),
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to complete scratch session');
-    }
-
-    const result = await response.json();
-
-    // console.log("🔍 Looking for 'Scratching' items to update...");
-    
-    setScratchHistory(prev => {
-      const updated = [...prev];
-      let updatedCount = 0;
-      
-      for (let i = 0; i < updated.length; i++) {
-        if (updated[i].status === "Scratching") {
-          updated[i] = {
-            status: "Scratched",
-            prize: currentSession.prize,
-          };
-          updatedCount++;
-          // console.log(`✅ Updated scratch at index ${i} with prize:`, currentSession.prize);
-        }
-      }
-      
-      if (updatedCount === 0) {
-        console.warn("⚠️ No 'Scratching' items found to update!");
-      }
-      
-      return updated;
-    });
-
-    // 🎯 CRITICAL: Clear the in-progress flag
-    localStorage.removeItem(`scratchInProgress_${orderId}`);
-    
-    // Rest of your existing code...
-    if (onScratchReveal) {
-      onScratchReveal(currentSession.prize);
-    }
-
-    const isWin = 
-      currentSession.prize?.type !== "none" &&
-      currentSession.prize?.value !== "-" &&
-      currentSession.isWinner === true;
-
-    if (isWin && congratsAudioRef.current) {
-      congratsAudioRef.current.currentTime = 0;
-      congratsAudioRef.current.play().catch(() => {});
-      triggerWinConfetti();
-    }
-
-    setSessionState('completed');
-    // console.log("✅ completeScratchSession finished");
-    
-  } catch (error) {
-    console.error('Error completing scratch session:', error);
+  markHistoryRow("Scratched", session.prize);
+  if (onScratchReveal) {
+    onScratchReveal(session.prize);
   }
+
+  const isWin =
+    session.prize?.type !== "none" &&
+    session.prize?.value !== "-" &&
+    session.isWinner === true;
+
+  if (isWin && congratsAudioRef.current) {
+    congratsAudioRef.current.currentTime = 0;
+    congratsAudioRef.current.play().catch(() => {});
+    triggerWinConfetti();
+  }
+
+  setSessionState("completed");
 };
 
   // 🎯 NEW: Fetch session on mount or when we need a new one
@@ -550,9 +544,7 @@ const completeScratchSession = async (): Promise<void> => {
     if (allScratchesCompleted || resultModalOpen) return;
     // Only fetch if we have remaining cards and no current session
     if (orderId && scratchHistory.length > 0 && !currentSession) {
-      const hasRemaining =
-        scratchHistory.some(s => s.status === "Not Scratched") ||
-        (scratchTicketCount ?? 0) > 0;
+      const hasRemaining = (scratchTicketCount ?? 0) > 0;
       if (hasRemaining && sessionState === 'loading') {
         fetchScratchSession();
       }
@@ -564,9 +556,7 @@ const completeScratchSession = async (): Promise<void> => {
   useEffect(() => {
     if (resultModalOpen || sessionState !== "completed" || allScratchesCompleted) return;
 
-    const hasRemaining =
-      (scratchTicketCount ?? 0) > 0 ||
-      scratchHistory.some((s) => s.status === "Not Scratched");
+    const hasRemaining = (scratchTicketCount ?? 0) > 0;
 
     if (!hasRemaining) {
       setAllScratchesCompleted(true);
@@ -576,6 +566,9 @@ const completeScratchSession = async (): Promise<void> => {
     const t = window.setTimeout(() => {
       hasCompletedRef.current = false;
       hasCommittedCurrentScratch.current = false;
+      hasRecordedRef.current = false;
+      recordPromiseRef.current = null;
+      committedIndexRef.current = null;
       setCurrentSession(null);
       setSessionState("loading");
       setRevealed(false);
@@ -638,7 +631,9 @@ const completeScratchSession = async (): Promise<void> => {
 
    // Reset state for new session
     isScratching.current = false;
-    initCanvas();
+    if (!hasCommittedCurrentScratch.current && !hasCompletedRef.current) {
+      initCanvas();
+    }
   }, [currentSession, sessionState]);
 
   useEffect(() => {
@@ -649,7 +644,7 @@ const completeScratchSession = async (): Promise<void> => {
     const handleMouseUpGlobal = () => {
       drawingRef.current = false;
       stopScratchSound(); // 🎵 Always stop sound on global pointer release
-      checkPercentScratched(true);
+      checkPercentRef.current(true);
     };
 
     window.addEventListener("mouseup", handleMouseUpGlobal);
@@ -865,9 +860,9 @@ function scratchAt(x: number, y: number) {
 }
 
 // Update your checkScratchCompletion function to save paths when complete
-function checkPercentScratched(force = false) {
+function checkPercentScratched(_force = false) {
   rafRef.current = null;
-  if (resultModalOpen) return;
+  if (resultModalOpenRef.current) return;
   const canvas = canvasRef.current;
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -886,69 +881,58 @@ function checkPercentScratched(force = false) {
     }
   }
 
-  const percent = cleared / total;
+  const percent = total > 0 ? cleared / total : 0;
 
-  // ✅ Update percentage display normally until 85%
   if (percent < AUTO_CLEAR_THRESHOLD) {
     setPercentScratched(Math.round(percent * 100));
   }
 
-  // 🎯 NEW: SIMPLIFIED FLOW at 85% - Just show popup with pre-loaded prize
-  if (percent >= AUTO_CLEAR_THRESHOLD && !revealed && !hasCompletedRef.current) {
-    // 🔒 Guard: Don't proceed if no session loaded
-    if (!currentSession) {
+  if (percent >= AUTO_CLEAR_THRESHOLD && !revealedRef.current && !hasCompletedRef.current) {
+    const session = currentSessionRef.current;
+    if (!session) {
       console.warn("Session not loaded yet, waiting...");
       return;
     }
 
     hasCompletedRef.current = true;
-    stopScratchSound(); // Stop sound immediately
+    revealedRef.current = true;
+    stopScratchSound();
     setRevealed(true);
-    setSessionState('scratching'); // Update state to indicate scratching completed
-    
-    // Save the completed scratch path
+    setSessionState("scratching");
+
     if (currentScratchPathRef.current.length > 0) {
       scratchPathsRef.current.push([...currentScratchPathRef.current]);
       currentScratchPathRef.current = [];
     }
 
-    // Images are ALREADY in final position (pre-loaded), just show popup
     (async () => {
       try {
-        const prizeWon = currentSession.prize;
-
-        // 🎯 Images are ALREADY in correct positions (pre-loaded from backend)
-        // NO image changes needed!
-
-        // Update percentage to 100%
         setPercentScratched(100);
-
-        // ⏱️ Brief delay for visual smoothness
-        await new Promise(resolve => setTimeout(resolve, 150));
-          // 🔒 Call completion endpoint to record usage and award prize
+        await new Promise((resolve) => setTimeout(resolve, 150));
         await completeScratchSession();
-        // ✅ Clear overlay to reveal final pattern
         clearOverlayInstant();
-
-        // 🎉 Show popup IMMEDIATELY
-        setSelectedPrize(prizeWon);
-        // Next card starts only after GET IN / close — a same-click prefetch
-        // would land on the new foil and instantly re-open the win popup.
+        setSelectedPrize(session.prize);
       } catch (error) {
         console.error("Error completing scratch:", error);
-        alert("Failed to complete scratch card. Please try again.");
-        // Clear overlay
         clearOverlayInstant();
-        // Reset on error to allow retry
-        hasCompletedRef.current = false;
-        setRevealed(false);
-        setSessionState('ready');
-        // Reinitialize canvas
-        initCanvas();
+        // Play is already consumed on first scratch. Keep the result visible
+        // and retry the save — do not hand them a fresh card.
+        try {
+          await completeScratchSession();
+          setSelectedPrize(session.prize);
+        } catch (retryError) {
+          console.error("Retry complete failed:", retryError);
+          alert("Failed to save scratch result. Please stay on this page and try again.");
+          hasCompletedRef.current = false;
+          revealedRef.current = false;
+          setRevealed(false);
+          setSessionState("ready");
+        }
       }
     })();
   }
 }
+checkPercentRef.current = checkPercentScratched;
 
   function clearOverlayInstant() {
     const canvas = canvasRef.current;
@@ -1135,42 +1119,29 @@ function checkPercentScratched(force = false) {
 //   );
 // }
 useEffect(() => {
+  const persist = () => {
+    if (hasCommittedCurrentScratch.current) {
+      void recordPlayIfNeeded().catch(() => {});
+    }
+  };
+
   const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-    if (hasCommittedCurrentScratch.current && !hasCompletedRef.current) {
-      // 🎯 Check if there's a scratch in progress
-      if (orderId && localStorage.getItem(`scratchInProgress_${orderId}`)) {
-        e.preventDefault();
-        e.returnValue = "You're scratching a card! If you leave now, you'll lose this scratch.";
-        return e.returnValue;
-      }
+    persist();
+    if (hasCommittedCurrentScratch.current && !hasRecordedRef.current) {
+      e.preventDefault();
+      e.returnValue = "Saving your scratch result…";
+      return e.returnValue;
     }
   };
 
-  const handleUnload = () => {
-    // 🎯 On page unload, mark any in-progress scratch as lost
-    if (orderId && localStorage.getItem(`scratchInProgress_${orderId}`)) {
-      const inProgressData = localStorage.getItem(`scratchInProgress_${orderId}`);
-      if (inProgressData) {
-        const { index } = JSON.parse(inProgressData);
-        
-        // Save that this scratch was lost
-        const lostScratches = JSON.parse(localStorage.getItem(`lostScratches_${orderId}`) || '[]');
-        lostScratches.push({ index, lostAt: Date.now() });
-        localStorage.setItem(`lostScratches_${orderId}`, JSON.stringify(lostScratches));
-        
-        localStorage.removeItem(`scratchInProgress_${orderId}`);
-      }
-    }
-  };
-
-  window.addEventListener('beforeunload', handleBeforeUnload);
-  window.addEventListener('unload', handleUnload);
+  window.addEventListener("beforeunload", handleBeforeUnload);
+  window.addEventListener("pagehide", persist);
 
   return () => {
-    window.removeEventListener('beforeunload', handleBeforeUnload);
-    window.removeEventListener('unload', handleUnload);
+    window.removeEventListener("beforeunload", handleBeforeUnload);
+    window.removeEventListener("pagehide", persist);
   };
-}, [orderId, hasCommittedCurrentScratch.current, hasCompletedRef.current]);
+}, [orderId]);
 
 
 useEffect(() => {
@@ -1258,7 +1229,11 @@ useEffect(() => {
                     resultModalOpen ? "pointer-events-none cursor-default" : "cursor-pointer"
                   }`}
                   onMouseDown={(e) => {
-                    if (allScratchesUsed) {
+                    if ((scratchTicketCount ?? 0) <= 0 && !currentSession) {
+                      setShowOutOfScratchesDialog(true);
+                      return;
+                    }
+                    if (allScratchesUsed && !currentSession) {
                       setShowOutOfScratchesDialog(true);
                       return;
                     }
@@ -1278,7 +1253,11 @@ useEffect(() => {
                     scratchAt(e.clientX - rect.left, e.clientY - rect.top);
                   }}
                   onTouchStart={(e) => {
-                    if (allScratchesUsed) {
+                    if ((scratchTicketCount ?? 0) <= 0 && !currentSession) {
+                      setShowOutOfScratchesDialog(true);
+                      return;
+                    }
+                    if (allScratchesUsed && !currentSession) {
                       setShowOutOfScratchesDialog(true);
                       return;
                     }

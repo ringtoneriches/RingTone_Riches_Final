@@ -131,10 +131,10 @@ export default function ScratchGamePage() {
   // 🎯 Callback 2: Handle session commit - child requests parent to save result via mutation
   // Returns promise that child can await to handle loading/error states
   const handleCommitSession = async (sessionId: string, payload: CompleteSessionPayload): Promise<void> => {
-    // console.log("🔒 Commit session requested:", sessionId, payload);
-    
-    // Use parent mutation (query invalidation survives child unmount)
-    await completeScratchMutation.mutateAsync({ sessionId, payload });
+    const result = await completeScratchMutation.mutateAsync({ sessionId, payload });
+    if (typeof result?.remainingCards === "number") {
+      setRemainingScratches(Math.max(0, result.remainingCards));
+    }
   };
   
   // 🎯 Callback 3: Refresh balance - used after reveal-all completes

@@ -169,6 +169,12 @@ import { SMSService } from "./services/sms.service";
 import { calculateDiscountedTotal } from "./utils/discounts";
 import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
 import { processUncontrolledSlotSpin, revealAllUncontrolledSlot } from "./services/slot-play";
+import {
+  getCompletedScratchSession,
+  getOpenScratchSession,
+  markScratchSessionCompleted,
+  setOpenScratchSession,
+} from "./services/scratch-session-lock";
 import rateLimit ,{ ipKeyGenerator } from 'express-rate-limit';
 const supportUpload = createS3Uploader("support");
 const competitionUpload = createS3Uploader("competitions");
@@ -7610,6 +7616,19 @@ app.post(
             });
         }
 
+        const existingSession = getOpenScratchSession(userId, orderId);
+        if (existingSession) {
+          return res.json({
+            success: true,
+            sessionId: existingSession.sessionId,
+            isWinner: existingSession.isWinner,
+            prize: existingSession.prize,
+            tileLayout: existingSession.tileLayout,
+            prizeId: existingSession.prizeId,
+            orderId,
+          });
+        }
+
         // Get user
         const user = await storage.getUser(userId);
         if (!user) {
@@ -7765,6 +7784,16 @@ app.post(
             }
           }
 
+          setOpenScratchSession({
+            sessionId,
+            userId,
+            orderId,
+            prizeId: selectedPrize.id,
+            isWinner,
+            prize: prizeInfo,
+            tileLayout,
+          });
+
           res.json({
             success: true,
             sessionId,
@@ -7802,6 +7831,18 @@ app.post(
           });
         }
 
+        const already = getCompletedScratchSession(sessionId);
+        if (already && already.userId === userId && already.orderId === orderId) {
+          return res.json({
+            success: true,
+            prize: already.prize,
+            prizeLabel: already.prizeLabel,
+            remainingCards: already.remainingCards,
+            orderId,
+            alreadyCompleted: true,
+          });
+        }
+
         // Verify order
         const order = await storage.getOrder(orderId);
         if (!order || order.userId !== userId || order.status !== "completed") {
@@ -7833,6 +7874,16 @@ app.post(
 
         // 🔒 Atomic transaction to record usage and award prize
         await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`);
+          const [usedRow] = await tx
+            .select({ count: sql<number>`count(*)` })
+            .from(scratchCardUsage)
+            .where(eq(scratchCardUsage.orderId, orderId));
+          const usedCount = Number(usedRow?.count || 0);
+          if (usedCount >= Number(order.quantity || 0)) {
+            throw new Error("No scratch cards remaining in this purchase");
+          }
+
           // Record scratch card usage
           await tx.insert(scratchCardUsage).values({
             orderId,
@@ -7961,6 +8012,14 @@ app.post(
         const used = await storage.getScratchCardsUsed(orderId);
         const remaining = order.quantity - used;
 
+        markScratchSessionCompleted(sessionId, {
+          userId,
+          orderId,
+          remainingCards: remaining,
+          prize: prizeResponse,
+          prizeLabel: selectedPrize.imageName || undefined,
+        });
+
         res.json({
           success: true,
           prize: prizeResponse,
@@ -7968,8 +8027,14 @@ app.post(
           remainingCards: remaining,
           orderId: order.id,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error completing scratch session:", error);
+        if (error?.message === "No scratch cards remaining in this purchase") {
+          return res.status(400).json({
+            success: false,
+            message: error.message,
+          });
+        }
         res.status(500).json({ message: "Failed to complete scratch session" });
       }
     }
