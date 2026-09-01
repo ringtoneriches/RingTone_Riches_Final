@@ -711,7 +711,7 @@ export default function AdminInstantPool() {
                                           #{number} · {prize.status}
                                         </div>
                                         <div className="mt-1 font-mono text-xs">
-                                          {prize.status === "locked" ? "Hidden" : prize.winningTicketLabel}
+                                          {prize.winningTicketLabel}
                                         </div>
                                       </button>
                                     </PopoverTrigger>
@@ -903,7 +903,7 @@ export default function AdminInstantPool() {
               </DialogTitle>
               <DialogDescription>
                 {pendingAction?.type === "activate"
-                  ? "Activation picks an unsold ticket number in the prize range. Sold loser tickets are never converted."
+                  ? "The assigned winning ticket stays fixed. If this prize has no number yet, one unsold ticket is picked and then never changed. Locked winning tickets stay reserved until you activate."
                   : pendingAction?.type === "delete"
                   ? "This permanently removes this unused prize copy. Won prizes and sold winning tickets cannot be deleted."
                   : pendingAction?.type === "delete-group"

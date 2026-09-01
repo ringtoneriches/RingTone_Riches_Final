@@ -342,8 +342,13 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                   </div>
                 )}
                 {!group && isControlled && (item as Prize).publicStatus === "unavailable" && (
-                  <div className="text-center pt-2">
-                    <Badge variant="outline" className="text-slate-400">Coming soon</Badge>
+                  <div className="text-center pt-2 space-y-1">
+                    <Badge variant="outline" className="text-slate-400">Reserved</Badge>
+                    {(item as Prize).winningTicketNumber ? (
+                      <p className="text-sm text-muted-foreground">
+                        Ticket #{(item as Prize).winningTicketNumber}
+                      </p>
+                    ) : null}
                   </div>
                 )}
                 {!group && isControlled && (item as Prize).publicStatus === "available" && (
@@ -408,6 +413,8 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                     ? ticket.winnerDisplayName || "Won"
                     : ticket.publicStatus === "available"
                     ? "Available"
+                    : ticket.winningTicketNumber
+                    ? "Reserved"
                     : "Coming soon"}
                 </div>
               </div>

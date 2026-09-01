@@ -128,9 +128,11 @@ export async function assertCanPurchaseTickets(
     );
   }
   const remaining = maxTickets - Number(competition.soldTickets || 0);
-  if (qty > remaining) {
+  const reservedUnsold = await countReservedUnsold(db, competitionId, maxTickets);
+  const buyable = Math.max(0, remaining - reservedUnsold);
+  if (qty > buyable) {
     throw new InstantWinError(
-      remaining <= 0 ? "This competition is sold out" : `Only ${remaining} tickets remaining`,
+      buyable <= 0 ? "This competition is sold out" : `Only ${buyable} tickets remaining`,
       400,
       "sold_out"
     );
@@ -217,6 +219,37 @@ async function soldSeqsInRange(tx: DbTx, competitionId: string, from: number, to
   );
 }
 
+async function reservedWinningSeqs(tx: DbTx, competitionId: string) {
+  const rows = await tx
+    .select({ n: instantWinPrizes.winningTicketNumber })
+    .from(instantWinPrizes)
+    .where(
+      and(
+        eq(instantWinPrizes.competitionId, competitionId),
+        eq(instantWinPrizes.status, "locked"),
+        isNotNull(instantWinPrizes.winningTicketNumber)
+      )
+    );
+  return new Set(
+    rows
+      .map((r) => Number(r.n))
+      .filter((n) => Number.isFinite(n) && n >= 1)
+  );
+}
+
+async function countReservedUnsold(tx: DbTx, competitionId: string, maxTickets: number) {
+  const reserved = await reservedWinningSeqs(tx, competitionId);
+  if (!reserved.size) return 0;
+  const from = Math.min(...reserved);
+  const to = Math.max(...reserved);
+  const sold = await soldSeqsInRange(tx, competitionId, from, to);
+  let reservedUnsold = 0;
+  for (const n of reserved) {
+    if (n <= maxTickets && !sold.has(n)) reservedUnsold += 1;
+  }
+  return reservedUnsold;
+}
+
 async function allocatedWinningNumbers(tx: DbTx, competitionId: string, exceptPrizeId?: string) {
   const rows = await tx
     .select({
@@ -261,6 +294,7 @@ async function allocateRandomSeqsInBlocks(
   blockSize: number
 ): Promise<number[]> {
   const size = Math.min(Math.max(1, blockSize), maxTickets);
+  const reserved = await reservedWinningSeqs(tx, competitionId);
   const seqs: number[] = [];
   let need = quantity;
 
@@ -269,7 +303,7 @@ async function allocateRandomSeqsInBlocks(
     const sold = await soldSeqsInRange(tx, competitionId, start, end);
     const available: number[] = [];
     for (let n = start; n <= end; n++) {
-      if (!sold.has(n)) available.push(n);
+      if (!sold.has(n) && !reserved.has(n)) available.push(n);
     }
     if (available.length === 0) continue;
     const take = Math.min(need, available.length);
@@ -278,6 +312,24 @@ async function allocateRandomSeqsInBlocks(
   }
 
   if (need > 0) {
+    throw new InstantWinError("This competition is sold out", 400, "sold_out");
+  }
+  return seqs;
+}
+
+async function allocateLowestAvailableSeqs(
+  tx: DbTx,
+  competitionId: string,
+  quantity: number,
+  maxTickets: number
+): Promise<number[]> {
+  const sold = await soldSeqsInRange(tx, competitionId, 1, maxTickets);
+  const reserved = await reservedWinningSeqs(tx, competitionId);
+  const seqs: number[] = [];
+  for (let n = 1; n <= maxTickets && seqs.length < quantity; n++) {
+    if (!sold.has(n) && !reserved.has(n)) seqs.push(n);
+  }
+  if (seqs.length < quantity) {
     throw new InstantWinError("This competition is sold out", 400, "sold_out");
   }
   return seqs;
@@ -622,7 +674,8 @@ async function issuePlayTicketsInner(tx: DbTx, opts: IssueTicketsOpts) {
     if (sold + quantity > maxTickets) {
       throw new InstantWinError("This competition is sold out", 400, "sold_out");
     }
-    if (!useBlocks && startSeq + quantity - 1 > maxTickets) {
+    const reservedUnsold = await countReservedUnsold(tx, opts.competitionId, maxTickets);
+    if (quantity > Math.max(0, maxTickets - sold - reservedUnsold)) {
       throw new InstantWinError("This competition is sold out", 400, "sold_out");
     }
     const maxPerOrder = await getMaxTicketsPerOrder();
@@ -647,7 +700,7 @@ async function issuePlayTicketsInner(tx: DbTx, opts: IssueTicketsOpts) {
         blockSize
       );
     } else {
-      seqs = Array.from({ length: quantity }, (_, i) => startSeq + i);
+      seqs = await allocateLowestAvailableSeqs(tx, opts.competitionId, quantity, maxTickets);
     }
   } else {
     seqs = Array.from({ length: quantity }, () => null);
@@ -693,7 +746,10 @@ async function issuePlayTicketsInner(tx: DbTx, opts: IssueTicketsOpts) {
     }
   }
 
-  const nextTicketNumber = controlled ? startSeq + quantity : Number(competition.nextTicketNumber || 1);
+  const issuedSeqs = seqs.filter((n): n is number => Number.isFinite(Number(n)));
+  const nextTicketNumber = controlled
+    ? Math.max(startSeq, ...(issuedSeqs.length ? issuedSeqs : [startSeq - 1])) + 1
+    : Number(competition.nextTicketNumber || 1);
   const soldTickets =
     opts.incrementSold === false ? sold : sold + quantity;
 
@@ -875,17 +931,13 @@ export async function activateInstantWinPrize(
         winningTicketNumber
       );
       if (sold.has(Number(winningTicketNumber))) {
-        const picked = await pickUnsoldNumberInRange(
-          tx,
-          prize.competitionId,
-          prize.rangeFrom,
-          prize.rangeTo,
-          prize.id
+        throw new InstantWinError(
+          `Winning ticket #${winningTicketNumber} is already sold and stays assigned to this prize. It cannot be replaced.`,
+          400,
+          "ticket_fixed"
         );
-        winningTicketNumber = picked.number;
-        rngRef = picked.rngRef;
       }
-    } else {
+    } else if (!winningTicketNumber) {
       const picked = await pickUnsoldNumberInRange(
         tx,
         prize.competitionId,
@@ -918,7 +970,7 @@ export async function activateInstantWinPrize(
       activationRule: { type: prize.activationType, value: prize.activationValue },
       rngRef,
       winningTicketNumber,
-      reason: opts?.reason || "Prize activated; winning number allocated from unsold range",
+      reason: opts?.reason || "Prize activated; winning number stays fixed",
     });
 
     return updated;
@@ -1140,14 +1192,10 @@ export async function listInstantWinPrizes(
     : rows;
 
   return filtered.map((prize) => {
-    const hideTicket = prize.status === "locked" && !opts?.revealLockedTickets;
     return {
       ...prize,
-      winningTicketNumber: hideTicket ? null : prize.winningTicketNumber,
-      winningTicketHidden: hideTicket,
-      winningTicketLabel: hideTicket
-        ? "Hidden"
-        : prize.winningTicketNumber
+      winningTicketHidden: false,
+      winningTicketLabel: prize.winningTicketNumber
         ? `#${prize.winningTicketNumber}`
         : "Not generated",
     };
@@ -1181,7 +1229,7 @@ export async function getPublicPrizePool(competitionId: string) {
     .filter((p) => p.status !== "disabled")
     .map((p) => {
       const unavailable = p.status === "locked";
-      const showTicket = p.status === "active" || p.status === "won";
+      const showTicket = Boolean(p.winningTicketNumber);
       return {
         id: p.id,
         competitionId: p.competitionId,
