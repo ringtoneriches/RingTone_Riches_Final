@@ -9,7 +9,6 @@ import { PrizeModal } from "@/components/games/prize-modal";
 import { useState, useEffect, useRef } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import CountdownTimer from "@/pages/countdownTimer";
 import congrats from "../../../attached_assets/sounds/congrats.mp3";
 import { completeSession, type CompleteSessionPayload } from "@/services/scratch-session-service";
 import { usePurchaseArrivalToast } from "@/lib/purchase-toast";

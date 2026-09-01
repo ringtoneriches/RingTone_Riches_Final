@@ -7,6 +7,7 @@ import {
   ToastTitle,
   ToastViewport,
 } from "@/components/ui/toast"
+import CashbackBurst from "@/components/billing/CashbackBurst"
 
 function SuccessMark() {
   return (
@@ -24,25 +25,29 @@ export function Toaster() {
 
   return (
     <ToastProvider>
-      {toasts.map(function ({ id, title, description, action, variant, ...props }) {
+      {toasts.map(function ({ id, title, description, action, variant, cashback, ...props }) {
         const isWin = variant === "success"
+        const hasCashback = Number(cashback) >= 0.01
         return (
           <Toast key={id} variant={variant} {...props}>
             {isWin ? (
-              <div className="rr-toast-win-inner">
+              <div className={`rr-toast-win-inner${hasCashback ? " is-cashback" : ""}`}>
                 <span className="rr-toast-win-burst" aria-hidden>
                   <i /><i /><i /><i /><i /><i /><i /><i />
                 </span>
-                <SuccessMark />
-                <div className="rr-toast-win-copy">
-                  <p className="rr-toast-win-kicker">Locked in</p>
-                  {title && <ToastTitle className="rr-toast-win-title">{title}</ToastTitle>}
-                  {description && (
-                    <ToastDescription className="rr-toast-win-desc">
-                      {description}
-                    </ToastDescription>
-                  )}
+                <div className="rr-toast-win-head">
+                  <SuccessMark />
+                  <div className="rr-toast-win-copy">
+                    <p className="rr-toast-win-kicker">{hasCashback ? "Paid · rewarded" : "Locked in"}</p>
+                    {title && <ToastTitle className="rr-toast-win-title">{title}</ToastTitle>}
+                    {description && (
+                      <ToastDescription className="rr-toast-win-desc">
+                        {description}
+                      </ToastDescription>
+                    )}
+                  </div>
                 </div>
+                {hasCashback ? <CashbackBurst amount={Number(cashback)} /> : null}
               </div>
             ) : (
               <div className="grid gap-1">

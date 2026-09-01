@@ -1,9 +1,15 @@
-import { useEffect } from "react";
-import { Check, Lock, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Loader2 } from "lucide-react";
 import { gameTypeLabel } from "@/lib/play-paths";
 import type { BasketItem } from "@/lib/basket";
 import type { CartCheckoutProgress } from "@/lib/cart-card-checkout";
 import { CheckoutPulse } from "@/components/cart/CheckoutLaunch";
+
+const WAIT_LINES = [
+  "This might take a few seconds.",
+  "Lining up each play in your cart.",
+  "Stay on this page — don’t close the tab.",
+];
 
 type Props = {
   open: boolean;
@@ -20,6 +26,8 @@ function shortTitle(title: string) {
 }
 
 export default function CartCheckoutOverlay({ open, items, progress }: Props) {
+  const [lineIndex, setLineIndex] = useState(0);
+
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -29,22 +37,30 @@ export default function CartCheckoutOverlay({ open, items, progress }: Props) {
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setInterval(() => {
+      setLineIndex((current) => (current + 1) % WAIT_LINES.length);
+    }, 2400);
+    return () => window.clearInterval(timer);
+  }, [open]);
+
   if (!open) return null;
 
   const total = progress?.total || items.length || 1;
   const step = progress?.step ?? 0;
   const phase = progress?.phase || "adding";
   const opening = phase === "opening";
+  const paying = phase === "paying" || opening;
   const bar = opening ? 100 : Math.min(92, Math.round((Math.max(step, 0.15) / total) * 88));
-  const headline = opening
-    ? "Opening secure payment"
-    : phase === "paying"
-      ? "Confirming your plays"
-      : step > 0
-        ? `Preparing ${step} of ${total}`
-        : "Preparing your cart";
+  const headline = paying
+    ? "Confirming your payment"
+    : step > 0
+      ? `Preparing ${step} of ${total}`
+      : "Preparing your cart";
   const readyCount = opening ? items.length : Math.max(step, 0);
   const shown = items.slice(0, readyCount);
+  const waitLine = WAIT_LINES[lineIndex];
 
   return (
     <div
@@ -55,7 +71,7 @@ export default function CartCheckoutOverlay({ open, items, progress }: Props) {
       aria-label={headline}
     >
       <div className="absolute inset-0 bg-[#050505]/80 backdrop-blur-md" />
-      <div className="relative w-full max-w-[26rem] overflow-hidden rounded-3xl border border-[#F1D47A]/25 bg-[#0A0A0D] shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
+      <div className="relative max-h-[90vh] w-full max-w-[26rem] overflow-y-auto overflow-x-hidden rounded-3xl border border-[#F1D47A]/25 bg-[#0A0A0D] shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#F1D47A]/70 to-transparent" />
         <div className="px-6 pb-6 pt-8 sm:px-8">
           <div className="mx-auto">
@@ -68,11 +84,17 @@ export default function CartCheckoutOverlay({ open, items, progress }: Props) {
           <h2 className="mt-2 text-center font-prize text-3xl leading-none text-white sm:text-[2.1rem]">
             {headline}
           </h2>
-          <p className="mx-auto mt-3 max-w-[18rem] text-center text-sm leading-relaxed text-white/50">
-            {opening
-              ? "Taking you to card payment. Don’t close this tab."
-              : "We’re lining up each game, then you’ll pay once by card."}
-          </p>
+          <div className="rr-confirm-cycle mx-auto mt-3 max-w-[18.5rem] text-center text-sm leading-relaxed text-white/50">
+            <p key={waitLine} className="rr-confirm-cycle__line">
+              {waitLine}
+            </p>
+          </div>
+
+          <div className="rr-confirm-promo">
+            <p className="rr-confirm-promo__kicker">Ringtone Riches</p>
+            <p className="rr-confirm-promo__title">More plays.<br />Bigger shots.</p>
+            <p className="rr-confirm-promo__tag">Win bigger. Play louder.</p>
+          </div>
 
           <div className="mt-6 h-1 overflow-hidden rounded-full bg-white/8">
             <div
@@ -82,7 +104,7 @@ export default function CartCheckoutOverlay({ open, items, progress }: Props) {
           </div>
 
           {shown.length > 0 && (
-            <div className="relative mt-5 h-[11.5rem] overflow-hidden">
+            <div className="relative mt-5 h-[7.6rem] overflow-hidden sm:h-[11.5rem]">
               <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-10 bg-gradient-to-b from-[#0A0A0D] to-transparent" />
               <ul
                 className="flex flex-col gap-2 will-change-transform"

@@ -109,3 +109,23 @@ export function gameTypeLabel(type?: string) {
       return "Competition";
   }
 }
+
+export function playUnitLabel(type?: string, count = 1) {
+  const many = count !== 1;
+  switch ((type || "").toLowerCase()) {
+    case "spin":
+      return many ? "spins" : "spin";
+    case "scratch":
+      return many ? "cards" : "card";
+    case "pop":
+      return many ? "pops" : "pop";
+    case "plinko":
+      return many ? "drops" : "drop";
+    case "voltz":
+    case "slot":
+    case "royal":
+      return many ? "plays" : "play";
+    default:
+      return many ? "tickets" : "ticket";
+  }
+}

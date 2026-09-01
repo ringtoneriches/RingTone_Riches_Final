@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,7 @@ import BrandWait from "@/components/brand/BrandWait";
 import ChaserBorder from "@/components/home/ChaserBorder";
 import { getPrizeDisplay, parsePrizeAmount } from "@/lib/competition-display";
 import { showPurchaseSuccessToast } from "@/lib/purchase-toast";
+import { waitConfirmScreen } from "@/lib/confirm-screen";
 
 /* Colour tokens live on .rr-billing in index.css */
 
@@ -161,6 +162,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
   const [showDiscountDialog, setShowDiscountDialog] = useState(false);
   const [discountCode, setDiscountCode] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const confirmStartedAt = useRef(0);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [entryTimer, setEntryTimer] = useState(10 * 60);
   const queryClient = useQueryClient();
@@ -391,11 +393,11 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
       if (result.remainingAmount > 0) throw new Error(`Insufficient funds. You need £${result.remainingAmount.toFixed(2)} more.`);
       return result;
     },
-    onSuccess: (data) => {
-      setIsProcessing(false);
+    onSuccess: async (data) => {
       localStorage.removeItem("pendingOrderInfo");
       if (data.redirectUrl) {
-        localStorage.setItem("pendingInstaplayOrder", JSON.stringify({ orderId, orderType, wheelType, competitionId: order?.competitionId, timestamp: Date.now() }));
+        localStorage.setItem("pendingInstaplayOrder", JSON.stringify({ orderId, orderType, wheelType, competitionId: order?.competitionId, cardSpend: totalAmount, timestamp: Date.now() }));
+        await waitConfirmScreen(confirmStartedAt.current);
         window.location.href = data.redirectUrl;
         return;
       }
@@ -404,7 +406,11 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         queryClient.invalidateQueries({ queryKey: [getEndpoint(), orderId] });
         const competitionId = data.competitionId || order?.competitionId;
-        setTimeout(() => setLocation(getGameSuccessPath(competitionId, orderId)), 1500);
+        await waitConfirmScreen(confirmStartedAt.current);
+        setIsProcessing(false);
+        setLocation(getGameSuccessPath(competitionId, orderId));
+      } else {
+        setIsProcessing(false);
       }
     },
     onError: (error: any) => {
@@ -450,6 +456,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
     }
 
     if (selectedMethods.instaplay) {
+      confirmStartedAt.current = Date.now();
       setIsProcessing(true);
       processPaymentMutation.mutate({ useInstaplay: true });
       return;
@@ -460,6 +467,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
       return;
     }
 
+    confirmStartedAt.current = Date.now();
     setIsProcessing(true);
     processPaymentMutation.mutate({
       useWalletBalance: selectedMethods.walletBalance,
@@ -477,7 +485,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
         const data = JSON.parse(pending);
         if (data.orderId === orderId) {
           localStorage.removeItem("pendingInstaplayOrder");
-          showPurchaseSuccessToast(toast, data.orderType || orderType, undefined, data.wheelType || wheelType);
+          showPurchaseSuccessToast(toast, data.orderType || orderType, undefined, data.wheelType || wheelType, Number(data.cardSpend) || undefined);
           queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
           queryClient.invalidateQueries({ queryKey: [getEndpoint(), orderId] });
           setTimeout(() => setLocation(getGameSuccessPath(data.competitionId, orderId)), 1500);
@@ -538,9 +546,10 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
         <BrandWait
           mode="overlay"
           kicker="Secure payment"
-          headline="Confirming"
-          subtitle="Stay on this page while we finish this payment."
+          headline="Confirming your payment"
+          subtitle="This might take a few seconds. Stay on this page."
           trust="Don’t close this tab"
+          promo
         />
       )}
 
@@ -754,8 +763,13 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                     <CreditCard className="h-[18px] w-[18px]" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-white">Card</div>
-                    <div className="mt-0.5 text-xs text-white/42">Pay now · no wallet top-up</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-bold text-white">Card</div>
+                      <span className="rounded-full border border-[#D4AF37]/35 bg-[#D4AF37]/12 px-1.5 py-px text-[9px] font-black uppercase tracking-widest text-[#F1D47A]">
+                        1% back
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-white/42">1% back to your wallet</div>
                     {selectedMethods.instaplay && totalAmount < MIN_PURCHASE ? (
                       <div className="mt-1 flex items-center gap-1.5 text-[11px] text-[#E8A14A]">
                         <AlertCircle className="h-3 w-3" />

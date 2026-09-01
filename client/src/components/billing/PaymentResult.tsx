@@ -1,9 +1,16 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
 import { Ban, Clock, XCircle } from "lucide-react";
 import { CheckoutPulse } from "@/components/brand/BrandWait";
+import CashbackBurst from "@/components/billing/CashbackBurst";
+
+const PROCESS_LINES = [
+  "This might take a few seconds.",
+  "Locking in your plays.",
+  "Stay on this page.",
+];
 
 export type PaymentResultVariant = "processing" | "success" | "cancelled" | "failed" | "waiting";
 
@@ -15,6 +22,7 @@ type Props = {
   actionLabel?: string;
   onAction?: () => void;
   extra?: ReactNode;
+  cashback?: number;
 };
 
 function ProcessingMark() {
@@ -57,7 +65,22 @@ export default function PaymentResult({
   actionLabel,
   onAction,
   extra,
+  cashback,
 }: Props) {
+  const [lineIndex, setLineIndex] = useState(0);
+  const processing = variant === "processing" || variant === "waiting";
+
+  useEffect(() => {
+    if (!processing) return;
+    const timer = window.setInterval(() => {
+      setLineIndex((current) => (current + 1) % PROCESS_LINES.length);
+    }, 2400);
+    return () => window.clearInterval(timer);
+  }, [processing]);
+
+  const displayTitle = processing ? "CONFIRMING YOUR PAYMENT" : title;
+  const displayMessage = processing ? PROCESS_LINES[lineIndex] : message;
+
   return (
     <div className="rr-page relative min-h-screen overflow-hidden bg-[#050505] text-white">
       <DigitalAtmosphere />
@@ -76,10 +99,20 @@ export default function PaymentResult({
             <StatusMark variant={variant} />
           </div>
 
-          <h1 className="font-prize text-4xl leading-none text-white sm:text-5xl">{title}</h1>
-          <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-white/50 sm:text-base">
-            {message}
-          </p>
+          <h1 className="font-prize text-4xl leading-none text-white sm:text-5xl">{displayTitle}</h1>
+          <div className="rr-confirm-cycle mx-auto mt-3 max-w-sm text-sm leading-relaxed text-white/50 sm:text-base">
+            <p key={displayMessage} className="rr-confirm-cycle__line">
+              {displayMessage}
+            </p>
+          </div>
+          {processing ? (
+            <div className="rr-confirm-promo mx-auto max-w-sm text-left">
+              <p className="rr-confirm-promo__kicker">Ringtone Riches</p>
+              <p className="rr-confirm-promo__title">More plays.<br />Bigger shots.</p>
+              <p className="rr-confirm-promo__tag">Win bigger. Play louder.</p>
+            </div>
+          ) : null}
+          {variant === "success" ? <CashbackBurst amount={Number(cashback) || 0} variant="hero" /> : null}
           {extra}
 
           {actionLabel && onAction ? (

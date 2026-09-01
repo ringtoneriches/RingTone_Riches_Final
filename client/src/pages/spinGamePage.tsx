@@ -10,7 +10,6 @@ import { PrizeModal } from "@/components/games/prize-modal";
 import { usePurchaseArrivalToast } from "@/lib/purchase-toast";
 import SpinWheel from "@/components/games/spinwheeltest";
 import { useLocation } from "wouter";
-import CountdownTimer from "@/pages/countdownTimer";
 import congrats from "../../../attached_assets/sounds/congrats.mp3"
 import SpinWheel2 from "@/components/games/spinwheeltest2";
 

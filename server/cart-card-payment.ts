@@ -5,6 +5,7 @@ import { db } from "./db";
 import { cashflows } from "./cashflows";
 import { isAuthenticated } from "./customAuth";
 import { issuePlayTickets } from "./services/instant-win-pool";
+import { creditCardCashback } from "./services/card-cashback";
 import { sendOrderConfirmationEmail, type OrderConfirmationPayload } from "./email";
 import {
   auditLogs,
@@ -220,6 +221,13 @@ export async function fulfillCartCardPayment(opts: {
           : undefined,
     }).catch((err) => console.error("Cart confirmation email failed:", err));
   }
+
+  await creditCardCashback({
+    userId: opts.userId,
+    cardAmount: opts.paidAmount,
+    paymentRef: opts.paymentRef,
+    orderId: uniqueIds[0],
+  });
 
   return generatedByOrder.issued;
 }

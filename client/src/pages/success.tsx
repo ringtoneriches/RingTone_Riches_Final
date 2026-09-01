@@ -28,6 +28,7 @@ export default function WalletSuccess() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [statusMessage, setStatusMessage] = useState("Processing your payment...");
+  const [cashback, setCashback] = useState(0);
 
   useEffect(() => {
     const confirmPayment = async () => {
@@ -56,16 +57,21 @@ export default function WalletSuccess() {
           const data = await res.json();
 
           if (res.status === 200 && data.credited) {
+            const creditedBack = Number(data.cashback) || 0;
+            setCashback(creditedBack);
             toast({
-              title: "Payment Received",
-              description: data.message || "Your wallet has been topped up!",
+              variant: "success",
+              title: "Wallet topped up",
+              description: "Your balance is ready to play.",
+              duration: creditedBack >= 0.01 ? 12000 : 9000,
+              cashback: creditedBack,
             });
 
             queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
             queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
 
             setStatusMessage("Wallet successfully updated! Redirecting...");
-            setTimeout(() => (window.location.href = "/wallet"), 1500);
+            setTimeout(() => (window.location.href = "/wallet"), creditedBack >= 0.01 ? 3200 : 1500);
             return;
           }
 
@@ -130,6 +136,7 @@ export default function WalletSuccess() {
       }
       message={statusMessage}
       variant={variant}
+      cashback={variant === "success" ? cashback : 0}
       actionLabel={variant === "failed" || variant === "waiting" ? "Back to wallet" : undefined}
       onAction={
         variant === "failed" || variant === "waiting" ? () => setLocation("/wallet") : undefined

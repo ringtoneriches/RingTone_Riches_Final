@@ -21,7 +21,10 @@ import { startCartCardCheckout, type CartCheckoutProgress } from "@/lib/cart-car
 import { showPurchaseSuccessToast } from "@/lib/purchase-toast";
 import CartCheckoutOverlay from "@/components/cart/CartCheckoutOverlay";
 import CheckoutLaunch from "@/components/cart/CheckoutLaunch";
-import type { BasketItem } from "@/lib/basket";
+import CheckoutBoostModal from "@/components/cart/CheckoutBoostModal";
+import { readBasket, type BasketItem } from "@/lib/basket";
+import { buildCheckoutBoostOffers, cartPayTotal, type CheckoutBoostOffer } from "@/lib/checkout-boost";
+import { waitConfirmScreen } from "@/lib/confirm-screen";
 import { MIN_PURCHASE, validateMinimumPurchase } from "@/components/unified-billing";
 import { User } from "@shared/schema";
 import {
@@ -73,7 +76,11 @@ export default function BasketPage() {
   const [showQuiz, setShowQuiz] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [guestLaunch, setGuestLaunch] = useState(false);
+  const [showBoost, setShowBoost] = useState(false);
   const autoPayStarted = useRef(false);
+  const skipBoostRef = useRef(false);
+  const confirmStartedAt = useRef(0);
+  const [holdConfirm, setHoldConfirm] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -120,7 +127,10 @@ export default function BasketPage() {
         throw new Error(`Need £${remainingAmount.toFixed(2)} more in your wallet.`);
       }
 
-      const snapshot = [...items];
+      const snapshot = readBasket();
+      if (!snapshot.length) throw new Error("Your cart is empty.");
+      confirmStartedAt.current = Date.now();
+      setHoldConfirm(true);
       setCheckoutItems(snapshot);
 
       if (methods.instaplay) {
@@ -184,7 +194,9 @@ export default function BasketPage() {
         wheelType: single?.wheelType || undefined,
       };
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
+      await waitConfirmScreen(confirmStartedAt.current);
+      setHoldConfirm(false);
       setProgress(null);
       if (result.redirected) return;
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
@@ -199,6 +211,7 @@ export default function BasketPage() {
       setLocation("/my-plays");
     },
     onError: (error) => {
+      setHoldConfirm(false);
       setProgress(null);
       if (apiErrorMessage(error) === "login-required" || /401/.test(String((error as Error)?.message))) {
         toast({
@@ -249,30 +262,32 @@ export default function BasketPage() {
     setMethods((prev) => ({ ...prev, [method]: !prev[method] }));
   };
 
-  const startCheckout = () => {
+  const boostOffers = useMemo(() => buildCheckoutBoostOffers(items, totals.pay), [items, totals.pay]);
+
+  const leftoverForPay = (pay: number) => {
+    let remaining = pay;
+    if (!methods.instaplay && methods.wallet) remaining -= Math.min(walletBalance, remaining);
+    if (!methods.instaplay && methods.points && pointsAllowed) remaining -= Math.min(pointsValue, remaining);
+    return Math.max(0, remaining);
+  };
+
+  const goGuestCheckout = () => {
+    setGuestLaunch(true);
+    setLocation("/guest-checkout?from=basket");
+  };
+
+  const continueToPay = () => {
     if (!isAuthenticated) {
-      setGuestLaunch(true);
-      setLocation("/guest-checkout?from=basket");
+      goGuestCheckout();
       return;
     }
-    if (!hasSelectedMethod) {
-      toast({ title: "Select a payment method", description: "Wallet, Ringtone Points, or pay by card." });
-      return;
-    }
-    if (instaplayBlocked) {
-      const validation = validateMinimumPurchase(totals.pay, "instaplay");
+    const payNow = cartPayTotal(readBasket());
+    if (methods.instaplay && payNow < MIN_PURCHASE) {
+      const validation = validateMinimumPurchase(payNow, "instaplay");
       toast({
         variant: "destructive",
         title: `Minimum £${MIN_PURCHASE} for card`,
         description: validation.message,
-      });
-      return;
-    }
-    if (walletShort) {
-      toast({
-        title: "Top up to finish",
-        description: `Need £${remainingAmount.toFixed(2)} more, or pay the cart by card.`,
-        variant: "destructive",
       });
       return;
     }
@@ -282,6 +297,65 @@ export default function BasketPage() {
       return;
     }
     checkout.mutate();
+  };
+
+  const startCheckout = () => {
+    if (isAuthenticated && !hasSelectedMethod) {
+      toast({ title: "Select a payment method", description: "Wallet, Ringtone Points, or pay by card." });
+      return;
+    }
+    if (isAuthenticated && walletShort) {
+      toast({
+        title: "Top up to finish",
+        description: `Need £${remainingAmount.toFixed(2)} more, or pay the cart by card.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!skipBoostRef.current && boostOffers.length > 0) {
+      setShowBoost(true);
+      return;
+    }
+    if (isAuthenticated && instaplayBlocked) {
+      const validation = validateMinimumPurchase(totals.pay, "instaplay");
+      toast({
+        variant: "destructive",
+        title: `Minimum £${MIN_PURCHASE} for card`,
+        description: validation.message,
+      });
+      return;
+    }
+    continueToPay();
+  };
+
+  const handleSkipBoost = () => {
+    skipBoostRef.current = true;
+    setShowBoost(false);
+    continueToPay();
+  };
+
+  const handleAcceptBoost = (offer: CheckoutBoostOffer) => {
+    skipBoostRef.current = true;
+    setQty(offer.competitionId, offer.newQty);
+    setShowBoost(false);
+    const nextPay = cartPayTotal(readBasket());
+    if (isAuthenticated && methods.instaplay && nextPay < MIN_PURCHASE) {
+      const validation = validateMinimumPurchase(nextPay, "instaplay");
+      toast({
+        variant: "destructive",
+        title: `Minimum £${MIN_PURCHASE} for card`,
+        description: validation.message,
+      });
+      return;
+    }
+    if (isAuthenticated && leftoverForPay(nextPay) > 0.009) {
+      toast({
+        title: "Plays added",
+        description: `Need £${leftoverForPay(nextPay).toFixed(2)} more, or pay the cart by card.`,
+      });
+      return;
+    }
+    continueToPay();
   };
 
   useEffect(() => {
@@ -529,12 +603,12 @@ export default function BasketPage() {
                           <span className="min-w-0 flex-1">
                             <span className="flex min-w-0 items-center gap-2">
                               <span className="truncate text-sm font-bold">Instant Play</span>
-                              <span className="shrink-0 rounded-full border border-[#C8102E]/30 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[#FF263D]">
-                                Card
+                              <span className="shrink-0 rounded-full border border-[#D4AF37]/35 bg-[#D4AF37]/12 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[#F1D47A]">
+                                1% back
                               </span>
                             </span>
                             <span className="mt-0.5 block text-xs text-white/45">
-                              Pay by card · no wallet top-up
+                              1% back to your wallet · no top-up needed
                               {methods.instaplay && instaplayBlocked && (
                                 <span className="mt-1 block text-[#FF263D]">
                                   Card needs £{MIN_PURCHASE.toFixed(2)} per game, same as ENTER NOW
@@ -606,9 +680,16 @@ export default function BasketPage() {
         />
       )}
       <CartCheckoutOverlay
-        open={checkout.isPending}
+        open={checkout.isPending || holdConfirm}
         items={checkoutItems.length ? checkoutItems : items}
         progress={progress}
+      />
+      <CheckoutBoostModal
+        open={showBoost}
+        currentTotal={totals.pay}
+        offers={boostOffers}
+        onSkip={handleSkipBoost}
+        onConfirm={handleAcceptBoost}
       />
 
       <Dialog open={showQuiz} onOpenChange={setShowQuiz}>
