@@ -8,7 +8,14 @@ export type PlayResultRow = {
   status: string;
   tone: PlayResultTone;
   prize: string;
+  ticketNumber?: string | number | null;
 };
+
+export function formatResultTicket(ticketNumber?: string | number | null) {
+  if (ticketNumber == null || ticketNumber === "") return null;
+  const raw = String(ticketNumber).trim().replace(/^#/, "");
+  return raw ? `#${raw}` : null;
+}
 
 type Props = {
   title?: string;
@@ -66,8 +73,8 @@ export default function PlayResultsTable({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-[40px_minmax(0,1fr)_minmax(5.5rem,auto)] border-b border-white/10 px-4 py-2 sm:grid-cols-[52px_1fr_8rem] sm:px-5">
-            {["#", "Status", "Prize"].map((h) => (
+          <div className="grid grid-cols-[36px_minmax(0,1fr)_minmax(5.5rem,1.1fr)_minmax(4.5rem,auto)] border-b border-white/10 px-4 py-2 sm:grid-cols-[52px_1fr_minmax(8rem,1.2fr)_minmax(7rem,auto)] sm:px-5">
+            {["#", "Status", "Ticket", "Prize"].map((h) => (
               <div
                 key={h}
                 className={`text-[9px] font-black uppercase tracking-[0.16em] text-white/35 ${
@@ -79,10 +86,15 @@ export default function PlayResultsTable({
             ))}
           </div>
           <div className="max-h-[min(52vh,420px)] overflow-y-auto">
-            {rows.map((row, i) => (
+            {rows.map((row, i) => {
+              const ticketLabel =
+                row.tone === "win" || row.tone === "replay"
+                  ? formatResultTicket(row.ticketNumber)
+                  : null;
+              return (
               <div
                 key={row.id ?? `${row.number}-${i}`}
-                className="grid grid-cols-[40px_minmax(0,1fr)_minmax(5.5rem,auto)] items-center gap-2 border-b border-white/10 px-4 py-2.5 sm:grid-cols-[52px_1fr_8rem] sm:px-5"
+                className="grid grid-cols-[36px_minmax(0,1fr)_minmax(5.5rem,1.1fr)_minmax(4.5rem,auto)] items-center gap-2 border-b border-white/10 px-4 py-2.5 sm:grid-cols-[52px_1fr_minmax(8rem,1.2fr)_minmax(7rem,auto)] sm:px-5"
                 style={{
                   borderLeft: `3px solid ${
                     row.tone === "win" || row.tone === "replay"
@@ -106,6 +118,12 @@ export default function PlayResultsTable({
                   </span>
                 </div>
                 <div
+                  className="min-w-0 truncate text-[11px] font-bold tabular-nums text-white/50"
+                  title={ticketLabel || undefined}
+                >
+                  {ticketLabel || "—"}
+                </div>
+                <div
                   className={`truncate text-right text-sm font-black tabular-nums ${
                     row.tone === "win" || row.tone === "replay" ? "text-[#F1D47A]" : "text-white/30"
                   }`}
@@ -114,7 +132,8 @@ export default function PlayResultsTable({
                   {row.prize}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
@@ -152,4 +171,87 @@ export function prizeFromReward(opts: {
     return { status: "Win", tone: "win", prize: raw != null && raw !== "" ? String(raw) : "Win" };
   }
   return { status: "Lose", tone: "lose", prize: "—" };
+}
+
+export type SpinHistoryRow = {
+  status: string;
+  prize: { brand: string; amount: any; type?: string; ticketNumber?: string | null };
+  ticketNumber?: string | null;
+};
+
+export function prizeFromSpinApi(spin: any) {
+  const prize = spin?.prize || {
+    brand: spin?.label || spin?.prizeName || "-",
+    amount: spin?.value ?? spin?.amount ?? 0,
+    type: spin?.type || (spin?.isWin ? spin?.rewardType : "none"),
+  };
+  return {
+    ...prize,
+    ticketNumber: prize.ticketNumber || spin?.ticketNumber || null,
+  };
+}
+
+export function applySpinPlayTickets(
+  history: SpinHistoryRow[],
+  playTickets: Array<string | null | undefined>,
+) {
+  if (!playTickets.length) return history;
+  let i = 0;
+  let changed = false;
+  const next = history.map((row) => {
+    if (row.status !== "SPUN") return row;
+    const existing = row.prize?.ticketNumber || row.ticketNumber;
+    if (existing) {
+      i += 1;
+      return row;
+    }
+    const ticket = playTickets[i++];
+    if (!ticket) return row;
+    changed = true;
+    return {
+      ...row,
+      ticketNumber: ticket,
+      prize: { ...row.prize, ticketNumber: ticket },
+    };
+  });
+  return changed ? next : history;
+}
+
+export function rowsFromSpinHistory(history: SpinHistoryRow[]): PlayResultRow[] {
+  return history.map((item, i) => {
+    const ticketNumber = item.prize?.ticketNumber ?? item.ticketNumber;
+    if (item.status !== "SPUN") {
+      return { id: i, number: i + 1, status: "Pending", tone: "pending" as const, prize: "—", ticketNumber: null };
+    }
+    const amount = item.prize?.amount;
+    const type = String(item.prize?.type || "").toLowerCase();
+    const isLoss =
+      type === "none" ||
+      type === "lose" ||
+      amount === "-" ||
+      amount === 0 ||
+      amount === "0" ||
+      item.prize?.brand === "X" ||
+      !amount;
+
+    if (isLoss) {
+      return { id: i, number: i + 1, status: "Lose", tone: "lose" as const, prize: "Lose", ticketNumber: null };
+    }
+
+    const amountText = String(amount);
+    const isPoints = type === "points" || /ringtone/i.test(amountText);
+    let prize: string;
+    if (isPoints) {
+      const n = parseInt(amountText.replace(/[^\d]/g, ""), 10);
+      prize = n ? `${n.toLocaleString()} pts` : amountText;
+    } else if (typeof amount === "number") {
+      prize = `£${amount.toFixed(2)}`;
+    } else if (type === "cash") {
+      const n = Number(amount);
+      prize = Number.isFinite(n) ? `£${n.toFixed(2)}` : `£${amount}`;
+    } else {
+      prize = amountText;
+    }
+    return { id: i, number: i + 1, status: "Win", tone: "win" as const, prize, ticketNumber };
+  });
 }

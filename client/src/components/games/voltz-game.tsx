@@ -9,6 +9,7 @@ import surgeSoundUrl from "@assets/surgessound_1772193798276.mp3";
 import { useLocation } from "wouter";
 import GameResultOverlay from "@/components/games/GameResultOverlay";
 import { formatVoltzPrizeHeadline, formatVoltzSwitchCompact } from "@/lib/voltz-display";
+import RevealAllBatchSummary, { batchRowsFromRewards } from "@/components/games/RevealAllBatchSummary";
 
 interface VoltzGameProps {
   orderId: string;
@@ -342,179 +343,25 @@ const [showRevealAllSummary, setShowRevealAllSummary] = useState(false);
   }
 }, [orderId, competitionId]);
 
-// Add reveal all summary component
-const RevealAllSummary = () => {
-  if (!revealAllResults) return null;
-  
-  const wins = revealAllResults.filter(r => r.isWin);
-  const physicalWins = revealAllResults.filter(r => r.isPhysical);
-  const freeReplays = revealAllResults.filter(r => r.outcome === "freeReplay");
-  const noWins = revealAllResults.filter(r => r.outcome === "noWin");
-  
-  const totalCash = wins
-    .filter(r => r.rewardType === "cash")
-    .reduce((sum, r) => sum + parseFloat(r.rewardValue || "0"), 0);
-  
-  const totalPoints = wins
-    .filter(r => r.rewardType === "points")
-    .reduce((sum, r) => sum + parseInt(r.rewardValue || "0"), 0);
-  
-  const formatSwitchText = (text: string) => formatVoltzSwitchCompact(text);
-  
-  return (
-    <div
-      className="vg-root absolute inset-0 flex items-center justify-center rounded-2xl z-30"
-      style={{
-        background: 'radial-gradient(ellipse at 50% 40%, rgba(241,212,122,0.08) 0%, rgba(5,5,5,0.96) 70%)',
-      }}
-    >
-      <div
-        className="vg-glass relative w-full max-w-[380px] mx-4 max-h-[85%] overflow-y-auto"
-        style={{
-          borderRadius: '24px',
-          border: '1px solid rgba(241,212,122,0.35)',
-          background: '#050505',
-          boxShadow: '0 0 60px rgba(241,212,122,0.12), 0 0 0 1px rgba(241,212,122,0.08)',
-        }}
-      >
-        {/* Header */}
-        <div className="sticky top-0 z-10 px-5 py-4 border-b border-[#F1D47A]/20"
-          style={{ background: '#050505' }}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-[#F1D47A]" />
-              <span className="vg-title text-xl text-[#F1D47A]">BATCH COMPLETE</span>
-            </div>
-            <button
-              onClick={() => {
-                setShowRevealAllSummary(false);
-                setRevealAllResults(null);
-              }}
-              className="w-8 h-8 rounded-full flex items-center justify-center border border-[#F1D47A]/30"
-            >
-              <X className="w-4 h-4 text-[#F1D47A]/70" />
-            </button>
-          </div>
-          
-          {/* Summary stats */}
-          <div className="grid grid-cols-4 gap-2 mt-3">
-            <div className="text-center p-2 rounded-lg bg-[#F1D47A]/5 border border-[#F1D47A]/15">
-              <div className="text-[#F1D47A] text-lg font-bold">{revealAllResults.length}</div>
-              <div className="text-[#F1D47A]/50 text-[9px] uppercase tracking-wider">Plays</div>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-[#F1D47A]/5 border border-[#F1D47A]/15">
-              <div className="text-[#F1D47A] text-lg font-bold">{wins.length + physicalWins.length}</div>
-              <div className="text-[#F1D47A]/50 text-[9px] uppercase tracking-wider">Wins</div>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-[#F1D47A]/5 border border-[#F1D47A]/15">
-              <div className="text-[#F1D47A] text-lg font-bold">{freeReplays.length}</div>
-              <div className="text-[#F1D47A]/50 text-[9px] uppercase tracking-wider">Replays</div>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-white/5 border border-white/10">
-              <div className="text-[#fff8ee] text-lg font-bold">{noWins.length}</div>
-              <div className="text-white/40 text-[9px] uppercase tracking-wider">No Win</div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Results list */}
-        <div className="px-4 py-3 space-y-2">
-          {revealAllResults.map((result, idx) => (
-            <div
-              key={idx}
-              className="flex items-center gap-3 p-3 rounded-xl"
-              style={{
-                background: result.isWin || result.isPhysical || result.outcome === "freeReplay"
-                  ? 'linear-gradient(90deg, rgba(241,212,122,0.08) 0%, transparent 100%)'
-                  : 'rgba(255,255,255,0.02)',
-                border: result.isWin || result.isPhysical || result.outcome === "freeReplay"
-                  ? '1px solid rgba(241,212,122,0.18)'
-                  : '1px solid rgba(255,255,255,0.06)',
-              }}
-            >
-              {/* Switch pills */}
-              <div className="flex gap-1.5">
-                {result.switchTexts.map((text, i) => (
-                  <div
-                    key={i}
-                    className="px-2 py-0.5 text-[10px] font-bold rounded-md"
-                    style={{
-                      background: 'rgba(0,0,0,0.4)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      color: '#ddd',
-                    }}
-                  >
-                    {formatSwitchText(text)}
-                  </div>
-                ))}
-              </div>
-              
-              {/* Result indicator */}
-              <div className="flex-1 flex items-center justify-end gap-2">
-                {result.isWin && (
-                  <>
-                    <span className="text-[#F1D47A] text-sm font-bold">
-                      {result.rewardType === "points"
-                        ? `${formatVoltzPrizeHeadline("points", result.rewardValue)} Ringtone Points`
-                        : formatVoltzPrizeHeadline(result.rewardType, result.rewardValue)}
-                    </span>
-                    <Trophy className="w-4 h-4 text-[#F1D47A]" />
-                  </>
-                )}
-                {result.isPhysical && (
-                  <>
-                    <span className="text-[#F1D47A] text-xs truncate max-w-[80px]">{result.prizeName}</span>
-                    <Package className="w-4 h-4 text-[#F1D47A]" />
-                  </>
-                )}
-                {result.outcome === "freeReplay" && (
-                  <>
-                    <span className="text-[#F1D47A] text-sm">+1 Play</span>
-                    <RotateCcw className="w-4 h-4 text-[#F1D47A]" />
-                  </>
-                )}
-                {result.outcome === "noWin" && (
-                  <span className="text-[#F1D47A]/40 text-xs">No Match</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-        
-        {/* Totals and CTA */}
-        <div className="sticky bottom-0 px-5 py-4 border-t border-[#F1D47A]/20"
-          style={{ background: '#050505' }}>
-          {(totalCash > 0 || totalPoints > 0) && (
-            <div className="flex items-center justify-center gap-4 mb-4 p-3 rounded-xl bg-[#F1D47A]/5 border border-[#F1D47A]/15">
-              {totalCash > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[#F1D47A]/60 text-xs">CASH:</span>
-                  <span className="text-[#F1D47A] font-bold text-lg">£{totalCash.toFixed(2)}</span>
-                </div>
-              )}
-              {totalPoints > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[#F1D47A]/60 text-xs">POINTS:</span>
-                  <span className="text-[#F1D47A] font-bold text-lg">{totalPoints}</span>
-                </div>
-              )}
-            </div>
-          )}
-          
-          <button
-            onClick={() => {
-              setShowRevealAllSummary(false);
-              setRevealAllResults(null);
-            }}
-            className="rr-cta w-full py-3 text-sm font-black uppercase tracking-[0.16em] rounded-xl"
-          >
-            CONTINUE PLAYING
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+const voltzBatchRows = (revealAllResults || []).map((r, i) => ({
+  ...batchRowsFromRewards([{
+    isWin: Boolean(r.isWin || r.isPhysical),
+    rewardType: r.outcome === "freeReplay" ? "try_again" : r.rewardType,
+    rewardValue: r.rewardValue,
+    prizeName: r.prizeName,
+    ticketNumber: (r as any).ticketNumber,
+    detail: (r.switchTexts || []).map((text) => formatVoltzSwitchCompact(text)).join(" · "),
+  }])[0],
+  number: i + 1,
+  id: i,
+}));
+const voltzBatchCash = (revealAllResults || [])
+  .filter((r) => r.isWin && r.rewardType === "cash")
+  .reduce((sum, r) => sum + parseFloat(r.rewardValue || "0"), 0);
+const voltzBatchPoints = (revealAllResults || [])
+  .filter((r) => r.isWin && r.rewardType === "points")
+  .reduce((sum, r) => sum + parseInt(r.rewardValue || "0", 10), 0);
+
 
   useEffect(() => {
     if (!gameContainerRef.current) return;
@@ -913,7 +760,19 @@ const RevealAllSummary = () => {
   </div>
 )}
 
-      {showRevealAllSummary && <RevealAllSummary />}
+      <RevealAllBatchSummary
+        open={showRevealAllSummary}
+        rows={voltzBatchRows}
+        playNoun="play"
+        cashWon={voltzBatchCash}
+        pointsWon={voltzBatchPoints}
+        variant="overlay"
+        dismissLabel="Continue playing"
+        onDismiss={() => {
+          setShowRevealAllSummary(false);
+          setRevealAllResults(null);
+        }}
+      />
 
       {/* ── Loading overlay ──────────────────────────────────────────────────── */}
       {!isGameReady && (

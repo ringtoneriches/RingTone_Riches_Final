@@ -9,12 +9,14 @@ import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { ArrowLeft, Zap } from "lucide-react";
+import { usePurchaseArrivalToast } from "@/lib/purchase-toast";
 
 
 export default function VoltzGamePage() {
   const { competitionId, orderId } = useParams();
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
+  usePurchaseArrivalToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
 
@@ -159,6 +161,7 @@ export default function VoltzGamePage() {
             rows={gameHistory.map((g: any, i: number) => ({
               id: g.id ?? i,
               number: i + 1,
+              ticketNumber: g.ticketNumber,
               ...prizeFromReward(g),
             }))}
             emptyTitle="NO SURGES RECORDED"

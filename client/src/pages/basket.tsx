@@ -18,6 +18,7 @@ import {
   processPaymentEndpoint,
 } from "@/lib/play-paths";
 import { startCartCardCheckout, type CartCheckoutProgress } from "@/lib/cart-card-checkout";
+import { showPurchaseSuccessToast } from "@/lib/purchase-toast";
 import CartCheckoutOverlay from "@/components/cart/CartCheckoutOverlay";
 import CheckoutLaunch from "@/components/cart/CheckoutLaunch";
 import type { BasketItem } from "@/lib/basket";
@@ -134,7 +135,7 @@ export default function BasketPage() {
           fromCart: true,
           onProgress: setProgress,
         });
-        return { paid: snapshot.length, redirected: true };
+        return { paid: snapshot.length, redirected: true, orderType: undefined as string | undefined, wheelType: undefined as string | undefined };
       }
 
       let paid = 0;
@@ -175,7 +176,13 @@ export default function BasketPage() {
         paid += 1;
       }
 
-      return { paid, redirected: false };
+      const single = snapshot.length === 1 ? snapshot[0] : undefined;
+      return {
+        paid,
+        redirected: false,
+        orderType: single?.type,
+        wheelType: single?.wheelType || undefined,
+      };
     },
     onSuccess: (result) => {
       setProgress(null);
@@ -183,10 +190,12 @@ export default function BasketPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user/orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user/tickets"] });
-      toast({
-        title: "You're in",
-        description: result.paid === 1 ? "Your game is ready to play." : `${result.paid} games are ready to play.`,
-      });
+      showPurchaseSuccessToast(
+        toast,
+        result.orderType,
+        result.paid === 1 ? undefined : `${result.paid} games are ready to play.`,
+        result.wheelType,
+      );
       setLocation("/my-plays");
     },
     onError: (error) => {

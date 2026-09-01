@@ -39,7 +39,7 @@ export default function CheckoutSuccess() {
       }
 
       const finishSuccess = (data: any) => {
-        showPurchaseSuccessToast(toast, data.competitionType || "competition");
+        showPurchaseSuccessToast(toast, data.competitionType || "competition", undefined, data.wheelType);
         queryClient.invalidateQueries({ queryKey: ["/api/user/tickets"] });
         queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
 
@@ -100,7 +100,7 @@ export default function CheckoutSuccess() {
               const guestData = await guestRes.json();
               if (guestRes.status === 200 && guestData.success) {
                 setIsProcessing(false);
-                showPurchaseSuccessToast(toast, guestData.competitionType || "competition");
+                showPurchaseSuccessToast(toast, guestData.competitionType || "competition", undefined, guestData.wheelType);
                 setTimeout(() => setLocation(`/guest-billing/${orderId}`), 1400);
                 return;
               }

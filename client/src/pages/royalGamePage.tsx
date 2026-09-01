@@ -6,6 +6,7 @@ import PlayResultsTable, { type PlayResultRow } from "@/components/games/PlayRes
 import { useState, useEffect, useRef, useCallback } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, ArrowLeft, Crown, Trophy, RefreshCw } from "lucide-react";
+import { usePurchaseArrivalToast } from "@/lib/purchase-toast";
 
 const GOLD = "#F1D47A";
 
@@ -22,6 +23,7 @@ function royalResultRows(history: any[]): PlayResultRow[] {
         : isReplay
           ? "5 free spins"
           : "—",
+      ticketNumber: entry.ticketNumber,
     };
   });
 }
@@ -29,6 +31,7 @@ function royalResultRows(history: any[]): PlayResultRow[] {
 export default function RoyalGamePage() {
   const { competitionId, orderId } = useParams();
   const [, navigate] = useLocation();
+  usePurchaseArrivalToast();
 
   const queryClient = useQueryClient();
   const iframeRef = useRef<HTMLIFrameElement>(null);

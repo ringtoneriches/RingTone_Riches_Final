@@ -33,6 +33,7 @@ export interface CompleteSessionResponse {
   };
   prizeLabel?: string;
   remainingCards: number;
+  ticketNumber?: string | null;
   orderId: string;
 }
 

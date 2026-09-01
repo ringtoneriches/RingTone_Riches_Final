@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { queryClient } from "@/lib/queryClient";
 import { ArrowLeft, Crown, Star, Gem, Zap, Gift, Sparkles, Target } from "lucide-react";
 import congrats from "../../../attached_assets/sounds/congrats.mp3";
+import { usePurchaseArrivalToast } from "@/lib/purchase-toast";
 
 export default function PlinkoGamePage() {
 const params = useParams();
@@ -16,6 +17,7 @@ const { competitionId, orderId } = params;
 //   const orderId = params.get("orderId") || "";
 //   const competitionId = params.get("competitionId") || "";
   const [, navigate] = useLocation();
+  usePurchaseArrivalToast();
   const [isBallDropping, setIsBallDropping] = useState(false);
   const confirmedHistoryCountRef = useRef<number>(0); // Track how many results were confirmed before current drop
   const [showDisclaimer, setShowDisclaimer] = useState(true);
@@ -236,6 +238,7 @@ const { competitionId, orderId } = params;
               rows={history.map((play: any, i: number) => ({
                 id: play.id ?? i,
                 number: history.length - i,
+                ticketNumber: play.ticketNumber,
                 ...prizeFromReward({
                   isWin: play.isWin && play.rewardType !== "none",
                   rewardType: play.rewardType,

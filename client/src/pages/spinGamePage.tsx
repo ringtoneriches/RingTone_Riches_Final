@@ -7,6 +7,7 @@ import { Target } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { PrizeModal } from "@/components/games/prize-modal";
+import { usePurchaseArrivalToast } from "@/lib/purchase-toast";
 import SpinWheel from "@/components/games/spinwheeltest";
 import { useLocation } from "wouter";
 import CountdownTimer from "@/pages/countdownTimer";
@@ -43,11 +44,24 @@ export default function SpinGamePage() {
     },
   });
 
-   const { data: competition } = useQuery({
+   const { data: competition, isFetched: competitionFetched } = useQuery({
       queryKey: ["/api/competitions", competitionId],
     });
 
       const wheelType = competition?.wheelType || "wheel1";
+      const [retroReady, setRetroReady] = useState(false);
+      const toastReady = !competitionFetched
+        ? false
+        : wheelType === "wheel2"
+          ? retroReady
+          : true;
+      usePurchaseArrivalToast(competition?.wheelType, toastReady);
+
+      useEffect(() => {
+        if (wheelType !== "wheel2") return;
+        const timer = window.setTimeout(() => setRetroReady(true), 8000);
+        return () => window.clearTimeout(timer);
+      }, [wheelType]);
 
       useEffect(() => {
       return () => {
@@ -133,6 +147,7 @@ export default function SpinGamePage() {
           ticketCount={remainingSpins}  
           orderId={orderId}
           competitionId={competitionId}
+          playTickets={orderData?.playTickets || []}
           isSpinning={isSpinning}
           setIsSpinning={setIsSpinning}    
           congratsAudioRef={congratsAudioRef} 
@@ -142,6 +157,7 @@ export default function SpinGamePage() {
               description: "You've used all spins from this purchase."
             });
           }}
+          onReady={() => setRetroReady(true)}
         />
       );
     } else {
@@ -151,6 +167,7 @@ export default function SpinGamePage() {
           ticketCount={remainingSpins}  
           orderId={orderId}
           competitionId={competitionId}
+          playTickets={orderData?.playTickets || []}
           isSpinning={isSpinning}
           setIsSpinning={setIsSpinning}    
           congratsAudioRef={congratsAudioRef} 

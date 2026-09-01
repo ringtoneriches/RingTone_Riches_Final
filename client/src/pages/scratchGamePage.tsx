@@ -12,12 +12,14 @@ import { useLocation } from "wouter";
 import CountdownTimer from "@/pages/countdownTimer";
 import congrats from "../../../attached_assets/sounds/congrats.mp3";
 import { completeSession, type CompleteSessionPayload } from "@/services/scratch-session-service";
+import { usePurchaseArrivalToast } from "@/lib/purchase-toast";
 
 
 export default function ScratchGamePage() {
   const { competitionId, orderId } = useParams();
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
+  usePurchaseArrivalToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
   const winnerCongratsRef = useRef<HTMLAudioElement | null>(null)
@@ -29,7 +31,7 @@ export default function ScratchGamePage() {
 
   const [gameResult, setGameResult] = useState<any>(null);
   const [isResultModalOpen, setIsResultModalOpen] = useState(false);
-  const [remainingScratches, setRemainingScratches] = useState<number>(0);
+  const [remainingScratches, setRemainingScratches] = useState<number | undefined>(undefined);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   // ✅ Parent-controlled mutation for scratch completion
@@ -130,11 +132,12 @@ export default function ScratchGamePage() {
 
   // 🎯 Callback 2: Handle session commit - child requests parent to save result via mutation
   // Returns promise that child can await to handle loading/error states
-  const handleCommitSession = async (sessionId: string, payload: CompleteSessionPayload): Promise<void> => {
+  const handleCommitSession = async (sessionId: string, payload: CompleteSessionPayload) => {
     const result = await completeScratchMutation.mutateAsync({ sessionId, payload });
     if (typeof result?.remainingCards === "number") {
       setRemainingScratches(Math.max(0, result.remainingCards));
     }
+    return result;
   };
   
   // 🎯 Callback 3: Refresh balance - used after reveal-all completes
@@ -173,7 +176,7 @@ export default function ScratchGamePage() {
           kicker="Scratch Nations · play"
           title="SCRATCH NATIONS"
           subtitle={competition?.title || "Scratch the card. Match 3 identical flags to win."}
-          remaining={remainingScratches}
+          remaining={remainingScratches ?? 0}
           remainingLabel={remainingScratches === 1 ? "card left" : "cards left"}
           Icon={Sparkles}
         />
@@ -189,6 +192,7 @@ export default function ScratchGamePage() {
           mode="loose"
           congratsAudioRef={winnerCongratsRef}
           resultModalOpen={isResultModalOpen}
+          playTickets={orderData?.playTickets || []}
         />
       </section>
 
