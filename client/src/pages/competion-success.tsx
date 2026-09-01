@@ -6,6 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { takeCartCheckoutFlag, clearBasket } from "@/lib/basket";
 import PaymentResult from "@/components/billing/PaymentResult";
 import { showPurchaseSuccessToast } from "@/lib/purchase-toast";
+import { waitConfirmScreen } from "@/lib/confirm-screen";
+import { cardCashbackAmount } from "@shared/card-cashback";
 
 export default function CheckoutSuccess() {
   const { toast } = useToast();
@@ -14,9 +16,11 @@ export default function CheckoutSuccess() {
   const [isProcessing, setIsProcessing] = useState(true);
   const [failed, setFailed] = useState(false);
   const [fromCart, setFromCart] = useState(false);
+  const [cashback, setCashback] = useState(0);
 
   useEffect(() => {
     const confirmPayment = async () => {
+      const shownAt = Date.now();
       const urlParams = new URLSearchParams(window.location.search);
 
       const paymentJobRef = urlParams.get("paymentjobref");
@@ -38,8 +42,11 @@ export default function CheckoutSuccess() {
         return;
       }
 
-      const finishSuccess = (data: any) => {
-        showPurchaseSuccessToast(toast, data.competitionType || "competition", undefined, data.wheelType);
+      const finishSuccess = async (data: any) => {
+        const cardSpend = Number(data.cardSpend || data.totalAmount) || 0;
+        const creditedBack = cardCashbackAmount(cardSpend);
+        setCashback(creditedBack);
+        showPurchaseSuccessToast(toast, data.competitionType || "competition", undefined, data.wheelType, cardSpend || undefined);
         queryClient.invalidateQueries({ queryKey: ["/api/user/tickets"] });
         queryClient.invalidateQueries({ queryKey: ["/api/user/transactions"] });
 
@@ -72,8 +79,9 @@ export default function CheckoutSuccess() {
         const cartCheckout = takeCartCheckoutFlag() || isCartCombo;
         if (cartCheckout) clearBasket();
         setFromCart(Boolean(isCartCombo));
+        await waitConfirmScreen(shownAt);
         setIsProcessing(false);
-        setTimeout(() => setLocation(isCartCombo ? "/my-plays" : redirectUrl), 1400);
+        setTimeout(() => setLocation(isCartCombo ? "/my-plays" : redirectUrl), creditedBack >= 0.01 ? 3200 : 1400);
       };
 
       for (let attempt = 0; attempt < 12; attempt += 1) {
@@ -85,7 +93,7 @@ export default function CheckoutSuccess() {
           });
           const data = await res.json();
           if (res.status === 200 && data.success && !data.waitingForWebhook) {
-            finishSuccess(data);
+            await finishSuccess(data);
             return;
           }
         } catch (err: any) {
@@ -99,8 +107,9 @@ export default function CheckoutSuccess() {
               });
               const guestData = await guestRes.json();
               if (guestRes.status === 200 && guestData.success) {
-                setIsProcessing(false);
                 showPurchaseSuccessToast(toast, guestData.competitionType || "competition", undefined, guestData.wheelType);
+                await waitConfirmScreen(shownAt);
+                setIsProcessing(false);
                 setTimeout(() => setLocation(`/guest-billing/${orderId}`), 1400);
                 return;
               }
@@ -153,6 +162,7 @@ export default function CheckoutSuccess() {
           : "Your tickets are ready. Taking you to play."
       }
       variant="success"
+      cashback={cashback}
     />
   );
 }

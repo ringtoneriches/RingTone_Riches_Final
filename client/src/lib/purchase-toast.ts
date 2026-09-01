@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { cardCashbackAmount } from "@shared/card-cashback";
 
 type ToastFn = (opts: {
   variant?: "default" | "destructive" | "success";
   title?: string;
   description?: string;
   duration?: number;
+  cashback?: number;
 }) => unknown;
 
 const QUEUE_KEY = "rr-purchase-toast";
@@ -65,13 +67,14 @@ function copyForType(orderType?: string, wheelType?: string) {
   }
 }
 
-function queuePurchaseToast(orderType?: string, wheelType?: string) {
+function queuePurchaseToast(orderType?: string, wheelType?: string, cardSpend?: number) {
   try {
     sessionStorage.setItem(
       QUEUE_KEY,
       JSON.stringify({
         orderType: orderType || "competition",
         wheelType: wheelType || null,
+        cardSpend: cardSpend || 0,
         at: Date.now(),
       }),
     );
@@ -85,16 +88,19 @@ function presentPurchaseToast(
   orderType?: string,
   serverMessage?: string,
   wheelType?: string,
+  cardSpend?: number,
 ) {
   const copy = copyForType(orderType, wheelType);
   const useServer =
     Boolean(serverMessage) && !GENERIC_PURCHASE_COPY.test(serverMessage || "");
+  const cashback = cardCashbackAmount(cardSpend || 0);
 
   toast({
     variant: "success",
     title: copy.title,
     description: useServer ? serverMessage : copy.description,
-    duration: 9000,
+    duration: cashback >= 0.01 ? 12000 : 9000,
+    cashback,
   });
 }
 
@@ -103,9 +109,10 @@ export function showPurchaseSuccessToast(
   orderType?: string,
   serverMessage?: string,
   wheelType?: string,
+  cardSpend?: number,
 ) {
-  queuePurchaseToast(orderType, wheelType);
-  presentPurchaseToast(toast, orderType, serverMessage, wheelType);
+  queuePurchaseToast(orderType, wheelType, cardSpend);
+  presentPurchaseToast(toast, orderType, serverMessage, wheelType, cardSpend);
 }
 
 export function consumeQueuedPurchaseToast(
@@ -119,6 +126,7 @@ export function consumeQueuedPurchaseToast(
     const data = JSON.parse(raw) as {
       orderType?: string;
       wheelType?: string | null;
+      cardSpend?: number;
       at?: number;
     };
     if (!data?.at || Date.now() - data.at > 10 * 60 * 1000) return false;
@@ -127,6 +135,7 @@ export function consumeQueuedPurchaseToast(
       data.orderType,
       undefined,
       opts?.wheelType || data.wheelType || undefined,
+      data.cardSpend,
     );
     return true;
   } catch {

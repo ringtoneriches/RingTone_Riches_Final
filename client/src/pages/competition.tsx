@@ -551,11 +551,8 @@ export default function CompetitionPage() {
                   </p>
                 ) : null}
 
-                <div className="mt-5">
-                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
-                    Draw closes
-                  </p>
-                  <CountdownBlocks time={countdown} size="lg" ended={stats.isExpired} />
+                <div className="mt-5 max-w-sm">
+                  <CountdownBlocks time={countdown} size="lg" ended={stats.isExpired} variant="ends" />
                 </div>
 
                 {stats.hasTickets && (

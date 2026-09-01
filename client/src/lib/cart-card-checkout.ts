@@ -1,6 +1,7 @@
 import { apiRequest } from "@/lib/queryClient";
 import { markCartCheckout, type BasketItem } from "@/lib/basket";
 import { createOrderEndpoint } from "@/lib/play-paths";
+import { waitConfirmScreen } from "@/lib/confirm-screen";
 
 export type CartCheckoutProgress = {
   phase: "adding" | "opening" | "paying";
@@ -16,6 +17,7 @@ export async function startCartCardCheckout(opts: {
   fromCart?: boolean;
   onProgress?: (progress: CartCheckoutProgress) => void;
 }) {
+  const startedAt = Date.now();
   const orderIds = [...(opts.orderIds || [])];
 
   if (!orderIds.length) {
@@ -58,6 +60,7 @@ export async function startCartCardCheckout(opts: {
   }
 
   if (opts.fromCart) markCartCheckout();
+  await waitConfirmScreen(startedAt);
   window.location.href = paid.redirectUrl;
   return { redirected: true as const, orderIds };
 }

@@ -164,6 +164,7 @@ import {
   parseCashAmount,
   refundEarlyTender,
 } from "./payment-settlement";
+import { creditCardCashback } from "./services/card-cashback";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { calculateDiscountedTotal } from "./utils/discounts";
@@ -960,7 +961,7 @@ async function processWalletTopup(
   paymentRef: string,
   amount: number,
   shouldCheckReferral: boolean = true
-): Promise<{ credited: boolean; already: boolean }> {
+): Promise<{ credited: boolean; already: boolean; cashback: number }> {
   if (amount <= 0) {
     throw new Error("Invalid wallet credit amount");
   }
@@ -1044,7 +1045,16 @@ async function processWalletTopup(
         console.log("Skipping referral check for this topup");
       }
     });
-    return { credited, already };
+    let cashback = 0;
+    if (credited || already) {
+      const creditedBack = await creditCardCashback({
+        userId,
+        cardAmount: amount,
+        paymentRef,
+      });
+      cashback = creditedBack.credited || 0;
+    }
+    return { credited, already, cashback };
   } catch (err) {
     console.error("processWalletTopup FAILED", err);
     throw err;
@@ -4095,6 +4105,7 @@ res.json({
             cardsPurchased: firstOrder?.quantity || order.quantity,
             quantity: firstOrder?.quantity || order.quantity,
             totalAmount: pendingAny.amount || order.totalAmount,
+            cardSpend: parseCashAmount(pendingAny.amount, paidAmount),
             generatedImmediately: true,
           });
         }
@@ -4121,6 +4132,7 @@ res.json({
             cardsPurchased: order.quantity,
             quantity: order.quantity,
             totalAmount: order.totalAmount,
+            cardSpend: parseCashAmount(order.cashflowsAmount, pendingAny?.amount, paidAmount),
           });
         }
   
@@ -4237,6 +4249,7 @@ res.json({
               cardsPurchased: order.quantity,
               quantity: order.quantity,
               totalAmount: order.totalAmount,
+              cardSpend: parseCashAmount(pending.amount, paidAmount),
               generatedImmediately: true
             });
           }
@@ -4276,6 +4289,7 @@ res.json({
           competitionId: order.competitionId,
           competitionType: competition?.type || "competition",
           tickets: tickets.map((t: any) => ({ ticketNumber: t.ticketNumber })),
+          cardSpend: parseCashAmount(paidAmount, recoveredPending?.amount),
           generatedImmediately: true,
         });
       } catch (error: any) {
@@ -4630,6 +4644,7 @@ res.json({
           : pendingRow?.metadata || {};
       const reservedWallet = Number(pendingMeta.reservedWallet || 0);
       const reservedPoints = Number(pendingMeta.reservedPoints || 0);
+      const cardSpend = parseCashAmount(pendingRow?.amount, amount);
 
       // 🛑 Idempotency guard
       const [existing] = await transaction
@@ -4659,7 +4674,7 @@ res.json({
             .set({ status: "completed", updatedAt: new Date() })
             .where(eq(pendingPayments.id, pendingPaymentId));
         }
-        return { order, competition: null, generatedTickets: existingTickets };
+        return { order, competition: null, generatedTickets: existingTickets, cardSpend };
       }
 
        // Get user before any changes
@@ -4714,7 +4729,7 @@ res.json({
             .set({ status: "completed", updatedAt: new Date() })
             .where(eq(pendingPayments.id, pendingPaymentId));
         }
-        return { order, competition, generatedTickets: existingTickets };
+        return { order, competition, generatedTickets: existingTickets, cardSpend };
       }
 
       const { tickets: generatedTickets } = await issuePlayTickets({
@@ -4762,7 +4777,7 @@ await transaction.insert(auditLogs).values({
         .where(eq(pendingPayments.id, pendingPaymentId));
     }
 
-    return { order, competition, generatedTickets };
+    return { order, competition, generatedTickets, cardSpend };
   };
   
     try {
@@ -4818,6 +4833,13 @@ await transaction.insert(auditLogs).values({
         gameType,
         quantity,
         amount,
+      });
+
+      await creditCardCashback({
+        userId,
+        cardAmount: result?.cardSpend ?? amount,
+        paymentRef,
+        orderId,
       });
   
       return result?.generatedTickets || [];
@@ -8733,7 +8755,9 @@ app.post(
           .where(
             and(
               eq(transactions.userId, userId),
-              eq(transactions.type, "deposit") // Only cashflow top-ups
+              eq(transactions.type, "deposit"), // Only cashflow top-ups
+              sql`COALESCE(${transactions.paymentRef}, '') NOT LIKE 'cb_%'`,
+              sql`COALESCE(${transactions.description}, '') NOT ILIKE '%card cashback%'`,
             )
           );
 
@@ -8764,7 +8788,9 @@ app.post(
             transactions,
             and(
               eq(transactions.userId, users.id),
-              eq(transactions.type, "deposit")
+              eq(transactions.type, "deposit"),
+              sql`COALESCE(${transactions.paymentRef}, '') NOT LIKE 'cb_%'`,
+              sql`COALESCE(${transactions.description}, '') NOT ILIKE '%card cashback%'`,
             )
           )
           .groupBy(users.id);
@@ -10379,10 +10405,16 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
       .limit(1);
 
     if (existingTx) {
+      const creditedBack = await creditCardCashback({
+        userId,
+        cardAmount: Number(existingTx.amount) || 0,
+        paymentRef: ref,
+      });
       return res.json({
         status: "PAID",
         credited: true,
         already: true,
+        cashback: creditedBack.credited || 0,
         message: "Wallet already updated.",
       });
     }
@@ -10437,6 +10469,7 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
           status: "PAID",
           credited: true,
           already: result.already,
+          cashback: result.cashback || 0,
           message: "Payment received. Wallet updated.",
         });
       }
@@ -10747,6 +10780,8 @@ if (!isAdmin && userData.dailyLimitLastUpdatedAt) {
           eq(transactions.type, "deposit"), // For competition entries
           eq(transactions.type, "topup")    // For wallet top-ups
         ),
+        sql`COALESCE(${transactions.paymentRef}, '') NOT LIKE 'cb_%'`,
+        sql`COALESCE(${transactions.description}, '') NOT ILIKE '%card cashback%'`,
         gte(transactions.createdAt, startOfDay),
         lte(transactions.createdAt, endOfDay)
       )

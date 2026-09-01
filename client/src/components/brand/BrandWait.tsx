@@ -15,6 +15,7 @@ type Props = {
   className?: string;
   /** Pulse + equalizer only — use inside a screen that already has a title. */
   quiet?: boolean;
+  promo?: boolean;
 };
 
 export function CheckoutPulse({
@@ -61,12 +62,14 @@ function WaitCard({
   headline,
   subtitle,
   trust,
+  promo,
 }: {
   showLogo: boolean;
   kicker: string;
   headline: string;
   subtitle?: string;
   trust?: string | null;
+  promo?: boolean;
 }) {
   return (
     <>
@@ -83,6 +86,13 @@ function WaitCard({
           <span />
           <span />
         </div>
+        {promo ? (
+          <div className="rr-confirm-promo w-full text-left">
+            <p className="rr-confirm-promo__kicker">Ringtone Riches</p>
+            <p className="rr-confirm-promo__title">More plays.<br />Bigger shots.</p>
+            <p className="rr-confirm-promo__tag">Win bigger. Play louder.</p>
+          </div>
+        ) : null}
         {trust ? (
           <p className="rr-checkout-launch__trust">
             <Lock className="h-3 w-3 text-[#F1D47A]" />
@@ -102,6 +112,7 @@ export default function BrandWait({
   trust = null,
   className = "",
   quiet = false,
+  promo = false,
 }: Props) {
   useEffect(() => {
     if (mode !== "overlay") return;
@@ -140,6 +151,7 @@ export default function BrandWait({
       headline={headline}
       subtitle={subtitle}
       trust={trust}
+      promo={promo}
     />
   );
 

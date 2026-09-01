@@ -28,11 +28,12 @@ export default function CountdownBlocks({ time, size = "sm", ended = false, vari
       { v: time.d, l: "D" },
       { v: time.h, l: "H" },
       { v: time.m, l: "M" },
+      ...(size === "lg" ? [{ v: time.s, l: "S" }] : []),
     ];
 
     return (
       <div
-        className="rr-ends-pill"
+        className={`rr-ends-pill ${size === "lg" ? "rr-ends-pill--lg" : ""}`}
         aria-label={`Ends in ${time.d} days, ${time.h} hours, ${time.m} minutes`}
       >
         <span className="rr-ends-left">

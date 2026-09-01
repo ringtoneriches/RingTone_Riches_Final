@@ -18,6 +18,7 @@ export default function CheckoutLaunch({
       headline={headline}
       subtitle={subtitle}
       trust="SSL encrypted · Don’t close this tab"
+      promo
     />
   );
 }

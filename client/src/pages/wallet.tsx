@@ -8,6 +8,7 @@ import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
 import BrandWait, { PageWait } from "@/components/brand/BrandWait";
 import { Link, Router, useLocation } from "wouter";
 import { Transaction, User, Ticket, Competition } from "@shared/schema";
+import { isCardCashbackTx } from "@shared/card-cashback";
 import { apiRequest } from "@/lib/queryClient";
 import {
   DollarSign,
@@ -77,8 +78,11 @@ import Wellbeing from "./wellbeing";
 import { VerificationForm } from "./verification-form";
 import VerificationTab from "./verification";
 // Update getTransactionIcon function:
-const getTransactionIcon = (type: string) => {
-  switch (type) {
+const getTransactionIcon = (transaction: Pick<Transaction, "type" | "description">) => {
+  if (isCardCashbackTx(transaction)) {
+    return <Sparkles className="h-4 w-4 text-[#F1D47A]" />;
+  }
+  switch (transaction.type) {
     case "deposit":
       return <ArrowUpCircle className="h-4 w-4 text-green-500" />;
     case "withdrawal":
@@ -109,7 +113,15 @@ const getTransactionIcon = (type: string) => {
 };
 
 // Update getTransactionTypeBadge function:
-const getTransactionTypeBadge = (type: string) => {
+const getTransactionTypeBadge = (transaction: Pick<Transaction, "type" | "description">) => {
+  if (isCardCashbackTx(transaction)) {
+    return (
+      <span className="border border-[#D4AF37]/35 bg-[#D4AF37]/12 px-2 py-1 rounded-full text-xs font-medium text-[#F1D47A]">
+        1% back
+      </span>
+    );
+  }
+  const type = transaction.type;
   const colors: Record<string, string> = {
     deposit: "bg-green-500/10 text-green-500 border-green-500/20",
     withdrawal: "bg-red-500/10 text-red-500 border-red-500/20",
@@ -372,7 +384,10 @@ function ChangePasswordModal() {
 }
 
 export function getTotalCashflow(transactions: Transaction[]): string {
-  const total = transactions.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+  const total = transactions.reduce((sum, tx) => {
+    if (isCardCashbackTx(tx)) return sum;
+    return sum + parseFloat(tx.amount);
+  }, 0);
   return total % 1 === 0 ? total.toFixed() : total.toFixed(2);
 }
 
@@ -1550,6 +1565,15 @@ const handleDeleteBankAccount = (
                       </p>
                     </div>
 
+                    <div className="mx-auto max-w-sm rounded-xl border border-[#D4AF37]/30 bg-gradient-to-r from-[#D4AF37]/12 via-[#D4AF37]/5 to-transparent px-4 py-3 text-left">
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#F1D47A]">
+                        1% back on card
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-white/60">
+                        Card, Apple Pay and Google Pay put 1% straight in your wallet. Wallet and Ringtone Points don&apos;t earn it.
+                      </p>
+                    </div>
+
                     <div className="space-y-4">
                       <div className="space-y-3">
                         <label className="text-sm text-gray-400">
@@ -1592,6 +1616,9 @@ const handleDeleteBankAccount = (
                           ? "Redirecting..."
                           : "TOP UP NOW"}
                       </button>
+                      <p className="text-center text-[11px] text-[#F1D47A]/80">
+                        Card top-ups earn 1% back instantly
+                      </p>
                       <button
                       onClick={() => {
                         // Check verification before opening withdrawal dialog
@@ -1692,11 +1719,11 @@ const handleDeleteBankAccount = (
                           >
                             <div className="flex items-start gap-3 flex-1">
                               <div className="mt-1">
-                                {getTransactionIcon(transaction.type)}
+                                {getTransactionIcon(transaction)}
                               </div>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
-                                  {getTransactionTypeBadge(transaction.type)}
+                                  {getTransactionTypeBadge(transaction)}
                                 </div>
                               <p className="font-medium text-sm text-white">
                                 {transaction.description.replace("Spin Wheel wheel2", "The retro ringtone spin win")}
