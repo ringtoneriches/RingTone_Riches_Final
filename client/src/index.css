@@ -3242,9 +3242,17 @@ html.rr-day .rr-legal-faq h3 {
   }
 }
 html.rr-day .rr-add-cart-btn {
-  background: rgba(255, 255, 255, 0.7);
-  color: #7a5b12;
-  border-color: rgba(80, 50, 20, 0.16);
+  background: rgba(8, 8, 10, 0.88);
+  color: #f1d47a;
+  border-color: rgba(241, 212, 122, 0.5);
+}
+html.rr-day .rr-add-cart-btn svg {
+  color: #f1d47a;
+}
+html.rr-day .rr-add-cart-btn:hover,
+html.rr-day .rr-add-cart-btn:hover svg {
+  color: #fff8ee;
+  border-color: #f1d47a;
 }
 .rr-header-cta {
   display: inline-flex;
@@ -3611,10 +3619,18 @@ html.rr-day .rr-add-cart-btn {
   color: #fff8ee;
   transform: translateY(-1px);
 }
+html.rr-day .rr-comp-add-cart,
+html.rr-day .rr-comp-add-cart svg {
+  color: #f1d47a;
+  border-color: rgba(241, 212, 122, 0.5);
+}
 html.rr-day .rr-comp-add-cart {
-  background: rgba(255, 255, 255, 0.7);
-  color: #7a5b12;
-  border-color: rgba(80, 50, 20, 0.16);
+  background: rgba(8, 8, 10, 0.88);
+}
+html.rr-day .rr-comp-add-cart:hover,
+html.rr-day .rr-comp-add-cart:hover svg {
+  color: #fff8ee;
+  border-color: #f1d47a;
 }
 .rr-comp-card {
   overflow: visible;

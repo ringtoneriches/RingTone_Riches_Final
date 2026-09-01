@@ -39,6 +39,13 @@ import ring from "../../../../attached_assets/ring.png";
 
 import MiddleVideo from "../../../../attached_assets/Middlevideo.mp4"
 import { useLocation } from "wouter";
+import PlayResultsTable, {
+  applySpinPlayTickets,
+  prizeFromSpinApi,
+  rowsFromSpinHistory,
+  type SpinHistoryRow,
+} from "@/components/games/PlayResultsTable";
+import RevealAllBatchSummary, { type RevealBatchRow } from "@/components/games/RevealAllBatchSummary";
 
 // Icon mapping for admin configuration - uses car PNG images
 const ICON_MAP: Record<string, any> = {
@@ -77,6 +84,7 @@ interface SpinWheelProps {
   ticketCount?: number;
   orderId?: string;
   competitionId?: string;
+  playTickets?: Array<string | null>;
   congratsAudioRef: React.RefObject<HTMLAudioElement>;
   onAllSpinsComplete?: () => void;   
 }
@@ -103,7 +111,7 @@ interface WheelConfig {
 // Add these functions for localStorage management (order-specific)
 const loadSpinHistory = (
   orderId?: string,
-): { status: string; prize: { brand: string; amount: any } }[] => {
+): SpinHistoryRow[] => {
   try {
     if (!orderId) return [];
     const saved = localStorage.getItem(`spinWheelHistory_${orderId}`);
@@ -114,7 +122,7 @@ const loadSpinHistory = (
 };
 
 const saveSpinHistory = (
-  history: { status: string; prize: { brand: string; amount: any } }[],
+  history: SpinHistoryRow[],
   orderId?: string,
 ) => {
   try {
@@ -135,6 +143,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
   ticketCount,
   orderId,
   competitionId,
+  playTickets = [],
   congratsAudioRef,
   onAllSpinsComplete
 }) => {
@@ -156,13 +165,14 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
   });
 
   // Inside your SpinWheel component, add the state:
-  const [spinHistory, setSpinHistory] = useState<
-    { status: string; prize: { brand: string; amount: any } }[]
-  >([]);
+  const [spinHistory, setSpinHistory] = useState<SpinHistoryRow[]>([]);
   
   // Confirmation dialog state
   const [showRevealAllDialog, setShowRevealAllDialog] = useState(false);
   const [showRevealAllResultDialog, setShowRevealAllResultDialog] = useState(false);
+  const [revealBatchRows, setRevealBatchRows] = useState<RevealBatchRow[]>([]);
+  const [revealBatchCash, setRevealBatchCash] = useState(0);
+  const [revealBatchPoints, setRevealBatchPoints] = useState(0);
   const [showOutOfSpinDialog, setShowOutOfSpinDialog] = useState(false);
     const [,setLocation] = useLocation();
   
@@ -207,13 +217,13 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     const savedHistory = loadSpinHistory(orderId);
 
     if (savedHistory.length === ticketCount) {
-      setSpinHistory(savedHistory);
+      setSpinHistory(applySpinPlayTickets(savedHistory, playTickets));
     } else if (savedHistory.length > 0) {
       const adjustedHistory = adjustSpinHistoryToCount(
         savedHistory,
         ticketCount,
       );
-      setSpinHistory(adjustedHistory);
+      setSpinHistory(applySpinPlayTickets(adjustedHistory, playTickets));
     } else {
       setSpinHistory(
         Array.from({ length: ticketCount }, () => ({
@@ -223,6 +233,11 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
       );
     }
   }, [ticketCount, orderId]);
+
+  useEffect(() => {
+    if (!playTickets.length) return;
+    setSpinHistory((prev) => applySpinPlayTickets(prev, playTickets));
+  }, [playTickets.join("|")]);
 
   // Helper function to adjust spin history
   const adjustSpinHistoryToCount = (history: any[], targetCount: number) => {
@@ -656,14 +671,20 @@ ctx.stroke();
     }
 
     const results = await response.json();
+    const spins = Array.isArray(results?.spins)
+      ? results.spins
+      : Array.isArray(results?.results)
+        ? results.results
+        : [];
     
     // Check if there are any wins in the results
     let hasWins = false;
-    if (results.spins && Array.isArray(results.spins)) {
-      hasWins = results.spins.some((spin: any) => {
-        return spin.prize.amount !== 0 && 
-               spin.prize.amount !== "-" && 
-               !spin.prize.brand?.toLowerCase().includes("lose");
+    if (spins.length) {
+      hasWins = spins.some((spin: any) => {
+        const prize = prizeFromSpinApi(spin);
+        return prize.amount !== 0 && 
+               prize.amount !== "-" && 
+               !String(prize.brand || "").toLowerCase().includes("lose");
       });
       
       // OR check if the backend returns totalWon
@@ -677,7 +698,7 @@ ctx.stroke();
       const updated = [...prev];
       let notSpunIndex = 0;
 
-      results.spins.forEach((spin: any) => {
+      spins.forEach((spin: any) => {
         while (notSpunIndex < updated.length && updated[notSpunIndex].status === "SPUN") {
           notSpunIndex++;
         }
@@ -685,7 +706,7 @@ ctx.stroke();
         if (notSpunIndex < updated.length) {
           updated[notSpunIndex] = {
             status: "SPUN",
-            prize: spin.prize,
+            prize: prizeFromSpinApi(spin),
           };
           notSpunIndex++;
         }
@@ -693,6 +714,16 @@ ctx.stroke();
 
       return updated;
     });
+
+    setRevealBatchRows(
+      spins.map((spin: any, i: number) => ({
+        ...rowsFromSpinHistory([{ status: "SPUN", prize: prizeFromSpinApi(spin) }])[0],
+        id: i,
+        number: i + 1,
+      })),
+    );
+    setRevealBatchCash(Number(results?.summary?.totalCash || 0));
+    setRevealBatchPoints(Number(results?.summary?.totalPoints || 0));
     
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     queryClient.invalidateQueries({ queryKey: ["/api/spin-order", orderId] });
@@ -913,7 +944,7 @@ if (isWin && congratsAudioRef.current) {
             if (firstUnspunIndex !== -1) {
               updated[firstUnspunIndex] = {
                 status: "SPUN",
-                prize: result.prize,
+                prize: prizeFromSpinApi(result),
               };
             }
               // 🔥 CHECK IF ALL SPINS ARE NOW SPENT
@@ -1078,139 +1109,25 @@ if (congratsAudioRef.current) {
         </button>
       </div>
 
-      {/* Premium Progress Tracker - Mobile Optimized */}
-      <div className="relative w-full max-w-2xl mx-auto mb-5 z-10 mt-10 px-2 sm:px-4">
-        {/* Glow effect */}
-        <div className="absolute -inset-2 bg-gradient-to-r from-[#FACC15]/20 via-[#F59E0B]/20 to-[#FACC15]/20 rounded-2xl blur-xl pointer-events-none"></div>
-
-        <div className="relative bg-gradient-to-br from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-xl rounded-xl sm:rounded-2xl border-2 border-[#FACC15]/40 shadow-2xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-[#FACC15] via-[#F59E0B] to-[#FACC15] px-3 sm:px-6 py-3 sm:py-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-              <h3 className="text-center sm:text-left text-base sm:text-xl md:text-2xl font-black text-gray-900 flex items-center gap-1 sm:gap-2">
-                {/* <span className="text-lg sm:text-2xl">🎡</span> */}
-                <span className="whitespace-nowrap">Spin Results</span>
-              </h3>
-              {spinHistory.filter(s => s.status === "NOT SPUN").length > 0 && (
-                <button
-                  onClick={() => setShowRevealAllDialog(true)}
-                  disabled={isSpinning}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-900 hover:bg-gray-800 text-[#FACC15] font-bold text-xs sm:text-sm rounded-lg border border-[#FACC15] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                  data-testid="button-reveal-all"
-                >
-                   Reveal All
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Table container - Mobile Optimized */}
-          <div className="px-2 sm:px-4 md:px-6 py-3 sm:py-4 max-h-[60vh] sm:max-h-72 overflow-y-auto custom-scrollbar">
-            <table className="w-full text-xs sm:text-sm md:text-base border-separate border-spacing-y-1 sm:border-spacing-y-2">
-              <thead className="sticky top-0 bg-gray-900/95 backdrop-blur-sm z-10">
-                <tr className="text-[#FACC15] font-bold text-left">
-                  <th className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-xs sm:text-sm">
-                    #
-                  </th>
-                  <th className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-xs sm:text-sm">
-                    Status
-                  </th>
-                  <th className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-xs sm:text-sm text-right">
-                    Prize
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {spinHistory.map((item, i) => (
-                  <tr
-                    key={i}
-                    className="bg-gray-800/60 hover:bg-gray-700/90 transition-all duration-200 rounded-lg group"
-                    data-testid={`row-spin-${i}`}
-                  >
-                    <td className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-[#FACC15] font-bold rounded-l-lg">
-                      <span className="flex items-center gap-1 sm:gap-2">
-                        <span className="hidden sm:flex w-6 h-6 rounded-full bg-[#FACC15]/20 items-center justify-center text-xs">
-                          {i + 1}
-                        </span>
-                        <span className="text-xs sm:text-sm whitespace-nowrap">
-                          <span className="sm:hidden">#{i + 1}</span>
-                          <span className="hidden sm:inline">Spin {i + 1}</span>
-                        </span>
-                      </span>
-                    </td>
-                    <td className="px-1 sm:px-2 md:px-3 py-2 sm:py-3">
-                      <span
-                        className={`inline-flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold ${
-                          item.status === "SPUN"
-                            ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                            : "bg-gray-700/50 text-gray-400 border border-gray-600/30"
-                        }`}
-                      >
-                        <span
-                          className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${
-                            item.status === "SPUN"
-                              ? "bg-green-400"
-                              : "bg-gray-400"
-                          }`}
-                        ></span>
-                        <span className="hidden sm:inline">{item.status}</span>
-                        <span className="sm:hidden">
-                          {item.status === "SPUN" ? "✓" : "−"}
-                        </span>
-                      </span>
-                    </td>
-                    <td className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-right rounded-r-lg">
-                      {item.status === "NOT SPUN" ? (
-                        <span className="text-gray-500 font-bold text-xs sm:text-sm whitespace-nowrap">-</span>
-                      ) : (
-                        <>
-                          {(() => {
-                            const isLoss = item.prize.amount === "-" || 
-                                          item.prize.amount === 0 || 
-                                          item.prize.brand === "X" || 
-                                          !item.prize.amount;
-                            
-                            if (isLoss) {
-                              return (
-                                <span className="text-red-400 font-bold text-xs sm:text-sm whitespace-nowrap">
-                                  Lose
-                                </span>
-                              );
-                            }
-                            
-                            // Check if it's ringtone points
-                            const isPoints = typeof item.prize.amount === "string" && 
-                                           item.prize.amount.includes("Ringtones");
-                            
-                            if (isPoints) {
-                              return (
-                                <span className="text-green-400 font-bold text-xs sm:text-sm whitespace-nowrap">
-                                  Win - {item.prize.amount}
-                                </span>
-                              );
-                            }
-                            
-                            // Cash prize
-                            const cashAmount = typeof item.prize.amount === "number" 
-                              ? item.prize.amount.toFixed(2) 
-                              : item.prize.amount;
-                            
-                            return (
-                              <span className="text-green-400 font-bold text-xs sm:text-sm whitespace-nowrap">
-                                Win - £{cashAmount}
-                              </span>
-                            );
-                          })()}
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      <PlayResultsTable
+        className="relative z-10 mx-auto mb-5 mt-10 w-full max-w-2xl"
+        title="Results"
+        rows={rowsFromSpinHistory(spinHistory)}
+        emptyTitle="NO SPINS YET"
+        emptyHint="Spin the wheel to see each result here."
+        headerRight={
+          spinHistory.some((s) => s.status === "NOT SPUN") ? (
+            <button
+              onClick={() => setShowRevealAllDialog(true)}
+              disabled={isSpinning}
+              className="rounded-lg border border-[#F1D47A]/40 bg-[#F1D47A]/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-[#F1D47A] disabled:opacity-50"
+              data-testid="button-reveal-all"
+            >
+              Reveal all
+            </button>
+          ) : null
+        }
+      />
 
       {/* Reveal All Confirmation Dialog */}
       <AlertDialog open={showRevealAllDialog} onOpenChange={setShowRevealAllDialog}>
@@ -1238,28 +1155,14 @@ if (congratsAudioRef.current) {
       </AlertDialog>
 
 
-            {/* Reveal-All Result Dialog */}
-      <AlertDialog open={showRevealAllResultDialog} onOpenChange={setShowRevealAllResultDialog}>
-        <AlertDialogContent className="bg-gray-900 w-[90vw] max-w-sm sm:max-w-md mx-auto  border-2 border-[#FACC15] text-white">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#FACC15] text-2xl font-black text-center">
-              ✨ Reveal-All Complete!
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-300 text-center text-lg">
-              Check the progress table below for full prize details.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-      
-          <AlertDialogFooter>
-            <AlertDialogAction
-              className="bg-[#FACC15] text-gray-900 hover:bg-[#F59E0B] font-bold px-6 py-3 rounded-lg"
-              onClick={() => setShowRevealAllResultDialog(false)}
-            >
-              OK
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <RevealAllBatchSummary
+        open={showRevealAllResultDialog}
+        rows={revealBatchRows}
+        playNoun="spin"
+        cashWon={revealBatchCash}
+        pointsWon={revealBatchPoints}
+        onDismiss={() => setShowRevealAllResultDialog(false)}
+      />
 
 
                         {/* OUT OF SCRATCHES DIALOG */}

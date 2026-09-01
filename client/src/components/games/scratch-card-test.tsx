@@ -15,10 +15,15 @@ import confetti from 'canvas-confetti';
 
 import { useLocation, useParams } from "wouter";
 import { Sparkles } from "lucide-react";
+import { formatResultTicket, prizeFromReward } from "@/components/games/PlayResultsTable";
+import RevealAllBatchSummary, { type RevealBatchRow } from "@/components/games/RevealAllBatchSummary";
 
 interface ScratchCardProps {
   onScratchReveal?: (prize: { type: string; value: string }) => void;
-  onCommitSession?: (sessionId: string, payload: { orderId: string; prizeId: string; isWinner: boolean }) => Promise<void>;
+  onCommitSession?: (
+    sessionId: string,
+    payload: { orderId: string; prizeId: string; isWinner: boolean },
+  ) => Promise<{ ticketNumber?: string | null } | void>;
   onRefreshBalance?: () => void;
   onRemainingChange?: (remaining: number) => void;
   commitError?: string | null;
@@ -28,6 +33,7 @@ interface ScratchCardProps {
   congratsAudioRef: React.RefObject<HTMLAudioElement>;
   competitionId?: string;
   resultModalOpen?: boolean;
+  playTickets?: Array<string | null>;
 }
 
 const CSS_WIDTH = 500;
@@ -64,7 +70,7 @@ function generateScratchGrid(mode: "tight" | "loose" = "loose") {
   return { images, isWinner };
 }
 // Add this function to load/save scratch history (order-specific)
-const loadScratchHistory = (orderId?: string): { status: string; prize: { type: string; value: string } }[] => {
+const loadScratchHistory = (orderId?: string): { status: string; prize: { type: string; value: string; ticketNumber?: string | null } }[] => {
   try {
     if (!orderId) return [];
     const saved = localStorage.getItem(`scratchCardHistory_${orderId}`);
@@ -74,7 +80,7 @@ const loadScratchHistory = (orderId?: string): { status: string; prize: { type: 
   }
 };
 
-const saveScratchHistory = (history: { status: string; prize: { type: string; value: string } }[], orderId?: string) => {
+const saveScratchHistory = (history: { status: string; prize: { type: string; value: string; ticketNumber?: string | null } }[], orderId?: string) => {
   try {
     if (!orderId) return;
     localStorage.setItem(`scratchCardHistory_${orderId}`, JSON.stringify(history));
@@ -83,7 +89,7 @@ const saveScratchHistory = (history: { status: string; prize: { type: string; va
   }
 };
 
-export default function ScratchCardTest({ onScratchReveal, onCommitSession, onRefreshBalance, onRemainingChange,  competitionId , mode = "tight", scratchTicketCount, orderId ,congratsAudioRef, resultModalOpen = false }: ScratchCardProps) {
+export default function ScratchCardTest({ onScratchReveal, onCommitSession, onRefreshBalance, onRemainingChange,  competitionId , mode = "tight", scratchTicketCount, orderId ,congratsAudioRef, resultModalOpen = false, playTickets = [] }: ScratchCardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const {id} = useParams()
   const drawingRef = useRef(false);
@@ -111,12 +117,15 @@ export default function ScratchCardTest({ onScratchReveal, onCommitSession, onRe
   const [images, setImages] = useState<any[]>([]);
   const [selectedPrize, setSelectedPrize] = useState<{ type: string; value: string }>({ type: "none", value: "0" });
   const [scratchHistory, setScratchHistory] = useState<
-    { status: string; prize: { type: string; value: string } }[]
+    { status: string; prize: { type: string; value: string; ticketNumber?: string | null } }[]
   >([]);
 
   // Confirmation dialog state
   const [showRevealAllDialog, setShowRevealAllDialog] = useState(false);
   const [showRevealAllResultDialog, setShowRevealAllResultDialog] = useState(false);
+  const [revealBatchRows, setRevealBatchRows] = useState<RevealBatchRow[]>([]);
+  const [revealBatchCash, setRevealBatchCash] = useState(0);
+  const [revealBatchPoints, setRevealBatchPoints] = useState(0);
 const [revealAllSummary, setRevealAllSummary] = useState<{ wins: number; losses: number }>({
   wins: 0,
   losses: 0
@@ -132,6 +141,7 @@ const resultModalOpenRef = useRef(resultModalOpen);
 const revealedRef = useRef(false);
 const recordPromiseRef = useRef<Promise<void> | null>(null);
 const checkPercentRef = useRef<(force?: boolean) => void>(() => {});
+const historyBoundToOrderRef = useRef<string | null>(null);
 const [allScratchesCompleted, setAllScratchesCompleted] = useState(false);
 
 currentSessionRef.current = currentSession;
@@ -197,54 +207,80 @@ useEffect(() => {
 }, [hideImagesAfterRevealAll]);
 
 
-    // ✅ SIMPLIFIED INITIALIZATION - Only run once when scratchTicketCount or orderId changes
-// Update your initialization useEffect
+function withPlayTickets(history: { status: string; prize: { type: string; value: string; ticketNumber?: string | null } }[]) {
+  if (!playTickets.length) return history;
+  let ticketIdx = 0;
+  return history.map((row) => {
+    if (row.status !== "Scratched" && row.status !== "Lost") return row;
+    const next = playTickets[ticketIdx++];
+    if (!next || row.prize?.ticketNumber) return row;
+    return { ...row, prize: { ...row.prize, ticketNumber: next } };
+  });
+}
+
+function closeConsumedLocalRows(
+  history: { status: string; prize: { type: string; value: string; ticketNumber?: string | null } }[],
+) {
+  return history.map((row) => {
+    if (row.status !== "Not Scratched" && row.status !== "Scratching") return row;
+    const hasPrize =
+      row.prize?.type &&
+      row.prize.type !== "none" &&
+      row.prize.value !== "-" &&
+      row.prize.value !== "In progress...";
+    return {
+      status: "Scratched",
+      prize: hasPrize ? row.prize : { type: "none", value: "Lose" },
+    };
+  });
+}
+
 useEffect(() => {
-  if (!scratchTicketCount || !orderId) return;
+  if (!orderId || scratchTicketCount === undefined) return;
+
+  if (historyBoundToOrderRef.current === orderId) {
+    if (playTickets.length) {
+      setScratchHistory((prev) => withPlayTickets(prev));
+    }
+    return;
+  }
 
   const savedHistory = loadScratchHistory(orderId);
   const lostScratches = JSON.parse(localStorage.getItem(`lostScratches_${orderId}`) || '[]');
 
   let finalHistory = savedHistory;
-  
-  // 🎯 Apply lost scratches
+
   if (lostScratches.length > 0) {
-    // console.log("📋 Found lost scratches:", lostScratches);
-    
     finalHistory = savedHistory.map((item, index) => {
       const wasLost = lostScratches.some((lost: any) => lost.index === index);
       if (wasLost) {
         return {
           status: "Lost",
-          prize: { type: "none", value: "Lost" },
+          prize: { type: "none", value: "Lose" },
         };
       }
       return item;
     });
-    
-    // Clear lost scratches after applying
     localStorage.removeItem(`lostScratches_${orderId}`);
   }
 
-  // If we have saved history that matches current count, use it
-  if (finalHistory.length === scratchTicketCount) {
-    setScratchHistory(openRemainingSlots(finalHistory, scratchTicketCount));
-  } 
-  // If saved history exists but count doesn't match, adjust it
-  else if (finalHistory.length > 0) {
-    const adjustedHistory = adjustHistoryToCount(finalHistory, scratchTicketCount);
-    setScratchHistory(openRemainingSlots(adjustedHistory, scratchTicketCount));
+  if (scratchTicketCount > 0 && finalHistory.length === scratchTicketCount) {
+    finalHistory = openRemainingSlots(finalHistory, scratchTicketCount);
+  } else if (finalHistory.length > 0) {
+    finalHistory = scratchTicketCount > 0
+      ? openRemainingSlots(adjustHistoryToCount(finalHistory, scratchTicketCount), scratchTicketCount)
+      : closeConsumedLocalRows(finalHistory);
+  } else if (scratchTicketCount > 0) {
+    finalHistory = Array.from({ length: scratchTicketCount }, () => ({
+      status: "Not Scratched",
+      prize: { type: "none", value: "-" },
+    }));
   }
-  // No saved history, create fresh
-  else {
-    setScratchHistory(
-      Array.from({ length: scratchTicketCount }, () => ({
-        status: "Not Scratched",
-        prize: { type: "none", value: "-" },
-      }))
-    );
-  }
-}, [scratchTicketCount, orderId]);
+
+  historyBoundToOrderRef.current = orderId;
+  setScratchHistory(withPlayTickets(finalHistory));
+  if (orderId && finalHistory.length > 0) saveScratchHistory(finalHistory, orderId);
+}, [scratchTicketCount, orderId, playTickets.join("|")]);
 
   // If the server still has cards, reopen locally-closed rows that were never used.
   const openRemainingSlots = (history: any[], remaining: number) => {
@@ -367,7 +403,7 @@ useEffect(() => {
 
 const markHistoryRow = (
   status: string,
-  prize: { type: string; value: string },
+  prize: { type: string; value: string; ticketNumber?: string | null },
 ) => {
   setScratchHistory((prev) => {
     const updated = [...prev];
@@ -380,7 +416,14 @@ const markHistoryRow = (
     }
     if (index < 0) return prev;
     committedIndexRef.current = index;
-    updated[index] = { status, prize };
+    updated[index] = {
+      status,
+      prize: {
+        ...updated[index].prize,
+        ...prize,
+        ticketNumber: prize.ticketNumber || updated[index].prize?.ticketNumber,
+      },
+    };
     if (orderId) saveScratchHistory(updated, orderId);
     return updated;
   });
@@ -399,8 +442,10 @@ const recordPlayIfNeeded = async (): Promise<void> => {
   };
 
   const run = (async () => {
+    let ticketNumber: string | null | undefined;
     if (onCommitSession) {
-      await onCommitSession(session.sessionId, payload);
+      const saved = await onCommitSession(session.sessionId, payload);
+      ticketNumber = saved?.ticketNumber;
     } else {
       const response = await fetch(`/api/scratch-session/${session.sessionId}/complete`, {
         method: "POST",
@@ -413,9 +458,11 @@ const recordPlayIfNeeded = async (): Promise<void> => {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.message || "Failed to complete scratch session");
       }
+      const body = await response.json();
+      ticketNumber = body?.ticketNumber;
     }
     hasRecordedRef.current = true;
-    markHistoryRow("Scratched", session.prize);
+    markHistoryRow("Scratched", { ...session.prize, ticketNumber: ticketNumber || undefined });
     if (orderId) {
       localStorage.removeItem(`scratchInProgress_${orderId}`);
       localStorage.removeItem(`scratchOpenSession_${orderId}`);
@@ -1018,17 +1065,18 @@ checkPercentRef.current = checkPercentScratched;
     }
 
     const results = await response.json();
+    const scratches = Array.isArray(results?.scratches) ? results.scratches : [];
 
     // Check if there are any wins in the results
     let hasWins = false;
     let winCount = 0;
     let totalWon = 0;
-    
-    setScratchHistory(prev => {
+
+    setScratchHistory((prev) => {
       const updated = [...prev];
       let openIndex = 0;
 
-      results.scratches.forEach((scratch: any) => {
+      scratches.forEach((scratch: any) => {
         while (
           openIndex < updated.length &&
           updated[openIndex].status !== "Not Scratched" &&
@@ -1037,42 +1085,76 @@ checkPercentRef.current = checkPercentScratched;
           openIndex++;
         }
 
-        if (openIndex < updated.length) {
-          const isWin = scratch.prize?.type !== "none" &&
-                       scratch.prize?.type !== "try_again" &&
-                       scratch.prize?.type !== "lose" &&
-                       scratch.prize?.value !== "Lose" &&
-                       scratch.prize?.value !== "Try Again" &&
-                       scratch.prize?.value !== "0" &&
-                       scratch.prize?.value !== 0;
-          
-          if (isWin) {
-            hasWins = true;
-            winCount++;
-            if (scratch.prize?.type === "cash" && scratch.prize?.value) {
-              const value = parseFloat(scratch.prize.value);
-              if (!isNaN(value)) totalWon += value;
-            }
-          }
+        const prize = {
+          ...(scratch.prize || { type: "none", value: "Lose" }),
+          ticketNumber: scratch.prize?.ticketNumber || scratch.ticketNumber || null,
+        };
 
+        const isWin = prize?.type !== "none" &&
+                     prize?.type !== "try_again" &&
+                     prize?.type !== "lose" &&
+                     prize?.value !== "Lose" &&
+                     prize?.value !== "Try Again" &&
+                     prize?.value !== "0" &&
+                     prize?.value !== 0;
+
+        if (isWin) {
+          hasWins = true;
+          winCount++;
+          if (prize?.type === "cash" && prize?.value) {
+            const value = parseFloat(prize.value);
+            if (!isNaN(value)) totalWon += value;
+          }
+        }
+
+        if (openIndex < updated.length) {
           updated[openIndex] = {
             status: "Scratched",
-            prize: scratch.prize,
+            prize,
           };
           openIndex++;
+        } else {
+          updated.push({ status: "Scratched", prize });
         }
       });
 
-      return updated.map((row) =>
+      const closed = updated.map((row) =>
         row.status === "Not Scratched" || row.status === "Scratching"
-          ? { status: "Scratched", prize: row.prize }
+          ? { status: "Scratched", prize: { type: "none", value: "Lose" } }
           : row
       );
+      if (orderId) saveScratchHistory(closed, orderId);
+      return closed;
     });
 
     const leftover = Math.max(0, Number(results.cardsRemaining) || 0);
     onRemainingChange?.(leftover);
     onRefreshBalance?.();
+
+    const batchRows: RevealBatchRow[] = scratches.map((scratch: any, i: number) => {
+      const prize = {
+        ...(scratch.prize || { type: "none", value: "Lose" }),
+        ticketNumber: scratch.prize?.ticketNumber || scratch.ticketNumber || null,
+      };
+      const type = String(prize.type || "").toLowerCase();
+      const isReplay = type === "try_again" || prize.value === "Try Again";
+      const isWin = !isReplay && type !== "none" && type !== "lose" &&
+        prize.value !== "Lose" && prize.value !== "0" && prize.value !== 0 && prize.value !== "-";
+      return {
+        id: i,
+        number: i + 1,
+        ticketNumber: prize.ticketNumber,
+        ...prizeFromReward({
+          isWin,
+          rewardType: isReplay ? "try_again" : type,
+          rewardValue: prize.value,
+          prizeName: prize.value,
+        }),
+      };
+    });
+    setRevealBatchRows(batchRows);
+    setRevealBatchCash(Number(results?.summary?.totalCash || totalWon || 0));
+    setRevealBatchPoints(Number(results?.summary?.totalPoints || 0));
 
     if (hasWins) {
       triggerWinConfetti(winCount, totalWon);
@@ -1352,6 +1434,7 @@ useEffect(() => {
                   <tr className="text-left text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
                     <th className="px-2 py-2 sm:px-3">#</th>
                     <th className="px-2 py-2 sm:px-3">Status</th>
+                    <th className="px-2 py-2 sm:px-3">Ticket</th>
                     <th className="px-2 py-2 text-right sm:px-3">Prize</th>
                   </tr>
                 </thead>
@@ -1395,55 +1478,58 @@ useEffect(() => {
         </span>
       </td>
       
-      <td className="px-1 sm:px-2 md:px-3 py-2 sm:py-3 text-right font-bold rounded-r-lg">
-        {item.status === "Not Scratched" ? (
-          <span className="text-white/45 text-xs sm:text-sm">-</span>
-        ) : item.status === "Scratching" ? ( // ✅ Add this case
-          <span className="animate-pulse text-xs text-[#FF263D] sm:text-sm">
-            Scratching...
-          </span>
-                        ) : (
-                          <>
-                            {(() => {
-                              const isLoss = item.prize.type === "none" || 
-                                           item.prize.type === "try_again" || 
-                                           item.prize.value === "Lose" ||
-                                           item.prize.value === "Try Again";
+      {(() => {
+        const isLoss = item.prize.type === "none" ||
+          item.prize.type === "try_again" ||
+          item.prize.value === "Lose" ||
+          item.prize.value === "Try Again";
+        const ticketLabel =
+          item.status === "Scratched" && !isLoss
+            ? formatResultTicket(item.prize.ticketNumber)
+            : null;
+        const prizeLabel =
+          item.status === "Not Scratched"
+            ? "-"
+            : item.status === "Scratching"
+              ? "Scratching..."
+              : isLoss
+                ? "Lose"
+                : item.prize.type === "cash"
+                  ? `£${item.prize.value}`
+                  : item.prize.type === "points"
+                    ? `${item.prize.value} pts`
+                    : item.prize.value;
 
-                              if (isLoss) {
-                                return (
-                                  <span className="whitespace-nowrap text-xs text-white/40 sm:text-sm">
-                                    Lose
-                                  </span>
-                                );
-                              }
-
-                              if (item.prize.type === "cash") {
-                                return (
-                                  <span className="whitespace-nowrap font-prize text-xs text-[#F1D47A] sm:text-sm">
-                                    £{item.prize.value}
-                                  </span>
-                                );
-                              }
-
-                              if (item.prize.type === "points") {
-                                return (
-                                  <span className="whitespace-nowrap font-prize text-xs text-[#F1D47A] sm:text-sm">
-                                    {item.prize.value} pts
-                                  </span>
-                                );
-                              }
-
-                              // Physical prize or other
-                              return (
-                                <span className="whitespace-nowrap font-prize text-xs text-[#F1D47A] sm:text-sm">
-                                  {item.prize.value}
-                                </span>
-                              );
-                            })()}
-                          </>
-                        )}
-                      </td>
+        return (
+          <>
+            <td className="max-w-[7.5rem] px-1 py-2 sm:max-w-none sm:px-2 md:px-3 sm:py-3">
+              <span
+                className="block truncate text-[11px] font-bold tabular-nums text-white/50 sm:text-xs"
+                title={ticketLabel || undefined}
+              >
+                {ticketLabel || "—"}
+              </span>
+            </td>
+            <td className="rounded-r-lg px-1 py-2 text-right font-bold sm:px-2 md:px-3 sm:py-3">
+              {item.status === "Not Scratched" ? (
+                <span className="text-xs text-white/45 sm:text-sm">-</span>
+              ) : item.status === "Scratching" ? (
+                <span className="animate-pulse text-xs text-[#FF263D] sm:text-sm">
+                  Scratching...
+                </span>
+              ) : isLoss ? (
+                <span className="whitespace-nowrap text-xs text-white/40 sm:text-sm">
+                  Lose
+                </span>
+              ) : (
+                <span className="whitespace-nowrap font-prize text-xs text-[#F1D47A] sm:text-sm">
+                  {prizeLabel}
+                </span>
+              )}
+            </td>
+          </>
+        );
+      })()}
                     </tr>
                   ))}
                 </tbody>
@@ -1477,28 +1563,14 @@ useEffect(() => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reveal-All Result Dialog */}
-<AlertDialog open={showRevealAllResultDialog} onOpenChange={setShowRevealAllResultDialog}>
-  <AlertDialogContent className="rr-scratch-panel mx-auto w-[90vw] max-w-sm border border-[#F1D47A]/25 bg-[#0A0A0D] text-white sm:max-w-md">
-    <AlertDialogHeader>
-      <AlertDialogTitle className="text-center font-prize text-2xl text-[#F1D47A]">
-        Reveal complete
-      </AlertDialogTitle>
-      <AlertDialogDescription className="text-center text-white/50">
-        Check the progress table below for every prize.
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-
-    <AlertDialogFooter>
-      <AlertDialogAction
-        className="bg-[#C8102E] text-white hover:bg-[#FF263D]"
-        onClick={() => setShowRevealAllResultDialog(false)}
-      >
-        OK
-      </AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
+      <RevealAllBatchSummary
+        open={showRevealAllResultDialog}
+        rows={revealBatchRows}
+        playNoun="card"
+        cashWon={revealBatchCash}
+        pointsWon={revealBatchPoints}
+        onDismiss={() => setShowRevealAllResultDialog(false)}
+      />
 
                   {/* OUT OF SCRATCHES DIALOG */}
 <AlertDialog open={showOutOfScratchesDialog} onOpenChange={setShowOutOfScratchesDialog}>

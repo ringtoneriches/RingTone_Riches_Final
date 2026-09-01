@@ -400,7 +400,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
         return;
       }
       if (data.success) {
-        showPurchaseSuccessToast(toast, orderType, data.message);
+        showPurchaseSuccessToast(toast, orderType, data.message, wheelType);
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         queryClient.invalidateQueries({ queryKey: [getEndpoint(), orderId] });
         const competitionId = data.competitionId || order?.competitionId;
@@ -477,7 +477,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
         const data = JSON.parse(pending);
         if (data.orderId === orderId) {
           localStorage.removeItem("pendingInstaplayOrder");
-          showPurchaseSuccessToast(toast, data.orderType || orderType);
+          showPurchaseSuccessToast(toast, data.orderType || orderType, undefined, data.wheelType || wheelType);
           queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
           queryClient.invalidateQueries({ queryKey: [getEndpoint(), orderId] });
           setTimeout(() => setLocation(getGameSuccessPath(data.competitionId, orderId)), 1500);

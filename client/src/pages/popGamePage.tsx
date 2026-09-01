@@ -7,7 +7,8 @@ import RingtonePopGame from "@/components/games/ringtone-pop-game";
 import { GameDisclaimer, GameEmpty, GameHero, GameShell, GameStatus } from "@/components/games/GameChrome";
 import PlayResultsTable, { prizeFromReward } from "@/components/games/PlayResultsTable";
 import { useState, useEffect, useRef } from "react";
-import PopRevealAllSummary, { type PopRevealResult } from "@/components/games/PopRevealAllSummary";
+import { type PopRevealResult } from "@/components/games/PopRevealAllSummary";
+import RevealAllBatchSummary, { batchRowsFromRewards } from "@/components/games/RevealAllBatchSummary";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import {
@@ -22,11 +23,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Loader2, ArrowLeft, Sparkles } from "lucide-react";
 import { getCompetitionTypeConfig } from "@/lib/competition-display";
+import { usePurchaseArrivalToast } from "@/lib/purchase-toast";
 
 export default function PopGamePage() {
   const { competitionId, orderId } = useParams();
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
+  usePurchaseArrivalToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
 
@@ -238,6 +241,7 @@ export default function PopGamePage() {
               rows={gameHistory.map((g: any, i: number) => ({
                 id: g.id ?? i,
                 number: i + 1,
+                ticketNumber: g.ticketNumber,
                 ...prizeFromReward(g),
               }))}
               emptyTitle="NO GAMES PLAYED YET"
@@ -247,15 +251,13 @@ export default function PopGamePage() {
         </div>
       </main>
 
-      <PopRevealAllSummary
+      <RevealAllBatchSummary
         open={showRevealAllSummary}
-        results={revealAllResults}
-        processed={revealAllProcessed}
-        totalWon={revealAllCash}
-        totalPoints={revealAllPoints}
-        freeReplaysWon={revealAllReplays}
-        onViewResults={viewRevealResults}
-        onGetMore={() => navigate(`/competition/${competitionId}`)}
+        rows={batchRowsFromRewards(revealAllResults)}
+        playNoun="pop"
+        cashWon={revealAllCash}
+        pointsWon={revealAllPoints}
+        onDismiss={viewRevealResults}
       />
 
       <AlertDialog open={showRevealAllDialog} onOpenChange={setShowRevealAllDialog}>

@@ -1,3 +1,4 @@
+import { playTicketLabel } from "./play-ticket-labels";
 import { randomInt, randomBytes } from "crypto";
 import { and, asc, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "../db";
@@ -1878,6 +1879,7 @@ export async function tryRevealControlledSpin(opts: {
         color: spin.color || wheelSegment?.color || "#eab308",
       },
       winningSegmentId,
+      ticketNumber: playTicketLabel(ticket),
       prize: {
         brand: details.prizeName,
         amount:
@@ -1889,6 +1891,7 @@ export async function tryRevealControlledSpin(opts: {
             ? details.prizeName
             : 0,
         type: details.isWin ? details.rewardType : "none",
+        ticketNumber: playTicketLabel(ticket),
       },
       spinsRemaining: Math.max(0, remaining - 1),
       orderId: opts.orderId,
@@ -1918,11 +1921,26 @@ export async function revealAllControlledSpin(opts: {
       userId: opts.userId,
       usedAt: new Date(),
     });
+    const ticketNumber = playTicketLabel(ticket);
     results.push({
       label: details.prizeName,
       type: details.rewardType,
       value: details.rewardValue,
       isWin: Boolean(details.isWin),
+      ticketNumber,
+      prize: {
+        brand: details.prizeName,
+        amount:
+          details.rewardType === "cash"
+            ? Number(details.rewardValue)
+            : details.rewardType === "points"
+            ? `${details.rewardValue} Ringtones`
+            : details.rewardType === "physical"
+            ? details.prizeName
+            : 0,
+        type: details.isWin ? details.rewardType : "none",
+        ticketNumber,
+      },
     });
   }
 
@@ -1932,6 +1950,7 @@ export async function revealAllControlledSpin(opts: {
       success: true,
       controlledPool: true,
       results,
+      spins: results,
       freeReplaysWon: 0,
       creditedAtSale: true,
     },

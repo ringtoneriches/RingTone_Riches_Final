@@ -6,6 +6,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowLeft, RefreshCw, Trophy, X, Sparkles } from "lucide-react";
 import PlayResultsTable, { type PlayResultRow } from "@/components/games/PlayResultsTable";
+import { usePurchaseArrivalToast } from "@/lib/purchase-toast";
+import RevealAllBatchSummary from "@/components/games/RevealAllBatchSummary";
 import SlotGameComponent from "@/components/games/slot-game";
 import ChaserBorder from "@/components/home/ChaserBorder";
 import confetti from "canvas-confetti";
@@ -230,156 +232,6 @@ type RevealAllResult = {
   spinNumber?: number;
 };
 
-function RevealAllSummary({
-  show,
-  results,
-  cashWon,
-  pointsWon,
-  onDismiss,
-}: {
-  show: boolean;
-  results: RevealAllResult[];
-  cashWon: number;
-  pointsWon: number;
-  onDismiss: () => void;
-}) {
-  const wins = results.filter((r) => r.isWin);
-  const winCount = wins.length;
-  const hadWin = winCount > 0;
-
-  useEffect(() => {
-    if (!show || !hadWin) return;
-    return fireSlotWinConfetti();
-  }, [show, hadWin]);
-
-  if (!show || !results.length) return null;
-
-  return (
-    <div
-      className="rr-slot-panel fixed inset-0 z-[56] flex items-center justify-center p-4"
-      style={{ background: "rgba(5,5,5,0.9)", backdropFilter: "blur(10px)" }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="slot-reveal-title"
-    >
-      <div className="relative w-full max-w-[440px] animate-bounce-in">
-        <div
-          className="pointer-events-none absolute -inset-8 rounded-[2rem] blur-3xl"
-          style={{
-            background: hadWin
-              ? "radial-gradient(circle at 50% 40%, rgba(200,16,46,0.28), rgba(241,212,122,0.08) 46%, transparent 72%)"
-              : "radial-gradient(circle at 50% 40%, rgba(255,255,255,0.08), transparent 70%)",
-          }}
-        />
-        <ChaserBorder variant="featured">
-          <div className="relative max-h-[86vh] overflow-hidden bg-gradient-to-b from-[#111115] via-[#0A0A0D] to-[#050505]">
-            <div className="px-6 pb-2 pt-8 text-center sm:px-8 sm:pt-9">
-              <button
-                type="button"
-                onClick={onDismiss}
-                className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-[#050505]/80 text-white/55 transition-colors hover:border-[#F1D47A]/40 hover:text-[#F1D47A]"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#C8102E]/40 bg-[#C8102E]/10 px-3 py-1">
-                <Sparkles className="h-3.5 w-3.5 text-[#F1D47A]" />
-                <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">
-                  All spins revealed
-                </span>
-              </div>
-
-              <h2 id="slot-reveal-title" className="font-prize text-4xl leading-none text-white sm:text-5xl">
-                REVEAL COMPLETE
-              </h2>
-              <p className="mt-3 text-sm text-white/50">
-                {results.length} spin{results.length === 1 ? "" : "s"} settled instantly.
-              </p>
-
-              <div className="mt-5 grid grid-cols-3 gap-2">
-                <div className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-3">
-                  <div className="font-prize text-2xl leading-none tabular-nums text-white">{results.length}</div>
-                  <div className="mt-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-white/40">Spins</div>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-3">
-                  <div className={`font-prize text-2xl leading-none tabular-nums ${winCount ? "text-[#4ADE80]" : "text-white"}`}>
-                    {winCount}
-                  </div>
-                  <div className="mt-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-white/40">Wins</div>
-                </div>
-                <div
-                  className="rounded-xl border px-2 py-3"
-                  style={{
-                    background: hadWin ? "rgba(241,212,122,0.06)" : "rgba(255,255,255,0.04)",
-                    borderColor: hadWin ? "rgba(241,212,122,0.28)" : "rgba(255,255,255,0.1)",
-                  }}
-                >
-                  <div className={`font-prize text-lg leading-none tabular-nums sm:text-2xl ${hadWin ? "text-[#F1D47A]" : "text-white/40"}`}>
-                    {cashWon > 0 ? `£${cashWon.toLocaleString()}` : pointsWon > 0 ? `${pointsWon.toLocaleString()} pts` : "—"}
-                  </div>
-                  <div className="mt-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-white/40">
-                    {cashWon > 0 && pointsWon > 0 ? "Cash" : cashWon > 0 ? "Cash" : pointsWon > 0 ? "Points" : "Won"}
-                  </div>
-                </div>
-              </div>
-
-              {cashWon > 0 && pointsWon > 0 && (
-                <p className="mt-3 text-sm text-[#F1D47A]">+{pointsWon.toLocaleString()} ringtone points</p>
-              )}
-              <p className="mt-3 text-xs text-white/40">
-                {hadWin ? "Prizes are already on your account." : "No wins this batch — check the history below."}
-              </p>
-            </div>
-
-            <div className="mx-4 mb-3 max-h-[32vh] overflow-y-auto rounded-xl border border-white/8 sm:mx-6">
-              {results.map((result, i) => {
-                const isWin = result.isWin;
-                const prizeType = result.prizeType === "points" ? "points" : "cash";
-                const amount =
-                  isWin && result.coinsWon > 0
-                    ? prizeType === "points"
-                      ? `+${result.coinsWon.toLocaleString()} pts`
-                      : `+£${result.coinsWon.toLocaleString()}`
-                    : "No match";
-                return (
-                  <div
-                    key={`${result.spinNumber ?? i}-${i}`}
-                    className="flex items-center justify-between gap-3 border-b border-white/6 px-3 py-2.5 last:border-b-0"
-                    style={{ background: isWin ? "rgba(16,80,40,0.18)" : "transparent" }}
-                  >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span className="w-8 shrink-0 text-[11px] font-black tabular-nums text-[#F1D47A]/80">
-                        #{result.spinNumber ?? i + 1}
-                      </span>
-                      <span className={`truncate text-sm font-semibold ${isWin ? "text-white" : "text-white/45"}`}>
-                        {isWin ? result.prizeName || "Win" : "No match"}
-                      </span>
-                    </div>
-                    <span className={`shrink-0 text-sm font-black tabular-nums ${isWin ? "text-[#F1D47A]" : "text-white/30"}`}>
-                      {amount}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="px-6 pb-6 sm:px-8 sm:pb-7">
-              <button
-                type="button"
-                onClick={onDismiss}
-                className="rr-cta h-12 w-full rounded-xl text-sm font-black uppercase tracking-[0.16em]"
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        </ChaserBorder>
-      </div>
-    </div>
-  );
-}
-
 function SessionStrip({
   purchased,
   used,
@@ -599,6 +451,7 @@ function slotResultRows(history: any[]): PlayResultRow[] {
       status: spin.isWin ? "Win" : "Lose",
       tone: spin.isWin ? "win" : "lose",
       prize: spin.isWin && won > 0 ? `+${won.toLocaleString()}` : "—",
+      ticketNumber: spin.ticketNumber,
     };
   });
 }
@@ -608,6 +461,7 @@ export default function SlotGamePage() {
   const { competitionId, orderId } = useParams();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  usePurchaseArrivalToast();
   const queryClient = useQueryClient();
   const [spinHistory, setSpinHistory] = useState<any[]>([]);
   const [showWinOverlay, setShowWinOverlay] = useState(false);
@@ -779,9 +633,22 @@ export default function SlotGamePage() {
     <GameShell>
       <WinOverlay show={showWinOverlay} coinsWon={lastCoinsWon} prizeType={lastPrizeType} prizeName={lastPrizeName} onDismiss={() => setShowWinOverlay(false)} />
       <LoseOverlay show={showLoseOverlay} onDismiss={() => setShowLoseOverlay(false)} />
-      <RevealAllSummary
-        show={showRevealAllSummary}
-        results={revealAllResults}
+      <RevealAllBatchSummary
+        open={showRevealAllSummary}
+        rows={revealAllResults.map((r, i) => ({
+          id: i,
+          number: r.spinNumber ?? i + 1,
+          status: r.isWin ? "Win" : "Lose",
+          tone: r.isWin ? "win" : "lose",
+          prize:
+            r.isWin && r.coinsWon > 0
+              ? r.prizeType === "points"
+                ? `${r.coinsWon.toLocaleString()} pts`
+                : `£${Number(r.coinsWon).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              : "—",
+          ticketNumber: (r as any).ticketNumber,
+        }))}
+        playNoun="spin"
         cashWon={revealAllCashWon}
         pointsWon={revealAllPointsWon}
         onDismiss={() => setShowRevealAllSummary(false)}
