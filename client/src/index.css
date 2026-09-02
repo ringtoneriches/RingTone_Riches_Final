@@ -65,18 +65,21 @@ canvas {
   }
 }
 
-/* Slot machine: photoreal art — bilinear/high-quality, not pixelated */
+/* Slot: keep global width:100% / height:auto so the HiDPI bitmap
+   (CSS × devicePixelRatio) is shown at parent CSS size — same recipe as
+   scratch-card. Only override the pixelated filter used by other games. */
 .rr-slot-panel canvas,
 .rr-slot-canvas canvas {
-  image-rendering: auto;
-  image-rendering: high-quality;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: auto !important;
 }
 
 @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
   .rr-slot-panel canvas,
   .rr-slot-canvas canvas {
-    image-rendering: auto;
-    image-rendering: high-quality;
+    image-rendering: auto !important;
   }
 }
 
