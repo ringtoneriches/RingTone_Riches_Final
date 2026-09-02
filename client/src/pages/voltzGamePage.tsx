@@ -145,12 +145,12 @@ export default function VoltzGamePage() {
           Icon={Zap}
         />
 
-        <VoltzGameComponent
-          orderId={orderId!}
-          competitionId={competitionId!}
-          playsRemaining={remainingPlays}
-          onPlayComplete={handlePlayComplete}
-        />
+            <VoltzGameComponent
+              orderId={orderId!}
+              competitionId={competitionId!}
+              playsRemaining={remainingPlays}
+              onPlayComplete={handlePlayComplete}
+            />
 
         <div className="mt-6">
           <PlayResultsTable
@@ -167,8 +167,8 @@ export default function VoltzGamePage() {
             emptyTitle="NO SURGES RECORDED"
             emptyHint="Tap a switch above to start playing."
           />
-        </div>
-      </main>
+          </div>
+        </main>
 
       <GameDisclaimer open={showDisclaimer} onClose={() => setShowDisclaimer(false)} />
     </GameShell>

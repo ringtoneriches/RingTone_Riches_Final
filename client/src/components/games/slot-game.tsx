@@ -43,6 +43,7 @@ export default function SlotGameComponent({
   const gameSceneRef = useRef<any>(null);
   const { toast } = useToast();
   const [isGameReady, setIsGameReady] = useState(false);
+  const [loadPct, setLoadPct] = useState(0);
 
   const orderIdRef = useRef(orderId);
   const creditsPerSpinRef = useRef(creditsPerSpin);
@@ -262,6 +263,9 @@ export default function SlotGameComponent({
 
       game.registry.set("renderDpr", dpr);
       gameInstanceRef.current = game;
+      game.events.on("slot-load-progress", (v: number) => {
+        setLoadPct(Math.round(Math.min(1, Math.max(0, v)) * 100));
+      });
 
       const applyTouchAction = () => {
         const canvas = gameContainerRef.current?.querySelector("canvas");
@@ -291,7 +295,7 @@ export default function SlotGameComponent({
           setTimeout(pollForScene, 200);
         }
       };
-      setTimeout(pollForScene, 500);
+      setTimeout(pollForScene, 150);
     };
 
     initGame();
@@ -328,7 +332,7 @@ export default function SlotGameComponent({
               style={{ color: "#FFD700" }}
             />
             <p className="text-sm" style={{ color: "rgba(200,140,255,0.65)" }}>
-              Loading game...
+              {loadPct > 0 ? `Loading game… ${loadPct}%` : "Loading game..."}
             </p>
           </div>
         </div>
