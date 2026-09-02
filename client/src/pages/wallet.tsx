@@ -3082,7 +3082,7 @@ const handleDeleteBankAccount = (
 
       {/* Withdrawal Request Dialog */}
       <Dialog open={withdrawalDialogOpen} onOpenChange={setWithdrawalDialogOpen}>
-  <DialogContent className="rr-wallet bg-[#0A0A0D] border-[#C8102E]/30 text-white max-w-md">
+  <DialogContent className="rr-wallet bg-[#0A0A0D] border-[#C8102E]/30 text-white max-w-md max-h-[90vh] overflow-y-auto">
     <DialogHeader>
       <DialogTitle className="text-2xl text-yellow-400">
         Request Withdrawal
@@ -3093,6 +3093,16 @@ const handleDeleteBankAccount = (
     </DialogHeader>
 
     <form onSubmit={handleWithdrawalSubmit} className="space-y-4">
+      <div
+        className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3"
+        data-testid="notice-withdrawal-bank-name"
+      >
+        <p className="text-sm text-yellow-100 leading-relaxed">
+          <span className="font-semibold text-yellow-400">Before submitting your withdrawal:</span>{" "}
+          Please make sure the bank account you provide is in your own name and matches your verified Ringtone Riches details. For security, we’re unable to send winnings to someone else’s bank account.
+        </p>
+      </div>
+
       {/* Amount field */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-1">

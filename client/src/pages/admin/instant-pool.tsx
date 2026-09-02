@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { instantPrizeGroupKey, planGroupActivation } from "@shared/instant-win-groups";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -73,8 +75,9 @@ export default function AdminInstantPool() {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [groupPages, setGroupPages] = useState<Record<string, number>>({});
   const [openPrizeId, setOpenPrizeId] = useState<string | null>(null);
+  const [selectedGroupKeys, setSelectedGroupKeys] = useState<string[]>([]);
   const [pendingAction, setPendingAction] = useState<{
-    type: "activate" | "lock" | "disable" | "delete" | "clear" | "delete-group";
+    type: "activate" | "lock" | "disable" | "delete" | "clear" | "delete-group" | "activate-groups";
     prize?: any;
     prizes?: any[];
   } | null>(null);
@@ -144,8 +147,7 @@ export default function AdminInstantPool() {
       prizes: any[];
     }>();
     for (const prize of filtered) {
-      const key = prize.competitionPrizeId
-        || `${Number(prize.value).toFixed(2)}|${prize.name}|${prize.rewardType}`;
+      const key = instantPrizeGroupKey(prize);
       const existing = map.get(key);
       if (existing) {
         existing.prizes.push(prize);
@@ -178,6 +180,7 @@ export default function AdminInstantPool() {
     setPage(1);
     setOpenGroups({});
     setGroupPages({});
+    setSelectedGroupKeys([]);
   }, [selectedId, statusFilter, search, pageSize]);
 
   useEffect(() => {
@@ -302,6 +305,41 @@ export default function AdminInstantPool() {
     },
   });
 
+  const bulkActivateMutation = useMutation({
+    mutationFn: async (payload: { groupKeys: string[]; confirmHighValue: boolean }) => {
+      const res = await apiRequest(
+        `/api/admin/competitions/${selectedId}/instant-win/prizes/activate-groups`,
+        "POST",
+        payload
+      );
+      if (!res.ok) {
+        const body = await res.json();
+        const err: any = new Error(body.message || "Bulk activate failed");
+        err.code = body.code;
+        throw err;
+      }
+      return res.json();
+    },
+    onSuccess: (result: { activated?: number; failed?: { message: string }[] }) => {
+      const failed = result.failed?.length || 0;
+      toast({
+        title: failed ? "Bulk activate finished with errors" : "Selected groups activated",
+        description: `${result.activated || 0} prize${result.activated === 1 ? "" : "s"} activated${
+          failed ? ` · ${failed} could not be activated` : ""
+        }.`,
+        variant: failed ? "destructive" : "default",
+      });
+      setConfirmOpen(false);
+      setPendingAction(null);
+      setConfirmHighValue(false);
+      setSelectedGroupKeys([]);
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({ title: "Bulk activate failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const selectedComp = competitions.find((c) => c.id === selectedId);
   const isControlled = selectedComp?.instantWinMode === "controlled_pool";
   const isInstantDraw = selectedComp?.type === "instant";
@@ -332,6 +370,11 @@ export default function AdminInstantPool() {
     setSelectedId(id);
     setCompSearch("");
   };
+
+  const bulkPlan = useMemo(
+    () => planGroupActivation(prizes, selectedGroupKeys, highValueThreshold),
+    [prizes, selectedGroupKeys, highValueThreshold]
+  );
 
   const submitCreate = (forceHighValue = false) => {
     const value = Number(form.value);
@@ -628,6 +671,53 @@ export default function AdminInstantPool() {
                     </div>
                   </div>
 
+                  {isControlled && (
+                    <div className="flex flex-col gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 sm:flex-row sm:flex-wrap sm:items-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        onClick={() => {
+                          const keys = pagedGroups
+                            .filter((g) => g.prizes.some((p) => p.status === "locked"))
+                            .map((g) => g.key);
+                          setSelectedGroupKeys((prev) => Array.from(new Set([...prev, ...keys])));
+                        }}
+                      >
+                        Select page
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        disabled={selectedGroupKeys.length === 0}
+                        onClick={() => setSelectedGroupKeys([])}
+                      >
+                        Clear selection
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="w-full bg-amber-500 text-black hover:bg-amber-600 sm:w-auto"
+                        disabled={!isControlled || selectedGroupKeys.length === 0}
+                        onClick={() => {
+                          setPendingAction({ type: "activate-groups" });
+                          setConfirmHighValue(false);
+                          setConfirmOpen(true);
+                        }}
+                      >
+                        <Unlock className="mr-1 h-3.5 w-3.5" />
+                        Activate selected
+                        {selectedGroupKeys.length > 0 ? ` (${selectedGroupKeys.length})` : ""}
+                      </Button>
+                      <p className="text-xs text-muted-foreground sm:ml-auto">
+                        Tick groups, then confirm. High-value groups stay locked unless you include them.
+                      </p>
+                    </div>
+                  )}
+
                   {pagedGroups.map((group) => {
                     const isOpen = !!openGroups[group.key];
                     const counts = {
@@ -645,7 +735,20 @@ export default function AdminInstantPool() {
                     return (
                       <div key={group.key} className="rounded-xl border border-border bg-card/60 overflow-hidden">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 sm:p-4">
-                          <div className="min-w-0 flex-1">
+                          <label className="flex items-start gap-3 min-w-0 flex-1 cursor-pointer">
+                            <Checkbox
+                              className="mt-1"
+                              checked={selectedGroupKeys.includes(group.key)}
+                              disabled={!isControlled || counts.locked === 0}
+                              onCheckedChange={(checked) => {
+                                setSelectedGroupKeys((prev) =>
+                                  checked
+                                    ? prev.includes(group.key) ? prev : [...prev, group.key]
+                                    : prev.filter((k) => k !== group.key)
+                                );
+                              }}
+                            />
+                            <div className="min-w-0 flex-1">
                             <div className="font-semibold text-base sm:text-lg truncate">{group.name}</div>
                             <div className="text-sm text-muted-foreground">
                               £{group.value.toLocaleString("en-GB")} · {group.prizes.length} prize{group.prizes.length === 1 ? "" : "s"}
@@ -656,7 +759,8 @@ export default function AdminInstantPool() {
                             <div className="sm:hidden text-xs text-muted-foreground mt-1">
                               {counts.active} active · {counts.locked} locked · {counts.won} won · {counts.disabled} disabled
                             </div>
-                          </div>
+                            </div>
+                          </label>
                           {removable.length > 0 && (
                             <Button
                               variant="outline"
@@ -897,6 +1001,8 @@ export default function AdminInstantPool() {
                   ? "Delete unused prizes"
                   : pendingAction?.type === "clear"
                   ? "Clear unused prizes"
+                  : pendingAction?.type === "activate-groups"
+                  ? "Activate selected groups"
                   : pendingAction?.type === "lock" && pendingAction.prize?.status === "disabled"
                   ? "Enable prize"
                   : `${pendingAction?.type || "Update"} prize`}
@@ -904,6 +1010,8 @@ export default function AdminInstantPool() {
               <DialogDescription>
                 {pendingAction?.type === "activate"
                   ? "The assigned winning ticket stays fixed. If this prize has no number yet, one unsold ticket is picked and then never changed. Locked winning tickets stay reserved until you activate."
+                  : pendingAction?.type === "activate-groups"
+                  ? "Only locked prizes in the groups below will go live. Unselected groups stay locked. Ticket numbers stay fixed."
                   : pendingAction?.type === "delete"
                   ? "This permanently removes this unused prize copy. Won prizes and sold winning tickets cannot be deleted."
                   : pendingAction?.type === "delete-group"
@@ -913,15 +1021,65 @@ export default function AdminInstantPool() {
                   : "This updates prize status only. Sold ticket results cannot be rewritten."}
               </DialogDescription>
             </DialogHeader>
+            {pendingAction?.type === "activate-groups" && (
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-border p-3 text-sm">
+                {bulkPlan.groups.length === 0 ? (
+                  <p className="text-muted-foreground">No matching prizes in the selected groups.</p>
+                ) : (
+                  bulkPlan.groups.map((g) => (
+                    <div key={g.key} className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">
+                          {g.name}
+                          {g.highValue ? " · high value" : ""}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          £{g.value.toLocaleString("en-GB")} · {g.alreadyActive} already active · {g.won} won
+                        </div>
+                      </div>
+                      <div className="shrink-0 font-semibold tabular-nums">
+                        {g.lockedCount} locked
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div className="border-t border-border pt-2 font-semibold">
+                  {bulkPlan.totalLocked} prize{bulkPlan.totalLocked === 1 ? "" : "s"} will be activated
+                </div>
+              </div>
+            )}
             {Number(pendingAction?.prize?.value || 0) >= highValueThreshold && pendingAction?.type === "activate" && (
               <p className="text-sm text-amber-400">High-value confirmation required for this prize.</p>
+            )}
+            {pendingAction?.type === "activate-groups" && bulkPlan.requiresHighValueConfirm && (
+              <label className="flex items-start gap-2 text-sm text-amber-400">
+                <Checkbox
+                  checked={confirmHighValue}
+                  onCheckedChange={(checked) => setConfirmHighValue(checked === true)}
+                />
+                <span>I confirm activating high-value prizes (£{highValueThreshold}+) in this selection.</span>
+              </label>
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
               <Button
                 className="bg-amber-500 hover:bg-amber-600 text-black"
+                disabled={
+                  pendingAction?.type === "activate-groups" &&
+                  (bulkActivateMutation.isPending ||
+                    bulkPlan.totalLocked === 0 ||
+                    (bulkPlan.requiresHighValueConfirm && !confirmHighValue))
+                }
                 onClick={() => {
                   if (!pendingAction) return;
+                  if (pendingAction.type === "activate-groups") {
+                    bulkActivateMutation.mutate({
+                      groupKeys: selectedGroupKeys,
+                      confirmHighValue:
+                        bulkPlan.requiresHighValueConfirm ? confirmHighValue : true,
+                    });
+                    return;
+                  }
                   if (pendingAction.type === "delete" && pendingAction.prize) {
                     deleteMutation.mutate(pendingAction.prize.id);
                     return;
@@ -942,7 +1100,9 @@ export default function AdminInstantPool() {
                   });
                 }}
               >
-                Confirm
+                {pendingAction?.type === "activate-groups" && bulkActivateMutation.isPending
+                  ? "Activating…"
+                  : "Confirm"}
               </Button>
             </DialogFooter>
           </DialogContent>
