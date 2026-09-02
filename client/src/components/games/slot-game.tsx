@@ -230,29 +230,37 @@ export default function SlotGameComponent({
       if (!gameContainerRef.current || destroyed) return;
 
       const rect = gameContainerRef.current.getBoundingClientRect();
-      const gameW = Math.round(rect.width) || 1280;
-      const gameH = Math.round(rect.height) || 720;
+      const cssW = Math.round(rect.width) || 1280;
+      const cssH = Math.round(rect.height) || 720;
+      // Phaser 3.90 has no `resolution`. Backing store must be CSS × DPR
+      // or the canvas is 1× and the browser upscales it (blur on Mac + iPhone).
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
 
       game = new Phaser.Game({
         type: Phaser.AUTO,
-        width: gameW,
-        height: gameH,
+        width: Math.round(cssW * dpr),
+        height: Math.round(cssH * dpr),
         parent: gameContainerRef.current,
         backgroundColor: "#080010",
         scale: {
           mode: Phaser.Scale.FIT,
           autoCenter: Phaser.Scale.CENTER_BOTH,
+          zoom: 1,
         },
-         render: {
-        pixelArt: false,     // Set to false for smooth images
-        antialias: true,     // Enable antialiasing for smoother edges
-        roundPixels: false,  // Keep as false for smoother animation
-      },
+        render: {
+          pixelArt: false,
+          antialias: true,
+          antialiasGL: true,
+          roundPixels: false,
+          mipmapFilter: "LINEAR",
+          powerPreference: "high-performance",
+        },
         input: { touch: { capture: false } },
         audio: { disableWebAudio: false, noAudio: false },
         scene: [Boot, Preload, SlotGame],
       });
 
+      game.registry.set("renderDpr", dpr);
       gameInstanceRef.current = game;
 
       const applyTouchAction = () => {
