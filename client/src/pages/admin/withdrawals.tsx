@@ -26,6 +26,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const DEFAULT_APPROVAL_NOTE =
+  "🎉 Congratulations on your win! Your withdrawal has been approved. We’d love it if you shared your win in our Facebook group to celebrate with the Ringtoners and inspire others. ❤️🏆";
+
 export default function AdminWithdrawals() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -135,6 +138,7 @@ useEffect(() => {
   ) => {
     setSelectedRequest(request);
     setActionType(action);
+    setAdminNotes(action === "approved" ? DEFAULT_APPROVAL_NOTE : "");
     setActionDialogOpen(true);
   };
 
@@ -291,7 +295,7 @@ useEffect(() => {
           <CardHeader className="border-b border-yellow-500/20">
             <CardTitle className="text-xl text-yellow-400 flex items-center gap-2">
               <Clock className="h-5 w-5" />
-              Pending Requests ({pendingPaginated.length})
+              Pending Requests ({pendingRequests.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
@@ -411,6 +415,7 @@ useEffect(() => {
               </div>
               
             )}
+            {pendingRequests.length > 0 && pendingTotalPages > 1 && (
             <div className="flex justify-center gap-3 mt-4">
             <Button 
               disabled={pendingPage === 1}
@@ -432,6 +437,7 @@ useEffect(() => {
               <ChevronRight />
             </Button>
           </div>
+            )}
 
           </CardContent>
         </Card>
@@ -442,7 +448,7 @@ useEffect(() => {
     <div className="flex items-center justify-between"> {/* Add flex container */}
       <CardTitle className="text-xl text-yellow-400 flex items-center gap-2">
         <ArrowDownCircle className="h-5 w-5" />
-        Processed Requests ({processedPaginated.length})
+        Processed Requests ({processedRequests.length})
       </CardTitle>
       
       {/* Cleanup Button - moved inside the flex container */}
@@ -551,6 +557,7 @@ useEffect(() => {
               </div>
               
             )}
+            {processedRequests.length > 0 && processedTotalPages > 1 && (
             <div className="flex justify-center gap-3 mt-4">
             <Button 
               disabled={processedPage === 1}
@@ -572,6 +579,7 @@ useEffect(() => {
              <ChevronRight />
             </Button>
           </div>
+            )}
 
           </CardContent>
         </Card>
@@ -619,7 +627,7 @@ useEffect(() => {
                   onChange={(e) => setAdminNotes(e.target.value)}
                   placeholder="Add any notes about this decision..."
                   className="bg-black/50 border-yellow-500/30 text-white"
-                  rows={3}
+                  rows={actionType === "approved" ? 6 : 3}
                   data-testid="textarea-admin-notes"
                 />
               </div>

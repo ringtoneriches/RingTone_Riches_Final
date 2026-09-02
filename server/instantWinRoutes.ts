@@ -7,6 +7,7 @@ import {
   HIGH_VALUE_THRESHOLD,
   InstantWinError,
   activateInstantWinPrize,
+  activateInstantWinPrizeGroups,
   createInstantWinPrize,
   clearUnusedInstantWinPrizes,
   deleteInstantWinPrize,
@@ -139,6 +140,28 @@ export function registerInstantWinRoutes(app: Express) {
           confirmHighValue: Boolean(req.body.confirmHighValue),
         });
         res.json(prize);
+      } catch (error) {
+        handleInstantWinError(res, error);
+      }
+    }
+  );
+
+  app.post(
+    "/api/admin/competitions/:competitionId/instant-win/prizes/activate-groups",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const groupKeys = Array.isArray(req.body?.groupKeys)
+          ? req.body.groupKeys.filter((id: unknown) => typeof id === "string")
+          : [];
+        const result = await activateInstantWinPrizeGroups(
+          req.params.competitionId,
+          groupKeys,
+          req.user?.id,
+          { confirmHighValue: Boolean(req.body?.confirmHighValue) }
+        );
+        res.json(result);
       } catch (error) {
         handleInstantWinError(res, error);
       }

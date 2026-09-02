@@ -1,4 +1,5 @@
 import { playTicketLabel } from "./play-ticket-labels";
+import { planGroupActivation } from "@shared/instant-win-groups";
 import { randomInt, randomBytes } from "crypto";
 import { and, asc, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "../db";
@@ -975,6 +976,64 @@ export async function activateInstantWinPrize(
 
     return updated;
   });
+}
+
+export async function activateInstantWinPrizeGroups(
+  competitionId: string,
+  groupKeys: string[],
+  adminId?: string,
+  opts?: { confirmHighValue?: boolean }
+) {
+  if (!Array.isArray(groupKeys) || groupKeys.length === 0) {
+    throw new InstantWinError("Select at least one prize group", 400);
+  }
+  if (!(await isCompetitionControlled(competitionId))) {
+    throw new InstantWinError("Bulk activate is only for controlled pool games", 400);
+  }
+
+  const prizes = await db
+    .select()
+    .from(instantWinPrizes)
+    .where(eq(instantWinPrizes.competitionId, competitionId));
+
+  const plan = planGroupActivation(prizes, groupKeys, HIGH_VALUE_THRESHOLD);
+  if (plan.groups.length === 0) {
+    throw new InstantWinError("None of the selected groups have prizes on this game", 400);
+  }
+  if (plan.totalLocked === 0) {
+    return {
+      activated: 0,
+      failed: [] as { id: string; message: string; code?: string }[],
+      groups: plan.groups,
+    };
+  }
+  if (plan.requiresHighValueConfirm && !opts?.confirmHighValue) {
+    throw new InstantWinError(
+      `High-value prize (£${HIGH_VALUE_THRESHOLD}+) requires confirmation`,
+      400,
+      "high_value_confirm"
+    );
+  }
+
+  const failed: { id: string; message: string; code?: string }[] = [];
+  let activated = 0;
+  for (const prize of plan.toActivate) {
+    try {
+      await activateInstantWinPrize(prize.id, adminId, {
+        confirmHighValue: true,
+        reason: "Bulk activate selected groups",
+      });
+      activated += 1;
+    } catch (error: any) {
+      failed.push({
+        id: prize.id,
+        message: error?.message || "Activate failed",
+        code: error?.code,
+      });
+    }
+  }
+
+  return { activated, failed, groups: plan.groups };
 }
 
 export async function lockInstantWinPrize(prizeId: string, adminId?: string) {
