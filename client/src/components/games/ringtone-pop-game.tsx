@@ -45,7 +45,6 @@ interface BalloonProps {
   index: number;
   disabled: boolean;
   isMuted: boolean;
-  isActive: boolean;
 }
 
 type BalloonColor = {
@@ -144,7 +143,7 @@ const getFontSize = (val: string) => {
   return "text-xs";
 };
 
-function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }: BalloonProps) {
+function Balloon({ value, isPopped, onPop, index, disabled, isMuted }: BalloonProps) {
   const colorScheme = BALLOON_COLORS[index % BALLOON_COLORS.length];
   const [isInflating, setIsInflating] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -273,9 +272,6 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }:
             }}
           >
             <div className="absolute inset-x-0 top-0 h-1" style={{ background: colorScheme.accent }} />
-            <span className="mb-1 text-[9px] font-black uppercase tracking-[0.22em] text-white/35">
-              Revealed
-            </span>
             <span
               className={`
                 font-prize text-center px-2 leading-tight text-[#fff8ee]
@@ -299,11 +295,7 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }:
       ? "balloon-inflate 0.11s ease-out forwards"
       : isAnimating
         ? "balloon-burst 0.08s ease-in forwards"
-        : disabled
-          ? "none"
-          : isActive
-            ? "balloon-drift-live 1.8s ease-in-out infinite"
-            : `balloon-drift ${3.4 + index * 0.45}s ease-in-out infinite`;
+        : "balloon-drift-live 1.8s ease-in-out infinite";
 
   return (
     <button
@@ -311,7 +303,7 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }:
       disabled={disabled}
       className={`
         relative
-        ${disabled ? "opacity-35 cursor-not-allowed grayscale-[0.15]" : "cursor-pointer"}
+        ${disabled ? "cursor-not-allowed" : "cursor-pointer"}
       `}
       style={{
         width: "140px",
@@ -321,24 +313,20 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }:
       }}
       data-testid={`balloon-${index}`}
     >
-      {isActive && !disabled && (
-        <>
-          <div
-            className="absolute bottom-2 left-1/2 h-10 w-24 -translate-x-1/2 rounded-full animate-spotlight"
-            style={{
-              background: `radial-gradient(ellipse, ${colorScheme.accent}55 0%, transparent 70%)`,
-              filter: "blur(8px)",
-            }}
-          />
-          <div
-            className="absolute bottom-8 left-1/2 -translate-x-1/2 w-28 h-32 sm:w-32 sm:h-36 rounded-full"
-            style={{
-              background: `radial-gradient(ellipse, ${colorScheme.main}28 0%, transparent 70%)`,
-              filter: "blur(12px)",
-            }}
-          />
-        </>
-      )}
+      <div
+        className="absolute bottom-2 left-1/2 h-10 w-24 -translate-x-1/2 rounded-full animate-spotlight"
+        style={{
+          background: `radial-gradient(ellipse, ${colorScheme.accent}55 0%, transparent 70%)`,
+          filter: "blur(8px)",
+        }}
+      />
+      <div
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 w-28 h-32 sm:w-32 sm:h-36 rounded-full"
+        style={{
+          background: `radial-gradient(ellipse, ${colorScheme.main}28 0%, transparent 70%)`,
+          filter: "blur(12px)",
+        }}
+      />
 
       <div
         className={`
@@ -349,10 +337,8 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }:
         `}
         style={{
           background: `radial-gradient(ellipse at 30% 25%, ${colorScheme.light} 0%, ${colorScheme.main} 35%, ${colorScheme.dark} 100%)`,
-          boxShadow: !disabled
-            ? `0 12px 50px ${colorScheme.main}60, ${colorScheme.innerGlow}, inset 8px 8px 30px ${colorScheme.light}50, ${isActive ? colorScheme.glow : `0 0 40px ${colorScheme.main}40`}`
-            : `0 4px 16px rgba(0,0,0,0.3)`,
-          border: `2px solid ${isActive ? colorScheme.accent : colorScheme.rim}`,
+          boxShadow: `0 12px 50px ${colorScheme.main}60, ${colorScheme.innerGlow}, inset 8px 8px 30px ${colorScheme.light}50, ${colorScheme.glow}`,
+          border: `2px solid ${colorScheme.accent}`,
         }}
       >
         <div
@@ -380,12 +366,10 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }:
           </span>
         </div>
 
-        {isActive && !disabled && (
-          <div
-            className="absolute inset-0 rounded-[50%_50%_48%_48%] animate-pulse-glow"
-            style={{ boxShadow: colorScheme.glow }}
-          />
-        )}
+        <div
+          className="absolute inset-0 rounded-[50%_50%_48%_48%] animate-pulse-glow"
+          style={{ boxShadow: colorScheme.glow }}
+        />
       </div>
 
       <div
@@ -404,7 +388,7 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted, isActive }:
         className="absolute -bottom-1 left-1/2 -translate-x-1/2 flex flex-col items-center"
         style={{
           transformOrigin: "top",
-          animation: disabled || isInflating || isAnimating ? "none" : "string-wave 3s ease-in-out infinite",
+          animation: isInflating || isAnimating ? "none" : "string-wave 3s ease-in-out infinite",
           animationDelay: `${index * 0.2}s`,
         }}
       >
@@ -793,7 +777,6 @@ export default function RingtonePopGame({
                       onPop={() => handleBalloonPop(index)}
                       disabled={!isPlaying || index !== currentBalloonIndex || !gameResult}
                       isMuted={isMuted}
-                      isActive={live}
                     />
                       </div>
                     </div>
@@ -863,7 +846,7 @@ export default function RingtonePopGame({
 
             {isPlaying && !showResultModal && (
               <p className="text-center text-sm text-white/55">
-                Tap the glowing balloon
+                Tap in order
                 <span className="mx-1.5 text-[#F1D47A]">·</span>
                 <span className="font-prize text-[#F1D47A]">{currentBalloonIndex + 1} of 3</span>
               </p>
