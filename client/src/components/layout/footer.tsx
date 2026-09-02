@@ -24,17 +24,17 @@ export default function Footer() {
             Real competitions. Real winners. Real prizes.
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
-            <a
-              href="https://www.facebook.com/profile.php?id=61579695463356"
+              <a
+                href="https://www.facebook.com/profile.php?id=61579695463356"
               className="rr-footer-social"
-              data-testid="link-facebook"
+                data-testid="link-facebook"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Facebook"
-            >
+              >
               <Facebook className="h-3.5 w-3.5" />
-            </a>
-            <a
+              </a>
+             <a
               href="https://www.instagram.com/ringtoneriches?igsh=MTVyMnJvZ2w4dGZ2Zw%3D%3D&utm_source=qr"
               className="rr-footer-social"
               data-testid="link-instagram"
@@ -44,17 +44,17 @@ export default function Footer() {
             >
               <Instagram className="h-3.5 w-3.5" />
             </a>
-            <a
-              href="https://www.tiktok.com/@ringtone.riches?_t=ZN-90jrPt73hTi&_r=1"
+              <a
+                href="https://www.tiktok.com/@ringtone.riches?_t=ZN-90jrPt73hTi&_r=1"
               className="rr-footer-social"
-              data-testid="link-tiktok"
+                data-testid="link-tiktok"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="TikTok"
-            >
+              >
               <TikTokIcon className="h-3.5 w-3.5" />
-            </a>
-          </div>
+              </a>
+            </div>
           <PaymentMethodIcons className="mt-5 justify-center" />
 
           <div className="rr-footer-age mt-8 max-w-lg">
@@ -67,7 +67,7 @@ export default function Footer() {
               you will not be able to collect the prize and the competition will be drawn again.
             </p>
           </div>
-        </div>
+          </div>
 
         <div className="rr-footer-nav mt-10 grid grid-cols-1 gap-7 sm:grid-cols-3 sm:gap-6">
           <div>
@@ -105,13 +105,13 @@ export default function Footer() {
 
           <div>
             <h4 className="rr-footer-heading">Contact</h4>
-            <Link href="/wallet?tab=support">
+          <Link href="/wallet?tab=support">
               <span className="rr-header-ghost inline-flex h-10 cursor-pointer gap-2 px-3.5">
                 <Headphones className="h-4 w-4" />
-                Support
-              </span>
-            </Link>
-          </div>
+              Support
+            </span>
+        </Link>
+        </div>
         </div>
 
         <SupportOrganisations />
@@ -128,7 +128,7 @@ export default function Footer() {
               BeGambleAware.org
             </a>
           </p>
-        </div>
+</div>
       </div>
     </footer>
   );

@@ -236,7 +236,6 @@ function SessionStrip({
   purchased,
   used,
   remaining,
-  creditsPerSpin,
   creditsWon,
   canRevealAll,
   isRevealing,
@@ -246,7 +245,6 @@ function SessionStrip({
   purchased: number;
   used: number;
   remaining: number;
-  creditsPerSpin: number;
   creditsWon: number;
   canRevealAll: boolean;
   isRevealing: boolean;
@@ -256,7 +254,6 @@ function SessionStrip({
   const cells = [
     { label: "Spins", value: `${used}/${purchased}` },
     { label: "Left", value: remaining },
-    { label: "Each", value: creditsPerSpin },
     { label: "Won", value: creditsWon > 0 ? `+${creditsWon.toLocaleString()}` : "0", accent: creditsWon > 0 },
   ];
 
@@ -265,7 +262,7 @@ function SessionStrip({
       className="rr-slot-panel overflow-hidden rounded-2xl border border-white/10"
       style={{ background: "linear-gradient(160deg,#0A0A0D 0%,#111115 100%)" }}
     >
-      <div className="grid grid-cols-4 divide-x divide-white/10">
+      <div className="grid grid-cols-3 divide-x divide-white/10">
         {cells.map((cell) => (
           <div key={cell.label} className="px-1.5 py-3 text-center sm:px-3 sm:py-3.5">
             <div
@@ -739,7 +736,6 @@ export default function SlotGamePage() {
               purchased={order.quantity}
               used={spinHistory.length}
               remaining={spinsRemaining}
-              creditsPerSpin={creditsPerSpin}
               creditsWon={totalWon}
               canRevealAll={spinsRemaining > 1 && !spinsExhausted}
               isRevealing={isRevealingAll}
