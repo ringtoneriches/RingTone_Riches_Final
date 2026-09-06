@@ -48,7 +48,6 @@ async function spawnChildren(opts: {
       rangeFrom: 1,
       rangeTo: maxTickets,
       activationType: "manual",
-      allocationMethod: "a_pregen",
       adminId: opts.adminId,
       confirmHighValue: true,
       competitionPrizeId: opts.parent.id,

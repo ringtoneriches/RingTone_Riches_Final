@@ -12,6 +12,9 @@ export type OpenScratchSession = {
   isWinner: boolean;
   prize: ScratchSessionPrize;
   tileLayout: string[];
+  ticketId?: string;
+  controlledPool?: boolean;
+  ticketNumber?: string | null;
 };
 
 type CompletedScratchSession = {

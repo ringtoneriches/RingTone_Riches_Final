@@ -150,6 +150,11 @@ import {
   confirmControlledVoltz,
   tryRevealControlledPlinko,
   revealAllControlledPlinko,
+  peekControlledScratch,
+  confirmControlledScratch,
+  revealAllControlledScratch,
+  revealAllControlledVoltz,
+  tryRevealControlledRoyal,
   getPublicPrizePool,
 } from "./services/instant-win-pool";
 import {
@@ -7440,6 +7445,16 @@ app.post(
         });
       }
 
+      const controlledRevealScratch = await revealAllControlledScratch({
+        competitionId,
+        orderId,
+        userId,
+        count: cardsToProcess,
+      });
+      if (controlledRevealScratch?.handled) {
+        return res.json(controlledRevealScratch.response);
+      }
+
       // Get user
       const user = await storage.getUser(userId);
       if (!user) {
@@ -7763,6 +7778,49 @@ app.post(
             tileLayout: existingSession.tileLayout,
             prizeId: existingSession.prizeId,
             orderId,
+            controlledPool: existingSession.controlledPool || false,
+            creditedAtSale: existingSession.controlledPool || false,
+            ticketNumber: existingSession.ticketNumber || null,
+          });
+        }
+
+        const controlledScratchPeek = await peekControlledScratch({
+          competitionId: order.competitionId,
+          orderId,
+          userId,
+        });
+        if (controlledScratchPeek?.handled) {
+          if (controlledScratchPeek.noTickets) {
+            return res.status(400).json({
+              success: false,
+              message: "No scratch cards remaining in this purchase",
+            });
+          }
+          const peek = controlledScratchPeek.response;
+          const sessionId = nanoid();
+          setOpenScratchSession({
+            sessionId,
+            userId,
+            orderId,
+            prizeId: peek.prizeId,
+            isWinner: peek.isWinner,
+            prize: peek.prize,
+            tileLayout: peek.tileLayout,
+            ticketId: peek.ticketId,
+            controlledPool: true,
+            ticketNumber: peek.ticketNumber,
+          });
+          return res.json({
+            success: true,
+            sessionId,
+            isWinner: peek.isWinner,
+            prize: peek.prize,
+            tileLayout: peek.tileLayout,
+            prizeId: peek.prizeId,
+            orderId,
+            controlledPool: true,
+            creditedAtSale: true,
+            ticketNumber: peek.ticketNumber,
           });
         }
 
@@ -8002,8 +8060,6 @@ app.post(
         }
 
         const orderId = openSession.orderId;
-        const prizeId = openSession.prizeId;
-        const isWinner = openSession.isWinner;
 
         // Verify order
         const order = await storage.getOrder(orderId);
@@ -8013,6 +8069,40 @@ app.post(
             message: "Invalid order",
           });
         }
+
+        if (openSession.controlledPool && openSession.ticketId) {
+          const confirmed = await confirmControlledScratch({
+            competitionId: order.competitionId,
+            orderId,
+            userId,
+            ticketId: openSession.ticketId,
+          });
+          if (!confirmed?.handled) {
+            return res.status(500).json({ message: "Failed to complete controlled scratch session" });
+          }
+          const body = confirmed.response;
+          markScratchSessionCompleted(sessionId, {
+            userId,
+            orderId,
+            remainingCards: body.remainingCards ?? 0,
+            prize: body.prize,
+            prizeLabel: body.prizeLabel,
+          });
+          return res.json({
+            success: true,
+            prize: body.prize,
+            prizeLabel: body.prizeLabel,
+            remainingCards: body.remainingCards,
+            orderId,
+            ticketNumber: body.ticketNumber,
+            controlledPool: true,
+            creditedAtSale: true,
+            alreadyCompleted: Boolean(confirmed.alreadyCompleted),
+          });
+        }
+
+        const prizeId = openSession.prizeId;
+        const isWinner = openSession.isWinner;
 
         // Get user
         const user = await storage.getUser(userId);
@@ -18850,6 +18940,16 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ success: false, message: "No valid Voltz game purchase found" });
     }
 
+    const controlledRevealVoltz = await revealAllControlledVoltz({
+      competitionId,
+      orderId,
+      userId,
+      count,
+    });
+    if (controlledRevealVoltz?.handled) {
+      return res.json(controlledRevealVoltz.response);
+    }
+
     const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
     const usedCount = Number(playsUsed[0]?.count || 0);
     const playsRemaining = order.quantity - usedCount;
@@ -21787,6 +21887,35 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
       if (!orderId) return res.status(400).json({ message: "Order ID required" });
       const order = await storage.getOrder(orderId);
       if (!order || order.userId !== userId || order.status !== "completed") return res.status(400).json({ message: "No valid Royal Reels order found" });
+
+      const controlledRoyal = await tryRevealControlledRoyal({
+        competitionId: order.competitionId,
+        orderId,
+        userId,
+      });
+      if (controlledRoyal?.handled) {
+        if (controlledRoyal.noTickets) {
+          return res.status(400).json({ success: false, message: "No plays remaining" });
+        }
+        const royal = controlledRoyal.response;
+        if (!royal) {
+          return res.status(500).json({ success: false, message: "Failed to record royal spin" });
+        }
+        return res.json({
+          success: true,
+          controlledPool: true,
+          creditedAtSale: true,
+          isWin: royal.isWin,
+          coinsWon: royal.coinsWon,
+          coinsSpent: coinsSpent || 0,
+          spinNumber: royal.spinNumber,
+          isRoyalReplay: false,
+          ticketNumber: royal.ticketNumber,
+          prizeName: royal.result?.prizeName,
+          playsRemaining: royal.playsRemaining,
+        });
+      }
+
       const cashValue = isWin && coinsWon > 0 ? parseFloat((coinsWon * 0.01).toFixed(2)) : 0;
       await db.insert(royalUsage).values({
         orderId,
@@ -21825,6 +21954,18 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
 
       const order = await storage.getOrder(orderId);
       if (!order || order.userId !== userId || order.status !== "completed") return res.status(400).json({ success: false, message: "No valid Royal Reels purchase found" });
+
+      const controlledRoyalPlay = await tryRevealControlledRoyal({
+        competitionId,
+        orderId,
+        userId,
+      });
+      if (controlledRoyalPlay?.handled) {
+        if (controlledRoyalPlay.noTickets) {
+          return res.status(400).json({ success: false, message: "No plays remaining" });
+        }
+        return res.json(controlledRoyalPlay.response);
+      }
 
       const usageRows = await db.select({ count: sql<number>`count(*)` }).from(royalUsage).where(eq(royalUsage.orderId, orderId));
       const usedCount = Number(usageRows[0]?.count || 0);

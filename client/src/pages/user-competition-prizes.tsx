@@ -32,8 +32,7 @@ interface Prize {
   remainingQuantity: number;
   createdAt?: string;
   updatedAt?: string;
-  publicStatus?: "available" | "won" | "unavailable";
-  status?: string;
+  publicStatus?: "available" | "won";
   winningTicketNumber?: number | null;
   winnerDisplayName?: string | null;
 }
@@ -41,7 +40,7 @@ interface Prize {
 interface PrizeGroupTicket {
   id: string;
   winningTicketNumber?: number | null;
-  publicStatus?: "available" | "won" | "unavailable";
+  publicStatus?: "available" | "won";
   winnerDisplayName?: string | null;
 }
 
@@ -341,21 +340,6 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                     </p>
                   </div>
                 )}
-                {!group && isControlled && (item as Prize).publicStatus === "unavailable" && (
-                  <div className="text-center pt-2 space-y-1">
-                    <Badge variant="outline" className="text-slate-400">Reserved</Badge>
-                    {(item as Prize).winningTicketNumber ? (
-                      <p className="text-sm text-muted-foreground">
-                        Ticket #{(item as Prize).winningTicketNumber}
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-                {!group && isControlled && (item as Prize).publicStatus === "available" && (
-                  <div className="text-center pt-2">
-                    <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">Available</Badge>
-                  </div>
-                )}
                 {!isControlled && ticketInfo && (
                   <div className="text-center pt-2">
                     <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-green-500/20 bg-green-500/10 px-2.5 py-1 sm:gap-2 sm:px-3">
@@ -408,15 +392,11 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                 <div className="text-xl font-bold">
                   {ticket.winningTicketNumber ? `#${ticket.winningTicketNumber}` : "—"}
                 </div>
-                <div className="text-xs mt-1 uppercase tracking-wide text-muted-foreground">
-                  {ticket.publicStatus === "won"
-                    ? ticket.winnerDisplayName || "Won"
-                    : ticket.publicStatus === "available"
-                    ? "Available"
-                    : ticket.winningTicketNumber
-                    ? "Reserved"
-                    : "Coming soon"}
-                </div>
+                {ticket.publicStatus === "won" && (
+                  <div className="text-xs mt-1 uppercase tracking-wide text-muted-foreground">
+                    {ticket.winnerDisplayName || "Won"}
+                  </div>
+                )}
               </div>
             ))}
           </div>

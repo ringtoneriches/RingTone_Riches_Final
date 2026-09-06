@@ -119,7 +119,7 @@ function resolveCheckoutPrize(
   const isControlled = prizePool?.mode === "controlled_pool" || competition?.instantWinMode === "controlled_pool";
 
   if (isControlled && poolPrizes.length) {
-    const available = poolPrizes.filter((p: any) => p.publicStatus === "available" || p.status === "active");
+    const available = poolPrizes.filter((p: any) => p.publicStatus === "available");
     const candidates = available.length ? available : poolPrizes;
     const top = candidates.reduce((best: any, p: any) =>
       Number(p.prizeValue || 0) > Number(best.prizeValue || 0) ? p : best

@@ -465,7 +465,7 @@ export const instantWinPrizes = pgTable("instant_win_prizes", {
   rangeTo: integer("range_to").notNull(),
   activationType: varchar("activation_type", { enum: ["manual", "percent_sold", "count_sold", "revenue", "datetime"] }).notNull().default("manual"),
   activationValue: jsonb("activation_value"),
-  allocationMethod: varchar("allocation_method", { enum: ["a_pregen", "b_on_activate"] }).notNull().default("b_on_activate"),
+  allocationMethod: varchar("allocation_method", { enum: ["a_pregen", "b_on_activate"] }).notNull().default("a_pregen"),
   winningTicketNumber: integer("winning_ticket_number"),
   wonAt: timestamp("won_at"),
   winnerUserId: varchar("winner_user_id"),
