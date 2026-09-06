@@ -1,8 +1,9 @@
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Upload, Settings, Archive, ArchiveRestore } from "lucide-react";
+import { Plus, Edit, Settings, Archive, ArchiveRestore } from "lucide-react";
+import { CompetitionImageFields } from "@/components/admin/competition-image-fields";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -15,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Competition } from "@shared/schema";
+import { competitionImageFormValues, formatPrizeAmountInput, getDefaultBadgeLabel, serializeBadgeLabel, serializePrizeAmount } from "@/lib/competition-display";
 import { Textarea } from "@/components/ui/textarea";
 import { Link } from "wouter";
 
@@ -22,8 +24,13 @@ interface CompetitionFormData {
   title: string;
   description: string;
   imageUrl: string;
+  featuredImageUrl: string;
+  cardImageUrl: string;
+  pageImageUrl: string;
   type: "royal";
   ticketPrice: string;
+  prizeAmount: string;
+  badgeLabel: string;
   maxTickets: string;
   ringtonePoints: string;
   endDate?: string;
@@ -40,55 +47,20 @@ function CompetitionForm({
   onCancel: () => void;
   isLoading: boolean;
 }) {
-  const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<CompetitionFormData>({
     title: data?.title || "",
     description: data?.description || "",
-    imageUrl: data?.imageUrl || "",
+    ...competitionImageFormValues(data),
     type: "royal",
     ticketPrice: data?.ticketPrice || "2.00",
+    prizeAmount: formatPrizeAmountInput(data?.prizeAmount),
+    badgeLabel: data?.badgeLabel || getDefaultBadgeLabel("royal"),
     maxTickets: data?.maxTickets?.toString() || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     endDate: data?.endDate
       ? new Date(data.endDate).toISOString().slice(0, 16)
       : "",
   });
-  const [uploading, setUploading] = useState(false);
-
-  const handleImageUpload = async (file: File) => {
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-
-      const response = await fetch("/api/upload/competition-image", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Upload failed");
-      }
-
-      const { imagePath } = await response.json();
-      setForm({ ...form, imageUrl: imagePath });
-      toast({
-        title: "Success",
-        description: "Image uploaded successfully",
-      });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Upload failed",
-        description: error.message,
-      });
-    } finally {
-      setUploading(false);
-    }
-  };
 
   return (
     <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 sm:pr-2">
@@ -113,51 +85,10 @@ function CompetitionForm({
         />
       </div>
 
-      <div>
-        <Label>Game Image</Label>
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  handleImageUpload(file);
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = "";
-                  }
-                }
-              }}
-              disabled={uploading}
-              className="hidden"
-              data-testid="input-image-upload"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              disabled={uploading}
-              onClick={() => fileInputRef.current?.click()}
-              data-testid="button-select-image"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {uploading ? "Uploading..." : "Select Image"}
-            </Button>
-          </div>
-          {form.imageUrl && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <img
-                src={form.imageUrl}
-                alt="Preview"
-                className="h-20 w-20 object-cover rounded border"
-              />
-              <span className="truncate">{form.imageUrl.split("/").slice(-1)[0]}</span>
-            </div>
-          )}
-        </div>
-      </div>
+      <CompetitionImageFields
+        values={form}
+        onChange={(patch) => setForm({ ...form, ...patch })}
+      />
 
       <div>
         <Label>Game Type</Label>
@@ -208,6 +139,35 @@ function CompetitionForm({
             data-testid="input-ringtonePoints"
           />
         </div>
+      </div>
+
+      <div>
+        <Label>Win up to (£)</Label>
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="e.g. 2000"
+          value={form.prizeAmount}
+          onChange={(e) => setForm({ ...form, prizeAmount: e.target.value })}
+          data-testid="input-prizeAmount"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Shown on cards as Instantly win up to. Leave empty to use a £ amount in the title.
+        </p>
+      </div>
+
+      <div>
+        <Label>Card badge</Label>
+        <Input
+          value={form.badgeLabel}
+          maxLength={40}
+          onChange={(e) => setForm({ ...form, badgeLabel: e.target.value })}
+          data-testid="input-badgeLabel"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Top-left label on listing cards. Defaults to the game type name.
+        </p>
       </div>
 
       <div>
@@ -269,6 +229,8 @@ export default function AdminRoyalReels() {
         ...formData,
         type: "royal",
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
+        prizeAmount: serializePrizeAmount(formData.prizeAmount),
+        badgeLabel: serializeBadgeLabel(formData.badgeLabel, "royal"),
         maxTickets: formData.maxTickets ? parseInt(formData.maxTickets) : null,
         ringtonePoints: parseInt(formData.ringtonePoints),
       };
@@ -307,6 +269,8 @@ export default function AdminRoyalReels() {
         ...data,
         type: "royal",
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
+        prizeAmount: serializePrizeAmount(data.prizeAmount),
+        badgeLabel: serializeBadgeLabel(data.badgeLabel, "royal"),
         maxTickets: data.maxTickets ? parseInt(data.maxTickets) : null,
         ringtonePoints: parseInt(data.ringtonePoints),
       };

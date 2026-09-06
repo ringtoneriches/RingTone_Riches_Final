@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { User } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/layout/header";
+import BrandWait from "@/components/brand/BrandWait";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,7 @@ import Footer from "@/components/layout/footer";
 import { Link } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import RedeemCodeCard from "@/components/wallet/RedeemCodeCard";
 
   export function UpdateProfileModal({ user }: { user: any }) {
   const { toast } = useToast();
@@ -224,12 +226,12 @@ export default function Account() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div
-          className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
-          aria-label="Loading"
-        />
-      </div>
+      <BrandWait
+        mode="page"
+        kicker="Account"
+        headline="Opening account"
+        subtitle="Checking your session."
+      />
     );
   }
 
@@ -358,6 +360,8 @@ export default function Account() {
                   </Link>
                 </div>
               </div>
+
+              <RedeemCodeCard variant="account" />
 
               <div className="bg-card rounded-xl border border-border p-6">
                 <h3 className="text-xl font-bold mb-4">Account Options</h3>

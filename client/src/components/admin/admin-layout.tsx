@@ -37,6 +37,8 @@ import {
   Video,
   TicketCheck,
   Gift,
+  Star,
+  Hash,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +47,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import BrandWait from "@/components/brand/BrandWait";
 import { User } from "@shared/schema";
 import {
   Dialog,
@@ -77,6 +80,8 @@ const sidebarGroups = [
     icon: null,
     items: [
       { name: "Competitions", path: "/admin/competitions", icon: Trophy },
+      { name: "Featured slider", path: "/admin/featured", icon: Star },
+      { name: "Card quantity", path: "/admin/card-quantity", icon: Hash },
       { name: "Entries", path: "/admin/entries", icon: Ticket },
       { name: "Winners", path: "/admin/winners", icon: Trophy },
     ],
@@ -108,6 +113,7 @@ const sidebarGroups = [
       { name: "Past Winners", path: "/admin/past-winners", icon: Award },
       { name: "Promo Video", path: "/admin/promo-video", icon: Video },
       { name: "Prize Table", path: "/admin/prize-table", icon: Award },
+      { name: "Instant Pool", path: "/admin/instant-pool", icon: Sparkles },
       { name: "Users", path: "/admin/users", icon: Users, protected: true },
       { name: "Transactions", path: "/admin/transactions", icon: Euro },
       { name: "Orders", path: "/admin/orders", icon: ShoppingCart },
@@ -119,12 +125,6 @@ const sidebarGroups = [
     ],
   },
 ];
-
-// Define PIN codes
-const PROTECTED_PINS = {
-  GAMES: "4545",
-  USERS: "4545",
-};
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth() as { user: User | null; isLoading: boolean };
@@ -145,36 +145,65 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   });
   
-  const [unlockedGroups, setUnlockedGroups] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("adminUnlockedGroups");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-  
-  const [unlockedItems, setUnlockedItems] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("adminUnlockedItems");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-  
-  const [unlockTimers, setUnlockTimers] = useState<{ [key: string]: number }>(() => {
-    try {
-      const saved = localStorage.getItem("adminUnlockTimers");
-      return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-      console.error("Failed to parse adminUnlockTimers", e);
-      localStorage.removeItem("adminUnlockTimers");
-      return {};
-    }
-  });
-  
   const { toast } = useToast();
+
+  const { data: stepUpStatus, refetch: refetchStepUp } = useQuery({
+    queryKey: ["/api/admin/step-up/status"],
+    enabled: Boolean(user?.isAdmin),
+    refetchInterval: 60_000,
+  });
+
+  const gamesUnlocked = stepUpStatus?.games === true;
+  const usersUnlocked = stepUpStatus?.users === true;
+
+  const stepUpMutation = useMutation({
+    mutationFn: async ({ pin, scope }: { pin: string; scope: "games" | "users" }) => {
+      const res = await apiRequest("/api/admin/step-up", "POST", { pin, scope });
+      return res.json();
+    },
+    onSuccess: async (_, variables) => {
+      await refetchStepUp();
+      const targetName = variables.scope === "games" ? "Games tab" : "Users access";
+
+      if (variables.scope === "games") {
+        setOpenGroups((prev) => ({ ...prev, Games: true }));
+      } else if (variables.scope === "users") {
+        setLocation("/admin/users");
+        setSidebarOpen(false);
+      }
+
+      toast({
+        title: "Access Granted",
+        description: `${targetName} unlocked for 30 minutes.`,
+        duration: 3000,
+      });
+      setShowPinDialog(false);
+      setPinInput("");
+      setUnlockingItem(null);
+      setPinError("");
+    },
+    onError: (error: any) => {
+      const message = String(error?.message || "");
+      if (message.includes("503")) {
+        setPinError("Step-up PIN is not configured on the server.");
+      } else if (message.includes("429")) {
+        setPinError("Too many attempts. Please wait and try again.");
+      } else {
+        setPinError("Incorrect PIN. Please try again.");
+      }
+      setPinInput("");
+    },
+  });
+
+  const lockStepUpMutation = useMutation({
+    mutationFn: async (scope: "games" | "users" | "all") => {
+      const res = await apiRequest("/api/admin/step-up/lock", "POST", { scope });
+      return res.json();
+    },
+    onSuccess: async () => {
+      await refetchStepUp();
+    },
+  });
 
   const { data: supportUnreadData } = useQuery({
     queryKey: ["/api/admin/support/unread-count"],
@@ -203,9 +232,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       localStorage.removeItem("adminUnlockedGroups");
       localStorage.removeItem("adminUnlockedItems");
       localStorage.removeItem("adminUnlockTimers");
-      setUnlockedGroups([]);
-      setUnlockedItems([]);
-      setUnlockTimers({});
       window.location.href = "/";
     },
   });
@@ -220,12 +246,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     localStorage.setItem("adminSidebarGroups", JSON.stringify(openGroups));
   }, [openGroups]);
 
-  useEffect(() => {
-    localStorage.setItem("adminUnlockedGroups", JSON.stringify(unlockedGroups));
-    localStorage.setItem("adminUnlockedItems", JSON.stringify(unlockedItems));
-    localStorage.setItem("adminUnlockTimers", JSON.parse(JSON.stringify(unlockTimers)));
-  }, [unlockedGroups, unlockedItems, unlockTimers]);
-
   // Auto-open group if active item is inside
   useEffect(() => {
     setOpenGroups(prev => {
@@ -237,45 +257,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return newState;
     });
   }, [location]);
-
-  // Check unlock timers every minute
-  useEffect(() => {
-    const checkTimers = () => {
-      const now = Date.now();
-      const expired = Object.entries(unlockTimers).filter(([_, expiry]) => now > expiry);
-      
-      if (expired.length > 0) {
-        expired.forEach(([key]) => {
-          if (key.startsWith('group:')) {
-            const groupName = key.replace('group:', '');
-            setUnlockedGroups(prev => prev.filter(g => g !== groupName));
-            toast({
-              title: "Session Expired",
-              description: `Games tab has been re-locked due to inactivity.`,
-              variant: "default",
-            });
-          } else if (key.startsWith('item:')) {
-            const itemPath = key.replace('item:', '');
-            setUnlockedItems(prev => prev.filter(i => i !== itemPath));
-            toast({
-              title: "Session Expired",
-              description: `Users access has been re-locked due to inactivity.`,
-              variant: "default",
-            });
-          }
-        });
-        
-        const newTimers = { ...unlockTimers };
-        expired.forEach(([key]) => delete newTimers[key]);
-        setUnlockTimers(newTimers);
-      }
-    };
-
-    const timer = setInterval(checkTimers, 60000);
-    checkTimers();
-
-    return () => clearInterval(timer);
-  }, [unlockTimers, toast]);
 
 // In your AdminLayout component, update the mutations
 const enableMaintenance = useMutation({
@@ -340,7 +321,7 @@ const disableMaintenance = useMutation({
   const handleGroupClick = (groupName: string) => {
     const group = sidebarGroups.find(g => g.name === groupName);
     
-    if (group?.protected && !unlockedGroups.includes(groupName)) {
+    if (group?.protected && !gamesUnlocked) {
       setUnlockingItem({ type: 'group', name: groupName });
       setPinInput("");
       setPinError("");
@@ -351,7 +332,7 @@ const disableMaintenance = useMutation({
   };
 
   const handleItemClick = (itemName: string, itemPath: string, isProtected?: boolean) => {
-    if (isProtected && !unlockedItems.includes(itemPath)) {
+    if (isProtected && !usersUnlocked) {
       setUnlockingItem({ type: 'item', name: itemName, path: itemPath });
       setPinInput("");
       setPinError("");
@@ -364,67 +345,46 @@ const disableMaintenance = useMutation({
   };
 
   const verifyPin = () => {
-    if (!unlockingItem) return;
+    if (!unlockingItem || stepUpMutation.isPending) return;
 
-    let correctPin = "";
-    let targetName = "";
-
-    if (unlockingItem.type === 'group') {
-      if (unlockingItem.name === "Games") {
-        correctPin = PROTECTED_PINS.GAMES;
-        targetName = "Games tab";
-      }
-    } else if (unlockingItem.type === 'item') {
-      if (unlockingItem.name === "Users") {
-        correctPin = PROTECTED_PINS.USERS;
-        targetName = "Users access";
-      }
+    let scope: "games" | "users" | null = null;
+    if (unlockingItem.type === "group" && unlockingItem.name === "Games") {
+      scope = "games";
+    } else if (unlockingItem.type === "item" && unlockingItem.name === "Users") {
+      scope = "users";
     }
 
-    if (pinInput === correctPin) {
-      const now = Date.now();
-      const unlockDuration = 30 * 60 * 1000;
-      const expiryTime = now + unlockDuration;
-
-      if (unlockingItem.type === 'group') {
-        setUnlockedGroups(prev => [...prev, unlockingItem.name]);
-        setOpenGroups(prev => ({ ...prev, [unlockingItem.name]: true }));
-        setUnlockTimers(prev => ({ ...prev, [`group:${unlockingItem.name}`]: expiryTime }));
-      } else if (unlockingItem.type === 'item' && unlockingItem.path) {
-        setUnlockedItems(prev => [...prev, unlockingItem.path]);
-        setUnlockTimers(prev => ({ ...prev, [`item:${unlockingItem.path}`]: expiryTime }));
-        setLocation(unlockingItem.path);
-        setSidebarOpen(false);
-      }
-      
-      toast({
-        title: "Access Granted",
-        description: `${targetName} unlocked for 30 minutes.`,
-        duration: 3000,
-      });
-      setShowPinDialog(false);
-      setPinInput("");
-      setUnlockingItem(null);
-    } else {
-      setPinError("Incorrect PIN. Please try again.");
-      setPinInput("");
+    if (!scope) {
+      setPinError("Unknown protected section.");
+      return;
     }
+
+    if (!pinInput.trim()) {
+      setPinError("Enter your PIN.");
+      return;
+    }
+
+    stepUpMutation.mutate({ pin: pinInput.trim(), scope });
   };
 
   const handleManualLock = (type: 'group' | 'item', identifier: string) => {
     if (type === 'group') {
-      setUnlockedGroups(prev => prev.filter(g => g !== identifier));
-      delete unlockTimers[`group:${identifier}`];
-      toast({
-        title: "Locked",
-        description: "Games tab has been re-locked.",
+      lockStepUpMutation.mutate("games", {
+        onSuccess: () => {
+          toast({
+            title: "Locked",
+            description: "Games tab has been re-locked.",
+          });
+        },
       });
     } else if (type === 'item') {
-      setUnlockedItems(prev => prev.filter(i => i !== identifier));
-      delete unlockTimers[`item:${identifier}`];
-      toast({
-        title: "Locked",
-        description: "Users access has been re-locked.",
+      lockStepUpMutation.mutate("users", {
+        onSuccess: () => {
+          toast({
+            title: "Locked",
+            description: "Users access has been re-locked.",
+          });
+        },
       });
     }
     
@@ -455,7 +415,16 @@ const disableMaintenance = useMutation({
     return supportCount > 0 || withdrawalCount > 0 || verificationCount > 0;
   };
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (isLoading) {
+    return (
+      <BrandWait
+        mode="page"
+        kicker="Admin"
+        headline="Loading admin"
+        subtitle="Checking your access."
+      />
+    );
+  }
   if (!user || !user.isAdmin) return null;
 
   return (
@@ -486,7 +455,7 @@ const disableMaintenance = useMutation({
           </Link>
 
           {sidebarGroups.map(group => {
-            const isGroupUnlocked = unlockedGroups.includes(group.name);
+            const isGroupUnlocked = group.name === "Games" ? gamesUnlocked : true;
             const isGroupProtected = group.protected;
             const showToolsNotification = group.name === "Tools" && hasToolsNotifications();
             
@@ -544,7 +513,7 @@ const disableMaintenance = useMutation({
                       if (item.notificationType === "withdrawals") unreadCount = withdrawalUnreadData?.count ?? 0;
                       if (item.notificationType === "verification") unreadCount = verificationUnreadData?.count ?? 0;
 
-                      const isItemUnlocked = unlockedItems.includes(item.path);
+                      const isItemUnlocked = item.path === "/admin/users" ? usersUnlocked : true;
                       const isItemProtected = item.protected;
                       const canAccess = isItemUnlocked || !isItemProtected;
 
@@ -611,19 +580,21 @@ const disableMaintenance = useMutation({
             Logout
           </Button>
           
-          {(unlockedGroups.length > 0 || unlockedItems.length > 0) && (
+          {(gamesUnlocked || usersUnlocked) && (
             <Button
               variant="ghost"
               className="w-full text-xs"
               onClick={() => {
-                setUnlockedGroups([]);
-                setUnlockedItems([]);
-                setUnlockTimers({});
-                toast({
-                  title: "All Tabs Locked",
-                  description: "All unlocked sections have been re-locked.",
+                lockStepUpMutation.mutate("all", {
+                  onSuccess: () => {
+                    toast({
+                      title: "All Tabs Locked",
+                      description: "All unlocked sections have been re-locked.",
+                    });
+                  },
                 });
               }}
+              disabled={lockStepUpMutation.isPending}
             >
               <Lock className="w-3 h-3 mr-2" />
               Lock All Protected Tabs
@@ -752,7 +723,13 @@ const disableMaintenance = useMutation({
       {/* PIN Verification Dialog */}
       <Dialog open={showPinDialog} onOpenChange={handlePinDialogOpenChange}>
         <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
-          <form autoComplete="off">
+          <form
+            autoComplete="off"
+            onSubmit={(e) => {
+              e.preventDefault();
+              verifyPin();
+            }}
+          >
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Lock className="w-6 h-6 text-yellow-600" />
@@ -767,20 +744,20 @@ const disableMaintenance = useMutation({
 
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="pin">Enter 4-digit PIN</Label>
+                <Label htmlFor="pin">Enter PIN</Label>
                 <Input
                   id="pin"
-                  type="text"             
-                  inputMode="numeric"         
+                  type="password"
+                  inputMode="numeric"
                   pattern="[0-9]*"
                   name="admin-pin-code"
                   autoComplete="one-time-code"
                   value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 16))}
                   onKeyDown={handleKeyPress}
-                  placeholder="0000"
+                  placeholder="••••"
                   className="text-center text-2xl tracking-widest font-mono h-12"
-                  maxLength={4}
+                  maxLength={16}
                   autoFocus
                 />
                 <input type="text" name="username" autoComplete="username" style={{ display: "none" }} />
@@ -801,11 +778,11 @@ const disableMaintenance = useMutation({
                 Cancel
               </Button>
               <Button
-                onClick={verifyPin}
-                disabled={pinInput.length !== 4}
+                type="submit"
+                disabled={!pinInput.trim() || stepUpMutation.isPending}
                 className="flex-1 bg-yellow-600 hover:bg-yellow-700"
               >
-                Verify PIN
+                {stepUpMutation.isPending ? "Verifying..." : "Verify PIN"}
               </Button>
             </DialogFooter>
           </form>

@@ -2,11 +2,10 @@ import express, { type Request, Response, NextFunction } from "express";
 import dotenv from "dotenv";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { getSession, setupCustomAuth } from "./customAuth"; 
+import { setupCustomAuth } from "./customAuth";
 import { storage } from "./storage";
 import { wsManager } from "./websocket";
 import { autoSeedProduction } from "./auto-seed";
-import { autoCreateAdmin } from "./auto-admin";
 import axios from 'axios';
 import { load } from 'cheerio';
 import puppeteer from "puppeteer";
@@ -15,7 +14,7 @@ import { getBrowser } from "./pupeteerBrowser";
 import { socialPreviewMiddleware } from "./social-preview";
   dotenv.config();
 
-
+const isProduction = process.env.NODE_ENV === "production";
 
 const app = express();
 app.disable("etag"); 
@@ -24,7 +23,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(socialPreviewMiddleware);
 
-// Serve uploaded files from attached_assets directory
+// Serve public static assets (images, sounds, etc.) — block sensitive file types
+const BLOCKED_ASSET_EXTENSIONS = /\.(sql|dump|env|pem|key|log|bak)$/i;
+app.use("/attached_assets", (req, res, next) => {
+  if (BLOCKED_ASSET_EXTENSIONS.test(req.path)) {
+    return res.status(404).end();
+  }
+  next();
+});
 app.use("/attached_assets", express.static("attached_assets"));
 
 
@@ -63,7 +69,7 @@ let browser;
     
     if (match) {
       const countStr = match[1];
-      let totalMembers = 6700;
+      let totalMembers = 10300;
       
       if (countStr.includes('K') || countStr.includes('k')) {
         totalMembers = parseFloat(countStr.replace(',', '')) * 1000;
@@ -81,8 +87,8 @@ let browser;
     } else {
       // Fallback
       res.json({
-        totalMembers: 7300,
-        formattedCount: '7.3K',
+        totalMembers: 10300,
+        formattedCount: '10.3K',
         isFallback: true,
         success: true
       });
@@ -92,8 +98,8 @@ let browser;
     console.error('Facebook error:', err.message);
     
     res.json({
-      totalMembers: 6700,
-      formattedCount: '6.7K',
+      totalMembers: 10300,
+      formattedCount: '10.3K',
       isFallback: true,
       success: false
     });
@@ -137,6 +143,8 @@ function formatCount(count) {
 // });
 
 
+// Trustpilot temporarily disabled — re-enable when ready to show reviews again.
+/*
 app.get("/api/trustpilot-reviews", async (req, res) => {
 let browser;
   try {
@@ -184,15 +192,18 @@ let browser;
     res.status(500).json({ error: "Failed to fetch Trustpilot reviews" });
   }
 });
+*/
 
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+  let capturedJsonResponse: Record<string, unknown> | undefined = undefined;
 
   const originalResJson = res.json;
   res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
+    if (!isProduction) {
+      capturedJsonResponse = bodyJson;
+    }
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
 
@@ -200,23 +211,22 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
+      if (!isProduction && capturedJsonResponse) {
+        const bodyPreview = JSON.stringify(capturedJsonResponse);
+        logLine += ` :: ${bodyPreview.length > 200 ? bodyPreview.slice(0, 199) + "…" : bodyPreview}`;
       }
       log(logLine);
     }
   });
-  console.log("➡️ Incoming request:", req.method, req.path);
+  if (!isProduction) {
+    console.log("➡️ Incoming request:", req.method, req.path);
+  }
   next();
 });
 
 (async () => {
   storage.initializeAdminUser();
   // await autoSeedProduction();
-  // await autoCreateAdmin();
   const server = await registerRoutes(app);
 
   startCrons();

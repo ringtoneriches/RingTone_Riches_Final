@@ -1,8 +1,9 @@
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, Trophy, Upload, Archive, ArchiveRestore } from "lucide-react";
+import { Plus, Edit, Trash2, Trophy, Archive, ArchiveRestore } from "lucide-react";
+import { CompetitionImageFields } from "@/components/admin/competition-image-fields";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -16,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Competition } from "@shared/schema";
+import { competitionImageFormValues, formatPrizeAmountInput, getDefaultBadgeLabel, serializeBadgeLabel, serializePrizeAmount } from "@/lib/competition-display";
 import WinnerDrawDialog from "@/components/admin/winner-draw-dialog";
 import PrizeConfigSpin, { SpinPrizeData } from "@/components/admin/prize-config-spin";
 import PrizeConfigScratch, { ScratchPrizeData } from "@/components/admin/prize-config-scratch";
@@ -25,8 +27,13 @@ interface CompetitionFormData {
   title: string;
   description: string;
   imageUrl: string;
+  featuredImageUrl: string;
+  cardImageUrl: string;
+  pageImageUrl: string;
   type: "spin" | "scratch" | "instant";
   ticketPrice: string;
+  prizeAmount: string;
+  badgeLabel: string;
   maxTickets: string;
   ringtonePoints: string;
   endDate?: string;
@@ -46,57 +53,22 @@ function CompetitionForm({
   isLoading: boolean;
   fixedType?: "spin" | "scratch" | "instant";
 }) {
-  const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<CompetitionFormData>({
     title: data?.title || "",
     description: data?.description || "",
-    imageUrl: data?.imageUrl || "",
+    ...competitionImageFormValues(data),
     type: fixedType || data?.type || "instant",
     ticketPrice: data?.ticketPrice || "0.99",
+    prizeAmount: formatPrizeAmountInput(data?.prizeAmount),
+    badgeLabel: data?.badgeLabel || getDefaultBadgeLabel(fixedType || data?.type || "instant"),
     maxTickets: data?.maxTickets?.toString() || "1000",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     endDate: data?.endDate ? new Date(data.endDate).toISOString().slice(0, 16) : "",
     prizeData: data?.prizeData as any,
   });
-  const [uploading, setUploading] = useState(false);
 
   const handlePrizeDataChange = (prizeData: SpinPrizeData | ScratchPrizeData | InstantPrizeData) => {
     setForm({ ...form, prizeData });
-  };
-
-  const handleImageUpload = async (file: File) => {
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-
-      const response = await fetch("/api/upload/competition-image", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Upload failed");
-      }
-
-      const { imagePath } = await response.json();
-      setForm({ ...form, imageUrl: imagePath });
-      toast({
-        title: "Success",
-        description: "Image uploaded successfully",
-      });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Upload failed",
-        description: error.message,
-      });
-    } finally {
-      setUploading(false);
-    }
   };
 
   return (
@@ -140,51 +112,10 @@ function CompetitionForm({
         <p className="text-xs text-muted-foreground mt-1">Tip: Press Enter to create new paragraphs</p>
       </div>
 
-      <div>
-        <Label>Competition Image</Label>
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  handleImageUpload(file);
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = "";
-                  }
-                }
-              }}
-              disabled={uploading}
-              className="hidden"
-              data-testid="input-image-upload"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              disabled={uploading}
-              onClick={() => fileInputRef.current?.click()}
-              data-testid="button-select-image"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {uploading ? "Uploading..." : "Select Image"}
-            </Button>
-          </div>
-          {form.imageUrl && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <img 
-                src={form.imageUrl} 
-                alt="Preview" 
-                className="h-20 w-20 object-cover rounded border"
-              />
-              <span className="truncate">{form.imageUrl.split("/").slice(-1)[0]}</span>
-            </div>
-          )}
-        </div>
-      </div>
+      <CompetitionImageFields
+        values={form}
+        onChange={(patch) => setForm({ ...form, ...patch })}
+      />
 
         {!fixedType && (
           <div>
@@ -192,9 +123,18 @@ function CompetitionForm({
             <select
               className="w-full p-2 border border-border rounded-md bg-background text-foreground"
               value={form.type}
-              onChange={(e) =>
-                setForm({ ...form, type: e.target.value as "spin" | "scratch" | "instant" })
-              }
+              onChange={(e) => {
+                const nextType = e.target.value as "spin" | "scratch" | "instant";
+                const prevDefault = getDefaultBadgeLabel(form.type);
+                setForm({
+                  ...form,
+                  type: nextType,
+                  badgeLabel:
+                    !form.badgeLabel.trim() || form.badgeLabel === prevDefault
+                      ? getDefaultBadgeLabel(nextType)
+                      : form.badgeLabel,
+                });
+              }}
               data-testid="select-type"
             >
               <option value="instant">Regular Competition</option>
@@ -222,6 +162,35 @@ function CompetitionForm({
               onChange={(e) => setForm({ ...form, ticketPrice: e.target.value })}
               data-testid="input-ticketPrice"
             />
+          </div>
+
+          <div>
+            <Label>Win up to (£)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="e.g. 2000"
+              value={form.prizeAmount}
+              onChange={(e) => setForm({ ...form, prizeAmount: e.target.value })}
+              data-testid="input-prizeAmount"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Shown on cards as Instantly win up to. Leave empty to use a £ amount in the title.
+            </p>
+          </div>
+
+          <div>
+            <Label>Card badge</Label>
+            <Input
+              value={form.badgeLabel}
+              maxLength={40}
+              onChange={(e) => setForm({ ...form, badgeLabel: e.target.value })}
+              data-testid="input-badgeLabel"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Top-left label on listing cards. Defaults to the game type name.
+            </p>
           </div>
 
           <div>
@@ -319,6 +288,8 @@ export default function AdminCompetitions() {
       const payload: any = {
         ...formData,
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
+        prizeAmount: serializePrizeAmount(formData.prizeAmount),
+        badgeLabel: serializeBadgeLabel(formData.badgeLabel, formData.type),
         maxTickets: parseInt(formData.maxTickets),
         ringtonePoints: parseInt(formData.ringtonePoints),
       };
@@ -357,6 +328,8 @@ export default function AdminCompetitions() {
       const payload: any = {
         ...data,
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
+        prizeAmount: serializePrizeAmount(data.prizeAmount),
+        badgeLabel: serializeBadgeLabel(data.badgeLabel, data.type),
         maxTickets: parseInt(data.maxTickets),
         ringtonePoints: parseInt(data.ringtonePoints),
       };

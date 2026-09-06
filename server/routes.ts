@@ -8,11 +8,29 @@ import fs from "fs";
 import crypto from "crypto";
 import { storage } from "./storage";
 import {
-  setupCustomAuth,
   isAuthenticated,
+  requireFullAccount,
   hashPassword,
   verifyPassword,
+  sanitizeUserForClient,
+  destroyAllUserSessions,
+  getAdminStepUpStatus,
+  grantAdminStepUp,
+  revokeAdminStepUp,
 } from "./customAuth";
+import { registerGuestAuthRoutes } from "./guest-auth";
+import {
+  issueGuestOrderAccessToken,
+  verifyGuestOrderAccess,
+  loadSessionUser,
+  normalizeGuestEmail,
+} from "./guest-order-access";
+import {
+  registerCartCardPaymentRoutes,
+  fulfillCartCardPayment,
+  failCartCardPayment,
+  cartOrderIdsFromMetadata,
+} from "./cart-card-payment";
 import {
   insertOrderSchema,
   insertTransactionSchema,
@@ -84,6 +102,7 @@ import {
   slotUsage,
   slotPrizeWins,
   ipBlocklist,
+  securityAuditLog,
   suspiciousActivities,
   guestPrizes,
   guestOrders,
@@ -116,6 +135,33 @@ import {
   sendTopupConfirmationEmail,
 } from "./email";
 import { wsManager } from "./websocket";
+import { registerInstantWinRoutes } from "./instantWinRoutes";
+import {
+  InstantWinError,
+  assertCanPurchaseTickets,
+  issuePlayTickets,
+  tryRevealControlledPop,
+  revealAllControlledPop,
+  tryRevealControlledSlot,
+  revealAllControlledSlot,
+  tryRevealControlledSpin,
+  revealAllControlledSpin,
+  peekControlledVoltz,
+  confirmControlledVoltz,
+  tryRevealControlledPlinko,
+  revealAllControlledPlinko,
+  peekControlledScratch,
+  confirmControlledScratch,
+  revealAllControlledScratch,
+  revealAllControlledVoltz,
+  tryRevealControlledRoyal,
+  getPublicPrizePool,
+} from "./services/instant-win-pool";
+import {
+  onTablePrizeCreated,
+  onTablePrizeDeleted,
+  onTablePrizeUpdated,
+} from "./services/prize-table-pool";
 
 import { applySelfSuspensionExpiry, isNotRestricted } from "./restriction";
 import {
@@ -125,10 +171,36 @@ import {
 } from "./cloudeflare/cloudeflareHelper";
 import { OTPGenerator } from "./otp";
 import { sendVerificationEmail } from "./emails/verification-email";
+import { issueEmailVerificationOtp } from "./email-otp";
+import {
+  applyReservedTender,
+  beginReservedCardCheckout,
+  firstQueryRow,
+  normalizeCashflowsStatus as readCashflowsStatus,
+  parseCashAmount,
+  refundEarlyTender,
+} from "./payment-settlement";
+import { creditCardCashback } from "./services/card-cashback";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { calculateDiscountedTotal } from "./utils/discounts";
 import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
+import { notifyPublicWinnerUpdate } from "./services/record-game-winner";
+import { processUncontrolledSlotSpin, revealAllUncontrolledSlot } from "./services/slot-play";
+import {
+  getCompletedScratchSession,
+  getOpenScratchSession,
+  getOpenScratchSessionById,
+  markScratchSessionCompleted,
+  setOpenScratchSession,
+} from "./services/scratch-session-lock";
+import {
+  attachTicketNumbersNewestFirst,
+  claimNextPlayTicket,
+  getOrderPlayTickets,
+  labelRevealAllResultTickets,
+  playTicketLabel,
+} from "./services/play-ticket-labels";
 import rateLimit ,{ ipKeyGenerator } from 'express-rate-limit';
 const supportUpload = createS3Uploader("support");
 const competitionUpload = createS3Uploader("competitions");
@@ -684,6 +756,28 @@ const DEFAULT_VOLTZ_CONFIG = {
   isVisible: true,
 };
 
+function formatVoltzSwitchLabel(
+  rewardType: string,
+  prizeValue?: string | number | null,
+  prizeName?: string | null,
+) {
+  if (rewardType === "cash") {
+    const v = parseFloat(String(prizeValue || "0"));
+    if (!Number.isFinite(v)) return "£0";
+    if (Number.isInteger(v)) return `£${v.toLocaleString("en-GB")}`;
+    return `£${v.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  if (rewardType === "points") {
+    const n = Math.floor(parseFloat(String(prizeValue || "0")));
+    return `${Number.isFinite(n) ? n.toLocaleString("en-GB") : "0"} Ringtone Points`;
+  }
+  if (rewardType === "physical") {
+    const name = (prizeName || "Prize").trim();
+    return name.length > 16 ? `${name.slice(0, 14)}…` : name;
+  }
+  return "REPLAY";
+}
+
 async function checkDailyTicketCap(userId: string, competitionId: string, quantity: number, gameType: string) {
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   
@@ -764,6 +858,58 @@ export const isAdmin = (req: any, res: any, next: any) => {
   next();
 };
 
+function scratchPrizeWeight(prize: { weight?: unknown }) {
+  const weight = Number(prize.weight);
+  return Number.isFinite(weight) ? weight : 0;
+}
+
+function isScratchPrizeEligible(
+  prize: { weight?: unknown; maxWins?: unknown; quantityWon?: unknown },
+  winsOverride?: number,
+) {
+  const weight = scratchPrizeWeight(prize);
+  if (weight <= 0) return false;
+  const maxWins =
+    prize.maxWins === null || prize.maxWins === undefined || prize.maxWins === ""
+      ? null
+      : Number(prize.maxWins);
+  const won = winsOverride !== undefined ? Number(winsOverride) : Number(prize.quantityWon) || 0;
+  if (maxWins !== null && Number.isFinite(maxWins) && won >= maxWins) return false;
+  return true;
+}
+
+function pickWeightedScratchPrize<T extends { weight?: unknown }>(eligiblePrizes: T[]): T | null {
+  if (eligiblePrizes.length === 0) return null;
+  const totalWeight = eligiblePrizes.reduce(
+    (sum, prize) => sum + scratchPrizeWeight(prize),
+    0,
+  );
+  if (totalWeight <= 0) return null;
+  let random = Math.random() * totalWeight;
+  let selected = eligiblePrizes[0];
+  for (const prize of eligiblePrizes) {
+    random -= scratchPrizeWeight(prize);
+    if (random <= 0) {
+      selected = prize;
+      break;
+    }
+  }
+  return selected;
+}
+
+async function guardControlledPurchase(res: any, competitionId: string, quantity: number) {
+  try {
+    await assertCanPurchaseTickets(competitionId, quantity);
+    return true;
+  } catch (err: any) {
+    if (err instanceof InstantWinError) {
+      res.status(err.status).json({ message: err.message, code: err.code });
+      return false;
+    }
+    throw err;
+  }
+}
+
 export function getClientIp(req: any) {
   return (
     req.headers["cf-connecting-ip"] || // Cloudflare
@@ -778,51 +924,7 @@ function normalizeCashflowsStatus(payment: any): {
   status: "PAID" | "PENDING" | "FAILED" | "UNKNOWN";
   paidAmount: number;
 } {
-  const raw =
-    payment?.status ||
-    payment?.data?.status ||
-    payment?.data?.paymentStatus ||
-    payment?.data?.payments?.[0]?.status ||
-    "";
-
-  const status = String(raw).toUpperCase();
-
-  const paidAmount = Number(
-    payment?.data?.paidAmount ||
-    payment?.data?.amountCollected ||
-    payment?.data?.payments?.[0]?.paidAmount ||
-    0
-  );
-
-  // ✅ Paid
-  if (
-    status.includes("PAID") ||
-    status.includes("SUCCESS") ||
-    status.includes("CAPTURE")
-  ) {
-    return { status: "PAID", paidAmount };
-  }
-
-  // ❌ Expired / Failed / Cancelled
-  if (
-    status.includes("FAIL") ||
-    status.includes("CANCEL") ||
-    status.includes("EXPIRE")
-  ) {
-    return { status: "FAILED", paidAmount: 0 };
-  }
-
-  // ⏳ Still pending
-  if (
-    status.includes("PENDING") ||
-    status.includes("PROCESS") ||
-    status.includes("AUTHOR")
-  ) {
-    return { status: "PENDING", paidAmount: 0 };
-  }
-
-  // ❓ Unknown = NEVER PAY
-  return { status: "UNKNOWN", paidAmount: 0 };
+  return readCashflowsStatus(payment);
 }
 
 
@@ -878,10 +980,13 @@ async function processWalletTopup(
   paymentRef: string,
   amount: number,
   shouldCheckReferral: boolean = true
-) {
+): Promise<{ credited: boolean; already: boolean; cashback: number }> {
   if (amount <= 0) {
     throw new Error("Invalid wallet credit amount");
   }
+
+  let credited = false;
+  let already = false;
 
   try {
     await db.transaction(async (tx) => {
@@ -892,22 +997,27 @@ async function processWalletTopup(
 
       if (existing) {
         console.warn("Duplicate wallet credit blocked:", pendingPaymentId);
+        already = true;
         return;
       }
 
       // Check pending payment status with FOR UPDATE lock using SQL
-      const pendingResult = await tx.execute<{
-        rows: Array<{ id: string; status: string }>
-      }>(sql`
+      const pendingResult = await tx.execute(sql`
         SELECT id, status 
         FROM pending_payments 
         WHERE id = ${pendingPaymentId}
         FOR UPDATE
       `);
       
-      const pending = Array.isArray(pendingResult) ? pendingResult[0] : pendingResult.rows?.[0];
+      const pending = firstQueryRow<{ id: string; status: string }>(pendingResult);
 
       if (!pending || pending.status !== "pending") {
+        const [existingRef] = await tx
+          .select()
+          .from(transactions)
+          .where(eq(transactions.paymentRef, paymentRef))
+          .limit(1);
+        already = Boolean(existingRef);
         console.warn("Pending payment not found or already processed:", pendingPaymentId);
         return;
       }
@@ -939,6 +1049,7 @@ async function processWalletTopup(
         })
         .where(eq(pendingPayments.id, pendingPaymentId));
 
+      credited = true;
       console.log("Wallet credited successfully", {
         userId,
         pendingPaymentId,
@@ -953,6 +1064,16 @@ async function processWalletTopup(
         console.log("Skipping referral check for this topup");
       }
     });
+    let cashback = 0;
+    if (credited || already) {
+      const creditedBack = await creditCardCashback({
+        userId,
+        cardAmount: amount,
+        paymentRef,
+      });
+      cashback = creditedBack.credited || 0;
+    }
+    return { credited, already, cashback };
   } catch (err) {
     console.error("processWalletTopup FAILED", err);
     throw err;
@@ -1146,6 +1267,61 @@ const registerLimiter = rateLimit({
   },
 });
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { message: "Too many login attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: ipKeyGenerator,
+});
+
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: {
+    message: "Too many password reset requests. Please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: ipKeyGenerator,
+});
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { message: "Too many reset attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: ipKeyGenerator,
+});
+
+const otpVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: {
+    message: "Too many verification attempts. Please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = String(req.body?.email || "").toLowerCase().trim();
+    const ip = ipKeyGenerator(req);
+    return email ? `${ip}:${email}` : ip;
+  },
+});
+
+const adminStepUpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: {
+    message: "Too many PIN attempts. Please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: ipKeyGenerator,
+});
+
 const validateFieldContent = (value: string, fieldName: string): string | null => {
   if (!value || value.trim().length === 0) return null;
   const trimmed = value.trim();
@@ -1270,8 +1446,50 @@ const registerUserSchema = z.object({
 
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
-  setupCustomAuth(app);
+  registerGuestAuthRoutes(app);
+  registerCartCardPaymentRoutes(app);
+
+  app.get("/api/admin/step-up/status", isAuthenticated, isAdmin, async (req: any, res) => {
+    res.json(getAdminStepUpStatus(req));
+  });
+
+  app.post(
+    "/api/admin/step-up",
+    adminStepUpLimiter,
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      const scope = req.body?.scope;
+      const pin = String(req.body?.pin || "");
+
+      if (scope !== "games" && scope !== "users") {
+        return res.status(400).json({ message: "Invalid scope" });
+      }
+
+      const expectedPin = process.env.ADMIN_SIDEBAR_PIN;
+      if (!expectedPin) {
+        return res.status(503).json({
+          message: "Admin step-up PIN is not configured on the server.",
+        });
+      }
+
+      if (!pin || pin !== expectedPin) {
+        return res.status(403).json({ message: "Incorrect PIN" });
+      }
+
+      const expiresAt = grantAdminStepUp(req, scope);
+      res.json({ success: true, scope, expiresAt });
+    },
+  );
+
+  app.post("/api/admin/step-up/lock", isAuthenticated, isAdmin, async (req: any, res) => {
+    const scope = req.body?.scope;
+    if (scope !== "games" && scope !== "users" && scope !== "all") {
+      return res.status(400).json({ message: "Invalid scope" });
+    }
+    revokeAdminStepUp(req, scope);
+    res.json({ success: true, ...getAdminStepUpStatus(req) });
+  });
 
   // File upload endpoint for competition images
   app.post(
@@ -1323,50 +1541,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   //     }
   //   }
   // );
-
-  app.post("/api/admin/verify-all-existing-users", async (req, res) => {
-    try {
-      // Simple auth check (you can add proper admin auth)
-      const { adminKey } = req.body;
-      if (adminKey !== process.env.ADMIN_MIGRATION_KEY) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      console.log("🔧 Verifying ALL existing users...");
-
-      const result = await db.execute(sql`
-      UPDATE users 
-      SET 
-        email_verified = true,
-        verification_sent_at = COALESCE(verification_sent_at, created_at),
-        email_verification_otp = NULL,
-        email_verification_otp_expires_at = NULL,
-        updated_at = NOW()
-      WHERE email IS NOT NULL 
-        AND email != ''
-    `);
-
-      // Count after update
-      const verifiedCount = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(users)
-        .where(sql`email_verified = true`);
-
-      res.json({
-        success: true,
-        message: `Grandfathered all existing users into verified status`,
-        verifiedCount: verifiedCount[0].count,
-        rowCount: result.rowCount,
-      });
-    } catch (error) {
-      console.error("❌ Migration error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Migration failed",
-        error: error.message,
-      });
-    }
-  });
 
 app.post("/api/auth/register", registerLimiter, async (req, res) => {
   const startTime = Date.now();
@@ -1453,9 +1627,56 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
     // ===== CHECK EXISTING USER =====
     const normalizedEmail = email.toLowerCase().trim();
     const existingUser = await storage.getUserByEmail(normalizedEmail);
-    if (existingUser) {
+    if (existingUser && !existingUser.isGuestAccount) {
       console.log(`❌ [register] User already exists: ${normalizedEmail}`);
       return res.status(400).json({ message: "User already exists with this email" });
+    }
+
+    if (existingUser?.isGuestAccount) {
+      const hashedGuestPassword = await hashPassword(password);
+      const guestDob =
+        birthMonth && birthYear
+          ? `${birthYear}-${String(birthMonth).padStart(2, "0")}-01`
+          : existingUser.dateOfBirth;
+      await db
+        .update(users)
+        .set({
+          password: hashedGuestPassword,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          dateOfBirth: guestDob,
+          phoneNumber: phoneNumber.trim(),
+          receiveNewsletter: receiveNewsletter || existingUser.receiveNewsletter || false,
+          isGuestAccount: false,
+          emailVerified: false,
+          passwordChangedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, existingUser.id));
+
+      await issueEmailVerificationOtp({
+        id: existingUser.id,
+        email: existingUser.email,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+      });
+
+      (req as any).session.userId = existingUser.id;
+
+      return res.status(200).json({
+        message: "Account saved. Verify your email to finish.",
+        claimedGuest: true,
+        needsVerification: true,
+        email: existingUser.email,
+        user: {
+          id: existingUser.id,
+          email: existingUser.email,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          isAdmin: existingUser.isAdmin || false,
+          emailVerified: false,
+        },
+      });
     }
 
     // ===== VALIDATE REFERRAL CODE =====
@@ -1795,7 +2016,7 @@ async function blockIp(ip: string, reason: string) {
 }
 
 // Login route (simplified - no verification check)
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", loginLimiter, async (req, res) => {
   try {
     const result = loginUserSchema.safeParse(req.body);
     if (!result.success) {
@@ -1816,6 +2037,12 @@ app.post("/api/auth/login", async (req, res) => {
     if (!user || !user.password) {
        console.log("❌ [login] User not found for:", normalizedEmail);
       return res.status(401).json({ message: "Invalid email or password" });
+    }
+    if (user.isGuestAccount) {
+      return res.status(403).json({
+        code: "GUEST_ACCOUNT",
+        message: "This email was used for guest checkout. Create a password on the Create account page, using the same email, to log in.",
+      });
     }
  console.log("✅ [login] User found:", user.email);
     // 1️⃣ Check admin disables first
@@ -1867,6 +2094,12 @@ app.post("/api/auth/login", async (req, res) => {
     );
     if (!isValidPassword) {
       return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    if (!freshUser.emailVerified && !freshUser.isGuestAccount) {
+      return res.status(403).json({
+        message: "Please verify your email address before logging in. Check your inbox for the verification code.",
+      });
     }
 
     // Store user ID in session
@@ -1951,6 +2184,139 @@ app.post("/api/auth/login", async (req, res) => {
     }
   });
 
+  app.post("/api/auth/verify-email", otpVerifyLimiter, async (req: any, res) => {
+    try {
+      const email = String(req.body?.email || "").toLowerCase().trim();
+      const otp = String(req.body?.otp || "").trim();
+
+      if (!email || !otp) {
+        return res.status(400).json({ message: "Email and OTP are required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      if (user.isGuestAccount) {
+        return res.status(400).json({ message: "Save a password first, then verify this email." });
+      }
+      if (user.emailVerified) {
+        return res.status(400).json({ message: "Email already verified" });
+      }
+      if (!user.emailVerificationOtp || user.emailVerificationOtp !== otp) {
+        return res.status(400).json({ message: "Invalid OTP" });
+      }
+      if (!user.emailVerificationOtpExpiresAt || new Date() > new Date(user.emailVerificationOtpExpiresAt)) {
+        return res.status(400).json({ message: "OTP has expired. Please request a new one." });
+      }
+
+      await db
+        .update(users)
+        .set({
+          emailVerified: true,
+          emailVerificationOtp: null,
+          emailVerificationOtpExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+
+      const existingTicket = await db
+        .select({ id: tickets.id })
+        .from(tickets)
+        .where(eq(tickets.userId, user.id))
+        .limit(1);
+
+      let bonusCashCredited = 0;
+      let bonusPointsCredited = 0;
+      if (!existingTicket.length) {
+        try {
+          const settings = await storage.getPlatformSettings();
+          if (settings?.signupBonusEnabled) {
+            const bonusCash = parseFloat(settings.signupBonusCash || "0");
+            const bonusPoints = settings.signupBonusPoints || 0;
+            if (bonusCash > 0) {
+              await db
+                .update(users)
+                .set({ balance: sql`${users.balance} + ${bonusCash}` })
+                .where(eq(users.id, user.id));
+              bonusCashCredited = bonusCash;
+            }
+            if (bonusPoints > 0) {
+              await db
+                .update(users)
+                .set({ ringtonePoints: sql`${users.ringtonePoints} + ${bonusPoints}` })
+                .where(eq(users.id, user.id));
+              bonusPointsCredited = bonusPoints;
+            }
+          }
+        } catch (bonusError) {
+          console.error("Signup bonus on verify error:", bonusError);
+        }
+      }
+
+      req.session.userId = user.id;
+
+      return res.json({
+        message: "Email verified successfully.",
+        verified: true,
+        bonusesApplied: {
+          cash: bonusCashCredited,
+          points: bonusPointsCredited,
+          referral: false,
+        },
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          emailVerified: true,
+        },
+      });
+    } catch (error) {
+      console.error("Verification error:", error);
+      return res.status(500).json({ message: "Failed to verify email" });
+    }
+  });
+
+  app.post("/api/auth/resend-otp", async (req, res) => {
+    try {
+      const email = String(req.body?.email || "").toLowerCase().trim();
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      if (user.isGuestAccount) {
+        return res.status(400).json({ message: "Save a password first, then verify this email." });
+      }
+      if (user.emailVerified) {
+        return res.status(400).json({ message: "Email already verified" });
+      }
+
+      if (user.verificationSentAt) {
+        const waitMs = 60 * 1000;
+        const elapsed = Date.now() - new Date(user.verificationSentAt).getTime();
+        if (elapsed < waitMs) {
+          return res.status(429).json({
+            message: "Please wait a minute before requesting another code.",
+          });
+        }
+      }
+
+      await issueEmailVerificationOtp(user);
+      return res.json({
+        message: "New OTP sent successfully to your email",
+        expiresIn: "30 minutes",
+      });
+    } catch (error) {
+      console.error("Resend OTP error:", error);
+      return res.status(500).json({ message: "Failed to resend OTP" });
+    }
+  });
+
   // Logout route
   app.post("/api/auth/logout", (req: any, res) => {
     req.session.destroy((err: any) => {
@@ -1965,7 +2331,7 @@ app.post("/api/auth/login", async (req, res) => {
   // Get current user route
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
-      res.json(req.user);
+      res.json(sanitizeUserForClient(req.user));
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -1973,7 +2339,7 @@ app.post("/api/auth/login", async (req, res) => {
   });
 
   // Password reset - Request reset link
-  app.post("/api/auth/forgot-password", async (req, res) => {
+  app.post("/api/auth/forgot-password", forgotPasswordLimiter, async (req, res) => {
     try {
       const { email } = forgotPasswordSchema.parse(req.body);
 
@@ -2055,7 +2421,7 @@ app.post("/api/auth/login", async (req, res) => {
   });
 
   // Password reset - Reset password with token
-  app.post("/api/auth/reset-password", async (req, res) => {
+  app.post("/api/auth/reset-password", resetPasswordLimiter, async (req, res) => {
     try {
       const { token, newPassword } = resetPasswordSchema.parse(req.body);
 
@@ -2087,7 +2453,12 @@ app.post("/api/auth/login", async (req, res) => {
       }
 
       const hashedPassword = await hashPassword(newPassword);
-      await storage.updateUser(user.id, { password: hashedPassword });
+      await storage.updateUser(user.id, {
+        password: hashedPassword,
+        passwordChangedAt: new Date(),
+      });
+
+      await destroyAllUserSessions(user.id);
 
       await db
         .update(passwordResetTokens)
@@ -2103,7 +2474,7 @@ app.post("/api/auth/login", async (req, res) => {
     }
   });
 
-  app.put("/api/auth/user", isAuthenticated, async (req: any, res) => {
+  app.put("/api/auth/user", isAuthenticated, requireFullAccount, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const {
@@ -2142,6 +2513,7 @@ app.post("/api/auth/login", async (req, res) => {
 
       if (password) {
         updateData.password = await hashPassword(password);
+        updateData.passwordChangedAt = new Date();
       }
 
       if (email) {
@@ -2152,6 +2524,10 @@ app.post("/api/auth/login", async (req, res) => {
       }
 
       const updatedUser = await storage.updateUser(userId, updateData);
+
+      if (password) {
+        await destroyAllUserSessions(userId);
+      }
 
       // Broadcast real-time update
       wsManager.broadcast({ type: "user_updated", userId });
@@ -2561,7 +2937,7 @@ app.delete("/api/admin/redeem-codes/:id", isAuthenticated, isAdmin, async (req, 
 
 
 // POST /api/redeem - User redeems a code (with debugging)
-app.post("/api/redeem", isAuthenticated, async (req, res) => {
+app.post("/api/redeem", isAuthenticated, requireFullAccount, async (req, res) => {
   try {
     const schema = z.object({
       code: z.string().min(3).max(20).transform(c => c.toUpperCase().trim()),
@@ -2722,7 +3098,7 @@ const result = await db.transaction(async (tx) => {
 });
 
 // GET /api/redeem/history - Get user's redemption history
-app.get("/api/redeem/history", isAuthenticated, async (req, res) => {
+app.get("/api/redeem/history", isAuthenticated, requireFullAccount, async (req, res) => {
   try {
     console.log("📦 Fetching redeem history for user:", req.user.id);
     
@@ -3618,20 +3994,16 @@ res.json({
 
           await storage.updateOrderStatus(orderId, "completed");
 
-          // Create tickets
-          const tickets = [];
           const actualQuantity = quantity || order.quantity || 1;
-          for (let i = 0; i < actualQuantity; i++) {
-            const ticketNumber = nanoid(8).toUpperCase();
-            const ticket = await storage.createTicket({
-              userId,
-              competitionId: competition.id,
-              orderId,
-              ticketNumber,
-              isWinner: false,
-            });
-            tickets.push(ticket);
-          }
+          const { tickets } = await issuePlayTickets({
+            competitionId: competition.id,
+            quantity: actualQuantity,
+            userId,
+            orderId,
+            gameType: "instant",
+            incrementSold: true,
+            makeLegacyNumber: () => nanoid(8).toUpperCase(),
+          });
 
           return res.json({
             success: true,
@@ -3644,62 +4016,34 @@ res.json({
           });
         }
 
-        // If there's remaining amount, create Cashflows session
-        const session = await cashflows.createCompetitionPaymentSession(
-          remainingAmount,
-          {
-            orderId,
-            competitionId: competition.id,
-            userId,
-            quantity: (quantity || order.quantity || 1).toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-          }
-        );
-
-        if (!session.hostedPageUrl) {
-          // If Cashflows fails, refund wallet + points
-          if (walletUsed > 0) {
-            await storage.updateUserBalance(
-              userId,
-              (walletBalance + walletUsed).toFixed(2)
-            );
-          }
-          if (pointsUsed > 0) {
-            await storage.updateUserRingtonePoints(
-              userId,
-              ringtonePoints + pointsUsed
-            );
-          }
-
-          return res
-            .status(500)
-            .json({ message: "Failed to get Cashflows checkout URL" });
-        }
-
-        // Save partial payment info
-        let paymentMethodText = "Cashflow";
-        if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Points+Cashflow";
-        } else if (walletUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Cashflow";
-        } else if (pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Points+Cashflow";
-        }
-
-        await storage.updateOrderPaymentInfo(orderId, {
-          paymentMethod: paymentMethodText,
-          walletAmount: walletUsed.toString(),
-          pointsAmount: pointsUsed.toString(),
-          cashflowsAmount: remainingAmount.toString(),
-          paymentBreakdown: JSON.stringify(paymentBreakdown),
+        await refundEarlyTender({
+          userId,
+          orderId,
+          walletUsed,
+          pointsUsed,
         });
-
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: competition.id,
+          quantity: quantity || order.quantity || 1,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
+          return res.status(500).json({ message: "Failed to get Cashflows checkout URL" });
+        }
         res.json({
           success: true,
-          redirectUrl: session.hostedPageUrl,
-          sessionId: session.paymentJobReference,
+          redirectUrl: started.redirectUrl,
+          sessionId: started.sessionId,
           fullyPaid: false,
-          paymentMethod: paymentMethodText,
           remainingAmount,
         });
       } catch (error: any) {
@@ -3739,21 +4083,14 @@ res.json({
           paymentRef
         );
   
-        const paymentStatus =
-          payment?.status ||
-          payment?.data?.status ||
-          payment?.data?.paymentStatus ||
-          payment?.paymentStatus;
+        const { status: paymentStatus, paidAmount } = normalizeCashflowsStatus(payment);
   
         console.log("📊 Payment Status:", paymentStatus);
-  
-        const successStatuses = ["SUCCESS", "COMPLETED", "PAID", "Paid"];
   
         const user = await storage.getUser(userId);
         const balance = parseFloat(user?.balance || "0");
   
-        // ❌ Payment failed
-        if (!successStatuses.includes(paymentStatus)) {
+        if (paymentStatus === "FAILED") {
           await db.insert(auditLogs).values({
             userId,
             userName:
@@ -3768,7 +4105,16 @@ res.json({
           });
   
           return res.status(400).json({
+            success: false,
             message: `Payment not completed. Status: ${paymentStatus}`,
+          });
+        }
+
+        if (paymentStatus !== "PAID") {
+          return res.status(202).json({
+            success: false,
+            waitingForWebhook: true,
+            message: "Payment is still confirming.",
           });
         }
   
@@ -3793,6 +4139,56 @@ res.json({
             .status(404)
             .json({ message: "Order not found or belongs to wrong user" });
         }
+
+        const pendingAny = await db.query.pendingPayments.findFirst({
+          where: (p, { eq }) => eq(p.paymentJobReference, paymentJobRef),
+        });
+        const cartOrderIds = cartOrderIdsFromMetadata(pendingAny?.metadata);
+
+        if (pendingAny && cartOrderIds.length) {
+          if (!cartOrderIds.includes(orderId)) {
+            return res.status(404).json({ message: "Order not found for this payment" });
+          }
+          const issued = await fulfillCartCardPayment({
+            userId,
+            orderIds: cartOrderIds,
+            pendingPaymentId: pendingAny.id,
+            paymentRef,
+            paidAmount: Number(pendingAny.amount || order.totalAmount) || 0,
+          });
+
+          if (pendingAny.status === "pending") {
+            await db
+              .update(pendingPayments)
+              .set({
+                status: "completed",
+                paymentReference: paymentRef,
+                updatedAt: new Date(),
+              })
+              .where(eq(pendingPayments.id, pendingAny.id));
+          }
+
+          const firstIssued = issued[0];
+          const firstOrder = await storage.getOrder(cartOrderIds[0]);
+          const firstCompetition = firstOrder
+            ? await storage.getCompetition(firstOrder.competitionId)
+            : null;
+
+          return res.json({
+            success: true,
+            cart: cartOrderIds.length > 1,
+            orderIds: cartOrderIds,
+            orderId: cartOrderIds[0],
+            competitionId: firstOrder?.competitionId || order.competitionId,
+            competitionType: firstCompetition?.type || "competition",
+            tickets: firstIssued?.tickets || [],
+            cardsPurchased: firstOrder?.quantity || order.quantity,
+            quantity: firstOrder?.quantity || order.quantity,
+            totalAmount: pendingAny.amount || order.totalAmount,
+            cardSpend: parseCashAmount(pendingAny.amount, paidAmount),
+            generatedImmediately: true,
+          });
+        }
   
         // Get competition
         const competition = await storage.getCompetition(order.competitionId);
@@ -3816,11 +4212,12 @@ res.json({
             cardsPurchased: order.quantity,
             quantity: order.quantity,
             totalAmount: order.totalAmount,
+            cardSpend: parseCashAmount(order.cashflowsAmount, pendingAny?.amount, paidAmount),
           });
         }
   
         // For instant play payments, generate tickets immediately
-        if (order.paymentMethod === "instaplay") {
+        if (order.paymentMethod === "instaplay" || String(order.paymentMethod || "").includes("Cashflow")) {
           // Check if there's a pending payment record or create one
           let pending = await db.query.pendingPayments.findFirst({
             where: (p, { eq, and }) => and(
@@ -3850,13 +4247,35 @@ res.json({
           // }
 
           if (!pending) {
-            console.warn("No pending payment found in success route");
-
-            return res.json({
-              success: true,
-              waitingForWebhook: true,
-              message: "Payment received, processing shortly",
-            });
+            const [anyPending] = await db
+              .select()
+              .from(pendingPayments)
+              .where(eq(pendingPayments.paymentJobReference, paymentJobRef))
+              .limit(1);
+            if (anyPending) {
+              pending = anyPending;
+            } else {
+              const [created] = await db
+                .insert(pendingPayments)
+                .values({
+                  userId,
+                  orderId,
+                  paymentType: "instant_play",
+                  paymentJobReference: paymentJobRef,
+                  paymentReference: paymentRef,
+                  amount: String(parseCashAmount(paidAmount, order.totalAmount)),
+                  status: "pending",
+                  metadata: {
+                    gameType: competition?.type || "scratch",
+                    competitionType: competition?.type,
+                    recovered: true,
+                  },
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .returning();
+              pending = created;
+            }
           }
   
           if (pending) {
@@ -3910,6 +4329,7 @@ res.json({
               cardsPurchased: order.quantity,
               quantity: order.quantity,
               totalAmount: order.totalAmount,
+              cardSpend: parseCashAmount(pending.amount, paidAmount),
               generatedImmediately: true
             });
           }
@@ -3930,14 +4350,27 @@ res.json({
           createdAt: new Date(),
         });
   
-        console.log("✅ Payment verified — webhook will process order");
-  
+        const recoveredPending = await db.query.pendingPayments.findFirst({
+          where: (p, { eq }) => eq(p.paymentJobReference, paymentJobRef),
+        });
+        const tickets = await processInstantPlayPurchase(
+          userId,
+          orderId,
+          recoveredPending?.id || pendingAny?.id,
+          paymentRef,
+          order.quantity,
+          parseCashAmount(paidAmount, recoveredPending?.amount, order.totalAmount),
+          competition?.type || "competition",
+        );
+
         return res.json({
           success: true,
           orderId,
           competitionId: order.competitionId,
           competitionType: competition?.type || "competition",
-          waitingForWebhook: true,
+          tickets: tickets.map((t: any) => ({ ticketNumber: t.ticketNumber })),
+          cardSpend: parseCashAmount(paidAmount, recoveredPending?.amount),
+          generatedImmediately: true,
         });
       } catch (error: any) {
         console.error("❌ Error confirming competition payment:", error);
@@ -4047,21 +4480,53 @@ res.json({
           paymentType: string;
           orderId: string | null;
           metadata: any;
+          amount: string | number | null;
         }>
       }>(sql`
         SELECT id, user_id as "userId", status, payment_type as "paymentType", 
-               order_id as "orderId", metadata
+               order_id as "orderId", metadata, amount
         FROM pending_payments 
         WHERE payment_job_reference = ${paymentJobReference}
         LIMIT 1
       `);
       
-      const pending = Array.isArray(pendingResult) ? pendingResult[0] : pendingResult.rows?.[0];
+      const pending = firstQueryRow<{
+        id: string;
+        userId: string;
+        status: string;
+        paymentType: string;
+        orderId: string | null;
+        metadata: any;
+        amount: string | number | null;
+      }>(pendingResult);
   
       if (!pending) {
+        const [guestPending] = await db
+          .select()
+          .from(guestPendingPayments)
+          .where(eq(guestPendingPayments.paymentJobReference, paymentJobReference))
+          .limit(1);
+        if (guestPending) {
+          const payment = await cashflows.getPaymentStatus(
+            paymentJobReference,
+            paymentReference ?? undefined,
+          );
+          const { status, paidAmount } = normalizeCashflowsStatus(payment);
+          const creditAmount = parseCashAmount(paidAmount, guestPending.amount);
+          if (status === "PAID" && creditAmount > 0) {
+            await processGuestOrder(
+              guestPending.guestOrderId,
+              paymentReference ?? paymentJobReference,
+              creditAmount,
+            );
+          }
+          return;
+        }
         console.warn("No pending payment found:", paymentJobReference);
         return;
       }
+
+      const cartOrderIds = cartOrderIdsFromMetadata(pending.metadata);
 
       // 🛑 GLOBAL IDEMPOTENCY CHECK (VERY IMPORTANT)
         const [existingTx] = await db
@@ -4072,6 +4537,28 @@ res.json({
 
         if (existingTx) {
           console.log("⚠️ Already processed (webhook/success):", paymentReference);
+          if (pending.paymentType === "instant_play") {
+            if (cartOrderIds.length) {
+              await fulfillCartCardPayment({
+                userId: pending.userId,
+                orderIds: cartOrderIds,
+                pendingPaymentId: pending.id,
+                paymentRef: paymentReference ?? paymentJobReference,
+                paidAmount: Number(pending.amount || 0) || 0,
+              });
+            } else if (pending.orderId) {
+              const gameType = pending.metadata?.gameType || pending.metadata?.competitionType || "unknown";
+              await processInstantPlayPurchase(
+                pending.userId,
+                pending.orderId,
+                pending.id,
+                paymentReference ?? paymentJobReference,
+                1,
+                Number(pending.amount || 0) || 0,
+                gameType,
+              );
+            }
+          }
           return;
         }
   
@@ -4116,12 +4603,16 @@ res.json({
           WHERE id = ${pending.id}
         `);
   
-        if (pending.orderId && pending.paymentType === 'instant_play') {
-          await db.execute(sql`
-            UPDATE orders 
-            SET status = 'failed', updated_at = NOW()
-            WHERE id = ${pending.orderId}
-          `);
+        if (pending.paymentType === 'instant_play') {
+          if (cartOrderIds.length) {
+            await failCartCardPayment(cartOrderIds);
+          } else if (pending.orderId) {
+            await db.execute(sql`
+              UPDATE orders 
+              SET status = 'failed', updated_at = NOW()
+              WHERE id = ${pending.orderId}
+            `);
+          }
         }
   
         console.warn("Payment failed", {
@@ -4133,31 +4624,43 @@ res.json({
         return;
       }
   
+      const settledAmount = parseCashAmount(paidAmount, pending.amount);
+
       // ⏳ Still waiting for PAID status
-      if (status !== "PAID" || paidAmount <= 0) {
+      if (status !== "PAID" || settledAmount <= 0) {
         return;
       }
   
       // ✅ Payment is successful - handle based on payment type
-      if (pending.paymentType === 'wallet_topup') {
+      if (pending.paymentType === 'wallet_topup' || !pending.paymentType) {
         await processWalletTopup(
           pending.userId,
           pending.id,
           paymentReference ?? paymentJobReference,
-          paidAmount
+          settledAmount
         );
       } else if (pending.paymentType === 'instant_play') {
-        // Get quantity from orders table since it's not in pending_payments
-        if (pending.orderId) {
-          const orderResult = await db.execute<{
-            rows: Array<{ quantity: number }>
-          }>(sql`
+        if (cartOrderIds.length) {
+          await fulfillCartCardPayment({
+            userId: pending.userId,
+            orderIds: cartOrderIds,
+            pendingPaymentId: pending.id,
+            paymentRef: paymentReference ?? paymentJobReference,
+            paidAmount: settledAmount,
+          });
+          await db.execute(sql`
+            UPDATE pending_payments
+            SET status = 'completed', updated_at = NOW()
+            WHERE id = ${pending.id}
+          `);
+        } else if (pending.orderId) {
+          const orderResult = await db.execute(sql`
             SELECT quantity 
             FROM orders 
             WHERE id = ${pending.orderId}
           `);
           
-          const order = Array.isArray(orderResult) ? orderResult[0] : orderResult.rows?.[0];
+          const order = firstQueryRow<{ quantity: number }>(orderResult);
           const quantity = order?.quantity || 1;
           
           const gameType = pending.metadata?.gameType || 
@@ -4170,9 +4673,14 @@ res.json({
             pending.id,
             paymentReference ?? paymentJobReference,
             quantity,
-            paidAmount,
+            settledAmount,
             gameType
           );
+          await db.execute(sql`
+            UPDATE pending_payments
+            SET status = 'completed', updated_at = NOW()
+            WHERE id = ${pending.id}
+          `);
         }
       } else {
         console.warn("Unknown payment type:", pending.paymentType);
@@ -4197,22 +4705,56 @@ res.json({
     gameType: string,
     tx?: any // Make transaction optional for webhook usage
   ) {
-    if (amount <= 0) {
+    if (amount < 0) {
       throw new Error("Invalid payment amount");
     }
   
     // If tx is provided, use it (for webhook), otherwise create new transaction
     const executeInTx = async (transaction: any) => {
+      const [pendingRow] = pendingPaymentId
+        ? await transaction
+            .select()
+            .from(pendingPayments)
+            .where(eq(pendingPayments.id, pendingPaymentId))
+            .limit(1)
+        : [];
+      const pendingMeta =
+        pendingRow?.metadata && typeof pendingRow.metadata === "string"
+          ? JSON.parse(pendingRow.metadata)
+          : pendingRow?.metadata || {};
+      const reservedWallet = Number(pendingMeta.reservedWallet || 0);
+      const reservedPoints = Number(pendingMeta.reservedPoints || 0);
+      const cardSpend = parseCashAmount(pendingRow?.amount, amount);
+
       // 🛑 Idempotency guard
       const [existing] = await transaction
         .select()
         .from(transactions)
           .where(eq(transactions.paymentRef, paymentRef))
         .limit(1);
-  
-      if (existing) {
+
+      const [order] = await transaction
+        .select()
+        .from(orders)
+        .where(eq(orders.id, orderId));
+
+      if (!order) {
+        throw new Error(`Order not found: ${orderId}`);
+      }
+
+      const existingTickets = await transaction
+        .select()
+        .from(tickets)
+        .where(eq(tickets.orderId, orderId));
+
+      if (existing && existingTickets.length) {
         console.warn("Duplicate instant play transaction blocked:", pendingPaymentId);
-        return;
+        if (pendingPaymentId) {
+          await transaction.update(pendingPayments)
+            .set({ status: "completed", updatedAt: new Date() })
+            .where(eq(pendingPayments.id, pendingPaymentId));
+        }
+        return { order, competition: null, generatedTickets: existingTickets, cardSpend };
       }
 
        // Get user before any changes
@@ -4224,90 +4766,77 @@ res.json({
     const oldBalance = Number(user.balance) || 0;
     const newBalance = oldBalance; 
   
-      // Get the order details
-      const [order] = await transaction
-        .select()
-        .from(orders)
-        .where(eq(orders.id, orderId));
-  
-      if (!order) {
-        throw new Error(`Order not found: ${orderId}`);
-      }
-  
+      await applyReservedTender({
+        tx: transaction,
+        userId,
+        orderId,
+        reservedWallet,
+        reservedPoints,
+      });
+
       // Get competition
       const [competition] = await transaction
         .select()
         .from(competitions)
         .where(eq(competitions.id, order.competitionId));
   
-      // Create transaction record
-      await transaction.insert(transactions).values({
-        userId,
-        type: "purchase",
-        amount: Math.round(amount * 100) / 100,
-        paymentRef,
-        pendingPaymentId,
-        orderId,
-        description: `Instant play purchase: ${competition?.title || gameType} - £${amount}`,
-        status: "completed",
-        createdAt: new Date(),
-      });
+      if (!existing) {
+        await transaction.insert(transactions).values({
+          userId,
+          type: "purchase",
+          amount: Math.round(amount * 100) / 100,
+          paymentRef,
+          pendingPaymentId,
+          orderId,
+          description: `Instant play purchase: ${competition?.title || gameType} - £${amount}`,
+          status: "completed",
+          createdAt: new Date(),
+        });
+      }
   
       // Update order status
       await transaction.update(orders)
         .set({
           status: "completed",
           updatedAt: new Date(),
-          paymentMethod: "instaplay",
+          paymentMethod: order.paymentMethod === "pending" ? "instaplay" : order.paymentMethod,
         })
         .where(eq(orders.id, orderId));
-  
-      // Update competition sold tickets count
-      if (competition) {
-        await transaction.update(competitions)
-          .set({ 
-            soldTickets: (competition.soldTickets || 0) + order.quantity,
-            updatedAt: new Date()
-          })
-          .where(eq(competitions.id, order.competitionId));
-      }
-  
-      // Generate tickets for the game (these are the entries/plays)
-      const generatedTickets = [];
-      for (let i = 0; i < order.quantity; i++) {
-        // Generate appropriate ticket number format based on game type
-        let ticketNumber;
-        switch (gameType) {
-          case 'scratch':
-            ticketNumber = `SCRATCH-${nanoid(8).toUpperCase()}`;
-            break;
-          case 'spin':
-            ticketNumber = `SPIN-${nanoid(8).toUpperCase()}`;
-            break;
-          case 'pop':
-            ticketNumber = `POP-${nanoid(8).toUpperCase()}`;
-            break;
-          case 'plinko':
-            ticketNumber = `PLINKO-${nanoid(8).toUpperCase()}`;
-            break;
-          case 'slot':
-            ticketNumber = `SLOT-${nanoid(8).toUpperCase()}`;
-            break;
-          default:
-            ticketNumber = `GAME-${nanoid(8).toUpperCase()}`;
+
+      if (existingTickets.length) {
+        if (pendingPaymentId) {
+          await transaction.update(pendingPayments)
+            .set({ status: "completed", updatedAt: new Date() })
+            .where(eq(pendingPayments.id, pendingPaymentId));
         }
-        
-        const [ticket] = await transaction.insert(tickets).values({
-          userId,
-          competitionId: order.competitionId,
-          orderId: orderId,
-          ticketNumber,
-          isWinner: false,
-          createdAt: new Date(),
-        }).returning();
-        
-        generatedTickets.push(ticket);
+        return { order, competition, generatedTickets: existingTickets, cardSpend };
       }
+
+      const { tickets: generatedTickets } = await issuePlayTickets({
+        tx: transaction,
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        userId,
+        orderId,
+        gameType,
+        incrementSold: true,
+        makeLegacyNumber: () => {
+          switch (gameType) {
+            case "scratch":
+              return `SCRATCH-${nanoid(8).toUpperCase()}`;
+            case "spin":
+              return `SPIN-${nanoid(8).toUpperCase()}`;
+            case "pop":
+              return `POP-${nanoid(8).toUpperCase()}`;
+            case "plinko":
+              return `PLINKO-${nanoid(8).toUpperCase()}`;
+            case "slot":
+              return `SLOT-${nanoid(8).toUpperCase()}`;
+            default:
+              return `GAME-${nanoid(8).toUpperCase()}`;
+          }
+        },
+      });
   
      // 🆕 RECORD AUDIT LOG FOR INSTANT PLAY PURCHASE
 await transaction.insert(auditLogs).values({
@@ -4322,7 +4851,13 @@ await transaction.insert(auditLogs).values({
   createdAt: new Date(),
 });
 
-    return { order, competition, generatedTickets };
+    if (pendingPaymentId) {
+      await transaction.update(pendingPayments)
+        .set({ status: "completed", updatedAt: new Date() })
+        .where(eq(pendingPayments.id, pendingPaymentId));
+    }
+
+    return { order, competition, generatedTickets, cardSpend };
   };
   
     try {
@@ -4378,6 +4913,13 @@ await transaction.insert(auditLogs).values({
         gameType,
         quantity,
         amount,
+      });
+
+      await creditCardCashback({
+        userId,
+        cardAmount: result?.cardSpend ?? amount,
+        paymentRef,
+        orderId,
       });
   
       return result?.generatedTickets || [];
@@ -4596,63 +5138,33 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
       // -------------------------
       if (remainingAmount > 0) {
         cashflowsUsed = remainingAmount;
-  
-        const session = await cashflows.createCompetitionPaymentSession(
-          remainingAmount,
-          {
-            orderId,
-            competitionId,
-            userId,
-            quantity: quantity.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-          }
-        );
-  
-        // In case Cashflows fails: refund wallet + points
-        if (!session || !session.hostedPageUrl) {
-          if (walletUsed > 0) {
-            await db.update(users)
-              .set({ balance: (walletBalance + walletUsed).toString() })
-              .where(eq(users.id, userId));
-          }
-          if (pointsUsed > 0) {
-            await db.update(users)
-              .set({ ringtonePoints: ringtonePoints + pointsUsed })
-              .where(eq(users.id, userId));
-          }
-  
-          return res
-            .status(500)
-            .json({ message: "Failed to create payment session" });
+        await refundEarlyTender({
+          userId,
+          orderId,
+          walletUsed,
+          pointsUsed,
+        });
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId,
+          quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: compType || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
+          return res.status(500).json({ message: "Failed to create payment session" });
         }
-  
-        // Determine payment method text for mixed payment
-        let paymentMethodText = "Cashflow";
-        if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Points+Cashflow";
-        } else if (walletUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Cashflow";
-        } else if (pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Points+Cashflow";
-        }
-  
-        // Save partial payment info
-        await db.update(orders)
-          .set({ 
-            status: "processing",
-            paymentMethod: paymentMethodText,
-            walletAmount: walletUsed.toString(),
-            pointsAmount: pointsUsed.toString(),
-            cashflowsAmount: remainingAmount.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-            updatedAt: new Date()
-          })
-          .where(eq(orders.id, orderId));
-  
         return res.json({
           success: true,
-          redirectUrl: session.hostedPageUrl,
-          sessionId: session.paymentJobReference,
+          redirectUrl: started.redirectUrl,
+          sessionId: started.sessionId,
         });
       }
   
@@ -4682,32 +5194,18 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
         .where(eq(orders.id, orderId));
   
       // Create tickets
-      const createdTickets = [];
+      const { tickets: createdTickets } = await issuePlayTickets({
+        competitionId,
+        quantity,
+        userId,
+        orderId: order.id,
+        gameType: compType,
+        incrementSold: compType === "instant",
+        makeLegacyNumber: () => nanoid(8).toUpperCase(),
+      });
 
-      for (let i = 0; i < quantity; i++) {
-        const ticketNumber = nanoid(8).toUpperCase();
-      
-        const [ticket] = await db.insert(tickets).values({
-          userId,
-          competitionId,
-          orderId: order.id,
-          ticketNumber,
-          isWinner: false,
-          createdAt: new Date(),
-        }).returning();
-      
-        createdTickets.push(ticket);
-      }
-      
-  
-      // Update sold tickets for instant competitions
       if (compType === "instant") {
-        await db.update(competitions)
-          .set({ 
-            soldTickets: (competition.soldTickets || 0) + quantity,
-            updatedAt: new Date()
-          })
-          .where(eq(competitions.id, competition.id));
+        // soldTickets already incremented by allocator when incrementSold is true
       }
   
       // Send confirmation email
@@ -4790,6 +5288,7 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
+    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
     const spinCostPerTicket = parseFloat(competition.ticketPrice);
     
@@ -5030,63 +5529,33 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
       // Process remaining amount through Cashflows
       if (remainingAmount > 0) {
         cashflowsUsed = remainingAmount;
-  
-        const session = await cashflows.createCompetitionPaymentSession(
-          remainingAmount,
-          {
-            orderId,
-            competitionId: order.competitionId,
-            userId,
-            quantity: order.quantity.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-          }
-        );
-  
-        if (!session.hostedPageUrl) {
-          // Refund wallet and points if Cashflows fails
-          if (walletUsed > 0) {
-            const currentBalance = Number(user?.balance) || 0;
-            await db.update(users)
-              .set({ balance: (currentBalance + walletUsed).toString() })
-              .where(eq(users.id, userId));
-          }
-          if (pointsUsed > 0) {
-            const currentPoints = user?.ringtonePoints || 0;
-            await db.update(users)
-              .set({ ringtonePoints: currentPoints + pointsUsed })
-              .where(eq(users.id, userId));
-          }
-  
+        await refundEarlyTender({
+          userId,
+          orderId,
+          walletUsed,
+          pointsUsed,
+        });
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
           return res.status(500).json({ message: "Failed to create Cashflows session" });
         }
-  
-        // Determine payment method text for mixed payment
-        let paymentMethodText = "Discount";
-        if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Points+Cashflow";
-        } else if (walletUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Cashflow";
-        } else if (pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Points+Cashflow";
-        }
-  
-        // Update order with payment info
-        await db.update(orders)
-          .set({ 
-            status: "processing",
-            paymentMethod: paymentMethodText,
-            walletAmount: walletUsed.toString(),
-            pointsAmount: pointsUsed.toString(),
-            cashflowsAmount: cashflowsUsed.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-            updatedAt: new Date()
-          })
-          .where(eq(orders.id, orderId));
-  
         return res.json({
           success: true,
-          redirectUrl: session.hostedPageUrl,
-          sessionId: session.paymentJobReference,
+          redirectUrl: started.redirectUrl,
+          sessionId: started.sessionId,
           paymentBreakdown: {
             walletUsed,
             pointsUsed,
@@ -5106,9 +5575,39 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
           paymentMethodText = "Points";
         }
   
-        // Update order with payment info and mark as completed
+        let spinEntries: any[] = [];
+        try {
+          const issued = await issuePlayTickets({
+            competitionId: order.competitionId,
+            quantity: order.quantity,
+            userId,
+            orderId: order.id,
+            gameType: "spin",
+            incrementSold: true,
+            makeLegacyNumber: () => `SPIN-${nanoid(8).toUpperCase()}`,
+          });
+          spinEntries = issued.tickets;
+        } catch (ticketError) {
+          if (walletUsed > 0 || pointsUsed > 0) {
+            const [freshUser] = await db.select().from(users).where(eq(users.id, userId));
+            if (freshUser) {
+              await db.update(users)
+                .set({
+                  balance: walletUsed > 0
+                    ? (Number(freshUser.balance || 0) + walletUsed).toString()
+                    : freshUser.balance,
+                  ringtonePoints: pointsUsed > 0
+                    ? Number(freshUser.ringtonePoints || 0) + pointsUsed
+                    : freshUser.ringtonePoints,
+                })
+                .where(eq(users.id, userId));
+            }
+          }
+          throw ticketError;
+        }
+
         await db.update(orders)
-          .set({ 
+          .set({
             status: "completed",
             paymentMethod: paymentMethodText,
             walletAmount: walletUsed.toString(),
@@ -5118,30 +5617,6 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
             updatedAt: new Date()
           })
           .where(eq(orders.id, orderId));
-  
-        // Create spin entries
-        const spinEntries  = [];
-        for (let i = 0; i < order.quantity; i++) {
-          const ticketNumber = `SPIN-${nanoid(8).toUpperCase()}`;
-          const [ticket] = await db.insert(tickets).values({
-            userId,
-            competitionId: order.competitionId,
-            orderId: order.id,
-            ticketNumber,
-            isUsed: false,
-            result: null,
-            createdAt: new Date(),
-          }).returning();
-          spinEntries .push(ticket);
-        }
-  
-        // Update competition sold tickets count
-        await db.update(competitions)
-          .set({ 
-            soldTickets: (competition.soldTickets || 0) + order.quantity,
-            updatedAt: new Date()
-          })
-          .where(eq(competitions.id, competition.id));
   
         // Get discount info for audit log
         let discountInfo = '';
@@ -5187,8 +5662,6 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
               minute: "2-digit",
             }),
             paymentMethod: paymentMethodText,
-            skillQuestion: competition.skillQuestion || undefined,
-            skillAnswer: order.skillAnswer || undefined,
             spinNumbers: spinNumbers.length > 0 ? spinNumbers : undefined,
           }).catch((err) =>
             console.error("Failed to send order confirmation email:", err)
@@ -5257,6 +5730,21 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         success: false,
         message: "No valid spin purchase found",
       });
+    }
+
+    const controlledSpin = await tryRevealControlledSpin({
+      competitionId,
+      orderId,
+      userId,
+    });
+    if (controlledSpin?.handled) {
+      if (controlledSpin.noTickets) {
+        return res.status(400).json({
+          success: false,
+          message: "No spins remaining in this purchase",
+        });
+      }
+      return res.json(controlledSpin.response);
     }
 
     // Check spins remaining
@@ -5418,7 +5906,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         prizeDescription: selectedSegment.label,
         prizeValue: `£${amount}`,
         imageUrl: null,
-        isShowcase: false,
+        isShowcase: true,
       });
 
       // 🚀 AUTO-SYNC PRIZE TO PRIZE TABLE
@@ -5469,7 +5957,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         prizeDescription: selectedSegment.label,
         prizeValue: `${points} Ringtones`,
         imageUrl: null,
-        isShowcase: false,
+        isShowcase: true,
       });
 
       // 🚀 AUTO-SYNC PRIZE TO PRIZE TABLE
@@ -5505,7 +5993,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         prizeDescription: `Physical Prize: ${selectedSegment.label}`,
         prizeValue: selectedSegment.label,
         imageUrl: null,
-        isShowcase: false,
+        isShowcase: true,
       });
 
       const maxWins = selectedSegment.maxWins !== undefined && 
@@ -5524,6 +6012,15 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       );
     }
 
+    let ticketNumber: string | null = null;
+    try {
+      await db.transaction(async (tx) => {
+        ticketNumber = await claimNextPlayTicket(tx, orderId);
+      });
+    } catch (err) {
+      console.error("Failed to label spin play ticket:", err);
+    }
+
     // Return full segment payload for frontend animation
     res.json({
       success: true,
@@ -5536,6 +6033,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         color: selectedSegment.color,
       },
       winningSegmentId: selectedSegment.id,
+      ticketNumber,
       prize: {
         brand: selectedSegment.label,
         amount:
@@ -5550,6 +6048,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           selectedSegment.rewardType === "lose"
             ? "none"
             : selectedSegment.rewardType,
+        ticketNumber,
       },
       spinsRemaining: spinsRemaining - 1,
       orderId: order.id,
@@ -5583,6 +6082,16 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
         success: false,
         message: "No valid spin purchase found",
       });
+    }
+
+    const controlledRevealSpins = await revealAllControlledSpin({
+      competitionId,
+      orderId,
+      userId,
+      count,
+    });
+    if (controlledRevealSpins?.handled) {
+      return res.json(controlledRevealSpins.response);
     }
 
     // Check spins remaining
@@ -5744,7 +6253,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             prizeDescription: selectedSegment.label,
             prizeValue: `£${amount}`,
             imageUrl: null,
-            isShowcase: false,
+            isShowcase: true,
             createdAt: new Date(),
           });
 
@@ -5799,7 +6308,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             prizeDescription: selectedSegment.label,
             prizeValue: `${points} Ringtones`,
             imageUrl: null,
-            isShowcase: false,
+            isShowcase: true,
             createdAt: new Date(),
           });
 
@@ -5841,7 +6350,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             prizeDescription: `Physical Prize: ${selectedSegment.label}`,
             prizeValue: selectedSegment.label,
             imageUrl: null,
-            isShowcase: false,
+            isShowcase: true,
             createdAt: new Date(),
           });
 
@@ -5932,6 +6441,20 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
     // --------------------------------------
     // DONE
     // --------------------------------------
+    try {
+      await db.transaction(async (tx) => {
+        for (const row of results as any[]) {
+          const ticketNumber = await claimNextPlayTicket(tx, orderId);
+          if (ticketNumber && row.prize) {
+            row.prize = { ...row.prize, ticketNumber };
+            row.ticketNumber = ticketNumber;
+          }
+        }
+      });
+    } catch (err) {
+      console.error("Failed to label reveal-all spin tickets:", err);
+    }
+
     res.json({
       success: true,
       spins: results,
@@ -5966,6 +6489,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
         const user = await storage.getUser(userId);
         const used = await storage.getSpinsUsed(orderId);
         const remaining = order.quantity - used;
+        const playTickets = (await getOrderPlayTickets(orderId)).map(playTicketLabel);
         res.json({
           order: {
             id: order.id,
@@ -5985,6 +6509,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             ringtonePoints: user?.ringtonePoints || 0,
           },
           spinCost: 2, // £2 per spin
+          playTickets,
         });
       } catch (error) {
         console.error("Error fetching spin order:", error);
@@ -6122,6 +6647,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
+    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
     const scratchCostPerCard = parseFloat(competition.ticketPrice);
     
@@ -6178,6 +6704,7 @@ app.post("/api/create-pop-order", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
+    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
     const popCostPerGame = parseFloat(competition.ticketPrice);
     
@@ -6237,6 +6764,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
+    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
     const voltzCostPerGame = parseFloat(competition.ticketPrice);
     
@@ -6477,63 +7005,33 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
       // Process remaining amount through Cashflows
       if (remainingAmount > 0) {
         cashflowsUsed = remainingAmount;
-  
-        const session = await cashflows.createCompetitionPaymentSession(
-          remainingAmount,
-          {
-            orderId,
-            competitionId: order.competitionId,
-            userId,
-            quantity: order.quantity.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-          }
-        );
-  
-        if (!session.hostedPageUrl) {
-          // Refund wallet and points if Cashflows fails
-          if (walletUsed > 0) {
-            const currentBalance = Number(user?.balance) || 0;
-            await db.update(users)
-              .set({ balance: (currentBalance + walletUsed).toString() })
-              .where(eq(users.id, userId));
-          }
-          if (pointsUsed > 0) {
-            const currentPoints = user?.ringtonePoints || 0;
-            await db.update(users)
-              .set({ ringtonePoints: currentPoints + pointsUsed })
-              .where(eq(users.id, userId));
-          }
-  
+        await refundEarlyTender({
+          userId,
+          orderId,
+          walletUsed,
+          pointsUsed,
+        });
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
           return res.status(500).json({ message: "Failed to create Cashflows session" });
         }
-  
-        // Determine payment method text for mixed payment
-        let paymentMethodText = "Discount";
-        if (walletUsed > 0 && pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Points+Cashflow";
-        } else if (walletUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Wallet+Cashflow";
-        } else if (pointsUsed > 0 && remainingAmount > 0) {
-          paymentMethodText = "Points+Cashflow";
-        }
-  
-        // Update order with payment info
-        await db.update(orders)
-          .set({ 
-            status: "processing",
-            paymentMethod: paymentMethodText,
-            walletAmount: walletUsed.toString(),
-            pointsAmount: pointsUsed.toString(),
-            cashflowsAmount: cashflowsUsed.toString(),
-            paymentBreakdown: JSON.stringify(paymentBreakdown),
-            updatedAt: new Date()
-          })
-          .where(eq(orders.id, orderId));
-  
         return res.json({
           success: true,
-          redirectUrl: session.hostedPageUrl,
-          sessionId: session.paymentJobReference,
+          redirectUrl: started.redirectUrl,
+          sessionId: started.sessionId,
           paymentBreakdown: {
             walletUsed,
             pointsUsed,
@@ -6553,7 +7051,16 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
           paymentMethodText = "Points";
         }
   
-        // Update order with payment info and mark as completed
+        const { tickets: scratchTickets } = await issuePlayTickets({
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          userId,
+          orderId: order.id,
+          gameType: "scratch",
+          incrementSold: true,
+          makeLegacyNumber: () => `SCRATCH-${nanoid(8).toUpperCase()}`,
+        });
+
         await db.update(orders)
           .set({ 
             status: "completed",
@@ -6565,29 +7072,6 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
             updatedAt: new Date()
           })
           .where(eq(orders.id, orderId));
-  
-        // Create scratch card entries
-        const scratchTickets = []; // <-- renamed from tickets
-          for (let i = 0; i < order.quantity; i++) {
-            const ticketNumber = `SCRATCH-${nanoid(8).toUpperCase()}`;
-            const [ticket] = await db.insert(tickets).values({ // <-- tickets table
-              userId,
-              competitionId: order.competitionId,
-              orderId: order.id,
-              ticketNumber,
-              isWinner: false,
-              createdAt: new Date(),
-            }).returning();
-            scratchTickets.push(ticket);
-          }
-  
-        // Update competition sold tickets count
-        await db.update(competitions)
-          .set({ 
-            soldTickets: (competition.soldTickets || 0) + order.quantity,
-            updatedAt: new Date()
-          })
-          .where(eq(competitions.id, competition.id));
   
         // Get discount info for audit log
         let discountInfo = '';
@@ -6633,8 +7117,6 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
               minute: "2-digit",
             }),
             paymentMethod: paymentMethodText,
-            skillQuestion: competition.skillQuestion || undefined,
-            skillAnswer: order.skillAnswer || undefined,
             ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
           }).catch((err) =>
             console.error("Failed to send order confirmation email:", err)
@@ -6723,37 +7205,17 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
             throw new Error("No prizes configured");
           }
 
-          // Filter prizes that haven't reached maxWins
-          const eligiblePrizes = allPrizes.filter((prize) => {
-            if (!prize.weight || prize.weight <= 0) return false;
-            if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins)
-              return false;
-            return true;
-          });
+          const eligiblePrizes = allPrizes.filter((prize) =>
+            isScratchPrizeEligible(prize)
+          );
 
           if (eligiblePrizes.length === 0) {
             throw new Error("No prizes available");
           }
 
-          // Weighted random selection
-          const totalWeight = eligiblePrizes.reduce(
-            (sum, prize) => sum + prize.weight,
-            0
-          );
-          if (totalWeight <= 0) {
-            throw new Error("Invalid prize weights");
-          }
-
-          let random = Math.random() * totalWeight;
-          selectedPrize = eligiblePrizes[0];
-
-          for (const prize of eligiblePrizes) {
-            random -= prize.weight;
-            if (random <= 0) {
-              selectedPrize = prize;
-              break;
-            }
-          }
+          const pickedPrize = pickWeightedScratchPrize(eligiblePrizes);
+          if (!pickedPrize) throw new Error("Invalid prize weights");
+          selectedPrize = pickedPrize;
 
           // 🔒 Record scratch card usage INSIDE transaction (atomic operation)
           await tx.insert(scratchCardUsage).values({
@@ -6827,7 +7289,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
           prizeDescription: "Scratch Card Prize",
           prizeValue: `£${amount}`,
           imageUrl: null,
-          isShowcase: false,
+          isShowcase: true,
         });
 
         prizeResponse = { type: "cash", value: amount.toFixed(2) };
@@ -6874,7 +7336,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
           prizeDescription: "Scratch Card Prize",
           prizeValue: `${points} Ringtones`,
           imageUrl: null,
-          isShowcase: false,
+          isShowcase: true,
         });
 
         prizeResponse = { type: "points", value: points.toString() };
@@ -6897,7 +7359,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
           prizeDescription: `Scratch Card Prize - ${selectedPrize.label}`,
           prizeValue: selectedPrize.label,
           imageUrl: null,
-          isShowcase: false,
+          isShowcase: true,
         });
 
         prizeResponse = { type: "physical", value: selectedPrize.label };
@@ -6981,6 +7443,16 @@ app.post(
         });
       }
 
+      const controlledRevealScratch = await revealAllControlledScratch({
+        competitionId,
+        orderId,
+        userId,
+        count: cardsToProcess,
+      });
+      if (controlledRevealScratch?.handled) {
+        return res.json(controlledRevealScratch.response);
+      }
+
       // Get user
       const user = await storage.getUser(userId);
       if (!user) {
@@ -7012,35 +7484,16 @@ app.post(
           // Pre-select all prizes using weighted random selection
           selectedPrizes = [];
           for (let i = 0; i < cardsToProcess; i++) {
-            const eligiblePrizes = allPrizes.filter((prize) => {
-              if (!prize.weight || prize.weight <= 0) return false;
-              const currentWins = prizeWinCounts.get(prize.id) || 0;
-              if (prize.maxWins !== null && currentWins >= prize.maxWins)
-                return false;
-              return true;
-            });
+            const eligiblePrizes = allPrizes.filter((prize) =>
+              isScratchPrizeEligible(prize, prizeWinCounts.get(prize.id) || 0)
+            );
 
             if (eligiblePrizes.length === 0) {
               selectedPrizes.push(null);
               continue;
             }
 
-            // Weighted random selection
-            const totalWeight = eligiblePrizes.reduce(
-              (sum, prize) => sum + prize.weight,
-              0
-            );
-            let random = Math.random() * totalWeight;
-            let selectedPrize = eligiblePrizes[0];
-
-            for (const prize of eligiblePrizes) {
-              random -= prize.weight;
-              if (random <= 0) {
-                selectedPrize = prize;
-                break;
-              }
-            }
-
+            const selectedPrize = pickWeightedScratchPrize(eligiblePrizes);
             selectedPrizes.push(selectedPrize);
 
             // Update win count for next iteration
@@ -7153,7 +7606,7 @@ app.post(
               prizeDescription: "Scratch Card Prize",
               prizeValue: `£${amount}`,
               imageUrl: null,
-              isShowcase: false,
+              isShowcase: true,
             });
 
             prizeResponse = { type: "cash", value: amount.toFixed(2) };
@@ -7195,7 +7648,7 @@ app.post(
               prizeDescription: "Scratch Card Prize",
               prizeValue: `${points} Ringtones`,
               imageUrl: null,
-              isShowcase: false,
+              isShowcase: true,
             });
 
             prizeResponse = { type: "points", value: points.toString() };
@@ -7221,7 +7674,7 @@ app.post(
             prizeDescription: `Scratch Card Prize - ${selectedPrize.imageName || selectedPrize.label}`,
             prizeValue: selectedPrize.imageName || selectedPrize.label,
             imageUrl: null,
-            isShowcase: false,
+            isShowcase: true,
           });
 
           prizeResponse = {
@@ -7245,6 +7698,15 @@ app.post(
 
         results.push({ prize: prizeResponse });
       }
+
+      await db.transaction(async (tx) => {
+        for (const row of results) {
+          const ticketNumber = await claimNextPlayTicket(tx, orderId);
+          if (ticketNumber) {
+            (row as any).prize = { ...(row as any).prize, ticketNumber };
+          }
+        }
+      });
 
       res.json({
         success: true,
@@ -7304,6 +7766,62 @@ app.post(
             });
         }
 
+        const existingSession = getOpenScratchSession(userId, orderId);
+        if (existingSession) {
+          return res.json({
+            success: true,
+            sessionId: existingSession.sessionId,
+            isWinner: existingSession.isWinner,
+            prize: existingSession.prize,
+            tileLayout: existingSession.tileLayout,
+            prizeId: existingSession.prizeId,
+            orderId,
+            controlledPool: existingSession.controlledPool || false,
+            creditedAtSale: existingSession.controlledPool || false,
+            ticketNumber: existingSession.ticketNumber || null,
+          });
+        }
+
+        const controlledScratchPeek = await peekControlledScratch({
+          competitionId: order.competitionId,
+          orderId,
+          userId,
+        });
+        if (controlledScratchPeek?.handled) {
+          if (controlledScratchPeek.noTickets) {
+            return res.status(400).json({
+              success: false,
+              message: "No scratch cards remaining in this purchase",
+            });
+          }
+          const peek = controlledScratchPeek.response;
+          const sessionId = nanoid();
+          setOpenScratchSession({
+            sessionId,
+            userId,
+            orderId,
+            prizeId: peek.prizeId,
+            isWinner: peek.isWinner,
+            prize: peek.prize,
+            tileLayout: peek.tileLayout,
+            ticketId: peek.ticketId,
+            controlledPool: true,
+            ticketNumber: peek.ticketNumber,
+          });
+          return res.json({
+            success: true,
+            sessionId,
+            isWinner: peek.isWinner,
+            prize: peek.prize,
+            tileLayout: peek.tileLayout,
+            prizeId: peek.prizeId,
+            orderId,
+            controlledPool: true,
+            creditedAtSale: true,
+            ticketNumber: peek.ticketNumber,
+          });
+        }
+
         // Get user
         const user = await storage.getUser(userId);
         if (!user) {
@@ -7325,34 +7843,16 @@ app.post(
             if (!allPrizes || allPrizes.length === 0)
               throw new Error("No prizes configured");
 
-            // Filter prizes that haven't reached maxWins
-            const eligiblePrizes = allPrizes.filter((prize) => {
-              if (!prize.weight || prize.weight <= 0) return false;
-              if (prize.maxWins !== null && prize.quantityWon >= prize.maxWins)
-                return false;
-              return true;
-            });
+            const eligiblePrizes = allPrizes.filter((prize) =>
+              isScratchPrizeEligible(prize)
+            );
 
             if (eligiblePrizes.length === 0)
               throw new Error("No prizes available");
 
-            // Weighted random selection
-            const totalWeight = eligiblePrizes.reduce(
-              (sum, prize) => sum + prize.weight,
-              0
-            );
-            if (totalWeight <= 0) throw new Error("Invalid prize weights");
-
-            let random = Math.random() * totalWeight;
-            selectedPrize = eligiblePrizes[0];
-
-            for (const prize of eligiblePrizes) {
-              random -= prize.weight;
-              if (random <= 0) {
-                selectedPrize = prize;
-                break;
-              }
-            }
+            const pickedPrize = pickWeightedScratchPrize(eligiblePrizes);
+            if (!pickedPrize) throw new Error("Invalid prize weights");
+            selectedPrize = pickedPrize;
           });
 
           // Determine winner strictly based on prize type
@@ -7376,10 +7876,9 @@ app.post(
           const activeImages = activePrizes
             .filter(
               (p) =>
+                p.rewardType !== "try_again" &&
                 p.imageName &&
-                p.imageName.trim() !== "" &&
-                p.weight &&
-                p.weight > 0
+                p.imageName.trim() !== ""
             )
             .map((p) => p.imageName as string);
 
@@ -7478,6 +7977,16 @@ app.post(
             }
           }
 
+          setOpenScratchSession({
+            sessionId,
+            userId,
+            orderId,
+            prizeId: selectedPrize.id,
+            isWinner,
+            prize: prizeInfo,
+            tileLayout,
+          });
+
           res.json({
             success: true,
             sessionId,
@@ -7506,14 +8015,49 @@ app.post(
       try {
         const userId = req.user.id;
         const { sessionId } = req.params;
-        const { orderId, prizeId, isWinner } = req.body;
+        const { orderId: clientOrderId } = req.body;
 
-        if (!orderId || !prizeId) {
-          return res.status(400).json({
-            success: false,
-            message: "Order ID and Prize ID are required",
+        const already = getCompletedScratchSession(sessionId);
+        if (already && already.userId === userId) {
+          if (clientOrderId && clientOrderId !== already.orderId) {
+            return res.status(400).json({
+              success: false,
+              message: "Order does not match scratch session",
+            });
+          }
+          return res.json({
+            success: true,
+            prize: already.prize,
+            prizeLabel: already.prizeLabel,
+            remainingCards: already.remainingCards,
+            orderId: already.orderId,
+            alreadyCompleted: true,
           });
         }
+
+        const openSession = getOpenScratchSessionById(sessionId);
+        if (!openSession) {
+          return res.status(400).json({
+            success: false,
+            message: "Scratch session expired or invalid. Please start a new card.",
+          });
+        }
+
+        if (openSession.userId !== userId) {
+          return res.status(403).json({
+            success: false,
+            message: "Not authorized for this scratch session",
+          });
+        }
+
+        if (clientOrderId && clientOrderId !== openSession.orderId) {
+          return res.status(400).json({
+            success: false,
+            message: "Order does not match scratch session",
+          });
+        }
+
+        const orderId = openSession.orderId;
 
         // Verify order
         const order = await storage.getOrder(orderId);
@@ -7524,13 +8068,47 @@ app.post(
           });
         }
 
+        if (openSession.controlledPool && openSession.ticketId) {
+          const confirmed = await confirmControlledScratch({
+            competitionId: order.competitionId,
+            orderId,
+            userId,
+            ticketId: openSession.ticketId,
+          });
+          if (!confirmed?.handled) {
+            return res.status(500).json({ message: "Failed to complete controlled scratch session" });
+          }
+          const body = confirmed.response;
+          markScratchSessionCompleted(sessionId, {
+            userId,
+            orderId,
+            remainingCards: body.remainingCards ?? 0,
+            prize: body.prize,
+            prizeLabel: body.prizeLabel,
+          });
+          return res.json({
+            success: true,
+            prize: body.prize,
+            prizeLabel: body.prizeLabel,
+            remainingCards: body.remainingCards,
+            orderId,
+            ticketNumber: body.ticketNumber,
+            controlledPool: true,
+            creditedAtSale: true,
+            alreadyCompleted: Boolean(confirmed.alreadyCompleted),
+          });
+        }
+
+        const prizeId = openSession.prizeId;
+        const isWinner = openSession.isWinner;
+
         // Get user
         const user = await storage.getUser(userId);
         if (!user) {
           return res.status(404).json({ message: "User not found" });
         }
 
-        // Get prize details
+        // Prize outcome is bound to the server-side session from /start
         const prize = await db
           .select()
           .from(scratchCardImages)
@@ -7543,15 +8121,27 @@ app.post(
 
         const selectedPrize = prize[0];
         let prizeResponse = { type: "none", value: "0" };
+        let ticketNumber: string | null = null;
 
         // 🔒 Atomic transaction to record usage and award prize
         await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`);
+          const [usedRow] = await tx
+            .select({ count: sql<number>`count(*)` })
+            .from(scratchCardUsage)
+            .where(eq(scratchCardUsage.orderId, orderId));
+          const usedCount = Number(usedRow?.count || 0);
+          if (usedCount >= Number(order.quantity || 0)) {
+            throw new Error("No scratch cards remaining in this purchase");
+          }
+
           // Record scratch card usage
           await tx.insert(scratchCardUsage).values({
             orderId,
             userId,
             usedAt: new Date(),
           });
+          ticketNumber = await claimNextPlayTicket(tx, orderId);
 
           // Award prize if winner
           if (
@@ -7607,7 +8197,7 @@ app.post(
                 prizeDescription: "Scratch Card Prize",
                 prizeValue: `£${amount}`,
                 imageUrl: null,
-                isShowcase: false,
+                isShowcase: true,
                 createdAt: new Date(),
               });
 
@@ -7643,7 +8233,7 @@ app.post(
                 prizeDescription: "Scratch Card Prize",
                 prizeValue: `${points} Ringtones`,
                 imageUrl: null,
-                isShowcase: false,
+                isShowcase: true,
                 createdAt: new Date(),
               });
 
@@ -7658,7 +8248,7 @@ app.post(
                 prizeDescription: `Scratch Card Prize - ${selectedPrize.imageName}`,
                 prizeValue: selectedPrize.imageName,
                 imageUrl: null,
-                isShowcase: false,
+                isShowcase: true,
                 createdAt: new Date(),
               });
 
@@ -7674,15 +8264,30 @@ app.post(
         const used = await storage.getScratchCardsUsed(orderId);
         const remaining = order.quantity - used;
 
+        markScratchSessionCompleted(sessionId, {
+          userId,
+          orderId,
+          remainingCards: remaining,
+          prize: prizeResponse,
+          prizeLabel: selectedPrize.imageName || undefined,
+        });
+
         res.json({
           success: true,
           prize: prizeResponse,
           prizeLabel: selectedPrize.imageName,
           remainingCards: remaining,
+          ticketNumber,
           orderId: order.id,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error completing scratch session:", error);
+        if (error?.message === "No scratch cards remaining in this purchase") {
+          return res.status(400).json({
+            success: false,
+            message: error.message,
+          });
+        }
         res.status(500).json({ message: "Failed to complete scratch session" });
       }
     }
@@ -7702,8 +8307,13 @@ app.post(
         }
 
         const user = await storage.getUser(userId);
-        const used = await storage.getScratchCardsUsed(orderId);
-        const remaining = order.quantity - used;
+        const competition = await storage.getCompetition(order.competitionId);
+        const scratchImages = await storage.getScratchCardImages();
+        const used = Number(await storage.getScratchCardsUsed(orderId)) || 0;
+        const remaining = Math.max(0, order.quantity - used);
+        const playTickets = (await getOrderPlayTickets(orderId))
+          .map((ticket) => playTicketLabel(ticket))
+          .filter((n): n is string => Boolean(n));
         res.json({
           order: {
             id: order.id,
@@ -7722,7 +8332,10 @@ app.post(
             balance: user?.balance || "0",
             ringtonePoints: user?.ringtonePoints || 0,
           },
+          competition,
+          scratchImages,
           scratchCost: 2, // £2 per scratch
+          playTickets,
         });
       } catch (error) {
         console.error("Error fetching scratch order:", error);
@@ -7750,6 +8363,8 @@ app.post(
       const used = await storage.getPopGamesUsed(orderId);
       const remaining = order.quantity - used;
       const history = await storage.getPopGameHistory(orderId);
+      const orderTickets = await getOrderPlayTickets(orderId);
+      const historyWithTickets = attachTicketNumbersNewestFirst(history, orderTickets);
 
       res.json({
         order: {
@@ -7770,7 +8385,7 @@ app.post(
         competition: competition,
         popCost: popCost,
         playsRemaining: remaining,
-        history: history,
+        history: historyWithTickets,
       });
     } catch (error) {
       console.error("Error fetching pop order:", error);
@@ -7937,11 +8552,28 @@ app.post(
   
       // If remaining, need Cashflows
       if (remainingAmount > 0.01) {
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
+          return res.status(500).json({ message: "Failed to create payment session" });
+        }
         return res.json({
-          success: false,
-          message: "Card payment required for remaining balance",
+          success: true,
+          redirectUrl: started.redirectUrl,
+          sessionId: started.sessionId,
           remainingAmount,
-          requiresCashflows: true,
         });
       }
   
@@ -7981,16 +8613,18 @@ app.post(
           updatedAt: new Date()
         })
         .where(eq(orders.id, orderId));
-  
-      // Update competition sold tickets count
-      await db.update(competitions)
-        .set({ 
-          soldTickets: (competition.soldTickets || 0) + order.quantity,
-          updatedAt: new Date()
-        })
-        .where(eq(competitions.id, competition.id));
-  
-      // Create transaction record
+
+      const { tickets: popTickets } = await issuePlayTickets({
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        userId,
+        orderId: order.id,
+        gameType: "pop",
+        incrementSold: true,
+        makeLegacyNumber: (i) =>
+          `POP-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`,
+      });
+
       await db.insert(transactions).values({
         userId,
         type: "pop_purchase",
@@ -7999,21 +8633,6 @@ app.post(
         orderId: orderId,
         createdAt: new Date(),
       });
-  
-      // Create tickets for pop game entries
-      const popTickets = [];
-      for (let i = 0; i < order.quantity; i++) {
-        const ticketNumber = `POP-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`;
-        const [ticket] = await db.insert(tickets).values({
-          userId,
-          competitionId: order.competitionId,
-          orderId: order.id,
-          ticketNumber,
-          isWinner: false,
-          createdAt: new Date(),
-        }).returning();
-        popTickets.push(ticket);
-      }
   
       // Send confirmation email
       if (user?.email) {
@@ -8140,7 +8759,24 @@ app.post(
       }
 
       if (remainingAmount > 0.01) {
-        return res.json({ success: false, message: "Card payment required for remaining balance", remainingAmount, requiresCashflows: true });
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) {
+          return res.status(500).json({ message: "Failed to create payment session" });
+        }
+        return res.json({ success: true, redirectUrl: started.redirectUrl, sessionId: started.sessionId, remainingAmount });
       }
 
       if (walletUsed > 0) {
@@ -8162,16 +8798,18 @@ app.post(
         pointsAmount: pointsUsed.toString(), cashflowsAmount: "0", paymentBreakdown: JSON.stringify(paymentBreakdown), updatedAt: new Date()
       }).where(eq(orders.id, orderId));
 
-      await db.update(competitions).set({ soldTickets: (competition.soldTickets || 0) + order.quantity, updatedAt: new Date() }).where(eq(competitions.id, competition.id));
+      const { tickets: voltzTickets } = await issuePlayTickets({
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        userId,
+        orderId: order.id,
+        gameType: "voltz",
+        incrementSold: true,
+        makeLegacyNumber: (i) =>
+          `VLT-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`,
+      });
 
       await db.insert(transactions).values({ userId, type: "voltz_purchase", amount: totalAmount.toFixed(2), description: `Voltz Game Purchase - ${order.quantity} games`, orderId: orderId, createdAt: new Date() });
-
-      const voltzTickets = [];
-      for (let i = 0; i < order.quantity; i++) {
-        const ticketNumber = `VLT-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`;
-        const [ticket] = await db.insert(tickets).values({ userId, competitionId: order.competitionId, orderId: order.id, ticketNumber, isWinner: false, createdAt: new Date() }).returning();
-        voltzTickets.push(ticket);
-      }
 
       if (user?.email) {
         const ticketNumbers = voltzTickets.map((t) => t.ticketNumber);
@@ -8303,7 +8941,9 @@ app.post(
           .where(
             and(
               eq(transactions.userId, userId),
-              eq(transactions.type, "deposit") // Only cashflow top-ups
+              eq(transactions.type, "deposit"), // Only cashflow top-ups
+              sql`COALESCE(${transactions.paymentRef}, '') NOT LIKE 'cb_%'`,
+              sql`COALESCE(${transactions.description}, '') NOT ILIKE '%card cashback%'`,
             )
           );
 
@@ -8334,7 +8974,9 @@ app.post(
             transactions,
             and(
               eq(transactions.userId, users.id),
-              eq(transactions.type, "deposit")
+              eq(transactions.type, "deposit"),
+              sql`COALESCE(${transactions.paymentRef}, '') NOT LIKE 'cb_%'`,
+              sql`COALESCE(${transactions.description}, '') NOT ILIKE '%card cashback%'`,
             )
           )
           .groupBy(users.id);
@@ -8918,7 +9560,7 @@ app.get(
 
 // USER VERIFICATION ROUTES
  // Get verification status for current user
-app.get("/api/verification/status", isAuthenticated, async (req, res) => {
+app.get("/api/verification/status", isAuthenticated, requireFullAccount, async (req, res) => {
   try {
     const userId = req.user.id;
     
@@ -8949,6 +9591,7 @@ app.get("/api/verification/status", isAuthenticated, async (req, res) => {
 app.post(
   "/api/verification/submit",
   isAuthenticated,
+  requireFullAccount,
   verificationUpload.single("documentImage"),
   async (req: any, res) => {
     try {
@@ -9541,90 +10184,6 @@ app.get(
   }
 );
 
-app.get(
-  "/api/admin/cashflow-transactions/debug-null-ref",
-  
-  async (req, res) => {
-    try {
-      // Get ALL deposits with NULL paymentRef
-      const nullRefDeposits = await db
-        .select({
-          id: transactions.id,
-          type: transactions.type,
-          description: transactions.description,
-          paymentRef: transactions.paymentRef,
-          amount: transactions.amount,
-          createdAt: transactions.createdAt,
-        })
-        .from(transactions)
-        .where(
-          sql`${transactions.type} = 'deposit'
-          AND (${transactions.paymentRef} IS NULL 
-               OR ${transactions.paymentRef} = '' 
-               OR ${transactions.paymentRef} = 'N/A')`
-        );
-      
-      // Check which ones have "Ref" or reference pattern in description
-      const withRefInDesc = nullRefDeposits.filter(tx => {
-        const desc = tx.description || '';
-        return desc.includes('Ref') || 
-               desc.includes('ref') ||
-               desc.match(/\d{15,}/) || // Has a long number (like payment ref)
-               desc.toLowerCase().includes('cashflows');
-      });
-      
-      // Extract reference from description where possible
-      const extractedRefs = withRefInDesc.map(tx => {
-        const desc = tx.description || '';
-        // Try to extract patterns like "Ref 260621..." or "Ref 251121..."
-        const refMatch = desc.match(/Ref\s*(\d+)/i);
-        return {
-          description: desc,
-          extractedRef: refMatch ? refMatch[1] : null,
-          amount: tx.amount,
-          createdAt: tx.createdAt,
-        };
-      });
-      
-      // Group by description pattern
-      const descPatterns = {};
-      nullRefDeposits.forEach(tx => {
-        const desc = tx.description || 'N/A';
-        descPatterns[desc] = (descPatterns[desc] || 0) + 1;
-      });
-      
-      // Sort patterns by count
-      const sortedPatterns = Object.entries(descPatterns)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 30);
-      
-      // Count how many have Cashflows-like descriptions
-      const cashflowsLike = nullRefDeposits.filter(tx => 
-        (tx.description || '').toLowerCase().includes('cashflows') ||
-        (tx.description || '').toLowerCase().includes('top-up') ||
-        (tx.description || '').toLowerCase().includes('top up') ||
-        (tx.description || '').match(/Ref\s*\d{15,}/i)
-      );
-      
-      res.json({
-        totalNullRefDeposits: nullRefDeposits.length,
-        withRefInDesc: withRefInDesc.length,
-        cashflowsLikeCount: cashflowsLike.length,
-        totalAmountOfCashflowsLike: cashflowsLike.reduce((sum, tx) => sum + Math.abs(parseFloat(String(tx.amount)) || 0), 0).toFixed(2),
-        sampleCashflowsLike: cashflowsLike.slice(0, 20),
-        extractedRefs: extractedRefs.filter(r => r.extractedRef).slice(0, 20),
-        topDescriptionPatterns: sortedPatterns,
-        // What would be added to your current total
-        wouldAddToTransactions: cashflowsLike.length,
-        wouldAddToRevenue: cashflowsLike.reduce((sum, tx) => sum + Math.abs(parseFloat(String(tx.amount)) || 0), 0).toFixed(2),
-      });
-      
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  }
-);
-
   app.get("/api/user/tickets", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
@@ -9806,72 +10365,10 @@ app.get(
     }
   );
 
-  app.post("/api/wallet/topup", isAuthenticated, async (req: any, res) => {
-    try {
-      console.log("Wallet topup endpoint called - middleware passed");
-      const userId = req.user.id;
-      const { amount, direct } = req.body;
-
-      if (!amount || amount <= 0) {
-        return res.status(400).json({ message: "Invalid amount" });
-      }
-
-      // 🎯 DIRECT TOP-UP (no Stripe, just update DB)
-      if (direct) {
-        // Update user balance
-        // Update user balance using storage abstraction
-        const user = await storage.getUser(userId);
-         const oldBalance = parseFloat(user?.balance || "0");
-          const newBalance = oldBalance + parseFloat(amount);
-        await storage.updateUserBalance(userId, newBalance);
-
-        // Insert a transaction record using storage abstraction
-        await storage.createTransaction({
-          userId,
-          type: "deposit",
-          amount: amount.toString(),
-          description: `Direct top-up of £${amount}`,
-        });
-
-         // 🆕 RECORD AUDIT LOG FOR DIRECT TOP-UP
-      await db.insert(auditLogs).values({
-        userId: userId,
-        action: "wallet_topup",
-        description: `wallet top-up of £${amount}`,
-        startBalance: oldBalance,
-        endBalance: newBalance,
-        createdAt: new Date(),
-      });
-
-        return res.json({ success: true });
-      }
-
-      // 🎯 STRIPE PAYMENT FLOW
-      if (!stripe) {
-        return res.status(500).json({
-          message: "Payment processing not configured. Please contact admin.",
-        });
-      }
-
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(amount * 100), // Convert to cents
-        currency: "gbp",
-        metadata: {
-          userId,
-          type: "wallet_topup",
-        },
-      });
-
-      return res.json({ clientSecret: paymentIntent.client_secret });
-    } catch (error) {
-      console.error("Error creating wallet top-up:", error);
-      res.status(500).json({ message: "Failed to create wallet top-up" });
-    }
-  });
-
   app.post(
   "/api/wallet/topup-checkout",
   isAuthenticated,
+  requireFullAccount,
   async (req: any, res) => {
     try {
       const { amount } = req.body;
@@ -9912,6 +10409,7 @@ app.get(
         userId,
         amount: Number(amount),
         status: "pending",
+        paymentType: "wallet_topup",
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -9927,34 +10425,38 @@ app.get(
   }
 );
 
-app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => {
+app.post("/api/wallet/confirm-topup", isAuthenticated, requireFullAccount, async (req: any, res) => {
   try {
     const { paymentJobRef, paymentRef } = req.body;
     const userId = req.user.id;
 
     if (!paymentJobRef) {
       return res.status(400).json({
+        credited: false,
         message: "Missing paymentJobRef"
       });
     }
 
-    // Check if already processed
-    const existingResult = await db.execute<{
-      rows: Array<{ id: string }>
-    }>(sql`
-      SELECT id 
-      FROM transactions 
-      WHERE payment_ref = ${paymentRef ?? paymentJobRef} 
-      AND user_id = ${userId}
-      LIMIT 1
-    `);
-    
-    const existingTx = Array.isArray(existingResult) ? existingResult[0] : existingResult.rows?.[0];
+    const ref = paymentRef ?? paymentJobRef;
+
+    const [existingTx] = await db
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.paymentRef, ref), eq(transactions.userId, userId)))
+      .limit(1);
 
     if (existingTx) {
+      const creditedBack = await creditCardCashback({
+        userId,
+        cardAmount: Number(existingTx.amount) || 0,
+        paymentRef: ref,
+      });
       return res.json({
         status: "PAID",
-        message: "Payment already processed.",
+        credited: true,
+        already: true,
+        cashback: creditedBack.credited || 0,
+        message: "Wallet already updated.",
       });
     }
 
@@ -9965,47 +10467,70 @@ app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => 
 
     const { status, paidAmount } = normalizeCashflowsStatus(payment);
 
-    if (status === "PAID" && paidAmount > 0) {
-      // Find pending payment
-      const pendingResult = await db.execute<{
-        rows: Array<{ id: string; userId: string; status: string }>
-      }>(sql`
-        SELECT id, user_id as "userId", status 
-        FROM pending_payments 
-        WHERE payment_job_reference = ${paymentJobRef}
-        LIMIT 1
-      `);
-      
-      const pending = Array.isArray(pendingResult) ? pendingResult[0] : pendingResult.rows?.[0];
+    const [pending] = await db
+      .select()
+      .from(pendingPayments)
+      .where(eq(pendingPayments.paymentJobReference, paymentJobRef))
+      .limit(1);
 
+    const creditAmount = parseCashAmount(paidAmount, pending?.amount);
+
+    if (status === "FAILED") {
       if (pending && pending.status === "pending") {
-        // ✅ This will now handle referral bonus internally
-        await processWalletTopup(
-          pending.userId,
-          pending.id,
-          paymentRef ?? paymentJobRef,
-          paidAmount
-        );
-
-        return res.json({
-          status: "PAID",
-          message: "Payment received. Wallet updated.",
-        });
-      } else {
-        return res.json({
-          status: "PAID",
-          message: "Payment already processed.",
-        });
+        await db
+          .update(pendingPayments)
+          .set({ status: "failed", updatedAt: new Date() })
+          .where(eq(pendingPayments.id, pending.id));
       }
+      return res.status(402).json({
+        status: "FAILED",
+        credited: false,
+        message: "Payment failed or was cancelled.",
+      });
     }
 
-    return res.json({
+    if (status === "PAID" && creditAmount > 0) {
+      if (!pending || pending.userId !== userId) {
+        return res.status(202).json({
+          status: "PAID",
+          credited: false,
+          message: "Payment received. Wallet update is still confirming.",
+        });
+      }
+
+      const result = await processWalletTopup(
+        pending.userId,
+        pending.id,
+        ref,
+        creditAmount
+      );
+
+      if (result.credited || result.already) {
+        return res.json({
+          status: "PAID",
+          credited: true,
+          already: result.already,
+          cashback: result.cashback || 0,
+          message: "Payment received. Wallet updated.",
+        });
+      }
+
+      return res.status(202).json({
+        status: "PAID",
+        credited: false,
+        message: "Payment received. Wallet update is still confirming.",
+      });
+    }
+
+    return res.status(202).json({
       status,
-      message: "Payment not completed. Please try again manually.",
+      credited: false,
+      message: "Payment is still processing. Please wait...",
     });
   } catch (err: any) {
     console.error("Confirm top-up error:", err);
     return res.status(500).json({
+      credited: false,
       message: "Failed to confirm wallet top-up",
       error: err.message
     });
@@ -10296,6 +10821,8 @@ if (!isAdmin && userData.dailyLimitLastUpdatedAt) {
           eq(transactions.type, "deposit"), // For competition entries
           eq(transactions.type, "topup")    // For wallet top-ups
         ),
+        sql`COALESCE(${transactions.paymentRef}, '') NOT LIKE 'cb_%'`,
+        sql`COALESCE(${transactions.description}, '') NOT ILIKE '%card cashback%'`,
         gte(transactions.createdAt, startOfDay),
         lte(transactions.createdAt, endOfDay)
       )
@@ -10387,44 +10914,6 @@ if (!isAdmin && userData.dailyLimitLastUpdatedAt) {
     });
   });
 
-  // Testing only - unsuspend immediately
-  app.post("/api/wellbeing/unsuspend", async (req, res) => {
-    const { userId, secret } = req.body;
-
-    if (secret !== process.env.UNSUSPEND_SECRET) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    try {
-      await db
-        .update(users)
-        .set({
-          selfSuspended: false,
-          selfSuspensionEndsAt: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
-
-      const freshUser = await storage.getUser(userId);
-
-      res.json({
-        success: true,
-        message: "User is now unsuspended.",
-        user: {
-          id: freshUser.id,
-          email: freshUser.email,
-          firstName: freshUser.firstName,
-          lastName: freshUser.lastName,
-          selfSuspended: freshUser.selfSuspended,
-          selfSuspensionEndsAt: freshUser.selfSuspensionEndsAt,
-        },
-      });
-    } catch (err) {
-      console.error("Unsuspend error:", err);
-      res.status(500).json({ success: false, message: "Failed to unsuspend" });
-    }
-  });
-
   app.post(
     "/api/wellbeing/close-account",
     isAuthenticated,
@@ -10477,35 +10966,6 @@ if (!isAdmin && userData.dailyLimitLastUpdatedAt) {
     }
   );
 
-  app.post("/api/wellbeing/undo-close-account", async (req, res) => {
-    const { userId, secret } = req.body;
-
-    if (secret !== process.env.UNDO_CLOSE_SECRET) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    try {
-      await db
-        .update(users)
-        .set({
-          disabled: false,
-          disabledAt: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
-
-      res.json({
-        success: true,
-        message: "Account re-enabled for testing.",
-      });
-    } catch (err) {
-      console.error("Undo account closure error:", err);
-      res
-        .status(500)
-        .json({ success: false, message: "Failed to re-enable account" });
-    }
-  });
-
   // ================================================================================
 // RINGTONE PLINKO GAME ROUTES - MAIN GAME ENDPOINTS
 // ================================================================================
@@ -10552,6 +11012,7 @@ app.post("/api/create-plinko-order", isAuthenticated, async (req: any, res) => {
     if (!competition || competition.type !== "plinko") {
       return res.status(404).json({ message: "Plinko competition not found" });
     }
+    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
     const ticketPrice = parseFloat(competition.ticketPrice);
     
@@ -10657,6 +11118,20 @@ app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
     if (!order || order.userId !== userId || order.status !== "completed") {
       return res.status(400).json({ success: false, message: "No valid Plinko game purchase found" });
     }
+
+    const controlledPlinko = await tryRevealControlledPlinko({
+      competitionId,
+      orderId,
+      userId,
+    });
+    if (controlledPlinko?.handled) {
+      if (controlledPlinko.noTickets) {
+        return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
+      }
+      plinkoCooldowns.set(cooldownKey, now);
+      return res.json(controlledPlinko.response);
+    }
+
     if (!user) return res.status(404).json({ message: "User not found" });
     if (!config.isActive) {
       return res.status(400).json({ success: false, message: "Ringtone Plinko is currently unavailable" });
@@ -10838,9 +11313,9 @@ app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
         userId, competitionId,
         prizeDescription: `Plinko: ${prizeName}`,
         prizeValue: displayPrizeValue,
-        prizeType: rewardType,
+        isShowcase: true,
         createdAt: new Date(), updatedAt: new Date()
-      }).catch(e => console.error(e));
+      }).then(() => notifyPublicWinnerUpdate(competitionId)).catch(e => console.error(e));
     }
 
     // 10. Random Free Replay (configurable chance)
@@ -10908,6 +11383,16 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
         success: false, 
         message: "No valid Plinko game purchase found" 
       });
+    }
+
+    const controlledRevealPlinko = await revealAllControlledPlinko({
+      competitionId,
+      orderId,
+      userId,
+      count,
+    });
+    if (controlledRevealPlinko?.handled) {
+      return res.json(controlledRevealPlinko.response);
     }
 
     const playsUsed = await db.select({ count: sql<number>`count(*)` })
@@ -10994,7 +11479,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
               userId, competitionId,
               prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
               prizeValue: `£${prizeValue}`,
-              prizeType: 'cash',
+              isShowcase: true,
               createdAt: new Date(), updatedAt: new Date()
             });
 
@@ -11005,7 +11490,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
               userId, competitionId,
               prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
               prizeValue: `${prizeValue} Points`,
-              prizeType: 'points',
+              isShowcase: true,
               createdAt: new Date(), updatedAt: new Date()
             });
 
@@ -11014,7 +11499,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
               userId, competitionId,
               prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
               prizeValue: selectedPrize.prizeName,
-              prizeType: 'physical',
+              isShowcase: true,
               createdAt: new Date(), updatedAt: new Date()
             });
           }
@@ -11128,7 +11613,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       processed: playsToProcess,
-      results,
+      results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints,
       totalFreePlays,
@@ -11172,11 +11657,14 @@ app.get("/api/plinko-order/:orderId", isAuthenticated, async (req: any, res) => 
     const usedCount = Number(playsUsed[0]?.count || 0);
 
     // Get play history
-    const history = await db
-      .select()
-      .from(plinkoWins)
-      .where(eq(plinkoWins.orderId, orderId))
-      .orderBy(desc(plinkoWins.wonAt));
+    const history = attachTicketNumbersNewestFirst(
+      await db
+        .select()
+        .from(plinkoWins)
+        .where(eq(plinkoWins.orderId, orderId))
+        .orderBy(desc(plinkoWins.wonAt)),
+      await getOrderPlayTickets(orderId),
+    );
 
     res.json({
       success: true,
@@ -11374,11 +11862,28 @@ app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) =
 
     // If remaining, need Cashflows
     if (remainingAmount > 0.01) {
+      const started = await beginReservedCardCheckout({
+        userId,
+        orderId,
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        cardAmount: remainingAmount,
+        walletAmount: walletUsed,
+        pointsAmount: pointsUsed,
+        gameType: competition?.type || "competition",
+        paymentBreakdown,
+        firstName: user?.firstName,
+        lastName: user?.lastName,
+        email: user?.email,
+      });
+      if (!started.ok) {
+        return res.status(500).json({ message: "Failed to create payment session" });
+      }
       return res.json({
-        success: false,
-        message: "Card payment required for remaining balance",
+        success: true,
+        redirectUrl: started.redirectUrl,
+        sessionId: started.sessionId,
         remainingAmount,
-        requiresCashflows: true,
       });
     }
 
@@ -11429,30 +11934,18 @@ app.post("/api/process-plinko-payment", isAuthenticated, async (req: any, res) =
       createdAt: new Date(),
     });
 
-    // Update competition sold tickets count
-    const newSoldTickets = (competition.soldTickets || 0) + order.quantity;
-    
-    await db.update(competitions)
-      .set({ 
-        soldTickets: newSoldTickets,
-        updatedAt: new Date()
-      })
-      .where(eq(competitions.id, competition.id));
+    const { tickets: plinkoTickets } = await issuePlayTickets({
+      competitionId: order.competitionId,
+      quantity: order.quantity,
+      userId,
+      orderId: order.id,
+      gameType: "plinko",
+      incrementSold: true,
+      makeLegacyNumber: (i) =>
+        `PLINKO-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`,
+    });
 
-    // Create tickets for plinko game entries
-    const plinkoTickets = [];
-    for (let i = 0; i < order.quantity; i++) {
-      const ticketNumber = `PLINKO-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, '0')}`;
-      const [ticket] = await db.insert(tickets).values({
-        userId,
-        competitionId: order.competitionId,
-        orderId: order.id,
-        ticketNumber,
-        isWinner: false,
-        createdAt: new Date(),
-      }).returning();
-      plinkoTickets.push(ticket);
-    }
+    const newSoldTickets = (competition.soldTickets || 0) + order.quantity;
 
     res.json({
       success: true,
@@ -11533,6 +12026,16 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
         success: false,
         message: "No valid Plinko game purchase found",
       });
+    }
+
+    const controlledRevealPlinko2 = await revealAllControlledPlinko({
+      competitionId,
+      orderId,
+      userId,
+      count: req.body.count || order.quantity,
+    });
+    if (controlledRevealPlinko2?.handled) {
+      return res.json(controlledRevealPlinko2.response);
     }
 
     // Get user
@@ -11642,12 +12145,25 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
 
       // Record win in main winners table for admin visibility
       if (isWin && selectedPrize.rewardType !== "try_again") {
+        let displayPrizeValue = prizeValue.toString();
+        if (selectedPrize.rewardType === "cash") {
+          displayPrizeValue = `£${prizeValue}`;
+        } else if (selectedPrize.rewardType === "points") {
+          displayPrizeValue = `${prizeValue} Points`;
+        } else if (selectedPrize.rewardType === "physical") {
+          displayPrizeValue = selectedPrize.prizeName;
+        }
+
         await db.insert(winners).values({
           userId,
           competitionId,
           prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
-          prizeValue: prizeValue.toString(),
+          prizeValue: displayPrizeValue,
+          isShowcase: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         });
+        notifyPublicWinnerUpdate(competitionId);
       }
 
       // Check for free replay
@@ -11719,7 +12235,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
 
     res.json({
       success: true,
-      results,
+      results: await labelRevealAllResultTickets(orderId, results),
       totalCashWon,
       totalPointsWon,
       freeReplaysGranted,
@@ -12630,41 +13146,6 @@ app.delete(
   }
 );
 
-  app.post("/api/seed-competitions", async (req, res) => {
-    try {
-      const competitions = req.body;
-      for (const comp of competitions) {
-        await storage.createCompetition(comp);
-      }
-      res.json({ message: "Sample competitions created successfully" });
-    } catch (error) {
-      console.error("Error seeding competitions:", error);
-      res.status(500).json({ message: "Failed to seed competitions" });
-    }
-  });
-
-  app.delete("/api/delete", async (req, res) => {
-    try {
-      console.log("🗑️ Deleting all competitions...");
-      await db.delete(transactions).execute();
-      // 1. Delete tickets linked to competitions
-      await db.delete(tickets).execute();
-      // 2. Delete orders linked to competitions
-      await db.delete(orders).execute();
-      const result = await db.delete(competitions).execute();
-      console.log("✅ Delete result:", result);
-      res.status(200).json({ message: "all competitions deleted" });
-    } catch (error) {
-      console.error("❌ Delete failed:", error);
-      res.status(500).json({ message: "Failed to delete competitions" });
-    }
-  });
-
-  app.delete("/api/test-delete", (req, res) => {
-    res.json({ message: "Delete route works!" });
-  });
-
-  // Admin routes would go here (protected by isAdmin middleware)
   // Admin Routes
 
   // Get admin dashboard stats
@@ -13302,12 +13783,21 @@ app.get(
     isAdmin,
     async (req: any, res) => {
       try {
-        const data = req.body;
+        const data = { ...req.body };
+        delete data.startDate;
+        delete data.createdAt;
+        delete data.created_at;
+        delete data.id;
+
+        if (!data.endDate) {
+          data.endDate = null;
+        } else {
+          const parsedEnd = new Date(data.endDate);
+          data.endDate = Number.isNaN(parsedEnd.getTime()) ? null : parsedEnd;
+        }
 
         const competition = await storage.createCompetition({
           ...data,
-          startDate: new Date(data.startDate),
-          endDate: new Date(data.endDate),
           isActive: true,
         });
 
@@ -13389,18 +13879,23 @@ app.get(
         // sanitize timestamps as before...
         sanitizeTimestamps(formattedUpdateData);
 
-        // 2️⃣ Delete old image if a new one is uploaded
-        if (
-          formattedUpdateData.imageUrl &&
-          oldCompetition.imageUrl &&
-          oldCompetition.imageUrl !== formattedUpdateData.imageUrl
-        ) {
-          // extract key from old URL
-          const oldKey = oldCompetition.imageUrl.replace(
-            `${process.env.R2_PUBLIC_URL}/`,
-            ""
-          );
-          await deleteR2Object(oldKey);
+        // 2️⃣ Delete old pictures if a new one is uploaded for that slot
+        const imageSlots = [
+          "imageUrl",
+          "featuredImageUrl",
+          "cardImageUrl",
+          "pageImageUrl",
+        ] as const;
+        for (const slot of imageSlots) {
+          const nextUrl = formattedUpdateData[slot];
+          const prevUrl = oldCompetition[slot];
+          if (nextUrl && prevUrl && nextUrl !== prevUrl) {
+            const oldKey = String(prevUrl).replace(
+              `${process.env.R2_PUBLIC_URL}/`,
+              "",
+            );
+            await deleteR2Object(oldKey);
+          }
         }
 
         const [updatedCompetition] = await db
@@ -13450,6 +13945,86 @@ app.get(
       } catch (error) {
         console.error("Error updating display order:", error);
         res.status(500).json({ message: "Failed to update display order" });
+      }
+    }
+  );
+
+  // Homepage featured slider order (null = not featured)
+  app.patch(
+    "/api/admin/competitions/:id/featured-order",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const raw = req.body?.featuredOrder;
+        const featuredOrder =
+          raw === null || raw === "" || raw === undefined
+            ? null
+            : Number(raw);
+
+        if (featuredOrder !== null && (!Number.isInteger(featuredOrder) || featuredOrder < 1)) {
+          return res.status(400).json({ message: "Featured order must be a positive integer or empty" });
+        }
+
+        if (featuredOrder !== null) {
+          await db
+            .update(competitions)
+            .set({ featuredOrder: null, updatedAt: new Date() })
+            .where(eq(competitions.featuredOrder, featuredOrder));
+        }
+
+        const [updatedCompetition] = await db
+          .update(competitions)
+          .set({
+            featuredOrder,
+            updatedAt: new Date(),
+          })
+          .where(eq(competitions.id, id))
+          .returning();
+
+        if (!updatedCompetition) {
+          return res.status(404).json({ message: "Competition not found" });
+        }
+
+        res.json(updatedCompetition);
+      } catch (error) {
+        console.error("Error updating featured order:", error);
+        res.status(500).json({ message: "Failed to update featured order" });
+      }
+    }
+  );
+
+  app.patch(
+    "/api/admin/competitions/:id/default-quantity",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const raw = Number(req.body?.defaultQuantity);
+        const defaultQuantity = Number.isInteger(raw) ? raw : NaN;
+        if (!Number.isInteger(defaultQuantity) || defaultQuantity < 1 || defaultQuantity > 500) {
+          return res.status(400).json({ message: "Default quantity must be a whole number from 1 to 500" });
+        }
+
+        const [updatedCompetition] = await db
+          .update(competitions)
+          .set({
+            defaultQuantity,
+            updatedAt: new Date(),
+          })
+          .where(eq(competitions.id, id))
+          .returning();
+
+        if (!updatedCompetition) {
+          return res.status(404).json({ message: "Competition not found" });
+        }
+
+        res.json(updatedCompetition);
+      } catch (error) {
+        console.error("Error updating default quantity:", error);
+        res.status(500).json({ message: "Failed to update default quantity" });
       }
     }
   );
@@ -13587,6 +14162,12 @@ app.patch(
       const competition = existing[0];
       if (!competition) {
         return res.status(404).json({ message: "Competition not found" });
+      }
+
+      if (competition.instantWinMode === "controlled_pool" && soldTickets !== undefined) {
+        return res.status(400).json({
+          message: "Sold tickets cannot be edited on controlled pool competitions",
+        });
       }
 
       // Check if competition is active and not archived
@@ -13744,6 +14325,9 @@ app.patch(
             competitionId: competition.id,
             prizeDescription: `Winner of ${competition.title}`,
             prizeValue: competition.ticketPrice,
+            isShowcase: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
           })
           .returning();
 
@@ -13769,11 +14353,58 @@ app.patch(
 
   // Game Spin Wheel Configuration Routes
 
+  const sanitizeSpinSegmentsForPublic = (segments: any[] = []) =>
+    segments.map(({ probability, currentWins, ...segment }) => segment);
+
+  // Public spin wheel config (wheel 1) — no probabilities or win stats
+  app.get("/api/spin-config", async (_req, res) => {
+    try {
+      const { gameSpinConfig } = await import("@shared/schema");
+      const [config] = await db
+        .select()
+        .from(gameSpinConfig)
+        .where(eq(gameSpinConfig.id, "active"));
+
+      if (!config) return res.json(DEFAULT_SPIN_WHEEL_CONFIG);
+
+      res.json({
+        ...config,
+        segments: sanitizeSpinSegmentsForPublic(config.segments || []),
+      });
+    } catch (error) {
+      console.error("Error fetching public spin config:", error);
+      res.status(500).json({ message: "Failed to fetch spin configuration" });
+    }
+  });
+
+  // Public spin wheel config (wheel 2) — no probabilities or win stats
+  app.get("/api/spin-2-config", async (_req, res) => {
+    try {
+      const { spinWheel2Configs } = await import("@shared/schema");
+      const [config] = await db
+        .select()
+        .from(spinWheel2Configs)
+        .where(eq(spinWheel2Configs.id, "active"));
+
+      if (!config) return res.json(DEFAULT_SPIN_WHEEL_2_CONFIG);
+
+      res.json({
+        ...config,
+        isVisible: config?.isVisible ?? true,
+        segments: sanitizeSpinSegmentsForPublic(config.segments || []),
+      });
+    } catch (error) {
+      console.error("Error fetching public spin 2 config:", error);
+      res.status(500).json({ message: "Failed to fetch spin configuration" });
+    }
+  });
+
   // Update the existing game-spin-config endpoint
 // --- Wheel 1 config ---
 app.get(
   "/api/admin/game-spin-config",
   isAuthenticated,
+  isAdmin,
   async (req: any, res) => {
     try {
       const { gameSpinConfig, spinWins } = await import("@shared/schema");
@@ -13893,6 +14524,7 @@ app.put(
 app.get(
   "/api/admin/game-spin-2-config",
   isAuthenticated,
+  isAdmin,
   async (req: any, res) => {
     try {
       const { spinWheel2Configs, spinWins } = await import("@shared/schema");
@@ -14066,6 +14698,7 @@ app.post(
   app.get(
     "/api/admin/test-spin-wins",
     isAuthenticated,
+    isAdmin,
     async (req: any, res) => {
       try {
         const spinWinsData = await db
@@ -14092,10 +14725,30 @@ app.post(
     }
   );
 
+  // Public scratch card visibility
+  app.get("/api/scratch-config", async (_req, res) => {
+    try {
+      const { gameScratchConfig } = await import("@shared/schema");
+      const [config] = await db
+        .select()
+        .from(gameScratchConfig)
+        .where(eq(gameScratchConfig.id, "active"));
+
+      res.json({
+        isVisible: config?.isVisible ?? true,
+        isActive: config?.isActive ?? true,
+      });
+    } catch (error) {
+      console.error("Error fetching scratch config:", error);
+      res.status(500).json({ message: "Failed to fetch scratch configuration" });
+    }
+  });
+
   // Game Scratch Card Configuration Routes
   app.get(
     "/api/admin/game-scratch-config",
     isAuthenticated,
+    isAdmin,
     async (req: any, res) => {
       try {
         const { gameScratchConfig } = await import("@shared/schema");
@@ -14183,6 +14836,7 @@ app.post(
   app.get(
     "/api/admin/game-pop-config",
     isAuthenticated,
+    isAdmin,
     async (req: any, res) => {
       try {
         const [config] = await db
@@ -14488,34 +15142,10 @@ const popCooldowns = new Map<string, number>();
 
 app.post("/api/play-pop", async (req: any, res) => {
   try {
-    // ============================================
-    // 1. DETERMINE IF AUTHENTICATED OR GUEST
-    // ============================================
-    // This route supports both logged-in and guest play, so it cannot use
-    // isAuthenticated middleware. Load the session user when present.
-    if (!req.user && req.session?.userId) {
-      req.user = await storage.getUser(req.session.userId);
-    }
+    await loadSessionUser(req);
 
     const userId = req.user?.id;
-    const { 
-      orderId, 
-      competitionId,
-      isGuest = false,
-      guestEmail,
-      guestName,
-      guestPhone
-    } = req.body;
-
-    // Prefer explicit guest flag; otherwise use session user when available
-    const isGuestMode = Boolean(isGuest) || !userId;
-
-    if (!isGuestMode && !userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required",
-      });
-    }
+    const { orderId, competitionId } = req.body;
 
     if (!orderId || !competitionId) {
       return res.status(400).json({
@@ -14524,11 +15154,52 @@ app.post("/api/play-pop", async (req: any, res) => {
       });
     }
 
+    const [guestOrderRecord] = await db
+      .select()
+      .from(guestOrders)
+      .where(eq(guestOrders.id, orderId))
+      .limit(1);
+
+    let isGuestMode: boolean;
+    if (guestOrderRecord) {
+      if (!verifyGuestOrderAccess(req, guestOrderRecord)) {
+        return res.status(403).json({
+          success: false,
+          message: "Not authorized to play this guest order",
+        });
+      }
+      isGuestMode = true;
+    } else if (userId && !req.user?.isGuestAccount) {
+      isGuestMode = false;
+    } else if (userId && req.user?.isGuestAccount) {
+      const authOrder = await storage.getOrder(orderId);
+      if (authOrder?.userId === userId && authOrder.status === "completed") {
+        isGuestMode = false;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "No valid pop game purchase found",
+        });
+      }
+    } else {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    if (!isGuestMode && !userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
     // ============================================
     // 2. COOLDOWN CHECK
     // ============================================
-    const cooldownKey = isGuestMode 
-      ? `guest-${guestEmail || 'unknown'}-${orderId}`
+    const cooldownKey = isGuestMode
+      ? `guest-${guestOrderRecord?.guestEmail || "unknown"}-${orderId}`
       : `${userId}-${orderId}`;
     
     const lastPlayTime = popCooldowns.get(cooldownKey) || 0;
@@ -14553,18 +15224,28 @@ app.post("/api/play-pop", async (req: any, res) => {
     let nextTicket: any = null;
 
     if (isGuestMode) {
-      // --- GUEST MODE: Get from guest tables ---
-      [guestOrder] = await db
-        .select()
-        .from(guestOrders)
-        .where(eq(guestOrders.id, orderId))
-        .where(eq(guestOrders.status, "completed"));
-
-      if (!guestOrder) {
+      guestOrder = guestOrderRecord;
+      if (!guestOrder || guestOrder.status !== "completed") {
         return res.status(400).json({
           success: false,
           message: "No valid pop game purchase found",
         });
+      }
+
+      const controlledGuestPop = await tryRevealControlledPop({
+        competitionId,
+        orderId,
+        isGuest: true,
+        guestOrder,
+      });
+      if (controlledGuestPop?.handled) {
+        if (controlledGuestPop.noTickets) {
+          return res.status(400).json({
+            success: false,
+            message: "No plays remaining in this purchase",
+          });
+        }
+        return res.json(controlledGuestPop.response);
       }
 
       // Get guest tickets
@@ -14619,6 +15300,22 @@ app.post("/api/play-pop", async (req: any, res) => {
           success: false,
           message: "No valid pop game purchase found",
         });
+      }
+
+      const controlledPop = await tryRevealControlledPop({
+        competitionId,
+        orderId,
+        userId,
+        isGuest: false,
+      });
+      if (controlledPop?.handled) {
+        if (controlledPop.noTickets) {
+          return res.status(400).json({
+            success: false,
+            message: "No plays remaining in this purchase",
+          });
+        }
+        return res.json(controlledPop.response);
       }
 
       // Check remaining plays
@@ -14971,7 +15668,7 @@ app.post("/api/play-pop", async (req: any, res) => {
           prizeDescription: prizeDescriptionText,
           prizeValue: prizeValueText,
           imageUrl: selectedSegment.imageUrl || null,
-          isShowcase: false,
+          isShowcase: true,
           createdAt: new Date(),
           updatedAt: new Date(),
         });
@@ -15157,6 +15854,16 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
         success: false,
         message: "No valid pop game purchase found",
       });
+    }
+
+    const controlledReveal = await revealAllControlledPop({
+      competitionId,
+      orderId,
+      userId,
+      count,
+    });
+    if (controlledReveal?.handled) {
+      return res.json(controlledReveal.response);
     }
 
     // Check remaining plays
@@ -15365,7 +16072,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
             prizeDescription: prizeDescriptionText,
             prizeValue: prizeValueText,
             imageUrl: selectedSegment.imageUrl || null,
-            isShowcase: false,
+            isShowcase: true,
             createdAt: new Date(),
             updatedAt: new Date(),
           });
@@ -15485,7 +16192,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       processed: playsToProcess,
-      results,
+      results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints: totalPoints,
       freeReplaysWon,
@@ -15716,81 +16423,133 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
   
       try {
         await db.transaction(async (tx) => {
-          // 🔍 Check user exists
           const user = await tx.query.users.findFirst({
             where: eq(users.id, id),
           });
-  
+
           if (!user) {
             throw new Error("USER_NOT_FOUND");
           }
-          
-           await tx
-          .delete(userIpLogs)
-          .where(eq(userIpLogs.userId, id));
 
+          await tx.delete(userIpLogs).where(eq(userIpLogs.userId, id));
+          await tx.delete(redeemCodeRedemptions).where(eq(redeemCodeRedemptions.userId, id));
+          await tx
+            .update(redeemCodes)
+            .set({ usedByUserId: null })
+            .where(eq(redeemCodes.usedByUserId, id));
+          await tx
+            .update(redeemCodes)
+            .set({ createdBy: null })
+            .where(eq(redeemCodes.createdBy, id));
+          await tx
+            .update(withdrawalRequests)
+            .set({ processedBy: null })
+            .where(eq(withdrawalRequests.processedBy, id));
+          await tx
+            .update(userVerifications)
+            .set({ reviewedBy: null })
+            .where(eq(userVerifications.reviewedBy, id));
+          await tx
+            .update(ipBlocklist)
+            .set({ blockedBy: null })
+            .where(eq(ipBlocklist.blockedBy, id));
+          await tx
+            .update(pushNotifications)
+            .set({ createdBy: null })
+            .where(eq(pushNotifications.createdBy, id));
+          await tx.delete(securityAuditLog).where(eq(securityAuditLog.userId, id));
+          await tx.delete(pushDeliveries).where(eq(pushDeliveries.userId, id));
+          await tx.delete(savedBankAccounts).where(eq(savedBankAccounts.userId, id));
+          await tx.delete(userVerifications).where(eq(userVerifications.userId, id));
 
-           await tx
-          .delete(redeemCodeRedemptions)
-          .where(eq(redeemCodeRedemptions.userId, id));
-
-           await tx
-          .update(redeemCodes)
-          .set({ usedByUserId: null })
-          .where(eq(redeemCodes.usedByUserId, id));
-
-          // 1️⃣ Get all order IDs for this user
           const ordersList = await tx
             .select({ id: orders.id })
             .from(orders)
             .where(eq(orders.userId, id));
-  
           const orderIds = ordersList.map((o) => o.id);
-  
-          // 2️⃣ Delete ALL order-dependent tables FIRST
+
           if (orderIds.length > 0) {
-            await tx
-              .delete(spinUsage)
-              .where(inArray(spinUsage.orderId, orderIds));
-  
-            await tx
-              .delete(scratchCardUsage)
-              .where(inArray(scratchCardUsage.orderId, orderIds));
-  
-            await tx
-              .delete(popUsage)
-              .where(inArray(popUsage.orderId, orderIds));
-  
-            await tx
-              .delete(popWins)
-              .where(inArray(popWins.orderId, orderIds));
-  
-            await tx
-              .delete(transactions)
-              .where(inArray(transactions.orderId, orderIds));
+            await tx.delete(spinUsage).where(inArray(spinUsage.orderId, orderIds));
+            await tx.delete(scratchCardUsage).where(inArray(scratchCardUsage.orderId, orderIds));
+            await tx.delete(popUsage).where(inArray(popUsage.orderId, orderIds));
+            await tx.delete(popWins).where(inArray(popWins.orderId, orderIds));
+            await tx.delete(plinkoUsage).where(inArray(plinkoUsage.orderId, orderIds));
+            await tx.delete(plinkoWins).where(inArray(plinkoWins.orderId, orderIds));
+            await tx.delete(voltzUsage).where(inArray(voltzUsage.orderId, orderIds));
+            await tx.delete(voltzWins).where(inArray(voltzWins.orderId, orderIds));
+            await tx.delete(slotUsage).where(inArray(slotUsage.orderId, orderIds));
+            await tx.delete(royalUsage).where(inArray(royalUsage.orderId, orderIds));
+            await tx.delete(royalWins).where(inArray(royalWins.orderId, orderIds));
+            await tx.delete(discountCodeUsages).where(inArray(discountCodeUsages.orderId, orderIds));
+            await tx.delete(tickets).where(inArray(tickets.orderId, orderIds));
           }
 
-          
-          // 🔹 Delete all transactions for this user
-          await tx.delete(transactions).where(eq(transactions.userId, id));
-
-          // 3️⃣ Delete tickets (user-owned)
+          await tx.delete(spinUsage).where(eq(spinUsage.userId, id));
+          await tx.delete(scratchCardUsage).where(eq(scratchCardUsage.userId, id));
+          await tx.delete(popUsage).where(eq(popUsage.userId, id));
+          await tx.delete(plinkoUsage).where(eq(plinkoUsage.userId, id));
+          await tx.delete(voltzUsage).where(eq(voltzUsage.userId, id));
+          await tx.delete(slotUsage).where(eq(slotUsage.userId, id));
+          await tx.delete(royalUsage).where(eq(royalUsage.userId, id));
+          await tx.delete(discountCodeUsages).where(eq(discountCodeUsages.userId, id));
+          await tx.delete(spinWins).where(eq(spinWins.userId, id));
+          await tx.delete(scratchCardWins).where(eq(scratchCardWins.userId, id));
+          await tx.delete(popWins).where(eq(popWins.userId, id));
+          await tx.delete(plinkoWins).where(eq(plinkoWins.userId, id));
+          await tx.delete(voltzWins).where(eq(voltzWins.userId, id));
+          await tx.delete(royalWins).where(eq(royalWins.userId, id));
           await tx.delete(tickets).where(eq(tickets.userId, id));
-  
-          // 4️⃣ Delete orders
+          await tx.delete(withdrawalRequests).where(eq(withdrawalRequests.userId, id));
+          await tx.delete(wellbeingRequests).where(eq(wellbeingRequests.userId, id));
+          await tx.delete(campaignEmails).where(eq(campaignEmails.userId, id));
+          await tx.delete(winners).where(eq(winners.userId, id));
+          await tx.delete(auditLogs).where(eq(auditLogs.userId, id));
+
+          const pendingRows = await tx
+            .select({ id: pendingPayments.id })
+            .from(pendingPayments)
+            .where(
+              orderIds.length > 0
+                ? or(eq(pendingPayments.userId, id), inArray(pendingPayments.orderId, orderIds))
+                : eq(pendingPayments.userId, id),
+            );
+          const pendingIds = pendingRows.map((row) => row.id);
+
+          await tx.delete(transactions).where(eq(transactions.userId, id));
+          if (pendingIds.length > 0) {
+            await tx.delete(transactions).where(inArray(transactions.pendingPaymentId, pendingIds));
+          }
+          if (orderIds.length > 0) {
+            await tx.delete(transactions).where(inArray(transactions.orderId, orderIds));
+          }
+          if (pendingIds.length > 0) {
+            await tx.delete(pendingPayments).where(inArray(pendingPayments.id, pendingIds));
+          }
+          await tx.delete(pendingPayments).where(eq(pendingPayments.userId, id));
+
+          const userTickets = await tx
+            .select({ id: supportTickets.id })
+            .from(supportTickets)
+            .where(eq(supportTickets.userId, id));
+          const ticketIds = userTickets.map((row) => row.id);
+          if (ticketIds.length > 0) {
+            await tx.delete(supportMessages).where(inArray(supportMessages.ticketId, ticketIds));
+            await tx.delete(supportTickets).where(inArray(supportTickets.id, ticketIds));
+          }
+
+          if (user.email) {
+            await tx.delete(passwordResetTokens).where(eq(passwordResetTokens.email, user.email));
+          }
+
           if (orderIds.length > 0) {
             await tx.delete(orders).where(inArray(orders.id, orderIds));
           }
-          // 🔹 Delete winners linked to this user
-          await tx.delete(winners).where(eq(winners.userId, id));
 
-          // 5️⃣ Remove this user as referrer
           await tx
             .update(users)
             .set({ referredBy: null })
             .where(eq(users.referredBy, id));
-  
-          // 6️⃣ Finally delete user
+
           await tx.delete(users).where(eq(users.id, id));
         });
   
@@ -16408,7 +17167,29 @@ app.get(
     async (req: any, res) => {
       try {
         const { id } = req.params;
-        const updateData = req.body;
+        const body = req.body ?? {};
+
+        const allowedFields = [
+          "email",
+          "firstName",
+          "lastName",
+          "phoneNumber",
+          "balance",
+          "ringtonePoints",
+          "notes",
+          "isAdmin",
+        ] as const;
+
+        const updateData: Record<string, unknown> = {};
+        for (const field of allowedFields) {
+          if (Object.prototype.hasOwnProperty.call(body, field)) {
+            updateData[field] = body[field];
+          }
+        }
+
+        if (Object.keys(updateData).length === 0) {
+          return res.status(400).json({ message: "No valid fields to update" });
+        }
 
         const [updatedUser] = await db
           .update(users)
@@ -16801,11 +17582,26 @@ app.get("/api/public/max-tickets", async (req, res) => {
     }
   );
 
-  // Scratch card image configuration endpoints
-  // GET endpoint is accessible to all authenticated users (they need to see the cards to play)
+  // Public scratch card images (display/checkout only — no weights or win stats)
+  app.get("/api/scratch-images", async (_req, res) => {
+    try {
+      const images = await storage.getScratchCardImages();
+      res.json(
+        images
+          .filter((image) => image.isActive !== false)
+          .map(({ weight, maxWins, quantityWon, ...image }) => image)
+      );
+    } catch (error) {
+      console.error("Error fetching scratch card images:", error);
+      res.status(500).json({ message: "Failed to fetch scratch card images" });
+    }
+  });
+
+  // Scratch card image configuration endpoints (admin)
   app.get(
     "/api/admin/scratch-images",
     isAuthenticated,
+    isAdmin,
     async (req: any, res) => {
       try {
         const images = await storage.getScratchCardImages();
@@ -17710,6 +18506,17 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ success: false, message: "No valid Voltz game purchase found" });
     }
 
+    const controlledVoltz = await peekControlledVoltz({
+      competitionId,
+      orderId,
+    });
+    if (controlledVoltz?.handled) {
+      if (controlledVoltz.noTickets) {
+        return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
+      }
+      return res.json(controlledVoltz.response);
+    }
+
     const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
     const usedCount = Number(playsUsed[0]?.count || 0);
     const playsRemaining = order.quantity - usedCount;
@@ -17865,18 +18672,8 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
     }
 
     // --- GET ALL PRIZE DISPLAY VALUES FOR THE SWITCHES ---
-    const getPrizeDisplay = (p: typeof prizes[0]) => {
-      if (p.rewardType === "cash") return `£${parseFloat(p.prizeValue || "0").toFixed(2)}`;
-      if (p.rewardType === "points") return `${Math.floor(parseFloat(p.prizeValue || "0"))} PTS`;
-      if (p.rewardType === "physical") {
-        const prizeName = p.prizeName || "Prize";
-        if (prizeName.length > 12) {
-          return prizeName.substring(0, 10) + "…";
-        }
-        return prizeName;
-      }
-      return "REPLAY";
-    };
+    const getPrizeDisplay = (p: typeof prizes[0]) =>
+      formatVoltzSwitchLabel(p.rewardType, p.prizeValue, p.prizeName);
 
     const shuffleArray = <T,>(arr: T[]): T[] => {
       for (let i = arr.length - 1; i > 0; i--) {
@@ -17919,27 +18716,31 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
     }
 
     // --- RETURN IMMEDIATE RESULT (NO CONFIRMATION NEEDED) ---
+    const resultPayload: Record<string, unknown> = {
+      outcome,
+      isWin,
+      isFreeReplay,
+      rewardType: rewardType,
+      rewardValue: rewardValue,
+      prizeName: selectedPrize?.prizeName || null,
+      prizeId: selectedPrize?.id || null,
+      isPhysical: rewardType === "physical",
+      switchTexts,
+    };
+
+    if (process.env.NODE_ENV !== "production") {
+      resultPayload._debug = {
+        winProbability,
+        winRoll,
+        isWinner,
+        totalWeight: prizes.reduce((sum, p) => sum + p.weight, 0),
+        selectedWeight: selectedPrize?.weight || 0,
+      };
+    }
+
     res.json({
       success: true,
-      result: { 
-        outcome, 
-        isWin, 
-        isFreeReplay, 
-        rewardType: rewardType, 
-        rewardValue: rewardValue,
-        prizeName: selectedPrize?.prizeName || null,
-        prizeId: selectedPrize?.id || null,
-        isPhysical: rewardType === "physical",
-        switchTexts,
-        // Debug info - remove in production
-        _debug: {
-          winProbability,
-          winRoll,
-          isWinner,
-          totalWeight: prizes.reduce((sum, p) => sum + p.weight, 0),
-          selectedWeight: selectedPrize?.weight || 0,
-        }
-      },
+      result: resultPayload,
       playsRemaining: playsRemaining - 1,
       // Note: Free replay will add a play in the confirmation step
     });
@@ -17961,6 +18762,17 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
     const order = await storage.getOrder(orderId);
     if (!order || order.userId !== userId) {
       return res.status(400).json({ success: false, message: "Order not found" });
+    }
+
+    const controlledConfirm = await confirmControlledVoltz({
+      competitionId: order.competitionId,
+      orderId,
+      userId,
+      ticketId: result?.ticketId,
+      switchChosen,
+    });
+    if (controlledConfirm?.handled) {
+      return res.json(controlledConfirm.response || { success: true, controlledPool: true, creditedAtSale: true });
     }
 
     const user = await storage.getUser(userId);
@@ -17995,7 +18807,7 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
             competitionId: order.competitionId, 
             prizeDescription: "Ringtone Voltz Win",
             prizeValue: `£${cashValue.toFixed(2)} Cash`,
-            isShowcase: false, 
+            isShowcase: true, 
             createdAt: new Date(), 
             updatedAt: new Date(),
           });
@@ -18031,7 +18843,7 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
             competitionId: order.competitionId, 
             prizeDescription: "Ringtone Voltz Win",
             prizeValue: `${pointsValue} Points`,
-            isShowcase: false, 
+            isShowcase: true, 
             createdAt: new Date(), 
             updatedAt: new Date(),
           });
@@ -18064,7 +18876,7 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
             competitionId: order.competitionId, 
             prizeDescription: `Physical Prize: ${result.prizeName}`,
             prizeValue: result.prizeName,
-            isShowcase: false, 
+            isShowcase: true, 
             createdAt: new Date(), 
             updatedAt: new Date(),
           });
@@ -18142,6 +18954,16 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ success: false, message: "No valid Voltz game purchase found" });
     }
 
+    const controlledRevealVoltz = await revealAllControlledVoltz({
+      competitionId,
+      orderId,
+      userId,
+      count,
+    });
+    if (controlledRevealVoltz?.handled) {
+      return res.json(controlledRevealVoltz.response);
+    }
+
     const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
     const usedCount = Number(playsUsed[0]?.count || 0);
     const playsRemaining = order.quantity - usedCount;
@@ -18174,18 +18996,8 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
     prizes.forEach((p) => prizeWinCounts.set(p.id, p.quantityWon || 0));
 
     // Helper functions for switch text generation
-    const getPrizeDisplay = (p: typeof prizes[0]) => {
-      if (p.rewardType === "cash") return `£${parseFloat(p.prizeValue || "0").toFixed(2)}`;
-      if (p.rewardType === "points") return `${Math.floor(parseFloat(p.prizeValue || "0"))} PTS`;
-      if (p.rewardType === "physical") {
-        const prizeName = p.prizeName || "Prize";
-        if (prizeName.length > 12) {
-          return prizeName.substring(0, 10) + "…";
-        }
-        return prizeName;
-      }
-      return "REPLAY";
-    };
+    const getPrizeDisplay = (p: typeof prizes[0]) =>
+      formatVoltzSwitchLabel(p.rewardType, p.prizeValue, p.prizeName);
 
     const shuffleArray = <T,>(arr: T[]): T[] => {
       for (let i = arr.length - 1; i > 0; i--) {
@@ -18328,7 +19140,7 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
               competitionId, 
               prizeDescription: "Ringtone Voltz Win",
               prizeValue: `£${value.toFixed(2)} Cash`,
-              isShowcase: false, 
+              isShowcase: true, 
               createdAt: new Date(), 
               updatedAt: new Date(),
             });
@@ -18339,7 +19151,7 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
               competitionId, 
               prizeDescription: "Ringtone Voltz Win",
               prizeValue: `${pointsValue} Points`,
-              isShowcase: false, 
+              isShowcase: true, 
               createdAt: new Date(), 
               updatedAt: new Date(),
             });
@@ -18357,7 +19169,7 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
               competitionId, 
               prizeDescription: `Physical Prize: ${selectedPrize.prizeName}`,
               prizeValue: selectedPrize.prizeName,
-              isShowcase: false, 
+              isShowcase: true, 
               createdAt: new Date(), 
               updatedAt: new Date(),
             });
@@ -18455,7 +19267,7 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
     res.json({ 
       success: true, 
       processed: playsToProcess, 
-      results,
+      results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints,
       freeReplaysWon,
@@ -18484,7 +19296,10 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
 
       const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
       const usedCount = Number(playsUsed[0]?.count || 0);
-      const history = await db.select().from(voltzWins).where(eq(voltzWins.orderId, orderId)).orderBy(desc(voltzWins.wonAt));
+      const history = attachTicketNumbersNewestFirst(
+        await db.select().from(voltzWins).where(eq(voltzWins.orderId, orderId)).orderBy(desc(voltzWins.wonAt)),
+        await getOrderPlayTickets(orderId),
+      );
 
       res.json({
         order: {
@@ -18671,6 +19486,8 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
 
 app.post("/api/guest/create-order", async (req: any, res) => {
   try {
+    await loadSessionUser(req);
+
     const { 
       firstName = '',      // Make optional with defaults
       lastName = '',       // Make optional with defaults
@@ -18688,6 +19505,14 @@ app.post("/api/guest/create-order", async (req: any, res) => {
         message: "Missing required fields: competitionId, gameType" 
       });
     }
+
+    const sessionUser = req.user;
+    const resolvedEmail = sessionUser?.isGuestAccount
+      ? sessionUser.email
+      : (email || `guest_${Date.now()}@temp.com`);
+    const resolvedFirstName = firstName || sessionUser?.firstName || '';
+    const resolvedLastName = lastName || sessionUser?.lastName || '';
+    const resolvedPhone = phone || sessionUser?.phoneNumber || '0000000000';
 
     // Get competition
     const [competition] = await db
@@ -18711,11 +19536,12 @@ app.post("/api/guest/create-order", async (req: any, res) => {
 
     // Create guest order with whatever details we have (can be empty)
     const [guestOrder] = await db.insert(guestOrders).values({
-      guestName: firstName && lastName ? `${firstName} ${lastName}`.trim() : 'Guest User',
-      guestEmail: email || `guest_${Date.now()}@temp.com`,
-      guestPhone: phone || '0000000000',
-      firstName: firstName || '',
-      lastName: lastName || '',
+      userId: sessionUser?.isGuestAccount ? sessionUser.id : null,
+      guestName: resolvedFirstName && resolvedLastName ? `${resolvedFirstName} ${resolvedLastName}`.trim() : 'Guest User',
+      guestEmail: resolvedEmail,
+      guestPhone: resolvedPhone,
+      firstName: resolvedFirstName || '',
+      lastName: resolvedLastName || '',
       competitionId,
       gameType,
       quantity,
@@ -18727,15 +19553,18 @@ app.post("/api/guest/create-order", async (req: any, res) => {
       createdAt: new Date(),
     }).returning();
 
+    const accessToken = issueGuestOrderAccessToken(req, guestOrder.id);
+
     res.json({
       success: true,
       orderId: guestOrder.id,
       orderReference: orderRef,
+      accessToken,
       totalAmount: totalAmount.toFixed(2),
-      firstName: firstName || '',
-      lastName: lastName || '',
-      email: email || '',
-      phone: phone || '',
+      firstName: resolvedFirstName || '',
+      lastName: resolvedLastName || '',
+      email: resolvedEmail || '',
+      phone: resolvedPhone || '',
       competitionId,
       gameType,
       quantity,
@@ -18758,6 +19587,8 @@ app.post("/api/guest/create-order", async (req: any, res) => {
 
 app.put("/api/guest/update-details/:orderId", async (req: any, res) => {
   try {
+    await loadSessionUser(req);
+
     const { orderId } = req.params;
     const { firstName, lastName, email, phone } = req.body;
 
@@ -18778,7 +19609,6 @@ app.put("/api/guest/update-details/:orderId", async (req: any, res) => {
       });
     }
 
-    // Check if order exists
     const [existingOrder] = await db
       .select()
       .from(guestOrders)
@@ -18788,6 +19618,13 @@ app.put("/api/guest/update-details/:orderId", async (req: any, res) => {
       return res.status(404).json({ 
         success: false, 
         message: "Guest order not found" 
+      });
+    }
+
+    if (!verifyGuestOrderAccess(req, existingOrder)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to update this guest order",
       });
     }
 
@@ -18827,6 +19664,8 @@ app.put("/api/guest/update-details/:orderId", async (req: any, res) => {
 
 app.post("/api/guest/process-payment", async (req: any, res) => {
   try {
+    await loadSessionUser(req);
+
     const { orderId } = req.body;
 
     if (!orderId) {
@@ -18836,7 +19675,6 @@ app.post("/api/guest/process-payment", async (req: any, res) => {
       });
     }
 
-    // Get guest order
     const [guestOrder] = await db
       .select()
       .from(guestOrders)
@@ -18846,6 +19684,13 @@ app.post("/api/guest/process-payment", async (req: any, res) => {
       return res.status(404).json({ 
         success: false,
         message: "Guest order not found" 
+      });
+    }
+
+    if (!verifyGuestOrderAccess(req, guestOrder)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to pay for this guest order",
       });
     }
 
@@ -18922,6 +19767,62 @@ app.post("/api/guest/process-payment", async (req: any, res) => {
 // =============================================
 // 3. GUEST PAYMENT WEBHOOK (Same as before)
 // =============================================
+
+app.post("/api/guest/confirm-payment", async (req: any, res) => {
+  try {
+    await loadSessionUser(req);
+
+    const { paymentJobRef, paymentRef, orderId } = req.body || {};
+    if (!paymentJobRef || !orderId) {
+      return res.status(400).json({ success: false, message: "Missing payment details" });
+    }
+
+    const [guestOrder] = await db
+      .select()
+      .from(guestOrders)
+      .where(eq(guestOrders.id, orderId))
+      .limit(1);
+
+    if (!guestOrder) {
+      return res.status(404).json({ success: false, message: "Guest order not found" });
+    }
+
+    if (!verifyGuestOrderAccess(req, guestOrder)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to confirm this guest order",
+      });
+    }
+
+    const [guestPending] = await db
+      .select()
+      .from(guestPendingPayments)
+      .where(eq(guestPendingPayments.paymentJobReference, paymentJobRef))
+      .limit(1);
+
+    if (!guestPending || guestPending.guestOrderId !== orderId) {
+      return res.status(202).json({ success: false, message: "Payment is still confirming." });
+    }
+
+    const payment = await cashflows.getPaymentStatus(paymentJobRef, paymentRef ?? undefined);
+    const { status, paidAmount } = normalizeCashflowsStatus(payment);
+    const creditAmount = parseCashAmount(paidAmount, guestPending.amount);
+
+    if (status === "FAILED") {
+      return res.status(402).json({ success: false, message: "Payment failed or was cancelled." });
+    }
+    if (status !== "PAID" || creditAmount <= 0) {
+      return res.status(202).json({ success: false, message: "Payment is still processing." });
+    }
+
+    await processGuestOrder(guestPending.guestOrderId, paymentRef ?? paymentJobRef, creditAmount);
+    const accessToken = issueGuestOrderAccessToken(req, guestPending.guestOrderId);
+    return res.json({ success: true, orderId: guestPending.guestOrderId, accessToken });
+  } catch (error: any) {
+    console.error("Guest confirm error:", error);
+    return res.status(500).json({ success: false, message: "Failed to confirm guest payment" });
+  }
+});
 
 app.post("/api/guest/webhook", async (req, res) => {
   console.log("GUEST WEBHOOK HIT", req.body);
@@ -19006,6 +19907,10 @@ async function processGuestOrder(
       throw new Error("Guest order not found");
     }
 
+    if (guestOrder.status === "completed") {
+      return { success: true, already: true, ticketNumbers: guestOrder.ticketNumbers };
+    }
+
     // Update guest order
     await tx.update(guestOrders)
       .set({
@@ -19031,50 +19936,33 @@ async function processGuestOrder(
       .from(competitions)
       .where(eq(competitions.id, guestOrder.competitionId));
 
-    // Update competition sold tickets
-    if (competition) {
-      await tx.update(competitions)
-        .set({ 
-          soldTickets: (competition.soldTickets || 0) + guestOrder.quantity,
-          updatedAt: new Date()
-        })
-        .where(eq(competitions.id, guestOrder.competitionId));
-    }
-
-    // Generate GUEST tickets
-    const ticketNumbers = [];
-    for (let i = 0; i < guestOrder.quantity; i++) {
-      let ticketNumber;
-      switch (guestOrder.gameType) {
-        case 'pop':
-          ticketNumber = `POP-G-${nanoid(8).toUpperCase()}`;
-          break;
-        case 'scratch':
-          ticketNumber = `SCR-G-${nanoid(8).toUpperCase()}`;
-          break;
-        case 'spin':
-          ticketNumber = `SPN-G-${nanoid(8).toUpperCase()}`;
-          break;
-        case 'slot':
-          ticketNumber = `SLT-G-${nanoid(8).toUpperCase()}`;
-          break;
-        case 'plinko':
-          ticketNumber = `PLK-G-${nanoid(8).toUpperCase()}`;
-          break;
-        default:
-          ticketNumber = `GST-G-${nanoid(8).toUpperCase()}`;
-      }
-
-      const [ticket] = await tx.insert(guestTickets).values({
-        guestOrderId: guestOrder.id,
-        ticketNumber,
-        competitionId: guestOrder.competitionId,
-        isWinner: false, // Will be set when played
-        createdAt: new Date(),
-      }).returning();
-
-      ticketNumbers.push(ticket.ticketNumber);
-    }
+    // Generate GUEST tickets from the shared pool
+    const { tickets: issuedGuestTickets } = await issuePlayTickets({
+      tx,
+      competitionId: guestOrder.competitionId,
+      quantity: guestOrder.quantity,
+      guestOrderId: guestOrder.id,
+      isGuest: true,
+      gameType: guestOrder.gameType,
+      incrementSold: true,
+      makeLegacyNumber: () => {
+        switch (guestOrder.gameType) {
+          case "pop":
+            return `POP-G-${nanoid(8).toUpperCase()}`;
+          case "scratch":
+            return `SCR-G-${nanoid(8).toUpperCase()}`;
+          case "spin":
+            return `SPN-G-${nanoid(8).toUpperCase()}`;
+          case "slot":
+            return `SLT-G-${nanoid(8).toUpperCase()}`;
+          case "plinko":
+            return `PLK-G-${nanoid(8).toUpperCase()}`;
+          default:
+            return `GST-G-${nanoid(8).toUpperCase()}`;
+        }
+      },
+    });
+    const ticketNumbers = issuedGuestTickets.map((t) => t.ticketNumber);
 
     // Update order with ticket numbers
     await tx.update(guestOrders)
@@ -19130,6 +20018,8 @@ async function sendGuestOrderConfirmation(email: string, orderDetails: any) {
 
 app.get("/api/guest/order/:identifier", async (req: any, res) => {
   try {
+    await loadSessionUser(req);
+
     const { identifier } = req.params;
     
     let guestOrder;
@@ -19150,6 +20040,13 @@ app.get("/api/guest/order/:identifier", async (req: any, res) => {
       return res.status(404).json({ 
         success: false,
         message: "Guest order not found" 
+      });
+    }
+
+    if (!verifyGuestOrderAccess(req, guestOrder)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to access this guest order",
       });
     }
 
@@ -19216,7 +20113,7 @@ app.get("/api/guest/order/:identifier", async (req: any, res) => {
 // 6. GET GUEST WINNINGS BY EMAIL
 // =============================================
 
-app.get("/api/guest/winnings/:email", async (req: any, res) => {
+app.get("/api/guest/winnings/:email", isAuthenticated, async (req: any, res) => {
   try {
     const { email } = req.params;
 
@@ -19224,6 +20121,13 @@ app.get("/api/guest/winnings/:email", async (req: any, res) => {
       return res.status(400).json({
         success: false,
         message: "Email is required"
+      });
+    }
+
+    if (normalizeGuestEmail(email) !== normalizeGuestEmail(req.user.email)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to view winnings for this email",
       });
     }
 
@@ -19288,13 +20192,17 @@ app.get("/api/guest/winnings/:email", async (req: any, res) => {
 
 app.post("/api/guest/transfer-winnings", async (req: any, res) => {
   try {
+    await loadSessionUser(req);
+
     const { 
       email,
       firstName,
       lastName,
       password,
       phone,
-      acceptTerms = false
+      acceptTerms = false,
+      accessToken,
+      guestOrderId,
     } = req.body;
 
     // Validate required fields
@@ -19309,6 +20217,38 @@ app.post("/api/guest/transfer-winnings", async (req: any, res) => {
       return res.status(400).json({ 
         success: false,
         message: "You must accept the terms and conditions" 
+      });
+    }
+
+    const normalizedEmail = normalizeGuestEmail(email);
+    let authorized = false;
+
+    if (
+      req.user &&
+      normalizeGuestEmail(req.user.email) === normalizedEmail
+    ) {
+      authorized = true;
+    }
+
+    if (!authorized && guestOrderId) {
+      const [guestOrder] = await db
+        .select()
+        .from(guestOrders)
+        .where(eq(guestOrders.id, guestOrderId))
+        .limit(1);
+      if (
+        guestOrder &&
+        normalizeGuestEmail(guestOrder.guestEmail) === normalizedEmail &&
+        verifyGuestOrderAccess(req, guestOrder, accessToken)
+      ) {
+        authorized = true;
+      }
+    }
+
+    if (!authorized) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to transfer winnings for this email",
       });
     }
 
@@ -19475,7 +20415,7 @@ app.post("/api/guest/transfer-winnings", async (req: any, res) => {
 // 8. CHECK IF GUEST HAS WINNINGS (Quick check)
 // =============================================
 
-app.get("/api/guest/check-winnings/:email", async (req: any, res) => {
+app.get("/api/guest/check-winnings/:email", isAuthenticated, async (req: any, res) => {
   try {
     const { email } = req.params;
 
@@ -19483,6 +20423,13 @@ app.get("/api/guest/check-winnings/:email", async (req: any, res) => {
       return res.status(400).json({
         success: false,
         message: "Email is required"
+      });
+    }
+
+    if (normalizeGuestEmail(email) !== normalizeGuestEmail(req.user.email)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to check winnings for this email",
       });
     }
 
@@ -19623,6 +20570,17 @@ app.delete("/api/admin/faqs/:id", isAuthenticated, isAdmin, async (req, res) => 
 app.get("/api/competitions/:competitionId/prize-table",  async (req, res) => {
   try {
     const { competitionId } = req.params;
+
+    const [competition] = await db
+      .select()
+      .from(competitions)
+      .where(eq(competitions.id, competitionId))
+      .limit(1);
+
+    if (competition?.instantWinMode === "controlled_pool") {
+      const pool = await getPublicPrizePool(competitionId);
+      return res.json(pool);
+    }
     
     const prizes = await db
       .select()
@@ -19664,24 +20622,43 @@ app.get("/api/competitions/:competitionId/prizes", isAuthenticated, isAdmin , as
 app.post("/api/competitions/:competitionId/prizes", isAuthenticated, isAdmin , async (req, res) => {
   try {
     const { competitionId } = req.params;
-    const { prizeName, prizeValue, totalQuantity, remainingQuantity  } = req.body;
+    const { prizeName, prizeValue, totalQuantity, remainingQuantity, ringtonePoints } = req.body;
     
    
    
     
+    const qty = Math.max(1, Number(totalQuantity || 1));
+    const remaining = remainingQuantity == null ? qty : Number(remainingQuantity);
+    const points = Math.max(0, Math.floor(Number(ringtonePoints ?? 0)) || 0);
+
     const [newPrize] = await db
       .insert(competitionPrizes)
       .values({
         competitionId,
         prizeName,
         prizeValue,
-        totalQuantity,
-        remainingQuantity,
+        ringtonePoints: points,
+        totalQuantity: qty,
+        remainingQuantity: remaining,
       })
       .returning();
-    
-    res.json(newPrize);
+
+    try {
+      const sync = await onTablePrizeCreated(newPrize, (req as any).user?.id);
+      const [freshPrize] = await db
+        .update(competitionPrizes)
+        .set({ ringtonePoints: points, updatedAt: new Date() })
+        .where(eq(competitionPrizes.id, newPrize.id))
+        .returning();
+      res.json({ ...(freshPrize || newPrize), instantPoolSpawned: sync.spawned });
+    } catch (syncError) {
+      await db.delete(competitionPrizes).where(eq(competitionPrizes.id, newPrize.id));
+      throw syncError;
+    }
   } catch (error) {
+    if (error instanceof InstantWinError) {
+      return res.status(error.status).json({ error: error.message, message: error.message });
+    }
     console.error("Error creating prize:", error);
     res.status(500).json({ error: "Failed to create prize" });
   }
@@ -19691,7 +20668,8 @@ app.post("/api/competitions/:competitionId/prizes", isAuthenticated, isAdmin , a
 app.put("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
   try {
     const { prizeId } = req.params;
-    const { prizeName, prizeValue, totalQuantity, remainingQuantity } = req.body;
+    const { prizeName, prizeValue, totalQuantity, remainingQuantity, ringtonePoints } = req.body;
+    const points = Math.max(0, Math.floor(Number(ringtonePoints ?? 0)) || 0);
     
     
     const [updatedPrize] = await db
@@ -19699,15 +20677,29 @@ app.put("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
       .set({
         prizeName,
         prizeValue,
+        ringtonePoints: points,
         totalQuantity,
         remainingQuantity,
         updatedAt: new Date(),
       })
       .where(eq(competitionPrizes.id, prizeId))
       .returning();
+
+    if (updatedPrize) {
+      await onTablePrizeUpdated(updatedPrize, (req as any).user?.id);
+      const [freshPrize] = await db
+        .update(competitionPrizes)
+        .set({ ringtonePoints: points, updatedAt: new Date() })
+        .where(eq(competitionPrizes.id, prizeId))
+        .returning();
+      return res.json(freshPrize || { ...updatedPrize, ringtonePoints: points });
+    }
     
     res.json(updatedPrize);
   } catch (error) {
+    if (error instanceof InstantWinError) {
+      return res.status(error.status).json({ error: error.message, message: error.message });
+    }
     console.error("Error updating prize:", error);
     res.status(500).json({ error: "Failed to update prize" });
   }
@@ -19717,7 +20709,8 @@ app.put("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
 app.delete("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) => {
   try {
     const { prizeId } = req.params;
-  
+
+    await onTablePrizeDeleted(prizeId);
     
     await db
       .delete(competitionPrizes)
@@ -19725,6 +20718,9 @@ app.delete("/api/prizes/:prizeId", isAuthenticated, isAdmin , async (req, res) =
     
     res.json({ message: "Prize deleted successfully" });
   } catch (error) {
+    if (error instanceof InstantWinError) {
+      return res.status(error.status).json({ error: error.message, message: error.message });
+    }
     console.error("Error deleting prize:", error);
     res.status(500).json({ error: "Failed to delete prize" });
   }
@@ -20043,6 +21039,7 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
       const { competitionId, quantity = 1 } = req.body;
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
+      if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
       const slotCostPerSpin = parseFloat(competition.ticketPrice);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(slotCostPerSpin, quantity);
       const user = await storage.getUser(userId);
@@ -20135,7 +21132,24 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
         remainingAmount -= pointsAmount;
         paymentBreakdown.push({ method: "ringtone_points", amount: pointsAmount, pointsUsed: pointsNeeded, description: `Points: £${pointsAmount.toFixed(2)} (${pointsNeeded} pts)` });
       }
-      if (remainingAmount > 0.01) return res.json({ success: false, message: "Card payment required", remainingAmount, requiresCashflows: true });
+      if (remainingAmount > 0.01) {
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) return res.status(500).json({ message: "Failed to create payment session" });
+        return res.json({ success: true, redirectUrl: started.redirectUrl, sessionId: started.sessionId, remainingAmount });
+      }
 
       if (walletUsed > 0) await db.update(users).set({ balance: (Number(user?.balance || "0") - walletUsed).toString() }).where(eq(users.id, userId));
       if (pointsUsed > 0) await db.update(users).set({ ringtonePoints: (user?.ringtonePoints || 0) - pointsUsed }).where(eq(users.id, userId));
@@ -20150,15 +21164,18 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
         walletAmount: walletUsed.toString(), pointsAmount: pointsUsed.toString(),
         cashflowsAmount: "0", paymentBreakdown: JSON.stringify(paymentBreakdown), updatedAt: new Date(),
       }).where(eq(orders.id, orderId));
-      await db.update(competitions).set({ soldTickets: (competition.soldTickets || 0) + order.quantity, updatedAt: new Date() }).where(eq(competitions.id, competition.id));
       await db.insert(transactions).values({ userId, type: "purchase", amount: totalAmount.toFixed(2), description: `Slot Machine Purchase - ${order.quantity} spins`, orderId, createdAt: new Date() });
 
-      const slotTickets = [];
-      for (let i = 0; i < order.quantity; i++) {
-        const ticketNumber = `SLT-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`;
-        const [ticket] = await db.insert(tickets).values({ userId, competitionId: order.competitionId, orderId: order.id, ticketNumber, isWinner: false, createdAt: new Date() }).returning();
-        slotTickets.push(ticket);
-      }
+      const { tickets: slotTickets } = await issuePlayTickets({
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        userId,
+        orderId: order.id,
+        gameType: "slot",
+        incrementSold: true,
+        makeLegacyNumber: (i) =>
+          `SLT-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`,
+      });
 
       if (user?.email) {
         sendOrderConfirmationEmail(user.email, {
@@ -20188,7 +21205,10 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
       const [slotCfg] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
       const creditsPerSpin = slotCfg?.creditsPerSpin || 20;
       const totalCredits = order.quantity * creditsPerSpin;
-      const history = await db.select().from(slotUsage).where(eq(slotUsage.orderId, orderId)).orderBy(desc(slotUsage.usedAt));
+      const history = attachTicketNumbersNewestFirst(
+        await db.select().from(slotUsage).where(eq(slotUsage.orderId, orderId)).orderBy(desc(slotUsage.usedAt)),
+        await getOrderPlayTickets(orderId),
+      );
       res.json({
         order: { id: order.id, competitionId: order.competitionId, quantity: order.quantity, totalAmount: order.totalAmount, status: order.status },
         user: { balance: user?.balance || "0", ringtonePoints: user?.ringtonePoints || 0 },
@@ -20243,343 +21263,101 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ message: "No valid slot order found" });
     }
 
-    // ── Enforce spin limit ───────────────────────────────────────────────
-    const existingSpins = await db.select({ id: slotUsage.id }).from(slotUsage).where(eq(slotUsage.orderId, orderId));
-    console.log("[API] Existing spins:", existingSpins.length, "of", order.quantity);
-    
-    if (existingSpins.length >= order.quantity) {
-      console.log("[API] ⚠️ All spins used");
-      return res.status(403).json({ 
-        message: "All spins used", 
-        spinsUsed: existingSpins.length, 
-        spinsAllowed: order.quantity 
-      });
-    }
-    const spinNumber = existingSpins.length + 1;
-
-    // ── Get competition ID ──────────────────────────────────────────────
-    let competitionId = order.competitionId || "slot-default";
-    let competitionTitle = "Slot Machine";
-    
-    try {
-      if (order.competitionId) {
-        const [competition] = await db
-          .select({ 
-            id: competitions.id, 
-            title: competitions.title,
-            imageUrl: competitions.imageUrl 
-          })
-          .from(competitions)
-          .where(eq(competitions.id, order.competitionId))
-          .limit(1);
-        
-        if (competition) {
-          competitionTitle = competition.title || "Slot Machine";
-          console.log("[API] Found competition from order:", { 
-            id: competition.id, 
-            title: competition.title 
-          });
-        }
-      } else {
-        const [slotComp] = await db
-          .select({ 
-            id: competitions.id, 
-            title: competitions.title,
-            imageUrl: competitions.imageUrl 
-          })
-          .from(competitions)
-          .where(
-            and(
-              eq(competitions.isActive, true),
-              eq(competitions.type, "slot")
-            )
-          )
-          .limit(1);
-        
-        if (slotComp) {
-          competitionId = slotComp.id;
-          competitionTitle = slotComp.title || "Slot Machine";
-          console.log("[API] Found slot competition:", { 
-            id: slotComp.id, 
-            title: slotComp.title 
-          });
-        }
+    const controlledSlot = await tryRevealControlledSlot({
+      competitionId: order.competitionId,
+      orderId,
+      userId,
+    });
+    if (controlledSlot?.handled) {
+      if (controlledSlot.noTickets) {
+        return res.status(403).json({ message: "All spins used" });
       }
-    } catch (compError) {
-      console.log("[API] ⚠️ Could not get competition, using default:", compError);
+      return res.json(controlledSlot.response);
     }
 
-    // ── Server-side prize determination ─────────────────────────────────
-    let selectedPrize: any = null;
-    let config;
-    
-    try {
-      const configs = await db.select().from(gameSlotConfig);
-      console.log("[API] Configs found:", configs.length);
-      
-      config = configs.length > 0 ? configs[0] : null;
-      
-      if (!config) {
-        console.log("[API] ⚠️ No slot config found, using default");
-        selectedPrize = { id: "default", symbol: "Win", isEuro: true, pay: 1 };
-      } else {
-        console.log("[API] Config found:", { id: config.id });
-        
-        let allPrizes: any[] = [];
-        try {
-          allPrizes = config?.prizesConfig ? JSON.parse(config.prizesConfig) : [];
-          console.log("[API] Prizes loaded:", allPrizes.length);
-        } catch (parseError) {
-          console.error("[API] ❌ Failed to parse prizesConfig:", parseError);
-          allPrizes = [];
-        }
-
-        // ✅ Get win counts from slot_prize_wins table
-        let winsMap: Record<string, number> = {};
-        try {
-          const prizeWins = await db
-            .select()
-            .from(slotPrizeWins);
-          
-          for (const row of prizeWins) {
-            if (row.prizeId) winsMap[row.prizeId] = Number(row.winCount);
-          }
-          console.log("[API] Current wins per prize from slot_prize_wins:", winsMap);
-        } catch (winsError) {
-          console.error("[API] ❌ Failed to get wins map:", winsError);
-          winsMap = {};
-        }
-
-        // ─── STRICT PRIZE FILTERING (FIXED) ──────────────────────────
-        const eligible = allPrizes.filter((p: any) => {
-          // 1. Must be enabled
-          if (p.enabled === false) {
-            console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: DISABLED`);
-            return false;
-          }
-          
-          // 2. Must have probability > 0
-          const prob = Number(p.probability || 0);
-          if (prob <= 0) {
-            console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: PROBABILITY is ${prob}%`);
-            return false;
-          }
-          
-          // 3. Must have pay > 0 (no point winning 0)
-          const payAmount = Number(p.pay || 0);
-          if (payAmount <= 0) {
-            console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: PAY is ${payAmount}`);
-            return false;
-          }
-          
-          // 4. Check maxWins - STRICT: if maxWins is 0, prize is COMPLETELY disabled
-          if (p.maxWins !== null && p.maxWins !== undefined) {
-            const maxWinsValue = Number(p.maxWins);
-            
-            // If maxWins is 0 or negative, prize should NEVER win
-            if (maxWinsValue <= 0) {
-              console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: MAX WINS is ${maxWinsValue} (capped at 0)`);
-              return false;
-            }
-            
-            // If maxWins is set and reached, prize is NOT eligible
-            const currentWins = winsMap[p.id] || 0;
-            if (currentWins >= maxWinsValue) {
-              console.log(`[API] ❌ Prize "${p.symbol}" (${p.id}) excluded: MAX WINS REACHED (${currentWins}/${maxWinsValue})`);
-              return false;
-            }
-            
-            console.log(`[API] ✅ Prize "${p.symbol}" (${p.id}) wins: ${currentWins}/${maxWinsValue}`);
-          } else {
-            console.log(`[API] ✅ Prize "${p.symbol}" (${p.id}) wins: unlimited`);
-          }
-          
-          return true;
-        });
-
-        console.log("[API] 📊 Eligible prizes after filtering:", eligible.length);
-        
-        if (eligible.length === 0) {
-          console.log("[API] ⚠️ NO ELIGIBLE PRIZES - all either disabled, 0% probability, 0 pay, or maxWins reached");
-          selectedPrize = null;
-        } else {
-          // Weighted random selection
-          const totalProbability = eligible.reduce((sum, p) => sum + Number(p.probability), 0);
-          const rand = Math.random() * totalProbability;
-          let cumulative = 0;
-          
-          console.log(`[API] 🎲 Rolling: ${rand.toFixed(2)} out of ${totalProbability.toFixed(2)}`);
-          
-          for (const prize of eligible) {
-            cumulative += Number(prize.probability);
-            if (rand <= cumulative) { 
-              selectedPrize = prize; 
-              console.log(`[API] 🎉 SELECTED: "${prize.symbol}" (${prize.id}) at cumulative ${cumulative.toFixed(2)}`);
-              break; 
-            }
-          }
-          
-          // Fallback: if somehow no prize selected, take the last eligible one
-          if (!selectedPrize && eligible.length > 0) {
-            selectedPrize = eligible[eligible.length - 1];
-            console.log(`[API] ⚠️ Fallback selection: "${selectedPrize.symbol}"`);
-          }
-        }
-      }
-      
-      // If no config and no prize selected, it's a loss
-      if (!selectedPrize && config) {
-        console.log("[API] ❌ No prize selected - this spin is a LOSS");
-        selectedPrize = null;
-      }
-    } catch (configError) {
-      console.error("[API] ❌ Error processing config:", configError);
-      selectedPrize = null;
+    const result = await processUncontrolledSlotSpin({
+      userId,
+      order: { id: order.id, quantity: order.quantity, competitionId: order.competitionId },
+      coinsSpent: coinsSpent || 0,
+    });
+    if (!result.ok) {
+      return res.status(result.status).json(result.body);
     }
-
-    const isWin = selectedPrize !== null && Number(selectedPrize.pay || 0) > 0;
-    let coinsWon = 0;
-    let prizeId: string | null = null;
-    let prizeName: string | null = null;
-    let prizeType: string | null = null;
-    let prizeImage: string | null = null;
-
-    if (isWin && selectedPrize) {
-      prizeId = selectedPrize.id;
-      prizeName = selectedPrize.symbol;
-      prizeType = selectedPrize.isEuro ? "cash" : "points";
-      prizeImage = selectedPrize.image || null;
-      coinsWon = Number(selectedPrize.pay || 0);
-
-      console.log("[API] 🎉 WIN! Prize:", { prizeId, prizeName, prizeType, coinsWon });
-
-      try {
-        const user = await storage.getUser(userId);
-        if (selectedPrize.isEuro && coinsWon > 0) {
-          // Cash prize → add to wallet balance
-          const newBalance = parseFloat(user?.balance || "0") + coinsWon;
-          await db.update(users).set({ balance: newBalance.toFixed(2) }).where(eq(users.id, userId));
-          await storage.createTransaction({ 
-            userId, 
-            type: "prize", 
-            amount: coinsWon.toFixed(2), 
-            description: `Slot Machine Win - £${coinsWon.toFixed(2)}` 
-          });
-          console.log("[API] 💰 Cash prize added:", coinsWon, "New balance:", newBalance);
-        } else if (!selectedPrize.isEuro && coinsWon > 0) {
-          // Points prize → add to ringtonePoints
-          const newPoints = (user?.ringtonePoints || 0) + coinsWon;
-          await db.update(users).set({ ringtonePoints: newPoints }).where(eq(users.id, userId));
-          await storage.createTransaction({ 
-            userId, 
-            type: "prize", 
-            amount: coinsWon.toString(),
-            description: `Slot Machine Win - ${coinsWon} Ringtone Points` 
-          });
-          console.log("[API] 🎯 Points prize added:", coinsWon, "New points:", newPoints);
-        }
-
-        // ✅ Increment win count in slot_prize_wins table
-        try {
-          const existingWin = await db
-            .select()
-            .from(slotPrizeWins)
-            .where(eq(slotPrizeWins.prizeId, prizeId))
-            .limit(1);
-
-          if (existingWin.length > 0) {
-            await db
-              .update(slotPrizeWins)
-              .set({ 
-                winCount: Number(existingWin[0].winCount) + 1,
-                updatedAt: new Date()
-              })
-              .where(eq(slotPrizeWins.prizeId, prizeId));
-            console.log(`[API] ✅ Updated win count for ${prizeId}: ${Number(existingWin[0].winCount) + 1}`);
-          } else {
-            await db
-              .insert(slotPrizeWins)
-              .values({
-                prizeId: prizeId,
-                winCount: 1,
-                updatedAt: new Date()
-              });
-            console.log(`[API] ✅ Created win count for ${prizeId}: 1`);
-          }
-        } catch (winCountError) {
-          console.error("[API] ❌ Error updating win count:", winCountError);
-        }
-
-        // ─── SYNC WITH COMPETITION PRIZES ───
-        const syncResult = await syncSlotPrize(
-          competitionId,
-          prizeId || "unknown",
-          prizeName || "Prize",
-          coinsWon,
-          selectedPrize.isEuro ? "cash" : "points",
-          selectedPrize.maxWins || null
-        );
-        console.log("[API] Slot prize sync result:", syncResult);
-
-        // ─── RECORD IN WINNERS TABLE ───
-        let prizeDescriptionText = `Slot Machine Win - ${competitionTitle}`;
-        let prizeValueText = selectedPrize.isEuro ? `£${coinsWon} Cash` : `${coinsWon} Points`;
-
-        await db.insert(winners).values({
-          userId,
-          competitionId: competitionId,
-          prizeDescription: prizeDescriptionText,
-          prizeValue: prizeValueText,
-          imageUrl: selectedPrize.image || null,
-          isShowcase: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-        console.log("[API] ✅ Winner recorded in winners table with competition:", competitionTitle);
-
-      } catch (prizeError) {
-        console.error("[API] ❌ Error processing prize:", prizeError);
-      }
-    } else {
-      console.log("[API] ❌ No win this spin");
-    }
-
-    // ── Record spin usage ──
-    try {
-      await db.insert(slotUsage).values({
-        orderId, 
-        userId, 
-        isWin,
-        coinsWon, 
-        coinsSpent: coinsSpent || 0,
-        spinNumber, 
-        prizeId: prizeId || null,
-        prizeName: prizeName || null,
-      } as any);
-      console.log("[API] ✅ Spin recorded:", { spinNumber, isWin, coinsWon, prizeId });
-    } catch (dbError) {
-      console.error("[API] ❌ Error recording spin:", dbError);
-    }
-
-    const response = { 
-      success: true, 
-      isWin, 
-      coinsWon, 
-      prizeId, 
-      prizeName, 
-      prizeType, 
-      prizeImage, 
-      spinNumber, 
-      spinsUsed: spinNumber, 
-      spinsAllowed: order.quantity 
-    };
-    
-    console.log("[API] ✅ Response:", response);
-    res.json(response);
+    console.log("[API] ✅ Response:", result.response);
+    res.json(result.response);
 
   } catch (error) {
     console.error("[API] 💥 Error in play-slot:", error);
     res.status(500).json({ message: "Failed to process spin", error: String(error) });
+  }
+});
+
+
+app.post("/api/reveal-all-slot", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { orderId, count, competitionId } = req.body;
+
+    if (!orderId || !count || count <= 0) {
+      return res.status(400).json({ success: false, message: "Valid orderId and count are required" });
+    }
+
+    const order = await storage.getOrder(orderId);
+    if (!order || order.userId !== userId || order.status !== "completed") {
+      return res.status(400).json({ success: false, message: "No valid slot order found" });
+    }
+
+    if (competitionId && order.competitionId && competitionId !== order.competitionId) {
+      return res.status(400).json({ success: false, message: "Competition does not match this order" });
+    }
+
+    const controlledReveal = await revealAllControlledSlot({
+      competitionId: order.competitionId,
+      orderId,
+      userId,
+      count,
+    });
+    if (controlledReveal?.handled) {
+      return res.json(controlledReveal.response);
+    }
+
+    const [slotCfg] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
+    const coinsSpent = slotCfg?.creditsPerSpin || 20;
+
+    const batch = await revealAllUncontrolledSlot({
+      userId,
+      order: { id: order.id, quantity: order.quantity, competitionId: order.competitionId },
+      coinsSpent,
+      count,
+    });
+    if (!batch.ok) {
+      return res.status(batch.status).json({ success: false, ...batch.body });
+    }
+
+    const results = batch.results;
+    const winCount = results.filter((r) => r.isWin).length;
+    const cashWon = results
+      .filter((r) => r.isWin && r.prizeType === "cash")
+      .reduce((sum, r) => sum + Number(r.coinsWon || 0), 0);
+    const pointsWon = results
+      .filter((r) => r.isWin && r.prizeType === "points")
+      .reduce((sum, r) => sum + Number(r.coinsWon || 0), 0);
+
+    const used = await db.select({ id: slotUsage.id }).from(slotUsage).where(eq(slotUsage.orderId, orderId));
+    const spinsRemaining = Math.max(0, order.quantity - used.length);
+
+    res.json({
+      success: true,
+      processed: results.length,
+      results: await labelRevealAllResultTickets(orderId, results),
+      winCount,
+      cashWon,
+      pointsWon,
+      spinsRemaining,
+    });
+  } catch (error) {
+    console.error("[API] 💥 Error in reveal-all-slot:", error);
+    res.status(500).json({ success: false, message: "Failed to reveal all spins" });
   }
 });
 
@@ -20863,41 +21641,6 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
   }
 });
 
-
-app.get("/api/debug/slot-wins", async (_req, res) => {
-  try {
-    // Get wins from slot_prize_wins table
-    const prizeWins = await db.select().from(slotPrizeWins);
-    
-    // Get prize config
-    const [config] = await db.select().from(gameSlotConfig);
-    let prizes = [];
-    if (config?.prizesConfig) {
-      prizes = JSON.parse(config.prizesConfig);
-    }
-    
-    // Create summary
-    const winsMap: Record<string, number> = {};
-    for (const win of prizeWins) {
-      winsMap[win.prizeId] = Number(win.winCount);
-    }
-    
-    res.json({
-      prizeWins: prizeWins,
-      prizeSummary: prizes.map((p: any) => ({
-        id: p.id,
-        symbol: p.symbol,
-        maxWins: p.maxWins || 'unlimited',
-        currentWins: winsMap[p.id] || 0,
-        isExhausted: p.maxWins ? (winsMap[p.id] || 0) >= Number(p.maxWins) : false
-      }))
-    });
-  } catch (error) {
-    console.error("Debug error:", error);
-    res.status(500).json({ error: String(error) });
-  }
-});
-
   // ═══════════════════ END SLOT MACHINE ROUTES ═══════════════════
 
   // ════════════════════ ROYAL REELS ROUTES ════════════════════
@@ -20978,6 +21721,7 @@ app.get("/api/debug/slot-wins", async (_req, res) => {
       const { competitionId, quantity = 1 } = req.body;
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
+      if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
       const costPerPlay = parseFloat(competition.ticketPrice);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(costPerPlay, quantity);
       const user = await storage.getUser(userId);
@@ -21057,7 +21801,24 @@ app.get("/api/debug/slot-wins", async (_req, res) => {
         remainingAmount -= pointsAmount;
         paymentBreakdown.push({ method: "ringtone_points", amount: pointsAmount, pointsUsed: pointsNeeded, description: `Points: £${pointsAmount.toFixed(2)} (${pointsNeeded} pts)` });
       }
-      if (remainingAmount > 0.01) return res.json({ success: false, message: "Card payment required", remainingAmount, requiresCashflows: true });
+      if (remainingAmount > 0.01) {
+        const started = await beginReservedCardCheckout({
+          userId,
+          orderId,
+          competitionId: order.competitionId,
+          quantity: order.quantity,
+          cardAmount: remainingAmount,
+          walletAmount: walletUsed,
+          pointsAmount: pointsUsed,
+          gameType: competition?.type || "competition",
+          paymentBreakdown,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          email: user?.email,
+        });
+        if (!started.ok) return res.status(500).json({ message: "Failed to create payment session" });
+        return res.json({ success: true, redirectUrl: started.redirectUrl, sessionId: started.sessionId, remainingAmount });
+      }
 
       if (walletUsed > 0) await db.update(users).set({ balance: (Number(user?.balance || "0") - walletUsed).toString() }).where(eq(users.id, userId));
       if (pointsUsed > 0) await db.update(users).set({ ringtonePoints: (user?.ringtonePoints || 0) - pointsUsed }).where(eq(users.id, userId));
@@ -21072,15 +21833,18 @@ app.get("/api/debug/slot-wins", async (_req, res) => {
         walletAmount: walletUsed.toString(), pointsAmount: pointsUsed.toString(),
         cashflowsAmount: "0", paymentBreakdown: JSON.stringify(paymentBreakdown), updatedAt: new Date(),
       }).where(eq(orders.id, orderId));
-      await db.update(competitions).set({ soldTickets: (competition.soldTickets || 0) + order.quantity, updatedAt: new Date() }).where(eq(competitions.id, competition.id));
       await db.insert(transactions).values({ userId, type: "purchase", amount: totalAmount.toFixed(2), description: `Royal Reels Purchase - ${order.quantity} games`, orderId, createdAt: new Date() });
 
-      const royalTickets = [];
-      for (let i = 0; i < order.quantity; i++) {
-        const ticketNumber = `RYL-${orderId.slice(0,8).toUpperCase()}-${(i+1).toString().padStart(3,"0")}`;
-        const [ticket] = await db.insert(tickets).values({ userId, competitionId: order.competitionId, orderId: order.id, ticketNumber, isWinner: false, createdAt: new Date() }).returning();
-        royalTickets.push(ticket);
-      }
+      const { tickets: royalTickets } = await issuePlayTickets({
+        competitionId: order.competitionId,
+        quantity: order.quantity,
+        userId,
+        orderId: order.id,
+        gameType: "royal",
+        incrementSold: true,
+        makeLegacyNumber: (i) =>
+          `RYL-${orderId.slice(0, 8).toUpperCase()}-${(i + 1).toString().padStart(3, "0")}`,
+      });
 
       if (user?.email) {
         sendOrderConfirmationEmail(user.email, {
@@ -21112,14 +21876,17 @@ app.get("/api/debug/slot-wins", async (_req, res) => {
       const history = await db.select().from(royalUsage).where(eq(royalUsage.orderId, orderId)).orderBy(desc(royalUsage.usedAt));
       const creditsPerGame = 100;
       const totalCredits = order.quantity * creditsPerGame;
-      const mappedHistory = history.map(h => ({
-        id: h.id,
-        isWin: h.isWin,
-        isRoyalReplay: h.isRoyalReplay,
-        coinsWon: h.isWin ? Math.round(parseFloat(h.rewardValue || "0") * 100) : 0,
-        coinsSpent: creditsPerGame,
-        usedAt: h.usedAt,
-      }));
+      const mappedHistory = attachTicketNumbersNewestFirst(
+        history.map((h) => ({
+          id: h.id,
+          isWin: h.isWin,
+          isRoyalReplay: h.isRoyalReplay,
+          coinsWon: h.isWin ? Math.round(parseFloat(h.rewardValue || "0") * 100) : 0,
+          coinsSpent: creditsPerGame,
+          usedAt: h.usedAt,
+        })),
+        await getOrderPlayTickets(orderId),
+      );
       res.json({ order: { id: order.id, competitionId: order.competitionId, quantity: order.quantity, totalAmount: order.totalAmount, status: order.status }, user: { balance: user?.balance || "0", ringtonePoints: user?.ringtonePoints || 0 }, competition, playsRemaining, creditsPerGame, totalCredits, history: mappedHistory });
     } catch (error) {
       console.error("Error fetching royal order:", error);
@@ -21134,6 +21901,35 @@ app.get("/api/debug/slot-wins", async (_req, res) => {
       if (!orderId) return res.status(400).json({ message: "Order ID required" });
       const order = await storage.getOrder(orderId);
       if (!order || order.userId !== userId || order.status !== "completed") return res.status(400).json({ message: "No valid Royal Reels order found" });
+
+      const controlledRoyal = await tryRevealControlledRoyal({
+        competitionId: order.competitionId,
+        orderId,
+        userId,
+      });
+      if (controlledRoyal?.handled) {
+        if (controlledRoyal.noTickets) {
+          return res.status(400).json({ success: false, message: "No plays remaining" });
+        }
+        const royal = controlledRoyal.response;
+        if (!royal) {
+          return res.status(500).json({ success: false, message: "Failed to record royal spin" });
+        }
+        return res.json({
+          success: true,
+          controlledPool: true,
+          creditedAtSale: true,
+          isWin: royal.isWin,
+          coinsWon: royal.coinsWon,
+          coinsSpent: coinsSpent || 0,
+          spinNumber: royal.spinNumber,
+          isRoyalReplay: false,
+          ticketNumber: royal.ticketNumber,
+          prizeName: royal.result?.prizeName,
+          playsRemaining: royal.playsRemaining,
+        });
+      }
+
       const cashValue = isWin && coinsWon > 0 ? parseFloat((coinsWon * 0.01).toFixed(2)) : 0;
       await db.insert(royalUsage).values({
         orderId,
@@ -21172,6 +21968,18 @@ app.get("/api/debug/slot-wins", async (_req, res) => {
 
       const order = await storage.getOrder(orderId);
       if (!order || order.userId !== userId || order.status !== "completed") return res.status(400).json({ success: false, message: "No valid Royal Reels purchase found" });
+
+      const controlledRoyalPlay = await tryRevealControlledRoyal({
+        competitionId,
+        orderId,
+        userId,
+      });
+      if (controlledRoyalPlay?.handled) {
+        if (controlledRoyalPlay.noTickets) {
+          return res.status(400).json({ success: false, message: "No plays remaining" });
+        }
+        return res.json(controlledRoyalPlay.response);
+      }
 
       const usageRows = await db.select({ count: sql<number>`count(*)` }).from(royalUsage).where(eq(royalUsage.orderId, orderId));
       const usedCount = Number(usageRows[0]?.count || 0);
@@ -21300,6 +22108,7 @@ app.get("/api/debug/slot-wins", async (_req, res) => {
 
   // ════════════════════ END ROYAL REELS ROUTES ════════════════════
 
+  registerInstantWinRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

@@ -42,6 +42,8 @@ import RingtonePopPage from "./pages/ringtone-pop";
 import AdminLogin from "./pages/admin/login";
 import AdminDashboard from "./pages/admin/dashboard";
 import AdminCompetitions from "./pages/admin/competitions";
+import AdminFeatured from "./pages/admin/admin-featured";
+import AdminCardQuantity from "./pages/admin/admin-card-quantity";
 import AdminSpinWheel from "./pages/admin/spin-wheel";
 import AdminScratchCard from "./pages/admin/scratch-card";
 import AdminUsers from "./pages/admin/users";
@@ -79,6 +81,7 @@ import VoltzBilling from "./pages/voltzBilling";
 import UserNotifications from "./components/notifications";
 import AdminFAQManager from "./pages/admin/faq-manager";
 import AdminPrizes from "./pages/admin/admin-prizes";
+import AdminInstantPool from "./pages/admin/instant-pool";
 import AdminCompetitionVideos from "./pages/admin/admin-competition-videos";
 import { initSocialBrowserWarning } from "./lib/facebook-browser-check";
 import AdminTicketManager from "./pages/admin/AdminTicketManager";
@@ -96,6 +99,11 @@ import AdminSlotMachineSettings from "./pages/admin/admin-slot-machine";
 import AdminBulkPoints from "./pages/admin/admin-bulk-points";
 import AdminSlotGame from "./pages/admin/admin-slot-spin";
 import GuestBilling from "./pages/guestbillling";
+import GuestCheckoutPage from "./pages/guest-checkout";
+import CreatePasswordPage from "./pages/create-password";
+import BasketPage from "./pages/basket";
+import MyPlaysPage from "./pages/my-plays";
+import BrandWait from "@/components/brand/BrandWait";
 
 function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -108,6 +116,8 @@ function Router() {
       {/* Public routes - always available */}
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/create-password" component={CreatePasswordPage} />
+      <Route path="/guest-checkout" component={GuestCheckoutPage} />
       <Route path="/verify-email" component={VerifyEmailPage} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
@@ -137,6 +147,8 @@ function Router() {
       {/* Authenticated routes - always registered, auth checked in component */}
       <Route path="/instant" component={instant} />
       <Route path="/wallet" component={Wallet} />
+      <Route path="/basket" component={BasketPage} />
+      <Route path="/my-plays" component={MyPlaysPage} />
       <Route path="/checkout/:orderId" component={Checkout} />
       <Route path="/spin-wheel" component={spinWheel} />
       <Route path="/scratch-card" component={ScratchCardPage} />
@@ -163,6 +175,8 @@ function Router() {
       <Route path="/admin/wheel-2-settings" component={AdminSpinWheelSettings} />
       <Route path="/admin/scratch-card" component={AdminScratchCard} />
       <Route path="/admin/competitions" component={AdminCompetitions} />
+      <Route path="/admin/featured" component={AdminFeatured} />
+      <Route path="/admin/card-quantity" component={AdminCardQuantity} />
       <Route path="/admin/entries" component={AdminEntries} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/orders" component={AdminOrders} />
@@ -187,6 +201,7 @@ function Router() {
       <Route path="/admin/ringtone-voltz/settings" component={AdminRingtoneVoltzSettings} />
       <Route path="/admin/faqs" component={AdminFAQManager} />
       <Route path="/admin/prize-table" component={AdminPrizes} />
+      <Route path="/admin/instant-pool" component={AdminInstantPool} />
       <Route path="/admin/promo-video" component={AdminCompetitionVideos} />
       <Route path="/admin/tickets" component={AdminTicketManagerPage} />
       <Route path="/admin/winners" component={AdminAddWinner} />
@@ -307,9 +322,12 @@ function AppWithMaintenance() {
     (maintenanceData?.maintenanceMode && authLoading && !isPublicRoute)
   ) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
+      <BrandWait
+        mode="page"
+        kicker="RingTone Riches"
+        headline="Loading"
+        subtitle="Getting the site ready."
+      />
     );
   }
 
@@ -353,7 +371,9 @@ function AppWithMaintenance() {
       )}
       
       {/* Adjust top padding based on maintenance banner */}
-      <div className={showMaintenanceBanner ? "pt-20 lg:pt-28" : "pt-20 lg:pt-24"}/>
+      <div
+        className={showMaintenanceBanner ? "rr-header-spacer rr-header-spacer--maintenance" : "rr-header-spacer"}
+      />
     
 
       <Router />

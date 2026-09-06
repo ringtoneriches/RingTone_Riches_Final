@@ -8,6 +8,7 @@ vite.config.ts.*
 
 # Local scratch / QA notes
 tmp/
+.tmp-checkout-shots/
 
 
 # Puppeteer profile/cache
@@ -25,3 +26,5 @@ temp_interactive_push.bat
 
 
 ringtone_prod.dump
+attached_assets/**/*.sql
+attached_assets/**/*.dump

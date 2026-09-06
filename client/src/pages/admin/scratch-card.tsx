@@ -1,8 +1,9 @@
 import AdminLayout from "@/components/admin/admin-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, Trophy, Upload, Settings, Archive, ArchiveRestore, Gift } from "lucide-react";
+import { Plus, Edit, Trash2, Trophy, Settings, Archive, ArchiveRestore, Gift } from "lucide-react";
+import { CompetitionImageFields } from "@/components/admin/competition-image-fields";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -17,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Competition } from "@shared/schema";
+import { competitionImageFormValues, formatPrizeAmountInput, getDefaultBadgeLabel, serializeBadgeLabel, serializePrizeAmount } from "@/lib/competition-display";
 import WinnerDrawDialog from "@/components/admin/winner-draw-dialog";
 import PrizeConfigSpin, {
   SpinPrizeData,
@@ -34,8 +36,13 @@ interface CompetitionFormData {
   title: string;
   description: string;
   imageUrl: string;
+  featuredImageUrl: string;
+  cardImageUrl: string;
+  pageImageUrl: string;
   type: "spin" | "scratch" | "instant";
   ticketPrice: string;
+  prizeAmount: string;
+  badgeLabel: string;
   maxTickets: string;
   ringtonePoints: string;
   endDate?: string;
@@ -55,14 +62,14 @@ function CompetitionForm({
   isLoading: boolean;
   fixedType?: "spin" | "scratch" | "instant";
 }) {
-  const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<CompetitionFormData>({
     title: data?.title || "",
     description: data?.description || "",
-    imageUrl: data?.imageUrl || "",
+    ...competitionImageFormValues(data),
     type: fixedType || data?.type || "instant",
     ticketPrice: data?.ticketPrice || "0.99",
+    prizeAmount: formatPrizeAmountInput(data?.prizeAmount),
+    badgeLabel: data?.badgeLabel || getDefaultBadgeLabel("scratch"),
     maxTickets: data?.maxTickets?.toString() || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     endDate: data?.endDate
@@ -70,46 +77,11 @@ function CompetitionForm({
       : "",
     prizeData: data?.prizeData as any,
   });
-  const [uploading, setUploading] = useState(false);
 
   const handlePrizeDataChange = (
     prizeData: SpinPrizeData | ScratchPrizeData | InstantPrizeData,
   ) => {
     setForm({ ...form, prizeData });
-  };
-
-  const handleImageUpload = async (file: File) => {
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-
-      const response = await fetch("/api/upload/competition-image", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Upload failed");
-      }
-
-      const { imagePath } = await response.json();
-      setForm({ ...form, imageUrl: imagePath });
-      toast({
-        title: "Success",
-        description: "Image uploaded successfully",
-      });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Upload failed",
-        description: error.message,
-      });
-    } finally {
-      setUploading(false);
-    }
   };
 
   return (
@@ -154,51 +126,10 @@ function CompetitionForm({
           />
         </div>
 
-        <div>
-          <Label>Competition Image</Label>
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    handleImageUpload(file);
-                    if (fileInputRef.current) {
-                      fileInputRef.current.value = "";
-                    }
-                  }
-                }}
-                disabled={uploading}
-                className="hidden"
-                data-testid="input-image-upload"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                disabled={uploading}
-                onClick={() => fileInputRef.current?.click()}
-                data-testid="button-select-image"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {uploading ? "Uploading..." : "Select Image"}
-              </Button>
-            </div>
-            {form.imageUrl && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <img
-                  src={form.imageUrl}
-                  alt="Preview"
-                  className="h-20 w-20 object-cover rounded border"
-                />
-                <span className="truncate">{form.imageUrl.split("/").slice(-1)[0]}</span>
-              </div>
-            )}
-          </div>
-        </div>
+        <CompetitionImageFields
+          values={form}
+          onChange={(patch) => setForm({ ...form, ...patch })}
+        />
 
         {!fixedType && (
           <div>
@@ -268,6 +199,35 @@ function CompetitionForm({
               data-testid="input-ringtonePoints"
             />
           </div>
+        </div>
+
+        <div>
+          <Label>Win up to (£)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="e.g. 2000"
+            value={form.prizeAmount}
+            onChange={(e) => setForm({ ...form, prizeAmount: e.target.value })}
+            data-testid="input-prizeAmount"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Shown on cards as Instantly win up to. Leave empty to use a £ amount in the title.
+          </p>
+        </div>
+
+        <div>
+          <Label>Card badge</Label>
+          <Input
+            value={form.badgeLabel}
+            maxLength={40}
+            onChange={(e) => setForm({ ...form, badgeLabel: e.target.value })}
+            data-testid="input-badgeLabel"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Top-left label on listing cards. Defaults to the game type name.
+          </p>
         </div>
 
         <div>
@@ -453,6 +413,8 @@ export default function AdminScratchCard() {
       const payload: any = {
         ...formData,
         ticketPrice: parseFloat(formData.ticketPrice).toFixed(2),
+        prizeAmount: serializePrizeAmount(formData.prizeAmount),
+        badgeLabel: serializeBadgeLabel(formData.badgeLabel, formData.type),
         maxTickets: parseInt(formData.maxTickets),
         ringtonePoints: parseInt(formData.ringtonePoints),
       };
@@ -491,6 +453,8 @@ export default function AdminScratchCard() {
       const payload: any = {
         ...data,
         ticketPrice: parseFloat(data.ticketPrice).toFixed(2),
+        prizeAmount: serializePrizeAmount(data.prizeAmount),
+        badgeLabel: serializeBadgeLabel(data.badgeLabel, data.type),
         maxTickets: parseInt(data.maxTickets),
         ringtonePoints: parseInt(data.ringtonePoints),
       };
@@ -641,7 +605,22 @@ export default function AdminScratchCard() {
               <Settings className="w-4 h-4" />
               Scratch Settings
             </Button>
+            <Button
+              onClick={() => setCreateDialogOpen(true)}
+              className="bg-amber-500 hover:bg-amber-600 text-black"
+              data-testid="button-create-scratch"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Scratch Card
+            </Button>
           </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4 md:p-6">
+          <p className="text-sm text-muted-foreground mb-4">
+            Change what each flag pays from here. Brazil, England, and the rest update on the next play — no developer needed.
+          </p>
+          <PrizeConfigScratch onSave={() => {}} />
         </div>
 
         {/* Active Competitions Section */}
@@ -653,9 +632,12 @@ export default function AdminScratchCard() {
                 <p className="text-muted-foreground mb-4">
                   No active scratch card competitions yet
                 </p>
-                {/* <Button onClick={() => setCreateDialogOpen(true)}>
+                <Button
+                  onClick={() => setCreateDialogOpen(true)}
+                  className="bg-amber-500 hover:bg-amber-600 text-black"
+                >
                   Create Your First Scratch Card
-                </Button> */}
+                </Button>
               </div>
             ) : (
               activeCompetitions.map((competition) => (

@@ -43,6 +43,7 @@ export class Preload extends Scene {
       progressBar.clear();
       progressBar.fillStyle(0xa16af7, 1);
       progressBar.fillRoundedRect(w / 2 - 160, h / 2 - 10, 320 * v, 20, 6);
+      this.game.events.emit("slot-load-progress", v);
     });
 
     this.load.on("complete", () => {
@@ -55,15 +56,10 @@ export class Preload extends Scene {
 
     // ── Core machine visuals ──
     // NOTE: keys below MUST match what SlotGame.tsx calls this.add.image(x, y, "KEY") with.
-    this.load.image("slot", "png/SlotMachine.png");
-    this.load.image("background", "png/Background_2.png");
-    console.log("Loading background...");
-    this.load.image("reel", "png/Reel3x3.png");
-    this.load.image("handle", "png/SlotMachineHandle.png");
-    this.load.image("handle_ball", "png/red/HandleBall.png");
-    this.load.image("button_spin", "png/red/ButtonSpinUp2.png");
-    this.load.image("button_spin_hover", "png/red/ButtonSpinUp3.png");
-    this.load.image("logo", "png/Symbols/logo.png");
+    this.load.image("slot", "png/SlotMachine.webp");
+    this.load.image("logo", "png/BrandLogo.webp");
+    this.load.image("background", "png/Background_2.webp");
+    this.load.image("reel", "png/Reel3x3.webp");
 
     // Lamps — were missing entirely before, which is why lampOn/lampOff never showed.
     this.load.image("lamp_on", "png/red/LampOn.png");
@@ -71,7 +67,7 @@ export class Preload extends Scene {
 
     // ── Symbols ──
     SYMBOL_KEYS.forEach(({ key, file }) => {
-      this.load.image(key, `png/Symbols/${file}`);
+      this.load.image(key, `png/Symbols/${file.replace(/\.png$/i, ".webp")}`);
     });
 
     // ── Audio ──
@@ -83,11 +79,14 @@ export class Preload extends Scene {
     this.load.audio("wincoins_clip", ["audio/win_coins.wav"]);
   }
 
- create() {
-  SYMBOL_KEYS.forEach(({ key }) => {
-    this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
-  });
+  create() {
+    const linear = Phaser.Textures.FilterMode.LINEAR;
+    for (const key of ["slot", "background", "reel", "logo", ...ALL_SYM_KEYS]) {
+      if (this.textures.exists(key)) {
+        this.textures.get(key).setFilter(linear);
+      }
+    }
 
-  this.scene.start("SlotGame");
-}
+    this.scene.start("SlotGame");
+  }
 }

@@ -8,6 +8,7 @@ import popSoundFile from "@assets/balloon-pop-sound_1766057573479.mp3";
 import hitSoundFile from "@assets/hitsound_1769687506654.mp3";
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogAction, AlertDialogCancel } from "../ui/alert-dialog";
 import { useLocation } from "wouter";
+import GameResultOverlay from "@/components/games/GameResultOverlay";
 
 interface Prize {
   slotIndex: number;
@@ -1088,225 +1089,77 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
         </div>
       </div>
       
-      {showResultPopup && currentResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          {/* High Quality Game Result Popup - Entrance animation then static */}
-          <div className="relative max-w-xs sm:max-w-sm w-full mx-3 sm:mx-4" style={{ animation: 'popup-entrance 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards' }}>
-            
-            
-            {/* Static glow effect - premium quality */}
-            <div className={`absolute -inset-4 sm:-inset-6 rounded-2xl sm:rounded-3xl blur-xl sm:blur-2xl ${
-              resultType === "win" 
-                ? "bg-gradient-to-br from-amber-400 via-yellow-500 to-orange-500 opacity-40"
-                : resultType === "freeplay"
-                ? "bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-600 opacity-40"
-                : "bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800 opacity-20"
-            }`} />
-            
-            {/* Main popup container - premium quality with solid background */}
-            <div className={`relative rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border-2 sm:border-[3px] ${
-              resultType === "win" 
-                ? "bg-gradient-to-b from-amber-950 via-slate-900 to-slate-950 border-amber-400/70"
-                : resultType === "freeplay"
-                ? "bg-gradient-to-b from-cyan-950 via-slate-900 to-slate-950 border-cyan-400/70"
-                : "bg-gradient-to-b from-gray-800 via-gray-900 to-slate-950 border-gray-500/40"
-            }`}>
-              
-              {/* One-time shine sweep effect */}
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute -inset-full w-[300%] h-[300%] bg-gradient-to-r from-transparent via-white/15 to-transparent rotate-12" style={{ animation: 'shine-sweep 0.8s ease-out forwards', animationDelay: '0.3s' }} />
-              </div>
-              
-              {/* Top decorative banner - premium quality */}
-              <div className={`relative h-24 sm:h-28 flex items-center justify-center overflow-hidden ${
-                resultType === "win"
-                  ? "bg-gradient-to-r from-amber-600/40 via-yellow-500/50 to-amber-600/40"
-                  : resultType === "freeplay"
-                  ? "bg-gradient-to-r from-cyan-600/40 via-blue-500/50 to-cyan-600/40"
-                  : "bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40"
-              }`}>
-                {/* Static sparkle decorations - only for wins and freeplay */}
-                {resultType !== "lose" && (
-                  <div className="absolute inset-0 overflow-hidden">
-                    {[...Array(8)].map((_, i) => (
-                      <div
-                        key={i}
-                        className={`absolute w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full ${resultType === "win" ? "bg-amber-300" : "bg-cyan-300"}`}
-                        style={{
-                          left: `${10 + i * 11}%`,
-                          top: `${20 + (i % 4) * 18}%`,
-                          opacity: 0.5 + (i % 3) * 0.15
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-                
-                {/* Main icon with entrance animation - larger for premium look */}
-                <div className="relative z-10" style={{ animation: 'icon-entrance 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards', animationDelay: '0.15s', opacity: 0, transform: 'scale(0)' }}>
-                  {resultType === "win" ? (
-                    <div className="relative">
-                      <div className="absolute inset-0 rounded-full bg-amber-400 blur-xl opacity-50" />
-                      <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-amber-200 via-yellow-400 to-amber-500 flex items-center justify-center shadow-2xl border-3 sm:border-4 border-amber-100/60">
-                        <Crown className="w-10 h-10 sm:w-12 sm:h-12 text-amber-900 drop-shadow-lg" />
-                      </div>
-                    </div>
-                  ) : resultType === "freeplay" ? (
-                    <div className="relative">
-                      <div className="absolute inset-0 rounded-full bg-cyan-400 blur-xl opacity-50" />
-                      <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-cyan-300 via-blue-500 to-purple-500 flex items-center justify-center shadow-2xl border-3 sm:border-4 border-cyan-200/60">
-                        <Gift className="w-10 h-10 sm:w-12 sm:h-12 text-white drop-shadow-lg" />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="relative">
-                      <div className="absolute inset-0 rounded-full bg-gray-500 blur-xl opacity-30" />
-                      <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-gray-500 via-gray-600 to-gray-700 flex items-center justify-center shadow-2xl border-3 sm:border-4 border-gray-400/40">
-                        <X className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 drop-shadow-lg" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="relative z-10 p-5 sm:p-7 pt-4 sm:pt-5" style={{ animation: 'content-fade-in 0.5s ease-out forwards', animationDelay: '0.4s', opacity: 0 }}>
-                {/* Close button */}
-                <button 
-                  onClick={closeResultPopup}
-                  className="absolute top-2 right-2 sm:top-3 sm:right-3 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all"
-                  data-testid="button-close-popup"
-                >
-                  <X className="w-4 h-4 sm:w-5 sm:h-5 text-white/80" />
-                </button>
-                
-                {resultType === "win" ? (
-                  <div className="flex flex-col items-center text-center">
-                    {/* Winner header - dynamic based on prize value */}
-                    <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-                      <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
-                      <span className="text-sm sm:text-base font-black tracking-[0.15em] sm:tracking-[0.2em] text-amber-400 uppercase">
-                        {currentResult.rewardType === "cash" && parseFloat(currentResult.prizeValue) >= 1000
-                          ? "Jackpot Winner"
-                          : currentResult.rewardType === "cash" && parseFloat(currentResult.prizeValue) >= 100
-                          ? "Big Winner"
-                          : currentResult.rewardType === "cash" && parseFloat(currentResult.prizeValue) >= 10
-                          ? "Winner"
-                          : currentResult.rewardType === "points" && parseFloat(currentResult.prizeValue) >= 1000
-                          ? "Mega Points"
-                          : currentResult.rewardType === "points" && parseFloat(currentResult.prizeValue) >= 100
-                          ? "Points Won"
-                          : "You Won"}
-                      </span>
-                      <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
-                    </div>
-                    
-                    {/* Prize amount with premium styling - amber/gold theme */}
-                    <div className="relative my-4 sm:my-5">
-                      <div className="absolute inset-0 blur-2xl sm:blur-3xl bg-amber-400/40 rounded-full" />
-                      <div className="relative text-5xl sm:text-6xl lg:text-7xl font-black" style={{
-                        background: 'linear-gradient(180deg, #fffbeb 0%, #fde68a 20%, #fbbf24 50%, #f59e0b 75%, #d97706 100%)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        filter: 'drop-shadow(0 4px 12px rgba(251,191,36,0.4))',
-                      }}>
-                        {currentResult.rewardType === "cash" 
-                          ? `£${parseFloat(currentResult.prizeValue).toFixed(2)}`
-                          : parseInt(currentResult.prizeValue).toLocaleString()}
-                      </div>
-                      {currentResult.rewardType !== "cash" && (
-                        <div className="text-lg sm:text-xl font-bold text-amber-400 mt-1">POINTS WON</div>
-                      )}
-                    </div>
-                    
-                    {/* Success badge - static, high quality */}
-                    <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-2 sm:py-2.5 bg-emerald-500/25 rounded-full border-2 border-emerald-400/50">
-                      <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-emerald-400 shadow-lg shadow-emerald-400/50" />
-                      <span className="text-emerald-300 text-sm sm:text-base font-bold">Added to your account</span>
-                    </div>
-                  </div>
-                ) : resultType === "freeplay" ? (
-                  <div className="flex flex-col items-center text-center">
-                    <div className="text-sm sm:text-base font-black tracking-[0.15em] sm:tracking-[0.2em] text-cyan-400 uppercase mb-2 sm:mb-3">Bonus Unlocked</div>
-                    
-                    <div className="relative my-4 sm:my-5">
-                      <div className="absolute inset-0 blur-2xl bg-cyan-400/30 rounded-full" />
-                      <div className="relative text-5xl sm:text-6xl font-black" style={{
-                        background: 'linear-gradient(135deg, #e0f2fe 0%, #67e8f9 30%, #22d3ee 60%, #0891b2 100%)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        filter: 'drop-shadow(0 4px 12px rgba(34,211,238,0.4))',
-                      }}>
-                        +1 FREE
-                      </div>
-                      <div className="text-lg sm:text-xl font-bold text-cyan-300 mt-1">PLAY</div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-2 sm:py-2.5 bg-cyan-500/25 rounded-full border-2 border-cyan-400/50">
-                      <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />
-                      <span className="text-cyan-300 text-sm sm:text-base font-bold">Drop again for free!</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center text-center">
-                    <div className="text-sm sm:text-base font-black tracking-[0.15em] sm:tracking-[0.2em] text-red-400 uppercase mb-2 sm:mb-3">Unlucky!</div>
-                    
-                    <div className="relative my-4 sm:my-5">
-                      <div className="absolute inset-0 blur-2xl bg-red-500/25 rounded-full" />
-                      <div className="relative text-4xl sm:text-5xl font-black" style={{
-                        background: 'linear-gradient(180deg, #fecaca 0%, #f87171 40%, #ef4444 70%, #dc2626 100%)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        filter: 'drop-shadow(0 4px 12px rgba(239,68,68,0.3))',
-                      }}>
-                        NO WIN
-                      </div>
-                      <div className="text-base sm:text-lg text-gray-400 mt-2 sm:mt-3">You won nothing this time</div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-2 sm:py-2.5 bg-gray-500/20 rounded-xl border-2 border-gray-500/40">
-                      <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                      <span className="text-gray-400 text-sm sm:text-base font-medium">Try again for a chance to win!</span>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Action buttons - responsive sizing */}
-                <div className="flex flex-col gap-2 sm:gap-3 mt-4 sm:mt-6">
-                  {localPlaysRemaining > 0 && (
-                    <Button
-                      onClick={() => {
-                        closeResultPopup();
-                        resetPegHitCounts();
-                        setTimeout(() => dropBall(), 100);
-                      }}
-                      className={`w-full h-12 sm:h-14 text-base sm:text-lg font-black rounded-xl sm:rounded-2xl border-0 shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] ${
-                        resultType === "win"
-                          ? "bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 hover:from-amber-400 hover:via-yellow-400 hover:to-amber-400 text-amber-900 shadow-amber-500/40"
-                          : resultType === "freeplay"
-                          ? "bg-gradient-to-r from-cyan-500 via-blue-500 to-cyan-500 hover:from-cyan-400 hover:via-blue-400 hover:to-cyan-400 text-white shadow-cyan-500/40"
-                          : "bg-gradient-to-r from-gray-600 via-gray-500 to-gray-600 text-white shadow-gray-500/30"
-                      }`}
-                      data-testid="button-play-again"
-                    >
-                      <Play className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                      DROP AGAIN
-                    </Button>
-                  )}
-                  <Button
-                    onClick={closeResultPopup}
-                    variant="ghost"
-                    className="w-full h-9 sm:h-10 text-white/50 hover:text-white hover:bg-white/10 rounded-lg sm:rounded-xl text-sm"
-                    data-testid="button-close-result"
-                  >
-                    Close
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {currentResult && (
+      <GameResultOverlay
+        open={!!(showResultPopup && currentResult)}
+        kind={resultType === "win" ? "win" : resultType === "freeplay" ? "extra" : "lose"}
+        onClose={closeResultPopup}
+        kicker={
+          resultType === "win"
+            ? currentResult.rewardType === "cash" && parseFloat(currentResult.prizeValue) >= 1000
+              ? "Jackpot winner"
+              : currentResult.rewardType === "cash" && parseFloat(currentResult.prizeValue) >= 100
+                ? "Big winner"
+                : currentResult.rewardType === "cash" && parseFloat(currentResult.prizeValue) >= 10
+                  ? "Winner"
+                  : currentResult.rewardType === "points" && parseFloat(currentResult.prizeValue) >= 1000
+                    ? "Mega points"
+                    : currentResult.rewardType === "points" && parseFloat(currentResult.prizeValue) >= 100
+                      ? "Points won"
+                      : "You won"
+            : resultType === "freeplay"
+              ? "Bonus unlocked"
+              : "Unlucky"
+        }
+        title={resultType === "win" ? "YOU WON" : resultType === "freeplay" ? "FREE PLAY" : "UNLUCKY"}
+        subtitle={
+          resultType === "freeplay"
+            ? "Drop again for free"
+            : resultType === "lose"
+              ? "You won nothing this time"
+              : undefined
+        }
+        prizeText={
+          resultType === "win"
+            ? currentResult.rewardType === "cash"
+              ? `£${parseFloat(currentResult.prizeValue).toFixed(2)}`
+              : parseInt(currentResult.prizeValue).toLocaleString()
+            : resultType === "freeplay"
+              ? "+1 FREE PLAY"
+              : undefined
+        }
+        prizeSub={
+          resultType === "win"
+            ? currentResult.rewardType === "cash"
+              ? "Added to your account"
+              : "Points won"
+            : resultType === "freeplay"
+              ? "Use it on your next drop"
+              : undefined
+        }
+        body={
+          resultType === "lose"
+            ? "Try again for a chance to win."
+            : undefined
+        }
+        primaryLabel={localPlaysRemaining > 0 ? "Drop again" : undefined}
+        onPrimary={
+          localPlaysRemaining > 0
+            ? () => {
+                closeResultPopup();
+                resetPegHitCounts();
+                setTimeout(() => dropBall(), 100);
+              }
+            : undefined
+        }
+        primaryTestId="button-play-again"
+        secondaryLabel="Close"
+        onSecondary={closeResultPopup}
+        closeTestId="button-close-popup"
+        secondaryTestId="button-close-result"
+      />
       )}
-      
+
       {/* ── Plinko-themed No Plays Dialog ─────────────────────────────────────── */}
       <AlertDialog open={showNoPlaysDialog} onOpenChange={setShowNoPlaysDialog}>
         <AlertDialogContent className="max-w-[360px] p-0 overflow-hidden border-0 bg-transparent">

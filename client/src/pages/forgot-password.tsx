@@ -1,13 +1,11 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Mail } from "lucide-react";
+import AuthShell from "@/components/auth/AuthShell";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -51,104 +49,79 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background/90 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold gradient-text">FORGOT PASSWORD</h1>
+    <AuthShell
+      kicker="Account recovery"
+      title="FORGOT PASSWORD"
+      sub={
+        submitted
+          ? "Check your inbox and follow the reset link."
+          : "We’ll email you a link if that address is on an account."
+      }
+    >
+      {!submitted ? (
+        <form onSubmit={handleSubmit} className="rr-auth-form">
+          <div className="rr-auth-field">
+            <label htmlFor="email" className="rr-auth-label">Email address</label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@email.com"
+              className="rr-auth-input"
+              required
+              data-testid="input-email"
+            />
+            <p className="rr-auth-hint">
+              Enter the email on your Ringtone Riches account.
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            className="rr-cta inline-flex h-12 w-full items-center justify-center rounded-xl text-sm font-black uppercase tracking-[0.12em]"
+            disabled={resetMutation.isPending}
+            data-testid="button-submit"
+          >
+            {resetMutation.isPending ? "Sending…" : "Send reset link"}
+          </button>
+
+          <div className="rr-auth-footer">
+            <p>Remember your password?</p>
+            <Link href="/login">
+              <span className="rr-auth-ghost cursor-pointer" data-testid="button-back-to-login">
+                Back to login
+              </span>
+            </Link>
+          </div>
+        </form>
+      ) : (
+        <div className="rr-auth-form">
+          <div className="rr-auth-note rr-auth-note--ok rr-auth-status">
+            <Mail className="mx-auto h-7 w-7 text-[#00b67a]" />
+            <h3>Check your email</h3>
+            <p>
+              If an account exists for <strong>{email}</strong>, a reset link is on its way.
+              Check spam if you don’t see it. The link expires in 1 hour.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSubmitted(false)}
+            className="rr-auth-ghost"
+            data-testid="button-try-again"
+          >
+            Try again
+          </button>
+
+          <Link href="/login">
+            <span className="rr-auth-ghost cursor-pointer" data-testid="button-back-to-login-success">
+              Back to login
+            </span>
+          </Link>
         </div>
-
-        <Card className="bg-black/40 border-ringtone-900/20 backdrop-blur-sm shadow-2xl">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold gradient-text text-center flex items-center justify-center gap-2">
-              <Mail className="w-6 h-6" />
-              Reset Password
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!submitted ? (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="email" className="text-white">
-                    Email Address
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
-                    className="bg-white text-black border-gray-300 mt-2"
-                    required
-                    data-testid="input-email"
-                  />
-                  <p className="text-sm text-gray-400 mt-2">
-                    Enter the email address associated with your account and we'll send you a link to reset your password.
-                  </p>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-yellow-600 hover:bg-ringtone-700 text-white font-bold"
-                  disabled={resetMutation.isPending}
-                  data-testid="button-submit"
-                >
-                  {resetMutation.isPending ? "SENDING..." : "SEND RESET LINK"}
-                </Button>
-
-                <div className="text-center border-t border-gray-600 pt-4">
-                  <p className="text-white text-sm mb-2">Remember your password?</p>
-                  <Link href="/login">
-                    <Button
-                      variant="outline"
-                      className="border-ringtone-600 text-ringtone-400 hover:bg-ringtone-600/10"
-                      data-testid="button-back-to-login"
-                    >
-                      BACK TO LOGIN
-                    </Button>
-                  </Link>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-4 text-center">
-                <div className="p-6 bg-green-900/20 border border-green-500/30 rounded-lg">
-                  <div className="text-4xl mb-4">✉️</div>
-                  <h3 className="text-xl font-bold text-white mb-2">Check Your Email</h3>
-                  <p className="text-gray-300 mb-4">
-                    We've sent a password reset link to <strong>{email}</strong>
-                  </p>
-                  <p className="text-sm text-gray-400">
-                    If you don't see the email, check your spam folder. The link will expire in 1 hour.
-                  </p>
-                </div>
-
-                <div className="border-t border-gray-600 pt-4">
-                  <p className="text-white text-sm mb-2">Didn't receive the email?</p>
-                  <Button
-                    onClick={() => setSubmitted(false)}
-                    variant="outline"
-                    className="border-ringtone-600 text-ringtone-400 hover:bg-ringtone-600/10"
-                    data-testid="button-try-again"
-                  >
-                    TRY AGAIN
-                  </Button>
-                </div>
-
-                <div className="border-t border-gray-600 pt-4">
-                  <Link href="/login">
-                    <Button
-                      variant="outline"
-                      className="border-ringtone-600 text-ringtone-400 hover:bg-ringtone-600/10"
-                      data-testid="button-back-to-login-success"
-                    >
-                      BACK TO LOGIN
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      )}
+    </AuthShell>
   );
 }

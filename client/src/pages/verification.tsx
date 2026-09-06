@@ -370,7 +370,7 @@ const calculateAge = (birthDate: string | Date | null): number | null => {
               <Button
                 onClick={handleSubmit}
                 disabled={!documentType || !imageFile || submitVerificationMutation.isPending}
-                className="flex-1 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-bold"
+                className="flex-1 rr-cta font-bold"
               >
                 {submitVerificationMutation.isPending ? (
                   <span className="flex items-center justify-center gap-2">
@@ -452,7 +452,7 @@ const calculateAge = (birthDate: string | Date | null): number | null => {
             
             <Button 
               onClick={() => setShowResubmitForm(true)}
-              className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-bold"
+              className="w-full rr-cta font-bold"
             >
               Submit New Verification
             </Button>
@@ -556,7 +556,7 @@ const calculateAge = (birthDate: string | Date | null): number | null => {
           <Button
             onClick={handleSubmit}
             disabled={!documentType || !imageFile || submitVerificationMutation.isPending}
-            className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-bold py-6"
+            className="w-full rr-cta font-bold py-6"
           >
             {submitVerificationMutation.isPending ? (
               <span className="flex items-center gap-2">

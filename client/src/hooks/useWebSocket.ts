@@ -21,9 +21,13 @@ type WebSocketEvent =
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const closedByClientRef = useRef(false);
 
   useEffect(() => {
+    closedByClientRef.current = false;
+
     function connect() {
+      if (closedByClientRef.current) return;
       try {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -104,10 +108,9 @@ export function useWebSocket() {
         };
 
         ws.onclose = () => {
-          console.log('WebSocket disconnected - attempting to reconnect...');
           wsRef.current = null;
-          
-          // Reconnect after 3 seconds
+          if (closedByClientRef.current) return;
+          console.log('WebSocket disconnected - attempting to reconnect...');
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
           }, 3000);
@@ -120,6 +123,7 @@ export function useWebSocket() {
     connect();
 
     return () => {
+      closedByClientRef.current = true;
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }

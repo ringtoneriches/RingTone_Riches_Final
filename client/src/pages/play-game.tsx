@@ -3,20 +3,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import Header from "@/components/layout/header";
-import Footer from "@/components/layout/footer";
 import { Competition, User, Ticket } from "@shared/schema";
+import { GameEmpty, GameShell, GameHero } from "@/components/games/GameChrome";
+import { Target } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import SpinWheel from "@/components/games/spinwheeltest";
-import ScratchCardTest from "@/components/games/scratch-card-test"; // Import your scratch card component
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import ScratchCardTest from "@/components/games/scratch-card-test";
+import GameResultOverlay from "@/components/games/GameResultOverlay";
 
 export default function PlayGamePage() {
   const { id } = useParams();
@@ -167,184 +161,130 @@ const playScratchCardMutation = useMutation({
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <h1 className="text-4xl font-bold mb-4">Login Required</h1>
-          <p className="text-muted-foreground mb-8">Please login to play games.</p>
-          <button 
-            onClick={() => window.location.href = "//login"}
-            className="bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:opacity-90 transition-opacity"
-          >
-            Login
-          </button>
-        </div>
-        <Footer />
-      </div>
+      <GameEmpty
+        title="LOGIN REQUIRED"
+        message="Please login to play games."
+        actionLabel="Login"
+        href="/login"
+      />
     );
   }
 
   if (!competition) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <h1 className="text-4xl font-bold mb-4">Competition Not Found</h1>
-          <button 
-            onClick={() => setLocation("/")}
-            className="bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:opacity-90 transition-opacity"
-          >
-            Back to Competitions
-          </button>
-        </div>
-        <Footer />
-      </div>
+      <GameEmpty
+        title="COMPETITION GONE"
+        message="This competition could not be found."
+        actionLabel="Back to competitions"
+        href="/"
+      />
     );
   }
 
   if (availableTickets.length === 0) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <h1 className="text-4xl font-bold mb-4">No Tickets Available</h1>
-          <p className="text-muted-foreground mb-8">You need to purchase tickets first to play this game.</p>
-          <button 
-            onClick={() => setLocation(`/competition/${id}`)}
-            className="bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:opacity-90 transition-opacity"
-          >
-            Purchase Tickets
-          </button>
-        </div>
-        <Footer />
-      </div>
+      <GameEmpty
+        title="NO TICKETS"
+        message="You need to purchase tickets first to play this game."
+        actionLabel="Purchase tickets"
+        href={`/competition/${id}`}
+      />
     );
   }
 
   const prizes = (competition.prizeData as any) || [];
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Header />
-      
-      <div className="container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold gradient-text mb-4">
-              {competition.type === "spin" ? "SPIN THE WHEEL" : "SCRATCH CARD"}
-            </h1>
-            <p className="text-xl text-muted-foreground">{competition.title}</p>
-            
-            {/* Ticket Count Display */}
-            <div className="bg-primary/20 rounded-lg px-6 py-3 inline-block mt-4">
-              <span className="text-lg font-semibold">
-                Available {competition.type === "spin" ? "Spins" : "Scratch Cards"}: <span className="text-primary">{ticketCount}</span>
-              </span>
+    <GameShell>
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:py-12">
+        <GameHero
+          kicker={competition.type === "spin" ? "Spin · play" : "Scratch · play"}
+          title={competition.type === "spin" ? "SPIN THE WHEEL" : "SCRATCH CARD"}
+          subtitle={competition.title}
+          remaining={ticketCount}
+          remainingLabel={competition.type === "spin" ? "spins left" : "cards left"}
+          Icon={Target}
+        />
+
+        <div className="space-y-8">
+          {competition.type === "spin" ? (
+            <div className="text-center">
+              <SpinWheel
+                onSpinComplete={handleSpinComplete}
+                isSpinning={isSpinning}
+                setIsSpinning={setIsSpinning}
+              />
             </div>
-          </div>
-
-        <div className="space-y-8 opacity-100">
-  {/* Game Interface */}
-  {competition.type === "spin" ? (
-    <div className="text-center">
-      <SpinWheel
-        onSpinComplete={handleSpinComplete}
-        isSpinning={isSpinning}
-        setIsSpinning={setIsSpinning}
-      />
-    </div>
-  ) : (
-    <div className="text-center">
-      <ScratchCardTest
-        competition={competition}
-        onScratchComplete={handleScratchComplete}
-      />
-    </div>
-  )}
-</div>
-
+          ) : (
+            <div className="text-center">
+              <ScratchCardTest
+                competition={competition}
+                onScratchComplete={handleScratchComplete}
+              />
+            </div>
+          )}
         </div>
       </div>
-       <Dialog open={isResultModalOpen} onOpenChange={setIsResultModalOpen}>
-  <DialogContent className="max-w-md md:max-w-xl flex flex-col justify-center items-center text-center">
-    <DialogHeader className="text-center">
-      <DialogTitle className="text-3xl w-full text-center font-bold">
-        {gameResult?.success ? "🎉 Congratulations!" : "😔 Try Again!"}
-      </DialogTitle>
-    </DialogHeader>
 
-    {gameResult?.prize && (
-      <div className="space-y-4 mt-4">
-        {competition.type === "spin" && gameResult.prize.brand && (
-          <p className="text-xl">
-            You landed on: <strong>{gameResult.prize.brand}</strong>
-          </p>
-        )}
-
-        <p className="text-2xl font-bold text-primary">
-          {competition.type === "spin" ? (
-            typeof gameResult.prize.amount === "number"
-              ? `£${gameResult.prize.amount}`
-              : gameResult.prize.amount || gameResult.prize
-          ) : gameResult.prize.type === "cash" ? (
-            `£${gameResult.prize.value}`
-          ) : (
-            `${gameResult.prize.value} Ringtone Points`
-          )}
-        </p>
-
-        {(competition.type === "spin" &&
-          typeof gameResult.prize.amount === "number" &&
-          gameResult.prize.amount > 0) ||
-        (competition.type === "scratch" &&
-          gameResult.prize.type === "cash" &&
-          parseFloat(gameResult.prize.value.replace(/[^0-9.]/g, "")) > 0) ? (
-          <p className="text-green-600">
-            Prize has been added to your wallet!
-          </p>
-        ) : competition.type === "scratch" &&
-          gameResult.prize.type === "points" ? (
-          <p className="text-green-600">
-            Ringtone points have been added to your account!
-          </p>
-        ) : null}
-      </div>
-    )}
-
-    <DialogFooter className="mt-6 flex justify-center gap-4">
-      {ticketCount > 0 ? (
-        <button
-          onClick={() => {
+      <GameResultOverlay
+        open={isResultModalOpen}
+        kind={gameResult?.success ? "win" : "lose"}
+        onClose={() => setIsResultModalOpen(false)}
+        kicker={gameResult?.success ? "Congratulations" : "No win"}
+        title={gameResult?.success ? "YOU WON" : "UNLUCKY"}
+        subtitle={
+          competition.type === "spin" && gameResult?.prize?.brand
+            ? `You landed on ${gameResult.prize.brand}`
+            : undefined
+        }
+        prizeText={
+          gameResult?.prize
+            ? competition.type === "spin"
+              ? typeof gameResult.prize.amount === "number"
+                ? `£${gameResult.prize.amount}`
+                : gameResult.prize.amount || String(gameResult.prize)
+              : gameResult.prize.type === "cash"
+                ? `£${gameResult.prize.value}`
+                : `${gameResult.prize.value} Ringtone Points`
+            : undefined
+        }
+        prizeSub={
+          (competition.type === "spin" &&
+            typeof gameResult?.prize?.amount === "number" &&
+            gameResult.prize.amount > 0) ||
+          (competition.type === "scratch" &&
+            gameResult?.prize?.type === "cash" &&
+            parseFloat(String(gameResult.prize.value).replace(/[^0-9.]/g, "")) > 0)
+            ? "Prize has been added to your wallet"
+            : competition.type === "scratch" && gameResult?.prize?.type === "points"
+              ? "Ringtone points have been added to your account"
+              : undefined
+        }
+        body={
+          gameResult?.success || gameResult?.prize
+            ? undefined
+            : "No luck this time. The next play could be yours."
+        }
+        primaryLabel={
+          ticketCount > 0
+            ? `Play again (${ticketCount - 1} ${competition.type === "spin" ? "spins" : "scratch"} left)`
+            : "Purchase more tickets"
+        }
+        onPrimary={() => {
+          if (ticketCount > 0) {
             handlePlayAgain();
             setIsResultModalOpen(false);
-          }}
-          className="bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:opacity-90 transition-opacity"
-        >
-          Play Again ({ticketCount - 1}{" "}
-          {competition.type === "spin" ? "spins" : "scratch"} left)
-        </button>
-      ) : (
-        <button
-          onClick={() => setLocation(`/competition/${id}`)}
-          className="bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:opacity-90 transition-opacity"
-        >
-          Purchase More Tickets
-        </button>
-      )}
-      <button
-        onClick={() => {
+          } else {
+            setLocation(`/competition/${id}`);
+          }
+        }}
+        secondaryLabel="Back to competitions"
+        onSecondary={() => {
           setIsResultModalOpen(false);
           setLocation("/");
         }}
-        className="bg-muted text-muted-foreground px-6 py-3 rounded-lg hover:bg-primary hover:text-primary-foreground transition-colors"
-      >
-        Back to Competitions
-      </button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-      <Footer />
-    </div>
+      />
+    </GameShell>
   );
 }
 

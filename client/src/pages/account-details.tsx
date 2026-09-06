@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import Header from "@/components/layout/header";
+import BrandWait from "@/components/brand/BrandWait";
 
 type User = {
  id: string;
@@ -28,9 +29,12 @@ export default function AccountDetails() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p className="text-muted-foreground">Loading account details...</p>
-      </div>
+      <BrandWait
+        mode="page"
+        kicker="Account"
+        headline="Loading account"
+        subtitle="Fetching your details."
+      />
     );
   }
 

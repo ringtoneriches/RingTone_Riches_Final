@@ -14,6 +14,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { getNationFlag } from "@/lib/scratch-nations";
+
+function symbolSrc(key: string) {
+  return getNationFlag(key)?.src || `/flags/${key}.svg`;
+}
 
 export interface ScratchCardImageConfig {
   id?: string;
@@ -32,27 +37,16 @@ export interface ScratchPrizeData {
   images?: ScratchCardImageConfig[];
 }
 
-const DEFAULT_LANDMARK_IMAGES = [
-  { name: "Barrier Reef", key: "barrier_reef" },
-  { name: "Angel of the North", key: "angel_of_north" },
-  { name: "Big Ben", key: "big_ben" },
-  { name: "Buckingham Palace", key: "buckingham_palace" },
-  { name: "Burj Khalifa", key: "burj_khalifa" },
-  { name: "Colosseum", key: "colosseum" },
-  { name: "Eiffel Tower", key: "eiffel_tower" },
-  { name: "Empire State", key: "empire_state" },
-  { name: "Golden Gate Bridge", key: "golden_gate" },
-  { name: "Grand Canyon", key: "grand_canyon" },
-  { name: "Great Wall of China", key: "great_wall" },
-  { name: "Mount Everest", key: "mount_everest" },
-  { name: "Notre Dame", key: "notre_dame" },
-  { name: "Pyramids of Pisa", key: "pyramids_pisa" },
-  { name: "Statue of Liberty", key: "statue_liberty" },
-  { name: "Stonehenge", key: "stonehenge" },
-  { name: "Taj Mahal", key: "taj_mahal" },
-  { name: "Times Square", key: "times_square" },
-  { name: "Tower Bridge", key: "tower_bridge" },
-  { name: "Tower of Pisa", key: "tower_pisa" },
+const DEFAULT_NATION_FLAGS = [
+  { name: "England", key: "gb-eng" },
+  { name: "Argentina", key: "ar" },
+  { name: "Spain", key: "es" },
+  { name: "France", key: "fr" },
+  { name: "Brazil", key: "br" },
+  { name: "Germany", key: "de" },
+  { name: "Portugal", key: "pt" },
+  { name: "Japan", key: "jp" },
+  { name: "Croatia", key: "hr" },
 ];
 
 interface PrizeConfigScratchProps {
@@ -210,7 +204,7 @@ export default function PrizeConfigScratch({
   };
 
   const initializeDefaultImages = async () => {
-    const defaultConfigs = DEFAULT_LANDMARK_IMAGES.map((img, index) => ({
+    const defaultConfigs = DEFAULT_NATION_FLAGS.map((img, index) => ({
       imageName: img.name,
       imageKey: img.key,
       rewardType: "try_again" as const,
@@ -232,7 +226,7 @@ export default function PrizeConfigScratch({
       <div>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-foreground">
-            Scratch Card Image Configuration
+            Scratch Nations flags & prizes
           </h3>
           <div className="flex gap-2">
             {images.length === 0 && !imagesLoading && (
@@ -242,7 +236,7 @@ export default function PrizeConfigScratch({
                 size="sm"
                 data-testid="button-init-default-images"
               >
-                Load Default Images
+                Load default flags
               </Button>
             )}
             <Button 
@@ -251,17 +245,17 @@ export default function PrizeConfigScratch({
               data-testid="button-add-image"
             >
               <Plus className="w-4 h-4 mr-2" />
-              Add Image
+              Add symbol
             </Button>
           </div>
         </div>
 
         <div className="bg-primary/10 p-3 rounded-lg mb-4">
           <p className="text-sm text-foreground">
-            <strong>How it works:</strong> When a player scratches and reveals 3 matching images, they win that image's configured prize.
+            <strong>How it works:</strong> Match 3 of the same flag to win that flag’s prize. Change the prize here — the live game uses it on the next scratch. No code change needed.
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Each image has a weight that determines how often it appears on the scratch card. Higher weight = appears more often.
+            Weight is how often that outcome is picked. Higher weight = more often. Set weight to 0 to stop it winning.
           </p>
         </div>
 
@@ -271,9 +265,9 @@ export default function PrizeConfigScratch({
           </div>
         ) : images.length === 0 ? (
           <div className="text-center py-8 border border-dashed border-border rounded-lg">
-            <p className="text-muted-foreground">No scratch card images configured</p>
+            <p className="text-muted-foreground">No flags configured</p>
             <p className="text-xs text-muted-foreground mt-2">
-              Click "Load Default Images" to get started with 20 landmark images
+              Click “Load default flags” to add the 9 Scratch Nations countries
             </p>
           </div>
         ) : (
@@ -289,6 +283,13 @@ export default function PrizeConfigScratch({
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
+                        {image.imageKey !== "No_Win" && (
+                          <img
+                            src={symbolSrc(image.imageKey)}
+                            alt=""
+                            className="h-8 w-11 rounded-sm object-cover border border-border shrink-0"
+                          />
+                        )}
                         <h4 className="font-medium text-foreground" data-testid={`text-image-name-${image.id}`}>
                           {image.imageName}
                         </h4>
@@ -369,7 +370,7 @@ export default function PrizeConfigScratch({
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>
-              {editingImage?.id ? "Edit" : "Add"} Scratch Card Image
+              {editingImage?.id ? "Edit prize" : "Add symbol"}
             </DialogTitle>
           </DialogHeader>
 
@@ -378,29 +379,29 @@ export default function PrizeConfigScratch({
               <div className="space-y-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>Image Name</Label>
+                    <Label>Country / symbol name</Label>
                     <Input
                       value={editingImage.imageName}
                       onChange={(e) =>
                         setEditingImage({ ...editingImage, imageName: e.target.value })
                       }
-                      placeholder="e.g., Big Ben"
+                      placeholder="e.g., Brazil"
                       data-testid="input-image-name"
                     />
                   </div>
 
                   <div>
-                    <Label>Image Key</Label>
+                    <Label>Flag code</Label>
                     <Input
                       value={editingImage.imageKey}
                       onChange={(e) =>
                         setEditingImage({ ...editingImage, imageKey: e.target.value })
                       }
-                      placeholder="e.g., big_ben"
+                      placeholder="e.g., br"
                       data-testid="input-image-key"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Used to match with image files
+                      Leave this as-is unless you add a new flag file
                     </p>
                   </div>
                 </div>

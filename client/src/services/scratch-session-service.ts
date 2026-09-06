@@ -21,8 +21,6 @@ export interface ScratchSessionResponse {
 
 export interface CompleteSessionPayload {
   orderId: string;
-  prizeId: string;
-  isWinner: boolean;
 }
 
 export interface CompleteSessionResponse {
@@ -33,6 +31,7 @@ export interface CompleteSessionResponse {
   };
   prizeLabel?: string;
   remainingCards: number;
+  ticketNumber?: string | null;
   orderId: string;
 }
 

@@ -59,6 +59,7 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
 
   const soldTickets = competition.soldTickets || 0;
   const currentMaxTickets = competition.maxTickets || 0;
+  const isControlledPool = (competition as any).instantWinMode === "controlled_pool";
   const isUnlimitedTickets = !currentMaxTickets || currentMaxTickets === 0;
   const availableTickets = isUnlimitedTickets ? Infinity : currentMaxTickets - soldTickets;
   const isSoldOut = !isUnlimitedTickets && availableTickets <= 0;
@@ -115,7 +116,7 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
     const maxChanged = isUnlimited 
       ? !isUnlimitedTickets 
       : (newMaxTickets !== currentMaxTickets);
-    const soldChanged = newSoldTickets !== soldTickets;
+    const soldChanged = !isControlledPool && newSoldTickets !== soldTickets;
 
     if (!maxChanged && !soldChanged) {
       setIsEditing(false);
@@ -155,7 +156,7 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
     if (pendingMaxTickets !== undefined) {
       data.maxTickets = pendingMaxTickets;
     }
-    if (pendingSoldTickets !== undefined) {
+    if (!isControlledPool && pendingSoldTickets !== undefined) {
       data.soldTickets = pendingSoldTickets;
     }
     
@@ -366,6 +367,7 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
                       onClick={handleUnlimitedToggle}
                       variant={isUnlimited ? "default" : "outline"}
                       size="sm"
+                      disabled={isControlledPool}
                       className={`text-xs sm:text-sm w-full sm:w-auto ${
                         isUnlimited 
                           ? "bg-green-600 hover:bg-green-700 text-white" 
@@ -447,7 +449,12 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
                     <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400" />
                     Sold Tickets
                   </Label>
-                  
+                  {isControlledPool ? (
+                    <p className="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
+                      Sold tickets are allocated automatically from the controlled pool and cannot be edited.
+                    </p>
+                  ) : (
+                  <>
                   <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                     <div className="flex-1">
                       <Input
@@ -493,6 +500,8 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
                       ))}
                     </div>
                   </div>
+                  </>
+                  )}
                 </div>
 
                 {/* Action Buttons */}

@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
+import BrandWait from "@/components/brand/BrandWait";
 import { Link, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -309,9 +310,12 @@ export default function Support() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
-      </div>
+      <BrandWait
+        mode="embed"
+        kicker="Support"
+        headline="Opening support"
+        subtitle="Checking your account."
+      />
     );
   }
 
@@ -321,19 +325,18 @@ export default function Support() {
   }
 
   return (
-    <div className="min-h-screen text-white">
-      <main className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="flex items-center justify-between gap-4 mb-8">
+    <div className="text-white">
+      <div className="mb-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <MessageSquare className="h-8 w-8 text-yellow-500" />
+            <MessageSquare className="h-7 w-7 text-[#F1D47A]" />
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-yellow-500">Support</h1>
-              <p className="text-gray-400 text-sm">Get help with your account</p>
+              <h1 className="font-prize text-3xl text-white">Support</h1>
+              <p className="text-sm text-white/50">Get help with your account</p>
             </div>
           </div>
           <Button
             onClick={() => setShowCreateDialog(true)}
-            className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+            className="rr-cta font-semibold"
             data-testid="button-create-ticket"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -346,7 +349,7 @@ export default function Support() {
             <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
           </div>
         ) : tickets.length === 0 ? (
-          <Card className="bg-[#2a2a2a] border-gray-700">
+          <Card className="rr-wallet-island bg-[#2a2a2a] border-gray-700">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <MessageSquare className="h-16 w-16 text-gray-500 mb-4" />
               <h3 className="text-xl font-semibold text-white mb-2">No Support Tickets</h3>
@@ -355,7 +358,7 @@ export default function Support() {
               </p>
               <Button
                 onClick={() => setShowCreateDialog(true)}
-                className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                className="rr-cta font-semibold"
                 data-testid="button-create-ticket-empty"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -560,7 +563,7 @@ export default function Support() {
 
             {selectedTicket.status !== "closed" && (
               <div className="border-t border-gray-700 pt-4 mt-4">
-                <div className="bg-gradient-to-r from-yellow-500/10 via-yellow-500/5 to-transparent border border-yellow-500/30 rounded-xl p-4">
+                <div className="rr-wallet-island bg-gradient-to-r from-yellow-500/10 via-yellow-500/5 to-transparent border border-yellow-500/30 rounded-xl p-4">
                   {replyImages.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-3">
                       {replyImages.map((url, index) => (
@@ -626,7 +629,7 @@ export default function Support() {
                       <Button
                         onClick={handleSendReply}
                         disabled={(!replyMessage.trim() && replyImages.length === 0) || sendMessageMutation.isPending}
-                        className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                        className="rr-cta font-semibold"
                         data-testid="button-send-reply"
                       >
                         {sendMessageMutation.isPending ? (
@@ -647,7 +650,7 @@ export default function Support() {
             {tickets.map((ticket) => (
               <Card
                 key={ticket.id}
-                className={`bg-[#2a2a2a] border-gray-700 cursor-pointer transition-all hover:border-yellow-500/50 ${
+                className={`rr-wallet-island bg-[#2a2a2a] border-gray-700 cursor-pointer transition-all hover:border-yellow-500/50 ${
                   ticket.userHasUnread ? "border-l-4 border-l-yellow-500" : ""
                 }`}
                 onClick={() => setSelectedTicket(ticket)}
@@ -686,10 +689,9 @@ export default function Support() {
             ))}
           </div>
         )}
-      </main>
 
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="bg-[#2a2a2a] border-gray-700 text-white max-w-lg">
+        <DialogContent className="rr-wallet-island max-w-lg border-white/10 bg-[#0A0A0D] text-white">
           <DialogHeader>
             <DialogTitle className="text-yellow-500">Create Support Ticket</DialogTitle>
           </DialogHeader>
@@ -789,7 +791,7 @@ export default function Support() {
             <Button
               onClick={handleSubmitTicket}
               disabled={createTicketMutation.isPending}
-              className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+              className="rr-cta font-semibold"
               data-testid="button-submit-ticket"
             >
               {createTicketMutation.isPending ? (

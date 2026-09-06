@@ -70,6 +70,7 @@ interface Prize {
   competitionId: string;
   prizeName: string;
   prizeValue: number;
+  ringtonePoints?: number;
   totalQuantity: number;
   remainingQuantity: number;
   gameType?: string;
@@ -84,6 +85,7 @@ interface Competition {
   status: string;
   type: string;
   title: string;
+  instantWinMode?: string;
 }
 
 interface TicketSettings {
@@ -113,6 +115,7 @@ export default function AdminPrizes() {
   const [formData, setFormData] = useState({
     prizeName: "",
     prizeValue: "",
+    ringtonePoints: "",
     totalQuantity: "",
     remainingQuantity: ""
   });
@@ -187,22 +190,28 @@ export default function AdminPrizes() {
         credentials: "include",
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to create prize");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || body.error || "Failed to create prize");
+      }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (created: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/competitions", selectedCompetition, "prizes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions", selectedCompetition, "instant-win"] });
       setIsCreateDialogOpen(false);
       resetForm();
       toast({
         title: "Success",
-        description: "Prize created successfully",
+        description: created?.instantPoolSpawned
+          ? `Prize created and ${created.instantPoolSpawned} Instant Pool records added. Set ranges and Activate in Tools → Instant Pool.`
+          : "Prize created successfully",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to create prize",
+        description: error.message || "Failed to create prize",
         variant: "destructive",
       });
     },
@@ -217,11 +226,15 @@ export default function AdminPrizes() {
         credentials: "include",
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to update prize");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || body.error || "Failed to update prize");
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/competitions", selectedCompetition, "prizes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions", selectedCompetition, "instant-win"] });
       setIsEditDialogOpen(false);
       setSelectedPrize(null);
       toast({
@@ -229,10 +242,10 @@ export default function AdminPrizes() {
         description: "Prize updated successfully",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to update prize",
+        description: error.message || "Failed to update prize",
         variant: "destructive",
       });
     },
@@ -245,11 +258,15 @@ export default function AdminPrizes() {
         method: "DELETE",
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to delete prize");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || body.error || "Failed to delete prize");
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/competitions", selectedCompetition, "prizes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/competitions", selectedCompetition, "instant-win"] });
       setIsDeleteDialogOpen(false);
       setSelectedPrize(null);
       toast({
@@ -257,10 +274,10 @@ export default function AdminPrizes() {
         description: "Prize deleted successfully",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to delete prize",
+        description: error.message || "Failed to delete prize",
         variant: "destructive",
       });
     },
@@ -308,6 +325,7 @@ const filteredAndSortedPrizes = useMemo(() => {
   let filtered = prizes.filter((prize) =>
     prize.prizeName.toLowerCase().includes(search.toLowerCase()) ||
     prize.prizeValue.toString().includes(search) ||
+    String(prize.ringtonePoints ?? 0).includes(search) ||
     prize.totalQuantity.toString().includes(search)
   );
 
@@ -327,6 +345,7 @@ const filteredAndSortedPrizes = useMemo(() => {
     setFormData({
       prizeName: "",
       prizeValue: "",
+      ringtonePoints: "",
       totalQuantity: "",
       remainingQuantity: ""
     });
@@ -337,6 +356,7 @@ const filteredAndSortedPrizes = useMemo(() => {
     setFormData({
       prizeName: prize.prizeName,
       prizeValue: prize.prizeValue.toString(),
+      ringtonePoints: String(prize.ringtonePoints ?? 0),
       totalQuantity: prize.totalQuantity.toString(),
       remainingQuantity: prize.remainingQuantity.toString(),
     });
@@ -348,13 +368,18 @@ const filteredAndSortedPrizes = useMemo(() => {
     setIsDeleteDialogOpen(true);
   };
 
+  const selectedComp = competitions.find((c) => c.id === selectedCompetition);
+  const isControlled = selectedComp?.instantWinMode === "controlled_pool";
+
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const qty = parseInt(formData.totalQuantity);
     createMutation.mutate({
       prizeName: formData.prizeName,
       prizeValue: parseFloat(formData.prizeValue),
-      totalQuantity: parseInt(formData.totalQuantity),
-      remainingQuantity: parseInt(formData.remainingQuantity),
+      ringtonePoints: parseInt(formData.ringtonePoints || "0", 10) || 0,
+      totalQuantity: qty,
+      remainingQuantity: isControlled ? qty : parseInt(formData.remainingQuantity),
     });
   };
 
@@ -366,6 +391,7 @@ const filteredAndSortedPrizes = useMemo(() => {
       data: {
         prizeName: formData.prizeName,
         prizeValue: parseFloat(formData.prizeValue),
+        ringtonePoints: parseInt(formData.ringtonePoints || "0", 10) || 0,
         totalQuantity: parseInt(formData.totalQuantity),
         remainingQuantity: parseInt(formData.remainingQuantity),
       },
@@ -541,7 +567,9 @@ const filteredAndSortedPrizes = useMemo(() => {
                       <DialogHeader>
                         <DialogTitle>Add New Prize</DialogTitle>
                         <DialogDescription>
-                          Create a new prize for this competition
+                          {isControlled
+                            ? "This creates Instant Pool copies automatically. Set each ticket range and Activate them in Tools → Instant Pool."
+                            : "Create a new prize for this competition"}
                         </DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-4 py-4">
@@ -572,6 +600,20 @@ const filteredAndSortedPrizes = useMemo(() => {
                           />
                         </div>
                         <div className="grid gap-2">
+                          <Label htmlFor="ringtonePoints">Ringtone Points</Label>
+                          <Input
+                            id="ringtonePoints"
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="0"
+                            value={formData.ringtonePoints}
+                            onChange={(e) =>
+                              setFormData({ ...formData, ringtonePoints: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-2">
                           <Label htmlFor="totalQuantity">Total Quantity</Label>
                           <Input
                             id="totalQuantity"
@@ -585,6 +627,7 @@ const filteredAndSortedPrizes = useMemo(() => {
                             min="1"
                           />
                         </div>
+                        {!isControlled && (
                         <div className="grid gap-2">
                           <Label htmlFor="remainingQuantity">Remaining Quantity</Label>
                           <Input
@@ -598,6 +641,7 @@ const filteredAndSortedPrizes = useMemo(() => {
                             required
                           />
                         </div>
+                        )}
                       </div>
                       <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-0">
                         <Button
@@ -631,6 +675,7 @@ const filteredAndSortedPrizes = useMemo(() => {
                     <CardTitle className="text-lg sm:text-xl">Prizes</CardTitle>
                     <CardDescription>
                       Showing {filteredAndSortedPrizes.length} of {prizes.length} prizes
+                      {isControlled && " · Controlled pool: quantity creates Instant Pool records"}
                       {filteredAndSortedPrizes.some(p => p.gameType) && " (Auto-synced from games)"}
                     </CardDescription>
                   </div>
@@ -678,6 +723,7 @@ const filteredAndSortedPrizes = useMemo(() => {
                               </div>
                             </TableHead>
                             <TableHead className="whitespace-nowrap">Value</TableHead>
+                            <TableHead className="whitespace-nowrap">Points</TableHead>
                             <TableHead className="whitespace-nowrap">Total</TableHead>
                             <TableHead className="whitespace-nowrap">Remaining</TableHead>
                             <TableHead className="whitespace-nowrap">Game</TableHead>
@@ -701,6 +747,11 @@ const filteredAndSortedPrizes = useMemo(() => {
                                     £{typeof prize.prizeValue === 'number' 
                                       ? prize.prizeValue.toFixed(2) 
                                       : Number(prize.prizeValue || 0).toFixed(2)}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="font-medium text-amber-400">
+                                    {(prize.ringtonePoints ?? 0).toLocaleString()}
                                   </span>
                                 </TableCell>
                                 <TableCell>{prize.totalQuantity}</TableCell>
@@ -951,6 +1002,19 @@ const filteredAndSortedPrizes = useMemo(() => {
                 />
               </div>
               <div className="grid gap-2">
+                <Label htmlFor="edit-ringtonePoints">Ringtone Points</Label>
+                <Input
+                  id="edit-ringtonePoints"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.ringtonePoints}
+                  onChange={(e) =>
+                    setFormData({ ...formData, ringtonePoints: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
                 <Label htmlFor="edit-totalQuantity">Total Quantity</Label>
                 <Input
                   id="edit-totalQuantity"
@@ -963,6 +1027,7 @@ const filteredAndSortedPrizes = useMemo(() => {
                   min="1"
                 />
               </div>
+              {!isControlled && (
               <div className="grid gap-2">
                 <Label htmlFor="edit-remainingQuantity">Remaining Quantity</Label>
                 <Input
@@ -975,6 +1040,7 @@ const filteredAndSortedPrizes = useMemo(() => {
                   required
                 />
               </div>
+              )}
             </div>
             <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-0">
               <Button
@@ -1015,6 +1081,9 @@ const filteredAndSortedPrizes = useMemo(() => {
                 Value: £{typeof selectedPrize.prizeValue === 'number' 
                   ? selectedPrize.prizeValue.toFixed(2) 
                   : Number(selectedPrize.prizeValue || 0).toFixed(2)}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Ringtone points: {(selectedPrize.ringtonePoints ?? 0).toLocaleString()}
               </p>
               <p className="text-sm text-muted-foreground">
                 Remaining: {selectedPrize.remainingQuantity} of {selectedPrize.totalQuantity}

@@ -51,9 +51,12 @@ import {
   plinkoUsage,
   userVerifications,
   voltzUsage,
+  slotUsage,
+  royalUsage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sum, sql, notInArray, lt } from "drizzle-orm";
+import { notifyPublicWinnerUpdate } from "./services/record-game-winner";
 import { hashPassword } from "./customAuth";
 
 export interface IStorage {
@@ -182,17 +185,44 @@ saveUserReferral(data: { userId: string; referrerId: string }): Promise<void>;
 export class DatabaseStorage implements IStorage {
 
 
-  // In storage.ts - add to DatabaseStorage class
-async initializeAdminUser(): Promise<void> {
-  try {
-    const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com";
-    const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
-    
-    const existingAdmin = await this.getUserByEmail(adminEmail);
-    
-    if (!existingAdmin) {
+  /** Creates the first admin only when ADMIN_EMAIL + ADMIN_PASSWORD are set and no admin exists yet. */
+  async initializeAdminUser(): Promise<void> {
+    const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (!adminEmail || !adminPassword) {
+      console.log(
+        "ℹ️  Admin bootstrap skipped (set ADMIN_EMAIL and ADMIN_PASSWORD to create an initial admin when none exists)",
+      );
+      return;
+    }
+
+    if (adminPassword.length < 12) {
+      console.error("❌ Admin bootstrap failed: ADMIN_PASSWORD must be at least 12 characters");
+      return;
+    }
+
+    try {
+      const [existingAdmin] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.isAdmin, true))
+        .limit(1);
+
+      if (existingAdmin) {
+        console.log("ℹ️  Admin bootstrap skipped (an admin account already exists)");
+        return;
+      }
+
+      const existingUser = await this.getUserByEmail(adminEmail);
+      if (existingUser) {
+        console.warn(
+          `⚠️  Admin bootstrap skipped: ${adminEmail} already exists but is not an admin. Promote via the admin panel or database.`,
+        );
+        return;
+      }
+
       const hashedPassword = await hashPassword(adminPassword);
-      
       await this.createUser({
         email: adminEmail,
         password: hashedPassword,
@@ -201,19 +231,12 @@ async initializeAdminUser(): Promise<void> {
         isAdmin: true,
         emailVerified: true,
       });
-      
-      console.log("✅ Admin user created successfully");
-    } else {
-      // Ensure existing admin has admin privileges
-      if (!existingAdmin.isAdmin) {
-        await this.updateUser(existingAdmin.id, { isAdmin: true });
-        console.log("✅ Existing user promoted to admin");
-      }
+
+      console.log(`✅ Initial admin created for ${adminEmail}`);
+    } catch (error) {
+      console.error("❌ Error initializing admin user:", error);
     }
-  } catch (error) {
-    console.error("❌ Error initializing admin user:", error);
   }
-}
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -306,7 +329,46 @@ async incrementCompetitionSoldTickets(competitionId: string, qty: number): Promi
   }
 
   async createCompetition(competition: InsertCompetition): Promise<Competition> {
-    const [created] = await db.insert(competitions).values(competition).returning();
+    const parseDate = (value: unknown) => {
+      if (value == null || value === "") return null;
+      const parsed = value instanceof Date ? value : new Date(String(value));
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    const [created] = await db
+      .insert(competitions)
+      .values({
+        title: competition.title,
+        description: competition.description,
+        imageUrl: competition.imageUrl || null,
+        featuredImageUrl: competition.featuredImageUrl || null,
+        cardImageUrl: competition.cardImageUrl || null,
+        pageImageUrl: competition.pageImageUrl || null,
+        type: competition.type,
+        ticketPrice: competition.ticketPrice,
+        prizeAmount: competition.prizeAmount ?? null,
+        badgeLabel: competition.badgeLabel
+          ? String(competition.badgeLabel).trim().slice(0, 40) || null
+          : null,
+        maxTickets: competition.maxTickets ?? null,
+        soldTickets: competition.soldTickets ?? 0,
+        nextTicketNumber: competition.nextTicketNumber ?? 1,
+        instantWinMode: competition.instantWinMode ?? "probability",
+        ticketBlockSize: competition.ticketBlockSize ?? null,
+        prizeData: competition.prizeData,
+        skillQuestion: competition.skillQuestion,
+        isActive: competition.isActive ?? true,
+        ringtonePoints: competition.ringtonePoints,
+        displayOrder: competition.displayOrder,
+        endDate: parseDate(competition.endDate),
+        wheelType: competition.wheelType,
+        status: competition.status,
+        videoUrl: competition.videoUrl,
+        videoKey: competition.videoKey,
+        videoMimeType: competition.videoMimeType,
+        videoUpdatedAt: parseDate(competition.videoUpdatedAt),
+      })
+      .returning();
     return created;
   }
 
@@ -386,6 +448,24 @@ async getUserRingtonePoints(userId: string): Promise<number> {
   
     return Number(result[0]?.count || 0);
   }
+
+  async getSlotUsed(orderId: string) {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(slotUsage)
+      .where(eq(slotUsage.orderId, orderId));
+
+    return Number(result[0]?.count || 0);
+  }
+
+  async getRoyalUsed(orderId: string) {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(royalUsage)
+      .where(eq(royalUsage.orderId, orderId));
+
+    return Number(result[0]?.count || 0);
+  }
   
 
  async getUserOrders(userId: string): Promise<any[]> {
@@ -428,6 +508,12 @@ async getUserRingtonePoints(userId: string): Promise<number> {
         }
         else if (competitionType === 'voltz' && order.orders.status === 'completed') {
           const used = await this.getVoltzUsed(order.orders.id);
+          remainingPlays = order.orders.quantity - used;
+        } else if (competitionType === 'slot' && order.orders.status === 'completed') {
+          const used = await this.getSlotUsed(order.orders.id);
+          remainingPlays = order.orders.quantity - used;
+        } else if (competitionType === 'royal' && order.orders.status === 'completed') {
+          const used = await this.getRoyalUsed(order.orders.id);
           remainingPlays = order.orders.quantity - used;
         }
 
@@ -533,9 +619,7 @@ async getRecentWinners(limit?: number, showcaseOnly = false): Promise<Winner[]> 
       .from(winners)
       .leftJoin(users, eq(users.id, winners.userId))
       .leftJoin(competitions, eq(competitions.id, winners.competitionId))
-      .orderBy(
-        sql`CAST(REGEXP_REPLACE(${winners.prizeValue}, '[^0-9.]', '', 'g') AS DECIMAL) DESC, ${winners.updatedAt} DESC`
-      );
+      .orderBy(desc(winners.createdAt));
 
     if (showcaseOnly) {
       query = query.where(eq(winners.isShowcase, true));
@@ -582,9 +666,15 @@ async createWinner(winner: Omit<Winner, "id" | "createdAt"> & { createdAt?: Date
   const now = new Date();
   const [created] = await db.insert(winners).values({
     ...winner,
+    isShowcase: winner.isShowcase ?? true,
     // Use provided createdAt or default to now
     createdAt: winner.createdAt || now,
   }).returning();
+
+  if (created.isShowcase) {
+    notifyPublicWinnerUpdate(created.competitionId);
+  }
+
   return created;
 }
 

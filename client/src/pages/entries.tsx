@@ -4,6 +4,7 @@ import Header from "@/components/layout/header";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
+import BrandWait from "@/components/brand/BrandWait";
 import { Competition, Ticket } from "@shared/schema";
 
 // Group tickets by competition
@@ -113,10 +114,11 @@ export default function Entries() {
         {/* Grouped Entries */}
         <div className="max-w-4xl mx-auto space-y-6">
           {isLoading ? (
-            <Card className="p-12">
-              <div className="text-center text-muted-foreground">
-                Loading your entries...
-              </div>
+            <Card className="p-8">
+              <BrandWait
+                quiet
+                headline="Loading entries"
+              />
             </Card>
           ) : groupedEntries.length === 0 ? (
             <Card className="p-12">

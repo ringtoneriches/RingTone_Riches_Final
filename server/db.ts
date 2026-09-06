@@ -7,8 +7,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-console.log("USING DB CONFIG WITH SSL ENABLED");
-console.log("DATABASE_URL =", process.env.DATABASE_URL);
+console.log("Database connection configured");
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
@@ -16,11 +15,17 @@ if (!process.env.DATABASE_URL) {
 
 const { Pool } = pg;
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  //  ssl: {
-  //   rejectUnauthorized: false 
-  // }
+  ...(isProduction
+    ? {
+        ssl: {
+          rejectUnauthorized: false,
+        },
+      }
+    : {}),
 });
 
 export const db = drizzle(pool, { schema });

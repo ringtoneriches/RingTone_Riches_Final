@@ -3,6 +3,22 @@ dotenv.config();
 import crypto from "crypto";
 import axios from "axios";
 
+const isProduction = process.env.NODE_ENV === "production";
+
+function cashflowsDebug(...args: unknown[]) {
+  if (!isProduction) {
+    console.log(...args);
+  }
+}
+
+function cashflowsError(message: string, details?: Record<string, unknown>) {
+  if (isProduction) {
+    console.error(message, details ? JSON.stringify(details) : "");
+  } else {
+    console.error(message, details ?? "");
+  }
+}
+
 export class CashflowsService {
   constructor(
     private config: {
@@ -43,10 +59,10 @@ export class CashflowsService {
       "Content-Type": "application/json",
     };
 
-    console.log("🧩 Sending Cashflows Hosted request...");
-    console.log("➡️ URL:", `${this.config.baseUrl}/payment-jobs`);
-    console.log("➡️ Body:", jsonBody);
-    console.log("Hash:", hash);
+    cashflowsDebug("🧩 Sending Cashflows Hosted request...");
+    cashflowsDebug("➡️ URL:", `${this.config.baseUrl}/payment-jobs`);
+    cashflowsDebug("➡️ Body:", jsonBody);
+    cashflowsDebug("Hash:", hash);
     try {
       const res = await axios.post(
         `${this.config.baseUrl}/payment-jobs`,
@@ -66,10 +82,13 @@ export class CashflowsService {
         fullResponse: res.data,
       };
     } catch (err: any) {
-      console.error("❌ Cashflows API Error:");
-      console.error("Status:", err.response?.status);
-      console.error("Full Error:", JSON.stringify(err.response?.data, null, 2));
-      console.error("Message:", err.message);
+      cashflowsError("❌ Cashflows API Error:", {
+        status: err.response?.status,
+        message: err.message,
+        ...(isProduction
+          ? {}
+          : { data: err.response?.data }),
+      });
       throw err;
     }
   }
@@ -77,55 +96,92 @@ export class CashflowsService {
 
 async createCompetitionPaymentSession(amount: number, metadata: any) {
   const amountString = amount.toFixed(2);
-  const displayOrderNumber = `${metadata.orderId.replace(/-/g, '').substring(0, 12)}/${Date.now().toString().slice(-7)}`;
-  const shortOrderId = metadata.orderId
-    .replace(/-/g, '')          
-    .substring(0, 12);  
-  const payload = {
+  const displayOrderNumber = `${String(metadata.orderId || "cart")
+    .replace(/-/g, "")
+    .substring(0, 12)}/${Date.now().toString().slice(-7)}`;
+
+  const firstName = String(metadata.firstName || metadata.customerFirstName || "").trim();
+  const lastName = String(metadata.lastName || metadata.customerLastName || "").trim();
+  const emailAddress = String(metadata.email || metadata.customerEmail || "").trim();
+  const orderLines = Array.isArray(metadata.orderLines) ? metadata.orderLines : [];
+  const cartReturn = metadata.cartCheckout ? "&cart=1" : "";
+
+  const order: Record<string, unknown> = {
+    orderNumber: displayOrderNumber,
+  };
+  if (firstName || lastName) {
+    order.billingAddress = {
+      ...(firstName ? { firstName } : {}),
+      ...(lastName ? { lastName } : {}),
+    };
+  }
+  if (emailAddress) {
+    order.billingIdentity = { emailAddress };
+  }
+
+  const cashflowsMeta = { ...metadata };
+  delete cashflowsMeta.orderLines;
+  delete cashflowsMeta.firstName;
+  delete cashflowsMeta.lastName;
+  delete cashflowsMeta.email;
+  delete cashflowsMeta.customerFirstName;
+  delete cashflowsMeta.customerLastName;
+  delete cashflowsMeta.customerEmail;
+
+  const buildPayload = (includeLines: boolean) => ({
     amountToCollect: amountString,
     currency: "GBP",
-     order: {
-      orderNumber: displayOrderNumber,
-    },
-    
+    order: includeLines && orderLines.length ? { ...order, orderLines } : order,
     parameters: {
-      returnUrlSuccess: `${process.env.CLIENT_URL}/success/competition?orderId=${metadata.orderId}`,
+      returnUrlSuccess: `${process.env.CLIENT_URL}/success/competition?orderId=${metadata.orderId}${cartReturn}`,
       returnUrlFailed: `${process.env.CLIENT_URL}/failed?orderId=${metadata.orderId}`,
       returnUrlCancelled: `${process.env.CLIENT_URL}/cancelled?orderId=${metadata.orderId}`,
     },
-    metadata: {
-      ...metadata,
-    },
-  };
+    metadata: cashflowsMeta,
+  });
 
-  const jsonBody = JSON.stringify(payload);
-  const hash = crypto
-    .createHash("sha512")
-    .update(this.config.apiKey + jsonBody, "utf8")
-    .digest("hex")
-    .toUpperCase();
+  const postJob = async (payload: ReturnType<typeof buildPayload>) => {
+    const jsonBody = JSON.stringify(payload);
+    const hash = crypto
+      .createHash("sha512")
+      .update(this.config.apiKey + jsonBody, "utf8")
+      .digest("hex")
+      .toUpperCase();
 
-  const headers = {
-    ConfigurationId: this.config.configurationId,
-    Hash: hash,
-    "Content-Type": "application/json",
+    const headers = {
+      ConfigurationId: this.config.configurationId,
+      Hash: hash,
+      "Content-Type": "application/json",
+    };
+
+    return axios.post(`${this.config.baseUrl}/payment-jobs`, payload, { headers });
   };
 
   try {
-    const res = await axios.post(`${this.config.baseUrl}/payment-jobs`, payload, { headers });
+    let res;
+    try {
+      res = await postJob(buildPayload(true));
+    } catch (lineErr: any) {
+      if (!orderLines.length) throw lineErr;
+      console.warn(
+        "Cashflows rejected orderLines; retrying without them:",
+        lineErr.response?.data || lineErr.message,
+      );
+      res = await postJob(buildPayload(false));
+    }
 
     const hostedPageUrl =
       res.data?.links?.action?.url ||
       res.data?.actions?.[0]?.url ||
       null;
 
-    console.log("🔗 Hosted page redirect URL:", hostedPageUrl);
-    console.log("🔁 Full Cashflows Response:", JSON.stringify(res.data, null, 2));
-    
-    // ✅ Check what reference Cashflows is using
-    console.log("📝 Cashflows Reference:", res.data?.data?.reference);
-    console.log("📝 Our Order ID:", metadata.orderId);
-    
+    cashflowsDebug("🔗 Hosted page redirect URL:", hostedPageUrl);
+    cashflowsDebug("📝 Cashflows Reference:", res.data?.data?.reference);
+    cashflowsDebug("📝 Our Order ID:", metadata.orderId);
+    if (!isProduction) {
+      console.log("🔁 Full Cashflows Response:", JSON.stringify(res.data, null, 2));
+    }
+
     return {
       success: true,
       hostedPageUrl,
@@ -133,10 +189,12 @@ async createCompetitionPaymentSession(amount: number, metadata: any) {
       fullResponse: res.data,
     };
   } catch (err: any) {
-    console.error("❌ Cashflows Competition Payment API Error:");
-    console.error("Status:", err.response?.status);
-    console.error("Full Error:", JSON.stringify(err.response?.data, null, 2));
-    console.error("Message:", err.message);
+    cashflowsError("❌ Cashflows Competition Payment API Error:", {
+      status: err.response?.status,
+      message: err.message,
+      orderId: metadata.orderId,
+      ...(isProduction ? {} : { data: err.response?.data }),
+    });
     throw err;
   }
 }
@@ -165,10 +223,11 @@ async createCompetitionPaymentSession(amount: number, metadata: any) {
     const res = await axios.get(url, { headers });
     return res.data;
   } catch (err: any) {
-    console.error(
-      "❌ Failed to fetch payment status:",
-      err.response?.data || err.message
-    );
+    cashflowsError("❌ Failed to fetch payment status:", {
+      status: err.response?.status,
+      message: err.message,
+      ...(isProduction ? {} : { data: err.response?.data }),
+    });
     throw err;
   }
 }

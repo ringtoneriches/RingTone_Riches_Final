@@ -26,6 +26,7 @@ interface SlotGameProps {
   spinsRemaining: number;
   onSpinComplete: (result: SlotSpinResult) => void;
   onNoSpinsLeft: () => void;
+  onSpinStart?: () => void;
 }
 
 export default function SlotGameComponent({
@@ -35,18 +36,21 @@ export default function SlotGameComponent({
   spinsRemaining,
   onSpinComplete,
   onNoSpinsLeft,
+  onSpinStart,
 }: SlotGameProps) {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<any>(null);
   const gameSceneRef = useRef<any>(null);
   const { toast } = useToast();
   const [isGameReady, setIsGameReady] = useState(false);
+  const [loadPct, setLoadPct] = useState(0);
 
   const orderIdRef = useRef(orderId);
   const creditsPerSpinRef = useRef(creditsPerSpin);
   const spinsRemainingRef = useRef(spinsRemaining);
   const onSpinCompleteRef = useRef(onSpinComplete);
   const onNoSpinsLeftRef = useRef(onNoSpinsLeft);
+  const onSpinStartRef = useRef(onSpinStart);
   const isProcessingRef = useRef(false);
   const pendingResultRef = useRef<SlotSpinResult | null>(null);
   const toastRef = useRef(toast);
@@ -56,6 +60,7 @@ export default function SlotGameComponent({
   useEffect(() => { spinsRemainingRef.current = spinsRemaining; }, [spinsRemaining]);
   useEffect(() => { onSpinCompleteRef.current = onSpinComplete; }, [onSpinComplete]);
   useEffect(() => { onNoSpinsLeftRef.current = onNoSpinsLeft; }, [onNoSpinsLeft]);
+  useEffect(() => { onSpinStartRef.current = onSpinStart; }, [onSpinStart]);
   useEffect(() => { toastRef.current = toast; }, [toast]);
 
   // Keep Phaser scene in sync so beginSpin can block audio when exhausted
@@ -89,6 +94,7 @@ export default function SlotGameComponent({
   
   console.log("[SPIN] ✅ No processing lock, proceeding with spin");
   isProcessingRef.current = true;
+  onSpinStartRef.current?.();
 
   try {
     console.log("[SPIN] 📡 Making API request to /api/play-slot");
@@ -225,30 +231,41 @@ export default function SlotGameComponent({
       if (!gameContainerRef.current || destroyed) return;
 
       const rect = gameContainerRef.current.getBoundingClientRect();
-      const gameW = Math.round(rect.width) || 1280;
-      const gameH = Math.round(rect.height) || 720;
+      const cssW = Math.round(rect.width) || 1280;
+      const cssH = Math.round(rect.height) || 720;
+      // Phaser 3.90 has no `resolution`. Backing store must be CSS × DPR
+      // or the canvas is 1× and the browser upscales it (blur on Mac + iPhone).
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
 
       game = new Phaser.Game({
         type: Phaser.AUTO,
-        width: gameW,
-        height: gameH,
+        width: Math.round(cssW * dpr),
+        height: Math.round(cssH * dpr),
         parent: gameContainerRef.current,
         backgroundColor: "#080010",
         scale: {
           mode: Phaser.Scale.FIT,
           autoCenter: Phaser.Scale.CENTER_BOTH,
+          zoom: 1,
         },
-         render: {
-        pixelArt: false,     // Set to false for smooth images
-        antialias: true,     // Enable antialiasing for smoother edges
-        roundPixels: false,  // Keep as false for smoother animation
-      },
+        render: {
+          pixelArt: false,
+          antialias: true,
+          antialiasGL: true,
+          roundPixels: false,
+          mipmapFilter: "LINEAR",
+          powerPreference: "high-performance",
+        },
         input: { touch: { capture: false } },
         audio: { disableWebAudio: false, noAudio: false },
         scene: [Boot, Preload, SlotGame],
       });
 
+      game.registry.set("renderDpr", dpr);
       gameInstanceRef.current = game;
+      game.events.on("slot-load-progress", (v: number) => {
+        setLoadPct(Math.round(Math.min(1, Math.max(0, v)) * 100));
+      });
 
       const applyTouchAction = () => {
         const canvas = gameContainerRef.current?.querySelector("canvas");
@@ -278,7 +295,7 @@ export default function SlotGameComponent({
           setTimeout(pollForScene, 200);
         }
       };
-      setTimeout(pollForScene, 500);
+      setTimeout(pollForScene, 150);
     };
 
     initGame();
@@ -315,12 +332,12 @@ export default function SlotGameComponent({
               style={{ color: "#FFD700" }}
             />
             <p className="text-sm" style={{ color: "rgba(200,140,255,0.65)" }}>
-              Loading game...
+              {loadPct > 0 ? `Loading game… ${loadPct}%` : "Loading game..."}
             </p>
           </div>
         </div>
       )}
-      <div ref={gameContainerRef} className="w-full h-full" />
+      <div ref={gameContainerRef} className="rr-slot-canvas w-full h-full" />
     </div>
   );
 }
