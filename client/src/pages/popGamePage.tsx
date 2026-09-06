@@ -257,6 +257,7 @@ export default function PopGamePage() {
         playNoun="pop"
         cashWon={revealAllCash}
         pointsWon={revealAllPoints}
+        dismissLabel="Go to play history"
         onDismiss={viewRevealResults}
       />
 

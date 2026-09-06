@@ -104,10 +104,16 @@ export default function RevealAllBatchSummary({
   cashWon = 0,
   pointsWon = 0,
   variant = "modal",
-  dismissLabel = "View your results",
+  dismissLabel = "Done",
   onDismiss,
 }: Props) {
   const hadWin = rows.some((r) => r.tone === "win") || cashWon > 0 || pointsWon > 0;
+
+  useEffect(() => {
+    if (!open || rows.length === 0) return;
+    document.documentElement.classList.add("rr-reveal-summary-open");
+    return () => document.documentElement.classList.remove("rr-reveal-summary-open");
+  }, [open, rows.length]);
 
   useEffect(() => {
     if (!open || rows.length === 0 || !hadWin) return;
@@ -130,8 +136,8 @@ export default function RevealAllBatchSummary({
 
   const shellClass =
     variant === "overlay"
-      ? "absolute inset-0 z-30 flex items-center justify-center p-3"
-      : "fixed inset-0 z-[9998] flex items-center justify-center overflow-y-auto p-4";
+      ? "fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
+      : "fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]";
 
   return (
     <div
@@ -156,8 +162,8 @@ export default function RevealAllBatchSummary({
               <button
                 type="button"
                 onClick={onDismiss}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[#F1D47A]/30 text-[#F1D47A]/70"
-                aria-label="Close"
+                className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#F1D47A]/30 text-[#F1D47A]/70 transition-colors hover:border-[#F1D47A]/50 hover:bg-[#F1D47A]/10 sm:flex"
+                aria-label="Close results"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -217,15 +223,17 @@ export default function RevealAllBatchSummary({
             )}
             <p className="mb-3 text-center text-xs text-white/40">
               {hadWin
-                ? "Prizes are already on your account. The results table below keeps every play."
-                : "No wins this batch — every outcome is listed below when you continue."}
+                ? "Prizes are already on your account. Close when you're finished reviewing."
+                : "No wins this batch — close to return; every outcome stays in your play history."}
             </p>
             <button
               type="button"
               onClick={onDismiss}
               className="rr-cta h-12 w-full rounded-xl text-sm font-black uppercase tracking-[0.16em]"
+              data-testid="button-close-reveal-summary"
             >
-              {dismissLabel}
+              <span className="sm:hidden">Close results</span>
+              <span className="hidden sm:inline">{dismissLabel}</span>
             </button>
           </div>
         </div>

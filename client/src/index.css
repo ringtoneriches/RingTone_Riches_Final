@@ -2684,6 +2684,10 @@ button, a, [role="button"] {
     z-index: 40;
   }
 }
+html.rr-reveal-summary-open .rr-theme-dock {
+  visibility: hidden;
+  pointer-events: none;
+}
 
 .rr-dock-stack {
   position: fixed;

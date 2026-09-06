@@ -107,8 +107,8 @@ export default function PopRevealAllSummary({
               <button
                 type="button"
                 onClick={onViewResults}
-                className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-[#050505]/80 text-white/55 transition-colors hover:border-[#F1D47A]/40 hover:text-[#F1D47A]"
-                aria-label="Close and view results"
+                className="absolute right-3 top-3 z-20 hidden h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-[#050505]/80 text-white/55 transition-colors hover:border-[#F1D47A]/40 hover:text-[#F1D47A] sm:flex"
+                aria-label="Close results"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -208,7 +208,8 @@ export default function PopRevealAllSummary({
                 className="rr-cta h-12 w-full rounded-xl text-sm font-black uppercase tracking-[0.16em]"
                 data-testid="button-view-pop-results"
               >
-                View your results
+                <span className="sm:hidden">Close results</span>
+                <span className="hidden sm:inline">Done</span>
               </button>
               {onGetMore && (
                 <button
