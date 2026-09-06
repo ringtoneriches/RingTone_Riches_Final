@@ -99,7 +99,7 @@ function presentPurchaseToast(
     variant: "success",
     title: copy.title,
     description: useServer ? serverMessage : copy.description,
-    duration: cashback >= 0.01 ? 12000 : 9000,
+    duration: cashback >= 0.01 ? 8000 : 5500,
     cashback,
   });
 }
