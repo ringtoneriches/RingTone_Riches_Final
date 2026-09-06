@@ -91,7 +91,6 @@ export default function AdminInstantPool() {
     rangeTo: "50",
     activationType: "manual",
     activationValue: "",
-    allocationMethod: "a_pregen",
   });
 
   const { data: competitions = [] } = useQuery<any[]>({
@@ -343,6 +342,21 @@ export default function AdminInstantPool() {
   const selectedComp = competitions.find((c) => c.id === selectedId);
   const isControlled = selectedComp?.instantWinMode === "controlled_pool";
   const isInstantDraw = selectedComp?.type === "instant";
+  const parsedBlockSize = blockSizeInput.trim() ? Number(blockSizeInput) : NaN;
+  const hasValidBlockSizeInput =
+    Number.isInteger(parsedBlockSize) &&
+    parsedBlockSize >= 1 &&
+    (!selectedComp?.maxTickets || parsedBlockSize <= Number(selectedComp.maxTickets));
+  const existingBlockSize = Number(selectedComp?.ticketBlockSize || 0);
+  const hasConfiguredBlockSize =
+    Number.isInteger(existingBlockSize) && existingBlockSize >= 1;
+  const controlledBlockSizeReady = hasValidBlockSizeInput || hasConfiguredBlockSize;
+
+  const resolveControlledBlockSize = (): number | null => {
+    if (hasValidBlockSizeInput) return parsedBlockSize;
+    if (hasConfiguredBlockSize) return existingBlockSize;
+    return null;
+  };
 
   useEffect(() => {
     setBlockSizeInput(
@@ -401,7 +415,6 @@ export default function AdminInstantPool() {
       rangeTo: Number(form.rangeTo),
       activationType: form.activationType,
       activationValue,
-      allocationMethod: form.allocationMethod,
       confirmHighValue: forceHighValue || value < highValueThreshold,
     });
   };
@@ -509,12 +522,26 @@ export default function AdminInstantPool() {
                     <Label className="mb-2 block">Ticket mode</Label>
                     <Select
                       value={selectedComp.instantWinMode || "probability"}
-                      onValueChange={(mode) =>
-                        modeMutation.mutate({
-                          mode,
-                          ticketBlockSize: blockSizeInput ? Number(blockSizeInput) : null,
-                        })
-                      }
+                      onValueChange={(mode) => {
+                        if (mode === "controlled_pool") {
+                          const blockSize = resolveControlledBlockSize();
+                          if (!blockSize) {
+                            toast({
+                              title: "Sale block size required",
+                              description:
+                                "Enter a sale block size below before switching to controlled pool.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          modeMutation.mutate({
+                            mode,
+                            ticketBlockSize: blockSize,
+                          });
+                          return;
+                        }
+                        modeMutation.mutate({ mode: "probability", ticketBlockSize: null });
+                      }}
                       disabled={isInstantDraw}
                     >
                       <SelectTrigger className="min-w-[200px]">
@@ -535,29 +562,38 @@ export default function AdminInstantPool() {
             </div>
             {selectedComp && !isInstantDraw && selectedComp.instantWinMode === "controlled_pool" && (
               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] items-end">
+                {!hasConfiguredBlockSize && (
+                  <p className="md:col-span-2 text-sm text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
+                    Controlled pool needs a sale block size before tickets can be sold. Set one below and save.
+                  </p>
+                )}
                 <div>
-                  <Label className="mb-2 block">Sale block size</Label>
+                  <Label className="mb-2 block">
+                    Sale block size <span className="text-destructive">*</span>
+                  </Label>
                   <Input
                     type="number"
                     min={1}
                     max={selectedComp.maxTickets || undefined}
+                    required
                     value={blockSizeInput}
                     onChange={(e) => setBlockSizeInput(e.target.value)}
-                    placeholder="Leave empty for 1, 2, 3 in order"
+                    placeholder="e.g. 1000"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Pool stays 1–{selectedComp.maxTickets || "N"}. Set e.g. 500 to give customers random unused numbers in 1–500, then 501–1000, and so on. A purchase that fills a block continues in the next one. Leave empty to keep issuing 1, 2, 3.
+                    Required for controlled pool. Pool stays 1–{selectedComp.maxTickets || "N"}. Customers get random unused numbers within each block (e.g. 1000 → first sales random in 1–1000, then 1001–2000, and so on).
                   </p>
                 </div>
                 <Button
                   variant="outline"
-                  disabled={modeMutation.isPending}
-                  onClick={() =>
+                  disabled={modeMutation.isPending || !hasValidBlockSizeInput}
+                  onClick={() => {
+                    if (!hasValidBlockSizeInput) return;
                     modeMutation.mutate({
                       mode: "controlled_pool",
-                      ticketBlockSize: blockSizeInput ? Number(blockSizeInput) : null,
-                    })
-                  }
+                      ticketBlockSize: parsedBlockSize,
+                    });
+                  }}
                 >
                   Save block size
                 </Button>
@@ -824,7 +860,6 @@ export default function AdminInstantPool() {
                                         <div className="font-semibold">{group.name}</div>
                                         <div className="text-xs text-muted-foreground">
                                           Range {prize.rangeFrom}–{prize.rangeTo} · {prize.activationType.replace("_", " ")}
-                                          {prize.allocationMethod === "a_pregen" ? " · Method A" : " · Method B"}
                                         </div>
                                       </div>
                                       <PrizeActions
@@ -941,30 +976,18 @@ export default function AdminInstantPool() {
                   <Input type="number" value={form.rangeTo} onChange={(e) => setForm({ ...form, rangeTo: e.target.value })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Activation</Label>
-                  <Select value={form.activationType} onValueChange={(activationType) => setForm({ ...form, activationType })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="manual">Manual</SelectItem>
-                      <SelectItem value="percent_sold">% sold</SelectItem>
-                      <SelectItem value="count_sold">Count sold</SelectItem>
-                      <SelectItem value="revenue">Revenue</SelectItem>
-                      <SelectItem value="datetime">Date & time</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Method</Label>
-                  <Select value={form.allocationMethod} onValueChange={(allocationMethod) => setForm({ ...form, allocationMethod })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="b_on_activate">Method B — pick on activate</SelectItem>
-                      <SelectItem value="a_pregen">Method A — pick now, stay locked</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div>
+                <Label>Activation</Label>
+                <Select value={form.activationType} onValueChange={(activationType) => setForm({ ...form, activationType })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="percent_sold">% sold</SelectItem>
+                    <SelectItem value="count_sold">Count sold</SelectItem>
+                    <SelectItem value="revenue">Revenue</SelectItem>
+                    <SelectItem value="datetime">Date & time</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               {form.activationType !== "manual" && (
                 <div>
@@ -1009,7 +1032,7 @@ export default function AdminInstantPool() {
               </DialogTitle>
               <DialogDescription>
                 {pendingAction?.type === "activate"
-                  ? "The assigned winning ticket stays fixed. If this prize has no number yet, one unsold ticket is picked and then never changed. Locked winning tickets stay reserved until you activate."
+                  ? "The assigned winning ticket stays fixed. Locked winning tickets stay reserved until you activate."
                   : pendingAction?.type === "activate-groups"
                   ? "Only locked prizes in the groups below will go live. Unselected groups stay locked. Ticket numbers stay fixed."
                   : pendingAction?.type === "delete"

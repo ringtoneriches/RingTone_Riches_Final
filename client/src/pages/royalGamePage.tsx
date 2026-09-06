@@ -66,20 +66,34 @@ export default function RoyalGamePage() {
     const spinNumber = spinCountRef.current;
     const coinsSpent = creditsPerGame;
     try {
-      await apiRequest("/api/record-royal-spin", "POST", { orderId, isWin, coinsWon, coinsSpent, spinNumber, isRoyalReplay });
-      const newEntry = {
-        id: `local-${spinNumber}`,
+      const res = await apiRequest("/api/record-royal-spin", "POST", {
+        orderId,
         isWin,
-        isRoyalReplay,
         coinsWon,
         coinsSpent,
         spinNumber,
+        isRoyalReplay,
+      });
+      const body = await res.json();
+      const serverWin = body.controlledPool ? Boolean(body.isWin) : isWin;
+      const serverCoins = body.controlledPool ? Number(body.coinsWon || 0) : coinsWon;
+      const serverReplay = body.controlledPool ? false : isRoyalReplay;
+      const serverSpinNumber = body.spinNumber ?? spinNumber;
+      const newEntry = {
+        id: `local-${serverSpinNumber}`,
+        isWin: serverWin,
+        isRoyalReplay: serverReplay,
+        coinsWon: serverCoins,
+        coinsSpent,
+        spinNumber: serverSpinNumber,
+        ticketNumber: body.ticketNumber || null,
         usedAt: new Date().toISOString(),
       };
       setSpinHistory(prev => [newEntry, ...prev]);
-      if (isWin && coinsWon > 0) {
+      if (serverWin && serverCoins > 0) {
         queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       }
+      queryClient.invalidateQueries({ queryKey: ["/api/royal-order", orderId] });
     } catch (err) {
       console.error("Failed to record royal spin:", err);
     }
