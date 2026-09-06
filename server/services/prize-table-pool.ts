@@ -1,6 +1,7 @@
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { db } from "../db";
 import { competitionPrizes, competitions, instantWinPrizes } from "@shared/schema";
+import { instantWinValueFromTablePrize } from "./instant-win-prize-value";
 import {
   InstantWinError,
   createInstantWinPrize,
@@ -40,11 +41,12 @@ async function spawnChildren(opts: {
 
   const created = [];
   for (let i = 0; i < opts.count; i++) {
+    const rewardType = inferRewardType(opts.parent.prizeName);
     const prize = await createInstantWinPrize({
       competitionId: opts.parent.competitionId,
       name: opts.parent.prizeName,
-      value: opts.parent.prizeValue,
-      rewardType: inferRewardType(opts.parent.prizeName),
+      value: instantWinValueFromTablePrize(opts.parent, rewardType),
+      rewardType,
       rangeFrom: 1,
       rangeTo: maxTickets,
       activationType: "manual",
@@ -102,11 +104,13 @@ export async function onTablePrizeUpdated(
 
   for (const child of live) {
     if (child.status === "won") continue;
+    const rewardType = inferRewardType(parent.prizeName);
     await db
       .update(instantWinPrizes)
       .set({
         name: parent.prizeName,
-        value: String(parent.prizeValue),
+        value: String(instantWinValueFromTablePrize(parent, rewardType)),
+        rewardType,
         updatedAt: new Date(),
       })
       .where(eq(instantWinPrizes.id, child.id));
@@ -198,6 +202,35 @@ export async function backfillMissingWinningNumbers(competitionId: string, admin
   return { assigned };
 }
 
+export async function syncInstantWinStoredValues(competitionId: string) {
+  const tablePrizes = await db
+    .select()
+    .from(competitionPrizes)
+    .where(eq(competitionPrizes.competitionId, competitionId));
+  const byId = new Map(tablePrizes.map((p) => [p.id, p]));
+
+  const prizes = await db
+    .select()
+    .from(instantWinPrizes)
+    .where(eq(instantWinPrizes.competitionId, competitionId));
+
+  let updated = 0;
+  for (const prize of prizes) {
+    if (prize.rewardType !== "points" || !prize.competitionPrizeId) continue;
+    const parent = byId.get(prize.competitionPrizeId);
+    if (!parent) continue;
+    const next = String(instantWinValueFromTablePrize(parent, "points"));
+    if (String(prize.value) !== next) {
+      await db
+        .update(instantWinPrizes)
+        .set({ value: next, updatedAt: new Date() })
+        .where(eq(instantWinPrizes.id, prize.id));
+      updated += 1;
+    }
+  }
+  return { updated };
+}
+
 export async function ensureChildrenForCompetition(competitionId: string, adminId?: string) {
   const competition = await getCompetition(competitionId);
   if (!competition || !isControlledMode(competition.instantWinMode)) return { spawned: 0, assigned: 0 };
@@ -219,5 +252,6 @@ export async function ensureChildrenForCompetition(competitionId: string, adminI
   }
 
   const { assigned } = await backfillMissingWinningNumbers(competitionId, adminId);
-  return { spawned, assigned };
+  const { updated } = await syncInstantWinStoredValues(competitionId);
+  return { spawned, assigned, valuesSynced: updated };
 }

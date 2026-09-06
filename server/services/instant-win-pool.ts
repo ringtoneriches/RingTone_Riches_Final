@@ -10,6 +10,7 @@ import {
   scratchDisplayImages,
   scratchPrizeFromDetails,
 } from "./scratch-controlled-layout";
+import { instantWinValueFromTablePrize } from "./instant-win-prize-value";
 import { randomInt, randomBytes } from "crypto";
 import { and, asc, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "../db";
@@ -388,11 +389,68 @@ export async function pickUnsoldNumberInRange(
   return { number: picked, rngRef };
 }
 
-function buildPrizeDetails(prize: {
-  name: string;
-  value: string | number;
-  rewardType: string;
-} | null) {
+/** Prize-table £ value for cash/physical; ringtone points count for points prizes. */
+export { instantWinValueFromTablePrize } from "./instant-win-prize-value";
+
+async function resolveInstantWinValueNum(
+  prize: { value: string | number; rewardType: string; competitionPrizeId?: string | null },
+  tx: DbTx
+): Promise<number> {
+  if (prize.rewardType === "points" && prize.competitionPrizeId) {
+    const [row] = await tx
+      .select({ ringtonePoints: competitionPrizes.ringtonePoints })
+      .from(competitionPrizes)
+      .where(eq(competitionPrizes.id, prize.competitionPrizeId))
+      .limit(1);
+    const pts = Math.max(0, Number(row?.ringtonePoints || 0));
+    if (pts > 0) return pts;
+  }
+  return Number(prize.value || 0);
+}
+
+/** Cash-equivalent liability for admin exposure (points prizes use parent £ value). */
+async function liabilityCashValue(
+  prize: { value: string | number; rewardType: string; competitionPrizeId?: string | null },
+  tx: DbTx
+): Promise<number> {
+  if (prize.rewardType === "points" && prize.competitionPrizeId) {
+    const [row] = await tx
+      .select({ prizeValue: competitionPrizes.prizeValue })
+      .from(competitionPrizes)
+      .where(eq(competitionPrizes.id, prize.competitionPrizeId))
+      .limit(1);
+    return Number(row?.prizeValue || 0);
+  }
+  return Number(prize.value || 0);
+}
+
+async function frozenTicketDetails(
+  ticket: { prizeDetails?: unknown; instantWinPrizeId?: string | null },
+  tx: DbTx = db
+): Promise<any> {
+  if (!ticket.instantWinPrizeId) {
+    return (ticket.prizeDetails as any) || buildPrizeDetails(null);
+  }
+  const [prize] = await tx
+    .select()
+    .from(instantWinPrizes)
+    .where(eq(instantWinPrizes.id, ticket.instantWinPrizeId))
+    .limit(1);
+  if (!prize) {
+    return (ticket.prizeDetails as any) || buildPrizeDetails(null);
+  }
+  const valueNum = await resolveInstantWinValueNum(prize, tx);
+  return buildPrizeDetails(prize, valueNum);
+}
+
+function buildPrizeDetails(
+  prize: {
+    name: string;
+    value: string | number;
+    rewardType: string;
+  } | null,
+  valueNumOverride?: number
+) {
   if (!prize) {
     const balloonValues = shuffleThreeDifferent();
     return {
@@ -413,7 +471,7 @@ function buildPrizeDetails(prize: {
     };
   }
 
-  const valueNum = Number(prize.value || 0);
+  const valueNum = valueNumOverride ?? Number(prize.value || 0);
   const rewardType = prize.rewardType;
   const isWin = rewardType === "cash" || rewardType === "points" || rewardType === "physical";
   const balloonValues =
@@ -477,9 +535,10 @@ async function creditFrozenWin(
     userId?: string;
     guestOrderId?: string;
     isGuest?: boolean;
+    valueNum?: number;
   }
 ) {
-  const valueNum = Number(opts.prize.value || 0);
+  const valueNum = opts.valueNum ?? (await resolveInstantWinValueNum(opts.prize, tx));
   let winnerUserId: string | null = opts.userId || null;
   let winnerDisplayName = "Winner";
 
@@ -606,9 +665,13 @@ async function freezeIssuedTicket(
     )
     .limit(1);
 
-  const details = buildPrizeDetails(matchingPrize || null);
+  const details = matchingPrize
+    ? buildPrizeDetails(matchingPrize, await resolveInstantWinValueNum(matchingPrize, tx))
+    : buildPrizeDetails(null);
   const isWin = Boolean(matchingPrize);
-  const prizeAmount = matchingPrize ? String(matchingPrize.value) : "0";
+  const prizeAmount = matchingPrize
+    ? String(details.rewardValue)
+    : "0";
 
   if (matchingPrize) {
     await creditFrozenWin(tx, {
@@ -618,6 +681,7 @@ async function freezeIssuedTicket(
       userId: opts.userId,
       guestOrderId: opts.guestOrderId,
       isGuest: opts.isGuest,
+      valueNum: Number(details.rewardValue),
     });
   }
 
@@ -1386,14 +1450,17 @@ export async function getAdminExposure(competitionId: string) {
   const ticketPrice = Number(competition.ticketPrice || 0);
   const revenue = Math.round(soldTickets * ticketPrice * 100) / 100;
 
-  const sum = (status: string) =>
-    prizes
-      .filter((p) => p.status === status)
-      .reduce((acc, p) => acc + Number(p.value || 0), 0);
+  const sum = async (status: string) => {
+    let total = 0;
+    for (const p of prizes.filter((row) => row.status === status)) {
+      total += await liabilityCashValue(p, db);
+    }
+    return total;
+  };
 
-  const paid = sum("won");
-  const activeLiability = sum("active");
-  const lockedLiability = sum("locked");
+  const paid = await sum("won");
+  const activeLiability = await sum("active");
+  const lockedLiability = await sum("locked");
 
   return {
     competitionId,
@@ -1658,7 +1725,7 @@ export async function tryRevealControlledPop(opts: {
   });
   if (!ticket) return { handled: true, noTickets: true, remaining: 0, total };
 
-  const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+  const details: any = await frozenTicketDetails(ticket);
   await markTicketRevealed(ticket.id, opts.isGuest);
 
   if (!opts.isGuest && opts.userId) {
@@ -1749,7 +1816,7 @@ export async function revealAllControlledPop(opts: {
   let totalPoints = 0;
 
   for (const ticket of pending) {
-    const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+    const details: any = await frozenTicketDetails(ticket);
     await markTicketRevealed(ticket.id, false);
     await db.insert(popUsage).values({
       orderId: opts.orderId,
@@ -1807,7 +1874,7 @@ export async function tryRevealControlledSlot(opts: {
   if (!ticket) {
     return { handled: true, noTickets: true, remaining: 0, total };
   }
-  const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+  const details: any = await frozenTicketDetails(ticket);
   const existingSpins = await db
     .select({ id: slotUsage.id })
     .from(slotUsage)
@@ -1968,7 +2035,7 @@ export async function tryRevealControlledSpin(opts: {
   if (!(await isCompetitionControlled(opts.competitionId))) return null;
   const { ticket, remaining, total } = await nextFrozenTicket({ orderId: opts.orderId });
   if (!ticket) return { handled: true, noTickets: true, remaining: 0, total };
-  const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+  const details: any = await frozenTicketDetails(ticket);
   const wheelSegment = pickWheelSegment(
     await loadWheelSegments(opts.competitionId),
     details,
@@ -2042,7 +2109,7 @@ export async function revealAllControlledSpin(opts: {
 
   const results: any[] = [];
   for (const ticket of pending) {
-    const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+    const details: any = await frozenTicketDetails(ticket);
     await markTicketRevealed(ticket.id, false);
     await db.insert(spinUsage).values({
       orderId: opts.orderId,
@@ -2092,7 +2159,7 @@ export async function peekControlledVoltz(opts: {
   if (!(await isCompetitionControlled(opts.competitionId))) return null;
   const { ticket, remaining, total } = await nextFrozenTicket({ orderId: opts.orderId });
   if (!ticket) return { handled: true, noTickets: true, remaining: 0, total };
-  const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+  const details: any = await frozenTicketDetails(ticket);
   const voltz = details.voltz || {};
   return {
     handled: true,
@@ -2138,7 +2205,7 @@ export async function confirmControlledVoltz(opts: {
   if (!ticket || (ticket.resultStatus !== "win" && ticket.resultStatus !== "lose")) {
     return { handled: true, alreadyRevealed: true };
   }
-  const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+  const details: any = await frozenTicketDetails(ticket);
   await markTicketRevealed(ticket.id, false);
   await db.insert(voltzUsage).values({
     orderId: opts.orderId,
@@ -2174,7 +2241,7 @@ export async function tryRevealControlledPlinko(opts: {
   if (!(await isCompetitionControlled(opts.competitionId))) return null;
   const { ticket, remaining, total } = await nextFrozenTicket({ orderId: opts.orderId });
   if (!ticket) return { handled: true, noTickets: true, remaining: 0, total };
-  const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+  const details: any = await frozenTicketDetails(ticket);
   await markTicketRevealed(ticket.id, false);
   await db.insert(plinkoUsage).values({
     orderId: opts.orderId,
@@ -2219,7 +2286,7 @@ export async function revealAllControlledPlinko(opts: {
   let totalCashWon = 0;
   let totalPointsWon = 0;
   for (const ticket of pending) {
-    const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+    const details: any = await frozenTicketDetails(ticket);
     await markTicketRevealed(ticket.id, false);
     await db.insert(plinkoUsage).values({
       orderId: opts.orderId,
@@ -2264,7 +2331,7 @@ async function loadScratchImageRows() {
 }
 
 async function buildControlledScratchSessionPayload(ticket: any) {
-  const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+  const details: any = await frozenTicketDetails(ticket);
   const { isWinner, prizeInfo } = scratchPrizeFromDetails(details);
   const imageRows = await loadScratchImageRows();
   const activeImages = scratchDisplayImages(imageRows);
@@ -2357,7 +2424,7 @@ export async function confirmControlledScratch(opts: {
         controlledPool: true,
         creditedAtSale: true,
         ticketNumber: playTicketLabel(ticket),
-        prize: scratchPrizeFromDetails(ticket.prizeDetails || buildPrizeDetails(null)).prizeInfo,
+        prize: scratchPrizeFromDetails(await frozenTicketDetails(ticket)).prizeInfo,
       },
     };
   }
@@ -2365,7 +2432,7 @@ export async function confirmControlledScratch(opts: {
     throw new InstantWinError("Ticket outcome is not ready", 400, "ticket_pending");
   }
 
-  const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+  const details: any = await frozenTicketDetails(ticket);
   const { isWinner, prizeInfo } = scratchPrizeFromDetails(details);
 
   await markTicketRevealed(ticket.id, opts.isGuest);
@@ -2435,6 +2502,15 @@ export async function revealAllControlledScratch(opts: {
     .from(scratchCardUsage)
     .where(eq(scratchCardUsage.orderId, opts.orderId));
 
+  let totalCash = 0;
+  let totalPoints = 0;
+  for (const scratch of scratches) {
+    const type = String(scratch.prize?.type || "").toLowerCase();
+    const raw = scratch.prize?.value;
+    if (type === "cash") totalCash += Number(raw || 0);
+    else if (type === "points") totalPoints += parseInt(String(raw || "0"), 10) || 0;
+  }
+
   return {
     handled: true,
     response: {
@@ -2443,8 +2519,8 @@ export async function revealAllControlledScratch(opts: {
       creditedAtSale: true,
       scratches,
       summary: {
-        totalCash: 0,
-        totalPoints: 0,
+        totalCash,
+        totalPoints,
         scratchesProcessed: scratches.length,
       },
       cardsRemaining: Math.max(0, Number(order?.quantity || 0) - Number(usedRow?.count || 0)),
@@ -2532,7 +2608,7 @@ export async function tryRevealControlledRoyal(opts: {
   const { ticket, remaining, total } = await nextFrozenTicket({ orderId: opts.orderId });
   if (!ticket) return { handled: true, noTickets: true, remaining: 0, total };
 
-  const details: any = ticket.prizeDetails || buildPrizeDetails(null);
+  const details: any = await frozenTicketDetails(ticket);
   const isWin = Boolean(details.isWin);
   const coinsWon = royalCoinsFromDetails(details);
   const cashValue =
