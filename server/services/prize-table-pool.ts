@@ -1,10 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { db } from "../db";
 import { competitionPrizes, competitions, instantWinPrizes } from "@shared/schema";
 import {
   InstantWinError,
   createInstantWinPrize,
   isControlledMode,
+  pickUnsoldNumberInRange,
   syncTablePrizeCounts,
 } from "./instant-win-pool";
 
@@ -47,7 +48,7 @@ async function spawnChildren(opts: {
       rangeFrom: 1,
       rangeTo: maxTickets,
       activationType: "manual",
-      allocationMethod: "b_on_activate",
+      allocationMethod: "a_pregen",
       adminId: opts.adminId,
       confirmHighValue: true,
       competitionPrizeId: opts.parent.id,
@@ -158,9 +159,49 @@ export async function onTablePrizeDeleted(parentId: string) {
   }
 }
 
+export async function backfillMissingWinningNumbers(competitionId: string, adminId?: string) {
+  const competition = await getCompetition(competitionId);
+  if (!competition || !isControlledMode(competition.instantWinMode)) return { assigned: 0 };
+
+  const maxTickets = Number(competition.maxTickets || 0);
+  if (!maxTickets) return { assigned: 0 };
+
+  const orphans = await db
+    .select()
+    .from(instantWinPrizes)
+    .where(
+      and(
+        eq(instantWinPrizes.competitionId, competitionId),
+        isNull(instantWinPrizes.winningTicketNumber),
+        ne(instantWinPrizes.status, "won")
+      )
+    );
+
+  let assigned = 0;
+  for (const prize of orphans) {
+    await db.transaction(async (tx) => {
+      const from = Number(prize.rangeFrom || 1);
+      const to = Number(prize.rangeTo || maxTickets);
+      const picked = await pickUnsoldNumberInRange(tx, competitionId, from, to, prize.id);
+      await tx
+        .update(instantWinPrizes)
+        .set({
+          winningTicketNumber: picked.number,
+          allocationMethod: "a_pregen",
+          lastChangedAt: new Date(),
+          lastChangedBy: adminId || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(instantWinPrizes.id, prize.id));
+    });
+    assigned += 1;
+  }
+  return { assigned };
+}
+
 export async function ensureChildrenForCompetition(competitionId: string, adminId?: string) {
   const competition = await getCompetition(competitionId);
-  if (!competition || !isControlledMode(competition.instantWinMode)) return { spawned: 0 };
+  if (!competition || !isControlledMode(competition.instantWinMode)) return { spawned: 0, assigned: 0 };
 
   const tablePrizes = await db
     .select()
@@ -177,5 +218,7 @@ export async function ensureChildrenForCompetition(competitionId: string, adminI
     const result = await onTablePrizeCreated(parent, adminId);
     spawned += result.spawned;
   }
-  return { spawned };
+
+  const { assigned } = await backfillMissingWinningNumbers(competitionId, adminId);
+  return { spawned, assigned };
 }

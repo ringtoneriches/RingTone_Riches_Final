@@ -75,7 +75,7 @@ export default function ScratchGamePage() {
 
   // Check if scratch cards are visible
   const { data: scratchConfig } = useQuery<{ isVisible: boolean }>({
-    queryKey: ["/api/admin/game-scratch-config"],
+    queryKey: ["/api/scratch-config"],
   });
 
   // Redirect if scratch cards are hidden

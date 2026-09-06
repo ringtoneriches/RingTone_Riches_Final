@@ -5,6 +5,7 @@ import { Zap, Shield, Trophy, ChevronRight, Star, Users, Crown, Play, Ticket, Ro
 import { Button } from "@/components/ui/button";
 import { useState, useRef, useMemo, memo, useCallback, useEffect } from "react";
 import featuredBgVideo from "@assets/generated_videos/featured_gaming_vivid_bg.mp4";
+import { getCompetitionImage } from "@/lib/competition-display";
 
 interface FeaturedCompetitionsProps {
   competitions: Competition[];
@@ -102,7 +103,7 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
               }}>
                 <div className="relative w-full aspect-[16/10] sm:aspect-[4/3] lg:aspect-[4/3]">
                   <img
-                    src={competition.imageUrl || "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80"}
+                    src={getCompetitionImage(competition, "featured")}
                     alt={competition.title}
                     loading="lazy"
                     className="w-full h-full object-cover"

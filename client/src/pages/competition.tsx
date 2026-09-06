@@ -32,6 +32,7 @@ import {
   getCompetitionBadgeLabel,
   getCompetitionTypeConfig,
   getDefaultQuantity,
+  getCompetitionImage,
   getFallbackImage,
   getDrawCardTitle,
   getPrizeDisplay,
@@ -492,9 +493,9 @@ export default function CompetitionPage() {
               <div className="relative overflow-hidden bg-[#0A0A0D] lg:min-h-[560px]">
                 <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#0A0A0D] sm:aspect-[4/3] lg:absolute lg:inset-0 lg:aspect-auto">
                   <img
-                    src={competition.imageUrl || getFallbackImage(competitionType)}
+                    src={getCompetitionImage(competition, "page")}
                               alt={competition.title}
-                    className="h-full w-full object-cover object-top lg:object-center"
+                    className="h-full w-full object-cover object-center"
                               data-testid={`img-competition-${competition.id}`}
                     onError={(e) => {
                       const img = e.currentTarget;

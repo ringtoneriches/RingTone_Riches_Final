@@ -241,7 +241,7 @@ export function isFeaturedCandidate(competition: Competition) {
   if (isTestCompetition(competition)) return false;
   const stats = getTicketStats(competition);
   if (stats.isClosed) return false;
-  if (!competition.imageUrl) return false;
+  if (!competition.imageUrl && !competition.featuredImageUrl) return false;
   if (!getPrizeDisplay(competition).prizeDisplay) return false;
   if (!stats.hasTickets) return false;
   return true;
@@ -280,4 +280,62 @@ export function getFallbackImage(type: string) {
   if (type === "voltz") return "/voltz.jpeg";
   if (type === "scratch") return "/scratch.jpeg";
   return "/pop.jpeg";
+}
+
+export type CompetitionArtSlot = "featured" | "card" | "page";
+
+export type CompetitionImageFormValues = {
+  imageUrl: string;
+  featuredImageUrl: string;
+  cardImageUrl: string;
+  pageImageUrl: string;
+};
+
+const SLOT_URL_KEY: Record<CompetitionArtSlot, keyof CompetitionImageFormValues> = {
+  featured: "featuredImageUrl",
+  card: "cardImageUrl",
+  page: "pageImageUrl",
+};
+
+export function competitionImageFormValues(
+  data?: {
+    imageUrl?: string | null;
+    featuredImageUrl?: string | null;
+    cardImageUrl?: string | null;
+    pageImageUrl?: string | null;
+  } | null,
+): CompetitionImageFormValues {
+  return {
+    imageUrl: data?.imageUrl || "",
+    featuredImageUrl: data?.featuredImageUrl || "",
+    cardImageUrl: data?.cardImageUrl || "",
+    pageImageUrl: data?.pageImageUrl || "",
+  };
+}
+
+export function getCompetitionImage(
+  competition: {
+    type?: string | null;
+    imageUrl?: string | null;
+    featuredImageUrl?: string | null;
+    cardImageUrl?: string | null;
+    pageImageUrl?: string | null;
+  },
+  slot: CompetitionArtSlot,
+) {
+  const dedicated = competition[SLOT_URL_KEY[slot]];
+  return dedicated || competition.imageUrl || getFallbackImage(competition.type || "");
+}
+
+export function hasDedicatedArt(
+  competition: {
+    featuredImageUrl?: string | null;
+    cardImageUrl?: string | null;
+    pageImageUrl?: string | null;
+  },
+  slot: CompetitionArtSlot,
+) {
+  if (slot === "featured") return !!competition.featuredImageUrl;
+  if (slot === "card") return !!competition.cardImageUrl;
+  return !!competition.pageImageUrl;
 }

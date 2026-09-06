@@ -220,6 +220,7 @@ async function soldSeqsInRange(tx: DbTx, competitionId: string, from: number, to
   );
 }
 
+/** Winning numbers on locked/disabled prizes are withheld from loser sales until active. */
 async function reservedWinningSeqs(tx: DbTx, competitionId: string) {
   const rows = await tx
     .select({ n: instantWinPrizes.winningTicketNumber })
@@ -227,8 +228,8 @@ async function reservedWinningSeqs(tx: DbTx, competitionId: string) {
     .where(
       and(
         eq(instantWinPrizes.competitionId, competitionId),
-        eq(instantWinPrizes.status, "locked"),
-        isNotNull(instantWinPrizes.winningTicketNumber)
+        isNotNull(instantWinPrizes.winningTicketNumber),
+        inArray(instantWinPrizes.status, ["locked", "disabled"])
       )
     );
   return new Set(
@@ -251,19 +252,18 @@ async function countReservedUnsold(tx: DbTx, competitionId: string, maxTickets: 
   return reservedUnsold;
 }
 
+/** Every assigned winning number is permanently tied to its prize (all statuses). */
 async function allocatedWinningNumbers(tx: DbTx, competitionId: string, exceptPrizeId?: string) {
   const rows = await tx
     .select({
       n: instantWinPrizes.winningTicketNumber,
       id: instantWinPrizes.id,
-      status: instantWinPrizes.status,
     })
     .from(instantWinPrizes)
     .where(
       and(
         eq(instantWinPrizes.competitionId, competitionId),
-        isNotNull(instantWinPrizes.winningTicketNumber),
-        ne(instantWinPrizes.status, "disabled")
+        isNotNull(instantWinPrizes.winningTicketNumber)
       )
     );
   return new Set(
@@ -839,7 +839,7 @@ export async function createInstantWinPrize(input: {
     );
   }
 
-  const method = input.allocationMethod || "b_on_activate";
+  const method = input.allocationMethod || "a_pregen";
 
   return db.transaction(async (tx) => {
     let winningTicketNumber: number | null = null;
@@ -907,9 +907,6 @@ export async function activateInstantWinPrize(
     if (prize.status === "won") {
       throw new InstantWinError("This prize is already won and cannot be changed", 400, "already_won");
     }
-    if (prize.status === "disabled") {
-      throw new InstantWinError("Disabled prizes cannot be activated", 400);
-    }
     if (prize.status === "active") return prize;
 
     const valueNum = Number(prize.value || 0);
@@ -924,7 +921,15 @@ export async function activateInstantWinPrize(
     let winningTicketNumber = prize.winningTicketNumber;
     let rngRef: string | null = null;
 
-    if (prize.allocationMethod === "a_pregen" && winningTicketNumber) {
+    if (prize.status === "disabled" && !winningTicketNumber) {
+      throw new InstantWinError(
+        "Disabled prize has no winning ticket number to re-enable",
+        400,
+        "no_winning_number"
+      );
+    }
+
+    if (winningTicketNumber) {
       const sold = await soldSeqsInRange(
         tx,
         prize.competitionId,
@@ -938,7 +943,7 @@ export async function activateInstantWinPrize(
           "ticket_fixed"
         );
       }
-    } else if (!winningTicketNumber) {
+    } else {
       const picked = await pickUnsoldNumberInRange(
         tx,
         prize.competitionId,
@@ -971,7 +976,7 @@ export async function activateInstantWinPrize(
       activationRule: { type: prize.activationType, value: prize.activationValue },
       rngRef,
       winningTicketNumber,
-      reason: opts?.reason || "Prize activated; winning number stays fixed",
+      reason: opts?.reason || (prize.status === "disabled" ? "Disabled prize re-enabled; winning number unchanged" : "Prize activated; winning number stays fixed"),
     });
 
     return updated;
@@ -1113,7 +1118,7 @@ export async function disableInstantWinPrize(prizeId: string, adminId?: string) 
       previousStatus: prize.status,
       newStatus: "disabled",
       winningTicketNumber: prize.winningTicketNumber,
-      reason: "Prize disabled",
+      reason: "Prize disabled; winning number stays reserved",
     });
     if (prize.competitionPrizeId) {
       await syncTablePrizeCounts(tx, prize.competitionPrizeId);

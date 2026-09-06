@@ -103,7 +103,7 @@ export default function AdminLogin() {
               <Input
                 id="admin-email"
                 type="email"
-                placeholder="admin@ringtoneriches.co.uk"
+                placeholder="you@yourcompany.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-400 focus:ring-yellow-400"

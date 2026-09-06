@@ -139,7 +139,7 @@ export function registerGuestAuthRoutes(app: Express) {
         lastName: lastName || undefined,
         phoneNumber: phone || undefined,
         receiveNewsletter,
-        emailVerified: true,
+        emailVerified: false,
         isGuestAccount: true,
       });
 

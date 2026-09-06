@@ -8,6 +8,7 @@ import PaymentResult from "@/components/billing/PaymentResult";
 import { showPurchaseSuccessToast } from "@/lib/purchase-toast";
 import { waitConfirmScreen } from "@/lib/confirm-screen";
 import { cardCashbackAmount } from "@shared/card-cashback";
+import { saveGuestOrderToken, getGuestOrderToken, guestOrderRequestInit } from "@/lib/guest-order-access";
 
 export default function CheckoutSuccess() {
   const { toast } = useToast();
@@ -100,17 +101,32 @@ export default function CheckoutSuccess() {
           const message = String(err?.message || "");
           if (message.includes("401") || message.includes("Unauthorized")) {
             try {
-              const guestRes = await apiRequest("/api/guest/confirm-payment", "POST", {
-                paymentJobRef,
-                paymentRef,
-                orderId,
-              });
+              const guestRes = await fetch(
+                "/api/guest/confirm-payment",
+                guestOrderRequestInit(orderId, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({
+                    paymentJobRef,
+                    paymentRef,
+                    orderId,
+                    accessToken: getGuestOrderToken(orderId) || undefined,
+                  }),
+                }),
+              );
               const guestData = await guestRes.json();
               if (guestRes.status === 200 && guestData.success) {
+                if (guestData.accessToken && orderId) {
+                  saveGuestOrderToken(orderId, guestData.accessToken);
+                }
                 showPurchaseSuccessToast(toast, guestData.competitionType || "competition", undefined, guestData.wheelType);
                 await waitConfirmScreen(shownAt);
                 setIsProcessing(false);
-                setTimeout(() => setLocation(`/guest-billing/${orderId}`), 1400);
+                const tokenQuery = guestData.accessToken
+                  ? `?token=${encodeURIComponent(guestData.accessToken)}`
+                  : "";
+                setTimeout(() => setLocation(`/guest-billing/${orderId}${tokenQuery}`), 1400);
                 return;
               }
             } catch {

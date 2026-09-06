@@ -91,7 +91,7 @@ export default function AdminInstantPool() {
     rangeTo: "50",
     activationType: "manual",
     activationValue: "",
-    allocationMethod: "b_on_activate",
+    allocationMethod: "a_pregen",
   });
 
   const { data: competitions = [] } = useQuery<any[]>({

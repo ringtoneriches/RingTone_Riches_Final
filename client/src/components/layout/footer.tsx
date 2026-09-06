@@ -66,7 +66,7 @@ export default function Footer() {
               Please note: players must be over 18 years of age. If you win and you are under 18,
               you will not be able to collect the prize and the competition will be drawn again.
             </p>
-          </div>
+            </div>
           </div>
 
         <div className="rr-footer-nav mt-10 grid grid-cols-1 gap-7 sm:grid-cols-3 sm:gap-6">

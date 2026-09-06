@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { saveGuestOrderToken, guestOrderRequestInit } from "@/lib/guest-order-access";
 
 interface GuestCheckoutFormProps {
   competitionId: string;
@@ -57,16 +58,22 @@ export function GuestCheckoutForm({
       }
 
       const orderData = await orderRes.json();
+      if (orderData.accessToken && orderData.orderId) {
+        saveGuestOrderToken(orderData.orderId, orderData.accessToken);
+      }
 
       // Step 2: Process payment
-      const paymentRes = await fetch("/api/guest/process-payment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: orderData.orderId,
+      const paymentRes = await fetch(
+        "/api/guest/process-payment",
+        guestOrderRequestInit(orderData.orderId, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            orderId: orderData.orderId,
+          }),
         }),
-        credentials: "include",
-      });
+      );
 
       if (!paymentRes.ok) {
         const error = await paymentRes.json();

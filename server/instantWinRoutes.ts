@@ -135,7 +135,7 @@ export function registerInstantWinRoutes(app: Express) {
           rangeTo: Number(req.body.rangeTo),
           activationType: req.body.activationType || "manual",
           activationValue: req.body.activationValue,
-          allocationMethod: req.body.allocationMethod || "b_on_activate",
+          allocationMethod: req.body.allocationMethod || "a_pregen",
           adminId: req.user?.id,
           confirmHighValue: Boolean(req.body.confirmHighValue),
         });

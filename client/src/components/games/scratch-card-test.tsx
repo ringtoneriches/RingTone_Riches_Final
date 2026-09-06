@@ -22,7 +22,7 @@ interface ScratchCardProps {
   onScratchReveal?: (prize: { type: string; value: string }) => void;
   onCommitSession?: (
     sessionId: string,
-    payload: { orderId: string; prizeId: string; isWinner: boolean },
+    payload: { orderId: string },
   ) => Promise<{ ticketNumber?: string | null } | void>;
   onRefreshBalance?: () => void;
   onRemainingChange?: (remaining: number) => void;
@@ -437,8 +437,6 @@ const recordPlayIfNeeded = async (): Promise<void> => {
 
   const payload = {
     orderId,
-    prizeId: session.prizeId,
-    isWinner: session.isWinner,
   };
 
   const run = (async () => {

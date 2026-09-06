@@ -12,7 +12,7 @@ const ScratchBilling = () => {
   const { toast } = useToast();
 
   const { data: scratchConfig } = useQuery<{ isVisible: boolean }>({
-    queryKey: ["/api/admin/game-scratch-config"],
+    queryKey: ["/api/scratch-config"],
   });
 
   useEffect(() => {
