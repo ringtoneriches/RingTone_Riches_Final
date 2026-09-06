@@ -2688,6 +2688,49 @@ html.rr-reveal-summary-open .rr-theme-dock {
   visibility: hidden;
   pointer-events: none;
 }
+html.rr-reveal-summary-open {
+  overflow: hidden;
+}
+
+/* Full-screen game modals — portaled to body, always below fixed header */
+.rr-reveal-summary-shell,
+.rr-game-modal-shell {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  top: var(--rr-header-h, calc(6rem + env(safe-area-inset-top, 0px)));
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  background: rgba(5, 5, 5, 0.92);
+  backdrop-filter: blur(10px);
+}
+@media (min-width: 640px) {
+  .rr-reveal-summary-shell,
+  .rr-game-modal-shell {
+    padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.rr-reveal-summary-card,
+.rr-game-modal-card {
+  max-height: min(
+    88dvh,
+    calc(
+      100dvh - var(--rr-header-h, 6rem) - 1.5rem - env(safe-area-inset-bottom, 0px)
+    )
+  );
+}
+
+html.rr-reveal-summary-open .rr-dock-stack {
+  visibility: hidden;
+  pointer-events: none;
+}
 
 .rr-dock-stack {
   position: fixed;

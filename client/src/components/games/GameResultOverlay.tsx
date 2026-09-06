@@ -1,4 +1,5 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Gift, RotateCcw, Trophy, X, Zap } from "lucide-react";
 import ChaserBorder from "@/components/home/ChaserBorder";
 
@@ -61,6 +62,12 @@ export default function GameResultOverlay({
   prizeSubTestId,
   theme = "default",
 }: Props) {
+  useEffect(() => {
+    if (!open || contained) return;
+    document.documentElement.classList.add("rr-reveal-summary-open");
+    return () => document.documentElement.classList.remove("rr-reveal-summary-open");
+  }, [open, contained]);
+
   if (!open) return null;
 
   const isWin = kind === "win" || kind === "physical";
@@ -81,16 +88,24 @@ export default function GameResultOverlay({
     <X className="h-7 w-7 text-white/40" />
   );
 
-  return (
+  const overlay = (
     <div
-      className={`${contained ? "absolute inset-0 z-20 rounded-2xl" : "fixed inset-0 z-[9998]"} flex items-center justify-center overflow-y-auto p-4`}
-      style={{ background: "rgba(5,5,5,0.88)", backdropFilter: "blur(10px)" }}
+      className={
+        contained
+          ? "absolute inset-0 z-20 flex items-center justify-center overflow-y-auto rounded-2xl p-4"
+          : "rr-game-modal-shell"
+      }
+      style={
+        contained
+          ? { background: "rgba(5,5,5,0.88)", backdropFilter: "blur(10px)" }
+          : undefined
+      }
       role="dialog"
       aria-modal="true"
       aria-labelledby="game-result-title"
       data-testid={overlayTestId}
     >
-      <div className="relative w-full max-w-[400px] animate-bounce-in">
+      <div className={`relative w-full max-w-[400px] animate-bounce-in ${contained ? "" : "my-auto"}`}>
         {featured ? (
           <div
             className="pointer-events-none absolute -inset-8 rounded-[2rem] blur-3xl"
@@ -113,7 +128,7 @@ export default function GameResultOverlay({
 
         <ChaserBorder variant={voltz ? "card" : featured ? "featured" : "card"}>
           <div
-            className={`relative px-6 pb-6 pt-8 text-center sm:px-8 sm:pb-7 sm:pt-9 ${
+            className={`rr-game-modal-card relative overflow-y-auto px-6 pb-6 pt-8 text-center sm:px-8 sm:pb-7 sm:pt-9 ${
               voltz
                 ? "border border-[#F1D47A]/30 bg-[#050505]"
                 : "bg-gradient-to-b from-[#111115] via-[#0A0A0D] to-[#050505]"
@@ -235,4 +250,7 @@ export default function GameResultOverlay({
       </div>
     </div>
   );
+
+  if (contained) return overlay;
+  return createPortal(overlay, document.body);
 }
