@@ -49,10 +49,7 @@ function TableBlock({
             <span className="text-right">Prize</span>
           </div>
           {rows.map((row, i) => {
-            const ticket =
-              row.tone === "win" || row.tone === "replay"
-                ? formatResultTicket(row.ticketNumber)
-                : null;
+            const ticket = formatResultTicket(row.ticketNumber);
             return (
               <div
                 key={row.id ?? `${row.number}-${i}`}

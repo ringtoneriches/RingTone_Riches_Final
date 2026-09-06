@@ -87,10 +87,7 @@ export default function PlayResultsTable({
           </div>
           <div className="max-h-[min(52vh,420px)] overflow-y-auto">
             {rows.map((row, i) => {
-              const ticketLabel =
-                row.tone === "win" || row.tone === "replay"
-                  ? formatResultTicket(row.ticketNumber)
-                  : null;
+              const ticketLabel = formatResultTicket(row.ticketNumber);
               return (
               <div
                 key={row.id ?? `${row.number}-${i}`}
@@ -235,7 +232,7 @@ export function rowsFromSpinHistory(history: SpinHistoryRow[]): PlayResultRow[] 
       !amount;
 
     if (isLoss) {
-      return { id: i, number: i + 1, status: "Lose", tone: "lose" as const, prize: "Lose", ticketNumber: null };
+      return { id: i, number: i + 1, status: "Lose", tone: "lose" as const, prize: "Lose", ticketNumber };
     }
 
     const amountText = String(amount);

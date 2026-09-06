@@ -1482,7 +1482,7 @@ useEffect(() => {
           item.prize.value === "Lose" ||
           item.prize.value === "Try Again";
         const ticketLabel =
-          item.status === "Scratched" && !isLoss
+          item.status === "Scratched"
             ? formatResultTicket(item.prize.ticketNumber)
             : null;
         const prizeLabel =
