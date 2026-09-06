@@ -165,10 +165,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       await refetchStepUp();
       const targetName = variables.scope === "games" ? "Games tab" : "Users access";
 
-      if (unlockingItem?.type === "group" && unlockingItem.name === "Games") {
+      if (variables.scope === "games") {
         setOpenGroups((prev) => ({ ...prev, Games: true }));
-      } else if (unlockingItem?.type === "item" && unlockingItem.path) {
-        setLocation(unlockingItem.path);
+      } else if (variables.scope === "users") {
+        setLocation("/admin/users");
         setSidebarOpen(false);
       }
 
@@ -723,7 +723,13 @@ const disableMaintenance = useMutation({
       {/* PIN Verification Dialog */}
       <Dialog open={showPinDialog} onOpenChange={handlePinDialogOpenChange}>
         <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
-          <form autoComplete="off">
+          <form
+            autoComplete="off"
+            onSubmit={(e) => {
+              e.preventDefault();
+              verifyPin();
+            }}
+          >
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Lock className="w-6 h-6 text-yellow-600" />
@@ -772,7 +778,7 @@ const disableMaintenance = useMutation({
                 Cancel
               </Button>
               <Button
-                onClick={verifyPin}
+                type="submit"
                 disabled={!pinInput.trim() || stepUpMutation.isPending}
                 className="flex-1 bg-yellow-600 hover:bg-yellow-700"
               >
