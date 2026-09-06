@@ -197,6 +197,7 @@ import {
   attachTicketNumbersNewestFirst,
   claimNextPlayTicket,
   getOrderPlayTickets,
+  labelRevealAllResultTickets,
   playTicketLabel,
 } from "./services/play-ticket-labels";
 import rateLimit ,{ ipKeyGenerator } from 'express-rate-limit';
@@ -11615,7 +11616,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       processed: playsToProcess,
-      results,
+      results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints,
       totalFreePlays,
@@ -12224,7 +12225,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
 
     res.json({
       success: true,
-      results,
+      results: await labelRevealAllResultTickets(orderId, results),
       totalCashWon,
       totalPointsWon,
       freeReplaysGranted,
@@ -16178,7 +16179,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       processed: playsToProcess,
-      results,
+      results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints: totalPoints,
       freeReplaysWon,
@@ -19253,7 +19254,7 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
     res.json({ 
       success: true, 
       processed: playsToProcess, 
-      results,
+      results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints,
       freeReplaysWon,
@@ -21335,7 +21336,7 @@ app.post("/api/reveal-all-slot", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       processed: results.length,
-      results,
+      results: await labelRevealAllResultTickets(orderId, results),
       winCount,
       cashWon,
       pointsWon,

@@ -29,6 +29,7 @@ interface PlayResult {
   isWin: boolean;
   isPhysical?: boolean;
   switchTexts: string[];
+  ticketNumber?: string | null;
 }
 
 function fireWinConfetti() {
@@ -312,6 +313,7 @@ const [showRevealAllSummary, setShowRevealAllSummary] = useState(false);
       isPhysical: r.rewardType === "physical",
       switchTexts: r.switchTexts || ["?", "?", "?"],
       prizeId: r.prizeId,
+      ticketNumber: r.ticketNumber ?? null,
     }));
     
     setRevealAllResults(results);
@@ -349,7 +351,7 @@ const voltzBatchRows = (revealAllResults || []).map((r, i) => ({
     rewardType: r.outcome === "freeReplay" ? "try_again" : r.rewardType,
     rewardValue: r.rewardValue,
     prizeName: r.prizeName,
-    ticketNumber: (r as any).ticketNumber,
+    ticketNumber: r.ticketNumber,
     detail: (r.switchTexts || []).map((text) => formatVoltzSwitchCompact(text)).join(" · "),
   }])[0],
   number: i + 1,

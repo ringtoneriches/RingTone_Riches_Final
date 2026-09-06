@@ -1843,6 +1843,7 @@ export async function revealAllControlledPop(opts: {
       rewardType: details.rewardType,
       rewardValue: details.rewardValue,
       prizeName: details.prizeName,
+      ticketNumber: playTicketLabel(ticket),
     });
   }
 
@@ -1908,6 +1909,7 @@ export async function tryRevealControlledSlot(opts: {
       spinNumber,
       spinsUsed: spinNumber,
       spinsAllowed: total,
+      ticketNumber: playTicketLabel(ticket),
       creditedAtSale: true,
     },
   };
@@ -2178,6 +2180,7 @@ export async function peekControlledVoltz(opts: {
         isPhysical: details.rewardType === "physical",
         switchTexts: details.switchTexts || ["NO MATCH", "£5", "£10"],
         ticketId: ticket.id,
+        ticketNumber: playTicketLabel(ticket),
       },
       playsRemaining: Math.max(0, remaining - 1),
       creditedAtSale: true,
@@ -2302,6 +2305,7 @@ export async function revealAllControlledPlinko(opts: {
       rewardType: details.rewardType,
       isWin: Boolean(details.isWin),
       color: details.plinko?.color || "#eab308",
+      ticketNumber: playTicketLabel(ticket),
     });
   }
 
@@ -2561,8 +2565,9 @@ export async function revealAllControlledVoltz(opts: {
       rewardType: (result as any).rewardType,
       rewardValue: (result as any).rewardValue,
       prizeName: (result as any).prizeName,
-      isFreeReplay: false,
-      ticketNumber: null,
+      isFreeReplay: Boolean((result as any).isFreeReplay),
+      switchTexts: (result as any).switchTexts,
+      ticketNumber: (result as any).ticketNumber ?? null,
     });
   }
 
