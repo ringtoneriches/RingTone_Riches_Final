@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Sparkles, Trophy, X } from "lucide-react";
 import confetti from "canvas-confetti";
 import {
@@ -103,7 +104,6 @@ export default function RevealAllBatchSummary({
   playNoun = "play",
   cashWon = 0,
   pointsWon = 0,
-  variant = "modal",
   dismissLabel = "Done",
   onDismiss,
 }: Props) {
@@ -134,23 +134,15 @@ export default function RevealAllBatchSummary({
         ? `${pointsWon.toLocaleString()} pts`
         : "—";
 
-  const shellClass =
-    variant === "overlay"
-      ? "fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
-      : "fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]";
-
-  return (
+  const modal = (
     <div
-      className={shellClass}
-      style={{ background: "rgba(5,5,5,0.92)", backdropFilter: "blur(10px)" }}
+      className="rr-reveal-summary-shell"
       role="dialog"
       aria-modal="true"
       aria-labelledby="reveal-batch-title"
     >
       <div className="relative w-full max-w-[460px]">
-        <div
-          className="max-h-[88vh] overflow-hidden rounded-2xl border border-[#F1D47A]/30 bg-[#050505] shadow-[0_0_60px_rgba(241,212,122,0.12)]"
-        >
+        <div className="rr-reveal-summary-card overflow-hidden rounded-2xl border border-[#F1D47A]/30 bg-[#050505] shadow-[0_0_60px_rgba(241,212,122,0.12)]">
           <div className="sticky top-0 z-10 border-b border-[#F1D47A]/20 bg-[#050505] px-5 py-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
@@ -240,6 +232,8 @@ export default function RevealAllBatchSummary({
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }
 
 export function batchRowsFromRewards(

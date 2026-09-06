@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Sparkles, X } from "lucide-react";
 import confetti from "canvas-confetti";
 import ChaserBorder from "@/components/home/ChaserBorder";
@@ -75,6 +76,12 @@ export default function PopRevealAllSummary({
     firePopConfetti();
   }, [open, hadWin]);
 
+  useEffect(() => {
+    if (!open || results.length === 0) return;
+    document.documentElement.classList.add("rr-reveal-summary-open");
+    return () => document.documentElement.classList.remove("rr-reveal-summary-open");
+  }, [open, results.length]);
+
   if (!open || results.length === 0) return null;
 
   const prizeLabel =
@@ -84,10 +91,9 @@ export default function PopRevealAllSummary({
         ? `${totalPoints.toLocaleString()} pts`
         : "—";
 
-  return (
+  const modal = (
     <div
-      className="fixed inset-0 z-[9998] flex items-center justify-center overflow-y-auto p-4"
-      style={{ background: "rgba(5,5,5,0.9)", backdropFilter: "blur(10px)" }}
+      className="rr-reveal-summary-shell"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pop-reveal-title"
@@ -102,7 +108,7 @@ export default function PopRevealAllSummary({
           }}
         />
         <ChaserBorder variant="featured">
-          <div className="relative max-h-[86vh] overflow-hidden bg-gradient-to-b from-[#111115] via-[#0A0A0D] to-[#050505]">
+          <div className="rr-reveal-summary-card relative overflow-hidden bg-gradient-to-b from-[#111115] via-[#0A0A0D] to-[#050505]">
             <div className="px-6 pb-2 pt-8 text-center sm:px-8 sm:pt-9">
               <button
                 type="button"
@@ -226,4 +232,6 @@ export default function PopRevealAllSummary({
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }
