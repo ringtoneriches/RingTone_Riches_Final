@@ -59,3 +59,19 @@ export async function claimNextPlayTicket(tx: any, orderId: string) {
 
   return playTicketLabel(next);
 }
+
+/** Attach play ticket numbers to reveal-all batch rows (legacy probability mode). */
+export async function labelRevealAllResultTickets(orderId: string, results: any[]) {
+  if (!results.length) return results;
+  try {
+    await db.transaction(async (tx) => {
+      for (const row of results) {
+        const ticketNumber = await claimNextPlayTicket(tx, orderId);
+        if (ticketNumber) row.ticketNumber = ticketNumber;
+      }
+    });
+  } catch (err) {
+    console.error("Failed to label reveal-all tickets:", err);
+  }
+  return results;
+}
