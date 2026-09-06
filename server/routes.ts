@@ -185,6 +185,7 @@ import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { calculateDiscountedTotal } from "./utils/discounts";
 import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
+import { notifyPublicWinnerUpdate } from "./services/record-game-winner";
 import { processUncontrolledSlotSpin, revealAllUncontrolledSlot } from "./services/slot-play";
 import {
   getCompletedScratchSession,
@@ -5905,7 +5906,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         prizeDescription: selectedSegment.label,
         prizeValue: `£${amount}`,
         imageUrl: null,
-        isShowcase: false,
+        isShowcase: true,
       });
 
       // 🚀 AUTO-SYNC PRIZE TO PRIZE TABLE
@@ -5956,7 +5957,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         prizeDescription: selectedSegment.label,
         prizeValue: `${points} Ringtones`,
         imageUrl: null,
-        isShowcase: false,
+        isShowcase: true,
       });
 
       // 🚀 AUTO-SYNC PRIZE TO PRIZE TABLE
@@ -5992,7 +5993,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         prizeDescription: `Physical Prize: ${selectedSegment.label}`,
         prizeValue: selectedSegment.label,
         imageUrl: null,
-        isShowcase: false,
+        isShowcase: true,
       });
 
       const maxWins = selectedSegment.maxWins !== undefined && 
@@ -6252,7 +6253,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             prizeDescription: selectedSegment.label,
             prizeValue: `£${amount}`,
             imageUrl: null,
-            isShowcase: false,
+            isShowcase: true,
             createdAt: new Date(),
           });
 
@@ -6307,7 +6308,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             prizeDescription: selectedSegment.label,
             prizeValue: `${points} Ringtones`,
             imageUrl: null,
-            isShowcase: false,
+            isShowcase: true,
             createdAt: new Date(),
           });
 
@@ -6349,7 +6350,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             prizeDescription: `Physical Prize: ${selectedSegment.label}`,
             prizeValue: selectedSegment.label,
             imageUrl: null,
-            isShowcase: false,
+            isShowcase: true,
             createdAt: new Date(),
           });
 
@@ -7288,7 +7289,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
           prizeDescription: "Scratch Card Prize",
           prizeValue: `£${amount}`,
           imageUrl: null,
-          isShowcase: false,
+          isShowcase: true,
         });
 
         prizeResponse = { type: "cash", value: amount.toFixed(2) };
@@ -7335,7 +7336,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
           prizeDescription: "Scratch Card Prize",
           prizeValue: `${points} Ringtones`,
           imageUrl: null,
-          isShowcase: false,
+          isShowcase: true,
         });
 
         prizeResponse = { type: "points", value: points.toString() };
@@ -7358,7 +7359,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
           prizeDescription: `Scratch Card Prize - ${selectedPrize.label}`,
           prizeValue: selectedPrize.label,
           imageUrl: null,
-          isShowcase: false,
+          isShowcase: true,
         });
 
         prizeResponse = { type: "physical", value: selectedPrize.label };
@@ -7605,7 +7606,7 @@ app.post(
               prizeDescription: "Scratch Card Prize",
               prizeValue: `£${amount}`,
               imageUrl: null,
-              isShowcase: false,
+              isShowcase: true,
             });
 
             prizeResponse = { type: "cash", value: amount.toFixed(2) };
@@ -7647,7 +7648,7 @@ app.post(
               prizeDescription: "Scratch Card Prize",
               prizeValue: `${points} Ringtones`,
               imageUrl: null,
-              isShowcase: false,
+              isShowcase: true,
             });
 
             prizeResponse = { type: "points", value: points.toString() };
@@ -7673,7 +7674,7 @@ app.post(
             prizeDescription: `Scratch Card Prize - ${selectedPrize.imageName || selectedPrize.label}`,
             prizeValue: selectedPrize.imageName || selectedPrize.label,
             imageUrl: null,
-            isShowcase: false,
+            isShowcase: true,
           });
 
           prizeResponse = {
@@ -8196,7 +8197,7 @@ app.post(
                 prizeDescription: "Scratch Card Prize",
                 prizeValue: `£${amount}`,
                 imageUrl: null,
-                isShowcase: false,
+                isShowcase: true,
                 createdAt: new Date(),
               });
 
@@ -8232,7 +8233,7 @@ app.post(
                 prizeDescription: "Scratch Card Prize",
                 prizeValue: `${points} Ringtones`,
                 imageUrl: null,
-                isShowcase: false,
+                isShowcase: true,
                 createdAt: new Date(),
               });
 
@@ -8247,7 +8248,7 @@ app.post(
                 prizeDescription: `Scratch Card Prize - ${selectedPrize.imageName}`,
                 prizeValue: selectedPrize.imageName,
                 imageUrl: null,
-                isShowcase: false,
+                isShowcase: true,
                 createdAt: new Date(),
               });
 
@@ -11312,9 +11313,9 @@ app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
         userId, competitionId,
         prizeDescription: `Plinko: ${prizeName}`,
         prizeValue: displayPrizeValue,
-        prizeType: rewardType,
+        isShowcase: true,
         createdAt: new Date(), updatedAt: new Date()
-      }).catch(e => console.error(e));
+      }).then(() => notifyPublicWinnerUpdate(competitionId)).catch(e => console.error(e));
     }
 
     // 10. Random Free Replay (configurable chance)
@@ -11478,7 +11479,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
               userId, competitionId,
               prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
               prizeValue: `£${prizeValue}`,
-              prizeType: 'cash',
+              isShowcase: true,
               createdAt: new Date(), updatedAt: new Date()
             });
 
@@ -11489,7 +11490,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
               userId, competitionId,
               prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
               prizeValue: `${prizeValue} Points`,
-              prizeType: 'points',
+              isShowcase: true,
               createdAt: new Date(), updatedAt: new Date()
             });
 
@@ -11498,7 +11499,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
               userId, competitionId,
               prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
               prizeValue: selectedPrize.prizeName,
-              prizeType: 'physical',
+              isShowcase: true,
               createdAt: new Date(), updatedAt: new Date()
             });
           }
@@ -12144,12 +12145,25 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
 
       // Record win in main winners table for admin visibility
       if (isWin && selectedPrize.rewardType !== "try_again") {
+        let displayPrizeValue = prizeValue.toString();
+        if (selectedPrize.rewardType === "cash") {
+          displayPrizeValue = `£${prizeValue}`;
+        } else if (selectedPrize.rewardType === "points") {
+          displayPrizeValue = `${prizeValue} Points`;
+        } else if (selectedPrize.rewardType === "physical") {
+          displayPrizeValue = selectedPrize.prizeName;
+        }
+
         await db.insert(winners).values({
           userId,
           competitionId,
           prizeDescription: `Plinko: ${selectedPrize.prizeName}`,
-          prizeValue: prizeValue.toString(),
+          prizeValue: displayPrizeValue,
+          isShowcase: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         });
+        notifyPublicWinnerUpdate(competitionId);
       }
 
       // Check for free replay
@@ -14311,6 +14325,9 @@ app.patch(
             competitionId: competition.id,
             prizeDescription: `Winner of ${competition.title}`,
             prizeValue: competition.ticketPrice,
+            isShowcase: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
           })
           .returning();
 
@@ -15651,7 +15668,7 @@ app.post("/api/play-pop", async (req: any, res) => {
           prizeDescription: prizeDescriptionText,
           prizeValue: prizeValueText,
           imageUrl: selectedSegment.imageUrl || null,
-          isShowcase: false,
+          isShowcase: true,
           createdAt: new Date(),
           updatedAt: new Date(),
         });
@@ -16055,7 +16072,7 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
             prizeDescription: prizeDescriptionText,
             prizeValue: prizeValueText,
             imageUrl: selectedSegment.imageUrl || null,
-            isShowcase: false,
+            isShowcase: true,
             createdAt: new Date(),
             updatedAt: new Date(),
           });
@@ -18790,7 +18807,7 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
             competitionId: order.competitionId, 
             prizeDescription: "Ringtone Voltz Win",
             prizeValue: `£${cashValue.toFixed(2)} Cash`,
-            isShowcase: false, 
+            isShowcase: true, 
             createdAt: new Date(), 
             updatedAt: new Date(),
           });
@@ -18826,7 +18843,7 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
             competitionId: order.competitionId, 
             prizeDescription: "Ringtone Voltz Win",
             prizeValue: `${pointsValue} Points`,
-            isShowcase: false, 
+            isShowcase: true, 
             createdAt: new Date(), 
             updatedAt: new Date(),
           });
@@ -18859,7 +18876,7 @@ app.post("/api/confirm-voltz-result", isAuthenticated, async (req: any, res) => 
             competitionId: order.competitionId, 
             prizeDescription: `Physical Prize: ${result.prizeName}`,
             prizeValue: result.prizeName,
-            isShowcase: false, 
+            isShowcase: true, 
             createdAt: new Date(), 
             updatedAt: new Date(),
           });
@@ -19123,7 +19140,7 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
               competitionId, 
               prizeDescription: "Ringtone Voltz Win",
               prizeValue: `£${value.toFixed(2)} Cash`,
-              isShowcase: false, 
+              isShowcase: true, 
               createdAt: new Date(), 
               updatedAt: new Date(),
             });
@@ -19134,7 +19151,7 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
               competitionId, 
               prizeDescription: "Ringtone Voltz Win",
               prizeValue: `${pointsValue} Points`,
-              isShowcase: false, 
+              isShowcase: true, 
               createdAt: new Date(), 
               updatedAt: new Date(),
             });
@@ -19152,7 +19169,7 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
               competitionId, 
               prizeDescription: `Physical Prize: ${selectedPrize.prizeName}`,
               prizeValue: selectedPrize.prizeName,
-              isShowcase: false, 
+              isShowcase: true, 
               createdAt: new Date(), 
               updatedAt: new Date(),
             });

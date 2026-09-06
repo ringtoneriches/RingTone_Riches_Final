@@ -10,6 +10,7 @@ import {
   winners,
 } from "@shared/schema";
 import { syncSlotPrize } from "./prize-sync";
+import { notifyPublicWinnerUpdate } from "./record-game-winner";
 
 type OrderLike = {
   id: string;
@@ -264,10 +265,11 @@ export async function processUncontrolledSlotSpin(opts: {
         prizeDescription: prizeDescriptionText,
         prizeValue: prizeValueText,
         imageUrl: selectedPrize.image || null,
-        isShowcase: false,
+        isShowcase: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+      notifyPublicWinnerUpdate(competitionId);
     } catch (prizeError) {
       console.error("[API] ❌ Error processing prize:", prizeError);
     }

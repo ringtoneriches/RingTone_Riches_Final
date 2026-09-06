@@ -357,14 +357,14 @@ const users = useMemo(() => {
       Show in Showcase
     </label>
     <span className="text-xs text-gray-500 ml-2">
-      (Check to show on public winners page)
+      (Uncheck to hide from the public winners page)
     </span>
   </div>
 )}
 
 {data && (
   <div className="text-xs text-gray-500 mt-2">
-    ⓘ New winners are automatically shown in the showcase
+    Game wins are published to the public winners page automatically.
   </div>
 )}
       
