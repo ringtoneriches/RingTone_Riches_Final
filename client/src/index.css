@@ -6531,7 +6531,7 @@ html.rr-day .bg-\[\#2a2a2a\] .text-muted-foreground {
 }
 @media (min-width: 1024px) {
   .rr-trust-row {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
