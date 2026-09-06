@@ -143,6 +143,8 @@ function formatCount(count) {
 // });
 
 
+// Trustpilot temporarily disabled — re-enable when ready to show reviews again.
+/*
 app.get("/api/trustpilot-reviews", async (req, res) => {
 let browser;
   try {
@@ -190,6 +192,7 @@ let browser;
     res.status(500).json({ error: "Failed to fetch Trustpilot reviews" });
   }
 });
+*/
 
 app.use((req, res, next) => {
   const start = Date.now();
