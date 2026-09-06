@@ -54,7 +54,6 @@ async function main() {
         year: "numeric",
       }),
       paymentMethod: "Card",
-      skillAnswer: "7:30am",
       ticketNumbers: ["RR-10482", "RR-10483"],
       cartLines: [
         {

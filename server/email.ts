@@ -120,8 +120,6 @@ export interface OrderConfirmationPayload {
   totalAmount: string;
   orderDate: string;
   paymentMethod: string;
-  skillQuestion?: string;
-  skillAnswer?: string;
   ticketNumbers?: string[];
   cartLines?: OrderConfirmationLine[];
 }
@@ -254,22 +252,6 @@ export async function sendOrderConfirmationEmail(
                 <tr>
                   <td style="padding: 14px 16px; font-size: 13px; color: #9a9aa3;">${escapeHtml(orderData.paymentMethod)}</td>
                   <td align="right" style="padding: 14px 16px; font-size: 20px; font-weight: 800; color: ${gold};">£${escapeHtml(String(orderData.totalAmount))}</td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td class="email-pad" style="padding: 0 24px 18px;">
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #141416; border: 1px solid #26262b; border-radius: 12px;">
-                <tr>
-                  <td style="padding: 14px 16px;">
-                    <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: ${gold};">Skill question</div>
-                    <p style="margin: 8px 0 6px; font-size: 13px; line-height: 1.45; color: #d8d8de;">You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?</p>
-                    <p style="margin: 0; font-size: 12px; color: #8b8b93;">7:15am · 7:25am · 7:30am · 7:45am</p>
-                    <p style="margin: 10px 0 0; font-size: 13px; font-weight: 800; color: #ffffff;">Answer: 7:30am${
-                      orderData.skillAnswer ? ` · Yours: ${escapeHtml(orderData.skillAnswer)}` : ""
-                    }</p>
-                  </td>
                 </tr>
               </table>
             </td>
