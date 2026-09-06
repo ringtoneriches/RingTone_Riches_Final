@@ -56,6 +56,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sum, sql, notInArray, lt } from "drizzle-orm";
+import { notifyPublicWinnerUpdate } from "./services/record-game-winner";
 import { hashPassword } from "./customAuth";
 
 export interface IStorage {
@@ -618,9 +619,7 @@ async getRecentWinners(limit?: number, showcaseOnly = false): Promise<Winner[]> 
       .from(winners)
       .leftJoin(users, eq(users.id, winners.userId))
       .leftJoin(competitions, eq(competitions.id, winners.competitionId))
-      .orderBy(
-        sql`CAST(REGEXP_REPLACE(${winners.prizeValue}, '[^0-9.]', '', 'g') AS DECIMAL) DESC, ${winners.updatedAt} DESC`
-      );
+      .orderBy(desc(winners.createdAt));
 
     if (showcaseOnly) {
       query = query.where(eq(winners.isShowcase, true));
@@ -667,9 +666,15 @@ async createWinner(winner: Omit<Winner, "id" | "createdAt"> & { createdAt?: Date
   const now = new Date();
   const [created] = await db.insert(winners).values({
     ...winner,
+    isShowcase: winner.isShowcase ?? true,
     // Use provided createdAt or default to now
     createdAt: winner.createdAt || now,
   }).returning();
+
+  if (created.isShowcase) {
+    notifyPublicWinnerUpdate(created.competitionId);
+  }
+
   return created;
 }
 

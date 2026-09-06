@@ -11,6 +11,7 @@ import {
   scratchPrizeFromDetails,
 } from "./scratch-controlled-layout";
 import { instantWinValueFromTablePrize } from "./instant-win-prize-value";
+import { notifyPublicWinnerUpdate } from "./record-game-winner";
 import { randomInt, randomBytes } from "crypto";
 import { and, asc, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "../db";
@@ -608,10 +609,11 @@ async function creditFrozenWin(
           : opts.prize.rewardType === "points"
           ? `${Math.floor(valueNum)} Points`
           : opts.prize.name,
-      isShowcase: false,
+      isShowcase: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    notifyPublicWinnerUpdate(opts.competitionId);
   }
 
   await tx
