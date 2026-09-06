@@ -290,7 +290,7 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
   });
 
   const { data: scratchImages } = useQuery({
-    queryKey: ["/api/admin/scratch-images"],
+    queryKey: ["/api/scratch-images"],
     enabled: orderType === "scratch",
     staleTime: 30_000,
   });

@@ -184,17 +184,44 @@ saveUserReferral(data: { userId: string; referrerId: string }): Promise<void>;
 export class DatabaseStorage implements IStorage {
 
 
-  // In storage.ts - add to DatabaseStorage class
-async initializeAdminUser(): Promise<void> {
-  try {
-    const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com";
-    const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
-    
-    const existingAdmin = await this.getUserByEmail(adminEmail);
-    
-    if (!existingAdmin) {
+  /** Creates the first admin only when ADMIN_EMAIL + ADMIN_PASSWORD are set and no admin exists yet. */
+  async initializeAdminUser(): Promise<void> {
+    const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (!adminEmail || !adminPassword) {
+      console.log(
+        "ℹ️  Admin bootstrap skipped (set ADMIN_EMAIL and ADMIN_PASSWORD to create an initial admin when none exists)",
+      );
+      return;
+    }
+
+    if (adminPassword.length < 12) {
+      console.error("❌ Admin bootstrap failed: ADMIN_PASSWORD must be at least 12 characters");
+      return;
+    }
+
+    try {
+      const [existingAdmin] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.isAdmin, true))
+        .limit(1);
+
+      if (existingAdmin) {
+        console.log("ℹ️  Admin bootstrap skipped (an admin account already exists)");
+        return;
+      }
+
+      const existingUser = await this.getUserByEmail(adminEmail);
+      if (existingUser) {
+        console.warn(
+          `⚠️  Admin bootstrap skipped: ${adminEmail} already exists but is not an admin. Promote via the admin panel or database.`,
+        );
+        return;
+      }
+
       const hashedPassword = await hashPassword(adminPassword);
-      
       await this.createUser({
         email: adminEmail,
         password: hashedPassword,
@@ -203,19 +230,12 @@ async initializeAdminUser(): Promise<void> {
         isAdmin: true,
         emailVerified: true,
       });
-      
-      console.log("✅ Admin user created successfully");
-    } else {
-      // Ensure existing admin has admin privileges
-      if (!existingAdmin.isAdmin) {
-        await this.updateUser(existingAdmin.id, { isAdmin: true });
-        console.log("✅ Existing user promoted to admin");
-      }
+
+      console.log(`✅ Initial admin created for ${adminEmail}`);
+    } catch (error) {
+      console.error("❌ Error initializing admin user:", error);
     }
-  } catch (error) {
-    console.error("❌ Error initializing admin user:", error);
   }
-}
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -319,7 +339,10 @@ async incrementCompetitionSoldTickets(competitionId: string, qty: number): Promi
       .values({
         title: competition.title,
         description: competition.description,
-        imageUrl: competition.imageUrl,
+        imageUrl: competition.imageUrl || null,
+        featuredImageUrl: competition.featuredImageUrl || null,
+        cardImageUrl: competition.cardImageUrl || null,
+        pageImageUrl: competition.pageImageUrl || null,
         type: competition.type,
         ticketPrice: competition.ticketPrice,
         prizeAmount: competition.prizeAmount ?? null,

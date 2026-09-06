@@ -8,12 +8,23 @@ import fs from "fs";
 import crypto from "crypto";
 import { storage } from "./storage";
 import {
-  setupCustomAuth,
   isAuthenticated,
+  requireFullAccount,
   hashPassword,
   verifyPassword,
+  sanitizeUserForClient,
+  destroyAllUserSessions,
+  getAdminStepUpStatus,
+  grantAdminStepUp,
+  revokeAdminStepUp,
 } from "./customAuth";
 import { registerGuestAuthRoutes } from "./guest-auth";
+import {
+  issueGuestOrderAccessToken,
+  verifyGuestOrderAccess,
+  loadSessionUser,
+  normalizeGuestEmail,
+} from "./guest-order-access";
 import {
   registerCartCardPaymentRoutes,
   fulfillCartCardPayment,
@@ -173,6 +184,7 @@ import { processUncontrolledSlotSpin, revealAllUncontrolledSlot } from "./servic
 import {
   getCompletedScratchSession,
   getOpenScratchSession,
+  getOpenScratchSessionById,
   markScratchSessionCompleted,
   setOpenScratchSession,
 } from "./services/scratch-session-lock";
@@ -1248,6 +1260,61 @@ const registerLimiter = rateLimit({
   },
 });
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { message: "Too many login attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: ipKeyGenerator,
+});
+
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: {
+    message: "Too many password reset requests. Please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: ipKeyGenerator,
+});
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { message: "Too many reset attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: ipKeyGenerator,
+});
+
+const otpVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: {
+    message: "Too many verification attempts. Please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = String(req.body?.email || "").toLowerCase().trim();
+    const ip = ipKeyGenerator(req);
+    return email ? `${ip}:${email}` : ip;
+  },
+});
+
+const adminStepUpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: {
+    message: "Too many PIN attempts. Please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: ipKeyGenerator,
+});
+
 const validateFieldContent = (value: string, fieldName: string): string | null => {
   if (!value || value.trim().length === 0) return null;
   const trimmed = value.trim();
@@ -1372,10 +1439,50 @@ const registerUserSchema = z.object({
 
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
-  setupCustomAuth(app);
   registerGuestAuthRoutes(app);
   registerCartCardPaymentRoutes(app);
+
+  app.get("/api/admin/step-up/status", isAuthenticated, isAdmin, async (req: any, res) => {
+    res.json(getAdminStepUpStatus(req));
+  });
+
+  app.post(
+    "/api/admin/step-up",
+    adminStepUpLimiter,
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      const scope = req.body?.scope;
+      const pin = String(req.body?.pin || "");
+
+      if (scope !== "games" && scope !== "users") {
+        return res.status(400).json({ message: "Invalid scope" });
+      }
+
+      const expectedPin = process.env.ADMIN_SIDEBAR_PIN;
+      if (!expectedPin) {
+        return res.status(503).json({
+          message: "Admin step-up PIN is not configured on the server.",
+        });
+      }
+
+      if (!pin || pin !== expectedPin) {
+        return res.status(403).json({ message: "Incorrect PIN" });
+      }
+
+      const expiresAt = grantAdminStepUp(req, scope);
+      res.json({ success: true, scope, expiresAt });
+    },
+  );
+
+  app.post("/api/admin/step-up/lock", isAuthenticated, isAdmin, async (req: any, res) => {
+    const scope = req.body?.scope;
+    if (scope !== "games" && scope !== "users" && scope !== "all") {
+      return res.status(400).json({ message: "Invalid scope" });
+    }
+    revokeAdminStepUp(req, scope);
+    res.json({ success: true, ...getAdminStepUpStatus(req) });
+  });
 
   // File upload endpoint for competition images
   app.post(
@@ -1427,50 +1534,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   //     }
   //   }
   // );
-
-  app.post("/api/admin/verify-all-existing-users", async (req, res) => {
-    try {
-      // Simple auth check (you can add proper admin auth)
-      const { adminKey } = req.body;
-      if (adminKey !== process.env.ADMIN_MIGRATION_KEY) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      console.log("🔧 Verifying ALL existing users...");
-
-      const result = await db.execute(sql`
-      UPDATE users 
-      SET 
-        email_verified = true,
-        verification_sent_at = COALESCE(verification_sent_at, created_at),
-        email_verification_otp = NULL,
-        email_verification_otp_expires_at = NULL,
-        updated_at = NOW()
-      WHERE email IS NOT NULL 
-        AND email != ''
-    `);
-
-      // Count after update
-      const verifiedCount = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(users)
-        .where(sql`email_verified = true`);
-
-      res.json({
-        success: true,
-        message: `Grandfathered all existing users into verified status`,
-        verifiedCount: verifiedCount[0].count,
-        rowCount: result.rowCount,
-      });
-    } catch (error) {
-      console.error("❌ Migration error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Migration failed",
-        error: error.message,
-      });
-    }
-  });
 
 app.post("/api/auth/register", registerLimiter, async (req, res) => {
   const startTime = Date.now();
@@ -1946,7 +2009,7 @@ async function blockIp(ip: string, reason: string) {
 }
 
 // Login route (simplified - no verification check)
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", loginLimiter, async (req, res) => {
   try {
     const result = loginUserSchema.safeParse(req.body);
     if (!result.success) {
@@ -2114,7 +2177,7 @@ app.post("/api/auth/login", async (req, res) => {
     }
   });
 
-  app.post("/api/auth/verify-email", async (req: any, res) => {
+  app.post("/api/auth/verify-email", otpVerifyLimiter, async (req: any, res) => {
     try {
       const email = String(req.body?.email || "").toLowerCase().trim();
       const otp = String(req.body?.otp || "").trim();
@@ -2261,7 +2324,7 @@ app.post("/api/auth/login", async (req, res) => {
   // Get current user route
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
-      res.json(req.user);
+      res.json(sanitizeUserForClient(req.user));
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -2269,7 +2332,7 @@ app.post("/api/auth/login", async (req, res) => {
   });
 
   // Password reset - Request reset link
-  app.post("/api/auth/forgot-password", async (req, res) => {
+  app.post("/api/auth/forgot-password", forgotPasswordLimiter, async (req, res) => {
     try {
       const { email } = forgotPasswordSchema.parse(req.body);
 
@@ -2351,7 +2414,7 @@ app.post("/api/auth/login", async (req, res) => {
   });
 
   // Password reset - Reset password with token
-  app.post("/api/auth/reset-password", async (req, res) => {
+  app.post("/api/auth/reset-password", resetPasswordLimiter, async (req, res) => {
     try {
       const { token, newPassword } = resetPasswordSchema.parse(req.body);
 
@@ -2383,7 +2446,12 @@ app.post("/api/auth/login", async (req, res) => {
       }
 
       const hashedPassword = await hashPassword(newPassword);
-      await storage.updateUser(user.id, { password: hashedPassword });
+      await storage.updateUser(user.id, {
+        password: hashedPassword,
+        passwordChangedAt: new Date(),
+      });
+
+      await destroyAllUserSessions(user.id);
 
       await db
         .update(passwordResetTokens)
@@ -2399,7 +2467,7 @@ app.post("/api/auth/login", async (req, res) => {
     }
   });
 
-  app.put("/api/auth/user", isAuthenticated, async (req: any, res) => {
+  app.put("/api/auth/user", isAuthenticated, requireFullAccount, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const {
@@ -2438,6 +2506,7 @@ app.post("/api/auth/login", async (req, res) => {
 
       if (password) {
         updateData.password = await hashPassword(password);
+        updateData.passwordChangedAt = new Date();
       }
 
       if (email) {
@@ -2448,6 +2517,10 @@ app.post("/api/auth/login", async (req, res) => {
       }
 
       const updatedUser = await storage.updateUser(userId, updateData);
+
+      if (password) {
+        await destroyAllUserSessions(userId);
+      }
 
       // Broadcast real-time update
       wsManager.broadcast({ type: "user_updated", userId });
@@ -2857,7 +2930,7 @@ app.delete("/api/admin/redeem-codes/:id", isAuthenticated, isAdmin, async (req, 
 
 
 // POST /api/redeem - User redeems a code (with debugging)
-app.post("/api/redeem", isAuthenticated, async (req, res) => {
+app.post("/api/redeem", isAuthenticated, requireFullAccount, async (req, res) => {
   try {
     const schema = z.object({
       code: z.string().min(3).max(20).transform(c => c.toUpperCase().trim()),
@@ -3018,7 +3091,7 @@ const result = await db.transaction(async (tx) => {
 });
 
 // GET /api/redeem/history - Get user's redemption history
-app.get("/api/redeem/history", isAuthenticated, async (req, res) => {
+app.get("/api/redeem/history", isAuthenticated, requireFullAccount, async (req, res) => {
   try {
     console.log("📦 Fetching redeem history for user:", req.user.id);
     
@@ -7886,26 +7959,51 @@ app.post(
       try {
         const userId = req.user.id;
         const { sessionId } = req.params;
-        const { orderId, prizeId, isWinner } = req.body;
-
-        if (!orderId || !prizeId) {
-          return res.status(400).json({
-            success: false,
-            message: "Order ID and Prize ID are required",
-          });
-        }
+        const { orderId: clientOrderId } = req.body;
 
         const already = getCompletedScratchSession(sessionId);
-        if (already && already.userId === userId && already.orderId === orderId) {
+        if (already && already.userId === userId) {
+          if (clientOrderId && clientOrderId !== already.orderId) {
+            return res.status(400).json({
+              success: false,
+              message: "Order does not match scratch session",
+            });
+          }
           return res.json({
             success: true,
             prize: already.prize,
             prizeLabel: already.prizeLabel,
             remainingCards: already.remainingCards,
-            orderId,
+            orderId: already.orderId,
             alreadyCompleted: true,
           });
         }
+
+        const openSession = getOpenScratchSessionById(sessionId);
+        if (!openSession) {
+          return res.status(400).json({
+            success: false,
+            message: "Scratch session expired or invalid. Please start a new card.",
+          });
+        }
+
+        if (openSession.userId !== userId) {
+          return res.status(403).json({
+            success: false,
+            message: "Not authorized for this scratch session",
+          });
+        }
+
+        if (clientOrderId && clientOrderId !== openSession.orderId) {
+          return res.status(400).json({
+            success: false,
+            message: "Order does not match scratch session",
+          });
+        }
+
+        const orderId = openSession.orderId;
+        const prizeId = openSession.prizeId;
+        const isWinner = openSession.isWinner;
 
         // Verify order
         const order = await storage.getOrder(orderId);
@@ -7922,7 +8020,7 @@ app.post(
           return res.status(404).json({ message: "User not found" });
         }
 
-        // Get prize details
+        // Prize outcome is bound to the server-side session from /start
         const prize = await db
           .select()
           .from(scratchCardImages)
@@ -9374,7 +9472,7 @@ app.get(
 
 // USER VERIFICATION ROUTES
  // Get verification status for current user
-app.get("/api/verification/status", isAuthenticated, async (req, res) => {
+app.get("/api/verification/status", isAuthenticated, requireFullAccount, async (req, res) => {
   try {
     const userId = req.user.id;
     
@@ -9405,6 +9503,7 @@ app.get("/api/verification/status", isAuthenticated, async (req, res) => {
 app.post(
   "/api/verification/submit",
   isAuthenticated,
+  requireFullAccount,
   verificationUpload.single("documentImage"),
   async (req: any, res) => {
     try {
@@ -9997,90 +10096,6 @@ app.get(
   }
 );
 
-app.get(
-  "/api/admin/cashflow-transactions/debug-null-ref",
-  
-  async (req, res) => {
-    try {
-      // Get ALL deposits with NULL paymentRef
-      const nullRefDeposits = await db
-        .select({
-          id: transactions.id,
-          type: transactions.type,
-          description: transactions.description,
-          paymentRef: transactions.paymentRef,
-          amount: transactions.amount,
-          createdAt: transactions.createdAt,
-        })
-        .from(transactions)
-        .where(
-          sql`${transactions.type} = 'deposit'
-          AND (${transactions.paymentRef} IS NULL 
-               OR ${transactions.paymentRef} = '' 
-               OR ${transactions.paymentRef} = 'N/A')`
-        );
-      
-      // Check which ones have "Ref" or reference pattern in description
-      const withRefInDesc = nullRefDeposits.filter(tx => {
-        const desc = tx.description || '';
-        return desc.includes('Ref') || 
-               desc.includes('ref') ||
-               desc.match(/\d{15,}/) || // Has a long number (like payment ref)
-               desc.toLowerCase().includes('cashflows');
-      });
-      
-      // Extract reference from description where possible
-      const extractedRefs = withRefInDesc.map(tx => {
-        const desc = tx.description || '';
-        // Try to extract patterns like "Ref 260621..." or "Ref 251121..."
-        const refMatch = desc.match(/Ref\s*(\d+)/i);
-        return {
-          description: desc,
-          extractedRef: refMatch ? refMatch[1] : null,
-          amount: tx.amount,
-          createdAt: tx.createdAt,
-        };
-      });
-      
-      // Group by description pattern
-      const descPatterns = {};
-      nullRefDeposits.forEach(tx => {
-        const desc = tx.description || 'N/A';
-        descPatterns[desc] = (descPatterns[desc] || 0) + 1;
-      });
-      
-      // Sort patterns by count
-      const sortedPatterns = Object.entries(descPatterns)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 30);
-      
-      // Count how many have Cashflows-like descriptions
-      const cashflowsLike = nullRefDeposits.filter(tx => 
-        (tx.description || '').toLowerCase().includes('cashflows') ||
-        (tx.description || '').toLowerCase().includes('top-up') ||
-        (tx.description || '').toLowerCase().includes('top up') ||
-        (tx.description || '').match(/Ref\s*\d{15,}/i)
-      );
-      
-      res.json({
-        totalNullRefDeposits: nullRefDeposits.length,
-        withRefInDesc: withRefInDesc.length,
-        cashflowsLikeCount: cashflowsLike.length,
-        totalAmountOfCashflowsLike: cashflowsLike.reduce((sum, tx) => sum + Math.abs(parseFloat(String(tx.amount)) || 0), 0).toFixed(2),
-        sampleCashflowsLike: cashflowsLike.slice(0, 20),
-        extractedRefs: extractedRefs.filter(r => r.extractedRef).slice(0, 20),
-        topDescriptionPatterns: sortedPatterns,
-        // What would be added to your current total
-        wouldAddToTransactions: cashflowsLike.length,
-        wouldAddToRevenue: cashflowsLike.reduce((sum, tx) => sum + Math.abs(parseFloat(String(tx.amount)) || 0), 0).toFixed(2),
-      });
-      
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  }
-);
-
   app.get("/api/user/tickets", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
@@ -10262,72 +10277,10 @@ app.get(
     }
   );
 
-  app.post("/api/wallet/topup", isAuthenticated, async (req: any, res) => {
-    try {
-      console.log("Wallet topup endpoint called - middleware passed");
-      const userId = req.user.id;
-      const { amount, direct } = req.body;
-
-      if (!amount || amount <= 0) {
-        return res.status(400).json({ message: "Invalid amount" });
-      }
-
-      // 🎯 DIRECT TOP-UP (no Stripe, just update DB)
-      if (direct) {
-        // Update user balance
-        // Update user balance using storage abstraction
-        const user = await storage.getUser(userId);
-         const oldBalance = parseFloat(user?.balance || "0");
-          const newBalance = oldBalance + parseFloat(amount);
-        await storage.updateUserBalance(userId, newBalance);
-
-        // Insert a transaction record using storage abstraction
-        await storage.createTransaction({
-          userId,
-          type: "deposit",
-          amount: amount.toString(),
-          description: `Direct top-up of £${amount}`,
-        });
-
-         // 🆕 RECORD AUDIT LOG FOR DIRECT TOP-UP
-      await db.insert(auditLogs).values({
-        userId: userId,
-        action: "wallet_topup",
-        description: `wallet top-up of £${amount}`,
-        startBalance: oldBalance,
-        endBalance: newBalance,
-        createdAt: new Date(),
-      });
-
-        return res.json({ success: true });
-      }
-
-      // 🎯 STRIPE PAYMENT FLOW
-      if (!stripe) {
-        return res.status(500).json({
-          message: "Payment processing not configured. Please contact admin.",
-        });
-      }
-
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(amount * 100), // Convert to cents
-        currency: "gbp",
-        metadata: {
-          userId,
-          type: "wallet_topup",
-        },
-      });
-
-      return res.json({ clientSecret: paymentIntent.client_secret });
-    } catch (error) {
-      console.error("Error creating wallet top-up:", error);
-      res.status(500).json({ message: "Failed to create wallet top-up" });
-    }
-  });
-
   app.post(
   "/api/wallet/topup-checkout",
   isAuthenticated,
+  requireFullAccount,
   async (req: any, res) => {
     try {
       const { amount } = req.body;
@@ -10384,7 +10337,7 @@ app.get(
   }
 );
 
-app.post("/api/wallet/confirm-topup", isAuthenticated, async (req: any, res) => {
+app.post("/api/wallet/confirm-topup", isAuthenticated, requireFullAccount, async (req: any, res) => {
   try {
     const { paymentJobRef, paymentRef } = req.body;
     const userId = req.user.id;
@@ -10873,44 +10826,6 @@ if (!isAdmin && userData.dailyLimitLastUpdatedAt) {
     });
   });
 
-  // Testing only - unsuspend immediately
-  app.post("/api/wellbeing/unsuspend", async (req, res) => {
-    const { userId, secret } = req.body;
-
-    if (secret !== process.env.UNSUSPEND_SECRET) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    try {
-      await db
-        .update(users)
-        .set({
-          selfSuspended: false,
-          selfSuspensionEndsAt: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
-
-      const freshUser = await storage.getUser(userId);
-
-      res.json({
-        success: true,
-        message: "User is now unsuspended.",
-        user: {
-          id: freshUser.id,
-          email: freshUser.email,
-          firstName: freshUser.firstName,
-          lastName: freshUser.lastName,
-          selfSuspended: freshUser.selfSuspended,
-          selfSuspensionEndsAt: freshUser.selfSuspensionEndsAt,
-        },
-      });
-    } catch (err) {
-      console.error("Unsuspend error:", err);
-      res.status(500).json({ success: false, message: "Failed to unsuspend" });
-    }
-  });
-
   app.post(
     "/api/wellbeing/close-account",
     isAuthenticated,
@@ -10962,35 +10877,6 @@ if (!isAdmin && userData.dailyLimitLastUpdatedAt) {
       }
     }
   );
-
-  app.post("/api/wellbeing/undo-close-account", async (req, res) => {
-    const { userId, secret } = req.body;
-
-    if (secret !== process.env.UNDO_CLOSE_SECRET) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    try {
-      await db
-        .update(users)
-        .set({
-          disabled: false,
-          disabledAt: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
-
-      res.json({
-        success: true,
-        message: "Account re-enabled for testing.",
-      });
-    } catch (err) {
-      console.error("Undo account closure error:", err);
-      res
-        .status(500)
-        .json({ success: false, message: "Failed to re-enable account" });
-    }
-  });
 
   // ================================================================================
 // RINGTONE PLINKO GAME ROUTES - MAIN GAME ENDPOINTS
@@ -13159,41 +13045,6 @@ app.delete(
   }
 );
 
-  app.post("/api/seed-competitions", async (req, res) => {
-    try {
-      const competitions = req.body;
-      for (const comp of competitions) {
-        await storage.createCompetition(comp);
-      }
-      res.json({ message: "Sample competitions created successfully" });
-    } catch (error) {
-      console.error("Error seeding competitions:", error);
-      res.status(500).json({ message: "Failed to seed competitions" });
-    }
-  });
-
-  app.delete("/api/delete", async (req, res) => {
-    try {
-      console.log("🗑️ Deleting all competitions...");
-      await db.delete(transactions).execute();
-      // 1. Delete tickets linked to competitions
-      await db.delete(tickets).execute();
-      // 2. Delete orders linked to competitions
-      await db.delete(orders).execute();
-      const result = await db.delete(competitions).execute();
-      console.log("✅ Delete result:", result);
-      res.status(200).json({ message: "all competitions deleted" });
-    } catch (error) {
-      console.error("❌ Delete failed:", error);
-      res.status(500).json({ message: "Failed to delete competitions" });
-    }
-  });
-
-  app.delete("/api/test-delete", (req, res) => {
-    res.json({ message: "Delete route works!" });
-  });
-
-  // Admin routes would go here (protected by isAdmin middleware)
   // Admin Routes
 
   // Get admin dashboard stats
@@ -13927,18 +13778,23 @@ app.get(
         // sanitize timestamps as before...
         sanitizeTimestamps(formattedUpdateData);
 
-        // 2️⃣ Delete old image if a new one is uploaded
-        if (
-          formattedUpdateData.imageUrl &&
-          oldCompetition.imageUrl &&
-          oldCompetition.imageUrl !== formattedUpdateData.imageUrl
-        ) {
-          // extract key from old URL
-          const oldKey = oldCompetition.imageUrl.replace(
-            `${process.env.R2_PUBLIC_URL}/`,
-            ""
-          );
-          await deleteR2Object(oldKey);
+        // 2️⃣ Delete old pictures if a new one is uploaded for that slot
+        const imageSlots = [
+          "imageUrl",
+          "featuredImageUrl",
+          "cardImageUrl",
+          "pageImageUrl",
+        ] as const;
+        for (const slot of imageSlots) {
+          const nextUrl = formattedUpdateData[slot];
+          const prevUrl = oldCompetition[slot];
+          if (nextUrl && prevUrl && nextUrl !== prevUrl) {
+            const oldKey = String(prevUrl).replace(
+              `${process.env.R2_PUBLIC_URL}/`,
+              "",
+            );
+            await deleteR2Object(oldKey);
+          }
         }
 
         const [updatedCompetition] = await db
@@ -14393,11 +14249,58 @@ app.patch(
 
   // Game Spin Wheel Configuration Routes
 
+  const sanitizeSpinSegmentsForPublic = (segments: any[] = []) =>
+    segments.map(({ probability, currentWins, ...segment }) => segment);
+
+  // Public spin wheel config (wheel 1) — no probabilities or win stats
+  app.get("/api/spin-config", async (_req, res) => {
+    try {
+      const { gameSpinConfig } = await import("@shared/schema");
+      const [config] = await db
+        .select()
+        .from(gameSpinConfig)
+        .where(eq(gameSpinConfig.id, "active"));
+
+      if (!config) return res.json(DEFAULT_SPIN_WHEEL_CONFIG);
+
+      res.json({
+        ...config,
+        segments: sanitizeSpinSegmentsForPublic(config.segments || []),
+      });
+    } catch (error) {
+      console.error("Error fetching public spin config:", error);
+      res.status(500).json({ message: "Failed to fetch spin configuration" });
+    }
+  });
+
+  // Public spin wheel config (wheel 2) — no probabilities or win stats
+  app.get("/api/spin-2-config", async (_req, res) => {
+    try {
+      const { spinWheel2Configs } = await import("@shared/schema");
+      const [config] = await db
+        .select()
+        .from(spinWheel2Configs)
+        .where(eq(spinWheel2Configs.id, "active"));
+
+      if (!config) return res.json(DEFAULT_SPIN_WHEEL_2_CONFIG);
+
+      res.json({
+        ...config,
+        isVisible: config?.isVisible ?? true,
+        segments: sanitizeSpinSegmentsForPublic(config.segments || []),
+      });
+    } catch (error) {
+      console.error("Error fetching public spin 2 config:", error);
+      res.status(500).json({ message: "Failed to fetch spin configuration" });
+    }
+  });
+
   // Update the existing game-spin-config endpoint
 // --- Wheel 1 config ---
 app.get(
   "/api/admin/game-spin-config",
   isAuthenticated,
+  isAdmin,
   async (req: any, res) => {
     try {
       const { gameSpinConfig, spinWins } = await import("@shared/schema");
@@ -14517,6 +14420,7 @@ app.put(
 app.get(
   "/api/admin/game-spin-2-config",
   isAuthenticated,
+  isAdmin,
   async (req: any, res) => {
     try {
       const { spinWheel2Configs, spinWins } = await import("@shared/schema");
@@ -14690,6 +14594,7 @@ app.post(
   app.get(
     "/api/admin/test-spin-wins",
     isAuthenticated,
+    isAdmin,
     async (req: any, res) => {
       try {
         const spinWinsData = await db
@@ -14716,10 +14621,30 @@ app.post(
     }
   );
 
+  // Public scratch card visibility
+  app.get("/api/scratch-config", async (_req, res) => {
+    try {
+      const { gameScratchConfig } = await import("@shared/schema");
+      const [config] = await db
+        .select()
+        .from(gameScratchConfig)
+        .where(eq(gameScratchConfig.id, "active"));
+
+      res.json({
+        isVisible: config?.isVisible ?? true,
+        isActive: config?.isActive ?? true,
+      });
+    } catch (error) {
+      console.error("Error fetching scratch config:", error);
+      res.status(500).json({ message: "Failed to fetch scratch configuration" });
+    }
+  });
+
   // Game Scratch Card Configuration Routes
   app.get(
     "/api/admin/game-scratch-config",
     isAuthenticated,
+    isAdmin,
     async (req: any, res) => {
       try {
         const { gameScratchConfig } = await import("@shared/schema");
@@ -14807,6 +14732,7 @@ app.post(
   app.get(
     "/api/admin/game-pop-config",
     isAuthenticated,
+    isAdmin,
     async (req: any, res) => {
       try {
         const [config] = await db
@@ -15112,34 +15038,10 @@ const popCooldowns = new Map<string, number>();
 
 app.post("/api/play-pop", async (req: any, res) => {
   try {
-    // ============================================
-    // 1. DETERMINE IF AUTHENTICATED OR GUEST
-    // ============================================
-    // This route supports both logged-in and guest play, so it cannot use
-    // isAuthenticated middleware. Load the session user when present.
-    if (!req.user && req.session?.userId) {
-      req.user = await storage.getUser(req.session.userId);
-    }
+    await loadSessionUser(req);
 
     const userId = req.user?.id;
-    const { 
-      orderId, 
-      competitionId,
-      isGuest = false,
-      guestEmail,
-      guestName,
-      guestPhone
-    } = req.body;
-
-    // Prefer explicit guest flag; otherwise use session user when available
-    const isGuestMode = Boolean(isGuest) || !userId;
-
-    if (!isGuestMode && !userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required",
-      });
-    }
+    const { orderId, competitionId } = req.body;
 
     if (!orderId || !competitionId) {
       return res.status(400).json({
@@ -15148,11 +15050,52 @@ app.post("/api/play-pop", async (req: any, res) => {
       });
     }
 
+    const [guestOrderRecord] = await db
+      .select()
+      .from(guestOrders)
+      .where(eq(guestOrders.id, orderId))
+      .limit(1);
+
+    let isGuestMode: boolean;
+    if (guestOrderRecord) {
+      if (!verifyGuestOrderAccess(req, guestOrderRecord)) {
+        return res.status(403).json({
+          success: false,
+          message: "Not authorized to play this guest order",
+        });
+      }
+      isGuestMode = true;
+    } else if (userId && !req.user?.isGuestAccount) {
+      isGuestMode = false;
+    } else if (userId && req.user?.isGuestAccount) {
+      const authOrder = await storage.getOrder(orderId);
+      if (authOrder?.userId === userId && authOrder.status === "completed") {
+        isGuestMode = false;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "No valid pop game purchase found",
+        });
+      }
+    } else {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    if (!isGuestMode && !userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
     // ============================================
     // 2. COOLDOWN CHECK
     // ============================================
-    const cooldownKey = isGuestMode 
-      ? `guest-${guestEmail || 'unknown'}-${orderId}`
+    const cooldownKey = isGuestMode
+      ? `guest-${guestOrderRecord?.guestEmail || "unknown"}-${orderId}`
       : `${userId}-${orderId}`;
     
     const lastPlayTime = popCooldowns.get(cooldownKey) || 0;
@@ -15177,14 +15120,8 @@ app.post("/api/play-pop", async (req: any, res) => {
     let nextTicket: any = null;
 
     if (isGuestMode) {
-      // --- GUEST MODE: Get from guest tables ---
-      [guestOrder] = await db
-        .select()
-        .from(guestOrders)
-        .where(eq(guestOrders.id, orderId))
-        .where(eq(guestOrders.status, "completed"));
-
-      if (!guestOrder) {
+      guestOrder = guestOrderRecord;
+      if (!guestOrder || guestOrder.status !== "completed") {
         return res.status(400).json({
           success: false,
           message: "No valid pop game purchase found",
@@ -17126,7 +17063,29 @@ app.get(
     async (req: any, res) => {
       try {
         const { id } = req.params;
-        const updateData = req.body;
+        const body = req.body ?? {};
+
+        const allowedFields = [
+          "email",
+          "firstName",
+          "lastName",
+          "phoneNumber",
+          "balance",
+          "ringtonePoints",
+          "notes",
+          "isAdmin",
+        ] as const;
+
+        const updateData: Record<string, unknown> = {};
+        for (const field of allowedFields) {
+          if (Object.prototype.hasOwnProperty.call(body, field)) {
+            updateData[field] = body[field];
+          }
+        }
+
+        if (Object.keys(updateData).length === 0) {
+          return res.status(400).json({ message: "No valid fields to update" });
+        }
 
         const [updatedUser] = await db
           .update(users)
@@ -17519,11 +17478,26 @@ app.get("/api/public/max-tickets", async (req, res) => {
     }
   );
 
-  // Scratch card image configuration endpoints
-  // GET endpoint is accessible to all authenticated users (they need to see the cards to play)
+  // Public scratch card images (display/checkout only — no weights or win stats)
+  app.get("/api/scratch-images", async (_req, res) => {
+    try {
+      const images = await storage.getScratchCardImages();
+      res.json(
+        images
+          .filter((image) => image.isActive !== false)
+          .map(({ weight, maxWins, quantityWon, ...image }) => image)
+      );
+    } catch (error) {
+      console.error("Error fetching scratch card images:", error);
+      res.status(500).json({ message: "Failed to fetch scratch card images" });
+    }
+  });
+
+  // Scratch card image configuration endpoints (admin)
   app.get(
     "/api/admin/scratch-images",
     isAuthenticated,
+    isAdmin,
     async (req: any, res) => {
       try {
         const images = await storage.getScratchCardImages();
@@ -18638,27 +18612,31 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
     }
 
     // --- RETURN IMMEDIATE RESULT (NO CONFIRMATION NEEDED) ---
+    const resultPayload: Record<string, unknown> = {
+      outcome,
+      isWin,
+      isFreeReplay,
+      rewardType: rewardType,
+      rewardValue: rewardValue,
+      prizeName: selectedPrize?.prizeName || null,
+      prizeId: selectedPrize?.id || null,
+      isPhysical: rewardType === "physical",
+      switchTexts,
+    };
+
+    if (process.env.NODE_ENV !== "production") {
+      resultPayload._debug = {
+        winProbability,
+        winRoll,
+        isWinner,
+        totalWeight: prizes.reduce((sum, p) => sum + p.weight, 0),
+        selectedWeight: selectedPrize?.weight || 0,
+      };
+    }
+
     res.json({
       success: true,
-      result: { 
-        outcome, 
-        isWin, 
-        isFreeReplay, 
-        rewardType: rewardType, 
-        rewardValue: rewardValue,
-        prizeName: selectedPrize?.prizeName || null,
-        prizeId: selectedPrize?.id || null,
-        isPhysical: rewardType === "physical",
-        switchTexts,
-        // Debug info - remove in production
-        _debug: {
-          winProbability,
-          winRoll,
-          isWinner,
-          totalWeight: prizes.reduce((sum, p) => sum + p.weight, 0),
-          selectedWeight: selectedPrize?.weight || 0,
-        }
-      },
+      result: resultPayload,
       playsRemaining: playsRemaining - 1,
       // Note: Free replay will add a play in the confirmation step
     });
@@ -19394,6 +19372,8 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
 
 app.post("/api/guest/create-order", async (req: any, res) => {
   try {
+    await loadSessionUser(req);
+
     const { 
       firstName = '',      // Make optional with defaults
       lastName = '',       // Make optional with defaults
@@ -19411,6 +19391,14 @@ app.post("/api/guest/create-order", async (req: any, res) => {
         message: "Missing required fields: competitionId, gameType" 
       });
     }
+
+    const sessionUser = req.user;
+    const resolvedEmail = sessionUser?.isGuestAccount
+      ? sessionUser.email
+      : (email || `guest_${Date.now()}@temp.com`);
+    const resolvedFirstName = firstName || sessionUser?.firstName || '';
+    const resolvedLastName = lastName || sessionUser?.lastName || '';
+    const resolvedPhone = phone || sessionUser?.phoneNumber || '0000000000';
 
     // Get competition
     const [competition] = await db
@@ -19434,11 +19422,12 @@ app.post("/api/guest/create-order", async (req: any, res) => {
 
     // Create guest order with whatever details we have (can be empty)
     const [guestOrder] = await db.insert(guestOrders).values({
-      guestName: firstName && lastName ? `${firstName} ${lastName}`.trim() : 'Guest User',
-      guestEmail: email || `guest_${Date.now()}@temp.com`,
-      guestPhone: phone || '0000000000',
-      firstName: firstName || '',
-      lastName: lastName || '',
+      userId: sessionUser?.isGuestAccount ? sessionUser.id : null,
+      guestName: resolvedFirstName && resolvedLastName ? `${resolvedFirstName} ${resolvedLastName}`.trim() : 'Guest User',
+      guestEmail: resolvedEmail,
+      guestPhone: resolvedPhone,
+      firstName: resolvedFirstName || '',
+      lastName: resolvedLastName || '',
       competitionId,
       gameType,
       quantity,
@@ -19450,15 +19439,18 @@ app.post("/api/guest/create-order", async (req: any, res) => {
       createdAt: new Date(),
     }).returning();
 
+    const accessToken = issueGuestOrderAccessToken(req, guestOrder.id);
+
     res.json({
       success: true,
       orderId: guestOrder.id,
       orderReference: orderRef,
+      accessToken,
       totalAmount: totalAmount.toFixed(2),
-      firstName: firstName || '',
-      lastName: lastName || '',
-      email: email || '',
-      phone: phone || '',
+      firstName: resolvedFirstName || '',
+      lastName: resolvedLastName || '',
+      email: resolvedEmail || '',
+      phone: resolvedPhone || '',
       competitionId,
       gameType,
       quantity,
@@ -19481,6 +19473,8 @@ app.post("/api/guest/create-order", async (req: any, res) => {
 
 app.put("/api/guest/update-details/:orderId", async (req: any, res) => {
   try {
+    await loadSessionUser(req);
+
     const { orderId } = req.params;
     const { firstName, lastName, email, phone } = req.body;
 
@@ -19501,7 +19495,6 @@ app.put("/api/guest/update-details/:orderId", async (req: any, res) => {
       });
     }
 
-    // Check if order exists
     const [existingOrder] = await db
       .select()
       .from(guestOrders)
@@ -19511,6 +19504,13 @@ app.put("/api/guest/update-details/:orderId", async (req: any, res) => {
       return res.status(404).json({ 
         success: false, 
         message: "Guest order not found" 
+      });
+    }
+
+    if (!verifyGuestOrderAccess(req, existingOrder)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to update this guest order",
       });
     }
 
@@ -19550,6 +19550,8 @@ app.put("/api/guest/update-details/:orderId", async (req: any, res) => {
 
 app.post("/api/guest/process-payment", async (req: any, res) => {
   try {
+    await loadSessionUser(req);
+
     const { orderId } = req.body;
 
     if (!orderId) {
@@ -19559,7 +19561,6 @@ app.post("/api/guest/process-payment", async (req: any, res) => {
       });
     }
 
-    // Get guest order
     const [guestOrder] = await db
       .select()
       .from(guestOrders)
@@ -19569,6 +19570,13 @@ app.post("/api/guest/process-payment", async (req: any, res) => {
       return res.status(404).json({ 
         success: false,
         message: "Guest order not found" 
+      });
+    }
+
+    if (!verifyGuestOrderAccess(req, guestOrder)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to pay for this guest order",
       });
     }
 
@@ -19648,9 +19656,28 @@ app.post("/api/guest/process-payment", async (req: any, res) => {
 
 app.post("/api/guest/confirm-payment", async (req: any, res) => {
   try {
+    await loadSessionUser(req);
+
     const { paymentJobRef, paymentRef, orderId } = req.body || {};
     if (!paymentJobRef || !orderId) {
       return res.status(400).json({ success: false, message: "Missing payment details" });
+    }
+
+    const [guestOrder] = await db
+      .select()
+      .from(guestOrders)
+      .where(eq(guestOrders.id, orderId))
+      .limit(1);
+
+    if (!guestOrder) {
+      return res.status(404).json({ success: false, message: "Guest order not found" });
+    }
+
+    if (!verifyGuestOrderAccess(req, guestOrder)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to confirm this guest order",
+      });
     }
 
     const [guestPending] = await db
@@ -19675,7 +19702,8 @@ app.post("/api/guest/confirm-payment", async (req: any, res) => {
     }
 
     await processGuestOrder(guestPending.guestOrderId, paymentRef ?? paymentJobRef, creditAmount);
-    return res.json({ success: true, orderId: guestPending.guestOrderId });
+    const accessToken = issueGuestOrderAccessToken(req, guestPending.guestOrderId);
+    return res.json({ success: true, orderId: guestPending.guestOrderId, accessToken });
   } catch (error: any) {
     console.error("Guest confirm error:", error);
     return res.status(500).json({ success: false, message: "Failed to confirm guest payment" });
@@ -19876,6 +19904,8 @@ async function sendGuestOrderConfirmation(email: string, orderDetails: any) {
 
 app.get("/api/guest/order/:identifier", async (req: any, res) => {
   try {
+    await loadSessionUser(req);
+
     const { identifier } = req.params;
     
     let guestOrder;
@@ -19896,6 +19926,13 @@ app.get("/api/guest/order/:identifier", async (req: any, res) => {
       return res.status(404).json({ 
         success: false,
         message: "Guest order not found" 
+      });
+    }
+
+    if (!verifyGuestOrderAccess(req, guestOrder)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to access this guest order",
       });
     }
 
@@ -19962,7 +19999,7 @@ app.get("/api/guest/order/:identifier", async (req: any, res) => {
 // 6. GET GUEST WINNINGS BY EMAIL
 // =============================================
 
-app.get("/api/guest/winnings/:email", async (req: any, res) => {
+app.get("/api/guest/winnings/:email", isAuthenticated, async (req: any, res) => {
   try {
     const { email } = req.params;
 
@@ -19970,6 +20007,13 @@ app.get("/api/guest/winnings/:email", async (req: any, res) => {
       return res.status(400).json({
         success: false,
         message: "Email is required"
+      });
+    }
+
+    if (normalizeGuestEmail(email) !== normalizeGuestEmail(req.user.email)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to view winnings for this email",
       });
     }
 
@@ -20034,13 +20078,17 @@ app.get("/api/guest/winnings/:email", async (req: any, res) => {
 
 app.post("/api/guest/transfer-winnings", async (req: any, res) => {
   try {
+    await loadSessionUser(req);
+
     const { 
       email,
       firstName,
       lastName,
       password,
       phone,
-      acceptTerms = false
+      acceptTerms = false,
+      accessToken,
+      guestOrderId,
     } = req.body;
 
     // Validate required fields
@@ -20055,6 +20103,38 @@ app.post("/api/guest/transfer-winnings", async (req: any, res) => {
       return res.status(400).json({ 
         success: false,
         message: "You must accept the terms and conditions" 
+      });
+    }
+
+    const normalizedEmail = normalizeGuestEmail(email);
+    let authorized = false;
+
+    if (
+      req.user &&
+      normalizeGuestEmail(req.user.email) === normalizedEmail
+    ) {
+      authorized = true;
+    }
+
+    if (!authorized && guestOrderId) {
+      const [guestOrder] = await db
+        .select()
+        .from(guestOrders)
+        .where(eq(guestOrders.id, guestOrderId))
+        .limit(1);
+      if (
+        guestOrder &&
+        normalizeGuestEmail(guestOrder.guestEmail) === normalizedEmail &&
+        verifyGuestOrderAccess(req, guestOrder, accessToken)
+      ) {
+        authorized = true;
+      }
+    }
+
+    if (!authorized) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to transfer winnings for this email",
       });
     }
 
@@ -20221,7 +20301,7 @@ app.post("/api/guest/transfer-winnings", async (req: any, res) => {
 // 8. CHECK IF GUEST HAS WINNINGS (Quick check)
 // =============================================
 
-app.get("/api/guest/check-winnings/:email", async (req: any, res) => {
+app.get("/api/guest/check-winnings/:email", isAuthenticated, async (req: any, res) => {
   try {
     const { email } = req.params;
 
@@ -20229,6 +20309,13 @@ app.get("/api/guest/check-winnings/:email", async (req: any, res) => {
       return res.status(400).json({
         success: false,
         message: "Email is required"
+      });
+    }
+
+    if (normalizeGuestEmail(email) !== normalizeGuestEmail(req.user.email)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to check winnings for this email",
       });
     }
 
@@ -21437,41 +21524,6 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
   } catch (error) {
     console.error("Error saving slot prizes:", error);
     res.status(500).json({ message: "Failed to save prizes" });
-  }
-});
-
-
-app.get("/api/debug/slot-wins", async (_req, res) => {
-  try {
-    // Get wins from slot_prize_wins table
-    const prizeWins = await db.select().from(slotPrizeWins);
-    
-    // Get prize config
-    const [config] = await db.select().from(gameSlotConfig);
-    let prizes = [];
-    if (config?.prizesConfig) {
-      prizes = JSON.parse(config.prizesConfig);
-    }
-    
-    // Create summary
-    const winsMap: Record<string, number> = {};
-    for (const win of prizeWins) {
-      winsMap[win.prizeId] = Number(win.winCount);
-    }
-    
-    res.json({
-      prizeWins: prizeWins,
-      prizeSummary: prizes.map((p: any) => ({
-        id: p.id,
-        symbol: p.symbol,
-        maxWins: p.maxWins || 'unlimited',
-        currentWins: winsMap[p.id] || 0,
-        isExhausted: p.maxWins ? (winsMap[p.id] || 0) >= Number(p.maxWins) : false
-      }))
-    });
-  } catch (error) {
-    console.error("Debug error:", error);
-    res.status(500).json({ error: String(error) });
   }
 });
 

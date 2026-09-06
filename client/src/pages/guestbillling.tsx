@@ -12,6 +12,10 @@ import { Input } from "@/components/ui/input";
 import { UserCircle, Shield, Lock } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  guestOrderApiUrl,
+  guestOrderRequestInit,
+} from "@/lib/guest-order-access";
 
 export default function GuestBilling() {
   const { orderId } = useParams();
@@ -33,7 +37,14 @@ export default function GuestBilling() {
     queryKey: ["/api/guest/order", orderId],
     enabled: !!orderId,
     queryFn: async () => {
-      const res = await apiRequest(`/api/guest/order/${orderId}`, "GET");
+      const res = await fetch(
+        guestOrderApiUrl(orderId!, `/api/guest/order/${orderId}`),
+        guestOrderRequestInit(orderId, { credentials: "include" }),
+      );
+      if (!res.ok) {
+        const text = (await res.text()) || res.statusText;
+        throw new Error(`${res.status}: ${text}`);
+      }
       return res.json();
     },
   });
@@ -116,16 +127,20 @@ export default function GuestBilling() {
     }
 
     try {
-      const response = await fetch(`/api/guest/update-details/${orderId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: guestForm.firstName,
-          lastName: guestForm.lastName,
-          email: guestForm.email,
-          phone: guestForm.phone,
+      const response = await fetch(
+        `/api/guest/update-details/${orderId}`,
+        guestOrderRequestInit(orderId, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            firstName: guestForm.firstName,
+            lastName: guestForm.lastName,
+            email: guestForm.email,
+            phone: guestForm.phone,
+          }),
         }),
-      });
+      );
 
       const data = await response.json();
 

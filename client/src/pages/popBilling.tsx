@@ -12,7 +12,7 @@ const PopBilling = () => {
   const { toast } = useToast();
 
   const { data: popConfig } = useQuery<{ isVisible: boolean }>({
-    queryKey: ["/api/admin/game-pop-config"],
+    queryKey: ["/api/pop-config"],
   });
 
   useEffect(() => {

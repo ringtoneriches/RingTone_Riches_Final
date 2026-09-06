@@ -19,6 +19,7 @@ import {
   getCompetitionTypeConfig,
   getCtaLabel,
   getDefaultQuantity,
+  getCompetitionImage,
   getFallbackImage,
   getDrawCardTitle,
   getPrizeOffer,
@@ -53,8 +54,8 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
     queryFn: async () => (await apiRequest("/api/voltz-config", "GET")).json(),
   });
   const { data: spinConfig } = useQuery({
-    queryKey: ["/api/admin/game-spin-2-config"],
-    queryFn: async () => (await apiRequest("/api/admin/game-spin-2-config", "GET")).json(),
+    queryKey: ["/api/spin-2-config"],
+    queryFn: async () => (await apiRequest("/api/spin-2-config", "GET")).json(),
   });
 
   if (competition.type === "plinko" && plinkoConfig?.isVisible === false) return null;
@@ -71,7 +72,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
   const TypeIcon = typeCfg.Icon;
 
   const imageSrc =
-    competition.imageUrl ||
+    getCompetitionImage(competition, "card") ||
     (competition.type === "pop" ? pop : competition.type === "voltz" ? voltz : competition.type === "scratch" ? scratch : undefined);
 
   const goToCompetition = (withQty = true) => {

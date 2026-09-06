@@ -21,8 +21,6 @@ export interface ScratchSessionResponse {
 
 export interface CompleteSessionPayload {
   orderId: string;
-  prizeId: string;
-  isWinner: boolean;
 }
 
 export interface CompleteSessionResponse {

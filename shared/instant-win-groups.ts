@@ -24,6 +24,7 @@ export type PlannedGroupActivation = {
 export function planGroupActivation<T extends {
   id: string;
   status: string;
+  winningTicketNumber?: number | null;
   competitionPrizeId?: string | null;
   value?: unknown;
   name?: string | null;
@@ -57,7 +58,10 @@ export function planGroupActivation<T extends {
       toActivate.push(prize);
     } else if (prize.status === "active") existing.alreadyActive += 1;
     else if (prize.status === "won") existing.won += 1;
-    else if (prize.status === "disabled") existing.disabled += 1;
+    else if (prize.status === "disabled") {
+      existing.disabled += 1;
+      if (prize.winningTicketNumber) toActivate.push(prize);
+    }
     groups.set(key, existing);
   }
 

@@ -16,6 +16,7 @@ import {
   getCtaLabel,
   getDefaultQuantity,
   getDrawCardTitle,
+  getCompetitionImage,
   getFallbackImage,
   getPrizeOffer,
   getStatusBadge,
@@ -75,19 +76,21 @@ function FeaturedSlide({
   };
 
   return (
-    <div className="grid lg:grid-cols-2 gap-0">
+    <div className="grid h-full lg:grid-cols-2 lg:items-stretch">
+      <div
+        className={`relative overflow-hidden bg-[#0A0A0D] aspect-[4/3] max-h-[240px] w-full sm:max-h-none lg:aspect-auto lg:max-h-none lg:h-full lg:min-h-[520px] ${active ? "lg:rr-art-sweep" : ""}`}
+      >
       <button
         type="button"
         data-featured-image
         onClick={goView}
         aria-label={`View ${competition.title}`}
-        className={`relative block w-full cursor-pointer overflow-hidden bg-[#0A0A0D] text-left lg:min-h-[520px] ${active ? "lg:rr-art-sweep" : ""}`}
+        className="absolute inset-0 h-full w-full cursor-pointer text-left"
       >
-        <div className="relative aspect-[4/3] max-h-[240px] w-full overflow-hidden bg-[#0A0A0D] sm:max-h-none sm:aspect-[4/3] lg:absolute lg:inset-0 lg:aspect-auto lg:max-h-none">
           <img
-            src={competition.imageUrl || getFallbackImage(competition.type)}
+            src={getCompetitionImage(competition, "featured")}
             alt=""
-            className={`h-full w-full object-cover object-top lg:object-center ${active ? "lg:rr-art-drift" : ""}`}
+            className={`h-full w-full object-cover object-center ${active ? "lg:rr-art-drift" : ""}`}
             loading={active ? "eager" : "lazy"}
             decoding="async"
             draggable={false}
@@ -98,7 +101,6 @@ function FeaturedSlide({
               img.src = getFallbackImage(competition.type);
             }}
           />
-        </div>
         <div className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-transparent via-transparent to-[#0A0A0D]/80 lg:block" />
         <div className="pointer-events-none absolute top-4 left-4 z-[2]">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#C8102E] px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
@@ -123,8 +125,9 @@ function FeaturedSlide({
           </div>
         )}
       </button>
+      </div>
 
-      <div className="relative flex flex-col justify-center border-t border-white/10 p-4 pb-5 sm:p-8 lg:border-t-0 lg:p-10 lg:pb-20">
+      <div className="relative flex flex-col justify-center border-t border-white/10 p-4 pb-5 sm:p-8 lg:border-t-0 lg:p-10 lg:pb-28">
         <div className="mb-3 flex flex-wrap items-center gap-2 sm:mb-4">
           <span className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-[#F1D47A]">
             <TypeIcon className="h-3 w-3" />
@@ -323,7 +326,7 @@ export default function FeaturedCompetition({ competitions }: Props) {
       <div className="relative z-10 mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         <ChaserBorder variant="featured" className="shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
           <div
-            className="relative overflow-hidden bg-[#0A0A0D] touch-pan-y lg:pb-8"
+            className="relative overflow-hidden bg-[#0A0A0D] touch-pan-y"
             onPointerDown={(e) => {
               if (count < 2 || e.button > 0) return;
               swipeRef.current = {
@@ -358,7 +361,7 @@ export default function FeaturedCompetition({ competitions }: Props) {
                 {competitions.map((item, index) => (
                   <div
                     key={item.id}
-                    className={`shrink-0 ${index === activeIndex ? "pointer-events-auto" : "pointer-events-none"}`}
+                    className={`h-full shrink-0 ${index === activeIndex ? "pointer-events-auto" : "pointer-events-none"}`}
                     style={{ width: `${100 / Math.max(count, 1)}%` }}
                     aria-hidden={index !== activeIndex}
                   >

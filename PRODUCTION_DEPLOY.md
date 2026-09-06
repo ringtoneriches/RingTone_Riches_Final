@@ -1,95 +1,88 @@
-# 🚀 Production Deployment Guide
+# Production Deployment Guide
 
-Your Ringtone Riches platform now includes **automatic production database seeding**!
+Your Ringtone Riches platform supports optional automatic database seeding and a secure admin bootstrap on first deploy.
 
-## ✨ What Happens Automatically
+## What Can Happen Automatically
 
-When you publish (deploy) your app to production, the system will **automatically**:
+When you deploy to production, the system may:
 
-1. ✅ **Check if your production database is empty**
-2. ✅ **Seed 11 competitions** if no data exists
-3. ✅ **Seed 20 scratch card images** if no data exists  
-4. ✅ **Create an admin account** if it doesn't exist
-
-**You don't need to do anything manually!** Just publish your app and everything will be ready.
+1. Check if your production database is empty
+2. Seed competitions and scratch card images (only if auto-seed is enabled)
+3. Create the **first** admin account — **only** when `ADMIN_EMAIL` and `ADMIN_PASSWORD` are set and no admin exists yet
 
 ---
 
-## 📝 How to Deploy
+## How to Deploy
 
-### Step 1: Click the "Publish" Button
-1. In your Replit project, click the **"Publish"** or **"Deploy"** button
-2. Follow the deployment prompts
-3. Wait for the deployment to complete
+### Step 1: Set required environment variables
 
-### Step 2: That's It!
-When your production server starts for the first time, it will automatically:
-- Detect that the database is empty
-- Seed all competitions and scratch card data
-- Create your admin account
+In your hosting provider (Railway, Replit Secrets, etc.), configure at minimum:
 
-You'll see these messages in your deployment logs:
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `SESSION_SECRET` | Yes | Session signing secret |
+| `ADMIN_EMAIL` | For first admin | Email for initial admin (first deploy only) |
+| `ADMIN_PASSWORD` | For first admin | Strong password (min 12 characters) |
+
+**Important:** Do not commit admin credentials to git. Set them only in your deployment environment.
+
+### Step 2: Deploy the application
+
+Deploy using your normal process (`npm run build` + `npm start`, or your host's deploy button).
+
+On first startup with no existing admin, you should see:
+
 ```
-🔍 Checking if production database needs seeding...
-🌱 Database is empty, starting auto-seed...
-✅ Seeded 11 competitions
-✅ Seeded 20 scratch card images
-✨ Production auto-seed completed successfully!
-👤 Creating admin user...
-✅ Admin user created successfully!
+ℹ️  Admin bootstrap skipped ...
 ```
 
----
+or, when env vars are set and no admin exists:
 
-## 🔑 Admin Login Credentials
+```
+✅ Initial admin created for your@email.com
+```
 
-After deployment, you can log in to the admin panel:
+### Step 3: Log in to the admin panel
 
-**Admin Account:**
-- **Email:** `admin@ringtoneriches.co.uk`
-- **Password:** `Admin123!`
+Visit `https://your-site.com/admin/login` and sign in with the credentials from your environment variables.
 
-**⚠️ Important:** Change this password immediately after your first login!
-
-**Admin Panel URL:** `https://your-site.com/admin`
+Change the password after first login if your host allows updating `ADMIN_PASSWORD` — the bootstrap only runs once.
 
 ---
 
-## ✅ What Gets Deployed
+## Creating an Admin Manually (Alternative)
 
-### Competitions (11 total):
-1. £1,000 TUI Holiday Voucher (99p)
-2. £1,000 Tax-Free Cash (99p)
-3. Scratch & Win (£2)
-4. Spin the Wheel (£2)
-5. Lux Excite Sink (40p)
-6. £500 Smyths Toys Gift Card (50p)
-7. £500 Amazon Gift Card (50p)
-8. PlayStation 5 Pro (50p)
-9. £500 JD Sports Gift Card (50p)
-10. £500 Free Giveaway (FREE)
-11. Orange iPhone 17 Pro Max (75p)
+If you prefer not to use boot-time bootstrap, run this once against your production database:
 
-### Scratch Card Images (20 landmarks):
-Barrier Reef, Angel of the North, Big Ben, Buckingham Palace, Burj Khalifa, Colosseum, Eiffel Tower, Empire State, Golden Gate Bridge, Grand Canyon, Great Wall of China, Mount Everest, Notre Dame, Pyramids of Pisa, Statue of Liberty, Stonehenge, Taj Mahal, Times Square, Tower Bridge, Tower of Pisa
+```bash
+ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='your-secure-password-min-12-chars' npm run create-admin
+```
+
+Requirements:
+
+- `DATABASE_URL` must be set
+- `ADMIN_EMAIL` and `ADMIN_PASSWORD` (min 12 chars) must be set
+- The email must not already exist as a non-admin user
 
 ---
 
-## 🔄 Re-deploying
+## Re-deploying
 
-If you redeploy your app:
-- **Existing data is preserved** - the auto-seed only runs if the database is empty
-- **Your admin account remains** - it won't create duplicates
-- **Competitions stay the same** - no data loss
-
-The auto-seed is **safe to run multiple times** - it checks first and only seeds if needed.
+- Existing data is preserved
+- Admin bootstrap **does not run again** once any admin account exists
+- Competitions and users are not overwritten on redeploy
 
 ---
 
-## 🎉 That's It!
+## Auto-seed (Optional)
 
-Simply publish your app and it's ready to go! All the data, competitions, and admin access will be automatically configured.
+Competition/scratch seeding via `autoSeedProduction()` is **disabled by default** in `server/index.ts`. Enable only for intentional empty-database setups.
 
-**No manual scripts to run!**  
-**No database commands needed!**  
-**Everything happens automatically!** ✨
+To seed manually:
+
+```bash
+npm run seed:production
+```
+
+See `scripts/PRODUCTION_SETUP.md` for details.

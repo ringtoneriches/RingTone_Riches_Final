@@ -152,7 +152,7 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
 
   // Fetch wheel configuration from admin - refetch on every spin for real-time updates
   const { data: wheelConfig, refetch: refetchConfig } = useQuery<WheelConfig>({
-    queryKey: ["/api/admin/game-spin-2-config"],
+    queryKey: ["/api/spin-2-config"],
   });
 
   // Inside your SpinWheel component, add the state:

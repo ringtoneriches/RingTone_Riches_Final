@@ -23,6 +23,7 @@ type CompletedScratchSession = {
 };
 
 const openByOrder = new Map<string, OpenScratchSession>();
+const openBySessionId = new Map<string, OpenScratchSession>();
 const completedBySession = new Map<string, CompletedScratchSession>();
 
 function openKey(userId: string, orderId: string) {
@@ -41,6 +42,12 @@ export function getOpenScratchSession(userId: string, orderId: string) {
 
 export function setOpenScratchSession(session: OpenScratchSession) {
   openByOrder.set(openKey(session.userId, session.orderId), session);
+  openBySessionId.set(session.sessionId, session);
+}
+
+export function getOpenScratchSessionById(sessionId: string) {
+  if (completedBySession.has(sessionId)) return null;
+  return openBySessionId.get(sessionId) || null;
 }
 
 export function getCompletedScratchSession(sessionId: string) {
@@ -53,4 +60,5 @@ export function markScratchSessionCompleted(
 ) {
   completedBySession.set(sessionId, result);
   openByOrder.delete(openKey(result.userId, result.orderId));
+  openBySessionId.delete(sessionId);
 }
