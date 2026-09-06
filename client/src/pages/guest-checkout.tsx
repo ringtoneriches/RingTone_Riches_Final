@@ -13,7 +13,6 @@ import { startCartCardCheckout, type CartCheckoutProgress } from "@/lib/cart-car
 import CartCheckoutOverlay from "@/components/cart/CartCheckoutOverlay";
 import CheckoutLaunch from "@/components/cart/CheckoutLaunch";
 import { readBasket, type BasketItem } from "@/lib/basket";
-import { isPlayableGameType } from "@/lib/ticket-price";
 import { apiErrorMessage } from "@/lib/api-error";
 import { Lock, Shield, UserCircle } from "lucide-react";
 
@@ -57,11 +56,6 @@ export default function GuestCheckoutPage() {
       const items = readBasket();
       if (!items.length) {
         setLocation("/basket");
-        return;
-      }
-      const needsQuiz = items.some((item) => !isPlayableGameType(item.type));
-      if (needsQuiz) {
-        setLocation("/basket?guestPay=1&autoPay=1");
         return;
       }
       setOverlayItems(items);

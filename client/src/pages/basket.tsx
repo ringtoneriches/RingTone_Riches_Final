@@ -37,20 +37,6 @@ import {
   Sparkles,
   CreditCard,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-
-const QUIZ = {
-  question: "You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?",
-  options: ["7:15am", "7:25am", "7:30am", "7:45am"],
-  correct: "7:30am",
-};
 
 function getValidBalance(balance: string | null | undefined): number {
   if (!balance) return 0;
@@ -73,8 +59,6 @@ export default function BasketPage() {
   });
   const [progress, setProgress] = useState<CartCheckoutProgress | null>(null);
   const [checkoutItems, setCheckoutItems] = useState<BasketItem[]>([]);
-  const [showQuiz, setShowQuiz] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [guestLaunch, setGuestLaunch] = useState(false);
   const [showBoost, setShowBoost] = useState(false);
   const autoPayStarted = useRef(false);
@@ -291,11 +275,6 @@ export default function BasketPage() {
       });
       return;
     }
-    if (hasInstant) {
-      setSelectedAnswer(null);
-      setShowQuiz(true);
-      return;
-    }
     checkout.mutate();
   };
 
@@ -365,13 +344,8 @@ export default function BasketPage() {
     if (instaplayBlocked) return;
     autoPayStarted.current = true;
     window.history.replaceState({}, "", "/basket");
-    if (hasInstant) {
-      setSelectedAnswer(null);
-      setShowQuiz(true);
-      return;
-    }
     checkout.mutate();
-  }, [isAuthenticated, items.length, methods.instaplay, instaplayBlocked, hasInstant]);
+  }, [isAuthenticated, items.length, methods.instaplay, instaplayBlocked]);
 
   const emptyCopy = useMemo(
     () => ({
@@ -692,53 +666,6 @@ export default function BasketPage() {
         onConfirm={handleAcceptBoost}
       />
 
-      <Dialog open={showQuiz} onOpenChange={setShowQuiz}>
-        <DialogContent className="mx-auto w-[90vw] max-w-sm rounded-2xl border border-white/10 bg-[#0A0A0D] sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-center font-prize text-2xl text-white">
-              Answer to proceed
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-center font-medium text-white/70">{QUIZ.question}</p>
-          <div className="grid grid-cols-1 gap-2">
-            {QUIZ.options.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setSelectedAnswer(option)}
-                className={`w-full rounded-xl border-2 p-3 font-semibold transition-all ${
-                  selectedAnswer === option
-                    ? "border-transparent bg-[#C8102E] text-white"
-                    : "border-white/10 bg-white/[0.02] text-white hover:border-[#C8102E]/40"
-                }`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-          <DialogFooter className="flex justify-center">
-            <Button
-              disabled={!selectedAnswer}
-              onClick={() => {
-                if (selectedAnswer !== QUIZ.correct) {
-                  toast({
-                    title: "Wrong Answer ❌",
-                    description: "That's not correct! Try again next time.",
-                    variant: "destructive",
-                  });
-                  setShowQuiz(false);
-                  return;
-                }
-                setShowQuiz(false);
-                checkout.mutate();
-              }}
-              className="rr-cta mt-4 h-11 rounded-xl px-8 font-black uppercase tracking-wider text-white disabled:opacity-50"
-            >
-              Submit
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

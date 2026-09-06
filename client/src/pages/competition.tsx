@@ -13,10 +13,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Minus, Plus, Sparkles, Zap, Ticket, Trophy, Lock, Mail, ShoppingCart } from "lucide-react";
 import { useBasket } from "@/hooks/useBasket";
 import UserCompetitionPrizes from "./user-competition-prizes";
@@ -118,9 +116,6 @@ export default function CompetitionPage() {
   };
   const [quantity, setQuantity] = useState(1);
   const { add: addToBasket } = useBasket();
-  const [showQuiz, setShowQuiz] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
   const [isPostalModalOpen, setIsPostalModalOpen] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
@@ -133,22 +128,6 @@ export default function CompetitionPage() {
     }
   }, []);
   
-  const quizQuestion = {
-    question: "You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?",
-    options: ["7:15am", "7:25am", "7:30am", "7:45am"],
-    correct: "7:30am",
-  };
-
-  const handleOpenQuiz = () => {
-    if (!isGameType) {
-      setSelectedAnswer(null);
-      setIsAnswerCorrect(null);
-      setShowQuiz(true);
-    } else {
-      handlePurchase();
-    }
-  };
-
   const { data: competition, isLoading } = useQuery<Competition>({
     queryKey: ["/api/competitions", id],
     enabled: !!id,
@@ -431,22 +410,6 @@ export default function CompetitionPage() {
     );
   }
 
-  const handleSubmitAnswer = () => {
-    if (selectedAnswer === quizQuestion.correct) {
-      setIsAnswerCorrect(true);
-      setShowQuiz(false);
-      handlePurchase();
-    } else {
-      setIsAnswerCorrect(false);
-      toast({
-        title: "Wrong Answer ❌",
-        description: "That's not correct! Try again next time.",
-        variant: "destructive",
-      });
-      setShowQuiz(false);
-    }
-  };
-
   const scrollToRange = () => {
     if (!rangeRef.current) return;
     const top = rangeRef.current.getBoundingClientRect().top + window.scrollY - 180;
@@ -630,7 +593,7 @@ export default function CompetitionPage() {
                 )}
 
                             <button
-                  onClick={handleOpenQuiz}
+                  onClick={handlePurchase}
                   disabled={purchaseLocked}
                   className={`rr-cta mt-4 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-sm font-black uppercase tracking-[0.14em] ${
                     isSoldOut || (isFreeGiveaway && !canBuyMore) ? "opacity-50" : ""
@@ -857,7 +820,7 @@ export default function CompetitionPage() {
           </div>
             
             <button
-              onClick={handleOpenQuiz}
+              onClick={handlePurchase}
             disabled={purchaseLocked}
             className={`rr-cta mt-5 flex h-14 w-full items-center justify-center gap-3 rounded-xl text-base font-black uppercase tracking-[0.14em] md:h-16 ${
               isSoldOut || (isFreeGiveaway && !canBuyMore) ? "opacity-50" : ""
@@ -948,45 +911,6 @@ export default function CompetitionPage() {
         </div>
       </section>
 
-      {!isGameType && (
-        <Dialog open={showQuiz} onOpenChange={setShowQuiz}>
-          <DialogContent className="mx-auto w-[90vw] max-w-sm rounded-2xl border border-white/10 bg-[#0A0A0D] sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-center font-prize text-2xl text-white">
-                Answer to proceed
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <p className="text-center font-medium text-white/70">{quizQuestion.question}</p>
-              <div className="grid grid-cols-1 gap-2">
-                {quizQuestion.options.map((option) => (
-                  <button
-                    key={option}
-                    onClick={() => setSelectedAnswer(option)}
-                    className={`w-full rounded-xl border-2 p-3 font-semibold transition-all ${
-                      selectedAnswer === option
-                        ? "border-transparent bg-[#C8102E] text-white"
-                        : "border-white/10 bg-white/[0.02] text-white hover:border-[#C8102E]/40"
-                    }`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <DialogFooter className="flex justify-center">
-              <Button
-                disabled={!selectedAnswer}
-                onClick={handleSubmitAnswer}
-                className="rr-cta mt-4 h-11 rounded-xl px-8 font-black uppercase tracking-wider text-white disabled:opacity-50"
-              >
-                Submit
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-
       <Dialog open={isPostalModalOpen} onOpenChange={setIsPostalModalOpen}>
         <DialogContent className="max-w-lg rounded-2xl border border-white/10 bg-[#0A0A0D]">
           <DialogHeader>
@@ -1009,7 +933,6 @@ export default function CompetitionPage() {
                 <li>Your full name and postal address</li>
                 <li>Your phone number and email address on your RingTone Riches account</li>
                 <li>Your date of birth</li>
-                <li>Your answer to the competition question</li>
                 <li>Incomplete or illegible entries will be disqualified</li>
                 <li>Maximum one entry per household</li>
               </ul>
@@ -1020,10 +943,6 @@ export default function CompetitionPage() {
                 </Link>
                 .
               </p>
-              <p className="mt-4 font-semibold text-white">
-                You wake up at 7:00am and take 30 minutes to get ready. What time are you ready?
-              </p>
-              <p>A: 7:15am B: 7:20am C: 7:30am D: 7:45am</p>
             </div>
           </DialogDescription>
         </DialogContent>

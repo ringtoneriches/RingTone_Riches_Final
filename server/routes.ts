@@ -5661,8 +5661,6 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
               minute: "2-digit",
             }),
             paymentMethod: paymentMethodText,
-            skillQuestion: competition.skillQuestion || undefined,
-            skillAnswer: order.skillAnswer || undefined,
             spinNumbers: spinNumbers.length > 0 ? spinNumbers : undefined,
           }).catch((err) =>
             console.error("Failed to send order confirmation email:", err)
@@ -7118,8 +7116,6 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
               minute: "2-digit",
             }),
             paymentMethod: paymentMethodText,
-            skillQuestion: competition.skillQuestion || undefined,
-            skillAnswer: order.skillAnswer || undefined,
             ticketNumbers: ticketNumbers.length > 0 ? ticketNumbers : undefined,
           }).catch((err) =>
             console.error("Failed to send order confirmation email:", err)
