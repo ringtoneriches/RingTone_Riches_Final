@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Trophy,
   Award,
@@ -8,6 +8,8 @@ import {
   ChevronDown,
   ChevronUp,
   Ticket,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -110,6 +112,153 @@ function getPrizeOfferLabel(prize: { prizeValue: number; ringtonePoints?: number
     return { amount: points.toLocaleString(), suffix: "Ringtone Points" };
   }
   return { amount: `£${cash.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, suffix: "value" };
+}
+
+const TICKETS_PER_PAGE = 24;
+
+function PrizeTicketNumbersDialog({
+  group,
+  onClose,
+}: {
+  group: PrizeGroup | null;
+  onClose: () => void;
+}) {
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [group?.id]);
+
+  const sortedTickets = useMemo(() => {
+    return [...(group?.tickets || [])].sort(
+      (a, b) => (Number(a.winningTicketNumber) || 0) - (Number(b.winningTicketNumber) || 0),
+    );
+  }, [group?.tickets]);
+
+  const totalTickets = sortedTickets.length;
+  const totalPages = Math.max(1, Math.ceil(totalTickets / TICKETS_PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * TICKETS_PER_PAGE;
+  const pageTickets = sortedTickets.slice(pageStart, pageStart + TICKETS_PER_PAGE);
+  const wonOnPage = pageTickets.filter((t) => t.publicStatus === "won").length;
+  const totalWon = sortedTickets.filter((t) => t.publicStatus === "won").length;
+
+  const goToPage = (nextPage: number) => {
+    setPage(Math.max(1, Math.min(totalPages, nextPage)));
+  };
+
+  return (
+    <Dialog open={!!group} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="flex max-h-[min(88vh,760px)] max-w-lg flex-col gap-0 overflow-hidden border-white/10 bg-[#0A0A0D] p-0">
+        <DialogHeader className="shrink-0 space-y-3 border-b border-white/10 px-5 pb-4 pt-5 sm:px-6">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#F1D47A]">Ticket assignments</p>
+            <DialogTitle className="font-prize text-2xl text-white">{group?.prizeName}</DialogTitle>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className="border-white/15 bg-white/5 text-white/80">
+              {formatNumber(totalTickets)} tickets
+            </Badge>
+            <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-200">
+              {formatNumber(totalWon)} won
+            </Badge>
+            <Badge variant="outline" className="border-[#C8102E]/30 bg-[#C8102E]/10 text-[#F1D47A]">
+              {formatNumber(totalTickets - totalWon)} available
+            </Badge>
+          </div>
+        </DialogHeader>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+          {totalTickets === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/10 bg-black/30 px-4 py-10 text-center text-sm text-muted-foreground">
+              No ticket numbers assigned yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+              {pageTickets.map((ticket) => {
+                const isWon = ticket.publicStatus === "won";
+                return (
+                  <div
+                    key={ticket.id}
+                    className={cn(
+                      "rounded-xl border p-3 text-center transition-colors sm:p-4",
+                      isWon
+                        ? "border-amber-500/25 bg-amber-500/10"
+                        : "border-white/10 bg-black/40",
+                    )}
+                  >
+                    <div className="font-mono text-lg font-bold text-white sm:text-xl">
+                      {ticket.winningTicketNumber ? `#${ticket.winningTicketNumber}` : "—"}
+                    </div>
+                    {isWon ? (
+                      <div className="mt-1 truncate text-[10px] font-semibold uppercase tracking-wide text-amber-200/90 sm:text-xs">
+                        {ticket.winnerDisplayName || "Won"}
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-[10px] uppercase tracking-wide text-white/35 sm:text-xs">
+                        Available
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {totalTickets > 0 && (
+          <div className="shrink-0 border-t border-white/10 bg-black/30 px-5 py-4 sm:px-6">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-white/55 sm:text-sm">
+              <span>
+                Showing{" "}
+                <span className="font-semibold text-white">
+                  {formatNumber(pageStart + 1)}–{formatNumber(Math.min(pageStart + TICKETS_PER_PAGE, totalTickets))}
+                </span>{" "}
+                of {formatNumber(totalTickets)}
+              </span>
+              {wonOnPage > 0 && (
+                <span className="text-amber-200/80">{wonOnPage} won on this page</span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => goToPage(safePage - 1)}
+                disabled={safePage <= 1}
+                className="border-white/15 bg-transparent text-white hover:bg-white/10 disabled:opacity-40"
+              >
+                <ChevronLeft className="mr-1 h-4 w-4" />
+                Previous
+              </Button>
+
+              <div className="text-center">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/40">Page</p>
+                <p className="font-prize text-lg leading-none text-[#F1D47A]">
+                  {safePage}
+                  <span className="text-sm text-white/45"> / {totalPages}</span>
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => goToPage(safePage + 1)}
+                disabled={safePage >= totalPages}
+                className="border-white/15 bg-transparent text-white hover:bg-white/10 disabled:opacity-40"
+              >
+                Next
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export default function UserCompetitionPrizes({ competitionId }: UserCompetitionPrizesProps) {
@@ -377,31 +526,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
         </Button>
       </div>
 
-      <Dialog open={!!openGroup} onOpenChange={(open) => { if (!open) setOpenGroup(null); }}>
-        <DialogContent className="max-w-lg border-white/10 bg-[#0A0A0D]">
-          <DialogHeader>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#F1D47A]">Ticket assignments</p>
-            <DialogTitle className="font-prize text-2xl text-white">{openGroup?.prizeName}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-3">
-            {(openGroup?.tickets || []).map((ticket) => (
-              <div
-                key={ticket.id}
-                className="rounded-xl border border-white/10 bg-black/40 p-4 text-center"
-              >
-                <div className="text-xl font-bold">
-                  {ticket.winningTicketNumber ? `#${ticket.winningTicketNumber}` : "—"}
-                </div>
-                {ticket.publicStatus === "won" && (
-                  <div className="text-xs mt-1 uppercase tracking-wide text-muted-foreground">
-                    {ticket.winnerDisplayName || "Won"}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PrizeTicketNumbersDialog group={openGroup} onClose={() => setOpenGroup(null)} />
     </div>
   );
 }
