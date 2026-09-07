@@ -102,7 +102,7 @@ export default function AdminCompetitionVideos() {
       
       
      return allCompetitions.filter((comp: Competition) => 
-  comp.type?.toLowerCase() === "instant"
+  comp.type?.toLowerCase() === "instant" && comp.isActive && comp.status === "active"
 );
     },
   });

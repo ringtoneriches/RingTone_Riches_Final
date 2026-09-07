@@ -1,6 +1,6 @@
 import { createElement, type ComponentType } from "react";
 import type { Competition } from "@shared/schema";
-import { FEATURED_SLOT_COUNT } from "@shared/competition-config";
+import { FEATURED_SLOT_COUNT, isCompetitionLive } from "@shared/competition-config";
 import { RotateCw, Sparkles, Target, Trophy, Zap } from "lucide-react";
 
 export { FEATURED_SLOT_COUNT };
@@ -240,6 +240,7 @@ export function isTestCompetition(competition: Competition) {
 }
 
 export function isFeaturedCandidate(competition: Competition) {
+  if (!isCompetitionLive(competition)) return false;
   if (HIDDEN_COMPETITION_IDS.includes(competition.id)) return false;
   if (isTestCompetition(competition)) return false;
   const stats = getTicketStats(competition);

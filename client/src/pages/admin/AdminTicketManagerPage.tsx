@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Competition } from "@shared/schema";
+import { isCompetitionArchived, isCompetitionLive } from "@shared/competition-config";
 
 import {
   Card,
@@ -66,11 +67,11 @@ export default function AdminTicketManagerPage() {
     const matchesSearch = comp.title.toLowerCase().includes(searchTerm.toLowerCase());
     let matchesStatus = true;
     if (statusFilter === "active") {
-      matchesStatus = comp.isActive && !comp.isArchived;
+      matchesStatus = isCompetitionLive(comp);
     } else if (statusFilter === "inactive") {
-      matchesStatus = !comp.isActive && !comp.isArchived;
+      matchesStatus = !comp.isActive && comp.status !== "archived";
     } else if (statusFilter === "archived") {
-      matchesStatus = comp.isArchived;
+      matchesStatus = isCompetitionArchived(comp);
     } else if (statusFilter === "sold_out") {
       matchesStatus = comp.maxTickets ? comp.soldTickets >= comp.maxTickets : false;
     }
@@ -89,7 +90,7 @@ export default function AdminTicketManagerPage() {
   };
 
   const getStatusBadge = (comp: Competition) => {
-    if (comp.isArchived) {
+    if (isCompetitionArchived(comp)) {
       return <Badge variant="secondary" className="bg-gray-600 text-[10px] sm:text-xs">Archived</Badge>;
     }
     if (!comp.isActive) {
@@ -153,7 +154,7 @@ export default function AdminTicketManagerPage() {
             <CardContent className="p-3 sm:p-4">
               <div className="text-[10px] sm:text-sm text-gray-400">Active</div>
               <div className="text-lg sm:text-2xl font-bold text-green-400 mt-0.5 sm:mt-1">
-                {competitions.filter(c => c.isActive && !c.isArchived).length}
+                {competitions.filter(isCompetitionLive).length}
               </div>
             </CardContent>
           </Card>
@@ -296,7 +297,7 @@ export default function AdminTicketManagerPage() {
                                 onClick={() => handleManageTickets(comp)}
                                 size="sm"
                                 className="bg-yellow-600 hover:bg-yellow-700"
-                                disabled={comp.isArchived}
+                                disabled={isCompetitionArchived(comp)}
                               >
                                 <Ticket className="w-4 h-4 mr-2" />
                                 Manage Tickets
@@ -373,7 +374,7 @@ export default function AdminTicketManagerPage() {
                         <Button
                           onClick={() => handleManageTickets(comp)}
                           size="sm"
-                          disabled={comp.isArchived}
+                          disabled={isCompetitionArchived(comp)}
                           className="bg-yellow-600 hover:bg-yellow-700 w-full text-xs h-8"
                         >
                           <Ticket className="w-3.5 h-3.5 mr-1.5" />
