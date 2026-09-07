@@ -45,24 +45,22 @@ export const ROYAL_SPIN_KEYS = [
 ] as const;
 
 const EMOJI_FONT =
-  '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+  'Apple Color Emoji, "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
 
 export function generateEmojiSymbolTextures(scene: Scene, size = 256) {
   for (const { key, emoji } of EMOJI_SYMBOLS) {
     if (scene.textures.exists(key)) continue;
 
-    const text = scene.make.text({
-      x: size / 2,
-      y: size / 2,
-      text: emoji,
-      style: {
-        fontFamily: EMOJI_FONT,
-        fontSize: `${Math.floor(size * 0.62)}px`,
-      },
-    });
-    text.setOrigin(0.5);
-    text.generateTexture(key, size, size);
-    text.destroy();
+    const canvasTexture = scene.textures.createCanvas(key, size, size);
+    const ctx = canvasTexture.getContext();
+
+    ctx.clearRect(0, 0, size, size);
+    ctx.font = `${Math.floor(size * 0.62)}px ${EMOJI_FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(emoji, size / 2, size / 2);
+
+    canvasTexture.refresh();
   }
 }
 
