@@ -147,6 +147,7 @@ export default function SpinGamePage() {
           orderId={orderId}
           competitionId={competitionId}
           playTickets={orderData?.playTickets || []}
+          serverHistory={orderData?.history || []}
           isSpinning={isSpinning}
           setIsSpinning={setIsSpinning}    
           congratsAudioRef={congratsAudioRef} 
@@ -167,6 +168,7 @@ export default function SpinGamePage() {
           orderId={orderId}
           competitionId={competitionId}
           playTickets={orderData?.playTickets || []}
+          serverHistory={orderData?.history || []}
           isSpinning={isSpinning}
           setIsSpinning={setIsSpinning}    
           congratsAudioRef={congratsAudioRef} 

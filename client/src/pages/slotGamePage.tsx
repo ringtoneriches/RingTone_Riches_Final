@@ -34,6 +34,7 @@ interface SlotSpinResult {
     coinsWon: number;
     coinsSpent: number;
     spinNumber: number;
+    ticketNumber?: string | null;
     usedAt: string;
   };
 }
@@ -587,6 +588,7 @@ export default function SlotGamePage() {
               coinsWon: r.coinsWon || 0,
               coinsSpent: creditsPerSpin,
               spinNumber: r.spinNumber,
+              ticketNumber: (r as any).ticketNumber ?? null,
               usedAt: new Date().toISOString(),
             })),
           ...prev,

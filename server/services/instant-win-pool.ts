@@ -1,4 +1,4 @@
-import { playTicketLabel } from "./play-ticket-labels";
+import { playTicketLabel, insertScratchPlayRecord, insertSpinPlayRecord } from "./play-ticket-labels";
 import { planGroupActivation } from "@shared/instant-win-groups";
 import {
   allocateTicketSeqsInBlocks,
@@ -1741,6 +1741,7 @@ export async function tryRevealControlledPop(opts: {
 
   const details: any = await frozenTicketDetails(ticket);
   await markTicketRevealed(ticket.id, opts.isGuest);
+  const ticketLabel = playTicketLabel(ticket);
 
   if (!opts.isGuest && opts.userId) {
     await db.insert(popUsage).values({
@@ -1757,6 +1758,7 @@ export async function tryRevealControlledPop(opts: {
       rewardType: details.rewardType === "lose" ? "lose" : details.rewardType,
       rewardValue: String(details.rewardValue ?? "0"),
       isWin: Boolean(details.isWin),
+      ticketNumber: ticketLabel,
       wonAt: new Date(),
     });
   }
@@ -1809,6 +1811,7 @@ export async function tryRevealControlledPop(opts: {
         isPhysical: details.rewardType === "physical",
       },
       playsRemaining,
+      ticketNumber: ticketLabel,
     },
   };
 }
@@ -1832,6 +1835,7 @@ export async function revealAllControlledPop(opts: {
   for (const ticket of pending) {
     const details: any = await frozenTicketDetails(ticket);
     await markTicketRevealed(ticket.id, false);
+    const ticketLabel = playTicketLabel(ticket);
     await db.insert(popUsage).values({
       orderId: opts.orderId,
       userId: opts.userId,
@@ -1846,6 +1850,7 @@ export async function revealAllControlledPop(opts: {
       rewardType: details.rewardType === "lose" ? "lose" : details.rewardType,
       rewardValue: String(details.rewardValue ?? "0"),
       isWin: Boolean(details.isWin),
+      ticketNumber: ticketLabel,
       wonAt: new Date(),
     });
     if (details.rewardType === "cash") totalCash += Number(details.rewardValue || 0);
@@ -1898,6 +1903,7 @@ export async function tryRevealControlledSlot(opts: {
   await markTicketRevealed(ticket.id, false);
   const isWin = Boolean(details.isWin);
   const coinsWon = details.rewardType === "physical" ? 0 : Number(details.rewardValue || 0);
+  const ticketLabel = playTicketLabel(ticket);
   await db.insert(slotUsage).values({
     orderId: opts.orderId,
     userId: opts.userId,
@@ -1907,6 +1913,7 @@ export async function tryRevealControlledSlot(opts: {
     spinNumber,
     prizeId: ticket.instantWinPrizeId || null,
     prizeName: details.prizeName || null,
+    ticketNumber: ticketLabel,
   } as any);
 
   return {
@@ -2062,20 +2069,32 @@ export async function tryRevealControlledSpin(opts: {
     throw new InstantWinError("Wheel configuration is missing segments", 500, "wheel_config");
   }
   await markTicketRevealed(ticket.id, false);
-  await db.insert(spinUsage).values({
-    orderId: opts.orderId,
-    userId: opts.userId,
-    usedAt: new Date(),
-  });
-  await db.insert(spinWins).values({
-    userId: opts.userId,
-    segmentId: winningSegmentId,
-    rewardType: details.rewardType === "points" || details.rewardType === "cash" ? details.rewardType : "lose",
-    rewardValue: String(details.rewardValue ?? "0"),
-    wonAt: new Date(),
+  const ticketLabel = playTicketLabel(ticket);
+  const spin = details.spin || {};
+  const rewardType =
+    details.rewardType === "points" || details.rewardType === "cash"
+      ? details.rewardType
+      : "lose";
+  await db.transaction(async (tx) => {
+    await insertSpinPlayRecord(tx, {
+      orderId: opts.orderId,
+      userId: opts.userId,
+      ticketNumber: ticketLabel,
+      isWin: Boolean(details.isWin),
+      segmentId: winningSegmentId,
+      prizeLabel: spin.label || details.prizeName || wheelSegment?.label || null,
+      rewardType,
+      rewardValue: String(details.rewardValue ?? "0"),
+    });
+    await tx.insert(spinWins).values({
+      userId: opts.userId,
+      segmentId: winningSegmentId,
+      rewardType: rewardType as any,
+      rewardValue: String(details.rewardValue ?? "0"),
+      wonAt: new Date(),
+    });
   });
 
-  const spin = details.spin || {};
   return {
     handled: true,
     response: {
@@ -2127,12 +2146,23 @@ export async function revealAllControlledSpin(opts: {
   for (const ticket of pending) {
     const details: any = await frozenTicketDetails(ticket);
     await markTicketRevealed(ticket.id, false);
-    await db.insert(spinUsage).values({
-      orderId: opts.orderId,
-      userId: opts.userId,
-      usedAt: new Date(),
-    });
     const ticketNumber = playTicketLabel(ticket);
+    const rewardType =
+      details.rewardType === "points" || details.rewardType === "cash"
+        ? details.rewardType
+        : "lose";
+    await db.transaction(async (tx) => {
+      await insertSpinPlayRecord(tx, {
+        orderId: opts.orderId,
+        userId: opts.userId,
+        ticketNumber,
+        isWin: Boolean(details.isWin),
+        segmentId: details.spin?.segmentId || null,
+        prizeLabel: details.prizeName || null,
+        rewardType,
+        rewardValue: String(details.rewardValue ?? "0"),
+      });
+    });
     results.push({
       label: details.prizeName,
       type: details.rewardType,
@@ -2224,6 +2254,7 @@ export async function confirmControlledVoltz(opts: {
   }
   const details: any = await frozenTicketDetails(ticket);
   await markTicketRevealed(ticket.id, false);
+  const ticketLabel = playTicketLabel(ticket);
   await db.insert(voltzUsage).values({
     orderId: opts.orderId,
     userId: opts.userId,
@@ -2237,6 +2268,7 @@ export async function confirmControlledVoltz(opts: {
     rewardType: details.rewardType === "lose" ? "no_win" : details.rewardType,
     rewardValue: details.rewardValue,
     isWin: Boolean(details.isWin),
+    ticketNumber: ticketLabel,
     wonAt: new Date(),
   });
   return {
@@ -2246,6 +2278,7 @@ export async function confirmControlledVoltz(opts: {
       controlledPool: true,
       creditedAtSale: true,
       extraQuantity: 0,
+      ticketNumber: ticketLabel,
     },
   };
 }
@@ -2260,10 +2293,22 @@ export async function tryRevealControlledPlinko(opts: {
   if (!ticket) return { handled: true, noTickets: true, remaining: 0, total };
   const details: any = await frozenTicketDetails(ticket);
   await markTicketRevealed(ticket.id, false);
+  const ticketLabel = playTicketLabel(ticket);
   await db.insert(plinkoUsage).values({
     orderId: opts.orderId,
     userId: opts.userId,
     usedAt: new Date(),
+  });
+  await db.insert(plinkoWins).values({
+    orderId: opts.orderId,
+    userId: opts.userId,
+    prizeId: ticket.instantWinPrizeId || "controlled",
+    slotIndex: details.plinko?.slotIndex || 0,
+    rewardType: details.rewardType === "lose" ? "try_again" : details.rewardType,
+    rewardValue: String(details.rewardValue ?? "0"),
+    isWin: Boolean(details.isWin),
+    ticketNumber: ticketLabel,
+    wonAt: new Date(),
   });
   const user = await storage.getUser(opts.userId);
   return {
@@ -2279,6 +2324,7 @@ export async function tryRevealControlledPlinko(opts: {
       color: details.plinko?.color || "#eab308",
       freeReplay: false,
       segmentFreePlay: false,
+      ticketNumber: ticketLabel,
       playsRemaining: Math.max(0, remaining - 1),
       newBalance: user?.balance,
       newPoints: user?.ringtonePoints,
@@ -2305,10 +2351,22 @@ export async function revealAllControlledPlinko(opts: {
   for (const ticket of pending) {
     const details: any = await frozenTicketDetails(ticket);
     await markTicketRevealed(ticket.id, false);
+    const ticketLabel = playTicketLabel(ticket);
     await db.insert(plinkoUsage).values({
       orderId: opts.orderId,
       userId: opts.userId,
       usedAt: new Date(),
+    });
+    await db.insert(plinkoWins).values({
+      orderId: opts.orderId,
+      userId: opts.userId,
+      prizeId: ticket.instantWinPrizeId || "controlled",
+      slotIndex: details.plinko?.slotIndex || 0,
+      rewardType: details.rewardType === "lose" ? "try_again" : details.rewardType,
+      rewardValue: String(details.rewardValue ?? "0"),
+      isWin: Boolean(details.isWin),
+      ticketNumber: ticketLabel,
+      wonAt: new Date(),
     });
     if (details.rewardType === "cash") totalCashWon += Number(details.rewardValue || 0);
     if (details.rewardType === "points") totalPointsWon += Number(details.rewardValue || 0);
@@ -2319,7 +2377,7 @@ export async function revealAllControlledPlinko(opts: {
       rewardType: details.rewardType,
       isWin: Boolean(details.isWin),
       color: details.plinko?.color || "#eab308",
-      ticketNumber: playTicketLabel(ticket),
+      ticketNumber: ticketLabel,
     });
   }
 
@@ -2454,10 +2512,18 @@ export async function confirmControlledScratch(opts: {
   const { isWinner, prizeInfo } = scratchPrizeFromDetails(details);
 
   await markTicketRevealed(ticket.id, opts.isGuest);
-  await db.insert(scratchCardUsage).values({
-    orderId: opts.orderId,
-    userId: opts.userId,
-    usedAt: new Date(),
+  const ticketLabel = playTicketLabel(ticket);
+  await db.transaction(async (tx) => {
+    await insertScratchPlayRecord(tx, {
+      orderId: opts.orderId,
+      userId: opts.userId,
+      ticketNumber: ticketLabel,
+      isWin: isWinner,
+      prizeId: ticket.instantWinPrizeId || null,
+      prizeLabel: prizeInfo.label || null,
+      rewardType: prizeInfo.type || null,
+      rewardValue: String(prizeInfo.value ?? "0"),
+    });
   });
 
   const [usedRow] = await db
@@ -2632,6 +2698,7 @@ export async function tryRevealControlledRoyal(opts: {
   const coinsWon = royalCoinsFromDetails(details);
   const winSymbol = royalSymbolFromPrize(details);
   const reelStops = buildRoyalReelStops(isWin, winSymbol);
+  const ticketLabel = playTicketLabel(ticket);
   const cashValue =
     details.rewardType === "cash" && isWin
       ? parseFloat(String(details.rewardValue || 0)).toFixed(2)
@@ -2647,6 +2714,7 @@ export async function tryRevealControlledRoyal(opts: {
     rewardValue: isWin && details.rewardType === "points" ? String(details.rewardValue) : cashValue,
     prizeId: ticket.instantWinPrizeId || null,
     symbols: details.royal?.symbols || [],
+    ticketNumber: ticketLabel,
     usedAt: new Date(),
   });
 
