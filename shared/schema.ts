@@ -717,6 +717,13 @@ export const spinUsage = pgTable("spin_usage", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   orderId: uuid("order_id").notNull().references(() => orders.id),
   userId: varchar("user_id").notNull().references(() => users.id),
+  spinNumber: integer("spin_number"),
+  ticketNumber: varchar("ticket_number"),
+  isWin: boolean("is_win").default(false),
+  segmentId: text("segment_id"),
+  prizeLabel: text("prize_label"),
+  rewardType: varchar("reward_type"),
+  rewardValue: text("reward_value"),
   usedAt: timestamp("used_at").defaultNow(),
 });
 
@@ -745,6 +752,13 @@ export const scratchCardUsage = pgTable("scratch_card_usage", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   orderId: uuid("order_id").notNull().references(() => orders.id),
   userId: varchar("user_id").notNull().references(() => users.id),
+  cardNumber: integer("card_number"),
+  ticketNumber: varchar("ticket_number"),
+  isWin: boolean("is_win").default(false),
+  prizeId: text("prize_id"),
+  prizeLabel: text("prize_label"),
+  rewardType: varchar("reward_type"),
+  rewardValue: text("reward_value"),
   usedAt: timestamp("used_at").defaultNow(),
 });
 
@@ -847,6 +861,7 @@ export const popWins = pgTable("pop_wins", {
   rewardType: varchar("reward_type", { enum: ["cash", "physical" , "points", "try_again", "lose"] }).notNull(),
   rewardValue: text("reward_value").notNull(),
   isWin: boolean("is_win").default(false),
+  ticketNumber: varchar("ticket_number"),
   wonAt: timestamp("won_at").defaultNow(),
 });
 
@@ -899,6 +914,7 @@ export const plinkoWins = pgTable("plinko_wins", {
   rewardType: varchar("reward_type", { enum: ["cash","physical", "points", "try_again"] }).notNull(),
   rewardValue: text("reward_value").notNull(), // Amount won as string
   isWin: boolean("is_win").default(false), // True if won cash or points
+  ticketNumber: varchar("ticket_number"),
   wonAt: timestamp("won_at").defaultNow(),
 });
 
@@ -961,6 +977,7 @@ export const voltzWins = pgTable("voltz_wins", {
   rewardType: varchar("reward_type", { enum: ["cash", "points", "try_again", "no_win", "lose"] }).notNull(),
   rewardValue: text("reward_value").notNull(),
   isWin: boolean("is_win").default(false),
+  ticketNumber: varchar("ticket_number"),
   wonAt: timestamp("won_at").defaultNow(),
 });
 
@@ -997,6 +1014,7 @@ export const slotUsage = pgTable("slot_usage", {
   coinsWon: integer("coins_won").default(0),
   isWin: boolean("is_win").default(false),
   spinNumber: integer("spin_number").default(1),
+  ticketNumber: varchar("ticket_number"),
   usedAt: timestamp("used_at").defaultNow(),
 });
 
@@ -1036,6 +1054,7 @@ export const royalUsage = pgTable("royal_usage", {
   rewardType: varchar("reward_type").default("no_win"),
   rewardValue: text("reward_value").default("0"),
   symbols: jsonb("symbols"),
+  ticketNumber: varchar("ticket_number"),
   usedAt: timestamp("used_at").defaultNow(),
 });
 

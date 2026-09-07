@@ -15,6 +15,7 @@ export interface SlotSpinResult {
     coinsWon: number;
     coinsSpent: number;
     spinNumber: number;
+    ticketNumber?: string | null;
     usedAt: string;
   };
 }
@@ -142,6 +143,7 @@ export default function SlotGameComponent({
         coinsWon: data.coinsWon || 0,
         coinsSpent: creditsPerSpinRef.current,
         spinNumber: data.spinNumber,
+        ticketNumber: data.ticketNumber ?? null,
         usedAt: new Date().toISOString(),
       },
     };

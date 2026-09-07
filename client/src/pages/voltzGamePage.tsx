@@ -87,9 +87,8 @@ export default function VoltzGamePage() {
   useEffect(() => {
     if (orderData) {
       setRemainingPlays(orderData.playsRemaining || 0);
-            const serverHistory = orderData.history || [];
-      if (serverHistory.length > gameHistory.length) {
-        setGameHistory(serverHistory);
+      if (orderData.history?.length) {
+        setGameHistory(orderData.history);
       }
     }
   }, [orderData]);
