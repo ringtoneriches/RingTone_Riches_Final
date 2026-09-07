@@ -1,5 +1,38 @@
 import { randomInt } from "crypto";
 
+const POP_LOSE_DECOY_AMOUNTS = [
+  1, 2, 3, 5, 7, 10, 15, 20, 25, 30, 50, 75, 100, 150, 200, 250, 500, 750, 1000,
+];
+
+/** Three different decoy cash amounts for losing Pop balloons (order shuffled). */
+export function generateLosingBalloonValues(cashValues: number[] = []): number[] {
+  const pool = [
+    ...new Set(
+      cashValues
+        .map((v) => Math.round(Number(v) * 100) / 100)
+        .filter((v) => Number.isFinite(v) && v > 0),
+    ),
+  ];
+  const source = pool.length >= 2 ? pool : POP_LOSE_DECOY_AMOUNTS;
+
+  let vals: number[];
+  if (source.length >= 3) {
+    vals = pickDistinctRandom(source, 3);
+  } else {
+    const [a, b] = source;
+    const extra =
+      POP_LOSE_DECOY_AMOUNTS.find((v) => v !== a && v !== b) ??
+      Math.max(a, b) + Math.min(a, b);
+    vals = pickDistinctRandom([a, b, extra], 3);
+  }
+
+  for (let i = vals.length - 1; i > 0; i--) {
+    const j = randomInt(0, i + 1);
+    [vals[i], vals[j]] = [vals[j], vals[i]];
+  }
+  return vals;
+}
+
 /** Pick distinct values from `available` without replacement. */
 export function pickDistinctRandom(available: number[], count: number): number[] {
   const pool = available.slice();

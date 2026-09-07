@@ -2,6 +2,7 @@ import { playTicketLabel, insertScratchPlayRecord, insertSpinPlayRecord } from "
 import { planGroupActivation } from "@shared/instant-win-groups";
 import {
   allocateTicketSeqsInBlocks,
+  generateLosingBalloonValues,
   pickDistinctRandom,
 } from "./controlled-pool-allocation";
 import {
@@ -120,16 +121,45 @@ function displayNameFromUser(user?: {
   return name || user?.email || "Winner";
 }
 
-function shuffleThreeDifferent(base: number[] = [1, 5, 10]) {
-  const vals = [...base];
-  for (let i = vals.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [vals[i], vals[j]] = [vals[j], vals[i]];
+async function loadPopDecoyCashValues(tx: DbTx, competitionId: string): Promise<number[]> {
+  const prizeRows = await tx
+    .select({
+      value: instantWinPrizes.value,
+      rewardType: instantWinPrizes.rewardType,
+      competitionPrizeId: instantWinPrizes.competitionPrizeId,
+    })
+    .from(instantWinPrizes)
+    .where(eq(instantWinPrizes.competitionId, competitionId));
+
+  const values: number[] = [];
+  for (const row of prizeRows) {
+    if (row.rewardType === "cash") {
+      const n = Number(row.value);
+      if (Number.isFinite(n) && n > 0) values.push(Math.round(n * 100) / 100);
+    } else if (row.rewardType === "points") {
+      const pts = await resolveInstantWinValueNum(row, tx);
+      if (pts > 0) values.push(Math.round((pts / 100) * 100) / 100);
+    }
   }
-  if (vals[0] === vals[1]) vals[1] = vals[0] + 1;
-  if (vals[1] === vals[2]) vals[2] = vals[1] + 2;
-  if (vals[0] === vals[2]) vals[2] = vals[0] + 3;
-  return vals.slice(0, 3);
+
+  if (values.length >= 2) return values;
+
+  const tableRows = await tx
+    .select({
+      prizeValue: competitionPrizes.prizeValue,
+      ringtonePoints: competitionPrizes.ringtonePoints,
+    })
+    .from(competitionPrizes)
+    .where(eq(competitionPrizes.competitionId, competitionId));
+
+  for (const row of tableRows) {
+    const cash = Number(row.prizeValue || 0);
+    if (cash > 0) values.push(Math.round(cash * 100) / 100);
+    const pts = Number(row.ringtonePoints || 0);
+    if (pts > 0) values.push(Math.round((pts / 100) * 100) / 100);
+  }
+
+  return values;
 }
 
 export async function getMaxTicketsPerOrder(): Promise<number> {
@@ -454,10 +484,11 @@ function buildPrizeDetails(
     value: string | number;
     rewardType: string;
   } | null,
-  valueNumOverride?: number
+  valueNumOverride?: number,
+  losingBalloonValues?: number[],
 ) {
   if (!prize) {
-    const balloonValues = shuffleThreeDifferent();
+    const balloonValues = losingBalloonValues ?? generateLosingBalloonValues();
     return {
       creditedAtSale: true,
       isWin: false,
@@ -671,9 +702,10 @@ async function freezeIssuedTicket(
     )
     .limit(1);
 
+  const decoyCashValues = matchingPrize ? [] : await loadPopDecoyCashValues(tx, opts.competitionId);
   const details = matchingPrize
     ? buildPrizeDetails(matchingPrize, await resolveInstantWinValueNum(matchingPrize, tx))
-    : buildPrizeDetails(null);
+    : buildPrizeDetails(null, undefined, generateLosingBalloonValues(decoyCashValues));
   const isWin = Boolean(matchingPrize);
   const prizeAmount = matchingPrize
     ? String(details.rewardValue)

@@ -158,6 +158,7 @@ import {
   tryRevealControlledRoyal,
   getPublicPrizePool,
 } from "./services/instant-win-pool";
+import { generateLosingBalloonValues } from "./services/controlled-pool-allocation";
 import {
   onTablePrizeCreated,
   onTablePrizeDeleted,
@@ -15777,19 +15778,9 @@ app.post("/api/play-pop", async (req: any, res) => {
     else {
       const cashVals = activeSegments
         .filter((s: any) => s.rewardType === "cash")
-        .map((s: any) => parseFloat(s.rewardValue?.toString() || "1"));
-
-      if (cashVals.length >= 2) {
-        let v1 = cashVals[Math.floor(Math.random() * cashVals.length)];
-        let v2 = cashVals[Math.floor(Math.random() * cashVals.length)];
-        let v3 = cashVals[Math.floor(Math.random() * cashVals.length)];
-        if (v1 === v2 && v2 === v3) {
-          v3 = cashVals.find((v) => v !== v1) || v1 + 1;
-        }
-        balloonValues = [v1, v2, v3];
-      } else {
-        balloonValues = [1, 5, 10];
-      }
+        .map((s: any) => parseFloat(s.rewardValue?.toString() || "0"))
+        .filter((v) => Number.isFinite(v) && v > 0);
+      balloonValues = generateLosingBalloonValues(cashVals);
     }
 
     // ============================================
@@ -16180,23 +16171,11 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
             updatedAt: new Date(),
           });
         } else {
-          // Lose: generate random non-matching balloon values using ONLY active cash segments
           const cashValues = activeSegments
             .filter((s) => s.rewardType === "cash")
-            .map((s) => parseFloat(s.rewardValue?.toString() || "1"));
-          if (cashValues.length >= 2) {
-            let val1 =
-              cashValues[Math.floor(Math.random() * cashValues.length)];
-            let val2 =
-              cashValues[Math.floor(Math.random() * cashValues.length)];
-            let val3 =
-              cashValues[Math.floor(Math.random() * cashValues.length)];
-            if (val1 === val2 && val2 === val3)
-              val3 = cashValues.find((v) => v !== val1) || val1 + 1;
-            balloonValues = [val1, val2, val3];
-          } else {
-            balloonValues = [1, 5, 10];
-          }
+            .map((s) => parseFloat(s.rewardValue?.toString() || "0"))
+            .filter((v) => Number.isFinite(v) && v > 0);
+          balloonValues = generateLosingBalloonValues(cashValues);
         }
 
         // Record pop usage
