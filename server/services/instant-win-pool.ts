@@ -10,6 +10,10 @@ import {
   scratchDisplayImages,
   scratchPrizeFromDetails,
 } from "./scratch-controlled-layout";
+import {
+  buildRoyalReelStops,
+  royalSymbolFromPrize,
+} from "./royal-controlled-layout";
 import { instantWinValueFromTablePrize } from "./instant-win-prize-value";
 import { notifyPublicWinnerUpdate } from "./record-game-winner";
 import { randomInt, randomBytes } from "crypto";
@@ -2626,6 +2630,8 @@ export async function tryRevealControlledRoyal(opts: {
   const details: any = await frozenTicketDetails(ticket);
   const isWin = Boolean(details.isWin);
   const coinsWon = royalCoinsFromDetails(details);
+  const winSymbol = royalSymbolFromPrize(details);
+  const reelStops = buildRoyalReelStops(isWin, winSymbol);
   const cashValue =
     details.rewardType === "cash" && isWin
       ? parseFloat(String(details.rewardValue || 0)).toFixed(2)
@@ -2662,10 +2668,12 @@ export async function tryRevealControlledRoyal(opts: {
         rewardValue: isWin ? String(details.rewardValue ?? "0") : "0",
         prizeId: ticket.instantWinPrizeId,
         prizeName: details.prizeName,
-        winSymbol: details.royal?.winSymbol || null,
+        winSymbol: winSymbol || details.royal?.winSymbol || null,
         symbols: details.royal?.symbols || [],
         royalReplay: false,
       },
+      reelStops,
+      winSymbol: winSymbol || null,
       coinsWon,
       isWin,
       ticketNumber: playTicketLabel(ticket),

@@ -24,15 +24,13 @@
     <script src="js/phaser.js"></script>
 </head>
 <body>
-    <script src="js/slotConfigRoyalReels.js?v=restore1"></script>
+    <script src="js/slotConfigRoyalReels.js?v=royal-symbols2"></script>
     <script src="js/mkutils.js"></script>
     <script src="js/popups.js"></script>
     <script src="js/state_machine.js"></script>
     <script src="js/slot_classes.js"></script>
-    <script src="js/slotGame.js?v=restore1"></script>
+    <script src="js/slotGame.js?v=royal-symbols2"></script>
     <script>
-        // Override loadSceneConfig to use the Royal Reels config
-        // This runs AFTER slotGame.js defines the class but BEFORE window.onload fires
         (function() {
             var _orig = SlotGame.prototype.loadSceneConfig;
             SlotGame.prototype.loadSceneConfig = function() {
@@ -41,7 +39,56 @@
                     var params = new URLSearchParams(window.location.search);
                     var credits = parseInt(params.get('credits') || '0');
                     if (credits > 0) slotConfig.defaultCoins = credits;
-                } catch(e) {}
+                } catch (e) {}
+            };
+        })();
+
+        (function() {
+            var params = new URLSearchParams(window.location.search);
+            var controlledRoyal = params.get('controlled') === '1';
+            if (!controlledRoyal) return;
+
+            var serverPayload = null;
+            var waitingForServer = false;
+
+            window.addEventListener('message', function(event) {
+                if (!event.data || event.data.type !== 'royalControlledSpin') return;
+                serverPayload = event.data;
+                waitingForServer = false;
+                if (window.slotGame && typeof window.slotGame.runSlot === 'function') {
+                    window.slotGame.runSlot();
+                }
+            });
+
+            window.postRoyalSpinResult = function(isWin, coinsWon, balance) {
+                if (!window.parent || window.parent === window) return;
+                var payload = serverPayload;
+                window.parent.postMessage({
+                    type: 'slotSpinResult',
+                    isWin: payload ? !!payload.isWin : !!isWin,
+                    coinsWon: payload ? Number(payload.coinsWon || 0) : Number(coinsWon || 0),
+                    balance: balance,
+                    controlledPool: true,
+                }, '*');
+                serverPayload = null;
+                if (slotConfig) slotConfig.reels_simulate = null;
+            };
+
+            var _origRunSlot = SlotGame.prototype.runSlot;
+            SlotGame.prototype.runSlot = function() {
+                if (serverPayload) {
+                    slotConfig.reels_simulate = slotConfigRoyalReels.reelStopsFromOutcome(
+                        serverPayload.isWin,
+                        serverPayload.winSymbol,
+                        serverPayload.reelStops
+                    );
+                    return _origRunSlot.call(this);
+                }
+                if (waitingForServer) return;
+                waitingForServer = true;
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({ type: 'royalSpinRequest' }, '*');
+                }
             };
         })();
     </script>
