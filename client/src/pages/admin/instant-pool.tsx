@@ -359,10 +359,18 @@ export default function AdminInstantPool() {
   };
 
   useEffect(() => {
-    setBlockSizeInput(
-      selectedComp?.ticketBlockSize ? String(selectedComp.ticketBlockSize) : ""
-    );
-  }, [selectedComp?.id, selectedComp?.ticketBlockSize]);
+    if (!selectedComp) {
+      setBlockSizeInput("");
+      return;
+    }
+    if (selectedComp.ticketBlockSize) {
+      setBlockSizeInput(String(selectedComp.ticketBlockSize));
+    } else if (selectedComp.maxTickets) {
+      setBlockSizeInput(String(selectedComp.maxTickets));
+    } else {
+      setBlockSizeInput("");
+    }
+  }, [selectedComp?.id, selectedComp?.ticketBlockSize, selectedComp?.maxTickets]);
 
   const visibleCompetitions = useMemo(() => {
     const q = compSearch.trim().toLowerCase();
@@ -560,9 +568,15 @@ export default function AdminInstantPool() {
                 </>
               )}
             </div>
-            {selectedComp && !isInstantDraw && selectedComp.instantWinMode === "controlled_pool" && (
+            {selectedComp && !isInstantDraw && (
               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] items-end">
-                {!hasConfiguredBlockSize && (
+                {!isControlled && (
+                  <p className="md:col-span-2 text-sm text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
+                    Enter a sale block size below, then switch to <span className="text-amber-200">Controlled pool</span> above
+                    or use the button. Match max tickets for one full pool with no chunks.
+                  </p>
+                )}
+                {isControlled && !hasConfiguredBlockSize && (
                   <p className="md:col-span-2 text-sm text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
                     Controlled pool needs a sale block size before tickets can be sold. Set one below and save.
                   </p>
@@ -578,10 +592,15 @@ export default function AdminInstantPool() {
                     required
                     value={blockSizeInput}
                     onChange={(e) => setBlockSizeInput(e.target.value)}
-                    placeholder="e.g. 1000"
+                    placeholder={
+                      selectedComp.maxTickets
+                        ? `e.g. ${selectedComp.maxTickets} (full pool)`
+                        : "e.g. 1000"
+                    }
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Required for controlled pool. Pool stays 1–{selectedComp.maxTickets || "N"}. Customers get random unused numbers within each block (e.g. 1000 → first sales random in 1–1000, then 1001–2000, and so on).
+                    Required for controlled pool. Pool stays 1–{selectedComp.maxTickets || "N"}.
+                    Use the same number as max tickets for one block across the full range.
                   </p>
                 </div>
                 <Button
@@ -595,7 +614,7 @@ export default function AdminInstantPool() {
                     });
                   }}
                 >
-                  Save block size
+                  {isControlled ? "Save block size" : "Switch to controlled pool"}
                 </Button>
               </div>
             )}
