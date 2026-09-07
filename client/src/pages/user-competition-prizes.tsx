@@ -30,6 +30,7 @@ interface Prize {
   prizeName: string;
   prizeValue: number;
   ringtonePoints?: number;
+  rewardType?: string;
   totalQuantity: number;
   remainingQuantity: number;
   createdAt?: string;
@@ -51,6 +52,7 @@ interface PrizeGroup {
   prizeName: string;
   prizeValue: number;
   ringtonePoints?: number;
+  rewardType?: string;
   totalQuantity: number;
   remainingQuantity: number;
   wonCount: number;
@@ -84,11 +86,12 @@ interface UserCompetitionPrizesProps {
   competitionName?: string;
 }
 
-const getPrizeIcon = (prizeName: string, value: number) => {
+const getPrizeIcon = (prizeName: string, value: number, ringtonePoints = 0) => {
   const name = prizeName.toLowerCase();
-  if (name.includes("gold") || name.includes("platinum") || value > 1000) return <Crown className="h-5 w-5 text-[#F1D47A] sm:h-8 sm:w-8" />;
-  if (name.includes("silver") || value > 500) return <Gem className="h-5 w-5 text-[#D4AF37] sm:h-8 sm:w-8" />;
-  if (name.includes("bronze") || value > 250) return <Award className="h-5 w-5 text-[#C8102E] sm:h-8 sm:w-8" />;
+  const displayValue = ringtonePoints > 0 && value <= 0 ? ringtonePoints / 100 : value;
+  if (name.includes("gold") || name.includes("platinum") || displayValue > 1000) return <Crown className="h-5 w-5 text-[#F1D47A] sm:h-8 sm:w-8" />;
+  if (name.includes("silver") || displayValue > 500) return <Gem className="h-5 w-5 text-[#D4AF37] sm:h-8 sm:w-8" />;
+  if (name.includes("bronze") || displayValue > 250) return <Award className="h-5 w-5 text-[#C8102E] sm:h-8 sm:w-8" />;
   return <Trophy className="h-5 w-5 text-[#F1D47A] sm:h-8 sm:w-8" />;
 };
 
@@ -105,10 +108,24 @@ const formatNumber = (num: number) => {
   return num.toLocaleString();
 };
 
-function getPrizeOfferLabel(prize: { prizeValue: number; ringtonePoints?: number }) {
+function isPointsPrize(prize: { prizeValue: number; ringtonePoints?: number; rewardType?: string }) {
   const points = Number(prize.ringtonePoints || 0);
   const cash = Number(prize.prizeValue || 0);
-  if (points > 0 && cash <= 0) {
+  return prize.rewardType === "points" || (points > 0 && cash <= 0);
+}
+
+function getPrizeSortValue(prize: { prizeValue: number; ringtonePoints?: number; rewardType?: string }) {
+  const points = Number(prize.ringtonePoints || 0);
+  if (isPointsPrize(prize) && points > 0) {
+    return points / 100;
+  }
+  return Number(prize.prizeValue || 0);
+}
+
+function getPrizeOfferLabel(prize: { prizeValue: number; ringtonePoints?: number; rewardType?: string }) {
+  const points = Number(prize.ringtonePoints || 0);
+  const cash = Number(prize.prizeValue || 0);
+  if (isPointsPrize(prize) && points > 0) {
     return { amount: points.toLocaleString(), suffix: "Ringtone Points" };
   }
   return { amount: `£${cash.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, suffix: "value" };
@@ -294,6 +311,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
           ...group,
           prizeValue: Number(group.prizeValue),
           ringtonePoints: Number(group.ringtonePoints || 0),
+          rewardType: group.rewardType,
           totalQuantity: Number(group.totalQuantity ?? 1),
           remainingQuantity: Number(group.remainingQuantity ?? 0),
           wonCount: Number(group.wonCount ?? 0),
@@ -335,7 +353,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
   const sortedPrizes = useMemo(() => {
     return [...prizes]
       .filter(prize => prize.totalQuantity > 0)
-      .sort((a, b) => b.prizeValue - a.prizeValue);
+      .sort((a, b) => getPrizeSortValue(b) - getPrizeSortValue(a));
   }, [prizes]);
 
   if (isLoading || ticketLoading) {
@@ -376,6 +394,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
                 prizeName: (item as PrizeGroup).prizeName,
                 prizeValue: (item as PrizeGroup).prizeValue,
                 ringtonePoints: (item as PrizeGroup).ringtonePoints,
+                rewardType: (item as PrizeGroup).rewardType,
                 totalQuantity: (item as PrizeGroup).totalQuantity,
                 remainingQuantity: (item as PrizeGroup).remainingQuantity,
               }
@@ -402,7 +421,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
               
               {/* Prize Icon */}
               <div className="absolute right-3 top-3 sm:right-4 sm:top-4">
-                {getPrizeIcon(prize.prizeName, prize.prizeValue)}
+                {getPrizeIcon(prize.prizeName, prize.prizeValue, prize.ringtonePoints)}
               </div>
               
               <CardHeader className="space-y-1.5 p-4 pr-11 sm:p-6 sm:pr-14">
