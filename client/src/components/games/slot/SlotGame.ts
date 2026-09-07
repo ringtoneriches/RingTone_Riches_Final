@@ -1,5 +1,5 @@
 import { Scene } from "phaser";
-import { ALL_SYM_KEYS } from "./Preload";
+import { ALL_SYM_KEYS, ROYAL_SPIN_KEYS, chooseWinSymbolKey } from "./symbols";
 
 export interface SpinResult {
   isWin: boolean;
@@ -13,9 +13,7 @@ export interface SlotCallbacks {
   onNoSpinsLeft?: () => void;
 }
 
-const ACTIVE_SYMS = [
-  "sym_coin", "sym_tomato", "sym_apple", "sym_pts750", "sym_pts1000",
-];
+const ACTIVE_SYMS = [...ROYAL_SPIN_KEYS];
 
 export class SlotGame extends Scene {
   private W = 0;
@@ -651,17 +649,7 @@ private stopReels(result: SpinResult) {
   }
 
   private chooseWinSym(result: SpinResult): string {
-    if (result.prizeType === "points") return result.coinsWon >= 1000 ? "sym_pts1000" : "sym_pts750";
-    const v = result.coinsWon;
-    if (v >= 1000) return "sym_diamond";
-    if (v >= 500)  return "sym_star";
-    if (v >= 80)   return "sym_orange";
-    if (v >= 50)   return "sym_cherry";
-    if (v >= 25)   return "sym_banana";
-    if (v >= 5)    return "sym_grape";
-    if (v >= 3)    return "sym_apple";
-    if (v >= 2)    return "sym_tomato";
-    return "sym_coin";
+    return chooseWinSymbolKey(result);
   }
 
   // ──────────────────────── Result display ────────────────────────

@@ -93,7 +93,7 @@ import SlotBilling from "./pages/slotBilling";
 import RoyalGamePage from "./pages/royalGamePage";
 import RoyalBilling from "./pages/royalBilling";
 import AdminSlotMachine from "./pages/admin/slot-machine";
-import AdminRoyalReels from "./pages/admin/royal-reels";
+// import AdminRoyalReels from "./pages/admin/royal-reels";
 import AdminRoyalReelsSettings from "./pages/admin/admin-royal-reels";
 import AdminSlotMachineSettings from "./pages/admin/admin-slot-machine";
 import AdminBulkPoints from "./pages/admin/admin-bulk-points";
@@ -207,7 +207,8 @@ function Router() {
       <Route path="/admin/winners" component={AdminAddWinner} />
       <Route path="/admin/slot" component={AdminSlotGame} />
       <Route path="/admin/slot-game/settings" component={AdminSlotMachine} />
-      <Route path="/admin/royal" component={AdminRoyalReels} />
+      {/* Royal Reels admin hidden until UI is fixed — use Ringtone Slot instead */}
+      {/* <Route path="/admin/royal" component={AdminRoyalReels} /> */}
       {/* <Route path="/admin/royal-reels/settings" component={AdminRoyalReelsSettings} />
       <Route path="/admin/slot-machine/settings" component={AdminSlotMachineSettings} /> */}
       <Route path="/admin/bulk-points" component={AdminBulkPoints } />

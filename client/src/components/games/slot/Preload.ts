@@ -1,21 +1,11 @@
 import { Scene } from "phaser";
+import {
+  ALL_SYM_KEYS,
+  generateEmojiSymbolTextures,
+  IMAGE_SYMBOLS,
+} from "./symbols";
 
-export const SYMBOL_KEYS = [
-  { key: "sym_coin",      file: "Coin £1.png" },
-  { key: "sym_tomato",    file: "Tomato £2.png" },
-  { key: "sym_apple",     file: "Apple £3.png" },
-  { key: "sym_bell",      file: "Bell £4.png" },
-  { key: "sym_grape",     file: "Grape £5.png" },
-  { key: "sym_banana",    file: "Banana £25.png" },
-  { key: "sym_cherry",    file: "Cherry £50.png" },
-  { key: "sym_orange",    file: "Orange £80.png" },
-  { key: "sym_star",      file: "Star £100.png" },
-  { key: "sym_diamond",   file: "Diamond £1000.png" },
-  { key: "sym_pts750",    file: "750 Points.png" },
-  { key: "sym_pts1000",   file: "1000 Points.png" },
-];
-
-export const ALL_SYM_KEYS = SYMBOL_KEYS.map((s) => s.key);
+export { ALL_SYM_KEYS } from "./symbols";
 
 export class Preload extends Scene {
   constructor() {
@@ -54,24 +44,17 @@ export class Preload extends Scene {
 
     this.load.setPath("/slotmachine");
 
-    // ── Core machine visuals ──
-    // NOTE: keys below MUST match what SlotGame.tsx calls this.add.image(x, y, "KEY") with.
     this.load.image("slot", "png/SlotMachine.webp");
     this.load.image("logo", "png/BrandLogo.webp");
     this.load.image("background", "png/Background_2.webp");
     this.load.image("reel", "png/Reel3x3.webp");
-
-    // Lamps — were missing entirely before, which is why lampOn/lampOff never showed.
     this.load.image("lamp_on", "png/red/LampOn.png");
     this.load.image("lamp_off", "png/red/LampOff.png");
 
-    // ── Symbols ──
-    SYMBOL_KEYS.forEach(({ key, file }) => {
+    IMAGE_SYMBOLS.forEach(({ key, file }) => {
       this.load.image(key, `png/Symbols/${file.replace(/\.png$/i, ".webp")}`);
     });
 
-    // ── Audio ──
-    // NOTE: keys below MUST match this.sound.add("KEY") calls in SlotGame.tsx's initSounds().
     this.load.audio("spin_clip", ["audio/spin_sound.wav"]);
     this.load.audio("win_clip", ["audio/mixkit_win.wav"]);
     this.load.audio("lose_clip", ["audio/lose.wav"]);
@@ -80,6 +63,8 @@ export class Preload extends Scene {
   }
 
   create() {
+    generateEmojiSymbolTextures(this);
+
     const linear = Phaser.Textures.FilterMode.LINEAR;
     for (const key of ["slot", "background", "reel", "logo", ...ALL_SYM_KEYS]) {
       if (this.textures.exists(key)) {
