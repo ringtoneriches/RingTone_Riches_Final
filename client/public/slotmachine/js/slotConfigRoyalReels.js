@@ -8,6 +8,9 @@ var RR_TEMP_CABINET = false;
 var RR_CAB_IMG_W = 963;
 var RR_CAB_IMG_H = 1024;
 
+/** Owner launch set — keep in sync with server/services/royal-controlled-layout.ts */
+var ROYAL_SYMBOL_TAPE = ['RCoin','RBell','RCherry','RBar','RStar','RDice','RSeven','RDiamond','RTrophy','RCrown'];
+
 var slotConfigRoyalReels = {
     slotTextColor : 0xD4AF37,   // gold text
 
@@ -23,8 +26,8 @@ var slotConfigRoyalReels = {
     lineColor : 0xFFD700,
 
     lineBetMaxValue: 20,
-    useWild: true,
-    wild: 'RWild',
+    useWild: false,
+    wild: 'RCrown',
     useScatter: false,
     scatter: 'Scatter',
     selectedLines: 'all',
@@ -90,32 +93,29 @@ var slotConfigRoyalReels = {
     ],
 
     symbols: [
-        // Royal symbols — blurred versions are duplicates (static during spin is fine)
-        { fileName: 'RCoin.png',        name: 'RCoin',        fileNameBlurred: 'RCoinBlurred.png',        animation: null, useWildSubstitute: true  },
-        { fileName: 'RApple.png',       name: 'RApple',       fileNameBlurred: 'RAppleBlurred.png',       animation: null, useWildSubstitute: true  },
-        { fileName: 'RTomato.png',      name: 'RTomato',      fileNameBlurred: 'RTomatoBlurred.png',      animation: null, useWildSubstitute: true  },
-        { fileName: 'RBell.png',        name: 'RBell',        fileNameBlurred: 'RBellBlurred.png',        animation: null, useWildSubstitute: true  },
-        { fileName: 'RGrape.png',       name: 'RGrape',       fileNameBlurred: 'RGrapeBlurred.png',       animation: null, useWildSubstitute: true  },
-        { fileName: 'RCherry.png',      name: 'RCherry',      fileNameBlurred: 'RCherryBlurred.png',      animation: null, useWildSubstitute: true  },
-        { fileName: 'RStar.png',        name: 'RStar',        fileNameBlurred: 'RStarBlurred.png',        animation: null, useWildSubstitute: true  },
-        { fileName: 'RDice.png',        name: 'RDice',        fileNameBlurred: 'RDiceBlurred.png',        animation: null, useWildSubstitute: true  },
-        { fileName: 'RSeven.png',       name: 'RSeven',       fileNameBlurred: 'RSevenBlurred.png',       animation: null, useWildSubstitute: true  },
-        { fileName: 'RDiamond.png',     name: 'RDiamond',     fileNameBlurred: 'RDiamondBlurred.png',     animation: null, useWildSubstitute: true  },
-        { fileName: 'RTrophy.png',      name: 'RTrophy',      fileNameBlurred: 'RTrophyBlurred.png',      animation: null, useWildSubstitute: true  },
-        { fileName: 'RWild.png',        name: 'RWild',        fileNameBlurred: 'RWildBlurred.png',        animation: null, useWildSubstitute: false },
+        { fileName: 'RCoin.png',           name: 'RCoin',    fileNameBlurred: 'RCoin.png',           animation: null, useWildSubstitute: false },
+        { fileName: 'RBell.png',           name: 'RBell',    fileNameBlurred: 'RBell.png',           animation: null, useWildSubstitute: false },
+        { fileName: 'RCherry.png',         name: 'RCherry',  fileNameBlurred: 'RCherry.png',         animation: null, useWildSubstitute: false },
+        { fileName: 'Bar £750.png',        name: 'RBar',     fileNameBlurred: 'Bar £750.png',        animation: null, useWildSubstitute: false },
+        { fileName: 'RStar.png',           name: 'RStar',    fileNameBlurred: 'RStar.png',           animation: null, useWildSubstitute: false },
+        { fileName: 'RDice.png',           name: 'RDice',    fileNameBlurred: 'RDice.png',           animation: null, useWildSubstitute: false },
+        { fileName: 'RSeven.png',          name: 'RSeven',   fileNameBlurred: 'RSeven.png',          animation: null, useWildSubstitute: false },
+        { fileName: 'RDiamond.png',        name: 'RDiamond', fileNameBlurred: 'RDiamond.png',        animation: null, useWildSubstitute: false },
+        { fileName: 'RTrophy.png',         name: 'RTrophy',  fileNameBlurred: 'RTrophy.png',         animation: null, useWildSubstitute: false },
+        { fileName: 'Crown £5000.png',     name: 'RCrown',   fileNameBlurred: 'Crown £5000.png',     animation: null, useWildSubstitute: false },
     ],
 
     reels: [
         {
-            symbolImages: ['RCoin','RBell','RCherry','RStar','RApple','RTomato','RDice','RGrape','RSeven','RDiamond','RCherry','RTrophy'],
+            symbolImages: ROYAL_SYMBOL_TAPE.slice(),
             offsetX: -233, offsetY: -166, windowImage: 'reel', windowsCount: 3, addSpinTime: 0,
         },
         {
-            symbolImages: ['RBell','RCoin','RStar','RCherry','RDiamond','RApple','RTomato','RWild','RSeven','RTrophy','RGrape','RDice','RTrophy','RSeven','RBell','RWild'],
+            symbolImages: ROYAL_SYMBOL_TAPE.slice(),
             offsetX: 0, offsetY: -166, windowImage: 'reel', windowsCount: 3, addSpinTime: 100,
         },
         {
-            symbolImages: ['RStar','RDiamond','RCherry','RBell','RTrophy','RCoin','RSeven','RApple','RGrape','RTomato','RWild','RDice','RTrophy','RStar','RWild'],
+            symbolImages: ROYAL_SYMBOL_TAPE.slice(),
             offsetX: 235, offsetY: -166, windowImage: 'reel', windowsCount: 3, addSpinTime: 200,
         }
     ],
@@ -129,18 +129,31 @@ var slotConfigRoyalReels = {
 
     payLines: [
         { line: ['RCoin',    'RCoin',    'RCoin'   ], pay: 2,   freeSpins: 0 },
-        { line: ['RApple',   'RApple',   'RApple'  ], pay: 3,   freeSpins: 0 },
-        { line: ['RTomato',  'RTomato',  'RTomato' ], pay: 5,   freeSpins: 0 },
         { line: ['RBell',    'RBell',    'RBell'   ], pay: 8,   freeSpins: 0 },
-        { line: ['RGrape',   'RGrape',   'RGrape'  ], pay: 10,  freeSpins: 0 },
         { line: ['RCherry',  'RCherry',  'RCherry' ], pay: 12,  freeSpins: 0 },
+        { line: ['RBar',     'RBar',     'RBar'    ], pay: 20,  freeSpins: 0 },
         { line: ['RStar',    'RStar',    'RStar'   ], pay: 20,  freeSpins: 0 },
         { line: ['RDice',    'RDice',    'RDice'   ], pay: 30,  freeSpins: 0 },
         { line: ['RSeven',   'RSeven',   'RSeven'  ], pay: 50,  freeSpins: 0 },
         { line: ['RDiamond', 'RDiamond', 'RDiamond'], pay: 100, freeSpins: 0 },
         { line: ['RTrophy',  'RTrophy',  'RTrophy' ], pay: 250, freeSpins: 0 },
-        { line: ['RWild',    'RWild',    'RWild'   ], pay: 500, freeSpins: 5 },
+        { line: ['RCrown',   'RCrown',   'RCrown'  ], pay: 500, freeSpins: 0 },
     ],
+
+    reelStopForMiddleSymbol: function(symbolName) {
+        var idx = ROYAL_SYMBOL_TAPE.indexOf(symbolName);
+        if (idx < 0) return 0;
+        return (idx - 1 + ROYAL_SYMBOL_TAPE.length) % ROYAL_SYMBOL_TAPE.length;
+    },
+
+    reelStopsFromOutcome: function(isWin, winSymbol, reelStops) {
+        if (Array.isArray(reelStops) && reelStops.length === 3) return reelStops;
+        if (isWin && winSymbol) {
+            var stop = this.reelStopForMiddleSymbol(winSymbol);
+            return [stop, stop, stop];
+        }
+        return [0, 1, 2];
+    },
 
     createSlotGraphic: function(scene) {
         scene.lampsArray = [];
@@ -332,35 +345,33 @@ var slotConfigRoyalReels = {
         linesContainer.add(popup.scene.add.sprite(0,-305,'paylines_title').setOrigin(0.5));
         linesContainer.add(popup.scene.add.sprite(0,30,'paylines_table').setOrigin(0.5));
 
-        // Lower symbols (coin, apple, tomato, bell, grape, cherry)
+        // Points + lower cash tiers
         let minorContainer = popup.scene.add.container(0, 0+offsetY);
         containers.push(minorContainer); popup.add(minorContainer);
         minorContainer.add(popup.scene.add.sprite(0,-305,'minor_title').setOrigin(0.5));
         let r1=-130, r2=r1+270, c1=-420, cd=470, c2=c1+cd, c3=c2+cd;
         createSymbolPlate3x(popup,minorContainer,'symbol_plate','RCoin',   c1,r1,2);
-        createSymbolPlate3x(popup,minorContainer,'symbol_plate','RApple',  c2,r1,3);
-        createSymbolPlate3x(popup,minorContainer,'symbol_plate','RTomato', c3,r1,5);
-        createSymbolPlate3x(popup,minorContainer,'symbol_plate','RBell',   c1+0.5*cd,r2,8);
-        createSymbolPlate3x(popup,minorContainer,'symbol_plate','RGrape',  c2+0.5*cd,r2,10);
+        createSymbolPlate3x(popup,minorContainer,'symbol_plate','RBell',   c2,r1,8);
+        createSymbolPlate3x(popup,minorContainer,'symbol_plate','RCherry', c3,r1,12);
+        createSymbolPlate3x(popup,minorContainer,'symbol_plate','RBar',    c1+0.5*cd,r2,20);
+        createSymbolPlate3x(popup,minorContainer,'symbol_plate','RStar',   c2+0.5*cd,r2,20);
         minorContainer.visible = false;
 
-        // Higher symbols
+        // Higher cash tiers
         let majorContainer = popup.scene.add.container(0, 0+offsetY);
         containers.push(majorContainer); popup.add(majorContainer);
         majorContainer.add(popup.scene.add.sprite(0,-305,'major_title').setOrigin(0.5));
-        createSymbolPlate3x(popup,majorContainer,'symbol_plate','RCherry',  c1,r1,12);
-        createSymbolPlate3x(popup,majorContainer,'symbol_plate','RStar',    c2,r1,20);
-        createSymbolPlate3x(popup,majorContainer,'symbol_plate','RDice',    c3,r1,30);
-        createSymbolPlate3x(popup,majorContainer,'symbol_plate','RSeven',   c1+0.5*cd,r2,50);
-        createSymbolPlate3x(popup,majorContainer,'symbol_plate','RDiamond', c2+0.5*cd,r2,100);
+        createSymbolPlate3x(popup,majorContainer,'symbol_plate','RDice',    c1,r1,30);
+        createSymbolPlate3x(popup,majorContainer,'symbol_plate','RSeven',   c2,r1,50);
+        createSymbolPlate3x(popup,majorContainer,'symbol_plate','RDiamond', c3,r1,100);
+        createSymbolPlate3x(popup,majorContainer,'symbol_plate','RTrophy',  c1+0.5*cd,r2,250);
         majorContainer.visible = false;
 
-        // Special: Trophy + Wild (Royal Replay)
+        // Jackpot crown
         let specialContainer = popup.scene.add.container(0, 0+offsetY);
         containers.push(specialContainer); popup.add(specialContainer);
         specialContainer.add(popup.scene.add.sprite(0,-305,'special_title').setOrigin(0.5));
-        createSymbolPlate3x(popup,specialContainer,'symbol_plate','RTrophy',c1+0.5*cd,r1,250);
-        createSpecSymbolPlate(popup,specialContainer,'specsymbol_plate','RWild',c2+0.5*cd,100,'Crown (Wild)\nsubstitutes any\nsymbol & triggers\nROYAL REPLAY\n(5 free spins)');
+        createSymbolPlate3x(popup,specialContainer,'symbol_plate','RCrown',c1+0.5*cd,r1,500);
         specialContainer.visible = false;
 
         // nav dots

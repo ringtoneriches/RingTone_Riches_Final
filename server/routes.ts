@@ -21926,6 +21926,8 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
           isRoyalReplay: false,
           ticketNumber: royal.ticketNumber,
           prizeName: royal.result?.prizeName,
+          winSymbol: royal.winSymbol || royal.result?.winSymbol || null,
+          reelStops: royal.reelStops || null,
           playsRemaining: royal.playsRemaining,
         });
       }

@@ -51,8 +51,58 @@ export default function RoyalGamePage() {
 
   const order = orderData?.order;
   const competition = orderData?.competition;
+  const isControlled = competition?.instantWinMode === "controlled_pool";
   const totalCredits = orderData?.totalCredits || 0;
   const creditsPerGame = orderData?.creditsPerGame || 100;
+
+  const applySpinResult = useCallback((body: any, coinsSpent = creditsPerGame) => {
+    const serverSpinNumber = body.spinNumber ?? spinCountRef.current;
+    const newEntry = {
+      id: `local-${serverSpinNumber}`,
+      isWin: Boolean(body.isWin),
+      isRoyalReplay: false,
+      coinsWon: Number(body.coinsWon || 0),
+      coinsSpent,
+      spinNumber: serverSpinNumber,
+      ticketNumber: body.ticketNumber || null,
+      usedAt: new Date().toISOString(),
+    };
+    setSpinHistory((prev) => [newEntry, ...prev]);
+    if (newEntry.isWin && newEntry.coinsWon > 0) {
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    }
+    queryClient.invalidateQueries({ queryKey: ["/api/royal-order", orderId] });
+  }, [creditsPerGame, orderId, queryClient]);
+
+  const requestControlledSpin = useCallback(async () => {
+    if (!orderId || order?.status !== "completed") return;
+    spinCountRef.current += 1;
+    try {
+      const res = await apiRequest("/api/record-royal-spin", "POST", {
+        orderId,
+        isWin: false,
+        coinsWon: 0,
+        coinsSpent: creditsPerGame,
+        spinNumber: spinCountRef.current,
+        isRoyalReplay: false,
+      });
+      const body = await res.json();
+      if (!body.success) return;
+      applySpinResult(body);
+      iframeRef.current?.contentWindow?.postMessage(
+        {
+          type: "royalControlledSpin",
+          reelStops: body.reelStops,
+          isWin: body.isWin,
+          coinsWon: body.coinsWon,
+          winSymbol: body.winSymbol,
+        },
+        "*"
+      );
+    } catch (err) {
+      console.error("Failed to record royal spin:", err);
+    }
+  }, [applySpinResult, creditsPerGame, order?.status, orderId]);
 
   useEffect(() => {
     if (orderData?.history) {
@@ -79,37 +129,36 @@ export default function RoyalGamePage() {
       const serverCoins = body.controlledPool ? Number(body.coinsWon || 0) : coinsWon;
       const serverReplay = body.controlledPool ? false : isRoyalReplay;
       const serverSpinNumber = body.spinNumber ?? spinNumber;
-      const newEntry = {
-        id: `local-${serverSpinNumber}`,
-        isWin: serverWin,
-        isRoyalReplay: serverReplay,
-        coinsWon: serverCoins,
-        coinsSpent,
-        spinNumber: serverSpinNumber,
-        ticketNumber: body.ticketNumber || null,
-        usedAt: new Date().toISOString(),
-      };
-      setSpinHistory(prev => [newEntry, ...prev]);
-      if (serverWin && serverCoins > 0) {
-        queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/royal-order", orderId] });
+      applySpinResult(
+        {
+          ...body,
+          isWin: serverWin,
+          coinsWon: serverCoins,
+          spinNumber: serverSpinNumber,
+        },
+        coinsSpent
+      );
     } catch (err) {
       console.error("Failed to record royal spin:", err);
     }
-  }, [orderId, order?.status, creditsPerGame, queryClient]);
+  }, [applySpinResult, orderId, order?.status, creditsPerGame]);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (!event.data || typeof event.data !== "object") return;
+      if (event.data.type === "royalSpinRequest" && isControlled) {
+        requestControlledSpin();
+        return;
+      }
       if (event.data.type === "slotSpinResult") {
+        if (isControlled) return;
         const { isWin, coinsWon, freeSpinsTriggered } = event.data;
         recordSpin(isWin, coinsWon || 0, !!freeSpinsTriggered);
       }
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [recordSpin]);
+  }, [isControlled, recordSpin, requestControlledSpin]);
 
   if (isLoading) {
     return <GameStatus message="Loading Royal Reels..." />;
@@ -126,7 +175,7 @@ export default function RoyalGamePage() {
     );
   }
 
-  const iframeSrc = `/slotmachine/royal-reels.html?credits=${totalCredits}&orderId=${orderId}&v=restore1`;
+  const iframeSrc = `/slotmachine/royal-reels.html?credits=${totalCredits}&orderId=${orderId}&controlled=${isControlled ? "1" : "0"}&v=royal-symbols2`;
 
   return (
     <GameShell>
@@ -198,9 +247,8 @@ export default function RoyalGamePage() {
                 <h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-[#F1D47A]/70">How to Play</h4>
                 <ul className="space-y-1.5 text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
                   <li>• Click SPIN or pull the handle to play</li>
-                  <li>• Match 3+ royal symbols across 20 paylines</li>
-                  <li>• 👑 Crown (Wild) substitutes any symbol</li>
-                  <li>• 3× Crown triggers <span style={{ color: "#9B59B6" }}>Royal Replay</span> (5 free spins!)</li>
+                  <li>• Match 3 identical symbols on the middle row to win</li>
+                  <li>• 👑 Crown is the £5,000 jackpot symbol</li>
                   <li>• Your credits reflect purchased games</li>
                 </ul>
               </div>
@@ -209,15 +257,16 @@ export default function RoyalGamePage() {
                 <h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-[#F1D47A]/70">Prize Table</h4>
                 <div className="space-y-1">
                   {[
-                    ["👑", "Crown (Wild)",  "500 × bet — Royal Replay!"],
-                    ["🏆", "Trophy",        "250 × bet"],
-                    ["💎", "Diamond",       "100 × bet"],
-                    ["7️⃣", "Lucky 7",       "50 × bet"],
-                    ["🎲", "Dice",          "30 × bet"],
-                    ["⭐", "Star",          "20 × bet"],
-                    ["🍒", "Cherry",        "12 × bet"],
-                    ["🍇", "Grape",         "10 × bet"],
-                    ["🔔", "Bell",          "8 × bet"],
+                    ["👑", "Crown", "Jackpot"],
+                    ["🏆", "Trophy", "£2,500"],
+                    ["💎", "Diamond", "£1,000"],
+                    ["7️⃣", "Seven", "£500"],
+                    ["🎲", "Dice", "£250"],
+                    ["⭐", "Star", "£100"],
+                    ["🟥", "Bar", "£50"],
+                    ["🍒", "Cherry", "1,000 pts"],
+                    ["🔔", "Bell", "200 pts"],
+                    ["🪙", "Coin", "99 pts"],
                   ].map(([icon, name, prize]) => (
                     <div key={name} className="flex items-center justify-between text-xs py-1" style={{ borderBottom: "1px solid rgba(212,175,55,0.06)" }}>
                       <span style={{ color: "rgba(255,255,255,0.55)" }}>{icon} {name}</span>
