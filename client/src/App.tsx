@@ -44,6 +44,7 @@ import AdminDashboard from "./pages/admin/dashboard";
 import AdminCompetitions from "./pages/admin/competitions";
 import AdminFeatured from "./pages/admin/admin-featured";
 import AdminCardQuantity from "./pages/admin/admin-card-quantity";
+import AdminListingOrder from "./pages/admin/admin-listing-order";
 import AdminSpinWheel from "./pages/admin/spin-wheel";
 import AdminScratchCard from "./pages/admin/scratch-card";
 import AdminUsers from "./pages/admin/users";
@@ -177,6 +178,7 @@ function Router() {
       <Route path="/admin/competitions" component={AdminCompetitions} />
       <Route path="/admin/featured" component={AdminFeatured} />
       <Route path="/admin/card-quantity" component={AdminCardQuantity} />
+      <Route path="/admin/listing-order" component={AdminListingOrder} />
       <Route path="/admin/entries" component={AdminEntries} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/orders" component={AdminOrders} />

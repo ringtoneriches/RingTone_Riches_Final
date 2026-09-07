@@ -1,6 +1,9 @@
 import { createElement, type ComponentType } from "react";
 import type { Competition } from "@shared/schema";
+import { FEATURED_SLOT_COUNT } from "@shared/competition-config";
 import { RotateCw, Sparkles, Target, Trophy, Zap } from "lucide-react";
+
+export { FEATURED_SLOT_COUNT };
 
 type BadgeIcon = ComponentType<{ className?: string }>;
 
@@ -253,7 +256,10 @@ function featuredRank(competition: Competition) {
 }
 
 /** Live competitions chosen for the homepage slider, in admin featured order. */
-export function pickFeaturedCompetitions(competitions: Competition[], limit = 4) {
+export function pickFeaturedCompetitions(
+  competitions: Competition[],
+  limit = FEATURED_SLOT_COUNT,
+) {
   const eligible = competitions.filter(isFeaturedCandidate);
   const pinned = eligible
     .filter((c) => featuredRank(c) != null)
