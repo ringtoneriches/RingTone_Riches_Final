@@ -11,7 +11,6 @@ import scratch from "../../public/scratch.jpeg";
 import ChaserBorder from "@/components/home/ChaserBorder";
 import QuantitySelector from "@/components/home/QuantitySelector";
 import CountdownBlocks from "@/components/home/CountdownBlocks";
-import SoldProgress from "@/components/home/SoldProgress";
 import { useCountdown } from "@/hooks/useCountdown";
 import {
   HIDDEN_COMPETITION_IDS,
@@ -166,12 +165,6 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                 </p>
               </div>
             </div>
-
-            {stats.hasTickets && (
-              <div className="rr-comp-sold mt-2.5">
-                <SoldProgress pct={stats.pct} sold={stats.soldT} compact />
-              </div>
-            )}
 
             <div className="rr-comp-timer mt-3">
               {stats.endDate ? (
