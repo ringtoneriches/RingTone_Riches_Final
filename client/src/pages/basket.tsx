@@ -46,6 +46,24 @@ function getValidBalance(balance: string | null | undefined): number {
   return Math.max(0, parsed);
 }
 
+function walletRemainingForPay(
+  pay: number,
+  opts: {
+    instaplay: boolean;
+    wallet: boolean;
+    points: boolean;
+    pointsAllowed: boolean;
+    walletBalance: number;
+    pointsValue: number;
+  },
+) {
+  if (opts.instaplay) return 0;
+  let remaining = pay;
+  if (opts.wallet) remaining -= Math.min(opts.walletBalance, remaining);
+  if (opts.points && opts.pointsAllowed) remaining -= Math.min(opts.pointsValue, remaining);
+  return Math.max(0, remaining);
+}
+
 export default function BasketPage() {
   const { items, totals, setQty, remove, clear } = useBasket();
   const { isAuthenticated, user } = useAuth();
@@ -101,18 +119,29 @@ export default function BasketPage() {
 
   const checkout = useMutation({
     mutationFn: async () => {
-      if (!items.length) throw new Error("Your cart is empty.");
-      if (!isAuthenticated) throw new Error("login-required");
-      if (!hasSelectedMethod) throw new Error("Choose a payment method.");
-      if (methods.instaplay) {
-        const validation = validateMinimumPurchase(totals.pay, "instaplay");
-        if (!validation.valid) throw new Error(validation.message || `Minimum £${MIN_PURCHASE} for card checkout.`);
-      } else if (remainingAmount > 0.009) {
-        throw new Error(`Need £${remainingAmount.toFixed(2)} more in your wallet.`);
-      }
-
       const snapshot = readBasket();
       if (!snapshot.length) throw new Error("Your cart is empty.");
+      if (!isAuthenticated) throw new Error("login-required");
+      if (!hasSelectedMethod) throw new Error("Choose a payment method.");
+
+      const payTotal = cartPayTotal(snapshot);
+      if (methods.instaplay) {
+        const validation = validateMinimumPurchase(payTotal, "instaplay");
+        if (!validation.valid) throw new Error(validation.message || `Minimum £${MIN_PURCHASE} for card checkout.`);
+      } else {
+        const remaining = walletRemainingForPay(payTotal, {
+          instaplay: methods.instaplay,
+          wallet: methods.wallet,
+          points: methods.points,
+          pointsAllowed,
+          walletBalance,
+          pointsValue,
+        });
+        if (remaining > 0.009) {
+          throw new Error(`Need £${remaining.toFixed(2)} more in your wallet.`);
+        }
+      }
+
       confirmStartedAt.current = Date.now();
       setHoldConfirm(true);
       setCheckoutItems(snapshot);
@@ -248,13 +277,6 @@ export default function BasketPage() {
 
   const boostOffers = useMemo(() => buildCheckoutBoostOffers(items, totals.pay), [items, totals.pay]);
 
-  const leftoverForPay = (pay: number) => {
-    let remaining = pay;
-    if (!methods.instaplay && methods.wallet) remaining -= Math.min(walletBalance, remaining);
-    if (!methods.instaplay && methods.points && pointsAllowed) remaining -= Math.min(pointsValue, remaining);
-    return Math.max(0, remaining);
-  };
-
   const goGuestCheckout = () => {
     setGuestLaunch(true);
     setLocation("/guest-checkout?from=basket");
@@ -315,9 +337,10 @@ export default function BasketPage() {
 
   const handleAcceptBoost = (offer: CheckoutBoostOffer) => {
     skipBoostRef.current = true;
-    setQty(offer.competitionId, offer.newQty);
+    const updatedItems = setQty(offer.competitionId, offer.newQty);
     setShowBoost(false);
-    const nextPay = cartPayTotal(readBasket());
+    const nextPay = cartPayTotal(updatedItems);
+
     if (isAuthenticated && methods.instaplay && nextPay < MIN_PURCHASE) {
       const validation = validateMinimumPurchase(nextPay, "instaplay");
       toast({
@@ -327,14 +350,8 @@ export default function BasketPage() {
       });
       return;
     }
-    if (isAuthenticated && leftoverForPay(nextPay) > 0.009) {
-      toast({
-        title: "Plays added",
-        description: `Need £${leftoverForPay(nextPay).toFixed(2)} more, or pay the cart by card.`,
-      });
-      return;
-    }
-    continueToPay();
+
+    queueMicrotask(() => continueToPay());
   };
 
   useEffect(() => {
