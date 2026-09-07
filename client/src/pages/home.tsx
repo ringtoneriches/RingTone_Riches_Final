@@ -20,7 +20,7 @@ import CommunitySection from "@/components/home/CommunitySection";
 import VipClub from "@/components/home/VipClub";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
 import BrandIntro from "@/components/home/BrandIntro";
-import { pickFeaturedCompetitions } from "@/lib/competition-display";
+import { FEATURED_SLOT_COUNT, pickFeaturedCompetitions } from "@/lib/competition-display";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
 const COMPETITION_FILTERS = [
@@ -42,11 +42,19 @@ export default function Home() {
 
   const [activeFilter, setActiveFilter] = useState("all");
 
-  const featuredList = useMemo(() => pickFeaturedCompetitions(competitions, 4), [competitions]);
+  const featuredList = useMemo(
+    () => pickFeaturedCompetitions(competitions, FEATURED_SLOT_COUNT),
+    [competitions],
+  );
 
   const filteredCompetitions = useMemo(() => {
-    if (activeFilter === "all") return competitions;
-    return competitions.filter((c) => c.type === activeFilter);
+    const list =
+      activeFilter === "all"
+        ? competitions
+        : competitions.filter((c) => c.type === activeFilter);
+    return [...list].sort(
+      (a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999),
+    );
   }, [competitions, activeFilter]);
 
   const liveCount = competitions.length;
