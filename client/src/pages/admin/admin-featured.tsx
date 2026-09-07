@@ -4,7 +4,7 @@ import { Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Competition } from "@shared/schema";
-import { FEATURED_SLOT_COUNT } from "@shared/competition-config";
+import { FEATURED_SLOT_COUNT, isCompetitionLive } from "@shared/competition-config";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -33,7 +33,7 @@ export default function AdminFeatured() {
     },
   });
 
-  const active = competitions.filter((c) => c.isActive && c.status === "active");
+  const active = competitions.filter(isCompetitionLive);
   const featured = [...active]
     .filter((c) => Number(c.featuredOrder) > 0)
     .sort((a, b) => Number(a.featuredOrder) - Number(b.featuredOrder));

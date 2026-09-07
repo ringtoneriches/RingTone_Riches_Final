@@ -4,6 +4,7 @@ import { Hash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Competition } from "@shared/schema";
+import { isCompetitionLive } from "@shared/competition-config";
 import { Input } from "@/components/ui/input";
 import { getCompetitionTypeConfig } from "@/lib/competition-display";
 
@@ -30,9 +31,7 @@ export default function AdminCardQuantity() {
     },
   });
 
-  const active = competitions
-    .filter((c) => c.isActive && c.status === "active")
-    .sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
+  const active = competitions.filter(isCompetitionLive).sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
 
   const save = (id: string, current: number, nextRaw: string) => {
     const next = Math.floor(Number(nextRaw));

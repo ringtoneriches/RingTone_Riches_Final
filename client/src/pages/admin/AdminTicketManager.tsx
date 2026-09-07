@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Competition } from "@shared/schema";
+import { isCompetitionArchived } from "@shared/competition-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -251,7 +252,7 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
                 variant="outline"
                 size="sm"
                 className="border-gray-600 text-gray-300 hover:bg-gray-700 w-full sm:w-auto text-xs sm:text-sm"
-                disabled={!competition.isActive || competition.isArchived}
+                disabled={isCompetitionArchived(competition)}
               >
                 <Edit2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5" />
                 Edit Tickets
@@ -551,13 +552,13 @@ export default function AdminTicketManager({ competition, onClose }: AdminTicket
           )}
 
           {/* Status Warning */}
-          {(!competition.isActive || competition.isArchived) && (
+          {isCompetitionArchived(competition) && (
             <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-2.5 sm:p-3">
               <div className="flex items-center gap-1.5 sm:gap-2 text-yellow-400">
                 <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
                 <span className="text-[10px] sm:text-xs">
                   {!competition.isActive && "This competition is inactive. Activate it to allow ticket management."}
-                  {competition.isArchived && "Archived competitions cannot be modified."}
+                  Archived competitions cannot be modified.
                 </span>
               </div>
             </div>

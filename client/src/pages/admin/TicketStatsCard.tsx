@@ -1,13 +1,15 @@
 // components/admin/TicketStatsCard.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Ticket, Users } from "lucide-react";
+import type { Competition } from "@shared/schema";
+import { isCompetitionLive } from "@shared/competition-config";
 
 interface TicketStatsCardProps {
   competitions: Competition[];
 }
 
 export function TicketStatsCard({ competitions }: TicketStatsCardProps) {
-  const activeComps = competitions.filter(c => c.isActive && !c.isArchived);
+  const activeComps = competitions.filter(isCompetitionLive);
   const totalTickets = activeComps.reduce((sum, c) => sum + (c.maxTickets || 0), 0);
   const totalSold = activeComps.reduce((sum, c) => sum + (c.soldTickets || 0), 0);
   const fillRate = totalTickets > 0 ? (totalSold / totalTickets) * 100 : 0;
