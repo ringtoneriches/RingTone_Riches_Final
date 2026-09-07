@@ -114,12 +114,18 @@ function isPointsPrize(prize: { prizeValue: number; ringtonePoints?: number; rew
   return prize.rewardType === "points" || (points > 0 && cash <= 0);
 }
 
-function getPrizeSortValue(prize: { prizeValue: number; ringtonePoints?: number; rewardType?: string }) {
-  const points = Number(prize.ringtonePoints || 0);
-  if (isPointsPrize(prize) && points > 0) {
-    return points / 100;
+/** Cash/physical first (high → low), then points (high → low). */
+function comparePrizesForDisplay(
+  a: { prizeValue: number; ringtonePoints?: number; rewardType?: string },
+  b: { prizeValue: number; ringtonePoints?: number; rewardType?: string },
+) {
+  const aIsPoints = isPointsPrize(a);
+  const bIsPoints = isPointsPrize(b);
+  if (aIsPoints !== bIsPoints) return aIsPoints ? 1 : -1;
+  if (aIsPoints) {
+    return Number(b.ringtonePoints || 0) - Number(a.ringtonePoints || 0);
   }
-  return Number(prize.prizeValue || 0);
+  return Number(b.prizeValue || 0) - Number(a.prizeValue || 0);
 }
 
 function getPrizeOfferLabel(prize: { prizeValue: number; ringtonePoints?: number; rewardType?: string }) {
@@ -349,12 +355,17 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
     enabled: !!competitionId,
   });
 
-  // Sort prizes by value (highest first) and filter out zero remaining
   const sortedPrizes = useMemo(() => {
     return [...prizes]
-      .filter(prize => prize.totalQuantity > 0)
-      .sort((a, b) => getPrizeSortValue(b) - getPrizeSortValue(a));
+      .filter((prize) => prize.totalQuantity > 0)
+      .sort(comparePrizesForDisplay);
   }, [prizes]);
+
+  const sortedGroups = useMemo(() => {
+    return [...groups]
+      .filter((group) => group.totalQuantity > 0)
+      .sort(comparePrizesForDisplay);
+  }, [groups]);
 
   if (isLoading || ticketLoading) {
     return (
@@ -374,7 +385,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
     );
   }
 
-  if ((useGroups ? groups.length : sortedPrizes.length) === 0) {
+  if ((useGroups ? sortedGroups.length : sortedPrizes.length) === 0) {
     return null;
   }
 
@@ -387,7 +398,7 @@ export default function UserCompetitionPrizes({ competitionId }: UserCompetition
           isOpen ? "max-h-none opacity-100" : "max-h-0 opacity-0"
         )}
       >
-        {(useGroups ? groups : sortedPrizes).map((item, index) => {
+        {(useGroups ? sortedGroups : sortedPrizes).map((item, index) => {
           const prize = useGroups
             ? {
                 id: (item as PrizeGroup).id,
