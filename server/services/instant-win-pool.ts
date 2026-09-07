@@ -1370,13 +1370,15 @@ export async function getPublicPrizePool(competitionId: string) {
   const publicPrizes = prizes.map((p) => {
     const showTicket = Boolean(p.winningTicketNumber);
     const isWon = p.status === "won";
+    const ringtonePoints = p.competitionPrizeId ? pointsByTableId.get(p.competitionPrizeId) || 0 : 0;
+    const isPointsPrize = p.rewardType === "points";
     return {
       id: p.id,
       competitionId: p.competitionId,
       competitionPrizeId: p.competitionPrizeId,
       prizeName: p.name,
-      prizeValue: Number(p.value),
-      ringtonePoints: p.competitionPrizeId ? pointsByTableId.get(p.competitionPrizeId) || 0 : 0,
+      prizeValue: isPointsPrize ? 0 : Number(p.value),
+      ringtonePoints,
       rewardType: p.rewardType,
       publicStatus: isWon ? ("won" as const) : ("available" as const),
       winningTicketNumber: showTicket ? p.winningTicketNumber : null,
@@ -1416,7 +1418,13 @@ export async function getPublicPrizePool(competitionId: string) {
         winnerDisplayName: p.winnerDisplayName,
       })),
     };
-  }).sort((a, b) => b.prizeValue - a.prizeValue);
+  }).sort((a, b) => {
+    const sortValue = (row: { rewardType?: string | null; ringtonePoints: number; prizeValue: number }) =>
+      row.rewardType === "points" && row.ringtonePoints > 0
+        ? row.ringtonePoints / 100
+        : row.prizeValue;
+    return sortValue(b) - sortValue(a);
+  });
 
   const maxTickets = Number(competition?.maxTickets || 0);
   const soldTickets = Number(competition?.soldTickets || 0);
