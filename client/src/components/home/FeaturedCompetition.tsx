@@ -8,7 +8,6 @@ import DigitalAtmosphere from "./DigitalAtmosphere";
 import TrustStrip from "./TrustStrip";
 import QuantitySelector from "./QuantitySelector";
 import CountdownBlocks from "./CountdownBlocks";
-import SoldProgress from "./SoldProgress";
 import { useCountdown } from "@/hooks/useCountdown";
 import {
   getCompetitionBadgeLabel,
@@ -160,12 +159,6 @@ function FeaturedSlide({
             {stats.isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
           </p>
         </div>
-
-        {stats.hasTickets && (
-          <div className="mt-4 sm:mt-5">
-            <SoldProgress pct={stats.pct} sold={stats.soldT} />
-          </div>
-        )}
 
         {stats.endDate ? (
           <div className="mt-3 sm:mt-4">
