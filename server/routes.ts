@@ -158,6 +158,7 @@ import {
   tryRevealControlledRoyal,
   getPublicPrizePool,
 } from "./services/instant-win-pool";
+import { generateLosingBalloonValues } from "./services/controlled-pool-allocation";
 import {
   onTablePrizeCreated,
   onTablePrizeDeleted,
@@ -182,6 +183,7 @@ import {
   refundEarlyTender,
 } from "./payment-settlement";
 import { creditCardCashback } from "./services/card-cashback";
+import { isCardCashbackTx } from "@shared/card-cashback";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { calculateDiscountedTotal } from "./utils/discounts";
@@ -10034,6 +10036,14 @@ app.get("/api/verification/can-withdraw", isAuthenticated, async (req, res) => {
   //   }
   // });
 
+function formatAdminCashflowTx<T extends { type?: string; amount?: unknown; description?: string | null }>(
+  tx: T,
+) {
+  const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
+  const type = isCardCashbackTx(tx) ? "cashback" : tx.type === "deposit" ? "deposit" : "purchase";
+  return { ...tx, amount, type };
+}
+
 // API endpoint: /api/admin/cashflow-transactions
 app.get(
   "/api/admin/cashflow-transactions",
@@ -10108,10 +10118,7 @@ app.get(
       
       // Apply pagination
       const total = filtered.length;
-      const paginated = filtered.slice(offset, offset + limit).map(tx => ({
-        ...tx,
-        amount: Math.abs(parseFloat(String(tx.amount)) || 0) // Always show positive
-      }));
+      const paginated = filtered.slice(offset, offset + limit).map(formatAdminCashflowTx);
       
       console.log(`Cashflows query: ${total} total transactions, showing page ${page} (${paginated.length} items)`);
       
@@ -10200,9 +10207,9 @@ app.get(
         );
       }
       
-      // Calculate deposit total
+      // Calculate deposit total (real Cashflows top-ups only — not card cashback)
       const depositTotal = filtered
-        .filter(tx => tx.type === "deposit")
+        .filter((tx) => tx.type === "deposit" && !isCardCashbackTx(tx))
         .reduce((sum, tx) => {
           const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
           return sum + amount;
@@ -10210,7 +10217,7 @@ app.get(
       
       // Calculate instant play purchase total
       const instantPlayTotal = filtered
-        .filter(tx => tx.type !== "deposit")
+        .filter((tx) => tx.type === "purchase")
         .reduce((sum, tx) => {
           const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
           return sum + amount;
@@ -15771,19 +15778,9 @@ app.post("/api/play-pop", async (req: any, res) => {
     else {
       const cashVals = activeSegments
         .filter((s: any) => s.rewardType === "cash")
-        .map((s: any) => parseFloat(s.rewardValue?.toString() || "1"));
-
-      if (cashVals.length >= 2) {
-        let v1 = cashVals[Math.floor(Math.random() * cashVals.length)];
-        let v2 = cashVals[Math.floor(Math.random() * cashVals.length)];
-        let v3 = cashVals[Math.floor(Math.random() * cashVals.length)];
-        if (v1 === v2 && v2 === v3) {
-          v3 = cashVals.find((v) => v !== v1) || v1 + 1;
-        }
-        balloonValues = [v1, v2, v3];
-      } else {
-        balloonValues = [1, 5, 10];
-      }
+        .map((s: any) => parseFloat(s.rewardValue?.toString() || "0"))
+        .filter((v) => Number.isFinite(v) && v > 0);
+      balloonValues = generateLosingBalloonValues(cashVals);
     }
 
     // ============================================
@@ -16174,23 +16171,11 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
             updatedAt: new Date(),
           });
         } else {
-          // Lose: generate random non-matching balloon values using ONLY active cash segments
           const cashValues = activeSegments
             .filter((s) => s.rewardType === "cash")
-            .map((s) => parseFloat(s.rewardValue?.toString() || "1"));
-          if (cashValues.length >= 2) {
-            let val1 =
-              cashValues[Math.floor(Math.random() * cashValues.length)];
-            let val2 =
-              cashValues[Math.floor(Math.random() * cashValues.length)];
-            let val3 =
-              cashValues[Math.floor(Math.random() * cashValues.length)];
-            if (val1 === val2 && val2 === val3)
-              val3 = cashValues.find((v) => v !== val1) || val1 + 1;
-            balloonValues = [val1, val2, val3];
-          } else {
-            balloonValues = [1, 5, 10];
-          }
+            .map((s) => parseFloat(s.rewardValue?.toString() || "0"))
+            .filter((v) => Number.isFinite(v) && v > 0);
+          balloonValues = generateLosingBalloonValues(cashValues);
         }
 
         // Record pop usage
