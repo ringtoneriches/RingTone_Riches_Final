@@ -182,6 +182,7 @@ import {
   refundEarlyTender,
 } from "./payment-settlement";
 import { creditCardCashback } from "./services/card-cashback";
+import { isCardCashbackTx } from "@shared/card-cashback";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { calculateDiscountedTotal } from "./utils/discounts";
@@ -10034,6 +10035,14 @@ app.get("/api/verification/can-withdraw", isAuthenticated, async (req, res) => {
   //   }
   // });
 
+function formatAdminCashflowTx<T extends { type?: string; amount?: unknown; description?: string | null }>(
+  tx: T,
+) {
+  const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
+  const type = isCardCashbackTx(tx) ? "cashback" : tx.type === "deposit" ? "deposit" : "purchase";
+  return { ...tx, amount, type };
+}
+
 // API endpoint: /api/admin/cashflow-transactions
 app.get(
   "/api/admin/cashflow-transactions",
@@ -10108,10 +10117,7 @@ app.get(
       
       // Apply pagination
       const total = filtered.length;
-      const paginated = filtered.slice(offset, offset + limit).map(tx => ({
-        ...tx,
-        amount: Math.abs(parseFloat(String(tx.amount)) || 0) // Always show positive
-      }));
+      const paginated = filtered.slice(offset, offset + limit).map(formatAdminCashflowTx);
       
       console.log(`Cashflows query: ${total} total transactions, showing page ${page} (${paginated.length} items)`);
       
@@ -10200,9 +10206,9 @@ app.get(
         );
       }
       
-      // Calculate deposit total
+      // Calculate deposit total (real Cashflows top-ups only — not card cashback)
       const depositTotal = filtered
-        .filter(tx => tx.type === "deposit")
+        .filter((tx) => tx.type === "deposit" && !isCardCashbackTx(tx))
         .reduce((sum, tx) => {
           const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
           return sum + amount;
@@ -10210,7 +10216,7 @@ app.get(
       
       // Calculate instant play purchase total
       const instantPlayTotal = filtered
-        .filter(tx => tx.type !== "deposit")
+        .filter((tx) => tx.type === "purchase")
         .reduce((sum, tx) => {
           const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
           return sum + amount;
