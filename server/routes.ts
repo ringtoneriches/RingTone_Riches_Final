@@ -109,6 +109,7 @@ import {
   guestTickets,
   guestPendingPayments
 } from "@shared/schema";
+import { FEATURED_SLOT_COUNT } from "@shared/competition-config";
 import { nanoid } from "nanoid";
 import { db } from "./db";
 import { stripe } from "./stripe";
@@ -14054,6 +14055,12 @@ app.get(
 
         if (featuredOrder !== null && (!Number.isInteger(featuredOrder) || featuredOrder < 1)) {
           return res.status(400).json({ message: "Featured order must be a positive integer or empty" });
+        }
+
+        if (featuredOrder !== null && featuredOrder > FEATURED_SLOT_COUNT) {
+          return res.status(400).json({
+            message: `Featured order must be between 1 and ${FEATURED_SLOT_COUNT}`,
+          });
         }
 
         if (featuredOrder !== null) {

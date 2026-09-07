@@ -4,10 +4,11 @@ import { Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Competition } from "@shared/schema";
+import { FEATURED_SLOT_COUNT } from "@shared/competition-config";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-const SLOT_COUNT = 4;
+const SLOT_COUNT = FEATURED_SLOT_COUNT;
 
 export default function AdminFeatured() {
   const { toast } = useToast();
@@ -51,7 +52,7 @@ export default function AdminFeatured() {
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {Array.from({ length: SLOT_COUNT }, (_, i) => {
             const slot = i + 1;
             const current = featured.find((c) => Number(c.featuredOrder) === slot);
