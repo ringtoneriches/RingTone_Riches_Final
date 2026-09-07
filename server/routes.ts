@@ -198,6 +198,8 @@ import {
   attachTicketNumbersNewestFirst,
   claimNextPlayTicket,
   getOrderPlayTickets,
+  insertScratchPlayRecord,
+  insertSpinPlayRecord,
   labelRevealAllResultTickets,
   playTicketLabel,
 } from "./services/play-ticket-labels";
@@ -5859,9 +5861,6 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       }
     }
 
-    // Record spin usage
-    await storage.recordSpinUsage(orderId, userId);
-
     // Record the win (with wheel type for tracking)
     await storage.recordSpinWin({
       userId,
@@ -6014,13 +6013,27 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       );
     }
 
+    const isWin =
+      selectedSegment.rewardType === "cash" ||
+      selectedSegment.rewardType === "points" ||
+      selectedSegment.rewardType === "physical";
     let ticketNumber: string | null = null;
     try {
       await db.transaction(async (tx) => {
         ticketNumber = await claimNextPlayTicket(tx, orderId);
+        await insertSpinPlayRecord(tx, {
+          orderId,
+          userId,
+          ticketNumber,
+          isWin,
+          segmentId: selectedSegment.id,
+          prizeLabel: selectedSegment.label,
+          rewardType: selectedSegment.rewardType,
+          rewardValue: String(selectedSegment.rewardValue ?? "0"),
+        });
       });
     } catch (err) {
-      console.error("Failed to label spin play ticket:", err);
+      console.error("Failed to record spin play ticket:", err);
     }
 
     // Return full segment payload for frontend animation
@@ -6196,11 +6209,20 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
           }
         }
 
-        // Record spin usage
-        await tx.insert(spinUsage).values({
+        // Record spin usage + play ticket
+        const ticketNumber = await claimNextPlayTicket(tx, orderId);
+        await insertSpinPlayRecord(tx, {
           orderId,
           userId,
-          usedAt: new Date(),
+          ticketNumber,
+          isWin:
+            selectedSegment.rewardType === "cash" ||
+            selectedSegment.rewardType === "points" ||
+            selectedSegment.rewardType === "physical",
+          segmentId: selectedSegment.id,
+          prizeLabel: selectedSegment.label,
+          rewardType: selectedSegment.rewardType,
+          rewardValue: String(selectedSegment.rewardValue ?? "0"),
         });
 
         // Record win
@@ -6377,10 +6399,12 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
         results.push({
           segmentId: selectedSegment.id,
           label: selectedSegment.label,
+          ticketNumber,
           prize: {
             brand: selectedSegment.label,
             amount: prizeAmount,
             type: prizeType,
+            ticketNumber,
           },
         });
       }
@@ -6492,6 +6516,15 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
         const used = await storage.getSpinsUsed(orderId);
         const remaining = order.quantity - used;
         const playTickets = (await getOrderPlayTickets(orderId)).map(playTicketLabel);
+        const orderTickets = await getOrderPlayTickets(orderId);
+        const history = attachTicketNumbersNewestFirst(
+          await db
+            .select()
+            .from(spinUsage)
+            .where(eq(spinUsage.orderId, orderId))
+            .orderBy(desc(spinUsage.usedAt)),
+          orderTickets,
+        );
         res.json({
           order: {
             id: order.id,
@@ -6512,6 +6545,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
           },
           spinCost: 2, // £2 per spin
           playTickets,
+          history,
         });
       } catch (error) {
         console.error("Error fetching spin order:", error);
@@ -7507,15 +7541,24 @@ app.post(
             }
           }
 
-          // Batch insert all scratch card usages
-          const usageValues = selectedPrizes.map(() => ({
-            orderId,
-            userId,
-            usedAt: new Date(),
-          }));
-          
-          if (usageValues.length > 0) {
-            await tx.insert(scratchCardUsage).values(usageValues);
+          // Record scratch card usage + play tickets
+          for (const selectedPrize of selectedPrizes) {
+            const ticketNumber = await claimNextPlayTicket(tx, orderId);
+            const isWin = Boolean(
+              selectedPrize &&
+                selectedPrize.rewardType !== "try_again" &&
+                selectedPrize.rewardType !== "lose",
+            );
+            await insertScratchPlayRecord(tx, {
+              orderId,
+              userId,
+              ticketNumber,
+              isWin,
+              prizeId: selectedPrize?.id ?? null,
+              prizeLabel: selectedPrize?.label || selectedPrize?.imageName || null,
+              rewardType: selectedPrize?.rewardType ?? "lose",
+              rewardValue: String(selectedPrize?.rewardValue ?? "0"),
+            });
           }
 
           // Update prize win counts
@@ -8137,13 +8180,22 @@ app.post(
             throw new Error("No scratch cards remaining in this purchase");
           }
 
-          // Record scratch card usage
-          await tx.insert(scratchCardUsage).values({
+          // Record scratch card usage + play ticket
+          ticketNumber = await claimNextPlayTicket(tx, orderId);
+          await insertScratchPlayRecord(tx, {
             orderId,
             userId,
-            usedAt: new Date(),
+            ticketNumber,
+            isWin: Boolean(
+              isWinner &&
+                selectedPrize.rewardType !== "try_again" &&
+                selectedPrize.rewardType !== "lose",
+            ),
+            prizeId: selectedPrize.id,
+            prizeLabel: selectedPrize.label || selectedPrize.imageName || null,
+            rewardType: selectedPrize.rewardType,
+            rewardValue: String(selectedPrize.rewardValue ?? "0"),
           });
-          ticketNumber = await claimNextPlayTicket(tx, orderId);
 
           // Award prize if winner
           if (
@@ -8316,6 +8368,17 @@ app.post(
         const playTickets = (await getOrderPlayTickets(orderId))
           .map((ticket) => playTicketLabel(ticket))
           .filter((n): n is string => Boolean(n));
+        const orderTickets = await getOrderPlayTickets(orderId);
+        const history = attachTicketNumbersNewestFirst(
+          (
+            await db
+              .select()
+              .from(scratchCardUsage)
+              .where(eq(scratchCardUsage.orderId, orderId))
+              .orderBy(desc(scratchCardUsage.usedAt))
+          ).map((row) => ({ ...row, spinNumber: row.cardNumber })),
+          orderTickets,
+        );
         res.json({
           order: {
             id: order.id,
@@ -8338,6 +8401,7 @@ app.post(
           scratchImages,
           scratchCost: 2, // £2 per scratch
           playTickets,
+          history,
         });
       } catch (error) {
         console.error("Error fetching scratch order:", error);
@@ -8367,6 +8431,7 @@ app.post(
       const history = await storage.getPopGameHistory(orderId);
       const orderTickets = await getOrderPlayTickets(orderId);
       const historyWithTickets = attachTicketNumbersNewestFirst(history, orderTickets);
+      const playTickets = orderTickets.map(playTicketLabel);
 
       res.json({
         order: {
@@ -8388,6 +8453,7 @@ app.post(
         popCost: popCost,
         playsRemaining: remaining,
         history: historyWithTickets,
+        playTickets,
       });
     } catch (error) {
       console.error("Error fetching pop order:", error);
@@ -11294,11 +11360,25 @@ app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
         .catch(e => console.error(e));
     }
 
-    // 8. Record win (fire-and-forget)
-    db.insert(plinkoWins).values({
-      orderId, userId, prizeId: selectedPrize.id, slotIndex,
-      rewardType, rewardValue: rewardValueStr, isWin
-    }).catch(e => console.error(e));
+    // 8. Record win with play ticket label
+    let ticketNumber: string | null = null;
+    try {
+      await db.transaction(async (tx) => {
+        ticketNumber = await claimNextPlayTicket(tx, orderId);
+        await tx.insert(plinkoWins).values({
+          orderId,
+          userId,
+          prizeId: selectedPrize.id,
+          slotIndex,
+          rewardType,
+          rewardValue: rewardValueStr,
+          isWin,
+          ticketNumber,
+        });
+      });
+    } catch (e) {
+      console.error("Failed to record plinko win:", e);
+    }
 
     // 9. Add to winners table (fire-and-forget)
     if (isWin) {
@@ -11358,6 +11438,7 @@ app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
       playsRemaining: playsRemaining - 1 + totalFreePlays,
       newBalance: updatedUser?.balance || user.balance,
       newPoints: updatedUser?.ringtonePoints || user.ringtonePoints,
+      ticketNumber,
     });
     
   } catch (error) {
@@ -11526,14 +11607,16 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
           totalFreePlays++;
         }
 
-        // Record win
+        // Record win with play ticket label
+        const ticketNumber = await claimNextPlayTicket(tx, orderId);
         await tx.insert(plinkoWins).values({
           orderId, userId,
           prizeId: selectedPrize.id,
           slotIndex: selectedPrize.slotIndex,
           rewardType,
           rewardValue: isWin ? prizeValue.toString() : isFreePlay ? "1" : "0",
-          isWin
+          isWin,
+          ticketNumber,
         });
 
         results.push({
@@ -11542,6 +11625,7 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
           prizeValue: isWin ? prizeValue : 0,
           rewardType,
           isWin: isWin || isFreePlay,
+          ticketNumber,
         });
       }
 
@@ -11659,14 +11743,16 @@ app.get("/api/plinko-order/:orderId", isAuthenticated, async (req: any, res) => 
     const usedCount = Number(playsUsed[0]?.count || 0);
 
     // Get play history
+    const orderTickets = await getOrderPlayTickets(orderId);
     const history = attachTicketNumbersNewestFirst(
       await db
         .select()
         .from(plinkoWins)
         .where(eq(plinkoWins.orderId, orderId))
         .orderBy(desc(plinkoWins.wonAt)),
-      await getOrderPlayTickets(orderId),
+      orderTickets,
     );
+    const playTickets = orderTickets.map(playTicketLabel);
 
     res.json({
       success: true,
@@ -11690,6 +11776,7 @@ app.get("/api/plinko-order/:orderId", isAuthenticated, async (req: any, res) => 
       playsUsed: usedCount,
       playsRemaining: order.quantity - usedCount,
       history,
+      playTickets,
     });
   } catch (error) {
     console.error("Error fetching Plinko order:", error);
@@ -15766,25 +15853,28 @@ app.post("/api/play-pop", async (req: any, res) => {
 
     } else {
       // AUTHENTICATED: Save usage and win record
-      if (!isRPrize) {
-        await db.insert(popUsage).values({
+      let ticketNumber: string | null = null;
+      await db.transaction(async (tx) => {
+        if (!isRPrize) {
+          ticketNumber = await claimNextPlayTicket(tx, orderId);
+          await tx.insert(popUsage).values({
+            orderId,
+            userId,
+            usedAt: new Date(),
+          });
+        }
+        await tx.insert(popWins).values({
           orderId,
           userId,
-          usedAt: new Date(),
-        });
-      }
-
-      await db.insert(popWins).values({
-        orderId,
-        userId,
-        competitionId,
-        prizeId: selectedSegment.id || "none",
-        balloonValues,
-        prizeName,
-        rewardType,
-        rewardValue,
-        isWin,
-        wonAt: new Date(),
+          prizeId: selectedSegment.id || "none",
+          balloonValues,
+          prizeName,
+          rewardType,
+          rewardValue,
+          isWin,
+          ticketNumber,
+          wonAt: new Date(),
+        } as any);
       });
 
       const newPlaysRemaining = isRPrize ? playsRemaining : playsRemaining - 1;
@@ -15793,6 +15883,7 @@ app.post("/api/play-pop", async (req: any, res) => {
       return res.json({
         success: true,
         isGuest: false,
+        ticketNumber,
         result: {
           balloonValues: rewardType === "physical" ? [0, 0, 0] : balloonValues,
           isWin,
@@ -19298,10 +19389,12 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
 
       const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
       const usedCount = Number(playsUsed[0]?.count || 0);
+      const orderTickets = await getOrderPlayTickets(orderId);
       const history = attachTicketNumbersNewestFirst(
         await db.select().from(voltzWins).where(eq(voltzWins.orderId, orderId)).orderBy(desc(voltzWins.wonAt)),
-        await getOrderPlayTickets(orderId),
+        orderTickets,
       );
+      const playTickets = orderTickets.map(playTicketLabel);
 
       res.json({
         order: {
@@ -19323,6 +19416,7 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
         playsUsed: usedCount,
         playsRemaining: order.quantity - usedCount,
         history,
+        playTickets,
       });
     } catch (error) {
       console.error("Error fetching voltz order:", error);
@@ -21211,10 +21305,11 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
         await db.select().from(slotUsage).where(eq(slotUsage.orderId, orderId)).orderBy(desc(slotUsage.usedAt)),
         await getOrderPlayTickets(orderId),
       );
+      const playTickets = (await getOrderPlayTickets(orderId)).map(playTicketLabel);
       res.json({
         order: { id: order.id, competitionId: order.competitionId, quantity: order.quantity, totalAmount: order.totalAmount, status: order.status },
         user: { balance: user?.balance || "0", ringtonePoints: user?.ringtonePoints || 0 },
-        competition, slotCost, totalCredits, creditsPerSpin, history,
+        competition, slotCost, totalCredits, creditsPerSpin, history, playTickets,
       });
     } catch (error) {
       console.error("Error fetching slot order:", error);
@@ -21885,11 +21980,14 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
           isRoyalReplay: h.isRoyalReplay,
           coinsWon: h.isWin ? Math.round(parseFloat(h.rewardValue || "0") * 100) : 0,
           coinsSpent: creditsPerGame,
+          spinNumber: null,
+          ticketNumber: h.ticketNumber,
           usedAt: h.usedAt,
         })),
         await getOrderPlayTickets(orderId),
       );
-      res.json({ order: { id: order.id, competitionId: order.competitionId, quantity: order.quantity, totalAmount: order.totalAmount, status: order.status }, user: { balance: user?.balance || "0", ringtonePoints: user?.ringtonePoints || 0 }, competition, playsRemaining, creditsPerGame, totalCredits, history: mappedHistory });
+      const playTickets = (await getOrderPlayTickets(orderId)).map(playTicketLabel);
+      res.json({ order: { id: order.id, competitionId: order.competitionId, quantity: order.quantity, totalAmount: order.totalAmount, status: order.status }, user: { balance: user?.balance || "0", ringtonePoints: user?.ringtonePoints || 0 }, competition, playsRemaining, creditsPerGame, totalCredits, history: mappedHistory, playTickets });
     } catch (error) {
       console.error("Error fetching royal order:", error);
       res.status(500).json({ message: "Failed to fetch royal order" });

@@ -17,6 +17,147 @@ export function formatResultTicket(ticketNumber?: string | number | null) {
   return raw ? `#${raw}` : null;
 }
 
+/** @deprecated Server attaches ticket numbers; do not guess from purchase order. */
+export function fillMissingPlayTickets<T extends { ticketNumber?: string | null }>(
+  rowsNewestFirst: T[],
+  _playTickets?: Array<string | null | undefined>,
+): T[] {
+  return rowsNewestFirst;
+}
+
+export function buildSpinHistoryFromServer(
+  serverRows: Array<{
+    spinNumber?: number | null;
+    ticketNumber?: string | null;
+    prizeLabel?: string | null;
+    rewardType?: string | null;
+    rewardValue?: string | null;
+  }>,
+  total: number,
+): SpinHistoryRow[] {
+  const bySpin = new Map<number, SpinHistoryRow>();
+  for (const row of serverRows) {
+    const sn = Number(row.spinNumber);
+    if (!Number.isFinite(sn) || sn < 1) continue;
+    const prizeType = row.rewardType === "lose" ? "none" : row.rewardType || "none";
+    const amount =
+      row.rewardType === "points"
+        ? `${row.rewardValue ?? 0} Ringtone`
+        : row.rewardType === "cash"
+          ? Number(row.rewardValue || 0)
+          : row.rewardType === "physical"
+            ? row.prizeLabel || "Prize"
+            : 0;
+    bySpin.set(sn, {
+      status: "SPUN",
+      ticketNumber: row.ticketNumber ?? null,
+      prize: {
+        brand: row.prizeLabel || "-",
+        amount,
+        type: prizeType,
+        ticketNumber: row.ticketNumber ?? null,
+      },
+    });
+  }
+  return Array.from({ length: total }, (_, i) =>
+    bySpin.get(i + 1) ?? { status: "NOT SPUN", prize: { brand: "-", amount: "-" } },
+  );
+}
+
+export function buildScratchHistoryFromServer(
+  serverRows: Array<{
+    cardNumber?: number | null;
+    ticketNumber?: string | null;
+    prizeLabel?: string | null;
+    rewardType?: string | null;
+    rewardValue?: string | null;
+    isWin?: boolean | null;
+  }>,
+  total: number,
+) {
+  const byCard = new Map<number, { status: string; prize: { type: string; value: string; ticketNumber?: string | null } }>();
+  for (const row of serverRows) {
+    const cn = Number(row.cardNumber);
+    if (!Number.isFinite(cn) || cn < 1) continue;
+    const isLoss =
+      row.rewardType === "lose" ||
+      row.rewardType === "try_again" ||
+      row.isWin === false;
+    byCard.set(cn, {
+      status: isLoss ? "Lost" : "Scratched",
+      prize: {
+        type: isLoss ? "none" : row.rewardType || "none",
+        value: isLoss ? "Lose" : String(row.rewardValue ?? row.prizeLabel ?? "0"),
+        ticketNumber: row.ticketNumber ?? null,
+      },
+    });
+  }
+  return Array.from({ length: total }, (_, i) =>
+    byCard.get(i + 1) ?? { status: "Not Scratched", prize: { type: "none", value: "-" } },
+  );
+}
+
+export function mergeSpinTicketsFromServer(
+  history: SpinHistoryRow[],
+  serverRows: Array<{ spinNumber?: number | null; ticketNumber?: string | null }>,
+): SpinHistoryRow[] {
+  if (!serverRows.length) return history;
+  const bySpin = new Map<number, string>();
+  for (const row of serverRows) {
+    const sn = Number(row.spinNumber);
+    const ticket = row.ticketNumber?.trim();
+    if (Number.isFinite(sn) && sn >= 1 && ticket) bySpin.set(sn, ticket);
+  }
+  if (!bySpin.size) return history;
+
+  let spunIdx = 0;
+  let changed = false;
+  const next = history.map((row) => {
+    if (row.status !== "SPUN") return row;
+    spunIdx += 1;
+    const ticket = bySpin.get(spunIdx);
+    if (!ticket) return row;
+    const existing = row.prize?.ticketNumber || row.ticketNumber;
+    if (existing === ticket) return row;
+    changed = true;
+    return {
+      ...row,
+      ticketNumber: ticket,
+      prize: { ...row.prize, ticketNumber: ticket },
+    };
+  });
+  return changed ? next : history;
+}
+
+export function mergeScratchTicketsFromServer<
+  T extends { status: string; prize: { type: string; value: string; ticketNumber?: string | null } },
+>(
+  history: T[],
+  serverRows: Array<{ cardNumber?: number | null; ticketNumber?: string | null }>,
+): T[] {
+  if (!serverRows.length) return history;
+  const byCard = new Map<number, string>();
+  for (const row of serverRows) {
+    const cn = Number(row.cardNumber);
+    const ticket = row.ticketNumber?.trim();
+    if (Number.isFinite(cn) && cn >= 1 && ticket) byCard.set(cn, ticket);
+  }
+  if (!byCard.size) return history;
+
+  let playedIdx = 0;
+  let changed = false;
+  const next = history.map((row) => {
+    if (row.status !== "Scratched" && row.status !== "Lost") return row;
+    playedIdx += 1;
+    const ticket = byCard.get(playedIdx);
+    if (!ticket) return row;
+    if (row.prize?.ticketNumber === ticket) return row;
+    changed = true;
+    return { ...row, prize: { ...row.prize, ticketNumber: ticket } };
+  });
+  return changed ? next : history;
+}
+
 type Props = {
   title?: string;
   rows: PlayResultRow[];

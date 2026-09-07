@@ -192,6 +192,7 @@ export default function ScratchGamePage() {
           congratsAudioRef={winnerCongratsRef}
           resultModalOpen={isResultModalOpen}
           playTickets={orderData?.playTickets || []}
+          serverHistory={orderData?.history || []}
         />
       </section>
 

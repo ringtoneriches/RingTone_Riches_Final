@@ -15,7 +15,7 @@ import confetti from 'canvas-confetti';
 
 import { useLocation, useParams } from "wouter";
 import { Sparkles } from "lucide-react";
-import { formatResultTicket, prizeFromReward } from "@/components/games/PlayResultsTable";
+import { formatResultTicket, mergeScratchTicketsFromServer, prizeFromReward } from "@/components/games/PlayResultsTable";
 import RevealAllBatchSummary, { type RevealBatchRow } from "@/components/games/RevealAllBatchSummary";
 
 interface ScratchCardProps {
@@ -34,6 +34,14 @@ interface ScratchCardProps {
   competitionId?: string;
   resultModalOpen?: boolean;
   playTickets?: Array<string | null>;
+  serverHistory?: Array<{
+    cardNumber?: number | null;
+    ticketNumber?: string | null;
+    prizeLabel?: string | null;
+    rewardType?: string | null;
+    rewardValue?: string | null;
+    isWin?: boolean | null;
+  }>;
 }
 
 const CSS_WIDTH = 500;
@@ -89,7 +97,7 @@ const saveScratchHistory = (history: { status: string; prize: { type: string; va
   }
 };
 
-export default function ScratchCardTest({ onScratchReveal, onCommitSession, onRefreshBalance, onRemainingChange,  competitionId , mode = "tight", scratchTicketCount, orderId ,congratsAudioRef, resultModalOpen = false, playTickets = [] }: ScratchCardProps) {
+export default function ScratchCardTest({ onScratchReveal, onCommitSession, onRefreshBalance, onRemainingChange,  competitionId , mode = "tight", scratchTicketCount, orderId ,congratsAudioRef, resultModalOpen = false, playTickets = [], serverHistory = [] }: ScratchCardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const {id} = useParams()
   const drawingRef = useRef(false);
@@ -208,6 +216,9 @@ useEffect(() => {
 
 
 function withPlayTickets(history: { status: string; prize: { type: string; value: string; ticketNumber?: string | null } }[]) {
+  if (serverHistory.length) {
+    return mergeScratchTicketsFromServer(history, serverHistory);
+  }
   if (!playTickets.length) return history;
   let ticketIdx = 0;
   return history.map((row) => {
@@ -280,7 +291,12 @@ useEffect(() => {
   historyBoundToOrderRef.current = orderId;
   setScratchHistory(withPlayTickets(finalHistory));
   if (orderId && finalHistory.length > 0) saveScratchHistory(finalHistory, orderId);
-}, [scratchTicketCount, orderId, playTickets.join("|")]);
+}, [scratchTicketCount, orderId, playTickets.join("|"), serverHistory]);
+
+useEffect(() => {
+  if (!serverHistory.length) return;
+  setScratchHistory((prev) => mergeScratchTicketsFromServer(prev, serverHistory));
+}, [serverHistory]);
 
   // If the server still has cards, reopen locally-closed rows that were never used.
   const openRemainingSlots = (history: any[], remaining: number) => {

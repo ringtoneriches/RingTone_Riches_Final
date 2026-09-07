@@ -33,7 +33,7 @@ import centerVideo from "../../../../attached_assets/spinweel2video.mp4"
 import congrats from "../../../../attached_assets/sounds/congrats.mp3"
 import { useLocation } from "wouter";
 import PlayResultsTable, {
-  applySpinPlayTickets,
+  mergeSpinTicketsFromServer,
   prizeFromSpinApi,
   rowsFromSpinHistory,
   type SpinHistoryRow,
@@ -73,6 +73,13 @@ interface SpinWheelProps {
   orderId?: string;
   competitionId?: string;
   playTickets?: Array<string | null>;
+  serverHistory?: Array<{
+    spinNumber?: number | null;
+    ticketNumber?: string | null;
+    prizeLabel?: string | null;
+    rewardType?: string | null;
+    rewardValue?: string | null;
+  }>;
   congratsAudioRef: React.RefObject<HTMLAudioElement>;
   onAllSpinsComplete?: () => void;
   onReady?: () => void;
@@ -133,6 +140,7 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
   orderId,
   competitionId,
   playTickets = [],
+  serverHistory = [],
   congratsAudioRef,
   onAllSpinsComplete,
   onReady,
@@ -207,13 +215,13 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
     const savedHistory = loadSpinHistory(orderId);
 
     if (savedHistory.length === ticketCount) {
-      setSpinHistory(applySpinPlayTickets(savedHistory, playTickets));
+      setSpinHistory(mergeSpinTicketsFromServer(savedHistory, serverHistory));
     } else if (savedHistory.length > 0) {
       const adjustedHistory = adjustSpinHistoryToCount(
         savedHistory,
         ticketCount,
       );
-      setSpinHistory(applySpinPlayTickets(adjustedHistory, playTickets));
+      setSpinHistory(mergeSpinTicketsFromServer(adjustedHistory, serverHistory));
     } else {
       setSpinHistory(
         Array.from({ length: ticketCount }, () => ({
@@ -225,9 +233,9 @@ const SpinWheel2: React.FC<SpinWheelProps> = ({
   }, [ticketCount, orderId]);
 
   useEffect(() => {
-    if (!playTickets.length) return;
-    setSpinHistory((prev) => applySpinPlayTickets(prev, playTickets));
-  }, [playTickets.join("|")]);
+    if (!serverHistory.length) return;
+    setSpinHistory((prev) => mergeSpinTicketsFromServer(prev, serverHistory));
+  }, [serverHistory]);
 
   // Helper function to adjust spin history
   const adjustSpinHistoryToCount = (history: any[], targetCount: number) => {

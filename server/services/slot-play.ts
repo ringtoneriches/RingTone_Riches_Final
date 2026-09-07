@@ -11,6 +11,7 @@ import {
 } from "@shared/schema";
 import { syncSlotPrize } from "./prize-sync";
 import { notifyPublicWinnerUpdate } from "./record-game-winner";
+import { claimNextPlayTicket } from "./play-ticket-labels";
 
 type OrderLike = {
   id: string;
@@ -29,6 +30,7 @@ export type SlotSpinResponse = {
   spinNumber: number;
   spinsUsed: number;
   spinsAllowed: number;
+  ticketNumber?: string | null;
 };
 
 type ProcessResult =
@@ -275,17 +277,22 @@ export async function processUncontrolledSlotSpin(opts: {
     }
   }
 
+  let ticketNumber: string | null = null;
   try {
-    await db.insert(slotUsage).values({
-      orderId,
-      userId,
-      isWin,
-      coinsWon,
-      coinsSpent: coinsSpent || 0,
-      spinNumber,
-      prizeId: prizeId || null,
-      prizeName: prizeName || null,
-    } as any);
+    await db.transaction(async (tx) => {
+      ticketNumber = await claimNextPlayTicket(tx, orderId);
+      await tx.insert(slotUsage).values({
+        orderId,
+        userId,
+        isWin,
+        coinsWon,
+        coinsSpent: coinsSpent || 0,
+        spinNumber,
+        prizeId: prizeId || null,
+        prizeName: prizeName || null,
+        ticketNumber,
+      });
+    });
   } catch (dbError) {
     console.error("[API] ❌ Error recording spin:", dbError);
   }
@@ -303,6 +310,7 @@ export async function processUncontrolledSlotSpin(opts: {
       spinNumber,
       spinsUsed: spinNumber,
       spinsAllowed: order.quantity,
+      ticketNumber,
     },
   };
 }
