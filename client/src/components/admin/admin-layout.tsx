@@ -39,6 +39,7 @@ import {
   Gift,
   Star,
   Hash,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,9 +70,8 @@ const sidebarGroups = [
       { name: "Ringtone Pop", path: "/admin/add-ringtone-pop", icon: Sparkles },
       { name: "Ringtone Plinko", path: "/admin/plinko", icon: Target },
       { name: "Ringtone Voltz", path: "/admin/voltz", icon: Zap },
-      
+      { name: "Royal Reels", path: "/admin/royal", icon: Crown },
       { name: "Ringtone Slot", path: "/admin/slot", icon: Zap },
-      // { name: "Ringtone Royal", path: "/admin/royal", icon: Zap },
     ],
     protected: true,
   },

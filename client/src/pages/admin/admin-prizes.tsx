@@ -140,7 +140,7 @@ export default function AdminPrizes() {
       const allCompetitions = await res.json();
     
       // Filter to only show specific competition types
-      const allowedTypes = ['pop', 'voltz', 'plinko', 'scratch', 'spin', 'slot'];
+      const allowedTypes = ['pop', 'voltz', 'plinko', 'scratch', 'spin', 'slot', 'royal'];
       return allCompetitions.filter((comp: Competition) => 
         allowedTypes.includes(comp.type?.toLowerCase()));
     },
