@@ -3739,6 +3739,8 @@ app.post("/api/user/notifications/clear-all", isAuthenticated, async (req, res) 
           return false;
         if (comp.type === "pop" && popConfig?.isVisible === false) return false;
          if (comp.type === "voltz" && voltzConfigRow?.isVisible === false) return false;
+        // Royal Reels hidden until UI is fixed — use Ringtone Slot instead
+        if (comp.type === "royal") return false;
         return true;
       });
 
