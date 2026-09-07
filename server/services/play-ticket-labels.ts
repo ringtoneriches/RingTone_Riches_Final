@@ -58,7 +58,7 @@ function historyChronological<T extends { spinNumber?: number | null; usedAt?: D
   });
 }
 
-function historyNewestFirst<T extends { spinNumber?: number | null; usedAt?: Date | string | null; wonAt?: Date | string | null }>(
+function sortHistoryNewestFirst<T extends { spinNumber?: number | null; usedAt?: Date | string | null; wonAt?: Date | string | null }>(
   rows: T[],
 ) {
   return [...rows].sort((a, b) => {
@@ -99,12 +99,12 @@ export function attachTicketNumbersNewestFirst<
     wonAt?: Date | string | null;
     ticketNumber?: string | null;
   },
->(historyNewestFirst: T[], orderTickets: TicketRow[]) {
+>(rowsNewestFirst: T[], orderTickets: TicketRow[]) {
   const revealedInOrder = sortTicketsForReveal(
     orderTickets.filter((t) => t.resultStatus === "revealed"),
   );
 
-  const chronological = historyChronological(historyNewestFirst);
+  const chronological = historyChronological(rowsNewestFirst);
   const labeled = chronological.map((row, index) => {
     const stored = normalizeStoredTicket(row.ticketNumber);
     const fromReveal = revealLabelForPlay(row, index, revealedInOrder);
@@ -121,7 +121,7 @@ export function attachTicketNumbersNewestFirst<
     return row;
   });
 
-  return historyNewestFirst(labeled);
+  return sortHistoryNewestFirst(labeled);
 }
 
 export async function claimNextPlayTicket(tx: any, orderId: string) {
