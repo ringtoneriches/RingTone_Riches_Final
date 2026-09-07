@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { isAuthenticated } from "./customAuth";
 import { db } from "./db";
 import { competitions, instantWinPrizeAudit } from "@shared/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, and } from "drizzle-orm";
 import {
   HIGH_VALUE_THRESHOLD,
   InstantWinError,
@@ -61,6 +61,7 @@ export function registerInstantWinRoutes(app: Express) {
           createdAt: competitions.createdAt,
         })
         .from(competitions)
+        .where(and(eq(competitions.isActive, true), eq(competitions.status, "active")))
         .orderBy(desc(competitions.createdAt));
       res.json(rows);
     } catch (error) {

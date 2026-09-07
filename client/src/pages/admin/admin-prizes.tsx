@@ -142,7 +142,7 @@ export default function AdminPrizes() {
       // Filter to only show specific competition types
       const allowedTypes = ['pop', 'voltz', 'plinko', 'scratch', 'spin', 'slot'];
       return allCompetitions.filter((comp: Competition) => 
-        allowedTypes.includes(comp.type?.toLowerCase()));
+        allowedTypes.includes(comp.type?.toLowerCase()) && comp.isActive && comp.status === "active");
     },
   });
 

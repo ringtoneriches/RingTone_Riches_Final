@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { instantPrizeGroupKey, planGroupActivation } from "@shared/instant-win-groups";
+import { isCompetitionLive } from "@shared/competition-config";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -372,21 +373,26 @@ export default function AdminInstantPool() {
     }
   }, [selectedComp?.id, selectedComp?.ticketBlockSize, selectedComp?.maxTickets]);
 
+  const liveCompetitions = useMemo(
+    () => competitions.filter(isCompetitionLive),
+    [competitions],
+  );
+
   const visibleCompetitions = useMemo(() => {
     const q = compSearch.trim().toLowerCase();
-    if (!q) return competitions;
-    return competitions.filter((c) =>
-      [c.title, c.type, c.instantWinMode, c.isActive ? "active" : "archived"]
+    if (!q) return liveCompetitions;
+    return liveCompetitions.filter((c) =>
+      [c.title, c.type, c.instantWinMode]
         .join(" ")
         .toLowerCase()
         .includes(q)
     );
-  }, [competitions, compSearch]);
+  }, [liveCompetitions, compSearch]);
 
   const eligibleCompetitions = visibleCompetitions.filter((c) => c.type !== "instant");
   const instantDrawCompetitions = visibleCompetitions.filter((c) => c.type === "instant");
-  const browseEligible = competitions.filter((c) => c.type !== "instant");
-  const browseInstantDraws = competitions.filter((c) => c.type === "instant");
+  const browseEligible = liveCompetitions.filter((c) => c.type !== "instant");
+  const browseInstantDraws = liveCompetitions.filter((c) => c.type === "instant");
 
   const pickCompetition = (id: string) => {
     setSelectedId(id);

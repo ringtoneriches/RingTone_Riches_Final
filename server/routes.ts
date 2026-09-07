@@ -3859,6 +3859,7 @@ res.json({
         .where(
           and(
             eq(competitions.id, req.params.id),
+            eq(competitions.isActive, true),
             eq(competitions.status, "active")
           )
         )
@@ -14152,6 +14153,8 @@ app.get(
           .update(competitions)
           .set({
             isActive: false,
+            status: "archived",
+            featuredOrder: null,
             updatedAt: new Date(),
           })
           .where(eq(competitions.id, id));
@@ -14267,13 +14270,7 @@ app.patch(
       }
 
       // Check if competition is active and not archived
-      if (!competition.isActive) {
-        return res.status(400).json({ 
-          message: "Cannot update tickets for inactive competitions" 
-        });
-      }
-
-      if (competition.isArchived) {
+      if (!competition.isActive || competition.status === "archived") {
         return res.status(400).json({ 
           message: "Cannot update tickets for archived competitions" 
         });
