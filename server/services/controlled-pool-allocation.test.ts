@@ -2,9 +2,25 @@ import { describe, expect, it } from "vitest";
 import {
   allocateTicketSeqsInBlocks,
   assertSeqsWithinBlock,
+  generateLosingBalloonValues,
   pickDistinctRandom,
   resolveTicketInstantWin,
 } from "./controlled-pool-allocation";
+
+describe("generateLosingBalloonValues", () => {
+  it("returns three distinct values from the prize pool when possible", () => {
+    const vals = generateLosingBalloonValues([1, 5, 10, 25, 50]);
+    expect(vals).toHaveLength(3);
+    expect(new Set(vals).size).toBe(3);
+    vals.forEach((v) => expect([1, 5, 10, 25, 50]).toContain(v));
+  });
+
+  it("uses fallback decoys when fewer than two pool values exist", () => {
+    const vals = generateLosingBalloonValues([5]);
+    expect(vals).toHaveLength(3);
+    expect(new Set(vals).size).toBe(3);
+  });
+});
 
 describe("pickDistinctRandom", () => {
   it("returns distinct numbers without replacement", () => {

@@ -28,7 +28,7 @@ interface CashflowTx {
   userEmail?: string;
   description: string;
   paymentRef: string;
-  type: string;
+  type: "deposit" | "purchase" | "cashback";
   amount: number;
   source: string;
   createdAt: string;
@@ -641,15 +641,21 @@ export default function AdminTransactions() {
                             {tx.userEmail || 'N/A'}
                           </TableCell>
                           <TableCell className="hidden sm:table-cell">
-                            <Badge 
-                              variant={tx.type === 'deposit' ? 'default' : 'secondary'}
+                            <Badge
+                              variant="secondary"
                               className={`text-[10px] sm:text-xs ${
-                                tx.type === 'deposit' 
-                                  ? 'bg-green-500/20 text-green-400 border-green-500/30' 
-                                  : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                tx.type === "deposit"
+                                  ? "bg-green-500/20 text-green-400 border-green-500/30"
+                                  : tx.type === "cashback"
+                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                                    : "bg-blue-500/20 text-blue-400 border-blue-500/30"
                               }`}
                             >
-                              {tx.type === 'deposit' ? 'Top-Up' : 'Instant-Play'}
+                              {tx.type === "deposit"
+                                ? "Top-Up"
+                                : tx.type === "cashback"
+                                  ? "Cashback"
+                                  : "Instant-Play"}
                             </Badge>
                           </TableCell>
                           <TableCell className="hidden md:table-cell">
@@ -664,11 +670,16 @@ export default function AdminTransactions() {
                             {tx.paymentRef || 'N/A'}
                           </TableCell>
                           <TableCell className="font-bold whitespace-nowrap p-2 sm:p-4">
-                            <span className={`text-xs sm:text-sm font-bold ${tx.type === 'deposit' ? 'text-green-400' : 'text-blue-400'}`}>
+                            <span
+                              className={`text-xs sm:text-sm font-bold ${
+                                tx.type === "deposit"
+                                  ? "text-green-400"
+                                  : tx.type === "cashback"
+                                    ? "text-amber-300"
+                                    : "text-blue-400"
+                              }`}
+                            >
                               £{Math.abs(Number(tx.amount || 0)).toFixed(2)}
-                              {tx.type === 'purchase' && (
-                                <span className="text-[10px] text-muted-foreground ml-1">(instant play)</span>
-                              )}
                             </span>
                           </TableCell>
                         </TableRow>
