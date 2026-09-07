@@ -1423,11 +1423,11 @@ export async function getPublicPrizePool(competitionId: string) {
       })),
     };
   }).sort((a, b) => {
-    const sortValue = (row: { rewardType?: string | null; ringtonePoints: number; prizeValue: number }) =>
-      row.rewardType === "points" && row.ringtonePoints > 0
-        ? row.ringtonePoints / 100
-        : row.prizeValue;
-    return sortValue(b) - sortValue(a);
+    const aIsPoints = a.rewardType === "points" && a.ringtonePoints > 0;
+    const bIsPoints = b.rewardType === "points" && b.ringtonePoints > 0;
+    if (aIsPoints !== bIsPoints) return aIsPoints ? 1 : -1;
+    if (aIsPoints) return b.ringtonePoints - a.ringtonePoints;
+    return b.prizeValue - a.prizeValue;
   });
 
   const maxTickets = Number(competition?.maxTickets || 0);
