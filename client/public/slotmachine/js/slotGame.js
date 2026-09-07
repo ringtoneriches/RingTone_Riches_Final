@@ -334,9 +334,7 @@ class SlotGame extends Phaser.Scene {
 
         this.slotPlayer.setWinCoinsCount(winCoins);
         this.slotPlayer.addCoins(winCoins);
-        if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ type: 'slotSpinResult', isWin: true, coinsWon: winCoins, balance: this.slotPlayer.coins }, '*');
-        }
+        postSlotSpinResult(true, winCoins, this.slotPlayer.coins);
         while (this.miniGame !== null || !this.guiController.hasNoPopUp()) {
             yield null;
         }
@@ -482,9 +480,7 @@ class SlotGame extends Phaser.Scene {
     // lose show coroutine
     *loseShowC(completeCallBack) {
         this.soundController.playClip('lose_clip', false);
-        if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ type: 'slotSpinResult', isWin: false, coinsWon: 0, balance: this.slotPlayer ? this.slotPlayer.coins : 0 }, '*');
-        }
+        postSlotSpinResult(false, 0, this.slotPlayer ? this.slotPlayer.coins : 0);
         //console.log('lose show, spinCount: ' + this.spinCount);
         //console.log('play lose sound');  // play sound loseSound
         this.slotPlayer.addLevelProgress(this.loseSpinLevelProgress);
@@ -658,4 +654,14 @@ function getTime() {
 
     //return the number of milliseconds since 1 January 1970 00:00:00.
     return d.getTime();
+}
+
+function postSlotSpinResult(isWin, coinsWon, balance) {
+    if (typeof window.postRoyalSpinResult === 'function') {
+        window.postRoyalSpinResult(isWin, coinsWon, balance);
+        return;
+    }
+    if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'slotSpinResult', isWin: isWin, coinsWon: coinsWon, balance: balance }, '*');
+    }
 }
