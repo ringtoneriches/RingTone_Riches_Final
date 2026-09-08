@@ -190,6 +190,7 @@ import { calculateDiscountedTotal } from "./utils/discounts";
 import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
 import { notifyPublicWinnerUpdate } from "./services/record-game-winner";
 import { processUncontrolledSlotSpin, revealAllUncontrolledSlot } from "./services/slot-play";
+import { getPromoVideoModeStatus } from "./services/promo-video-mode";
 import {
   getCompletedScratchSession,
   getOpenScratchSession,
@@ -1456,6 +1457,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/step-up/status", isAuthenticated, isAdmin, async (req: any, res) => {
     res.json(getAdminStepUpStatus(req));
+  });
+
+  app.get("/api/admin/promo-video-mode", isAuthenticated, isAdmin, async (_req, res) => {
+    res.json(getPromoVideoModeStatus());
   });
 
   app.post(
