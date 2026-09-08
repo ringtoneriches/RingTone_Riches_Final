@@ -10,6 +10,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Shield, XCircle } from "lucide-react";
 import AuthShell from "@/components/auth/AuthShell";
 import AuthPasswordInput from "@/components/auth/AuthPasswordInput";
+import { validateRegisterNameField } from "@/lib/register-field-validation";
 
 // ===== SECURITY CONSTANTS =====
 const SUSPICIOUS_PATTERNS = [
@@ -48,8 +49,6 @@ const BOT_PATTERNS = [
   /^[a-f0-9]{16,}$/i, // Hex string
   /^[a-zA-Z]{1}\d{10,}$/, // Letter followed by numbers
 ];
-
-const ALLOWED_NAME_CHARS = /^[a-zA-Z\s\-'., ]+$/;
 
 type RegisterForm = {
   firstName: string;
@@ -102,6 +101,10 @@ export default function Register() {
 
   // Check if string contains suspicious content
   const validateField = (value: string, fieldName: string): string | null => {
+    if (fieldName === "First name" || fieldName === "Last name") {
+      return validateRegisterNameField(value, fieldName);
+    }
+
     if (!value || value.trim().length === 0) {
       return null; // Empty fields handled separately
     }
@@ -127,13 +130,6 @@ export default function Register() {
       }
     }
 
-    // Check for allowed characters (for name fields)
-    if (fieldName === "First name" || fieldName === "Last name") {
-      if (!ALLOWED_NAME_CHARS.test(trimmed)) {
-        return `${fieldName} contains invalid characters (only letters, spaces, hyphens, and apostrophes allowed)`;
-      }
-    }
-
     // Check for excessive special characters
     const specialChars = trimmed.match(/[^a-zA-Z0-9\s\-'., ]/g) || [];
     if (specialChars.length > trimmed.length * 0.3) {
@@ -143,14 +139,6 @@ export default function Register() {
     // Check for excessive repeated characters
     if (/(\w)\1{5,}/.test(trimmed)) {
       return `${fieldName} contains too many repeated characters`;
-    }
-
-    // Check for common name patterns (should have at least 2 letters)
-    if (fieldName === "First name" || fieldName === "Last name") {
-      const letters = trimmed.match(/[a-zA-Z]/g) || [];
-      if (letters.length < 2) {
-        return `${fieldName} must contain at least 2 letters`;
-      }
     }
 
     return null;
