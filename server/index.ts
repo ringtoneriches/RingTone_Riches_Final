@@ -12,6 +12,7 @@ import puppeteer from "puppeteer";
 import { startCrons } from "./cron";
 import { getBrowser } from "./pupeteerBrowser";
 import { socialPreviewMiddleware } from "./social-preview";
+import { getPromoVideoModeStatus } from "./services/promo-video-mode";
   dotenv.config();
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -228,6 +229,13 @@ app.use((req, res, next) => {
   storage.initializeAdminUser();
   // await autoSeedProduction();
   const server = await registerRoutes(app);
+
+  const promoVideo = getPromoVideoModeStatus();
+  if (promoVideo.enabled) {
+    log("🎬 PROMO VIDEO MODE active — every controlled-pool ticket wins the jackpot (staging only)");
+  } else if (promoVideo.envFlag && promoVideo.productionBlocked) {
+    log("⚠️ PROMO_VIDEO_MODE=true ignored on live production host");
+  }
 
   startCrons();
 
