@@ -52,6 +52,10 @@ type BalloonColor = {
   light: string;
   dark: string;
   accent: string;
+  /** Outline around the balloon body. Kept separate from `accent` so the
+   *  black balloon can drop its gold ring without losing the gold burst,
+   *  spotlight and prize-card styling that `accent` also drives. */
+  ring: string;
   rim: string;
   glow: string;
   innerGlow: string;
@@ -64,6 +68,7 @@ const BALLOON_COLORS: BalloonColor[] = [
     light: "#FF6B7A",
     dark: "#7A0A1C",
     accent: "#FF263D",
+    ring: "#FF263D",
     rim: "rgba(255, 38, 61, 0.45)",
     glow: "0 0 60px rgba(200, 16, 46, 0.8), 0 0 100px rgba(200, 16, 46, 0.4)",
     innerGlow: "inset 0 0 30px rgba(255, 255, 255, 0.25)",
@@ -74,6 +79,7 @@ const BALLOON_COLORS: BalloonColor[] = [
     light: "#F8E7A8",
     dark: "#8A6E18",
     accent: "#F1D47A",
+    ring: "#F1D47A",
     rim: "rgba(241, 212, 122, 0.55)",
     glow: "0 0 60px rgba(212, 175, 55, 0.8), 0 0 100px rgba(241, 212, 122, 0.4)",
     innerGlow: "inset 0 0 30px rgba(255, 255, 255, 0.3)",
@@ -84,6 +90,7 @@ const BALLOON_COLORS: BalloonColor[] = [
     light: "#4a4a52",
     dark: "#050505",
     accent: "#F1D47A",
+    ring: "#050505",
     rim: "rgba(241, 212, 122, 0.65)",
     glow: "0 0 50px rgba(241, 212, 122, 0.45), 0 0 90px rgba(200, 16, 46, 0.22)",
     innerGlow: "inset 0 0 28px rgba(241, 212, 122, 0.14)",
@@ -338,7 +345,7 @@ function Balloon({ value, isPopped, onPop, index, disabled, isMuted }: BalloonPr
         style={{
           background: `radial-gradient(ellipse at 30% 25%, ${colorScheme.light} 0%, ${colorScheme.main} 35%, ${colorScheme.dark} 100%)`,
           boxShadow: `0 12px 50px ${colorScheme.main}60, ${colorScheme.innerGlow}, inset 8px 8px 30px ${colorScheme.light}50, ${colorScheme.glow}`,
-          border: `2px solid ${colorScheme.accent}`,
+          border: `2px solid ${colorScheme.ring}`,
         }}
       >
         <div
