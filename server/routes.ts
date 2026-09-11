@@ -191,6 +191,8 @@ import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpi
 import { notifyPublicWinnerUpdate } from "./services/record-game-winner";
 import { processUncontrolledSlotSpin, revealAllUncontrolledSlot } from "./services/slot-play";
 import { getPromoVideoModeStatus } from "./services/promo-video-mode";
+import { getCashflowsRevenue } from "./services/cashflows-revenue";
+import { ukDayStart } from "./services/uk-day";
 import {
   getCompletedScratchSession,
   getOpenScratchSession,
@@ -10159,101 +10161,27 @@ app.get(
     try {
       const { dateFrom, dateTo, search } = req.query;
       
-      // Get Cashflows transactions with same inclusive filter
-      let allTransactions = await db
-        .select({
-          id: transactions.id,
-          userId: transactions.userId,
-          userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
-          userEmail: users.email,
-          type: transactions.type,
-          amount: transactions.amount,
-          description: transactions.description,
-          createdAt: transactions.createdAt,
-          source: sql`'cashflows'`,
-          paymentRef: transactions.paymentRef,
-        })
-        .from(transactions)
-        .leftJoin(users, eq(transactions.userId, users.id))
-        .where(
-          sql`(
-            ${transactions.type} = 'deposit'
-          ) OR (
-            ${transactions.type} = 'purchase' 
-            AND ${transactions.paymentRef} IS NOT NULL 
-            AND ${transactions.paymentRef} != '' 
-            AND ${transactions.paymentRef} != 'N/A'
-            AND ${transactions.description} LIKE '%Instant play purchase%'
-          ) OR (
-            ${transactions.paymentRef} LIKE '260%'
-          )`
-        );
-      
-      // Apply filters
-      let filtered = [...allTransactions];
-      
-      if (dateFrom) {
-        const fromDate = new Date(dateFrom as string);
-        filtered = filtered.filter(tx => new Date(tx.createdAt) >= fromDate);
-      }
+      // Totals come from completed Cashflows payments — the same figure as the dashboard's
+      // "Today's Revenue" and the Cashflows portal. Cashback and signup bonuses are not Cashflows money.
+      const fromDate = dateFrom ? new Date(dateFrom as string) : null;
+      let toDate: Date | null = null;
       if (dateTo) {
-        const toDate = new Date(dateTo as string);
+        toDate = new Date(dateTo as string);
         toDate.setHours(23, 59, 59, 999);
-        filtered = filtered.filter(tx => new Date(tx.createdAt) <= toDate);
       }
-      if (search) {
-        const searchLower = (search as string).toLowerCase();
-        filtered = filtered.filter(tx => 
-          (tx.userName || '').toLowerCase().includes(searchLower) ||
-          (tx.userEmail || '').toLowerCase().includes(searchLower) ||
-          (tx.description || '').toLowerCase().includes(searchLower) ||
-          (tx.paymentRef || '').toLowerCase().includes(searchLower) ||
-          String(Math.abs(parseFloat(String(tx.amount)) || 0)).includes(searchLower)
-        );
-      }
-      
-      // Calculate deposit total (real Cashflows top-ups only — not card cashback)
-      const depositTotal = filtered
-        .filter((tx) => tx.type === "deposit" && !isCardCashbackTx(tx))
-        .reduce((sum, tx) => {
-          const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
-          return sum + amount;
-        }, 0);
-      
-      // Calculate instant play purchase total
-      const instantPlayTotal = filtered
-        .filter((tx) => tx.type === "purchase")
-        .reduce((sum, tx) => {
-          const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
-          return sum + amount;
-        }, 0);
-      
-      // Total revenue
-      const totalAmount = depositTotal + instantPlayTotal;
-      
-      // Unique users
-      const uniqueUsers = new Set(
-        filtered
-          .map(tx => tx.userEmail || tx.userId)
-          .filter(Boolean)
-      );
-      
-      console.log('Cashflows Stats:', {
-        totalFiltered: filtered.length,
-        depositCount: filtered.filter(tx => tx.type === 'deposit').length,
-        purchaseCount: filtered.filter(tx => tx.type !== 'deposit').length,
-        depositTotal: depositTotal.toFixed(2),
-        instantPlayTotal: instantPlayTotal.toFixed(2),
-        totalAmount: totalAmount.toFixed(2),
-        uniqueUsers: uniqueUsers.size
+
+      const revenue = await getCashflowsRevenue({
+        from: fromDate,
+        to: toDate,
+        search: search as string | undefined,
       });
-      
+
       res.json({
-        totalAmount: Number(totalAmount.toFixed(2)),
-        depositTotal: Number(depositTotal.toFixed(2)),
-        instantPlayTotal: Number(instantPlayTotal.toFixed(2)),
-        transactionCount: filtered.length,
-        uniqueUsers: uniqueUsers.size,
+        totalAmount: revenue.total,
+        depositTotal: revenue.topupTotal,
+        instantPlayTotal: revenue.cardPurchaseTotal,
+        transactionCount: revenue.count,
+        uniqueUsers: revenue.uniqueCustomers,
       });
       
     } catch (error) {
@@ -13268,23 +13196,13 @@ app.delete(
           .select({ count: sql<number>`count(*)` })
           .from(competitions);
 
-        // Get total revenue
-        const today = new Date();
-        today.setUTCHours(0, 0, 0, 0);
-        
-        // Daily revenue (today)
-        const dailyRevenueResult  = await db
-        .select({
-          total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
-        })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.type, "deposit"),
-            gte(transactions.createdAt, today)
-          )
-        );
-      
+        // "Today" is the UK calendar day (00:00 Europe/London), not UTC midnight
+        const today = ukDayStart();
+
+        // Daily revenue: money Cashflows took today — top-ups and card game purchases (incl. guests).
+        // Card cashback and signup bonuses are wallet credits, not revenue.
+        const dailyRevenue = await getCashflowsRevenue({ from: today });
+
 
         // 👉 NEW: Total site credit across all users
         const totalSiteCreditResult = await db
@@ -13328,7 +13246,7 @@ app.delete(
           stats: {
             totalUsers: totalUsers[0]?.count || 0,
             totalCompetitions: totalCompetitions[0]?.count || 0,
-            dailyRevenue: dailyRevenueResult[0]?.total || 0,
+            dailyRevenue: dailyRevenue.total,
 
             // ⭐ Added fields
             totalSiteCredit: totalSiteCreditResult[0]?.total || 0,

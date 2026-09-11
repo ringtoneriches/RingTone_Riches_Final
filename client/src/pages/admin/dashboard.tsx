@@ -190,6 +190,7 @@ export default function AdminDashboard() {
             icon={PoundSterling}
             tone="green"
             delay={300}
+            subtitle="Cashflows · since midnight UK"
             isHidden={privacyMode}
           />
           <StatCard
