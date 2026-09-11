@@ -25,7 +25,7 @@ import PaymentCancelled from "./pages/cancelled";
 import PaymentFailed from "./pages/failed";
 import CheckoutFailed from "./pages/competition-failed";
 import CheckoutCancelled from "./pages/competition-cancelled";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import TermsAndConditions from "./pages/terms-and-conditions";
 import PlayResponsibly from "./pages/play-responsible";
 import PrivacyPolicy from "./pages/privacy-policy";
@@ -301,7 +301,12 @@ function AppWithMaintenance() {
 
   const isAdminUser = user?.isAdmin === true;
   const isAdminRoute = location.startsWith("/admin");
-  
+
+  // Admin brand theme lives on <html> so Radix portals (dialogs, selects, toasts) get it too.
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle("rr-admin", isAdminRoute);
+  }, [isAdminRoute]);
+
   // Public routes that should still be accessible during maintenance
   const publicRoutes = [
     "/login", 
