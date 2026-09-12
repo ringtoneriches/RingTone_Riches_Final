@@ -346,6 +346,9 @@ async incrementCompetitionSoldTickets(competitionId: string, qty: number): Promi
         pageImageUrl: competition.pageImageUrl || null,
         type: competition.type,
         ticketPrice: competition.ticketPrice,
+        flashSalePrice: competition.flashSalePrice ?? null,
+        flashSaleStartsAt: parseDate(competition.flashSaleStartsAt),
+        flashSaleEndsAt: parseDate(competition.flashSaleEndsAt),
         prizeAmount: competition.prizeAmount ?? null,
         badgeLabel: competition.badgeLabel
           ? String(competition.badgeLabel).trim().slice(0, 40) || null

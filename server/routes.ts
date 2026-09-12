@@ -193,6 +193,7 @@ import { processUncontrolledSlotSpin, revealAllUncontrolledSlot } from "./servic
 import { getPromoVideoModeStatus } from "./services/promo-video-mode";
 import { getCashflowsRevenue } from "./services/cashflows-revenue";
 import { ukDayStart } from "./services/uk-day";
+import { effectiveTicketPrice } from "@shared/flash-sale";
 import {
   getCompletedScratchSession,
   getOpenScratchSession,
@@ -5305,7 +5306,7 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     }
     if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
-    const spinCostPerTicket = parseFloat(competition.ticketPrice);
+    const spinCostPerTicket = effectiveTicketPrice(competition);
     
     // Calculate discount
     const { originalTotal, discountPercent, discountedTotal, savings } = 
@@ -6610,7 +6611,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
         },
         competition: {
           title: competition.title,
-          ticketPrice: competition.ticketPrice,
+          ticketPrice: effectiveTicketPrice(competition).toFixed(2),
           type: competition.type,
         },
       });
@@ -6643,7 +6644,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             });
         }
 
-        const ticketPrice = parseFloat(competition.ticketPrice);
+        const ticketPrice = effectiveTicketPrice(competition);
         const totalAmount = ticketPrice * quantity;
 
         const user = await storage.getUser(userId);
@@ -6696,7 +6697,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
     }
     if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
-    const scratchCostPerCard = parseFloat(competition.ticketPrice);
+    const scratchCostPerCard = effectiveTicketPrice(competition);
     
     // Calculate discount
     const { originalTotal, discountPercent, discountedTotal, savings } = 
@@ -6753,7 +6754,7 @@ app.post("/api/create-pop-order", isAuthenticated, async (req: any, res) => {
     }
     if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
-    const popCostPerGame = parseFloat(competition.ticketPrice);
+    const popCostPerGame = effectiveTicketPrice(competition);
     
     // Calculate discount
     const { originalTotal, discountPercent, discountedTotal, savings } = 
@@ -6813,7 +6814,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
     }
     if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
-    const voltzCostPerGame = parseFloat(competition.ticketPrice);
+    const voltzCostPerGame = effectiveTicketPrice(competition);
     
     // Calculate discount
     const { originalTotal, discountPercent, discountedTotal, savings } = 
@@ -9398,8 +9399,8 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
 
     if (!competition) return res.status(404).json({ error: "Competition not found" });
 
-    // Calculate original amount
-    const originalAmount = Number(competition.ticketPrice) * order.quantity;
+    // Calculate original amount (flash sale price when one is running)
+    const originalAmount = effectiveTicketPrice(competition) * order.quantity;
     
     // Prepare discount values
     let discountAmount = Number(discount.value);
@@ -9564,7 +9565,7 @@ app.post(
           .from(competitions)
           .where(eq(competitions.id, competitionId));
 
-        const originalAmount = Number(competition?.ticketPrice || 0) * order.quantity;
+        const originalAmount = effectiveTicketPrice(competition) * order.quantity;
 
         // Update order to remove discount
         await tx.update(orders)
@@ -11024,10 +11025,10 @@ app.post("/api/create-plinko-order", isAuthenticated, async (req: any, res) => {
     }
     if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
-    const ticketPrice = parseFloat(competition.ticketPrice);
-    
+    const ticketPrice = effectiveTicketPrice(competition);
+
     // Calculate discount
-    const { originalTotal, discountPercent, discountedTotal, savings } = 
+    const { originalTotal, discountPercent, discountedTotal, savings } =
       calculateDiscountedTotal(ticketPrice, quantity);
 
     const order = await storage.createOrder({
@@ -13879,6 +13880,10 @@ app.get(
               "end_date",
               "updatedAt",
               "updated_at",
+              "flashSaleStartsAt",
+              "flash_sale_starts_at",
+              "flashSaleEndsAt",
+              "flash_sale_ends_at",
             ];
 
             if (timestampFields.includes(key)) {
@@ -13930,6 +13935,104 @@ app.get(
       } catch (error) {
         console.error("Error updating competition:", error);
         res.status(500).json({ message: "Failed to update competition" });
+      }
+    }
+  );
+
+  // Flash sale — start a temporary price that expires on its own (shared/flash-sale.ts)
+  app.post(
+    "/api/admin/competitions/:id/flash-sale",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const schema = z.object({
+          salePrice: z.coerce.number().min(0),
+          durationMinutes: z.coerce.number().int().min(1).max(60 * 24 * 30).optional(),
+          startsAt: z.string().optional(),
+          endsAt: z.string().optional(),
+        });
+        const { salePrice, durationMinutes, startsAt, endsAt } = schema.parse(req.body);
+
+        const [competition] = await db
+          .select()
+          .from(competitions)
+          .where(eq(competitions.id, req.params.id));
+        if (!competition) return res.status(404).json({ message: "Competition not found" });
+
+        const basePrice = Number(competition.ticketPrice);
+        if (!(salePrice < basePrice)) {
+          return res.status(400).json({
+            message: `Sale price must be below the normal price of £${basePrice.toFixed(2)}`,
+          });
+        }
+
+        const start = startsAt ? new Date(startsAt) : new Date();
+        if (Number.isNaN(start.getTime())) {
+          return res.status(400).json({ message: "Invalid start time" });
+        }
+
+        let end: Date | null = null;
+        if (endsAt) {
+          end = new Date(endsAt);
+        } else if (durationMinutes) {
+          end = new Date(start.getTime() + durationMinutes * 60_000);
+        }
+        if (!end || Number.isNaN(end.getTime())) {
+          return res.status(400).json({ message: "Choose how long the sale should run" });
+        }
+        if (end.getTime() <= Date.now()) {
+          return res.status(400).json({ message: "The sale end time must be in the future" });
+        }
+
+        const [updated] = await db
+          .update(competitions)
+          .set({
+            flashSalePrice: salePrice.toFixed(2),
+            flashSaleStartsAt: start,
+            flashSaleEndsAt: end,
+            updatedAt: new Date(),
+          })
+          .where(eq(competitions.id, req.params.id))
+          .returning();
+
+        wsManager.broadcast({ type: "competition_updated", competitionId: req.params.id });
+        res.json(updated);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid flash sale details" });
+        }
+        console.error("Error starting flash sale:", error);
+        res.status(500).json({ message: "Failed to start flash sale" });
+      }
+    }
+  );
+
+  // Flash sale — stop early and go straight back to the normal price
+  app.delete(
+    "/api/admin/competitions/:id/flash-sale",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const [updated] = await db
+          .update(competitions)
+          .set({
+            flashSalePrice: null,
+            flashSaleStartsAt: null,
+            flashSaleEndsAt: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(competitions.id, req.params.id))
+          .returning();
+
+        if (!updated) return res.status(404).json({ message: "Competition not found" });
+
+        wsManager.broadcast({ type: "competition_updated", competitionId: req.params.id });
+        res.json(updated);
+      } catch (error) {
+        console.error("Error stopping flash sale:", error);
+        res.status(500).json({ message: "Failed to stop flash sale" });
       }
     }
   );
@@ -19536,7 +19639,7 @@ app.post("/api/guest/create-order", async (req: any, res) => {
     }
 
     // Calculate total amount
-    const ticketPrice = Number(competition.ticketPrice);
+    const ticketPrice = effectiveTicketPrice(competition);
     const totalAmount = ticketPrice * quantity;
 
     // Generate order reference
@@ -21048,7 +21151,7 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
       if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
-      const slotCostPerSpin = parseFloat(competition.ticketPrice);
+      const slotCostPerSpin = effectiveTicketPrice(competition);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(slotCostPerSpin, quantity);
       const user = await storage.getUser(userId);
       const userBalance = parseFloat(user?.balance || "0");
@@ -21731,7 +21834,7 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
       if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
-      const costPerPlay = parseFloat(competition.ticketPrice);
+      const costPerPlay = effectiveTicketPrice(competition);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(costPerPlay, quantity);
       const user = await storage.getUser(userId);
       const order = await storage.createOrder({

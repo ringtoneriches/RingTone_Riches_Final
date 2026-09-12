@@ -265,6 +265,10 @@ export const competitions = pgTable("competitions", {
   pageImageUrl: text("page_image_url"),
   type: varchar("type", { enum: ["spin", "scratch", "instant", "pop", "plinko","voltz","slot","royal"] }).notNull(),
   ticketPrice: decimal("ticket_price", { precision: 10, scale: 2 }).notNull(),
+  // Flash sale: temporary price that expires on its own (see shared/flash-sale.ts)
+  flashSalePrice: decimal("flash_sale_price", { precision: 10, scale: 2 }),
+  flashSaleStartsAt: timestamp("flash_sale_starts_at"),
+  flashSaleEndsAt: timestamp("flash_sale_ends_at"),
   prizeAmount: decimal("prize_amount", { precision: 10, scale: 2 }),
   badgeLabel: varchar("badge_label", { length: 40 }),
   maxTickets: integer("max_tickets"),

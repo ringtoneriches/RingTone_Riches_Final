@@ -38,6 +38,7 @@ import {
   ListOrdered,
   ExternalLink,
   LogOut,
+  TicketPercent,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,6 +93,7 @@ const sidebarGroups = [
     items: [
       { name: "Marketing", path: "/admin/marketing", icon: Mail },
       { name: "Discounts", path: "/admin/discount", icon: TicketIcon },
+      { name: "Flash Sales", path: "/admin/flash-sales", icon: TicketPercent },
       { name: "Redeem Code", path: "/admin/redeem", icon: FileDigit },
       { name: "Intelligence", path: "/admin/intelligence", icon: Brain },
       { name: "Notification", path: "/admin/notification", icon: Send },

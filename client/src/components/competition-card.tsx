@@ -12,6 +12,8 @@ import ChaserBorder from "@/components/home/ChaserBorder";
 import QuantitySelector from "@/components/home/QuantitySelector";
 import CountdownBlocks from "@/components/home/CountdownBlocks";
 import { useCountdown } from "@/hooks/useCountdown";
+import FlashPrice from "@/components/FlashPrice";
+import { effectiveTicketPrice } from "@shared/flash-sale";
 import {
   HIDDEN_COMPETITION_IDS,
   getCompetitionBadgeLabel,
@@ -127,7 +129,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
               </span>
             </div>
             <span className="rr-comp-price-tag">
-              {stats.isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
+              <FlashPrice competition={competition} isFree={stats.isFree} variant="tag" />
             </span>
             {stats.isClosed && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/55">
@@ -161,7 +163,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-white/40">Entry</p>
                 <p className="font-prize text-xl text-[#F1D47A]">
-                  {stats.isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
+                  <FlashPrice competition={competition} isFree={stats.isFree} showTimer />
                 </p>
               </div>
             </div>
@@ -195,7 +197,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                           type: competition.type || "instant",
                           title: competition.title,
                           imageUrl: competition.imageUrl || undefined,
-                          ticketPrice: competition.ticketPrice,
+                          ticketPrice: effectiveTicketPrice(competition).toFixed(2),
                           quantity: qty,
                           wheelType: competition.wheelType,
                         },

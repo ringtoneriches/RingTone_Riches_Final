@@ -435,6 +435,11 @@ export default function BasketPage() {
                                 {item.title}
                               </h3>
                               <p className="mt-1 text-xs text-white/40">
+                                {item.basePrice && (
+                                  <span className="mr-1.5 text-white/35 line-through decoration-[#FF263D]/70">
+                                    £{parseFloat(item.basePrice).toFixed(2)}
+                                  </span>
+                                )}
                                 £{parseFloat(item.ticketPrice || "0").toFixed(2)} each
                                 {line.savings > 0 && (
                                   <span className="ml-2 text-[#F1D47A]">· {line.discountPercent}% bundle off</span>

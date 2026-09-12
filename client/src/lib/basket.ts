@@ -4,6 +4,8 @@ export type BasketItem = {
   title: string;
   imageUrl?: string;
   ticketPrice: string;
+  /** Normal price, set only while a flash sale is running (for the struck-through price). */
+  basePrice?: string;
   quantity: number;
   wheelType?: string | null;
 };
