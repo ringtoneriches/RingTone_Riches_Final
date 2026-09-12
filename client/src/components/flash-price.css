@@ -82,8 +82,75 @@ html.rr-day .rr-flash-now {
   color: #a8791b;
 }
 
+/* Card-level sale treatment: obvious at a glance, still premium. */
+.rr-flash-ribbon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 8px;
+  border: 1px solid rgba(241, 212, 122, 0.55);
+  background: linear-gradient(180deg, #ff263d 0%, #c8102e 100%);
+  padding: 0.22rem 0.45rem;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff8ee;
+  box-shadow: 0 6px 18px rgba(200, 16, 46, 0.4);
+  animation: rr-flash-ribbon-pulse 2.8s ease-in-out infinite;
+}
+.rr-flash-ribbon__off {
+  color: #ffe9a8;
+  font-weight: 900;
+}
+@keyframes rr-flash-ribbon-pulse {
+  0%, 100% {
+    box-shadow: 0 6px 18px rgba(200, 16, 46, 0.35);
+  }
+  50% {
+    box-shadow: 0 6px 22px rgba(200, 16, 46, 0.6), 0 0 16px rgba(241, 212, 122, 0.3);
+  }
+}
+
+.rr-comp-card.is-sale {
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 1px rgba(241, 212, 122, 0.22),
+    0 18px 40px rgba(200, 16, 46, 0.18);
+}
+
+/* Mobile grid cards hide the entry block, so the artwork pill carries the sale. */
+@media (max-width: 767px) {
+  .rr-comp-grid .rr-comp-card.is-sale .rr-comp-price-tag {
+    border-color: rgba(255, 38, 61, 0.75);
+    background: rgba(8, 8, 10, 0.92);
+    padding: 0.22rem 0.5rem;
+    font-size: 12px;
+    box-shadow: 0 6px 16px rgba(200, 16, 46, 0.35);
+  }
+  .rr-comp-grid .rr-comp-price-tag .rr-flash-was {
+    font-size: 0.75em;
+  }
+  /* Two-column cards are narrow: drop the words, keep the unmistakable "50% OFF". */
+  .rr-comp-grid .rr-flash-ribbon {
+    gap: 0.2rem;
+    padding: 0.18rem 0.38rem;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+  }
+  .rr-comp-grid .rr-flash-ribbon__label {
+    display: none;
+  }
+  .rr-flash-timer {
+    font-size: 8.5px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .rr-flash-now {
+  .rr-flash-now,
+  .rr-flash-ribbon {
     animation: none;
   }
 }
