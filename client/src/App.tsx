@@ -67,6 +67,7 @@ import AdminSpinWheelSettings from "./pages/admin/AdminSpinWheelSettings";
 import Intelligence from "./pages/admin/intelligence";
 import RegistrationSourceModal from "./components/RegistrationSourceModal";
 import AdminDiscountCodes from "./pages/admin/discount";
+import AdminFlashSales from "./pages/admin/flash-sales";
 import PlinkoBilling from "./pages/plinkoBilling";
 import AdminPlinko from "./pages/admin/plinko";
 import AdminPlinkoBalloon from "./pages/admin/admin-plinko";
@@ -194,6 +195,7 @@ function Router() {
       <Route path="/admin/add-ringtone-pop" component={AdminPopBalloon} />
       <Route path="/admin/intelligence" component={Intelligence} />
       <Route path="/admin/discount" component={AdminDiscountCodes} />
+      <Route path="/admin/flash-sales" component={AdminFlashSales} />
       <Route path="/admin/plinko" component={AdminPlinkoBalloon} />
       <Route path="/admin/ringtone-plinko/settings" component={AdminPlinko} />
       <Route path="/admin/verification" component={AdminVerifications} />

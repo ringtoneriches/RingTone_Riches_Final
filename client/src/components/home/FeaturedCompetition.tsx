@@ -9,6 +9,8 @@ import TrustStrip from "./TrustStrip";
 import QuantitySelector from "./QuantitySelector";
 import CountdownBlocks from "./CountdownBlocks";
 import { useCountdown } from "@/hooks/useCountdown";
+import FlashPrice from "@/components/FlashPrice";
+import { effectiveTicketPrice } from "@shared/flash-sale";
 import {
   getCompetitionBadgeLabel,
   getCompetitionTypeConfig,
@@ -156,7 +158,7 @@ function FeaturedSlide({
         <div className="mt-4 sm:mt-5">
           <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Entry</p>
           <p className="font-prize text-2xl sm:text-4xl text-[#F1D47A]">
-            {stats.isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
+            <FlashPrice competition={competition} isFree={stats.isFree} showTimer />
           </p>
         </div>
 
@@ -185,7 +187,7 @@ function FeaturedSlide({
                       type: competition.type || "instant",
                       title: competition.title,
                       imageUrl: competition.imageUrl || undefined,
-                      ticketPrice: competition.ticketPrice,
+                      ticketPrice: effectiveTicketPrice(competition).toFixed(2),
                       quantity: qty,
                       wheelType: competition.wheelType,
                     },

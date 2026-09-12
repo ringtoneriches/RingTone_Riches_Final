@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { Minus, Plus, Sparkles, Zap, Ticket, Trophy, Lock, Mail, ShoppingCart } from "lucide-react";
 import { useBasket } from "@/hooks/useBasket";
+import { effectiveTicketPrice } from "@shared/flash-sale";
+import FlashPrice from "@/components/FlashPrice";
 import UserCompetitionPrizes from "./user-competition-prizes";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
 import { PageWait } from "@/components/brand/BrandWait";
@@ -368,7 +370,7 @@ export default function CompetitionPage() {
         type: competitionType,
         title: competition.title,
         imageUrl: competition.imageUrl || undefined,
-        ticketPrice: competition.ticketPrice,
+        ticketPrice: effectiveTicketPrice(competition).toFixed(2),
         quantity,
         wheelType: competition.wheelType,
       },
@@ -427,7 +429,7 @@ export default function CompetitionPage() {
   const stats = getTicketStats(competition);
   const statusBadge = getStatusBadge(stats);
 
-  const pricePerTicket = parseFloat(competition.ticketPrice);
+  const pricePerTicket = effectiveTicketPrice(competition);
   
   const { originalPrice, discountPercent, discountedPrice, savings } = 
     isGameType ? calculateDiscountedPrice(pricePerTicket, quantity) : 
@@ -541,7 +543,9 @@ export default function CompetitionPage() {
                 <div className="mt-6 flex items-end justify-between gap-3">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/40">Per entry</p>
-                    <p className="font-prize text-3xl text-white">£{pricePerTicket.toFixed(2)}</p>
+                    <p className="font-prize text-3xl text-white">
+                      <FlashPrice competition={competition} showTimer />
+                    </p>
                   </div>
                             <div className="text-right">
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/40">Total</p>
@@ -796,7 +800,7 @@ export default function CompetitionPage() {
                   )}
                   <p className="font-prize text-3xl leading-none text-[#F1D47A] sm:text-4xl">£{displayTotal.toFixed(2)}</p>
                   <p className="mt-1 text-[11px] text-white/40">
-                    £{pricePerTicket.toFixed(2)} each
+                    <FlashPrice competition={competition} variant="tag" /> each
                     {isGameType && discountPercent > 0 && (
                       <span className="text-[#F1D47A]">
                         {" "}
