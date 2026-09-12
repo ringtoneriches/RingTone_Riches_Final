@@ -5,9 +5,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, Lock, Mail, Sparkles } from "lucide-react";
+import { Shield, Lock, Mail } from "lucide-react";
+import BrandLogo from "@/components/layout/BrandLogo";
+import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
+import "@/components/admin/admin-theme.css";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
@@ -66,100 +68,95 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-yellow-400/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }}></div>
-      </div>
+    <div className="rr-auth-page fixed inset-0 z-10 overflow-y-auto text-white">
+      <DigitalAtmosphere className="rr-atmosphere--page" />
 
-      <Card className="relative w-full max-w-md border-yellow-400/20 bg-gray-900/90 backdrop-blur-xl shadow-2xl">
-        <CardHeader className="space-y-4 text-center pb-8">
-          {/* Logo/Icon */}
-          <div className="mx-auto w-20 h-20 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center shadow-lg">
-            <Shield className="w-10 h-10 text-white" />
+      <div className="relative z-10 flex min-h-full items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md">
+          <div className="mb-6 flex flex-col items-center text-center">
+            <BrandLogo force="night" className="h-14 w-auto sm:h-16" />
+            <span className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#C8102E]/40 bg-[#C8102E]/10 px-3 py-1">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF263D] opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FF263D]" />
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FF263D]">
+                Restricted area
+              </span>
+            </span>
           </div>
 
-          {/* Title */}
-          <div>
-            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-              Admin Panel
-            </CardTitle>
-            <CardDescription className="text-gray-400 mt-2 flex items-center justify-center gap-2">
-              <Sparkles className="w-4 h-4 text-yellow-400" />
-              Ringtone Riches Administration
-            </CardDescription>
-          </div>
-        </CardHeader>
+          <div className="rr-auth-card">
+            <p className="rr-auth-kicker">Ringtone Riches Administration</p>
+            <h1 className="rr-auth-title font-prize uppercase">Admin Panel</h1>
+            <p className="rr-auth-sub">Sign in with your admin account to manage the platform.</p>
 
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Field */}
-            <div className="space-y-2">
-              <Label htmlFor="admin-email" className="text-gray-300 flex items-center gap-2">
-                <Mail className="w-4 h-4 text-yellow-400" />
-                Email Address
-              </Label>
-              <Input
-                id="admin-email"
-                type="email"
-                placeholder="you@yourcompany.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-400 focus:ring-yellow-400"
-                data-testid="input-admin-email"
-                autoComplete="email"
-              />
-            </div>
+            <form onSubmit={handleSubmit} className="rr-auth-form rr-auth-body">
+              {/* Email Field */}
+              <div className="rr-auth-field">
+                <Label htmlFor="admin-email" className="rr-auth-label flex items-center gap-2">
+                  <Mail className="h-3.5 w-3.5 text-[#F1D47A]" />
+                  Email Address
+                </Label>
+                <Input
+                  id="admin-email"
+                  type="email"
+                  placeholder="you@yourcompany.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="rr-auth-input"
+                  data-testid="input-admin-email"
+                  autoComplete="email"
+                />
+              </div>
 
-            {/* Password Field */}
-            <div className="space-y-2">
-              <Label htmlFor="admin-password" className="text-gray-300 flex items-center gap-2">
-                <Lock className="w-4 h-4 text-yellow-400" />
-                Password
-              </Label>
-              <Input
-                id="admin-password"
-                type="password"
-                placeholder="Enter your admin password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus:border-yellow-400 focus:ring-yellow-400"
-                data-testid="input-admin-password"
-                autoComplete="current-password"
-              />
-            </div>
+              {/* Password Field */}
+              <div className="rr-auth-field">
+                <Label htmlFor="admin-password" className="rr-auth-label flex items-center gap-2">
+                  <Lock className="h-3.5 w-3.5 text-[#F1D47A]" />
+                  Password
+                </Label>
+                <Input
+                  id="admin-password"
+                  type="password"
+                  placeholder="Enter your admin password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="rr-auth-input"
+                  data-testid="input-admin-password"
+                  autoComplete="current-password"
+                />
+              </div>
 
-            {/* Login Button */}
-            <Button
-              type="submit"
-              className="w-full bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-500 hover:to-yellow-700 text-black font-bold py-6 shadow-lg hover:shadow-xl transition-all"
-              disabled={loginMutation.isPending}
-              data-testid="button-admin-login"
-            >
-              {loginMutation.isPending ? (
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin w-5 h-5 border-3 border-black border-t-transparent rounded-full" />
-                  Authenticating...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Shield className="w-5 h-5" />
-                  Login to Admin Panel
-                </div>
-              )}
-            </Button>
-          </form>
+              {/* Login Button */}
+              <Button
+                type="submit"
+                className="rr-cta mt-1 h-12 w-full rounded-xl text-sm font-black uppercase tracking-[0.16em]"
+                disabled={loginMutation.isPending}
+                data-testid="button-admin-login"
+              >
+                {loginMutation.isPending ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFF8EE] border-t-transparent" />
+                    Authenticating...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    Login to Admin Panel
+                  </div>
+                )}
+              </Button>
+            </form>
 
-          {/* Security Notice */}
-          <div className="mt-6 p-4 bg-yellow-400/10 border border-yellow-400/20 rounded-lg">
-            <p className="text-xs text-gray-400 text-center flex items-center justify-center gap-2">
-              <Lock className="w-3 h-3 text-yellow-400" />
+            {/* Security Notice */}
+            <p className="mt-5 flex items-center justify-center gap-2 border-t border-white/[0.06] pt-4 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/40">
+              <Lock className="h-3 w-3 text-[#F1D47A]" />
               Secure admin access only
             </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

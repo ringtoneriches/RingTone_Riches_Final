@@ -25,7 +25,7 @@ import PaymentCancelled from "./pages/cancelled";
 import PaymentFailed from "./pages/failed";
 import CheckoutFailed from "./pages/competition-failed";
 import CheckoutCancelled from "./pages/competition-cancelled";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import TermsAndConditions from "./pages/terms-and-conditions";
 import PlayResponsibly from "./pages/play-responsible";
 import PrivacyPolicy from "./pages/privacy-policy";
@@ -67,6 +67,7 @@ import AdminSpinWheelSettings from "./pages/admin/AdminSpinWheelSettings";
 import Intelligence from "./pages/admin/intelligence";
 import RegistrationSourceModal from "./components/RegistrationSourceModal";
 import AdminDiscountCodes from "./pages/admin/discount";
+import AdminFlashSales from "./pages/admin/flash-sales";
 import PlinkoBilling from "./pages/plinkoBilling";
 import AdminPlinko from "./pages/admin/plinko";
 import AdminPlinkoBalloon from "./pages/admin/admin-plinko";
@@ -194,6 +195,7 @@ function Router() {
       <Route path="/admin/add-ringtone-pop" component={AdminPopBalloon} />
       <Route path="/admin/intelligence" component={Intelligence} />
       <Route path="/admin/discount" component={AdminDiscountCodes} />
+      <Route path="/admin/flash-sales" component={AdminFlashSales} />
       <Route path="/admin/plinko" component={AdminPlinkoBalloon} />
       <Route path="/admin/ringtone-plinko/settings" component={AdminPlinko} />
       <Route path="/admin/verification" component={AdminVerifications} />
@@ -301,7 +303,12 @@ function AppWithMaintenance() {
 
   const isAdminUser = user?.isAdmin === true;
   const isAdminRoute = location.startsWith("/admin");
-  
+
+  // Admin brand theme lives on <html> so Radix portals (dialogs, selects, toasts) get it too.
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle("rr-admin", isAdminRoute);
+  }, [isAdminRoute]);
+
   // Public routes that should still be accessible during maintenance
   const publicRoutes = [
     "/login", 

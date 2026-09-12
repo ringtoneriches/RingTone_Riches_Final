@@ -20,7 +20,7 @@ import {
   Sparkles,
   Brain,
   TicketIcon,
-  ArrowDown,
+  ChevronDown,
   Target,
   AlertTriangle,
   Check,
@@ -29,10 +29,6 @@ import {
   FileDigit,
   Send,
   Zap,
-  Megaphone,
-  Percent,
-  QrCode,
-  Network,
   MailQuestion,
   Video,
   TicketCheck,
@@ -40,6 +36,9 @@ import {
   Star,
   Hash,
   ListOrdered,
+  ExternalLink,
+  LogOut,
+  TicketPercent,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +48,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import BrandWait from "@/components/brand/BrandWait";
+import BrandLogo from "@/components/layout/BrandLogo";
 import { User } from "@shared/schema";
 import {
   Dialog,
@@ -58,12 +58,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import "./admin-theme.css";
 
 // Grouped sidebar items
 const sidebarGroups = [
   {
     name: "Games",
-    icon: null, 
+    icon: null,
     items: [
       { name: "Spin Wheel", path: "/admin/spin-wheel", icon: CircleDot },
       { name: "Scratch Card", path: "/admin/scratch-card", icon: CreditCard },
@@ -92,6 +93,7 @@ const sidebarGroups = [
     items: [
       { name: "Marketing", path: "/admin/marketing", icon: Mail },
       { name: "Discounts", path: "/admin/discount", icon: TicketIcon },
+      { name: "Flash Sales", path: "/admin/flash-sales", icon: TicketPercent },
       { name: "Redeem Code", path: "/admin/redeem", icon: FileDigit },
       { name: "Intelligence", path: "/admin/intelligence", icon: Brain },
       { name: "Notification", path: "/admin/notification", icon: Send },
@@ -144,7 +146,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return {};
     }
   });
-  
+
   const { toast } = useToast();
 
   const { data: stepUpStatus, refetch: refetchStepUp } = useQuery({
@@ -320,7 +322,7 @@ const disableMaintenance = useMutation({
 
   const handleGroupClick = (groupName: string) => {
     const group = sidebarGroups.find(g => g.name === groupName);
-    
+
     if (group?.protected && !gamesUnlocked) {
       setUnlockingItem({ type: 'group', name: groupName });
       setPinInput("");
@@ -339,7 +341,7 @@ const disableMaintenance = useMutation({
       setShowPinDialog(true);
       return;
     }
-    
+
     setLocation(itemPath);
     setSidebarOpen(false);
   };
@@ -387,7 +389,7 @@ const disableMaintenance = useMutation({
         },
       });
     }
-    
+
     if (location === identifier) {
       setLocation("/admin");
     }
@@ -427,30 +429,51 @@ const disableMaintenance = useMutation({
   }
   if (!user || !user.isAdmin) return null;
 
+  const activeGroup = sidebarGroups.find((group) => group.items.some((item) => item.path === location));
+  const activeItem = activeGroup?.items.find((item) => item.path === location);
+  // Routes outside the sidebar (e.g. /admin/ringtone-plinko/settings) get a title from the path, minus ids.
+  const pathTitle = location
+    .replace(/^\/admin\/?/, "")
+    .split("/")
+    .filter((segment) => segment && !/^[0-9a-f-]{8,}$/i.test(segment))
+    .join(" ")
+    .replace(/-/g, " ");
+  const pageTitle = location === "/admin" ? "Dashboard" : activeItem?.name ?? (pathTitle || "Admin panel");
+  const adminName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Admin";
+
   return (
-    <div className="flex h-screen -mt-24 overflow-hidden">
-      {/* Sidebar - Fixed position, independent scroll */}
+    <div className="rr-admin-shell fixed inset-0 flex overflow-hidden">
+      <div className="rr-admin-backdrop" aria-hidden />
+
+      {/* Sidebar - independent scroll */}
       <aside
-        className={`fixed lg:sticky top-0 left-0 z-50 w-64 h-screen bg-card border-r border-border transform transition-transform duration-300 flex flex-col ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        className={`rr-admin-sidebar fixed inset-y-0 left-0 z-50 flex w-[17.5rem] flex-col transition-transform duration-300 lg:relative lg:z-10 lg:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* Sidebar Header - Fixed at top */}
-        <div className="p-6 border-b border-border flex justify-between items-center shrink-0">
-          <h1 className="text-2xl font-bold text-primary">Admin Panel</h1>
-          <button className="lg:hidden" onClick={() => setSidebarOpen(false)}>
-            <X className="w-5 h-5" />
+        <div className="rr-admin-brand">
+          <BrandLogo force="night" className="h-10 w-auto" />
+          <button
+            type="button"
+            className="rr-admin-icon-btn lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
+          >
+            <X className="h-4 w-4" />
           </button>
         </div>
+        <div className="rr-admin-brand-tag">
+          <span className="rr-admin-live-dot" aria-hidden />
+          Control room
+        </div>
 
-        {/* Navigation - Scrollable middle section */}
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        <nav className="rr-admin-nav flex-1 overflow-y-auto px-3 pb-4">
           <Link href="/admin">
-            <div className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer ${
-              location === "/admin" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}>
-              <LayoutDashboard className="w-5 h-5" />
-              <span>Dashboard</span>
+            <div className={`rr-admin-link ${location === "/admin" ? "is-active" : ""}`}>
+              <span className="rr-admin-link-icon">
+                <LayoutDashboard className="h-4 w-4" />
+              </span>
+              <span className="truncate">Dashboard</span>
             </div>
           </Link>
 
@@ -458,54 +481,54 @@ const disableMaintenance = useMutation({
             const isGroupUnlocked = group.name === "Games" ? gamesUnlocked : true;
             const isGroupProtected = group.protected;
             const showToolsNotification = group.name === "Tools" && hasToolsNotifications();
-            
+            const isOpen = openGroups[group.name] && (isGroupUnlocked || !isGroupProtected);
+
             return (
-              <div key={group.name}>
+              <div key={group.name} className="pt-4">
                 <button
-                  className={`flex items-center justify-between w-full px-4 py-2 text-lg font-medium text-muted-foreground hover:bg-muted rounded-lg ${
-                    showToolsNotification ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse' : ''
-                  }`}
+                  type="button"
+                  className={`rr-admin-group ${showToolsNotification ? "has-alert" : ""} ${isOpen ? "is-open" : ""}`}
                   onClick={() => handleGroupClick(group.name)}
                 >
-                  <div className="flex items-center gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
                     {isGroupProtected && !isGroupUnlocked && (
-                      <Lock className="w-3 h-3 text-yellow-500" />
+                      <Lock className="h-3 w-3 shrink-0 text-[#F1D47A]" />
                     )}
                     {isGroupProtected && isGroupUnlocked && (
-                      <Unlock className="w-3 h-3 text-green-500" />
+                      <Unlock className="h-3 w-3 shrink-0 text-emerald-400" />
                     )}
-                    {group.name}
+                    <span className="truncate">{group.name}</span>
                     {showToolsNotification && (
-                      <span className="ml-2 inline-flex items-center justify-center w-2 h-2">
-                        <span className="absolute inline-flex h-3 w-3 rounded-full bg-red-600 opacity-75 animate-ping"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600"></span>
+                      <span className="relative ml-1 inline-flex h-2 w-2 shrink-0">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF263D] opacity-75"></span>
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FF263D]"></span>
                       </span>
                     )}
-                  </div>
-                  <div className="flex items-center gap-1">
+                  </span>
+                  <span className="flex items-center gap-1.5">
                     {isGroupProtected && isGroupUnlocked && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 w-6 p-0"
+                        className="rr-admin-lock-btn h-6 w-6 p-0"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleManualLock('group', group.name);
                         }}
                         title="Lock this tab"
                       >
-                        <Lock className="w-3 h-3" />
+                        <Lock className="h-3 w-3" />
                       </Button>
                     )}
                     {isGroupProtected && !isGroupUnlocked && (
-                      <span className="text-xs text-yellow-500">Locked</span>
+                      <span className="rr-admin-locked-tag">Locked</span>
                     )}
-                    <ArrowDown className={`w-4 h-4 transition-transform ${openGroups[group.name] ? "rotate-180" : ""}`} />
-                  </div>
+                    <ChevronDown className="rr-admin-group-chevron h-3.5 w-3.5" />
+                  </span>
                 </button>
-                
-                {openGroups[group.name] && (isGroupUnlocked || !isGroupProtected) && (
-                  <div className="ml-4 mt-1 space-y-1">
+
+                {isOpen && (
+                  <div className="mt-1.5 space-y-0.5">
                     {group.items.map(item => {
                       const Icon = item.icon;
                       let unreadCount = 0;
@@ -520,24 +543,22 @@ const disableMaintenance = useMutation({
                       return (
                         <div
                           key={item.path}
-                          className={`flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer ${
-                            location === item.path ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                          } ${!canAccess ? "opacity-60" : ""}`}
+                          className={`rr-admin-link ${location === item.path ? "is-active" : ""} ${!canAccess ? "is-locked" : ""}`}
                           onClick={() => handleItemClick(item.name, item.path, isItemProtected)}
                         >
-                          <div className="flex items-center gap-2">
-                            {isItemProtected && !isItemUnlocked && (
-                              <Lock className="w-3 h-3 text-yellow-500" />
-                            )}
-                            {isItemProtected && isItemUnlocked && (
-                              <Unlock className="w-3 h-3 text-green-500" />
-                            )}
-                            <Icon className="w-4 h-4" />
-                            <span className="text-md">{item.name}</span>
-                          </div>
-                          <div className="ml-auto flex items-center gap-2">
+                          <span className="rr-admin-link-icon">
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <span className="truncate">{item.name}</span>
+                          {isItemProtected && !isItemUnlocked && (
+                            <Lock className="h-3 w-3 shrink-0 text-[#F1D47A]" />
+                          )}
+                          {isItemProtected && isItemUnlocked && (
+                            <Unlock className="h-3 w-3 shrink-0 text-emerald-400" />
+                          )}
+                          <span className="ml-auto flex items-center gap-2">
                             {unreadCount > 0 && (
-                              <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-red-500 rounded-full">
+                              <span className="rr-admin-count">
                                 {unreadCount > 99 ? "99+" : unreadCount}
                               </span>
                             )}
@@ -545,20 +566,20 @@ const disableMaintenance = useMutation({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 w-6 p-0"
+                                className="rr-admin-lock-btn h-6 w-6 p-0"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleManualLock('item', item.path);
                                 }}
                                 title="Lock this access"
                               >
-                                <Lock className="w-3 h-3" />
+                                <Lock className="h-3 w-3" />
                               </Button>
                             )}
                             {isItemProtected && !isItemUnlocked && (
-                              <span className="text-xs text-yellow-500">Locked</span>
+                              <span className="rr-admin-locked-tag">Locked</span>
                             )}
-                          </div>
+                          </span>
                         </div>
                       );
                     })}
@@ -569,17 +590,18 @@ const disableMaintenance = useMutation({
           })}
         </nav>
 
-        {/* Sidebar Footer - Fixed at bottom */}
-        <div className="p-4 border-t border-border space-y-2 shrink-0">
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => logoutMutation.mutate()}
-            data-testid="button-logout"
-          >
-            Logout
-          </Button>
-          
+        {/* Sidebar footer */}
+        <div className="rr-admin-sidebar-foot space-y-2 p-3">
+          <div className="rr-admin-identity">
+            <span className="rr-admin-avatar">{adminName.charAt(0).toUpperCase()}</span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-[#FFF8EE]">{adminName}</span>
+              <span className="block text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#F1D47A]/80">
+                Administrator
+              </span>
+            </span>
+          </div>
+
           {(gamesUnlocked || usersUnlocked) && (
             <Button
               variant="ghost"
@@ -600,82 +622,102 @@ const disableMaintenance = useMutation({
               Lock All Protected Tabs
             </Button>
           )}
+
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => logoutMutation.mutate()}
+            data-testid="button-logout"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
         </div>
       </aside>
 
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
-          onClick={() => setSidebarOpen(false)} 
+        <div
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden"
+          onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Main content area - Scrolls independently */}
-      <div className="flex-1 flex flex-col min-w-0 ">
-        {/* Header - Sticky at top */}
-        <header className="bg-card border-b border-border p-4 lg:px-8 shrink-0 sticky top-0 z-30">
-          <div className="flex items-center justify-between gap-2 min-w-0">
+      {/* Main content area - scrolls independently */}
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
+        <header className="rr-admin-topbar relative shrink-0">
+          <div className="flex h-16 items-center gap-3 px-4 lg:px-8">
             <button
+              type="button"
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden shrink-0 text-muted-foreground hover:text-foreground"
+              className="rr-admin-icon-btn shrink-0 lg:hidden"
               data-testid="button-menu"
+              aria-label="Open menu"
             >
-              <Menu className="w-6 h-6" />
+              <Menu className="h-5 w-5" />
             </button>
 
-            <div className="flex items-center justify-between flex-1 gap-2 sm:gap-4 min-w-0">
-              <Link href="/">
-                <Button variant="outline" size="sm" className="shrink-0">
-                  View Site
-                </Button>
-              </Link>
+            <p className="rr-admin-crumb min-w-0 flex-1 truncate">
+              Admin
+              {activeGroup && (
+                <>
+                  <span className="rr-admin-crumb-sep">/</span>
+                  {activeGroup.name}
+                </>
+              )}
+              <span className="rr-admin-crumb-sep">/</span>
+              <span className="text-[#FFF8EE]">{pageTitle}</span>
+            </p>
 
-              {/* Compact Maintenance Toggle — clear admin indicator + always-visible action button */}
-              <div
-                className={`flex items-center gap-2 sm:gap-3 px-2 py-1.5 sm:px-4 sm:py-2 rounded-xl border shadow-sm shrink-0 ${
-                  maintenanceData?.maintenanceMode
-                    ? "bg-red-600/15 border-red-500/50"
-                    : "bg-muted border-border"
-                }`}
-              >
-                {maintenanceData?.maintenanceMode ? (
-                  <span className="text-red-500 font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span className="sm:hidden">Maint. ON</span>
-                    <span className="hidden sm:inline">Maintenance Active</span>
+            {/* Maintenance status — clear indicator + always-visible action button */}
+            <div className={`rr-admin-status shrink-0 ${maintenanceData?.maintenanceMode ? "is-maintenance" : ""}`}>
+              {maintenanceData?.maintenanceMode ? (
+                <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#FF6B7A] sm:text-[11px]">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  <span className="sm:hidden">Maint. ON</span>
+                  <span className="hidden sm:inline">Maintenance active</span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-emerald-400">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60"></span>
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400"></span>
                   </span>
-                ) : (
-                  <span className="text-green-500 font-bold text-sm flex items-center gap-2">
-                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0"></span>
-                    <span className="hidden sm:inline">Site is Live</span>
-                  </span>
-                )}
+                  <span className="hidden sm:inline">Site is live</span>
+                </span>
+              )}
 
-                {maintenanceData?.maintenanceMode ? (
-                  <button
-                    onClick={() => disableMaintenance.mutate()}
-                    disabled={disableMaintenance.isPending}
-                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all whitespace-nowrap"
-                  >
-                    {disableMaintenance.isPending ? "Disabling..." : "Disable"}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleEnableMaintenance}
-                    disabled={enableMaintenance.isPending}
-                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all whitespace-nowrap"
-                  >
-                    {enableMaintenance.isPending ? "Enabling..." : "Enable"}
-                  </button>
-                )}
-              </div>
+              {maintenanceData?.maintenanceMode ? (
+                <button
+                  onClick={() => disableMaintenance.mutate()}
+                  disabled={disableMaintenance.isPending}
+                  className="rr-admin-status-btn is-go"
+                >
+                  {disableMaintenance.isPending ? "Disabling..." : "Disable"}
+                </button>
+              ) : (
+                <button
+                  onClick={handleEnableMaintenance}
+                  disabled={enableMaintenance.isPending}
+                  className="rr-admin-status-btn is-stop"
+                >
+                  {enableMaintenance.isPending ? "Enabling..." : "Enable"}
+                </button>
+              )}
             </div>
+
+            <Link href="/">
+              <Button variant="outline" size="sm" className="shrink-0">
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">View Site</span>
+              </Button>
+            </Link>
           </div>
+          <div className="rr-header-line" aria-hidden />
         </header>
 
-        {/* Main content - Scrollable */}
-        <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
+        {/* Main content - scrollable */}
+        <main className="rr-admin-main flex-1 overflow-y-auto p-4 lg:p-8">
           {children}
         </main>
       </div>
@@ -685,7 +727,7 @@ const disableMaintenance = useMutation({
         <DialogContent className="w-[90vw] max-w-sm sm:max-w-md mx-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-6 h-6 text-yellow-600" />
+              <AlertTriangle className="w-6 h-6 text-[#FF263D]" />
               Enable Maintenance Mode?
             </DialogTitle>
             <DialogDescription className="pt-2">
@@ -732,11 +774,11 @@ const disableMaintenance = useMutation({
           >
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Lock className="w-6 h-6 text-yellow-600" />
+                <Lock className="w-6 h-6 text-[#F1D47A]" />
                 {unlockingItem?.type === 'group' ? 'Unlock Games Tab' : 'Unlock Users Access'}
               </DialogTitle>
               <DialogDescription className="pt-2">
-                {unlockingItem?.type === 'group' 
+                {unlockingItem?.type === 'group'
                   ? 'Enter PIN to access Games management section'
                   : 'Enter PIN to access User management section'}
               </DialogDescription>
@@ -780,7 +822,7 @@ const disableMaintenance = useMutation({
               <Button
                 type="submit"
                 disabled={!pinInput.trim() || stepUpMutation.isPending}
-                className="flex-1 bg-yellow-600 hover:bg-yellow-700"
+                className="flex-1"
               >
                 {stepUpMutation.isPending ? "Verifying..." : "Verify PIN"}
               </Button>

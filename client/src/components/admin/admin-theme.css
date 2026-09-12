@@ -1,0 +1,893 @@
+/* ========================================
+   ADMIN PANEL — RINGTONE RICHES BRAND
+   Everything is scoped to html.rr-admin, which App toggles for /admin routes.
+   Scoping on <html> (not the layout) lets Radix portals — dialogs, selects,
+   popovers, toasts — pick the theme up too.
+   ======================================== */
+
+/* Tokens — shadcn primitives read these */
+html.rr-admin {
+  --background: #050505;
+  --foreground: #fff8ee;
+  --card: #0b0b0e;
+  --card-foreground: #fff8ee;
+  --popover: #0f0f13;
+  --popover-foreground: #fff8ee;
+  --primary: #c8102e;
+  --primary-foreground: #fff8ee;
+  --secondary: #16161b;
+  --secondary-foreground: #fff8ee;
+  --muted: #131317;
+  --muted-foreground: #9b958d;
+  --accent: #1d1a14;
+  --accent-foreground: #fff8ee;
+  --destructive: #3a0a13;
+  --destructive-foreground: #ff8a96;
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #f1d47a;
+  --chart-1: #c8102e;
+  --chart-2: #f1d47a;
+  --chart-3: #d4af37;
+  --chart-4: #ff263d;
+  --chart-5: #34d399;
+  --sidebar: #0a0a0d;
+  --sidebar-foreground: #fff8ee;
+  --sidebar-primary: #c8102e;
+  --sidebar-primary-foreground: #fff8ee;
+  --sidebar-accent: #1d1a14;
+  --sidebar-accent-foreground: #fff8ee;
+  --sidebar-border: rgba(212, 175, 55, 0.14);
+  --sidebar-ring: #f1d47a;
+  --radius: 0.75rem;
+  color-scheme: dark;
+  background-color: #050505;
+}
+html.rr-admin body {
+  background-color: #050505;
+  color: #fff8ee;
+}
+html.rr-admin ::selection {
+  background: rgba(200, 16, 46, 0.6);
+  color: #fff8ee;
+}
+html.rr-admin .rr-admin-main,
+html.rr-admin .rr-admin-nav,
+html.rr-admin [role="dialog"],
+html.rr-admin [role="alertdialog"],
+html.rr-admin [role="listbox"] {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(212, 175, 55, 0.28) transparent;
+}
+
+/* ===== Shell ===== */
+.rr-admin-shell {
+  background: #050505;
+  color: #fff8ee;
+}
+.rr-admin-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 45% at 90% 0%, rgba(200, 16, 46, 0.14), transparent 60%),
+    radial-gradient(ellipse 45% 40% at 100% 100%, rgba(212, 175, 55, 0.06), transparent 60%),
+    linear-gradient(180deg, #050505 0%, #09090b 50%, #050505 100%);
+}
+.rr-admin-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image:
+    linear-gradient(rgba(227, 27, 54, 0.55) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(227, 27, 54, 0.35) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+/* Sidebar */
+.rr-admin-sidebar {
+  background:
+    radial-gradient(ellipse 90% 28% at 0% 0%, rgba(200, 16, 46, 0.16), transparent 60%),
+    linear-gradient(180deg, #0a0a0d 0%, #070709 100%);
+  border-right: 1px solid rgba(212, 175, 55, 0.12);
+  box-shadow: 16px 0 40px rgba(0, 0, 0, 0.35);
+}
+.rr-admin-sidebar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -1px;
+  bottom: 0;
+  width: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(200, 16, 46, 0.45) 28%,
+    rgba(212, 175, 55, 0.55) 50%,
+    rgba(200, 16, 46, 0.45) 72%,
+    transparent 100%
+  );
+}
+.rr-admin-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1.25rem 1.25rem 0.6rem;
+}
+.rr-admin-brand-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 1.25rem 0.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #f1d47a;
+}
+.rr-admin-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #ff263d;
+  box-shadow: 0 0 10px rgba(255, 38, 61, 0.85);
+}
+.rr-admin-group {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 248, 238, 0.42);
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.rr-admin-group:hover {
+  color: #fff8ee;
+  background: rgba(255, 255, 255, 0.03);
+}
+.rr-admin-group.is-open {
+  color: rgba(241, 212, 122, 0.9);
+}
+.rr-admin-group-chevron {
+  transition: transform 0.2s ease;
+}
+.rr-admin-group.is-open .rr-admin-group-chevron {
+  transform: rotate(180deg);
+}
+.rr-admin-group.has-alert {
+  color: #ff6b7a;
+  background: rgba(200, 16, 46, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 38, 61, 0.32);
+}
+.rr-admin-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 2.6rem;
+  padding: 0.35rem 0.55rem 0.35rem 0.4rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 248, 238, 0.64);
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.rr-admin-link:hover {
+  color: #fff8ee;
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(212, 175, 55, 0.2);
+}
+.rr-admin-link-icon {
+  display: inline-flex;
+  width: 1.85rem;
+  height: 1.85rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(241, 212, 122, 0.85);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.rr-admin-link.is-active {
+  color: #fff8ee;
+  border-color: rgba(241, 212, 122, 0.45);
+  background: linear-gradient(180deg, #ff263d 0%, #c8102e 55%, #8e0b20 100%);
+  box-shadow:
+    0 8px 20px rgba(200, 16, 46, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+.rr-admin-link.is-active .rr-admin-link-icon {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.22);
+  color: #fff8ee;
+}
+.rr-admin-link.is-locked {
+  opacity: 0.6;
+}
+.rr-admin-count {
+  display: inline-flex;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: #ff263d;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  box-shadow: 0 0 12px rgba(255, 38, 61, 0.55);
+}
+.rr-admin-link.is-active .rr-admin-count {
+  background: #fff8ee;
+  color: #8e0b20;
+  box-shadow: none;
+}
+.rr-admin-locked-tag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(241, 212, 122, 0.8);
+}
+html.rr-admin .rr-admin-lock-btn {
+  border-radius: 8px;
+  color: rgba(255, 248, 238, 0.6);
+}
+html.rr-admin .rr-admin-lock-btn:hover {
+  color: #f1d47a;
+  background: rgba(212, 175, 55, 0.12);
+}
+.rr-admin-sidebar-foot {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.28);
+}
+.rr-admin-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.4rem 0.35rem 0.6rem;
+}
+.rr-admin-avatar {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ff263d 0%, #8e0b20 100%);
+  box-shadow: 0 0 0 2px rgba(241, 212, 122, 0.45);
+  font-family: "Oswald", "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff8ee;
+}
+
+/* Top bar */
+.rr-admin-topbar {
+  z-index: 30;
+  background: rgba(5, 5, 5, 0.82);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.rr-admin-crumb {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #f1d47a;
+}
+.rr-admin-crumb-sep {
+  margin: 0 0.45rem;
+  color: rgba(255, 248, 238, 0.25);
+}
+.rr-admin-icon-btn {
+  display: inline-flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  background: rgba(8, 8, 10, 0.7);
+  color: #f1d47a;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.rr-admin-icon-btn:hover {
+  border-color: #f1d47a;
+  background: rgba(212, 175, 55, 0.1);
+}
+.rr-admin-status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  height: 2.5rem;
+  padding: 0 0.3rem 0 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 10, 13, 0.8);
+}
+.rr-admin-status.is-maintenance {
+  border-color: rgba(255, 38, 61, 0.5);
+  background: rgba(200, 16, 46, 0.14);
+  box-shadow: 0 0 22px rgba(200, 16, 46, 0.22);
+}
+.rr-admin-status-btn {
+  height: 1.9rem;
+  padding: 0 0.8rem;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff8ee;
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+.rr-admin-status-btn.is-stop {
+  border: 1px solid rgba(241, 212, 122, 0.35);
+  background: linear-gradient(180deg, #ff263d 0%, #a50d25 100%);
+}
+.rr-admin-status-btn.is-go {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(180deg, #10b981 0%, #047857 100%);
+}
+.rr-admin-status-btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+.rr-admin-status-btn:disabled {
+  opacity: 0.6;
+}
+
+/* ===== Shared admin blocks ===== */
+.rr-admin-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #f1d47a;
+}
+.rr-admin-kicker-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(200, 16, 46, 0.4);
+  background: rgba(200, 16, 46, 0.1);
+  padding: 0.25rem 0.75rem;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #ff263d;
+}
+.rr-admin-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(212, 175, 55, 0.22);
+  background:
+    radial-gradient(ellipse 70% 100% at 100% 0%, rgba(200, 16, 46, 0.3), transparent 60%),
+    radial-gradient(ellipse 50% 70% at 0% 100%, rgba(212, 175, 55, 0.1), transparent 55%),
+    #0a0a0d;
+  padding: 1.25rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 24px 60px rgba(0, 0, 0, 0.35);
+}
+.rr-admin-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #c8102e, #d4af37, #c8102e, transparent);
+}
+.rr-admin-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(227, 27, 54, 0.6) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(227, 27, 54, 0.4) 1px, transparent 1px);
+  background-size: 40px 40px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 30%, #000 100%);
+}
+@media (min-width: 640px) {
+  .rr-admin-hero {
+    padding: 1.75rem 2rem;
+  }
+}
+.rr-admin-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0b0b0e;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 40px rgba(0, 0, 0, 0.3);
+}
+.rr-admin-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.rr-admin-panel-icon,
+.rr-admin-stat-icon {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f1d47a;
+}
+.rr-admin-stat {
+  --stat-glow: rgba(212, 175, 55, 0.14);
+  --stat-line: #f1d47a;
+  --stat-ink: #f1d47a;
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(ellipse 90% 80% at 100% 0%, var(--stat-glow), transparent 60%),
+    #0b0b0e;
+  padding: 1rem 1.1rem 1.15rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 40px rgba(0, 0, 0, 0.3);
+}
+.rr-admin-stat::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--stat-line), transparent);
+}
+.rr-admin-stat--red {
+  --stat-glow: rgba(200, 16, 46, 0.22);
+  --stat-line: #ff263d;
+  --stat-ink: #ff6b7a;
+}
+.rr-admin-stat--green {
+  --stat-glow: rgba(16, 185, 129, 0.14);
+  --stat-line: #34d399;
+  --stat-ink: #34d399;
+}
+.rr-admin-stat .rr-admin-stat-icon {
+  color: var(--stat-ink);
+}
+.rr-admin-stat-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 248, 238, 0.55);
+}
+.rr-admin-stat-value {
+  font-family: "Oswald", "Inter", system-ui, sans-serif;
+  font-size: clamp(1.6rem, 2.6vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  color: #fff8ee;
+}
+.rr-admin-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid;
+  padding: 0.2rem 0.6rem;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.rr-admin-pill--ok {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(16, 185, 129, 0.1);
+}
+.rr-admin-pill--wait {
+  color: #f1d47a;
+  border-color: rgba(241, 212, 122, 0.35);
+  background: rgba(212, 175, 55, 0.1);
+}
+.rr-admin-pill--bad {
+  color: #ff6b7a;
+  border-color: rgba(255, 38, 61, 0.35);
+  background: rgba(200, 16, 46, 0.12);
+}
+
+/* ===== Page typography ===== */
+html.rr-admin .rr-admin-main h1 {
+  font-family: "Oswald", "Inter", system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  text-transform: uppercase;
+  color: #fff8ee;
+}
+html.rr-admin .rr-admin-main h2,
+html.rr-admin [role="dialog"] h2,
+html.rr-admin [role="alertdialog"] h2 {
+  font-family: "Oswald", "Inter", system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+html.rr-admin .rr-admin-main h3,
+html.rr-admin .rr-admin-main .leading-none.tracking-tight {
+  font-family: "Oswald", "Inter", system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+html.rr-admin .rr-admin-main .leading-none.tracking-tight {
+  text-transform: uppercase;
+}
+html.rr-admin .bg-clip-text.text-transparent {
+  background-image: linear-gradient(180deg, #fff3cf 0%, #f1d47a 55%, #c9a13a 100%);
+}
+html.rr-admin .text-primary,
+html.rr-admin .hover\:text-primary:hover {
+  color: #f1d47a;
+}
+
+/* ===== shadcn primitives ===== */
+
+/* Cards */
+html.rr-admin .rounded-lg.border.text-card-foreground.shadow-sm {
+  border-radius: 16px;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.022), transparent 42%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+/* Buttons — shadcn base carries whitespace-nowrap + ring-offset-background */
+html.rr-admin .whitespace-nowrap.ring-offset-background:not([role="tab"]) {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, filter 0.2s ease;
+}
+html.rr-admin .whitespace-nowrap.ring-offset-background.bg-primary {
+  border: 1px solid rgba(241, 212, 122, 0.5);
+  background-image: linear-gradient(180deg, #ff263d 0%, #c8102e 55%, #8e0b20 100%);
+  box-shadow:
+    0 6px 18px rgba(200, 16, 46, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+html.rr-admin .whitespace-nowrap.ring-offset-background.bg-primary:hover:not(:disabled) {
+  border-color: #f1d47a;
+  transform: translateY(-1px);
+  box-shadow:
+    0 10px 26px rgba(200, 16, 46, 0.4),
+    0 0 16px rgba(212, 175, 55, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+/* Outline — only while its token classes survive (no page colour overrides) */
+html.rr-admin .whitespace-nowrap.ring-offset-background.border-input.bg-background {
+  --input: rgba(212, 175, 55, 0.38);
+  --background: rgba(8, 8, 10, 0.72);
+  --accent: rgba(212, 175, 55, 0.12);
+  --accent-foreground: #fff8ee;
+}
+:where(html.rr-admin .whitespace-nowrap.ring-offset-background.border-input.bg-background) {
+  color: #f1d47a;
+}
+html.rr-admin .whitespace-nowrap.ring-offset-background.border-input.bg-background:hover:not(:disabled) {
+  border-color: #f1d47a;
+}
+html.rr-admin .whitespace-nowrap.ring-offset-background.hover\:bg-accent:not(.border-input) {
+  --accent: rgba(212, 175, 55, 0.1);
+}
+html.rr-admin .whitespace-nowrap.ring-offset-background.bg-destructive {
+  box-shadow: inset 0 0 0 1px rgba(255, 38, 61, 0.45);
+}
+html.rr-admin .whitespace-nowrap.ring-offset-background.bg-destructive:hover:not(:disabled) {
+  background-color: #52101c;
+  color: #ffb3bb;
+}
+html.rr-admin .whitespace-nowrap.ring-offset-background.bg-secondary:hover:not(:disabled) {
+  background-color: #1f1f26;
+}
+
+/* Inputs, textareas, select triggers */
+html.rr-admin :is(input, textarea, button[role="combobox"]).border-input.bg-background {
+  --input: rgba(255, 255, 255, 0.12);
+  --background: rgba(255, 255, 255, 0.04);
+}
+html.rr-admin :is(input, textarea, button[role="combobox"]).ring-offset-background:focus-visible,
+html.rr-admin button[role="combobox"].ring-offset-background:focus {
+  --tw-ring-offset-width: 0px;
+  --tw-ring-color: rgba(212, 175, 55, 0.28);
+  border-color: rgba(241, 212, 122, 0.7);
+}
+html.rr-admin input::placeholder,
+html.rr-admin textarea::placeholder {
+  color: rgba(255, 248, 238, 0.32);
+}
+html.rr-admin input[type="datetime-local"],
+html.rr-admin input[type="date"],
+html.rr-admin input[type="time"] {
+  color-scheme: dark;
+}
+
+/* Dropdown surfaces */
+html.rr-admin [role="listbox"],
+html.rr-admin [role="menu"],
+html.rr-admin [data-radix-popper-content-wrapper] > .bg-popover {
+  border-color: rgba(212, 175, 55, 0.22);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+}
+html.rr-admin [role="option"][data-highlighted],
+html.rr-admin [role="menuitem"][data-highlighted] {
+  color: #f1d47a;
+}
+
+/* Dialogs */
+html.rr-admin .fixed.inset-0.z-50.bg-black\/80 {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+html.rr-admin :is([role="dialog"], [role="alertdialog"]).fixed.grid {
+  --background: #0a0a0d;
+  border-color: rgba(212, 175, 55, 0.22);
+  background-image:
+    radial-gradient(ellipse 80% 40% at 100% 0%, rgba(200, 16, 46, 0.14), transparent 55%),
+    radial-gradient(ellipse 60% 35% at 0% 100%, rgba(212, 175, 55, 0.06), transparent 50%);
+  box-shadow:
+    inset 0 2px 0 rgba(200, 16, 46, 0.55),
+    0 30px 80px rgba(0, 0, 0, 0.6);
+}
+@media (min-width: 640px) {
+  html.rr-admin :is([role="dialog"], [role="alertdialog"]).fixed.grid {
+    border-radius: 20px;
+  }
+}
+
+/* Tabs */
+html.rr-admin [role="tablist"] {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background-color: rgba(10, 10, 13, 0.85);
+}
+html.rr-admin [role="tab"] {
+  border-radius: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(255, 248, 238, 0.55);
+}
+html.rr-admin [role="tab"]:hover {
+  color: #fff8ee;
+}
+html.rr-admin [role="tab"][data-state="active"] {
+  background: linear-gradient(180deg, #ff263d 0%, #c8102e 60%, #8e0b20 100%);
+  color: #fff8ee;
+  box-shadow:
+    0 6px 16px rgba(200, 16, 46, 0.3),
+    inset 0 0 0 1px rgba(241, 212, 122, 0.4);
+}
+
+/* Tables */
+html.rr-admin :is(.rr-admin-main, [role="dialog"]) thead th {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(241, 212, 122, 0.82);
+}
+html.rr-admin :is(.rr-admin-main, [role="dialog"]) thead tr {
+  border-color: rgba(212, 175, 55, 0.18);
+}
+html.rr-admin :is(.rr-admin-main, [role="dialog"]) tbody tr {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+html.rr-admin :is(.rr-admin-main, [role="dialog"]) tbody tr:hover {
+  background-color: rgba(212, 175, 55, 0.04);
+}
+
+/* Switches, checkboxes, progress */
+html.rr-admin button[role="switch"][data-state="checked"] {
+  background: linear-gradient(180deg, #f1d47a 0%, #c9a13a 100%);
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.35);
+}
+html.rr-admin button[role="switch"][data-state="unchecked"] {
+  background-color: #26262d;
+}
+html.rr-admin button[role="checkbox"] {
+  border-color: rgba(241, 212, 122, 0.6);
+}
+html.rr-admin button[role="checkbox"][data-state="checked"] {
+  border-color: #f1d47a;
+}
+html.rr-admin [role="progressbar"] > .bg-primary {
+  background: linear-gradient(90deg, #c8102e 0%, #e31b36 48%, #d4af37 100%);
+}
+
+/* Toasts */
+html.rr-admin li[role="status"].group:not(.destructive):not(.rr-toast-win) {
+  border-color: rgba(212, 175, 55, 0.3);
+  background-image: radial-gradient(ellipse 80% 80% at 100% 0%, rgba(200, 16, 46, 0.14), transparent 60%);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+html.rr-admin li[role="status"].group.destructive {
+  border-color: rgba(255, 38, 61, 0.5);
+}
+
+/* ===== Legacy utility remaps =====
+   Older admin pages hardcode blue-tinted greys and lemon yellows.
+   Map them onto brand surfaces and gold instead of touching page logic. */
+
+/* Grey text */
+html.rr-admin :is(.text-gray-300, .text-slate-300) { color: rgba(255, 248, 238, 0.74); }
+html.rr-admin .text-gray-400 { color: rgba(255, 248, 238, 0.56); }
+html.rr-admin .text-gray-500 { color: rgba(255, 248, 238, 0.42); }
+html.rr-admin :is(.text-gray-600, .text-zinc-600) { color: rgba(255, 248, 238, 0.36); }
+html.rr-admin .hover\:text-gray-700:hover { color: #fff8ee; }
+html.rr-admin :is(.placeholder\:text-zinc-400, .placeholder\:text-gray-500)::placeholder { color: rgba(255, 248, 238, 0.32); }
+
+/* Grey surfaces */
+html.rr-admin :is(.bg-zinc-900, .bg-gray-900) { background-color: #0b0b0e; }
+html.rr-admin .bg-gray-900\/90 { background-color: rgba(11, 11, 14, 0.9); }
+html.rr-admin .bg-zinc-900\/50 { background-color: rgba(11, 11, 14, 0.5); }
+html.rr-admin .bg-zinc-950\/95 { background-color: rgba(5, 5, 5, 0.95); }
+html.rr-admin :is(.bg-zinc-800, .bg-gray-800) { background-color: #121216; }
+html.rr-admin .bg-zinc-800\/70 { background-color: rgba(18, 18, 22, 0.7); }
+html.rr-admin :is(.bg-zinc-800\/50, .bg-gray-800\/50) { background-color: rgba(18, 18, 22, 0.5); }
+html.rr-admin .bg-zinc-800\/20 { background-color: rgba(18, 18, 22, 0.2); }
+html.rr-admin :is(.bg-zinc-700, .bg-gray-700) { background-color: #1e1e24; }
+html.rr-admin .bg-gray-600 { background-color: #2a2a31; }
+html.rr-admin .bg-\[\#2a2a2a\] { background-color: #16161b; }
+html.rr-admin .bg-\[\#1a1a1a\] { background-color: #0f0f13; }
+html.rr-admin .hover\:bg-zinc-800:hover { background-color: #18181d; }
+html.rr-admin .hover\:bg-zinc-800\/50:hover { background-color: rgba(24, 24, 29, 0.6); }
+html.rr-admin :is(.hover\:bg-gray-700, .hover\:bg-zinc-700):hover { background-color: #202027; }
+html.rr-admin .hover\:bg-zinc-700\/50:hover { background-color: rgba(32, 32, 39, 0.6); }
+html.rr-admin .hover\:bg-gray-600:hover { background-color: #2a2a31; }
+
+/* Grey borders */
+html.rr-admin :is(.border-zinc-800, .border-gray-700) { border-color: rgba(255, 255, 255, 0.08); }
+html.rr-admin :is(.border-zinc-700, .border-gray-600, .border-zinc-600) { border-color: rgba(255, 255, 255, 0.12); }
+html.rr-admin .border-zinc-800\/40 { border-color: rgba(255, 255, 255, 0.05); }
+
+/* Grey gradient stops — only the stop colour, so paired utilities keep working */
+html.rr-admin :is(.from-gray-900, .from-zinc-900) { --tw-gradient-from: #0b0b0e var(--tw-gradient-from-position); }
+html.rr-admin :is(.to-gray-800, .to-zinc-800) { --tw-gradient-to: #141418 var(--tw-gradient-to-position); }
+html.rr-admin .via-zinc-900 { --tw-gradient-stops: var(--tw-gradient-from), #0b0b0e var(--tw-gradient-via-position), var(--tw-gradient-to); }
+html.rr-admin .via-gray-800 { --tw-gradient-stops: var(--tw-gradient-from), #141418 var(--tw-gradient-via-position), var(--tw-gradient-to); }
+
+/* Lemon / amber text → brand gold */
+/* Single-class list only: :is() takes its strongest argument's specificity,
+   and page headings (h1 rule above) must still win over these. */
+html.rr-admin :is(
+  .text-yellow-400, .text-yellow-500, .text-yellow-600,
+  .text-amber-300, .text-amber-400, .text-amber-500, .text-amber-600
+) { color: #f1d47a; }
+html.rr-admin .data-\[state\=active\]\:text-amber-300[data-state="active"] { color: #f1d47a; }
+html.rr-admin :is(.text-amber-400\/80, .text-amber-500\/80) { color: rgba(241, 212, 122, 0.8); }
+html.rr-admin .text-amber-400\/90 { color: rgba(241, 212, 122, 0.9); }
+html.rr-admin .text-yellow-400\/50 { color: rgba(241, 212, 122, 0.5); }
+html.rr-admin :is(.hover\:text-amber-600, .hover\:text-amber-300, .hover\:text-yellow-700):hover { color: #f1d47a; }
+
+/* Lemon / amber fills → brand gold (keeps "warning / pending" meaning) */
+html.rr-admin :is(
+  .bg-yellow-400, .bg-yellow-500, .bg-yellow-600,
+  .bg-amber-400, .bg-amber-500, .bg-amber-600, .bg-amber-700
+) {
+  background-color: #d9b44a;
+  background-image: linear-gradient(180deg, #f5dd8f 0%, #dfb850 55%, #b8902c 100%);
+}
+html.rr-admin :is(.bg-yellow-400, .bg-yellow-500, .bg-yellow-600, .bg-amber-500, .bg-amber-600):is(.text-white, .text-primary-foreground) {
+  color: #16120a;
+}
+
+/* Light toggle tracks and progress rails */
+html.rr-admin .bg-gray-200 { background-color: #26262d; }
+html.rr-admin .bg-gray-300 { background-color: #34343c; }
+html.rr-admin :is(
+  .hover\:bg-yellow-400, .hover\:bg-yellow-500, .hover\:bg-yellow-600, .hover\:bg-yellow-700,
+  .hover\:bg-amber-600, .hover\:bg-amber-700
+):hover {
+  filter: brightness(1.08);
+}
+html.rr-admin :is(.from-yellow-400, .from-yellow-500, .from-amber-300, .from-amber-400, .from-amber-500, .from-amber-600) {
+  --tw-gradient-from: #f5dd8f var(--tw-gradient-from-position);
+}
+html.rr-admin :is(.to-yellow-600, .to-yellow-700, .to-amber-500, .to-amber-600, .to-amber-700) {
+  --tw-gradient-to: #b8902c var(--tw-gradient-to-position);
+}
+html.rr-admin :is(.to-yellow-400, .to-amber-400) {
+  --tw-gradient-to: #dfb850 var(--tw-gradient-to-position);
+}
+html.rr-admin .via-yellow-500 { --tw-gradient-stops: var(--tw-gradient-from), #dfb850 var(--tw-gradient-via-position), var(--tw-gradient-to); }
+html.rr-admin .via-amber-400 { --tw-gradient-stops: var(--tw-gradient-from), #e9c76a var(--tw-gradient-via-position), var(--tw-gradient-to); }
+html.rr-admin :is(.focus\:border-amber-500, .focus\:border-yellow-400, .focus\:border-yellow-500):focus { border-color: rgba(241, 212, 122, 0.7); }
+html.rr-admin .focus\:ring-yellow-400:focus { --tw-ring-color: rgba(212, 175, 55, 0.35); }
+
+/* Opacity modifiers on token colours. Tailwind can't generate these from var() colours,
+   so pages using them got nothing — give them real values here. */
+html.rr-admin .bg-muted\/50 { background-color: rgba(255, 255, 255, 0.035); }
+html.rr-admin .bg-muted\/40 { background-color: rgba(255, 255, 255, 0.03); }
+html.rr-admin .bg-muted\/30 { background-color: rgba(255, 255, 255, 0.025); }
+html.rr-admin .hover\:bg-muted\/50:hover { background-color: rgba(255, 255, 255, 0.05); }
+html.rr-admin .hover\:bg-muted\/30:hover { background-color: rgba(255, 255, 255, 0.035); }
+html.rr-admin .border-border\/50 { border-color: rgba(255, 255, 255, 0.05); }
+html.rr-admin .border-muted-foreground\/30 { border-color: rgba(155, 149, 141, 0.3); }
+html.rr-admin .bg-primary\/20 { background-color: rgba(200, 16, 46, 0.2); }
+html.rr-admin .bg-primary\/10 { background-color: rgba(200, 16, 46, 0.1); }
+html.rr-admin .bg-background\/95 { background-color: rgba(5, 5, 5, 0.95); }
+html.rr-admin .bg-background\/50 { background-color: rgba(5, 5, 5, 0.5); }
+html.rr-admin .bg-card\/80 { background-color: rgba(11, 11, 14, 0.8); }
+html.rr-admin .bg-card\/60 { background-color: rgba(11, 11, 14, 0.6); }
+html.rr-admin .hover\:bg-destructive\/90:hover { background-color: #52101c; }
+html.rr-admin .text-muted-foreground\/60 { color: rgba(155, 149, 141, 0.6); }
+html.rr-admin .text-muted-foreground\/50 { color: rgba(155, 149, 141, 0.5); }
+html.rr-admin .text-muted-foreground\/30 { color: rgba(155, 149, 141, 0.3); }
+html.rr-admin .from-primary\/20 {
+  --tw-gradient-from: rgba(200, 16, 46, 0.2) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgba(200, 16, 46, 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+html.rr-admin .to-primary\/5 { --tw-gradient-to: rgba(200, 16, 46, 0.05) var(--tw-gradient-to-position); }
+
+/* Light-mode leftovers — pale info boxes and hover washes glare on black */
+html.rr-admin .bg-blue-50 { background-color: rgba(59, 130, 246, 0.1); }
+html.rr-admin .bg-green-50 { background-color: rgba(16, 185, 129, 0.1); }
+html.rr-admin :is(.bg-red-50, .bg-red-100) { background-color: rgba(200, 16, 46, 0.12); }
+html.rr-admin .bg-amber-50 { background-color: rgba(212, 175, 55, 0.1); }
+html.rr-admin .border-blue-200 { border-color: rgba(96, 165, 250, 0.3); }
+html.rr-admin .border-amber-200 { border-color: rgba(241, 212, 122, 0.3); }
+html.rr-admin :is(.bg-blue-50, .bg-blue-50 *)[class*="text-blue-"] { color: #93c5fd; }
+html.rr-admin :is(.bg-green-50, .bg-green-50 *)[class*="text-green-"] { color: #6ee7b7; }
+html.rr-admin :is(.bg-red-50, .bg-red-50 *, .bg-red-100, .bg-red-100 *)[class*="text-red-"] { color: #fca5a5; }
+html.rr-admin :is(.bg-amber-50, .bg-amber-50 *)[class*="text-amber-"] { color: #f1d47a; }
+html.rr-admin :is(.bg-blue-50, .bg-green-50, .bg-red-50, .bg-amber-50) :is(.text-gray-600, .text-gray-700, .text-gray-800, .text-gray-900) {
+  color: rgba(255, 248, 238, 0.72);
+}
+html.rr-admin .hover\:bg-green-50:hover { background-color: rgba(16, 185, 129, 0.12); }
+html.rr-admin .hover\:bg-red-50:hover { background-color: rgba(200, 16, 46, 0.14); }
+html.rr-admin .hover\:bg-red-200:hover { background-color: rgba(200, 16, 46, 0.22); }
+html.rr-admin :is(.hover\:bg-amber-50, .hover\:bg-yellow-50):hover { background-color: rgba(212, 175, 55, 0.12); }
+html.rr-admin :is(.hover\:bg-blue-50, .hover\:bg-blue-100):hover { background-color: rgba(59, 130, 246, 0.12); }
+html.rr-admin .hover\:bg-purple-50:hover { background-color: rgba(168, 85, 247, 0.12); }
+
+/* Dark -600/-700 text is muddy on black — lift it a step */
+html.rr-admin .text-red-600 { color: #f87171; }
+html.rr-admin .text-green-600 { color: #34d399; }
+html.rr-admin .text-blue-600 { color: #60a5fa; }
+html.rr-admin .text-purple-600 { color: #c084fc; }
+html.rr-admin .hover\:text-red-700:hover { color: #fca5a5; }
+html.rr-admin :is(.hover\:text-green-600, .hover\:text-green-700):hover { color: #6ee7b7; }
+html.rr-admin .hover\:text-blue-700:hover { color: #93c5fd; }
+html.rr-admin .hover\:text-purple-700:hover { color: #d8b4fe; }
+html.rr-admin .border-green-600 { border-color: rgba(52, 211, 153, 0.55); }

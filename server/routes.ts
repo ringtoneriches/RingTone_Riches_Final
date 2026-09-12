@@ -190,6 +190,10 @@ import { calculateDiscountedTotal } from "./utils/discounts";
 import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
 import { notifyPublicWinnerUpdate } from "./services/record-game-winner";
 import { processUncontrolledSlotSpin, revealAllUncontrolledSlot } from "./services/slot-play";
+import { getPromoVideoModeStatus } from "./services/promo-video-mode";
+import { getCashflowsRevenue } from "./services/cashflows-revenue";
+import { ukDayStart } from "./services/uk-day";
+import { effectiveTicketPrice } from "@shared/flash-sale";
 import {
   getCompletedScratchSession,
   getOpenScratchSession,
@@ -1456,6 +1460,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/step-up/status", isAuthenticated, isAdmin, async (req: any, res) => {
     res.json(getAdminStepUpStatus(req));
+  });
+
+  app.get("/api/admin/promo-video-mode", isAuthenticated, isAdmin, async (_req, res) => {
+    res.json(getPromoVideoModeStatus());
   });
 
   app.post(
@@ -5298,7 +5306,7 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     }
     if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
-    const spinCostPerTicket = parseFloat(competition.ticketPrice);
+    const spinCostPerTicket = effectiveTicketPrice(competition);
     
     // Calculate discount
     const { originalTotal, discountPercent, discountedTotal, savings } = 
@@ -6603,7 +6611,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
         },
         competition: {
           title: competition.title,
-          ticketPrice: competition.ticketPrice,
+          ticketPrice: effectiveTicketPrice(competition).toFixed(2),
           type: competition.type,
         },
       });
@@ -6636,7 +6644,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
             });
         }
 
-        const ticketPrice = parseFloat(competition.ticketPrice);
+        const ticketPrice = effectiveTicketPrice(competition);
         const totalAmount = ticketPrice * quantity;
 
         const user = await storage.getUser(userId);
@@ -6689,7 +6697,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
     }
     if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
-    const scratchCostPerCard = parseFloat(competition.ticketPrice);
+    const scratchCostPerCard = effectiveTicketPrice(competition);
     
     // Calculate discount
     const { originalTotal, discountPercent, discountedTotal, savings } = 
@@ -6746,7 +6754,7 @@ app.post("/api/create-pop-order", isAuthenticated, async (req: any, res) => {
     }
     if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
-    const popCostPerGame = parseFloat(competition.ticketPrice);
+    const popCostPerGame = effectiveTicketPrice(competition);
     
     // Calculate discount
     const { originalTotal, discountPercent, discountedTotal, savings } = 
@@ -6806,7 +6814,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
     }
     if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
-    const voltzCostPerGame = parseFloat(competition.ticketPrice);
+    const voltzCostPerGame = effectiveTicketPrice(competition);
     
     // Calculate discount
     const { originalTotal, discountPercent, discountedTotal, savings } = 
@@ -9391,8 +9399,8 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
 
     if (!competition) return res.status(404).json({ error: "Competition not found" });
 
-    // Calculate original amount
-    const originalAmount = Number(competition.ticketPrice) * order.quantity;
+    // Calculate original amount (flash sale price when one is running)
+    const originalAmount = effectiveTicketPrice(competition) * order.quantity;
     
     // Prepare discount values
     let discountAmount = Number(discount.value);
@@ -9557,7 +9565,7 @@ app.post(
           .from(competitions)
           .where(eq(competitions.id, competitionId));
 
-        const originalAmount = Number(competition?.ticketPrice || 0) * order.quantity;
+        const originalAmount = effectiveTicketPrice(competition) * order.quantity;
 
         // Update order to remove discount
         await tx.update(orders)
@@ -10154,101 +10162,27 @@ app.get(
     try {
       const { dateFrom, dateTo, search } = req.query;
       
-      // Get Cashflows transactions with same inclusive filter
-      let allTransactions = await db
-        .select({
-          id: transactions.id,
-          userId: transactions.userId,
-          userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
-          userEmail: users.email,
-          type: transactions.type,
-          amount: transactions.amount,
-          description: transactions.description,
-          createdAt: transactions.createdAt,
-          source: sql`'cashflows'`,
-          paymentRef: transactions.paymentRef,
-        })
-        .from(transactions)
-        .leftJoin(users, eq(transactions.userId, users.id))
-        .where(
-          sql`(
-            ${transactions.type} = 'deposit'
-          ) OR (
-            ${transactions.type} = 'purchase' 
-            AND ${transactions.paymentRef} IS NOT NULL 
-            AND ${transactions.paymentRef} != '' 
-            AND ${transactions.paymentRef} != 'N/A'
-            AND ${transactions.description} LIKE '%Instant play purchase%'
-          ) OR (
-            ${transactions.paymentRef} LIKE '260%'
-          )`
-        );
-      
-      // Apply filters
-      let filtered = [...allTransactions];
-      
-      if (dateFrom) {
-        const fromDate = new Date(dateFrom as string);
-        filtered = filtered.filter(tx => new Date(tx.createdAt) >= fromDate);
-      }
+      // Totals come from completed Cashflows payments — the same figure as the dashboard's
+      // "Today's Revenue" and the Cashflows portal. Cashback and signup bonuses are not Cashflows money.
+      const fromDate = dateFrom ? new Date(dateFrom as string) : null;
+      let toDate: Date | null = null;
       if (dateTo) {
-        const toDate = new Date(dateTo as string);
+        toDate = new Date(dateTo as string);
         toDate.setHours(23, 59, 59, 999);
-        filtered = filtered.filter(tx => new Date(tx.createdAt) <= toDate);
       }
-      if (search) {
-        const searchLower = (search as string).toLowerCase();
-        filtered = filtered.filter(tx => 
-          (tx.userName || '').toLowerCase().includes(searchLower) ||
-          (tx.userEmail || '').toLowerCase().includes(searchLower) ||
-          (tx.description || '').toLowerCase().includes(searchLower) ||
-          (tx.paymentRef || '').toLowerCase().includes(searchLower) ||
-          String(Math.abs(parseFloat(String(tx.amount)) || 0)).includes(searchLower)
-        );
-      }
-      
-      // Calculate deposit total (real Cashflows top-ups only — not card cashback)
-      const depositTotal = filtered
-        .filter((tx) => tx.type === "deposit" && !isCardCashbackTx(tx))
-        .reduce((sum, tx) => {
-          const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
-          return sum + amount;
-        }, 0);
-      
-      // Calculate instant play purchase total
-      const instantPlayTotal = filtered
-        .filter((tx) => tx.type === "purchase")
-        .reduce((sum, tx) => {
-          const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
-          return sum + amount;
-        }, 0);
-      
-      // Total revenue
-      const totalAmount = depositTotal + instantPlayTotal;
-      
-      // Unique users
-      const uniqueUsers = new Set(
-        filtered
-          .map(tx => tx.userEmail || tx.userId)
-          .filter(Boolean)
-      );
-      
-      console.log('Cashflows Stats:', {
-        totalFiltered: filtered.length,
-        depositCount: filtered.filter(tx => tx.type === 'deposit').length,
-        purchaseCount: filtered.filter(tx => tx.type !== 'deposit').length,
-        depositTotal: depositTotal.toFixed(2),
-        instantPlayTotal: instantPlayTotal.toFixed(2),
-        totalAmount: totalAmount.toFixed(2),
-        uniqueUsers: uniqueUsers.size
+
+      const revenue = await getCashflowsRevenue({
+        from: fromDate,
+        to: toDate,
+        search: search as string | undefined,
       });
-      
+
       res.json({
-        totalAmount: Number(totalAmount.toFixed(2)),
-        depositTotal: Number(depositTotal.toFixed(2)),
-        instantPlayTotal: Number(instantPlayTotal.toFixed(2)),
-        transactionCount: filtered.length,
-        uniqueUsers: uniqueUsers.size,
+        totalAmount: revenue.total,
+        depositTotal: revenue.topupTotal,
+        instantPlayTotal: revenue.cardPurchaseTotal,
+        transactionCount: revenue.count,
+        uniqueUsers: revenue.uniqueCustomers,
       });
       
     } catch (error) {
@@ -11091,10 +11025,10 @@ app.post("/api/create-plinko-order", isAuthenticated, async (req: any, res) => {
     }
     if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
 
-    const ticketPrice = parseFloat(competition.ticketPrice);
-    
+    const ticketPrice = effectiveTicketPrice(competition);
+
     // Calculate discount
-    const { originalTotal, discountPercent, discountedTotal, savings } = 
+    const { originalTotal, discountPercent, discountedTotal, savings } =
       calculateDiscountedTotal(ticketPrice, quantity);
 
     const order = await storage.createOrder({
@@ -13263,23 +13197,13 @@ app.delete(
           .select({ count: sql<number>`count(*)` })
           .from(competitions);
 
-        // Get total revenue
-        const today = new Date();
-        today.setUTCHours(0, 0, 0, 0);
-        
-        // Daily revenue (today)
-        const dailyRevenueResult  = await db
-        .select({
-          total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
-        })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.type, "deposit"),
-            gte(transactions.createdAt, today)
-          )
-        );
-      
+        // "Today" is the UK calendar day (00:00 Europe/London), not UTC midnight
+        const today = ukDayStart();
+
+        // Daily revenue: money Cashflows took today — top-ups and card game purchases (incl. guests).
+        // Card cashback and signup bonuses are wallet credits, not revenue.
+        const dailyRevenue = await getCashflowsRevenue({ from: today });
+
 
         // 👉 NEW: Total site credit across all users
         const totalSiteCreditResult = await db
@@ -13323,7 +13247,7 @@ app.delete(
           stats: {
             totalUsers: totalUsers[0]?.count || 0,
             totalCompetitions: totalCompetitions[0]?.count || 0,
-            dailyRevenue: dailyRevenueResult[0]?.total || 0,
+            dailyRevenue: dailyRevenue.total,
 
             // ⭐ Added fields
             totalSiteCredit: totalSiteCreditResult[0]?.total || 0,
@@ -13956,6 +13880,10 @@ app.get(
               "end_date",
               "updatedAt",
               "updated_at",
+              "flashSaleStartsAt",
+              "flash_sale_starts_at",
+              "flashSaleEndsAt",
+              "flash_sale_ends_at",
             ];
 
             if (timestampFields.includes(key)) {
@@ -14007,6 +13935,104 @@ app.get(
       } catch (error) {
         console.error("Error updating competition:", error);
         res.status(500).json({ message: "Failed to update competition" });
+      }
+    }
+  );
+
+  // Flash sale — start a temporary price that expires on its own (shared/flash-sale.ts)
+  app.post(
+    "/api/admin/competitions/:id/flash-sale",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const schema = z.object({
+          salePrice: z.coerce.number().min(0),
+          durationMinutes: z.coerce.number().int().min(1).max(60 * 24 * 30).optional(),
+          startsAt: z.string().optional(),
+          endsAt: z.string().optional(),
+        });
+        const { salePrice, durationMinutes, startsAt, endsAt } = schema.parse(req.body);
+
+        const [competition] = await db
+          .select()
+          .from(competitions)
+          .where(eq(competitions.id, req.params.id));
+        if (!competition) return res.status(404).json({ message: "Competition not found" });
+
+        const basePrice = Number(competition.ticketPrice);
+        if (!(salePrice < basePrice)) {
+          return res.status(400).json({
+            message: `Sale price must be below the normal price of £${basePrice.toFixed(2)}`,
+          });
+        }
+
+        const start = startsAt ? new Date(startsAt) : new Date();
+        if (Number.isNaN(start.getTime())) {
+          return res.status(400).json({ message: "Invalid start time" });
+        }
+
+        let end: Date | null = null;
+        if (endsAt) {
+          end = new Date(endsAt);
+        } else if (durationMinutes) {
+          end = new Date(start.getTime() + durationMinutes * 60_000);
+        }
+        if (!end || Number.isNaN(end.getTime())) {
+          return res.status(400).json({ message: "Choose how long the sale should run" });
+        }
+        if (end.getTime() <= Date.now()) {
+          return res.status(400).json({ message: "The sale end time must be in the future" });
+        }
+
+        const [updated] = await db
+          .update(competitions)
+          .set({
+            flashSalePrice: salePrice.toFixed(2),
+            flashSaleStartsAt: start,
+            flashSaleEndsAt: end,
+            updatedAt: new Date(),
+          })
+          .where(eq(competitions.id, req.params.id))
+          .returning();
+
+        wsManager.broadcast({ type: "competition_updated", competitionId: req.params.id });
+        res.json(updated);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid flash sale details" });
+        }
+        console.error("Error starting flash sale:", error);
+        res.status(500).json({ message: "Failed to start flash sale" });
+      }
+    }
+  );
+
+  // Flash sale — stop early and go straight back to the normal price
+  app.delete(
+    "/api/admin/competitions/:id/flash-sale",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const [updated] = await db
+          .update(competitions)
+          .set({
+            flashSalePrice: null,
+            flashSaleStartsAt: null,
+            flashSaleEndsAt: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(competitions.id, req.params.id))
+          .returning();
+
+        if (!updated) return res.status(404).json({ message: "Competition not found" });
+
+        wsManager.broadcast({ type: "competition_updated", competitionId: req.params.id });
+        res.json(updated);
+      } catch (error) {
+        console.error("Error stopping flash sale:", error);
+        res.status(500).json({ message: "Failed to stop flash sale" });
       }
     }
   );
@@ -19613,7 +19639,7 @@ app.post("/api/guest/create-order", async (req: any, res) => {
     }
 
     // Calculate total amount
-    const ticketPrice = Number(competition.ticketPrice);
+    const ticketPrice = effectiveTicketPrice(competition);
     const totalAmount = ticketPrice * quantity;
 
     // Generate order reference
@@ -21125,7 +21151,7 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
       if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
-      const slotCostPerSpin = parseFloat(competition.ticketPrice);
+      const slotCostPerSpin = effectiveTicketPrice(competition);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(slotCostPerSpin, quantity);
       const user = await storage.getUser(userId);
       const userBalance = parseFloat(user?.balance || "0");
@@ -21808,7 +21834,7 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
       if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
-      const costPerPlay = parseFloat(competition.ticketPrice);
+      const costPerPlay = effectiveTicketPrice(competition);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(costPerPlay, quantity);
       const user = await storage.getUser(userId);
       const order = await storage.createOrder({

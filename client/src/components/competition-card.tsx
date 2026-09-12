@@ -3,7 +3,7 @@ import { Competition } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Zap } from "lucide-react";
 import { useBasket } from "@/hooks/useBasket";
 import pop from "../../public/pop.jpeg";
 import voltz from "../../public/voltz.jpeg";
@@ -12,6 +12,8 @@ import ChaserBorder from "@/components/home/ChaserBorder";
 import QuantitySelector from "@/components/home/QuantitySelector";
 import CountdownBlocks from "@/components/home/CountdownBlocks";
 import { useCountdown } from "@/hooks/useCountdown";
+import FlashPrice from "@/components/FlashPrice";
+import { effectiveTicketPrice, flashSaleState } from "@shared/flash-sale";
 import {
   HIDDEN_COMPETITION_IDS,
   getCompetitionBadgeLabel,
@@ -69,6 +71,8 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
   const cta = getCtaLabel(competition.type, stats.isClosed);
   const isDraw = !isInstantWinGame(competition.type);
   const TypeIcon = typeCfg.Icon;
+  const sale = flashSaleState(competition);
+  const saleLive = sale.isLive && !stats.isClosed;
 
   const imageSrc =
     getCompetitionImage(competition, "card") ||
@@ -81,7 +85,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
 
   return (
     <div
-      className="rr-comp-card group h-full"
+      className={`rr-comp-card group h-full ${saleLive ? "is-sale" : ""}`}
       data-testid={`card-competition-${competition.id}`}
       role="link"
       tabIndex={stats.isClosed ? -1 : 0}
@@ -121,13 +125,20 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                 {badgeLabel}
               </span>
             </div>
-            <div className="absolute right-2.5 top-2.5">
+            <div className="absolute right-2.5 top-2.5 flex flex-col items-end gap-1.5">
               <span className={`rr-comp-status ${stats.isClosed ? "is-closed" : ""}`}>
                 {badge}
               </span>
+              {saleLive && (
+                <span className="rr-flash-ribbon">
+                  <Zap className="h-2.5 w-2.5 shrink-0" strokeWidth={2.6} />
+                  <span className="rr-flash-ribbon__label">Flash sale</span>
+                  {sale.percentOff > 0 && <b className="rr-flash-ribbon__off">{sale.percentOff}% off</b>}
+                </span>
+              )}
             </div>
             <span className="rr-comp-price-tag">
-              {stats.isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
+              <FlashPrice competition={competition} isFree={stats.isFree} variant="tag" />
             </span>
             {stats.isClosed && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/55">
@@ -161,7 +172,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-white/40">Entry</p>
                 <p className="font-prize text-xl text-[#F1D47A]">
-                  {stats.isFree ? "FREE" : `£${parseFloat(competition.ticketPrice).toFixed(2)}`}
+                  <FlashPrice competition={competition} isFree={stats.isFree} showTimer />
                 </p>
               </div>
             </div>
@@ -195,7 +206,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                           type: competition.type || "instant",
                           title: competition.title,
                           imageUrl: competition.imageUrl || undefined,
-                          ticketPrice: competition.ticketPrice,
+                          ticketPrice: effectiveTicketPrice(competition).toFixed(2),
                           quantity: qty,
                           wheelType: competition.wheelType,
                         },

@@ -16,6 +16,10 @@ import {
   royalSymbolFromPrize,
 } from "./royal-controlled-layout";
 import { instantWinValueFromTablePrize } from "./instant-win-prize-value";
+import {
+  isPromoVideoModeEnabled,
+  resolvePromoJackpotPrize,
+} from "./promo-video-mode";
 import { notifyPublicWinnerUpdate } from "./record-game-winner";
 import { randomInt, randomBytes } from "crypto";
 import { and, asc, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
@@ -460,9 +464,27 @@ async function liabilityCashValue(
 }
 
 async function frozenTicketDetails(
-  ticket: { prizeDetails?: unknown; instantWinPrizeId?: string | null },
+  ticket: {
+    prizeDetails?: unknown;
+    instantWinPrizeId?: string | null;
+    competitionId?: string;
+  },
   tx: DbTx = db
 ): Promise<any> {
+  if (isPromoVideoModeEnabled() && ticket.competitionId) {
+    const jackpot = await resolvePromoJackpotPrize(ticket.competitionId, tx);
+    if (jackpot) {
+      return buildPrizeDetails(
+        {
+          name: jackpot.name,
+          value: jackpot.value,
+          rewardType: jackpot.rewardType,
+        },
+        jackpot.valueNum,
+      );
+    }
+  }
+
   if (!ticket.instantWinPrizeId) {
     return (ticket.prizeDetails as any) || buildPrizeDetails(null);
   }
@@ -690,6 +712,34 @@ async function freezeIssuedTicket(
     ticketId: string;
   }
 ) {
+  if (isPromoVideoModeEnabled()) {
+    const jackpot = await resolvePromoJackpotPrize(opts.competitionId, tx);
+    if (jackpot) {
+      const syntheticPrize = {
+        name: jackpot.name,
+        value: jackpot.value,
+        rewardType: jackpot.rewardType,
+      };
+      const details = buildPrizeDetails(syntheticPrize, jackpot.valueNum);
+      const patch = {
+        isWinner: true,
+        prizeAmount: String(jackpot.valueNum),
+        prizeType: jackpot.rewardType,
+        prizeDetails: details,
+        resultStatus: "win" as const,
+        instantWinPrizeId: null,
+      };
+
+      if (opts.isGuest) {
+        await tx.update(guestTickets).set(patch).where(eq(guestTickets.id, opts.ticketId));
+      } else {
+        await tx.update(tickets).set(patch).where(eq(tickets.id, opts.ticketId));
+      }
+
+      return { isWin: true, details, prize: null };
+    }
+  }
+
   const [matchingPrize] = await tx
     .select()
     .from(instantWinPrizes)

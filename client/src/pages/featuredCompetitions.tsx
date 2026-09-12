@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useRef, useMemo, memo, useCallback, useEffect } from "react";
 import featuredBgVideo from "@assets/generated_videos/featured_gaming_vivid_bg.mp4";
 import { getCompetitionImage } from "@/lib/competition-display";
+import { effectiveTicketPrice, flashSaleState } from "@shared/flash-sale";
 
 interface FeaturedCompetitionsProps {
   competitions: Competition[];
@@ -159,14 +160,26 @@ const CompetitionCard = memo(({ competition, onView }: { competition: Competitio
               </div>
 
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-5">
-                <div className="flex items-baseline gap-2.5">
+                <div className="flex flex-wrap items-baseline gap-2.5">
                   <span className="text-white/40 text-sm line-through font-medium">
-                    £{(parseFloat(competition.ticketPrice) * 2).toFixed(2)}
+                    £{(flashSaleState(competition).isLive
+                      ? flashSaleState(competition).basePrice
+                      : parseFloat(competition.ticketPrice) * 2
+                    ).toFixed(2)}
                   </span>
                   <span className="text-3xl sm:text-4xl font-black" style={{ color: colors.neon }}>
-                    £{parseFloat(competition.ticketPrice).toFixed(2)}
+                    £{effectiveTicketPrice(competition).toFixed(2)}
                   </span>
                   <span className="text-white/55 text-xs sm:text-sm font-medium">per play</span>
+                  {flashSaleState(competition).isLive && (
+                    <span className="rr-flash-ribbon self-center">
+                      <Zap className="h-2.5 w-2.5 shrink-0" strokeWidth={2.6} />
+                      <span className="rr-flash-ribbon__label">Flash sale</span>
+                      <b className="rr-flash-ribbon__off">
+                        {flashSaleState(competition).percentOff}% off
+                      </b>
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex gap-2.5 w-full sm:w-auto">
