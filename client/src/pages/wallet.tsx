@@ -10,6 +10,7 @@ import { Link, Router, useLocation } from "wouter";
 import { Transaction, User, Ticket, Competition } from "@shared/schema";
 import { isCardCashbackTx } from "@shared/card-cashback";
 import { apiRequest } from "@/lib/queryClient";
+import { formatTransactionAmount } from "@/lib/transaction-amount";
 import {
   DollarSign,
   PoundSterling,
@@ -591,17 +592,15 @@ const filteredTransactions =
         return `£${amount.toFixed(2)}`;
       }
     
-      // For other ringtone prizes
+      // Other ringtone prizes — the description decides points vs cash.
       if (transaction.type === "prize" && desc.includes("ringtone")) {
-        if (desc.includes("spin") || desc.includes("points") || desc.includes("pts")) {
-          return `${amount} pts`;
-        }
-        return `£${amount.toFixed(2)}`;
+        return formatTransactionAmount(transaction);
       }
       
-      // For all other prize types, show as cash
+      // Points prizes are stored exactly like cash ones — type "prize" with the points
+      // count in `amount` (e.g. "Instant win — 200 points") — so the description decides.
       if (transaction.type === "prize") {
-        return `£${amount.toFixed(2)}`;
+        return formatTransactionAmount(transaction);
       }
       
       // For all other types, show as cash
