@@ -55,7 +55,7 @@ export default function MyPlaysPage() {
                 </p>
               </div>
               {isAuthenticated && (
-                <div className="flex gap-2 sm:gap-3">
+                <div className="rr-plays-stats flex gap-2 sm:gap-3">
                   <div className="min-w-0 flex-1 rounded-2xl border border-[#D4AF37]/25 bg-[#D4AF37]/8 px-3.5 py-2.5 sm:flex-none sm:px-5 sm:py-3">
                     <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Waiting</p>
                     <p className="font-prize text-2xl text-[#F1D47A] sm:text-3xl">{live.length}</p>

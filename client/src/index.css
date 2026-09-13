@@ -5856,6 +5856,22 @@ html.rr-day .rr-plays .rr-chaser .text-white\/35 {
 html.rr-day .rr-plays .rr-chaser .text-\[\#F1D47A\] {
   color: #f1d47a !important;
 }
+/* Play cards carry no background of their own — in night mode the black page shows
+   through. On cream they need a real dark surface, which is what the ivory text
+   rules above already assume (and matches game cards elsewhere in day mode). */
+html.rr-day .rr-plays .rr-chaser > div.relative {
+  background-color: #0a0a0d;
+}
+/* The stat tiles sit on the cream page itself, not on a card. */
+html.rr-day .rr-plays-stats .bg-black\/40 {
+  background-color: rgba(22, 21, 26, 0.05);
+}
+html.rr-day .rr-plays-stats .border-white\/10 {
+  border-color: rgba(22, 21, 26, 0.12);
+}
+html.rr-day .rr-plays-stats .text-\[\#F1D47A\] {
+  color: #a8791b !important;
+}
 html.rr-day .rr-plays .font-prize.text-white,
 html.rr-day .rr-cart .font-prize.text-white {
   color: var(--rr-ink) !important;
