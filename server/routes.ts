@@ -4770,7 +4770,7 @@ res.json({
             .set({ status: "completed", updatedAt: new Date() })
             .where(eq(pendingPayments.id, pendingPaymentId));
         }
-        return { order, competition: null, generatedTickets: existingTickets, cardSpend };
+        return { order, competition: null, generatedTickets: existingTickets, cardSpend, didIssue: false };
       }
 
        // Get user before any changes
@@ -4825,7 +4825,7 @@ res.json({
             .set({ status: "completed", updatedAt: new Date() })
             .where(eq(pendingPayments.id, pendingPaymentId));
         }
-        return { order, competition, generatedTickets: existingTickets, cardSpend };
+        return { order, competition, generatedTickets: existingTickets, cardSpend, didIssue: false };
       }
 
       const { tickets: generatedTickets } = await issuePlayTickets({
@@ -4873,7 +4873,7 @@ await transaction.insert(auditLogs).values({
         .where(eq(pendingPayments.id, pendingPaymentId));
     }
 
-    return { order, competition, generatedTickets, cardSpend };
+    return { order, competition, generatedTickets, cardSpend, didIssue: true };
   };
   
     try {
@@ -4888,8 +4888,11 @@ await transaction.insert(auditLogs).values({
         });
       }
   
-      // Send confirmation email (non-blocking) - do this outside transaction
-      if (result) {
+      // Send confirmation email (non-blocking) - do this outside transaction.
+      // Only when this call actually issued the tickets. Cashflows sends several
+      // notifications per payment and the success page can be reloaded, so the
+      // other paths reach here having done nothing and must not email again.
+      if (result?.didIssue) {
         const { order, competition, generatedTickets } = result;
         
         // Get user for email
