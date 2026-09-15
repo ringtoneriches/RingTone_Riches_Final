@@ -193,6 +193,7 @@ import { processUncontrolledSlotSpin, revealAllUncontrolledSlot } from "./servic
 import { getPromoVideoModeStatus } from "./services/promo-video-mode";
 import { getCashflowsRevenue } from "./services/cashflows-revenue";
 import { ukDayStart } from "./services/uk-day";
+import { shouldProcessPaymentWebhook } from "./services/payment-webhook-guard";
 import { effectiveTicketPrice } from "@shared/flash-sale";
 import {
   getCompletedScratchSession,
@@ -4578,14 +4579,22 @@ res.json({
           return;
         }
   
-      // 🚫 Hard stop if not pending
-      if (pending.status !== "pending") {
-        console.log("Blocked non-pending payment:", pending.status);
+      // 🚫 Stop if this payment must not be processed.
+      // "failed" is deliberately NOT final: one payment job can hold several
+      // attempts, so a customer who fails 3D Secure and then retries
+      // successfully produces a second webhook on the same job. Treating the
+      // first failure as final meant Cashflows collected the money and the
+      // customer got nothing. Cashflows is asked for the truth below.
+      if (!shouldProcessPaymentWebhook(pending.status)) {
+        console.log("Blocked payment webhook, status:", pending.status);
         return;
       }
   
-      // Save payment reference once
-      if (!pending.paymentReference && paymentReference) {
+      // Record the reference of the attempt we are acting on. A retry after a
+      // failed attempt carries a NEW reference, and the row should end up naming
+      // the attempt that actually paid. Completed rows never reach here, so this
+      // cannot overwrite the reference of an already-settled payment.
+      if (paymentReference) {
         await db.execute(sql`
           UPDATE pending_payments 
           SET payment_reference = ${paymentReference}
