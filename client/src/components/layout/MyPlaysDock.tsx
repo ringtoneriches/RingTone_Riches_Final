@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Gamepad2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { readyToPlayOrders, type UnplayedOrder } from "@/lib/unplayed-orders";
+import { isPlayExpired, readyToPlayOrders, type UnplayedOrder } from "@/lib/unplayed-orders";
 
 const HIDDEN = [
   "/my-plays",
@@ -31,12 +31,10 @@ export default function MyPlaysDock({ hidden = false }: { hidden?: boolean }) {
     staleTime: 30000,
   });
 
-  const readyPlayCount = readyToPlayOrders(playOrders).filter((order) => {
-    const created = new Date(order.orders.createdAt).getTime();
-    const type = (order.competitions?.type || "").toLowerCase();
-    if (!["spin", "scratch", "pop", "plinko", "voltz"].includes(type)) return true;
-    return Date.now() < created + 2 * 60 * 60 * 1000;
-  }).length;
+  // Same window rule as My Plays, shared so the badge cannot drift from the page.
+  const readyPlayCount = readyToPlayOrders(playOrders).filter(
+    (order) => !isPlayExpired(order),
+  ).length;
 
   if (hidden || shouldHide(location)) return null;
 

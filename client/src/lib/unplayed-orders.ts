@@ -18,6 +18,8 @@ export type UnplayedOrder = {
     status: string;
     createdAt: string;
   };
+  // Drizzle hands these back as Date objects; the API serialises them to strings.
+  tickets?: Array<{ createdAt?: string | Date | null }>;
   remainingPlays?: number;
 };
 
@@ -29,9 +31,26 @@ export function isPlayWindowType(type?: string) {
   return EXPIRE_TYPES.has((type || "").toLowerCase());
 }
 
+/**
+ * When the play window starts: the moment the customer actually paid.
+ *
+ * Tickets are issued inside the payment transaction, so the earliest ticket is
+ * when the purchase completed. The order row is created earlier, at checkout,
+ * so measuring from it started the clock while the customer was still on the
+ * card page. Falls back to the order for rows that have no tickets.
+ */
+function playWindowStart(order: UnplayedOrder) {
+  let earliest = Number.POSITIVE_INFINITY;
+  for (const ticket of order.tickets || []) {
+    const issued = ticket?.createdAt ? new Date(ticket.createdAt).getTime() : NaN;
+    if (!Number.isNaN(issued)) earliest = Math.min(earliest, issued);
+  }
+  if (earliest !== Number.POSITIVE_INFINITY) return earliest;
+  return new Date(order.orders.createdAt).getTime();
+}
+
 export function playWindowMs(order: UnplayedOrder) {
-  const created = new Date(order.orders.createdAt).getTime();
-  return created + PLAY_WINDOW_MS - Date.now();
+  return playWindowStart(order) + PLAY_WINDOW_MS - Date.now();
 }
 
 export function isPlayExpired(order: UnplayedOrder) {

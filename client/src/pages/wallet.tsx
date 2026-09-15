@@ -11,6 +11,7 @@ import { Transaction, User, Ticket, Competition } from "@shared/schema";
 import { isCardCashbackTx } from "@shared/card-cashback";
 import { apiRequest } from "@/lib/queryClient";
 import { formatTransactionAmount } from "@/lib/transaction-amount";
+import { playWindowMs } from "@/lib/unplayed-orders";
 import {
   DollarSign,
   PoundSterling,
@@ -684,11 +685,8 @@ const incompleteGames = orders.filter((order) => {
   const status = order.orders.status;
   
   // Check if game should be removed (expired + 10 minutes)
-  const now = Date.now();
-  const created = new Date(order.orders.createdAt).getTime();
-  const expiryTime = created + (2 * 60 * 60 * 1000);
   const removalDelay = 10 * 60 * 1000; // 10 minutes in milliseconds
-  const shouldRemove = now > (expiryTime + removalDelay);
+  const shouldRemove = playWindowMs(order) < -removalDelay;
   
   return (
     ["spin", "scratch", "plinko", "pop", "voltz"].includes(type) &&
@@ -700,19 +698,8 @@ const incompleteGames = orders.filter((order) => {
 });
 
 const getTimeRemaining = (order) => {
-  const now = Date.now(); // Current time in milliseconds UTC
-  const created = new Date(order.orders.createdAt).getTime(); // Convert to milliseconds
-  const expiryTime = created + (2 * 60 * 60 * 1000); // Add 2 hours in milliseconds
-  const timeLeftMs = expiryTime - now;
-  
-  console.log('Debug:', {
-    created: new Date(created).toISOString(),
-    expiry: new Date(expiryTime).toISOString(),
-    now: new Date(now).toISOString(),
-    timeLeftMs: timeLeftMs,
-    timeLeftHours: (timeLeftMs / (1000 * 60 * 60)).toFixed(2)
-  });
-  
+  const timeLeftMs = playWindowMs(order);
+
   if (timeLeftMs <= 0) return null;
   
   const hours = Math.floor(timeLeftMs / (1000 * 60 * 60));
@@ -724,12 +711,7 @@ const getTimeRemaining = (order) => {
   return `${minutes}m remaining`;
 };
 
-const isGameExpired = (order) => {
-  const now = Date.now();
-  const created = new Date(order.orders.createdAt).getTime();
-  const expiryTime = created + (2 * 60 * 60 * 1000);
-  return now > expiryTime;
-};
+const isGameExpired = (order) => playWindowMs(order) <= 0;
 
 
 const incompleteGamesRef = useRef(null);
