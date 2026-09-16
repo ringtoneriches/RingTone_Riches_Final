@@ -42,3 +42,28 @@ export function ukDayStart(now: Date = new Date()): Date {
   const guess = new Date(midnightAsUtc - ukOffsetMs(now));
   return new Date(midnightAsUtc - ukOffsetMs(guess));
 }
+
+/**
+ * The instant the NEXT UK calendar day begins, as a UTC Date.
+ *
+ * Used for the daily spin countdown. Not simply "+24 hours": a UK day is 23 or
+ * 25 hours long on clock-change days. Stepping 36 hours forward always lands
+ * somewhere inside tomorrow, and ukDayStart then snaps back to its midnight.
+ */
+export function ukNextDayStart(now: Date = new Date()): Date {
+  const todayStart = ukDayStart(now);
+  return ukDayStart(new Date(todayStart.getTime() + 36 * 60 * 60 * 1000));
+}
+
+/**
+ * The UK calendar date at `instant`, as YYYY-MM-DD.
+ *
+ * Used as the "one per day" key for the daily spin. It must be the UK date, not
+ * the UTC one: during BST, 00:30 UK is still 23:30 UTC the previous day, so a
+ * UTC key would let someone spin twice in one British evening.
+ */
+export function ukDateString(now: Date = new Date()): string {
+  const c = ukWallClock(now);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${c.year}-${pad(c.month)}-${pad(c.day)}`;
+}

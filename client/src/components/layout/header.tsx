@@ -231,6 +231,11 @@ export default function Header() {
                   Winners
                 </span>
               </Link>
+              <Link href="/daily-spin">
+                <span className={`rr-nav-link cursor-pointer ${location === "/daily-spin" ? "is-active" : ""}`} data-testid="link-daily-spin">
+                  Daily Spin
+                </span>
+              </Link>
               <Link href="/#how-it-works">
                 <span
                   className="rr-nav-link cursor-pointer"
@@ -379,6 +384,12 @@ export default function Header() {
               <Link href="/winners" onClick={closeMobileMenu}>
                 <div className="rr-mobile-item group active:scale-98">
                   <span className="text-sm font-black uppercase tracking-[0.16em] text-white">Winners</span>
+                  <ChevronRight className="w-5 h-5 text-[#F1D47A] group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+              <Link href="/daily-spin" onClick={closeMobileMenu}>
+                <div className="rr-mobile-item group active:scale-98">
+                  <span className="text-sm font-black uppercase tracking-[0.16em] text-white">Daily Spin</span>
                   <ChevronRight className="w-5 h-5 text-[#F1D47A] group-hover:translate-x-1 transition-transform" />
                 </div>
               </Link>

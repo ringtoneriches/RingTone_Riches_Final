@@ -137,6 +137,7 @@ import {
 } from "./email";
 import { wsManager } from "./websocket";
 import { registerInstantWinRoutes } from "./instantWinRoutes";
+import { registerDailySpinRoutes } from "./daily-spin-routes";
 import {
   InstantWinError,
   assertCanPurchaseTickets,
@@ -1458,6 +1459,7 @@ const registerUserSchema = z.object({
 export async function registerRoutes(app: Express): Promise<Server> {
   registerGuestAuthRoutes(app);
   registerCartCardPaymentRoutes(app);
+  registerDailySpinRoutes(app);
 
   app.get("/api/admin/step-up/status", isAuthenticated, isAdmin, async (req: any, res) => {
     res.json(getAdminStepUpStatus(req));
@@ -8920,10 +8922,16 @@ app.post(
     }
   });
 
-  // Convert ringtone points to wallet balance
+  // Convert ringtone points to wallet balance.
+  //
+  // Admin-only. Points are handed out freely (instant wins, promos, the daily
+  // spin), so leaving conversion open to every account turns every points
+  // giveaway into withdrawable cash. The customer UI has never called this
+  // endpoint; gating it changes nothing for users.
   app.post(
     "/api/convert-ringtone-points",
     isAuthenticated,
+    isAdmin,
     async (req: any, res) => {
       try {
         const userId = req.user.id;

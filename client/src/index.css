@@ -7248,3 +7248,81 @@ html.rr-zoomed .rr-art-sweep::after {
     justify-content: center;
   }
 }
+/* ---------------------------------------------------------------------------
+   Free Daily Spin — wheel glow.
+
+   Mirrors the featured card's chaser beam (.rr-chaser--featured): a conic
+   gradient sweeping red into gold around the rim, plus a soft bloom. The red
+   dividers inside the wheel are pixels in the artwork, so they cannot be lit
+   with CSS — that glow is a pre-rendered layer screened over the wheel and
+   rotated with it (see DailySpinWheel.tsx).
+--------------------------------------------------------------------------- */
+.rr-spin-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  pointer-events: none;
+  box-shadow:
+    0 0 38px rgba(200, 16, 46, 0.3),
+    0 0 70px rgba(255, 38, 61, 0.16),
+    0 0 110px rgba(212, 175, 55, 0.08);
+  animation: rr-spin-breathe 4.4s ease-in-out infinite;
+}
+
+.rr-spin-chaser {
+  position: absolute;
+  inset: -1.5%;
+  border-radius: 9999px;
+  overflow: hidden;
+  pointer-events: none;
+  padding: 2px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+.rr-spin-chaser::before {
+  content: "";
+  position: absolute;
+  inset: -45%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    transparent 58%,
+    #7a0b1c 68%,
+    #c8102e 74%,
+    #ff263d 80%,
+    #d4af37 86%,
+    #f1d47a 90%,
+    #e31b36 94%,
+    transparent 100%
+  );
+  animation: rr-chaser-spin 5.2s linear infinite;
+}
+
+/* The pre-rendered divider glow, screened over the artwork. */
+.rr-spin-glow-layer {
+  mix-blend-mode: screen;
+  animation: rr-spin-breathe 4.4s ease-in-out infinite;
+}
+
+@keyframes rr-spin-breathe {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
+
+/* While the wheel is turning, hold the glow at full strength. */
+.rr-spin-is-spinning .rr-spin-glow-layer,
+.rr-spin-is-spinning .rr-spin-halo {
+  animation-play-state: paused;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-spin-halo,
+  .rr-spin-glow-layer,
+  .rr-spin-chaser::before {
+    animation: none;
+  }
+}
