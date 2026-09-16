@@ -68,6 +68,8 @@ import Intelligence from "./pages/admin/intelligence";
 import RegistrationSourceModal from "./components/RegistrationSourceModal";
 import AdminDiscountCodes from "./pages/admin/discount";
 import AdminFlashSales from "./pages/admin/flash-sales";
+import AdminDailySpin from "./pages/admin/daily-spin";
+import DailySpinPage from "./pages/daily-spin";
 import PlinkoBilling from "./pages/plinkoBilling";
 import AdminPlinko from "./pages/admin/plinko";
 import AdminPlinkoBalloon from "./pages/admin/admin-plinko";
@@ -151,6 +153,7 @@ function Router() {
       <Route path="/wallet" component={Wallet} />
       <Route path="/basket" component={BasketPage} />
       <Route path="/my-plays" component={MyPlaysPage} />
+      <Route path="/daily-spin" component={DailySpinPage} />
       <Route path="/checkout/:orderId" component={Checkout} />
       <Route path="/spin-wheel" component={spinWheel} />
       <Route path="/scratch-card" component={ScratchCardPage} />
@@ -173,6 +176,7 @@ function Router() {
       {/* Admin routes - always registered, auth checked in component */}
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin" component={AdminDashboard} />
+      <Route path="/admin/daily-spin" component={AdminDailySpin} />
       <Route path="/admin/spin-wheel" component={AdminSpinWheel} />
       <Route path="/admin/wheel-2-settings" component={AdminSpinWheelSettings} />
       <Route path="/admin/scratch-card" component={AdminScratchCard} />

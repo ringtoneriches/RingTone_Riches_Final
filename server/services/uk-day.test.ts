@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ukDayStart } from "./uk-day";
+import { ukDayStart, ukNextDayStart, ukDateString } from "./uk-day";
 
 const start = (iso: string) => ukDayStart(new Date(iso)).toISOString();
 
@@ -27,5 +27,19 @@ describe("ukDayStart", () => {
   it("handles the day the clocks go back (25 Oct 2026)", () => {
     // Midnight was still BST; by noon it is GMT
     expect(start("2026-10-25T12:00:00Z")).toBe("2026-10-24T23:00:00.000Z");
+  });
+});
+
+describe("ukNextDayStart", () => {
+  it("gives tomorrow's UK midnight, not now + 24h", () => {
+    const next = ukNextDayStart(new Date("2026-06-15T09:00:00Z"));
+    // 16 June 00:00 UK = 15 June 23:00 UTC during BST.
+    expect(next.toISOString()).toBe("2026-06-15T23:00:00.000Z");
+  });
+
+  it("handles the clock-change day, when a UK day is not 24 hours", () => {
+    // BST ends 25 Oct 2026: that UK day is 25 hours long.
+    const next = ukNextDayStart(new Date("2026-10-25T12:00:00Z"));
+    expect(next.toISOString()).toBe("2026-10-26T00:00:00.000Z");
   });
 });
