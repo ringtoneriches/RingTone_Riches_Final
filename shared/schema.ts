@@ -13,6 +13,7 @@ import {
   uuid,
   serial,
   bigint,
+  date,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -520,7 +521,15 @@ export const guestPendingPayments = pgTable("guest_pending_payments", {
 export const transactions = pgTable("transactions", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  type: varchar("type", { enum: ["deposit", "withdrawal", "purchase", "prize", "referral" , "referral_bonus" , "redeem"] }).notNull(),
+  // Every value the application actually writes. The column is plain varchar
+  // with no CHECK constraint, and production already holds rows of each of
+  // these, so this list documents reality rather than changing it.
+  type: varchar("type", {
+    enum: [
+      "deposit", "withdrawal", "purchase", "prize", "referral", "referral_bonus", "redeem",
+      "ringtone_points", "pop_purchase", "plinko_purchase", "voltz_purchase", "refund",
+    ],
+  }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   pendingPaymentId: uuid("pending_payment_id").references(() => pendingPayments.id),
   paymentRef: varchar("payment_ref").unique(), 
@@ -933,6 +942,10 @@ export const platformSettings = pgTable("platform_settings", {
   maxTicketsPerOrder: integer("max_tickets_per_order").default(250),
   minimumTopUp: decimal("minimum_top_up", { precision: 10, scale: 2 }).default("10.00"),
   maintenanceMode: boolean("maintenance_mode").default(false),
+  dailySpinEnabled: boolean("daily_spin_enabled").default(false),
+  // Spins allowed from one IP per UK day; 0 disables the cap. Generous by
+  // default because UK mobile networks share IPs across many customers.
+  dailySpinIpLimit: integer("daily_spin_ip_limit").default(12),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -1512,3 +1525,69 @@ export const insertSupportMessageSchema = createInsertSchema(supportMessages).om
 export type SupportMessage = typeof supportMessages.$inferSelect;
 export type InsertSupportMessage = z.infer<typeof insertSupportMessageSchema>;
 
+
+// ---------------------------------------------------------------------------
+// Free Daily Spin
+//
+// A retention wheel: every registered member gets one free spin per UK day and
+// wins Ringtone Points from a fixed pool. Deliberately NOT a competitions.type
+// — there is no money, no ticket and no draw here, so none of the order,
+// payment or prize-sync machinery applies.
+// ---------------------------------------------------------------------------
+
+// One pool/cycle. Runs until its prizes are exhausted, then a new one starts.
+export const dailySpinCycles = pgTable("daily_spin_cycles", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name"),
+  status: varchar("status", { enum: ["draft", "active", "paused", "exhausted"] })
+    .notNull()
+    .default("draft"),
+  activatedAt: timestamp("activated_at"),
+  exhaustedAt: timestamp("exhausted_at"),
+  createdBy: varchar("created_by"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("daily_spin_cycles_status_idx").on(table.status),
+]);
+
+// The prize tiers inside a cycle. `remaining` is decremented as prizes go out;
+// `segmentIndex` pins each tier to one of the wheel's 8 segments.
+export const dailySpinPrizes = pgTable("daily_spin_prizes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  cycleId: uuid("cycle_id").notNull().references(() => dailySpinCycles.id, { onDelete: "cascade" }),
+  pointsValue: integer("points_value").notNull(),
+  quantity: integer("quantity").notNull(),
+  remaining: integer("remaining").notNull(),
+  segmentIndex: integer("segment_index").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("daily_spin_prizes_cycle_idx").on(table.cycleId),
+  uniqueIndex("daily_spin_prizes_cycle_segment_idx").on(table.cycleId, table.segmentIndex),
+]);
+
+// One row per spin. The unique index on (user_id, spin_date) IS the daily lock:
+// the insert either succeeds or the member has already spun today. Enforced by
+// the database, so refreshing, two devices or a double tap cannot beat it.
+export const dailySpinResults = pgTable("daily_spin_results", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  cycleId: uuid("cycle_id").notNull().references(() => dailySpinCycles.id),
+  prizeId: uuid("prize_id").notNull().references(() => dailySpinPrizes.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  pointsAwarded: integer("points_awarded").notNull(),
+  segmentIndex: integer("segment_index").notNull(),
+  spinDate: date("spin_date").notNull(), // UK calendar day, see services/uk-day.ts
+  ipAddress: varchar("ip_address"), // for abuse detection, see daily-spin-eligibility.ts
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("daily_spin_results_user_day_idx").on(table.userId, table.spinDate),
+  index("daily_spin_results_cycle_idx").on(table.cycleId),
+  index("daily_spin_results_created_idx").on(table.createdAt),
+  index("daily_spin_results_ip_day_idx").on(table.ipAddress, table.spinDate),
+]);
+
+export type DailySpinCycle = typeof dailySpinCycles.$inferSelect;
+export type DailySpinPrize = typeof dailySpinPrizes.$inferSelect;
+export type DailySpinResult = typeof dailySpinResults.$inferSelect;

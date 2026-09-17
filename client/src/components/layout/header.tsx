@@ -12,6 +12,7 @@ import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import AnnouncementTicker from "@/components/home/AnnouncementTicker";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import MyPlaysDock from "@/components/layout/MyPlaysDock";
+import DailySpinPrompt from "@/components/layout/DailySpinPrompt";
 import CartDock from "@/components/layout/CartDock";
 import { useBasket } from "@/hooks/useBasket";
 
@@ -306,6 +307,7 @@ export default function Header() {
       <div className={`rr-dock-stack ${mobileOpen ? "invisible pointer-events-none" : ""}`}>
         <CartDock hidden={mobileOpen} />
         <MyPlaysDock hidden={mobileOpen} />
+        <DailySpinPrompt hidden={mobileOpen} />
       </div>
 
       {/* Mobile Menu - Optimized for performance */}
