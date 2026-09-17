@@ -39,6 +39,7 @@ type Summary = {
 
 type AdminState = {
   enabled: boolean;
+  ipLimit: number;
   cycle: Cycle | null;
   prizes: Prize[];
   summary: Summary | null;
@@ -152,6 +153,71 @@ function PrizeRow({ prize, locked }: { prize: Prize; locked: boolean }) {
   );
 }
 
+/** The per-IP daily cap. Generous on purpose — see the server comment. */
+function IpLimitPanel({ value }: { value: number }) {
+  const [limit, setLimit] = useState(String(value));
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  useEffect(() => setLimit(String(value)), [value]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/admin/daily-spin/settings", "POST", {
+        ipLimit: Number(limit),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/daily-spin"] });
+      toast({
+        title: "Limit updated",
+        description: Number(limit) === 0 ? "The per-connection limit is off." : `${limit} spins per connection per day.`,
+      });
+    },
+    onError: (error: any) =>
+      toast({ title: "Could not update the limit", description: cleanError(error, ""), variant: "destructive" }),
+  });
+
+  const n = Number(limit);
+  const invalid = !Number.isInteger(n) || n < 0 || n > 1000;
+
+  return (
+    <div className="rr-admin-panel flex flex-wrap items-center justify-between gap-4 p-4">
+      <div className="max-w-xl">
+        <p className="text-sm text-[#FFF8EE]">Spins per connection per day</p>
+        <p className="mt-0.5 text-xs text-white/45">
+          Blunts one person farming points across several accounts. Keep it generous — mobile networks put
+          many unrelated customers on one address, so a low number turns real members away. Set 0 to switch
+          the limit off.
+        </p>
+      </div>
+      <div className="flex items-end gap-2">
+        <div className="w-24">
+          <Label className="text-xs" htmlFor="ip-limit">
+            Limit
+          </Label>
+          <Input
+            id="ip-limit"
+            type="number"
+            min={0}
+            max={1000}
+            value={limit}
+            onChange={(e) => setLimit(e.target.value)}
+          />
+        </div>
+        <Button
+          size="sm"
+          disabled={invalid || limit === String(value) || save.isPending}
+          onClick={() => save.mutate()}
+        >
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "green" | "red" }) {
   return (
     <div className={`rr-admin-stat ${tone === "green" ? "rr-admin-stat--green" : tone === "red" ? "rr-admin-stat--red" : ""}`}>
@@ -180,7 +246,7 @@ export default function AdminDailySpin() {
 
   const toggle = useMutation({
     mutationFn: async (enabled: boolean) => {
-      const res = await apiRequest("/api/admin/daily-spin/toggle", "POST", { enabled });
+      const res = await apiRequest("/api/admin/daily-spin/settings", "POST", { enabled });
       return res.json();
     },
     onSuccess: (result: any) => {
@@ -276,6 +342,8 @@ export default function AdminDailySpin() {
                 />
               </div>
             </div>
+
+            <IpLimitPanel value={data?.ipLimit ?? 12} />
 
             {!cycle ? (
               <div className="rr-admin-panel p-8 text-center">

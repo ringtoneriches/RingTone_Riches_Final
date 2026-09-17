@@ -27,6 +27,12 @@ import {
   type SpinPrize,
 } from "./services/daily-spin-pool";
 import { ukDateString, ukNextDayStart } from "./services/uk-day";
+import {
+  accountCanSpin,
+  ineligible,
+  ipWithinDailyLimit,
+  type Eligibility,
+} from "./services/daily-spin-eligibility";
 
 // Defined locally rather than imported from routes.ts, which would be a
 // circular import. Same approach as instantWinRoutes.ts.
@@ -43,12 +49,36 @@ const isAdmin = (req: any, res: any, next: any) => {
 /** Postgres unique-violation: the member already span today. */
 const UNIQUE_VIOLATION = "23505";
 
-async function isSpinEnabled() {
+/** Same precedence Cloudflare-fronted requests use elsewhere in the app. */
+function clientIp(req: any): string {
+  return (
+    req.headers["cf-connecting-ip"] ||
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.socket?.remoteAddress ||
+    req.ip ||
+    "unknown"
+  );
+}
+
+async function getSettings() {
   const [settings] = await db
-    .select({ enabled: platformSettings.dailySpinEnabled })
+    .select({
+      enabled: platformSettings.dailySpinEnabled,
+      ipLimit: platformSettings.dailySpinIpLimit,
+    })
     .from(platformSettings)
     .limit(1);
-  return Boolean(settings?.enabled);
+  return { enabled: Boolean(settings?.enabled), ipLimit: settings?.ipLimit ?? 0 };
+}
+
+/** Spins already taken from this address today, for the per-IP cap. */
+async function spinsFromIpToday(ip: string, spinDate: string) {
+  if (!ip || ip === "unknown") return 0;
+  const [row] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(dailySpinResults)
+    .where(and(eq(dailySpinResults.ipAddress, ip), eq(dailySpinResults.spinDate, spinDate)));
+  return row?.n ?? 0;
 }
 
 async function getActiveCycle() {
@@ -90,16 +120,40 @@ export function registerDailySpinRoutes(app: Express) {
   app.get("/api/daily-spin", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const enabled = await isSpinEnabled();
-      const cycle = await getActiveCycle();
       const spinDate = ukDateString();
       const nextSpinAt = ukNextDayStart().toISOString();
 
-      if (!enabled || !cycle) {
-        return res.json({ enabled: false, segments: [], hasSpunToday: false, nextSpinAt });
+      // Read the account fresh: the session may predate a verification.
+      const [account] = await db
+        .select({
+          emailVerified: users.emailVerified,
+          isGuestAccount: users.isGuestAccount,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      const allowed = accountCanSpin(account);
+      const { enabled } = await getSettings();
+      const cycle = enabled ? await getActiveCycle() : null;
+
+      let state: Eligibility = allowed;
+      if (state.eligible && !enabled) state = ineligible("disabled");
+      if (state.eligible && !cycle) state = ineligible("no_pool");
+
+      if (!state.eligible) {
+        return res.json({
+          enabled: false,
+          eligible: false,
+          reason: state.reason,
+          message: state.message,
+          segments: [],
+          hasSpunToday: false,
+          nextSpinAt,
+        });
       }
 
-      const prizes = await getCyclePrizes(cycle.id);
+      const prizes = await getCyclePrizes(cycle!.id);
       const [todays] = await db
         .select()
         .from(dailySpinResults)
@@ -108,6 +162,7 @@ export function registerDailySpinRoutes(app: Express) {
 
       res.json({
         enabled: true,
+        eligible: true,
         segments: prizes.map((p) => ({
           segmentIndex: p.segmentIndex,
           pointsValue: p.pointsValue,
@@ -138,13 +193,32 @@ export function registerDailySpinRoutes(app: Express) {
     const nextSpinAt = ukNextDayStart().toISOString();
 
     try {
-      if (!(await isSpinEnabled())) {
-        return res.status(403).json({ message: "The daily spin is not running right now" });
+      // Registered, verified members only. Checked against the database rather
+      // than the session, which may predate a verification or a change.
+      const [account] = await db
+        .select({
+          emailVerified: users.emailVerified,
+          isGuestAccount: users.isGuestAccount,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      const allowed = accountCanSpin(account);
+      if (!allowed.eligible) {
+        return res.status(403).json({ reason: allowed.reason, message: allowed.message });
+      }
+
+      const { enabled, ipLimit } = await getSettings();
+      if (!enabled) {
+        const off = ineligible("disabled");
+        return res.status(403).json({ reason: off.reason, message: off.message });
       }
 
       const cycle = await getActiveCycle();
       if (!cycle) {
-        return res.status(503).json({ message: "No prize pool is active right now" });
+        const none = ineligible("no_pool");
+        return res.status(503).json({ reason: none.reason, message: none.message });
       }
 
       // Already span today — hand back the same result.
@@ -161,6 +235,15 @@ export function registerDailySpinRoutes(app: Express) {
           segmentIndex: existing.segmentIndex,
           nextSpinAt,
         });
+      }
+
+      // Blunts farming across many accounts on one connection. Deliberately
+      // generous, and skipped entirely when the limit is 0.
+      const ip = clientIp(req);
+      if (!ipWithinDailyLimit(await spinsFromIpToday(ip, spinDate), ipLimit)) {
+        const capped = ineligible("ip_limit");
+        console.warn("[daily-spin] ip limit reached", { ip, spinDate, ipLimit });
+        return res.status(429).json({ reason: capped.reason, message: capped.message });
       }
 
       const outcome = await db.transaction(async (tx) => {
@@ -203,6 +286,7 @@ export function registerDailySpinRoutes(app: Express) {
           pointsAwarded: claimed.pointsValue,
           segmentIndex: claimed.segmentIndex,
           spinDate,
+          ipAddress: ip,
         });
 
         await tx
@@ -275,7 +359,7 @@ export function registerDailySpinRoutes(app: Express) {
   /** Current cycle, its figures, and the global toggle. */
   app.get("/api/admin/daily-spin", isAuthenticated, isAdmin, async (_req, res) => {
     try {
-      const enabled = await isSpinEnabled();
+      const { enabled, ipLimit } = await getSettings();
       const [cycle] = await db
         .select()
         .from(dailySpinCycles)
@@ -283,30 +367,52 @@ export function registerDailySpinRoutes(app: Express) {
         .orderBy(desc(dailySpinCycles.createdAt))
         .limit(1);
 
-      if (!cycle) return res.json({ enabled, cycle: null, prizes: [], summary: null });
+      if (!cycle) return res.json({ enabled, ipLimit, cycle: null, prizes: [], summary: null });
 
       const prizes = await getCyclePrizes(cycle.id);
-      res.json({ enabled, cycle, prizes, summary: summarisePool(prizes) });
+      res.json({ enabled, ipLimit, cycle, prizes, summary: summarisePool(prizes) });
     } catch (error) {
       console.error("[daily-spin] admin state failed:", error);
       res.status(500).json({ message: "Could not load the daily spin settings" });
     }
   });
 
-  /** Turn the wheel on or off without touching the pool. */
-  app.post("/api/admin/daily-spin/toggle", isAuthenticated, isAdmin, async (req, res) => {
+  /**
+   * Wheel on/off and the per-IP daily cap. Either may be sent on its own.
+   *
+   * The cap exists to blunt farming across many accounts on one connection.
+   * Keep it generous: UK mobile networks put many unrelated customers behind a
+   * single address, so a tight cap refuses genuine members. 0 disables it.
+   */
+  app.post("/api/admin/daily-spin/settings", isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const enabled = Boolean(req.body?.enabled);
+      const patch: Record<string, unknown> = { updatedAt: new Date() };
+
+      if (req.body?.enabled !== undefined) {
+        patch.dailySpinEnabled = Boolean(req.body.enabled);
+      }
+
+      if (req.body?.ipLimit !== undefined) {
+        const limit = Number(req.body.ipLimit);
+        if (!Number.isInteger(limit) || limit < 0 || limit > 1000) {
+          return res.status(400).json({ message: "The IP limit must be a whole number between 0 and 1000" });
+        }
+        patch.dailySpinIpLimit = limit;
+      }
+
       await db
         .insert(platformSettings)
-        .values({ id: "active", dailySpinEnabled: enabled })
-        .onConflictDoUpdate({
-          target: platformSettings.id,
-          set: { dailySpinEnabled: enabled, updatedAt: new Date() },
-        });
-      res.json({ success: true, enabled });
+        .values({
+          id: "active",
+          dailySpinEnabled: Boolean(patch.dailySpinEnabled ?? false),
+          dailySpinIpLimit: (patch.dailySpinIpLimit as number) ?? 12,
+        })
+        .onConflictDoUpdate({ target: platformSettings.id, set: patch });
+
+      const settings = await getSettings();
+      res.json({ success: true, ...settings });
     } catch (error) {
-      console.error("[daily-spin] toggle failed:", error);
+      console.error("[daily-spin] settings update failed:", error);
       res.status(500).json({ message: "Could not update the daily spin" });
     }
   });

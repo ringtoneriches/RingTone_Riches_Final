@@ -7326,3 +7326,172 @@ html.rr-zoomed .rr-art-sweep::after {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Free Daily Spin — how members find it.
+
+   No nav entry: a permanent link would sit greyed out most of the day and
+   would advertise the wheel to guests who cannot use it. The dock and the
+   popup appear only while a spin is actually waiting.
+--------------------------------------------------------------------------- */
+.rr-spin-dock {
+  pointer-events: auto;
+  position: relative;
+}
+
+.rr-spin-dock-fab {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3.4rem;
+  padding: 0.45rem 1rem 0.45rem 0.5rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  background: linear-gradient(135deg, rgba(200, 16, 46, 0.95), rgba(10, 10, 13, 0.95));
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5), 0 0 22px rgba(200, 16, 46, 0.3);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.rr-spin-dock-fab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 30px rgba(255, 38, 61, 0.42);
+}
+
+.rr-spin-dock-icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  color: #f1d47a;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(241, 212, 122, 0.35);
+  animation: rr-spin-dock-pulse 2.6s ease-in-out infinite;
+}
+
+.rr-spin-dock-copy { display: flex; flex-direction: column; line-height: 1.1; padding-right: 0.2rem; }
+.rr-spin-dock-kicker {
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 248, 238, 0.65);
+}
+.rr-spin-dock-label {
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff8ee;
+}
+
+@keyframes rr-spin-dock-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(241, 212, 122, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(241, 212, 122, 0); }
+}
+
+/* Popup ------------------------------------------------------------------- */
+.rr-spin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+.rr-spin-modal-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(2, 2, 4, 0.72);
+  backdrop-filter: blur(3px);
+  animation: rr-spin-fade 0.22s ease-out;
+}
+.rr-spin-modal-card {
+  position: relative;
+  width: min(26rem, 100%);
+  padding: 1.6rem 1.4rem 1.4rem;
+  border-radius: 20px;
+  text-align: center;
+  border: 1px solid rgba(212, 175, 55, 0.32);
+  background: radial-gradient(120% 90% at 50% 0%, #1a0b10 0%, #0a0a0d 62%);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6), 0 0 44px rgba(200, 16, 46, 0.22);
+  animation: rr-spin-pop 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.rr-spin-modal-close {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  color: rgba(255, 248, 238, 0.6);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.rr-spin-modal-close:hover { color: #fff8ee; background: rgba(255, 255, 255, 0.12); }
+
+.rr-spin-modal-wheel {
+  width: 8.5rem;
+  height: 8.5rem;
+  object-fit: contain;
+  margin: 0 auto 0.4rem;
+  filter: drop-shadow(0 0 22px rgba(200, 16, 46, 0.45));
+  animation: rr-spin-modal-turn 14s linear infinite;
+}
+.rr-spin-modal-kicker {
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #ff263d;
+}
+.rr-spin-modal-title {
+  margin-top: 0.4rem;
+  font-family: var(--font-prize, inherit);
+  font-size: 1.7rem;
+  line-height: 1.05;
+  color: #fff8ee;
+}
+.rr-spin-modal-text {
+  margin-top: 0.55rem;
+  font-size: 0.85rem;
+  color: rgba(255, 248, 238, 0.6);
+}
+.rr-spin-modal-cta {
+  margin-top: 1.1rem;
+  display: inline-flex;
+  height: 3rem;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.rr-spin-modal-later {
+  margin-top: 0.6rem;
+  font-size: 0.75rem;
+  color: rgba(255, 248, 238, 0.45);
+}
+.rr-spin-modal-later:hover { color: rgba(255, 248, 238, 0.75); }
+
+@keyframes rr-spin-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rr-spin-pop {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes rr-spin-modal-turn { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-spin-dock-icon,
+  .rr-spin-modal-wheel,
+  .rr-spin-modal-card,
+  .rr-spin-modal-scrim {
+    animation: none;
+  }
+}
