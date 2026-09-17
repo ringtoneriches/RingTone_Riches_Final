@@ -943,6 +943,9 @@ export const platformSettings = pgTable("platform_settings", {
   minimumTopUp: decimal("minimum_top_up", { precision: 10, scale: 2 }).default("10.00"),
   maintenanceMode: boolean("maintenance_mode").default(false),
   dailySpinEnabled: boolean("daily_spin_enabled").default(false),
+  // Spins allowed from one IP per UK day; 0 disables the cap. Generous by
+  // default because UK mobile networks share IPs across many customers.
+  dailySpinIpLimit: integer("daily_spin_ip_limit").default(12),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -1576,11 +1579,13 @@ export const dailySpinResults = pgTable("daily_spin_results", {
   pointsAwarded: integer("points_awarded").notNull(),
   segmentIndex: integer("segment_index").notNull(),
   spinDate: date("spin_date").notNull(), // UK calendar day, see services/uk-day.ts
+  ipAddress: varchar("ip_address"), // for abuse detection, see daily-spin-eligibility.ts
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   uniqueIndex("daily_spin_results_user_day_idx").on(table.userId, table.spinDate),
   index("daily_spin_results_cycle_idx").on(table.cycleId),
   index("daily_spin_results_created_idx").on(table.createdAt),
+  index("daily_spin_results_ip_day_idx").on(table.ipAddress, table.spinDate),
 ]);
 
 export type DailySpinCycle = typeof dailySpinCycles.$inferSelect;

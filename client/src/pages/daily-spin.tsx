@@ -14,6 +14,9 @@ import { apiRequest } from "@/lib/queryClient";
 
 type SpinState = {
   enabled: boolean;
+  eligible?: boolean;
+  reason?: string;
+  message?: string;
   segments: WheelSegment[];
   hasSpunToday: boolean;
   lastResult?: { pointsValue: number; segmentIndex: number } | null;
@@ -144,10 +147,31 @@ export default function DailySpinPage() {
               <ChaserBorder variant="card" className="mx-auto max-w-xl">
                 <div className="px-4 py-10 text-center sm:px-6 sm:py-14">
                   <Sparkles className="mx-auto h-10 w-10 text-[#F1D47A]" />
-                  <h2 className="mt-4 font-prize text-2xl sm:text-3xl">Back soon</h2>
+                  <h2 className="mt-4 font-prize text-2xl sm:text-3xl">
+                    {data?.reason === "email_not_verified"
+                      ? "Verify your email"
+                      : data?.reason === "guest_account"
+                        ? "Members only"
+                        : "Back soon"}
+                  </h2>
+                  {/* The server owns the wording so the reason is never guessed at. */}
                   <p className="mt-2 text-sm text-white/50">
-                    The daily spin isn’t running at the moment. Check back shortly.
+                    {data?.message || "The daily spin isn’t running at the moment. Check back shortly."}
                   </p>
+                  {data?.reason === "email_not_verified" && (
+                    <Link href="/verify-email">
+                      <button className="rr-cta mt-6 inline-flex h-12 items-center rounded-xl px-7 text-sm font-black uppercase tracking-[0.14em]">
+                        Verify email
+                      </button>
+                    </Link>
+                  )}
+                  {data?.reason === "guest_account" && (
+                    <Link href="/create-password">
+                      <button className="rr-cta mt-6 inline-flex h-12 items-center rounded-xl px-7 text-sm font-black uppercase tracking-[0.14em]">
+                        Finish my account
+                      </button>
+                    </Link>
+                  )}
                 </div>
               </ChaserBorder>
             ) : (
