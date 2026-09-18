@@ -7409,6 +7409,8 @@ html.rr-zoomed .rr-art-sweep::after {
 }
 .rr-spin-modal-card {
   position: relative;
+  /* Explicitly above the backdrop so nothing can intercept the close button. */
+  z-index: 1;
   width: min(26rem, 100%);
   padding: 1.6rem 1.4rem 1.4rem;
   border-radius: 20px;

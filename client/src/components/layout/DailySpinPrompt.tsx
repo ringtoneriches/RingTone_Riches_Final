@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation } from "wouter";
 import { Sparkles, X } from "lucide-react";
 import { useDailySpin } from "@/hooks/useDailySpin";
@@ -81,6 +82,16 @@ export default function DailySpinPrompt({ hidden = false }: { hidden?: boolean }
     return () => clearTimeout(timer);
   }, [available, hide, today]);
 
+  // Escape always closes, whatever is on top.
+  useEffect(() => {
+    if (!showPopup) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowPopup(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showPopup]);
+
   if (!available || hide) return null;
 
   return (
@@ -99,15 +110,13 @@ export default function DailySpinPrompt({ hidden = false }: { hidden?: boolean }
         </div>
       </Link>
 
-      {showPopup && (
-        <div className="rr-spin-modal" role="dialog" aria-modal="true" aria-label="Your free daily spin">
-          <button
-            className="rr-spin-modal-scrim"
-            aria-label="Close"
-            onClick={() => setShowPopup(false)}
-          />
+      {showPopup &&
+        createPortal(
+          <div className="rr-spin-modal" role="dialog" aria-modal="true" aria-label="Your free daily spin">
+          <div className="rr-spin-modal-scrim" onClick={() => setShowPopup(false)} />
           <div className="rr-spin-modal-card">
             <button
+              type="button"
               className="rr-spin-modal-close"
               aria-label="Close"
               onClick={() => setShowPopup(false)}
@@ -132,12 +141,17 @@ export default function DailySpinPrompt({ hidden = false }: { hidden?: boolean }
                 Spin now
               </button>
             </Link>
-            <button className="rr-spin-modal-later" onClick={() => setShowPopup(false)}>
+            <button
+              type="button"
+              className="rr-spin-modal-later"
+              onClick={() => setShowPopup(false)}
+            >
               Maybe later
             </button>
           </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

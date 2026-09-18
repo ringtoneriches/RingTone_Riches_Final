@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock, Gift, Sparkles } from "lucide-react";
 import Header from "@/components/layout/header";
@@ -7,6 +7,8 @@ import Footer from "@/components/layout/footer";
 import DigitalAtmosphere from "@/components/home/DigitalAtmosphere";
 import ChaserBorder from "@/components/home/ChaserBorder";
 import DailySpinWheel, { type WheelSegment } from "@/components/games/DailySpinWheel";
+import GameResultOverlay from "@/components/games/GameResultOverlay";
+import { celebrateWin } from "@/lib/celebrate";
 import BrandWait from "@/components/brand/BrandWait";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -55,6 +57,7 @@ function NextSpin({ at }: { at: string }) {
 }
 
 export default function DailySpinPage() {
+  const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -62,6 +65,7 @@ export default function DailySpinPage() {
   const [spinning, setSpinning] = useState(false);
   const [landOn, setLandOn] = useState<number | null>(null);
   const [won, setWon] = useState<number | null>(null);
+  const [showResult, setShowResult] = useState(false);
 
   const { data, isLoading } = useQuery<SpinState>({
     queryKey: ["/api/daily-spin"],
@@ -91,8 +95,10 @@ export default function DailySpinPage() {
     setSpinning(false);
     const points = spin.data?.pointsValue ?? null;
     setWon(points);
-    if (points !== null && !spin.data?.alreadySpun) {
-      toast({ title: `You won ${points} points!`, description: "Added to your Ringtone Points." });
+    if (points !== null) {
+      setShowResult(true);
+      // Same celebration the games use, so a win feels like a win.
+      if (!spin.data?.alreadySpun) celebrateWin();
     }
     queryClient.invalidateQueries({ queryKey: ["/api/daily-spin"] });
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
@@ -184,13 +190,7 @@ export default function DailySpinPage() {
                 />
 
                 <div className="mt-8 text-center">
-                  {won !== null ? (
-                    <div className="mx-auto max-w-sm rounded-2xl border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-5 py-5">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-white/45">You won</p>
-                      <p className="font-prize text-4xl text-[#F1D47A] sm:text-5xl">{won} pts</p>
-                      <p className="mt-2 text-xs text-white/45">Added to your Ringtone Points.</p>
-                    </div>
-                  ) : alreadyDone ? (
+                  {won !== null || alreadyDone ? (
                     <div className="mx-auto max-w-sm rounded-2xl border border-white/10 bg-black/40 px-5 py-5">
                       <p className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/45">
                         <Clock className="h-3 w-3 text-[#F1D47A]" />
@@ -199,9 +199,9 @@ export default function DailySpinPage() {
                       <div className="mt-1">
                         <NextSpin at={data.nextSpinAt} />
                       </div>
-                      {data.lastResult && (
+                      {(won ?? data.lastResult?.pointsValue) != null && (
                         <p className="mt-2 text-xs text-white/45">
-                          Today you won {data.lastResult.pointsValue} points.
+                          Today you won {won ?? data.lastResult?.pointsValue} points.
                         </p>
                       )}
                     </div>
@@ -216,18 +216,23 @@ export default function DailySpinPage() {
                     </button>
                   )}
 
-                  {won !== null && (
-                    <div className="mt-5 flex flex-col items-center gap-2">
-                      <p className="inline-flex items-center gap-1.5 text-xs text-white/40">
-                        <Clock className="h-3.5 w-3.5 text-[#F1D47A]" />
-                        Next free spin in <NextSpin at={data.nextSpinAt} />
-                      </p>
-                      <Link href="/">
-                        <button className="rr-header-ghost mt-2 h-11 px-6 text-xs">Browse games</button>
-                      </Link>
-                    </div>
-                  )}
                 </div>
+
+                <GameResultOverlay
+                  open={showResult && won !== null}
+                  kind="win"
+                  kicker="Daily Spin"
+                  title="You won!"
+                  prizeText={`${won ?? 0} pts`}
+                  prizeSub="Ringtone Points added to your account"
+                  body="Spend them on any game. Your next free spin unlocks at midnight."
+                  primaryLabel="Browse games"
+                  onPrimary={() => setLocation("/")}
+                  secondaryLabel="Stay here"
+                  onSecondary={() => setShowResult(false)}
+                  onClose={() => setShowResult(false)}
+                  overlayTestId="overlay-daily-spin-result"
+                />
               </>
             )}
           </div>
