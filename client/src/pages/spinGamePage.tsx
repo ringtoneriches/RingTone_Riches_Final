@@ -127,15 +127,8 @@ export default function SpinGamePage() {
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     queryClient.invalidateQueries({ queryKey: ["/api/spin-order", orderId] });
 
-    if (normalizedPrize.type !== "none") {
-      toast({
-        title: "🎉 Congratulations!",
-       description: `You won ${normalizedPrize.type === "cash" ? "£" : ""}${normalizedPrize.type === "points" 
-  ? normalizedPrize.value?.replace(/s$/i, "") 
-  : normalizedPrize.value}${normalizedPrize.type === "points" ? " points" : ""}!`,
-
-      });
-    }
+    // No toast here: the prize modal opened above already announces the win.
+    // Firing both put a plain duplicate over the header on mobile.
   };
 
    const getWheelComponent = () => {

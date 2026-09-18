@@ -50,16 +50,8 @@ export default function ScratchGamePage() {
       // Clear any errors
       setCommitError(null);
       
-      // Show success toast
-      if (gameResult?.prize && gameResult.prize.type !== "none") {
-        toast({
-          title: "🎉 Congratulations!",
-          description: `You won ${gameResult.prize.type === "cash" ? "£" : ""}${gameResult.prize.type === "points" 
-  ? gameResult.prize.value?.replace(/s$/i, "") 
-  : gameResult.prize.value}${gameResult.prize.type === "points" ? " points" : ""}!`,
-
-        });
-      }
+      // No toast here: the prize modal already announces the win. Firing both
+      // put a plain duplicate over the header on mobile.
     },
     onError: (error: any) => {
       console.error('❌ Parent mutation error:', error);
