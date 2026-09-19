@@ -16,13 +16,14 @@ import {
   royalSymbolFromPrize,
 } from "./royal-controlled-layout";
 import { instantWinValueFromTablePrize } from "./instant-win-prize-value";
+import { checkTicketLimit, hasPerUserLimit } from "./ticket-limits";
 import {
   isPromoVideoModeEnabled,
   resolvePromoJackpotPrize,
 } from "./promo-video-mode";
 import { notifyPublicWinnerUpdate } from "./record-game-winner";
 import { randomInt, randomBytes } from "crypto";
-import { and, asc, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import {
@@ -175,10 +176,107 @@ export async function getMaxTicketsPerOrder(): Promise<number> {
   }
 }
 
+
+/**
+ * The cutoff for "recent" unpaid orders, in the column's own terms.
+ *
+ * created_at is `timestamp without time zone` on every one of these tables,
+ * and rows do not all agree on what that means: ones Postgres stamps itself
+ * hold the server's local wall clock, ones the application passes in hold UTC.
+ * Production runs UTC so the two coincide, but comparing against a bare now()
+ * silently misses rows anywhere else — on a machine five hours ahead, every
+ * application-stamped order looked five hours old and the limit never bit.
+ *
+ * Taking the earlier of the two readings is right under either convention. In
+ * UTC they are the same value, so production behaviour is exactly the two
+ * hours intended; elsewhere the window only ever widens, which tightens the
+ * limit rather than letting someone past it.
+ */
+const RECENT_ORDER_CUTOFF = sql`LEAST((now())::timestamp, (now() AT TIME ZONE 'UTC')) - interval '2 hours'`;
+
+/**
+ * How many tickets an account already has committed to a competition.
+ *
+ * Issued tickets PLUS the quantity on recent unpaid orders. Counting only
+ * issued tickets was not enough: tickets are created at payment, so a basket
+ * holding the same competition several times passed every check at zero held
+ * and then issued them all. Three orders of 2 against a limit of 2 went
+ * through exactly that way.
+ *
+ * Pending orders are only counted for a short window. Abandoned checkouts are
+ * common — around a third of orders in production are pending and days old —
+ * so counting them forever would lock real customers out of a competition they
+ * never actually entered. A checkout takes seconds; two hours is generous.
+ */
+export async function countCommittedTickets(
+  competitionId: string,
+  userId: string,
+  options?: { excludeOrderIds?: string[] },
+) {
+  // A route settling an order must not count that order against itself.
+  const exclude = (options?.excludeOrderIds ?? []).filter(Boolean);
+
+  const [issued] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(tickets)
+    .where(and(eq(tickets.competitionId, competitionId), eq(tickets.userId, userId)));
+
+  const [reserved] = await db
+    .select({ n: sql<number>`COALESCE(SUM(${orders.quantity}), 0)::int` })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.competitionId, competitionId),
+        eq(orders.userId, userId),
+        eq(orders.status, "pending"),
+        sql`${orders.createdAt} > ${RECENT_ORDER_CUTOFF}`,
+        exclude.length ? notInArray(orders.id, exclude) : undefined,
+      ),
+    );
+
+  return (issued?.n ?? 0) + (reserved?.n ?? 0);
+}
+
+/**
+ * The same count for guest checkout, keyed on the email they gave.
+ *
+ * Guest orders and tickets live in their own tables, so the signed-in count
+ * cannot see them and a limited competition was wide open to anyone who
+ * checked out as a guest.
+ *
+ * This is best effort by nature: nothing stops someone starting again with a
+ * different email address. It closes the ordinary case — the same person
+ * ordering repeatedly — which is what the limit is for.
+ */
+export async function countGuestCommittedTickets(competitionId: string, guestEmail: string) {
+  const email = guestEmail.trim().toLowerCase();
+  if (!email) return 0;
+
+  const [issued] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(guestTickets)
+    .innerJoin(guestOrders, eq(guestTickets.guestOrderId, guestOrders.id))
+    .where(and(eq(guestTickets.competitionId, competitionId), sql`LOWER(${guestOrders.guestEmail}) = ${email}`));
+
+  const [reserved] = await db
+    .select({ n: sql<number>`COALESCE(SUM(${guestOrders.quantity}), 0)::int` })
+    .from(guestOrders)
+    .where(
+      and(
+        eq(guestOrders.competitionId, competitionId),
+        sql`LOWER(${guestOrders.guestEmail}) = ${email}`,
+        eq(guestOrders.status, "pending"),
+        sql`${guestOrders.createdAt} > ${RECENT_ORDER_CUTOFF}`,
+      ),
+    );
+
+  return (issued?.n ?? 0) + (reserved?.n ?? 0);
+}
+
 export async function assertCanPurchaseTickets(
   competitionId: string,
   quantity: number,
-  options?: { skipModeCheck?: boolean }
+  options?: { skipModeCheck?: boolean; userId?: string }
 ) {
   const qty = Number(quantity || 0);
   if (!Number.isFinite(qty) || qty < 1) {
@@ -193,6 +291,25 @@ export async function assertCanPurchaseTickets(
 
   if (!competition) {
     throw new InstantWinError("Competition not found", 404, "not_found");
+  }
+
+  // Per-account cap, when the competition sets one. Deliberately BEFORE the
+  // controlled-pool branch below, which returns early for probability mode —
+  // the limit has to hold for every competition type, not just controlled ones.
+  //
+  // Counted across all of the account's orders: a per-order cap is beaten by
+  // simply ordering twice, which is how a 100%-off sale was taken 13 times
+  // over by one account.
+  if (options?.userId && hasPerUserLimit(competition.maxTicketsPerUser)) {
+    const verdict = checkTicketLimit({
+      maxTicketsPerUser: competition.maxTicketsPerUser,
+      alreadyHeld: await countCommittedTickets(competitionId, options.userId),
+      requested: qty,
+    });
+
+    if (!verdict.allowed) {
+      throw new InstantWinError(verdict.message, 400, "per_user_limit");
+    }
   }
 
   const maxPerOrder = await getMaxTicketsPerOrder();

@@ -27,6 +27,7 @@ import {
   getStatusBadge,
   getTicketStats,
   isInstantWinGame,
+  quantityCapFor,
 } from "@/lib/competition-display";
 
 interface CompetitionCardProps {
@@ -40,10 +41,13 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
   const stats = getTicketStats(competition);
   const cd = useCountdown(competition.endDate);
   const maxQty = stats.hasTickets ? Math.max(1, stats.remaining) : 20;
-  const [qty, setQty] = useState(() => getDefaultQuantity(competition, maxQty));
+  // Cards do not know how many this account already holds, so they cap at the
+  // competition's limit; the detail page narrows it to what is actually left.
+  const cardMax = quantityCapFor(competition, maxQty);
+  const [qty, setQty] = useState(() => getDefaultQuantity(competition, cardMax));
 
   useEffect(() => {
-    setQty(getDefaultQuantity(competition, maxQty));
+    setQty(getDefaultQuantity(competition, cardMax));
   }, [competition.id, competition.defaultQuantity]);
 
   const { data: plinkoConfig } = useQuery({
@@ -190,7 +194,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                 <div className="rr-comp-cart-row">
                   <QuantitySelector
                     value={qty}
-                    max={maxQty}
+                    max={cardMax}
                     onChange={setQty}
                     className="rr-qty"
                   />
@@ -210,7 +214,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                           quantity: qty,
                           wheelType: competition.wheelType,
                         },
-                        maxQty
+                        cardMax
                       );
                     }}
                     className="rr-comp-add-cart"

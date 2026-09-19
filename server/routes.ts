@@ -158,6 +158,8 @@ import {
   revealAllControlledVoltz,
   tryRevealControlledRoyal,
   getPublicPrizePool,
+  countCommittedTickets,
+  countGuestCommittedTickets,
 } from "./services/instant-win-pool";
 import { generateLosingBalloonValues } from "./services/controlled-pool-allocation";
 import {
@@ -195,6 +197,7 @@ import { getPromoVideoModeStatus } from "./services/promo-video-mode";
 import { getCashflowsRevenue } from "./services/cashflows-revenue";
 import { ukDayStart } from "./services/uk-day";
 import { shouldProcessPaymentWebhook } from "./services/payment-webhook-guard";
+import { checkTicketLimit, hasPerUserLimit, ticketLimitNote, ticketsRemainingForUser } from "./services/ticket-limits";
 import { effectiveTicketPrice } from "@shared/flash-sale";
 import {
   getCompletedScratchSession,
@@ -908,9 +911,14 @@ function pickWeightedScratchPrize<T extends { weight?: unknown }>(eligiblePrizes
   return selected;
 }
 
-async function guardControlledPurchase(res: any, competitionId: string, quantity: number) {
+async function guardControlledPurchase(
+  res: any,
+  competitionId: string,
+  quantity: number,
+  userId?: string,
+) {
   try {
-    await assertCanPurchaseTickets(competitionId, quantity);
+    await assertCanPurchaseTickets(competitionId, quantity, { userId });
     return true;
   } catch (err: any) {
     if (err instanceof InstantWinError) {
@@ -3864,6 +3872,120 @@ res.json({
 });
 });
 
+  /**
+   * What this competition's per-person limit means for the signed-in customer.
+   *
+   * Kept separate from the competition payload because it is per-account and
+   * must not be cached with it. Guests get the limit and its wording but no
+   * personal count, so the page can still say "limit 2 per person" before they
+   * log in rather than springing it on them at checkout.
+   */
+  app.get("/api/competitions/:id/ticket-limit", async (req: any, res) => {
+    try {
+      const [competition] = await db
+        .select({
+          maxTicketsPerUser: competitions.maxTicketsPerUser,
+          ticketLimitNote: competitions.ticketLimitNote,
+          ticketPrice: competitions.ticketPrice,
+          flashSalePrice: competitions.flashSalePrice,
+          flashSaleStartsAt: competitions.flashSaleStartsAt,
+          flashSaleEndsAt: competitions.flashSaleEndsAt,
+        })
+        .from(competitions)
+        .where(eq(competitions.id, req.params.id))
+        .limit(1);
+
+      if (!competition) return res.status(404).json({ message: "Competition not found" });
+
+      const limit = competition.maxTicketsPerUser ?? null;
+      const isFree = effectiveTicketPrice(competition) <= 0;
+      const note = ticketLimitNote({
+        maxTicketsPerUser: limit,
+        custom: competition.ticketLimitNote,
+        isFree,
+      });
+
+      // This route is public so guests still get the wording. req.user is
+      // only set by isAuthenticated, which is not on it, so read the session
+      // directly or a signed-in customer looks like a guest holding nothing.
+      const userId = req.user?.id ?? req.session?.userId;
+      if (!userId || !hasPerUserLimit(limit)) {
+        return res.json({ limit, note, held: 0, remaining: limit ?? null });
+      }
+
+      const alreadyHeld = await countCommittedTickets(req.params.id, userId);
+      res.json({
+        limit,
+        note,
+        held: alreadyHeld,
+        remaining: ticketsRemainingForUser(limit, alreadyHeld),
+      });
+    } catch (error) {
+      console.error("Error loading ticket limit:", error);
+      res.status(500).json({ message: "Failed to load ticket limit" });
+    }
+  });
+
+  /**
+   * The same thing for several competitions at once, keyed by id.
+   *
+   * The basket needs every line's limit before it can cap its quantity
+   * pickers, and asking one at a time would be a request per line on a page
+   * people reach with a full basket. Deliberately NOT under
+   * /api/competitions/... so it can never be mistaken for a competition id.
+   */
+  app.get("/api/ticket-limits", async (req: any, res) => {
+    try {
+      const ids = String(req.query.ids || "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean)
+        .slice(0, 50); // a basket is small; this is just a ceiling
+
+      if (!ids.length) return res.json({});
+
+      const rows = await db
+        .select({
+          id: competitions.id,
+          maxTicketsPerUser: competitions.maxTicketsPerUser,
+          ticketLimitNote: competitions.ticketLimitNote,
+          ticketPrice: competitions.ticketPrice,
+          flashSalePrice: competitions.flashSalePrice,
+          flashSaleStartsAt: competitions.flashSaleStartsAt,
+          flashSaleEndsAt: competitions.flashSaleEndsAt,
+        })
+        .from(competitions)
+        .where(inArray(competitions.id, ids));
+
+      const userId = req.user?.id ?? req.session?.userId;
+      const out: Record<string, { limit: number | null; note: string | null; held: number; remaining: number | null }> = {};
+
+      for (const row of rows) {
+        const limit = row.maxTicketsPerUser ?? null;
+        const note = ticketLimitNote({
+          maxTicketsPerUser: limit,
+          custom: row.ticketLimitNote,
+          isFree: effectiveTicketPrice(row) <= 0,
+        });
+
+        if (!userId || !hasPerUserLimit(limit)) {
+          out[row.id] = { limit, note, held: 0, remaining: limit ?? null };
+          continue;
+        }
+
+        const held = await countCommittedTickets(row.id, userId);
+        out[row.id] = { limit, note, held, remaining: ticketsRemainingForUser(limit, held) };
+      }
+
+      res.json(out);
+    } catch (error) {
+      console.error("Error loading ticket limits:", error);
+      // A basket that cannot read the limits must still work: the server
+      // refuses anything over the limit at checkout regardless.
+      res.json({});
+    }
+  });
+
   app.get("/api/competitions/:id", async (req, res) => {
     try {
       const competition = await db
@@ -5041,7 +5163,32 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
       }
   
       const compType = competition.type;
-      
+
+      // -------------------------
+      // 1️⃣.5 PER-ACCOUNT LIMIT
+      // -------------------------
+      // This route issues tickets for prize-draw competitions and, unlike the
+      // create-*-order routes, never went through guardControlledPurchase — so
+      // it had no per-order cap either. Counted across all of this account's
+      // orders, because a per-order cap is beaten by ordering twice.
+      if (hasPerUserLimit(competition.maxTicketsPerUser)) {
+        // Excluding this order: it is pending too, and would otherwise be
+        // counted against itself.
+        const alreadyHeld = await countCommittedTickets(competitionId, userId, {
+          excludeOrderIds: [orderId],
+        });
+
+        const verdict = checkTicketLimit({
+          maxTicketsPerUser: competition.maxTicketsPerUser,
+          alreadyHeld,
+          requested: Number(quantity || 0),
+        });
+
+        if (!verdict.allowed) {
+          return res.status(400).json({ message: verdict.message, code: "per_user_limit" });
+        }
+      }
+
       // -------------------------
       // 2️⃣ SOLD-OUT LOGIC (INSTANT ONLY)
       // -------------------------
@@ -5318,7 +5465,7 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
-    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+    if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
 
     const spinCostPerTicket = effectiveTicketPrice(competition);
     
@@ -6709,7 +6856,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
-    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+    if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
 
     const scratchCostPerCard = effectiveTicketPrice(competition);
     
@@ -6766,7 +6913,7 @@ app.post("/api/create-pop-order", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
-    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+    if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
 
     const popCostPerGame = effectiveTicketPrice(competition);
     
@@ -6826,7 +6973,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
-    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+    if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
 
     const voltzCostPerGame = effectiveTicketPrice(competition);
     
@@ -11043,7 +11190,7 @@ app.post("/api/create-plinko-order", isAuthenticated, async (req: any, res) => {
     if (!competition || competition.type !== "plinko") {
       return res.status(404).json({ message: "Plinko competition not found" });
     }
-    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+    if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
 
     const ticketPrice = effectiveTicketPrice(competition);
 
@@ -19658,6 +19805,24 @@ app.post("/api/guest/create-order", async (req: any, res) => {
       });
     }
 
+    // Per-account limit, counted against the email this guest gave.
+    //
+    // Guest checkout was the way round it entirely: guest orders and tickets
+    // are in their own tables, so the signed-in count never saw them. Best
+    // effort — a different email starts again — but it closes the ordinary
+    // case of one person ordering over and over.
+    if (hasPerUserLimit(competition.maxTicketsPerUser) && resolvedEmail) {
+      const verdict = checkTicketLimit({
+        maxTicketsPerUser: competition.maxTicketsPerUser,
+        alreadyHeld: await countGuestCommittedTickets(competitionId, resolvedEmail),
+        requested: Number(quantity || 0),
+      });
+
+      if (!verdict.allowed) {
+        return res.status(400).json({ success: false, message: verdict.message, code: "per_user_limit" });
+      }
+    }
+
     // Calculate total amount
     const ticketPrice = effectiveTicketPrice(competition);
     const totalAmount = ticketPrice * quantity;
@@ -21170,7 +21335,7 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
       const { competitionId, quantity = 1 } = req.body;
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
-      if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+      if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
       const slotCostPerSpin = effectiveTicketPrice(competition);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(slotCostPerSpin, quantity);
       const user = await storage.getUser(userId);
@@ -21853,7 +22018,7 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
       const { competitionId, quantity = 1 } = req.body;
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
-      if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+      if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
       const costPerPlay = effectiveTicketPrice(competition);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(costPerPlay, quantity);
       const user = await storage.getUser(userId);

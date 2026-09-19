@@ -273,6 +273,11 @@ export const competitions = pgTable("competitions", {
   prizeAmount: decimal("prize_amount", { precision: 10, scale: 2 }),
   badgeLabel: varchar("badge_label", { length: 40 }),
   maxTickets: integer("max_tickets"),
+  // How many tickets ONE account may hold for this competition, counted across
+  // all their orders. NULL or 0 = no limit. See services/ticket-limits.ts.
+  maxTicketsPerUser: integer("max_tickets_per_user"),
+  // Optional wording for that limit. Blank = generated from the number above.
+  ticketLimitNote: text("ticket_limit_note"),
   soldTickets: integer("sold_tickets").default(0),
   nextTicketNumber: integer("next_ticket_number").default(1),
   instantWinMode: varchar("instant_win_mode", { enum: ["probability", "controlled_pool"] }).default("probability"),

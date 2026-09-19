@@ -8,6 +8,14 @@ type Props = {
   disabled?: boolean;
   size?: "sm" | "md" | "lg";
   className?: string;
+  /**
+   * Called when someone presses + while already at `max`.
+   *
+   * Without it the button simply goes dead at the cap, which tells the customer
+   * nothing — the reason they hit a limit is exactly what they need to hear.
+   * When provided, + stays pressable at the cap and reports instead.
+   */
+  onLimitHit?: () => void;
 };
 
 export default function QuantitySelector({
@@ -18,7 +26,9 @@ export default function QuantitySelector({
   disabled = false,
   size = "sm",
   className = "",
+  onLimitHit,
 }: Props) {
+  const atMax = value >= max;
   const box =
     size === "lg"
       ? "h-12 sm:h-14"
@@ -62,9 +72,14 @@ export default function QuantitySelector({
       <button
         type="button"
         aria-label="Increase quantity"
-        disabled={disabled || value >= max}
+        disabled={disabled || (atMax && !onLimitHit)}
+        aria-describedby={atMax && onLimitHit ? "qty-limit-note" : undefined}
         onClick={(e) => {
           e.stopPropagation();
+          if (atMax) {
+            onLimitHit?.();
+            return;
+          }
           onChange(Math.min(max, value + 1));
         }}
         className={`flex items-center justify-center text-[#F1D47A] transition-colors hover:bg-[#C8102E]/30 disabled:opacity-30 disabled:hover:bg-transparent ${hit}`}

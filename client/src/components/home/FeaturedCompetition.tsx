@@ -23,6 +23,7 @@ import {
   getStatusBadge,
   getTicketStats,
   isInstantWinGame,
+  quantityCapFor,
 } from "@/lib/competition-display";
 
 type Props = {
@@ -64,6 +65,9 @@ function FeaturedSlide({
   const badge = getStatusBadge(stats);
   const cta = getCtaLabel(competition.type, stats.isClosed);
   const maxQty = stats.hasTickets ? Math.max(1, stats.remaining) : 20;
+  // Never offer more than the competition's per-person limit: the stepper and
+  // the basket both have to respect it, or the customer only finds out at pay.
+  const cardMax = quantityCapFor(competition, maxQty);
   const TypeIcon = typeCfg.Icon;
 
   const goEnter = () => {
@@ -173,7 +177,7 @@ function FeaturedSlide({
             <div className="flex items-stretch gap-2">
               <QuantitySelector
                 value={qty}
-                max={maxQty}
+                max={cardMax}
                 onChange={setQty}
                 size="lg"
                 className="rr-qty shrink-0"
@@ -191,7 +195,7 @@ function FeaturedSlide({
                       quantity: qty,
                       wheelType: competition.wheelType,
                     },
-                    maxQty
+                    cardMax
                   );
                 }}
                 className="rr-add-cart-btn"
@@ -247,7 +251,7 @@ export default function FeaturedCompetition({ competitions }: Props) {
       : 20
     : 20;
   const [qty, setQty] = useState(() =>
-    competition ? getDefaultQuantity(competition, featuredMax) : 1
+    competition ? getDefaultQuantity(competition, quantityCapFor(competition, featuredMax)) : 1
   );
   const [showSwipeHint, setShowSwipeHint] = useState(true);
   const [swipeHintLeaving, setSwipeHintLeaving] = useState(false);
@@ -257,7 +261,7 @@ export default function FeaturedCompetition({ competitions }: Props) {
     if (!competition) return;
     const stats = getTicketStats(competition);
     const maxQty = stats.hasTickets ? Math.max(1, stats.remaining) : 20;
-    setQty(getDefaultQuantity(competition, maxQty));
+    setQty(getDefaultQuantity(competition, quantityCapFor(competition, maxQty)));
   }, [competition?.id, competition?.defaultQuantity]);
 
   useEffect(() => {

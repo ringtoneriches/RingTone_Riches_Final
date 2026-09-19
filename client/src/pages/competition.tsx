@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Minus, Plus, Sparkles, Zap, Ticket, Trophy, Lock, Mail, ShoppingCart } from "lucide-react";
+import { Minus, Plus, Sparkles, Zap, Ticket, Trophy, Lock, Mail, ShoppingCart, Info } from "lucide-react";
 import { useBasket } from "@/hooks/useBasket";
 import { effectiveTicketPrice } from "@shared/flash-sale";
 import FlashPrice from "@/components/FlashPrice";
@@ -39,6 +39,7 @@ import {
   getStatusBadge,
   getTicketStats,
   isInstantWinGame,
+  quantityCapFor,
 } from "@/lib/competition-display";
 
 function playNoun(type: string, quantity: number, mode: "cta" | "label" = "label") {
@@ -164,6 +165,41 @@ export default function CompetitionPage() {
   });
 
   const maxTicketsAllowed = ticketSettings?.maxTicketsPerOrder || 500;
+
+  // Per-person cap for this competition, if it has one. Fetched separately from
+  // the competition because it depends on who is signed in.
+  const { data: ticketLimit } = useQuery<{
+    limit: number | null;
+    note: string | null;
+    held: number;
+    remaining: number | null;
+  }>({
+    queryKey: [`/api/competitions/${id}/ticket-limit`],
+    enabled: Boolean(id),
+  });
+
+  const limitNote = ticketLimit?.note || null;
+  const perPersonRemaining =
+    ticketLimit?.limit && ticketLimit.limit > 0 ? (ticketLimit.remaining ?? ticketLimit.limit) : null;
+
+  // The quantity picker stops at whichever cap bites first: the global
+  // per-order maximum, this competition's per-person limit, or what this
+  // account has left.
+  const effectiveMax = quantityCapFor(
+    { maxTicketsPerUser: ticketLimit?.limit ?? null },
+    maxTicketsAllowed,
+    perPersonRemaining,
+  );
+
+  const [limitFlash, setLimitFlash] = useState(false);
+
+  // Announce the limit briefly when someone presses + against it, then settle
+  // back to the quiet inline note.
+  const announceLimit = () => {
+    if (!limitNote) return;
+    setLimitFlash(true);
+    window.setTimeout(() => setLimitFlash(false), 2600);
+  };
   const countdown = useCountdown(competition?.endDate);
 
   useEffect(() => {
@@ -171,8 +207,10 @@ export default function CompetitionPage() {
     const fromUrl = parseInt(params.get("qty") || "", 10);
     if (Number.isFinite(fromUrl) && fromUrl >= 1) return;
     if (!competition) return;
-    setQuantity(getDefaultQuantity(competition, maxTicketsAllowed));
-  }, [competition?.id, competition?.defaultQuantity, maxTicketsAllowed]);
+    // Capped, so a configured default of 10 on a competition limited to 2 opens
+    // at 2 rather than at a number the customer cannot actually buy.
+    setQuantity(getDefaultQuantity(competition, effectiveMax));
+  }, [competition?.id, competition?.defaultQuantity, effectiveMax]);
 
   // ✅ FIXED: Pass competition image through order creation
   const purchaseTicketMutation = useMutation({
@@ -563,16 +601,39 @@ export default function CompetitionPage() {
                             </div>
                           )}
 
+                {/* The per-person limit, stated before checkout rather than sprung
+                    at it. Sits quietly under the picker, and lifts for a moment
+                    when someone presses + against the cap. */}
+                {limitNote && (
+                  <div
+                    id="qty-limit-note"
+                    role="status"
+                    className={`mt-3 inline-flex items-center gap-1.5 self-start rounded-full border px-3 py-1 text-[11px] font-bold tracking-wide transition-all duration-200 ${
+                      limitFlash
+                        ? "scale-[1.03] border-[#FF263D]/60 bg-[#C8102E]/25 text-[#FFF8EE] shadow-[0_0_18px_rgba(200,16,46,0.35)]"
+                        : "border-white/10 bg-white/[0.04] text-white/55"
+                    }`}
+                    data-testid="text-ticket-limit-note"
+                  >
+                    <Info className="h-3.5 w-3.5 shrink-0 text-[#F1D47A]" />
+                    <span>
+                      {limitNote}
+                      {ticketLimit?.held ? ` You have ${ticketLimit.held}.` : ""}
+                    </span>
+                  </div>
+                )}
+
                 {!isFreeGiveaway && (
                   <div className="mt-5 flex items-stretch gap-2">
                     <QuantitySelector
                       value={quantity}
                       min={1}
-                      max={maxTicketsAllowed}
+                      max={effectiveMax}
                       onChange={setQuantity}
                       disabled={stats.isClosed}
                       size="lg"
                       className="rr-qty shrink-0"
+                      onLimitHit={limitNote ? announceLimit : undefined}
                     />
                     {!isSoldOut && (
                       <button
