@@ -36,6 +36,7 @@ import {
   ArrowRight,
   Sparkles,
   CreditCard,
+  Info,
 } from "lucide-react";
 
 function getValidBalance(balance: string | null | undefined): number {
@@ -65,7 +66,8 @@ function walletRemainingForPay(
 }
 
 export default function BasketPage() {
-  const { items, totals, setQty, remove, clear } = useBasket();
+  const { items, totals, setQty, remove, clear, limits, limitFor, capFor, clamped, clearClamped } =
+    useBasket();
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -83,6 +85,29 @@ export default function BasketPage() {
   const skipBoostRef = useRef(false);
   const confirmStartedAt = useRef(0);
   const [holdConfirm, setHoldConfirm] = useState(false);
+  /** Which line's limit note is lit up, after someone pressed + at the cap. */
+  const [limitFlash, setLimitFlash] = useState<string | null>(null);
+
+  const flashLimit = (competitionId: string) => {
+    setLimitFlash(competitionId);
+    window.setTimeout(() => setLimitFlash((current) => (current === competitionId ? null : current)), 1400);
+  };
+
+  // When the basket corrects itself — a limit lowered, or tickets bought
+  // elsewhere since — say so rather than silently changing the number under
+  // the customer.
+  useEffect(() => {
+    if (!clamped.length) return;
+    const [first] = clamped;
+    toast({
+      title: clamped.length > 1 ? "Quantities updated" : "Quantity updated",
+      description:
+        clamped.length > 1
+          ? "Some items were reduced to the limit allowed per person."
+          : `${first.title ? `${first.title} was` : "That item was"} reduced to ${first.to}, the most you can take.`,
+    });
+    clearClamped();
+  }, [clamped]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -275,7 +300,11 @@ export default function BasketPage() {
     setMethods((prev) => ({ ...prev, [method]: !prev[method] }));
   };
 
-  const boostOffers = useMemo(() => buildCheckoutBoostOffers(items, totals.pay), [items, totals.pay]);
+  const boostOffers = useMemo(
+    () => buildCheckoutBoostOffers(items, totals.pay, capFor),
+    // capFor is derived from the limits query, which `items` re-runs with.
+    [items, totals.pay, limits],
+  );
 
   const goGuestCheckout = () => {
     setGuestLaunch(true);
@@ -337,7 +366,7 @@ export default function BasketPage() {
 
   const handleAcceptBoost = (offer: CheckoutBoostOffer) => {
     skipBoostRef.current = true;
-    const updatedItems = setQty(offer.competitionId, offer.newQty);
+    const updatedItems = setQty(offer.competitionId, offer.newQty, capFor(offer.competitionId));
     setShowBoost(false);
     const nextPay = cartPayTotal(updatedItems);
 
@@ -414,6 +443,9 @@ export default function BasketPage() {
                 <div className="space-y-4">
                   {items.map((item) => {
                     const line = lineTotal(item.ticketPrice, item.quantity, item.type);
+                    const limit = limitFor(item.competitionId);
+                    const lineCap = capFor(item.competitionId);
+                    const limitNote = limit?.note ?? null;
                     return (
                       <ChaserBorder key={item.competitionId} variant="card">
                         <article className="p-3.5 sm:p-5">
@@ -459,8 +491,9 @@ export default function BasketPage() {
                             <QuantitySelector
                               value={item.quantity}
                               min={1}
-                              max={500}
-                              onChange={(qty) => setQty(item.competitionId, qty)}
+                              max={lineCap}
+                              onChange={(qty) => setQty(item.competitionId, qty, lineCap)}
+                              onLimitHit={limitNote ? () => flashLimit(item.competitionId) : undefined}
                             />
                             <div className="min-w-0 text-right">
                               {line.savings > 0 && (
@@ -469,6 +502,28 @@ export default function BasketPage() {
                               <p className="font-prize text-xl text-[#F1D47A] sm:text-2xl">£{line.discountedPrice.toFixed(2)}</p>
                             </div>
                           </div>
+
+                          {/* The per-person limit, said here rather than sprung at
+                              payment. Lifts for a moment when someone presses +
+                              against the cap. */}
+                          {limitNote && (
+                            <div
+                              id="qty-limit-note"
+                              role="status"
+                              className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold tracking-wide transition-all duration-200 ${
+                                limitFlash === item.competitionId
+                                  ? "scale-[1.03] border-[#FF263D]/60 bg-[#C8102E]/25 text-[#FFF8EE] shadow-[0_0_18px_rgba(200,16,46,0.35)]"
+                                  : "border-white/10 bg-white/[0.04] text-white/55"
+                              }`}
+                              data-testid={`text-basket-limit-note-${item.competitionId}`}
+                            >
+                              <Info className="h-3.5 w-3.5 shrink-0 text-[#F1D47A]" />
+                              <span>
+                                {limitNote}
+                                {limit?.held ? ` You have ${limit.held}.` : ""}
+                              </span>
+                            </div>
+                          )}
                         </article>
                       </ChaserBorder>
                     );

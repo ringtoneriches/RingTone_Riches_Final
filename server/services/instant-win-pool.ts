@@ -178,6 +178,23 @@ export async function getMaxTicketsPerOrder(): Promise<number> {
 
 
 /**
+ * The cutoff for "recent" unpaid orders, in the column's own terms.
+ *
+ * created_at is `timestamp without time zone` on every one of these tables,
+ * and rows do not all agree on what that means: ones Postgres stamps itself
+ * hold the server's local wall clock, ones the application passes in hold UTC.
+ * Production runs UTC so the two coincide, but comparing against a bare now()
+ * silently misses rows anywhere else — on a machine five hours ahead, every
+ * application-stamped order looked five hours old and the limit never bit.
+ *
+ * Taking the earlier of the two readings is right under either convention. In
+ * UTC they are the same value, so production behaviour is exactly the two
+ * hours intended; elsewhere the window only ever widens, which tightens the
+ * limit rather than letting someone past it.
+ */
+const RECENT_ORDER_CUTOFF = sql`LEAST((now())::timestamp, (now() AT TIME ZONE 'UTC')) - interval '2 hours'`;
+
+/**
  * How many tickets an account already has committed to a competition.
  *
  * Issued tickets PLUS the quantity on recent unpaid orders. Counting only
@@ -212,8 +229,44 @@ export async function countCommittedTickets(
         eq(orders.competitionId, competitionId),
         eq(orders.userId, userId),
         eq(orders.status, "pending"),
-        sql`${orders.createdAt} > now() - interval '2 hours'`,
+        sql`${orders.createdAt} > ${RECENT_ORDER_CUTOFF}`,
         exclude.length ? notInArray(orders.id, exclude) : undefined,
+      ),
+    );
+
+  return (issued?.n ?? 0) + (reserved?.n ?? 0);
+}
+
+/**
+ * The same count for guest checkout, keyed on the email they gave.
+ *
+ * Guest orders and tickets live in their own tables, so the signed-in count
+ * cannot see them and a limited competition was wide open to anyone who
+ * checked out as a guest.
+ *
+ * This is best effort by nature: nothing stops someone starting again with a
+ * different email address. It closes the ordinary case — the same person
+ * ordering repeatedly — which is what the limit is for.
+ */
+export async function countGuestCommittedTickets(competitionId: string, guestEmail: string) {
+  const email = guestEmail.trim().toLowerCase();
+  if (!email) return 0;
+
+  const [issued] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(guestTickets)
+    .innerJoin(guestOrders, eq(guestTickets.guestOrderId, guestOrders.id))
+    .where(and(eq(guestTickets.competitionId, competitionId), sql`LOWER(${guestOrders.guestEmail}) = ${email}`));
+
+  const [reserved] = await db
+    .select({ n: sql<number>`COALESCE(SUM(${guestOrders.quantity}), 0)::int` })
+    .from(guestOrders)
+    .where(
+      and(
+        eq(guestOrders.competitionId, competitionId),
+        sql`LOWER(${guestOrders.guestEmail}) = ${email}`,
+        eq(guestOrders.status, "pending"),
+        sql`${guestOrders.createdAt} > ${RECENT_ORDER_CUTOFF}`,
       ),
     );
 
