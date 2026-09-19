@@ -79,6 +79,35 @@ export function getDefaultBadgeLabel(type: string) {
   return getCompetitionTypeConfig(type).label;
 }
 
+/**
+ * The most tickets a picker should offer for this competition.
+ *
+ * Takes whichever cap bites first: the global per-order maximum, the
+ * competition's per-person limit, and — on the competition page, where we know
+ * it — how many that account has left. Listing cards do not know the account's
+ * count, so they cap at the limit itself; the detail page refines it.
+ *
+ * Never returns less than 1: at zero remaining the picker still shows 1 and the
+ * server refuses the purchase with an explanation, which reads better than a
+ * stepper stuck on nothing.
+ */
+export function quantityCapFor(
+  competition: { maxTicketsPerUser?: number | null },
+  globalMax = 500,
+  remainingForUser?: number | null,
+) {
+  const caps = [Math.max(1, globalMax)];
+
+  const perUser = Number(competition.maxTicketsPerUser);
+  if (Number.isFinite(perUser) && perUser > 0) caps.push(perUser);
+
+  if (typeof remainingForUser === "number" && Number.isFinite(remainingForUser)) {
+    caps.push(remainingForUser);
+  }
+
+  return Math.max(1, Math.min(...caps));
+}
+
 export function getDefaultQuantity(
   competition: { defaultQuantity?: number | null },
   maxQty = 500

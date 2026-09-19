@@ -39,6 +39,7 @@ import {
   getStatusBadge,
   getTicketStats,
   isInstantWinGame,
+  quantityCapFor,
 } from "@/lib/competition-display";
 
 function playNoun(type: string, quantity: number, mode: "cta" | "label" = "label") {
@@ -181,9 +182,14 @@ export default function CompetitionPage() {
   const perPersonRemaining =
     ticketLimit?.limit && ticketLimit.limit > 0 ? (ticketLimit.remaining ?? ticketLimit.limit) : null;
 
-  // The quantity picker stops at whichever cap bites first.
-  const effectiveMax =
-    perPersonRemaining === null ? maxTicketsAllowed : Math.max(1, Math.min(maxTicketsAllowed, perPersonRemaining));
+  // The quantity picker stops at whichever cap bites first: the global
+  // per-order maximum, this competition's per-person limit, or what this
+  // account has left.
+  const effectiveMax = quantityCapFor(
+    { maxTicketsPerUser: ticketLimit?.limit ?? null },
+    maxTicketsAllowed,
+    perPersonRemaining,
+  );
 
   const [limitFlash, setLimitFlash] = useState(false);
 
@@ -201,8 +207,10 @@ export default function CompetitionPage() {
     const fromUrl = parseInt(params.get("qty") || "", 10);
     if (Number.isFinite(fromUrl) && fromUrl >= 1) return;
     if (!competition) return;
-    setQuantity(getDefaultQuantity(competition, maxTicketsAllowed));
-  }, [competition?.id, competition?.defaultQuantity, maxTicketsAllowed]);
+    // Capped, so a configured default of 10 on a competition limited to 2 opens
+    // at 2 rather than at a number the customer cannot actually buy.
+    setQuantity(getDefaultQuantity(competition, effectiveMax));
+  }, [competition?.id, competition?.defaultQuantity, effectiveMax]);
 
   // ✅ FIXED: Pass competition image through order creation
   const purchaseTicketMutation = useMutation({
