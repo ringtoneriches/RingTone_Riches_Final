@@ -195,7 +195,7 @@ import { getPromoVideoModeStatus } from "./services/promo-video-mode";
 import { getCashflowsRevenue } from "./services/cashflows-revenue";
 import { ukDayStart } from "./services/uk-day";
 import { shouldProcessPaymentWebhook } from "./services/payment-webhook-guard";
-import { checkTicketLimit, hasPerUserLimit } from "./services/ticket-limits";
+import { checkTicketLimit, hasPerUserLimit, ticketLimitNote, ticketsRemainingForUser } from "./services/ticket-limits";
 import { effectiveTicketPrice } from "@shared/flash-sale";
 import {
   getCompletedScratchSession,
@@ -3869,6 +3869,62 @@ res.json({
   createdAt: userData.createdAt
 });
 });
+
+  /**
+   * What this competition's per-person limit means for the signed-in customer.
+   *
+   * Kept separate from the competition payload because it is per-account and
+   * must not be cached with it. Guests get the limit and its wording but no
+   * personal count, so the page can still say "limit 2 per person" before they
+   * log in rather than springing it on them at checkout.
+   */
+  app.get("/api/competitions/:id/ticket-limit", async (req: any, res) => {
+    try {
+      const [competition] = await db
+        .select({
+          maxTicketsPerUser: competitions.maxTicketsPerUser,
+          ticketLimitNote: competitions.ticketLimitNote,
+          ticketPrice: competitions.ticketPrice,
+          flashSalePrice: competitions.flashSalePrice,
+          flashSaleStartsAt: competitions.flashSaleStartsAt,
+          flashSaleEndsAt: competitions.flashSaleEndsAt,
+        })
+        .from(competitions)
+        .where(eq(competitions.id, req.params.id))
+        .limit(1);
+
+      if (!competition) return res.status(404).json({ message: "Competition not found" });
+
+      const limit = competition.maxTicketsPerUser ?? null;
+      const isFree = effectiveTicketPrice(competition) <= 0;
+      const note = ticketLimitNote({
+        maxTicketsPerUser: limit,
+        custom: competition.ticketLimitNote,
+        isFree,
+      });
+
+      const userId = req.user?.id;
+      if (!userId || !hasPerUserLimit(limit)) {
+        return res.json({ limit, note, held: 0, remaining: limit ?? null });
+      }
+
+      const [held] = await db
+        .select({ n: sql<number>`COUNT(*)::int` })
+        .from(tickets)
+        .where(and(eq(tickets.competitionId, req.params.id), eq(tickets.userId, userId)));
+
+      const alreadyHeld = held?.n ?? 0;
+      res.json({
+        limit,
+        note,
+        held: alreadyHeld,
+        remaining: ticketsRemainingForUser(limit, alreadyHeld),
+      });
+    } catch (error) {
+      console.error("Error loading ticket limit:", error);
+      res.status(500).json({ message: "Failed to load ticket limit" });
+    }
+  });
 
   app.get("/api/competitions/:id", async (req, res) => {
     try {

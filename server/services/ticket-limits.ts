@@ -64,3 +64,31 @@ export function checkTicketLimit(opts: {
 
   return { allowed: false, message, alreadyHeld: held, limit, remaining };
 }
+
+/**
+ * The sentence shown to customers about a competition's per-person limit.
+ *
+ * Defaults to wording generated from the number, so a limit is never silent —
+ * an admin only writes their own when they want to say something more specific.
+ * Returns null when the competition has no limit, so callers can just check for
+ * a value rather than deciding whether to show anything.
+ *
+ * `isFree` reads better on giveaways, where "free tickets" is the phrase
+ * customers actually use.
+ */
+export function ticketLimitNote(opts: {
+  maxTicketsPerUser: number | null | undefined;
+  custom?: string | null;
+  isFree?: boolean;
+}): string | null {
+  const custom = opts.custom?.trim();
+  if (custom) return custom;
+
+  if (!hasPerUserLimit(opts.maxTicketsPerUser)) return null;
+
+  const limit = opts.maxTicketsPerUser as number;
+  const noun = limit === 1 ? "ticket" : "tickets";
+  return opts.isFree
+    ? `Limit ${limit} free ${noun} per person.`
+    : `Limit ${limit} ${noun} per person.`;
+}

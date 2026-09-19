@@ -36,6 +36,7 @@ interface CompetitionFormData {
   badgeLabel: string;
   maxTickets: string;
   maxTicketsPerUser: string;
+  ticketLimitNote: string;
   ringtonePoints: string;
   endDate?: string;
   prizeData?: SpinPrizeData | ScratchPrizeData | InstantPrizeData;
@@ -65,6 +66,7 @@ function CompetitionForm({
     maxTickets: data?.maxTickets?.toString() || "1000",
     // Blank means no limit, which is how every existing competition behaves.
     maxTicketsPerUser: data?.maxTicketsPerUser?.toString() || "",
+    ticketLimitNote: data?.ticketLimitNote || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     endDate: data?.endDate ? new Date(data.endDate).toISOString().slice(0, 16) : "",
     prizeData: data?.prizeData as any,
@@ -223,6 +225,24 @@ function CompetitionForm({
           </div>
 
           <div>
+            <Label>Limit Wording (optional)</Label>
+            <Input
+              placeholder={
+                form.maxTicketsPerUser.trim()
+                  ? `Limit ${form.maxTicketsPerUser.trim()} tickets per person.`
+                  : "Shown only when a limit is set"
+              }
+              value={form.ticketLimitNote}
+              onChange={(e) => setForm({ ...form, ticketLimitNote: e.target.value })}
+              data-testid="input-ticketLimitNote"
+            />
+            <p className="mt-1 text-xs text-white/40">
+              Shown to customers under the quantity picker, so nobody can say they did not know. Leave
+              blank and the site writes it from the number above.
+            </p>
+          </div>
+
+          <div>
             <Label>Ringtone Points</Label>
             <Input
               type="number"
@@ -313,6 +333,7 @@ export default function AdminCompetitions() {
         maxTicketsPerUser: formData.maxTicketsPerUser.trim() === ""
           ? null
           : parseInt(formData.maxTicketsPerUser),
+        ticketLimitNote: formData.ticketLimitNote.trim() || null,
         ringtonePoints: parseInt(formData.ringtonePoints),
       };
       
@@ -356,6 +377,7 @@ export default function AdminCompetitions() {
         maxTicketsPerUser: data.maxTicketsPerUser.trim() === ""
           ? null
           : parseInt(data.maxTicketsPerUser),
+        ticketLimitNote: data.ticketLimitNote.trim() || null,
         ringtonePoints: parseInt(data.ringtonePoints),
       };
       

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkTicketLimit, hasPerUserLimit, ticketsRemainingForUser } from "./ticket-limits";
+import { checkTicketLimit, hasPerUserLimit, ticketLimitNote, ticketsRemainingForUser } from "./ticket-limits";
 
 describe("hasPerUserLimit", () => {
   it("treats null, undefined and 0 as no limit", () => {
@@ -89,5 +89,42 @@ describe("checkTicketLimit", () => {
     const r = checkTicketLimit({ maxTicketsPerUser: 2, alreadyHeld: 13, requested: 1 });
     expect(r.allowed).toBe(false);
     if (!r.allowed) expect(r.remaining).toBe(0);
+  });
+});
+
+describe("ticketLimitNote", () => {
+  it("says nothing when there is no limit", () => {
+    expect(ticketLimitNote({ maxTicketsPerUser: null })).toBeNull();
+    expect(ticketLimitNote({ maxTicketsPerUser: 0 })).toBeNull();
+  });
+
+  it("generates wording so a limit is never silent", () => {
+    expect(ticketLimitNote({ maxTicketsPerUser: 2 })).toBe("Limit 2 tickets per person.");
+    expect(ticketLimitNote({ maxTicketsPerUser: 1 })).toBe("Limit 1 ticket per person.");
+  });
+
+  it("says 'free' on giveaways, which is how customers describe them", () => {
+    // The competition this came from was a 100%-off giveaway whose terms lived
+    // only in the title.
+    expect(ticketLimitNote({ maxTicketsPerUser: 2, isFree: true })).toBe(
+      "Limit 2 free tickets per person.",
+    );
+  });
+
+  it("prefers the admin's own wording", () => {
+    expect(
+      ticketLimitNote({ maxTicketsPerUser: 2, custom: "Two free entries each — be fair!" }),
+    ).toBe("Two free entries each — be fair!");
+  });
+
+  it("ignores whitespace-only wording and falls back to the default", () => {
+    expect(ticketLimitNote({ maxTicketsPerUser: 2, custom: "   " })).toBe(
+      "Limit 2 tickets per person.",
+    );
+  });
+
+  it("does not invent a note from custom text when there is no limit", () => {
+    // An admin may leave wording behind after clearing the number.
+    expect(ticketLimitNote({ maxTicketsPerUser: null, custom: "" })).toBeNull();
   });
 });
