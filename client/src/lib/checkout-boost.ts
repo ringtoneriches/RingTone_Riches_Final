@@ -37,17 +37,32 @@ function pickBoostItem(items: BasketItem[]) {
   );
 }
 
-export function buildCheckoutBoostOffers(items: BasketItem[], currentTotal = cartPayTotal(items)): CheckoutBoostOffer[] {
+/**
+ * `capFor` is how many of a competition this customer may hold in total.
+ *
+ * Without it the boost would cheerfully offer "2 more plays" on a competition
+ * limited to 2 and then be refused at payment — worse than not offering, since
+ * the site invited it. Items already at their cap are skipped entirely.
+ */
+export function buildCheckoutBoostOffers(
+  items: BasketItem[],
+  currentTotal = cartPayTotal(items),
+  capFor: (competitionId: string) => number = () => MAX_QTY,
+): CheckoutBoostOffer[] {
   if (!items.length) return [];
-  const item = pickBoostItem(items);
+  const boostable = items.filter((row) => row.quantity < capFor(row.competitionId));
+  if (!boostable.length) return [];
+  const item = pickBoostItem(boostable);
   if (!item) return [];
+
+  const cap = Math.min(MAX_QTY, capFor(item.competitionId));
 
   const currentLine = lineTotal(item.ticketPrice, item.quantity, item.type).discountedPrice;
   const candidates: CheckoutBoostOffer[] = [];
 
   for (let extra = 1; extra <= MAX_EXTRA; extra += 1) {
     const newQty = item.quantity + extra;
-    if (newQty > MAX_QTY) break;
+    if (newQty > cap) break;
     const nextLine = lineTotal(item.ticketPrice, newQty, item.type).discountedPrice;
     const extraCost = money(nextLine - currentLine);
     if (extraCost < 0.01 || extraCost > MAX_EXTRA_COST) continue;

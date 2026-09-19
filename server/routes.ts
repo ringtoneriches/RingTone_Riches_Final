@@ -159,6 +159,7 @@ import {
   tryRevealControlledRoyal,
   getPublicPrizePool,
   countCommittedTickets,
+  countGuestCommittedTickets,
 } from "./services/instant-win-pool";
 import { generateLosingBalloonValues } from "./services/controlled-pool-allocation";
 import {
@@ -3904,7 +3905,10 @@ res.json({
         isFree,
       });
 
-      const userId = req.user?.id;
+      // This route is public so guests still get the wording. req.user is
+      // only set by isAuthenticated, which is not on it, so read the session
+      // directly or a signed-in customer looks like a guest holding nothing.
+      const userId = req.user?.id ?? req.session?.userId;
       if (!userId || !hasPerUserLimit(limit)) {
         return res.json({ limit, note, held: 0, remaining: limit ?? null });
       }
@@ -3919,6 +3923,66 @@ res.json({
     } catch (error) {
       console.error("Error loading ticket limit:", error);
       res.status(500).json({ message: "Failed to load ticket limit" });
+    }
+  });
+
+  /**
+   * The same thing for several competitions at once, keyed by id.
+   *
+   * The basket needs every line's limit before it can cap its quantity
+   * pickers, and asking one at a time would be a request per line on a page
+   * people reach with a full basket. Deliberately NOT under
+   * /api/competitions/... so it can never be mistaken for a competition id.
+   */
+  app.get("/api/ticket-limits", async (req: any, res) => {
+    try {
+      const ids = String(req.query.ids || "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean)
+        .slice(0, 50); // a basket is small; this is just a ceiling
+
+      if (!ids.length) return res.json({});
+
+      const rows = await db
+        .select({
+          id: competitions.id,
+          maxTicketsPerUser: competitions.maxTicketsPerUser,
+          ticketLimitNote: competitions.ticketLimitNote,
+          ticketPrice: competitions.ticketPrice,
+          flashSalePrice: competitions.flashSalePrice,
+          flashSaleStartsAt: competitions.flashSaleStartsAt,
+          flashSaleEndsAt: competitions.flashSaleEndsAt,
+        })
+        .from(competitions)
+        .where(inArray(competitions.id, ids));
+
+      const userId = req.user?.id ?? req.session?.userId;
+      const out: Record<string, { limit: number | null; note: string | null; held: number; remaining: number | null }> = {};
+
+      for (const row of rows) {
+        const limit = row.maxTicketsPerUser ?? null;
+        const note = ticketLimitNote({
+          maxTicketsPerUser: limit,
+          custom: row.ticketLimitNote,
+          isFree: effectiveTicketPrice(row) <= 0,
+        });
+
+        if (!userId || !hasPerUserLimit(limit)) {
+          out[row.id] = { limit, note, held: 0, remaining: limit ?? null };
+          continue;
+        }
+
+        const held = await countCommittedTickets(row.id, userId);
+        out[row.id] = { limit, note, held, remaining: ticketsRemainingForUser(limit, held) };
+      }
+
+      res.json(out);
+    } catch (error) {
+      console.error("Error loading ticket limits:", error);
+      // A basket that cannot read the limits must still work: the server
+      // refuses anything over the limit at checkout regardless.
+      res.json({});
     }
   });
 
@@ -19739,6 +19803,24 @@ app.post("/api/guest/create-order", async (req: any, res) => {
         success: false,
         message: "Competition not found" 
       });
+    }
+
+    // Per-account limit, counted against the email this guest gave.
+    //
+    // Guest checkout was the way round it entirely: guest orders and tickets
+    // are in their own tables, so the signed-in count never saw them. Best
+    // effort — a different email starts again — but it closes the ordinary
+    // case of one person ordering over and over.
+    if (hasPerUserLimit(competition.maxTicketsPerUser) && resolvedEmail) {
+      const verdict = checkTicketLimit({
+        maxTicketsPerUser: competition.maxTicketsPerUser,
+        alreadyHeld: await countGuestCommittedTickets(competitionId, resolvedEmail),
+        requested: Number(quantity || 0),
+      });
+
+      if (!verdict.allowed) {
+        return res.status(400).json({ success: false, message: verdict.message, code: "per_user_limit" });
+      }
     }
 
     // Calculate total amount

@@ -56,11 +56,11 @@ export function addToBasket(item: BasketItem, maxQty = 500) {
   return items;
 }
 
-export function setBasketQty(competitionId: string, quantity: number) {
+export function setBasketQty(competitionId: string, quantity: number, maxQty = 500) {
   const items = readBasket()
     .map((item) =>
       item.competitionId === competitionId
-        ? { ...item, quantity: Math.max(1, quantity) }
+        ? { ...item, quantity: Math.min(Math.max(1, maxQty), Math.max(1, quantity)) }
         : item
     )
     .filter((item) => item.quantity > 0);
