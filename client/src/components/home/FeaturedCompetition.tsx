@@ -23,6 +23,7 @@ import {
   getStatusBadge,
   getTicketStats,
   isInstantWinGame,
+  quantityCapFor,
 } from "@/lib/competition-display";
 
 type Props = {
@@ -247,7 +248,7 @@ export default function FeaturedCompetition({ competitions }: Props) {
       : 20
     : 20;
   const [qty, setQty] = useState(() =>
-    competition ? getDefaultQuantity(competition, featuredMax) : 1
+    competition ? getDefaultQuantity(competition, quantityCapFor(competition, featuredMax)) : 1
   );
   const [showSwipeHint, setShowSwipeHint] = useState(true);
   const [swipeHintLeaving, setSwipeHintLeaving] = useState(false);
@@ -257,7 +258,7 @@ export default function FeaturedCompetition({ competitions }: Props) {
     if (!competition) return;
     const stats = getTicketStats(competition);
     const maxQty = stats.hasTickets ? Math.max(1, stats.remaining) : 20;
-    setQty(getDefaultQuantity(competition, maxQty));
+    setQty(getDefaultQuantity(competition, quantityCapFor(competition, maxQty)));
   }, [competition?.id, competition?.defaultQuantity]);
 
   useEffect(() => {
