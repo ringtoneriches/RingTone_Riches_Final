@@ -194,7 +194,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                 <div className="rr-comp-cart-row">
                   <QuantitySelector
                     value={qty}
-                    max={maxQty}
+                    max={cardMax}
                     onChange={setQty}
                     className="rr-qty"
                   />
@@ -214,7 +214,7 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
                           quantity: qty,
                           wheelType: competition.wheelType,
                         },
-                        maxQty
+                        cardMax
                       );
                     }}
                     className="rr-comp-add-cart"

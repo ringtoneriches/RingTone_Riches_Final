@@ -65,6 +65,9 @@ function FeaturedSlide({
   const badge = getStatusBadge(stats);
   const cta = getCtaLabel(competition.type, stats.isClosed);
   const maxQty = stats.hasTickets ? Math.max(1, stats.remaining) : 20;
+  // Never offer more than the competition's per-person limit: the stepper and
+  // the basket both have to respect it, or the customer only finds out at pay.
+  const cardMax = quantityCapFor(competition, maxQty);
   const TypeIcon = typeCfg.Icon;
 
   const goEnter = () => {
@@ -174,7 +177,7 @@ function FeaturedSlide({
             <div className="flex items-stretch gap-2">
               <QuantitySelector
                 value={qty}
-                max={maxQty}
+                max={cardMax}
                 onChange={setQty}
                 size="lg"
                 className="rr-qty shrink-0"
@@ -192,7 +195,7 @@ function FeaturedSlide({
                       quantity: qty,
                       wheelType: competition.wheelType,
                     },
-                    maxQty
+                    cardMax
                   );
                 }}
                 className="rr-add-cart-btn"

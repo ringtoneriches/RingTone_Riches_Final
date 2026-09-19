@@ -4,7 +4,8 @@ import { nanoid } from "nanoid";
 import { db } from "./db";
 import { cashflows } from "./cashflows";
 import { isAuthenticated } from "./customAuth";
-import { issuePlayTickets } from "./services/instant-win-pool";
+import { countCommittedTickets, issuePlayTickets } from "./services/instant-win-pool";
+import { checkTicketLimit, hasPerUserLimit } from "./services/ticket-limits";
 import { creditCardCashback } from "./services/card-cashback";
 import { sendOrderConfirmationEmail, type OrderConfirmationPayload } from "./email";
 import {
@@ -295,6 +296,45 @@ export function registerCartCardPaymentRoutes(app: Express) {
           .from(competitions)
           .where(inArray(competitions.id, competitionIds));
         const compById = new Map(comps.map((row) => [row.id, row]));
+
+        // Per-account ticket limits.
+        //
+        // The basket used to be the way around them: each order passed its own
+        // check when it was created, then they were all paid for together here,
+        // where nothing looked at the limit again. Checking at the point of
+        // payment closes that, and it has to add the basket's own lines up per
+        // competition — two lines of 2 in one basket are 4 tickets.
+        //
+        // The orders being paid for are excluded from the count, or they would
+        // be counted twice: once as a basket line, once as a pending order.
+        const wantedByCompetition = new Map<string, number>();
+        for (const order of ordered) {
+          wantedByCompetition.set(
+            order.competitionId,
+            (wantedByCompetition.get(order.competitionId) ?? 0) + Math.max(0, order.quantity),
+          );
+        }
+
+        for (const [competitionId, requested] of wantedByCompetition) {
+          const competition = compById.get(competitionId);
+          if (!competition || !hasPerUserLimit(competition.maxTicketsPerUser)) continue;
+
+          const verdict = checkTicketLimit({
+            maxTicketsPerUser: competition.maxTicketsPerUser,
+            alreadyHeld: await countCommittedTickets(competitionId, userId, {
+              excludeOrderIds: orderIds,
+            }),
+            requested,
+          });
+
+          if (!verdict.allowed) {
+            return res.status(400).json({
+              message: `${competition.title}: ${verdict.message}`,
+              code: "per_user_limit",
+              competitionId,
+            });
+          }
+        }
         const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
 
         const orderLines = ordered.map((order, index) => {

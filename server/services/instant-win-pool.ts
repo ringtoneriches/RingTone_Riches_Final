@@ -23,7 +23,7 @@ import {
 } from "./promo-video-mode";
 import { notifyPublicWinnerUpdate } from "./record-game-winner";
 import { randomInt, randomBytes } from "crypto";
-import { and, asc, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import {
@@ -176,6 +176,50 @@ export async function getMaxTicketsPerOrder(): Promise<number> {
   }
 }
 
+
+/**
+ * How many tickets an account already has committed to a competition.
+ *
+ * Issued tickets PLUS the quantity on recent unpaid orders. Counting only
+ * issued tickets was not enough: tickets are created at payment, so a basket
+ * holding the same competition several times passed every check at zero held
+ * and then issued them all. Three orders of 2 against a limit of 2 went
+ * through exactly that way.
+ *
+ * Pending orders are only counted for a short window. Abandoned checkouts are
+ * common — around a third of orders in production are pending and days old —
+ * so counting them forever would lock real customers out of a competition they
+ * never actually entered. A checkout takes seconds; two hours is generous.
+ */
+export async function countCommittedTickets(
+  competitionId: string,
+  userId: string,
+  options?: { excludeOrderIds?: string[] },
+) {
+  // A route settling an order must not count that order against itself.
+  const exclude = (options?.excludeOrderIds ?? []).filter(Boolean);
+
+  const [issued] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(tickets)
+    .where(and(eq(tickets.competitionId, competitionId), eq(tickets.userId, userId)));
+
+  const [reserved] = await db
+    .select({ n: sql<number>`COALESCE(SUM(${orders.quantity}), 0)::int` })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.competitionId, competitionId),
+        eq(orders.userId, userId),
+        eq(orders.status, "pending"),
+        sql`${orders.createdAt} > now() - interval '2 hours'`,
+        exclude.length ? notInArray(orders.id, exclude) : undefined,
+      ),
+    );
+
+  return (issued?.n ?? 0) + (reserved?.n ?? 0);
+}
+
 export async function assertCanPurchaseTickets(
   competitionId: string,
   quantity: number,
@@ -204,14 +248,9 @@ export async function assertCanPurchaseTickets(
   // simply ordering twice, which is how a 100%-off sale was taken 13 times
   // over by one account.
   if (options?.userId && hasPerUserLimit(competition.maxTicketsPerUser)) {
-    const [held] = await db
-      .select({ n: sql<number>`COUNT(*)::int` })
-      .from(tickets)
-      .where(and(eq(tickets.competitionId, competitionId), eq(tickets.userId, options.userId)));
-
     const verdict = checkTicketLimit({
       maxTicketsPerUser: competition.maxTicketsPerUser,
-      alreadyHeld: held?.n ?? 0,
+      alreadyHeld: await countCommittedTickets(competitionId, options.userId),
       requested: qty,
     });
 
