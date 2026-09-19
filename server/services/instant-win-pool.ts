@@ -16,6 +16,7 @@ import {
   royalSymbolFromPrize,
 } from "./royal-controlled-layout";
 import { instantWinValueFromTablePrize } from "./instant-win-prize-value";
+import { checkTicketLimit, hasPerUserLimit } from "./ticket-limits";
 import {
   isPromoVideoModeEnabled,
   resolvePromoJackpotPrize,
@@ -178,7 +179,7 @@ export async function getMaxTicketsPerOrder(): Promise<number> {
 export async function assertCanPurchaseTickets(
   competitionId: string,
   quantity: number,
-  options?: { skipModeCheck?: boolean }
+  options?: { skipModeCheck?: boolean; userId?: string }
 ) {
   const qty = Number(quantity || 0);
   if (!Number.isFinite(qty) || qty < 1) {
@@ -193,6 +194,30 @@ export async function assertCanPurchaseTickets(
 
   if (!competition) {
     throw new InstantWinError("Competition not found", 404, "not_found");
+  }
+
+  // Per-account cap, when the competition sets one. Deliberately BEFORE the
+  // controlled-pool branch below, which returns early for probability mode —
+  // the limit has to hold for every competition type, not just controlled ones.
+  //
+  // Counted across all of the account's orders: a per-order cap is beaten by
+  // simply ordering twice, which is how a 100%-off sale was taken 13 times
+  // over by one account.
+  if (options?.userId && hasPerUserLimit(competition.maxTicketsPerUser)) {
+    const [held] = await db
+      .select({ n: sql<number>`COUNT(*)::int` })
+      .from(tickets)
+      .where(and(eq(tickets.competitionId, competitionId), eq(tickets.userId, options.userId)));
+
+    const verdict = checkTicketLimit({
+      maxTicketsPerUser: competition.maxTicketsPerUser,
+      alreadyHeld: held?.n ?? 0,
+      requested: qty,
+    });
+
+    if (!verdict.allowed) {
+      throw new InstantWinError(verdict.message, 400, "per_user_limit");
+    }
   }
 
   const maxPerOrder = await getMaxTicketsPerOrder();

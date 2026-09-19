@@ -35,6 +35,7 @@ interface CompetitionFormData {
   prizeAmount: string;
   badgeLabel: string;
   maxTickets: string;
+  maxTicketsPerUser: string;
   ringtonePoints: string;
   endDate?: string;
   prizeData?: SpinPrizeData | ScratchPrizeData | InstantPrizeData;
@@ -62,6 +63,8 @@ function CompetitionForm({
     prizeAmount: formatPrizeAmountInput(data?.prizeAmount),
     badgeLabel: data?.badgeLabel || getDefaultBadgeLabel(fixedType || data?.type || "instant"),
     maxTickets: data?.maxTickets?.toString() || "1000",
+    // Blank means no limit, which is how every existing competition behaves.
+    maxTicketsPerUser: data?.maxTicketsPerUser?.toString() || "",
     ringtonePoints: data?.ringtonePoints?.toString() || "0",
     endDate: data?.endDate ? new Date(data.endDate).toISOString().slice(0, 16) : "",
     prizeData: data?.prizeData as any,
@@ -204,6 +207,22 @@ function CompetitionForm({
           </div>
 
           <div>
+            <Label>Max Tickets Per Person</Label>
+            <Input
+              type="number"
+              min="0"
+              placeholder="No limit"
+              value={form.maxTicketsPerUser}
+              onChange={(e) => setForm({ ...form, maxTicketsPerUser: e.target.value })}
+              data-testid="input-maxTicketsPerUser"
+            />
+            <p className="mt-1 text-xs text-white/40">
+              How many tickets one account may hold, counted across all their orders. Leave blank for no
+              limit. Worth setting before any heavily discounted sale.
+            </p>
+          </div>
+
+          <div>
             <Label>Ringtone Points</Label>
             <Input
               type="number"
@@ -291,6 +310,9 @@ export default function AdminCompetitions() {
         prizeAmount: serializePrizeAmount(formData.prizeAmount),
         badgeLabel: serializeBadgeLabel(formData.badgeLabel, formData.type),
         maxTickets: parseInt(formData.maxTickets),
+        maxTicketsPerUser: formData.maxTicketsPerUser.trim() === ""
+          ? null
+          : parseInt(formData.maxTicketsPerUser),
         ringtonePoints: parseInt(formData.ringtonePoints),
       };
       
@@ -331,6 +353,9 @@ export default function AdminCompetitions() {
         prizeAmount: serializePrizeAmount(data.prizeAmount),
         badgeLabel: serializeBadgeLabel(data.badgeLabel, data.type),
         maxTickets: parseInt(data.maxTickets),
+        maxTicketsPerUser: data.maxTicketsPerUser.trim() === ""
+          ? null
+          : parseInt(data.maxTicketsPerUser),
         ringtonePoints: parseInt(data.ringtonePoints),
       };
       
