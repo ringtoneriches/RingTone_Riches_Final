@@ -195,6 +195,7 @@ import { getPromoVideoModeStatus } from "./services/promo-video-mode";
 import { getCashflowsRevenue } from "./services/cashflows-revenue";
 import { ukDayStart } from "./services/uk-day";
 import { shouldProcessPaymentWebhook } from "./services/payment-webhook-guard";
+import { checkTicketLimit, hasPerUserLimit } from "./services/ticket-limits";
 import { effectiveTicketPrice } from "@shared/flash-sale";
 import {
   getCompletedScratchSession,
@@ -908,9 +909,14 @@ function pickWeightedScratchPrize<T extends { weight?: unknown }>(eligiblePrizes
   return selected;
 }
 
-async function guardControlledPurchase(res: any, competitionId: string, quantity: number) {
+async function guardControlledPurchase(
+  res: any,
+  competitionId: string,
+  quantity: number,
+  userId?: string,
+) {
   try {
-    await assertCanPurchaseTickets(competitionId, quantity);
+    await assertCanPurchaseTickets(competitionId, quantity, { userId });
     return true;
   } catch (err: any) {
     if (err instanceof InstantWinError) {
@@ -5041,7 +5047,31 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
       }
   
       const compType = competition.type;
-      
+
+      // -------------------------
+      // 1️⃣.5 PER-ACCOUNT LIMIT
+      // -------------------------
+      // This route issues tickets for prize-draw competitions and, unlike the
+      // create-*-order routes, never went through guardControlledPurchase — so
+      // it had no per-order cap either. Counted across all of this account's
+      // orders, because a per-order cap is beaten by ordering twice.
+      if (hasPerUserLimit(competition.maxTicketsPerUser)) {
+        const [held] = await db
+          .select({ n: sql<number>`COUNT(*)::int` })
+          .from(tickets)
+          .where(and(eq(tickets.competitionId, competitionId), eq(tickets.userId, userId)));
+
+        const verdict = checkTicketLimit({
+          maxTicketsPerUser: competition.maxTicketsPerUser,
+          alreadyHeld: held?.n ?? 0,
+          requested: Number(quantity || 0),
+        });
+
+        if (!verdict.allowed) {
+          return res.status(400).json({ message: verdict.message, code: "per_user_limit" });
+        }
+      }
+
       // -------------------------
       // 2️⃣ SOLD-OUT LOGIC (INSTANT ONLY)
       // -------------------------
@@ -5318,7 +5348,7 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
-    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+    if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
 
     const spinCostPerTicket = effectiveTicketPrice(competition);
     
@@ -6709,7 +6739,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
-    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+    if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
 
     const scratchCostPerCard = effectiveTicketPrice(competition);
     
@@ -6766,7 +6796,7 @@ app.post("/api/create-pop-order", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
-    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+    if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
 
     const popCostPerGame = effectiveTicketPrice(competition);
     
@@ -6826,7 +6856,7 @@ app.post("/api/create-voltz-order", isAuthenticated, async (req: any, res) => {
     if (!competition) {
       return res.status(404).json({ message: "Competition not found" });
     }
-    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+    if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
 
     const voltzCostPerGame = effectiveTicketPrice(competition);
     
@@ -11043,7 +11073,7 @@ app.post("/api/create-plinko-order", isAuthenticated, async (req: any, res) => {
     if (!competition || competition.type !== "plinko") {
       return res.status(404).json({ message: "Plinko competition not found" });
     }
-    if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+    if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
 
     const ticketPrice = effectiveTicketPrice(competition);
 
@@ -21170,7 +21200,7 @@ app.get('/api/promo-competitions/:id/video', async (req, res) => {
       const { competitionId, quantity = 1 } = req.body;
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
-      if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+      if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
       const slotCostPerSpin = effectiveTicketPrice(competition);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(slotCostPerSpin, quantity);
       const user = await storage.getUser(userId);
@@ -21853,7 +21883,7 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
       const { competitionId, quantity = 1 } = req.body;
       const competition = await storage.getCompetition(competitionId);
       if (!competition) return res.status(404).json({ message: "Competition not found" });
-      if (!(await guardControlledPurchase(res, competitionId, quantity))) return;
+      if (!(await guardControlledPurchase(res, competitionId, quantity, userId))) return;
       const costPerPlay = effectiveTicketPrice(competition);
       const { originalTotal, discountPercent, discountedTotal, savings } = calculateDiscountedTotal(costPerPlay, quantity);
       const user = await storage.getUser(userId);
