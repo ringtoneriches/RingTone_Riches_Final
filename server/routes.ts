@@ -158,6 +158,7 @@ import {
   revealAllControlledVoltz,
   tryRevealControlledRoyal,
   getPublicPrizePool,
+  countCommittedTickets,
 } from "./services/instant-win-pool";
 import { generateLosingBalloonValues } from "./services/controlled-pool-allocation";
 import {
@@ -3908,12 +3909,7 @@ res.json({
         return res.json({ limit, note, held: 0, remaining: limit ?? null });
       }
 
-      const [held] = await db
-        .select({ n: sql<number>`COUNT(*)::int` })
-        .from(tickets)
-        .where(and(eq(tickets.competitionId, req.params.id), eq(tickets.userId, userId)));
-
-      const alreadyHeld = held?.n ?? 0;
+      const alreadyHeld = await countCommittedTickets(req.params.id, userId);
       res.json({
         limit,
         note,
@@ -5112,14 +5108,15 @@ app.post("/api/purchase-ticket", isAuthenticated, async (req: any, res) => {
       // it had no per-order cap either. Counted across all of this account's
       // orders, because a per-order cap is beaten by ordering twice.
       if (hasPerUserLimit(competition.maxTicketsPerUser)) {
-        const [held] = await db
-          .select({ n: sql<number>`COUNT(*)::int` })
-          .from(tickets)
-          .where(and(eq(tickets.competitionId, competitionId), eq(tickets.userId, userId)));
+        // Excluding this order: it is pending too, and would otherwise be
+        // counted against itself.
+        const alreadyHeld = await countCommittedTickets(competitionId, userId, {
+          excludeOrderIds: [orderId],
+        });
 
         const verdict = checkTicketLimit({
           maxTicketsPerUser: competition.maxTicketsPerUser,
-          alreadyHeld: held?.n ?? 0,
+          alreadyHeld,
           requested: Number(quantity || 0),
         });
 
