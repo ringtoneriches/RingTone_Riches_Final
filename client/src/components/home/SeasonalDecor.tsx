@@ -92,24 +92,34 @@ function Cobweb({ corner }: { corner: "tl" | "tr" }) {
    different beat, so it never looks like one rigid piece being waved about.
    --------------------------------------------------------------------------- */
 
+/**
+ * Legs with a knee in them.
+ *
+ * A spider's leg rises steeply from the body, peaks, and drops away — it does
+ * not sweep out in a smooth curve. Drawing them as single arcs is what made
+ * the first attempt look like a dust mote with whiskers; the sharp joint is
+ * the thing the eye reads as "spider".
+ */
 const SPIDER_LEGS = [
-  // Left side
-  "M26 26 C16 20 10 14 4 6",
-  "M25 30 C14 28 8 26 1 21",
-  "M25 34 C14 36 8 39 2 44",
-  "M27 38 C19 43 15 48 11 54",
+  // Left side: body -> knee -> foot. The knees sit at four different heights
+  // on purpose. Matched pairs arc into one another and the whole thing reads
+  // as a bow tie above the body rather than eight separate legs.
+  "M26 26 C20 21 15 19 10 20 C8 22 7 25 6 29",
+  "M25 30 C17 28 11 28 6 31 C5 34 5 37 5 41",
+  "M25 34 C17 34 11 37 8 42 C8 45 9 48 11 51",
+  "M27 38 C22 41 18 45 16 51 C17 54 19 56 22 58",
   // Right side
-  "M38 26 C48 20 54 14 60 6",
-  "M39 30 C50 28 56 26 63 21",
-  "M39 34 C50 36 56 39 62 44",
-  "M37 38 C45 43 49 48 53 54",
+  "M38 26 C44 21 49 19 54 20 C56 22 57 25 58 29",
+  "M39 30 C47 28 53 28 58 31 C59 34 59 37 59 41",
+  "M39 34 C47 34 53 37 56 42 C56 45 55 48 53 51",
+  "M37 38 C42 41 46 45 48 51 C47 54 45 56 42 58",
 ];
 
 function Spider() {
   return (
     <div className="rr-hw-spider" aria-hidden>
       <span className="rr-hw-spider-thread" />
-      <svg className="rr-hw-spider-body" viewBox="0 0 64 56" fill="none" focusable="false">
+      <svg className="rr-hw-spider-body" viewBox="0 0 64 60" fill="none" focusable="false">
         {/* Legs twice, same paths: a thick dark pass for separation from
             bright artwork, then a thin light rim on top. Drawn once they are
             near-black lines on a busy image and the spider loses the
@@ -124,8 +134,13 @@ function Spider() {
             <path key={i} d={d} />
           ))}
         </g>
-        <ellipse className="rr-hw-spider-head" cx="32" cy="27" rx="7" ry="6" />
-        <ellipse className="rr-hw-spider-abdomen" cx="32" cy="37" rx="10" ry="11" />
+        <ellipse className="rr-hw-spider-head" cx="32" cy="27" rx="6.6" ry="5.6" />
+        {/* Teardrop rather than an ellipse: an abdomen is widest low down and
+            narrows where it meets the body. */}
+        <path
+          className="rr-hw-spider-abdomen"
+          d="M32 30 C39 30 43 36 43 42 C43 49 38 54 32 54 C26 54 21 49 21 42 C21 36 25 30 32 30 Z"
+        />
         <circle className="rr-hw-spider-eye" cx="29.4" cy="25.4" r="1.5" />
         <circle className="rr-hw-spider-eye" cx="34.6" cy="25.4" r="1.5" />
       </svg>
@@ -147,24 +162,50 @@ const BATS = [
   { top: "9%", scale: 0.78, duration: "23s", delay: "12s", flap: "0.38s" },
 ];
 
+/**
+ * One wing, drawn from the body out to three fingertips with the membrane
+ * scalloped between them.
+ *
+ * The scallops are the whole thing. A bat wing is skin stretched between
+ * elongated fingers, so its trailing edge is a row of concave arcs — without
+ * them you get a smooth blob that reads as a bird, a moth, or nothing. The
+ * right wing is this path mirrored rather than a second drawing, so the two
+ * can never drift apart.
+ */
+const BAT_WING =
+  "M60 21 " +
+  // leading edge: shoulder out along the arm to the outer fingertip
+  "C52 9 40 2 26 2 " +
+  // outer fingertip, then the membrane scallops back toward the body
+  "C28 7 27 11 24 14 " +
+  "L10 10 " +
+  "C14 16 14 20 11 24 " +
+  "L2 26 " +
+  "C9 28 13 31 15 36 " +
+  "C22 30 30 27 38 26 " +
+  // trailing edge returning to the body
+  "C46 26 54 25 60 26 Z";
+
 function Bat({ style }: { style: React.CSSProperties }) {
   return (
     <span className="rr-hw-bat" style={style} aria-hidden>
-      <svg viewBox="0 0 80 40" fill="none" focusable="false">
-        {/* Wings are separate groups so each can pivot at the body. */}
+      <svg viewBox="0 0 120 44" fill="none" focusable="false">
+        {/* Each wing pivots at the body, so they are separate groups. */}
         <g className="rr-hw-bat-wing rr-hw-bat-wing--l">
-          <path d="M40 20 C32 10 22 6 10 8 C16 12 14 18 8 20 C16 21 20 25 22 31 C28 26 34 24 40 24 Z" />
+          <path d={BAT_WING} />
         </g>
         <g className="rr-hw-bat-wing rr-hw-bat-wing--r">
-          <path d="M40 20 C48 10 58 6 70 8 C64 12 66 18 72 20 C64 21 60 25 58 31 C52 26 46 24 40 24 Z" />
+          {/* Mirrored about the body rather than redrawn. */}
+          <path d={BAT_WING} transform="translate(120 0) scale(-1 1)" />
         </g>
         <path
           className="rr-hw-bat-body"
-          d="M40 12 C43 12 45 15 45 19 C45 24 43 29 40 32 C37 29 35 24 35 19 C35 15 37 12 40 12 Z"
+          d="M60 10 C64 10 67 14 67 20 C67 27 64 34 60 38 C56 34 53 27 53 20 C53 14 56 10 60 10 Z"
         />
-        {/* Ears, which is most of what makes a silhouette read as a bat. */}
-        <path className="rr-hw-bat-body" d="M37 13 L35 8 L39 11 Z" />
-        <path className="rr-hw-bat-body" d="M43 13 L45 8 L41 11 Z" />
+        {/* Ears. Pointed and well clear of the head — on a silhouette this
+            small they do more work than the body shape does. */}
+        <path className="rr-hw-bat-body" d="M56 12 L52 2 L60 9 Z" />
+        <path className="rr-hw-bat-body" d="M64 12 L68 2 L60 9 Z" />
       </svg>
     </span>
   );

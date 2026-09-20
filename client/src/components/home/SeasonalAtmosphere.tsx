@@ -1,5 +1,6 @@
 import { useSeason } from "@/hooks/useSeason";
 import { SeasonalBats } from "./SeasonalDecor";
+import HalloweenMoon from "./HalloweenMoon";
 
 /**
  * The seasonal layer that sits inside the page's existing atmosphere.
@@ -43,7 +44,9 @@ export default function SeasonalAtmosphere() {
           them rather than washing a grey film across the light sources. */}
       <div className="rr-hw-vignette" aria-hidden />
 
-      <div className="rr-hw-moon" aria-hidden />
+      <div className="rr-hw-moon" aria-hidden>
+        <HalloweenMoon />
+      </div>
 
       {/* After the moon, so they cross in front of it rather than behind. */}
       <SeasonalBats />
