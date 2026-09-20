@@ -1,4 +1,7 @@
 import { useSeason } from "@/hooks/useSeason";
+import { SeasonalBats } from "./SeasonalDecor";
+import HalloweenMoon from "./HalloweenMoon";
+import HalloweenClouds from "./HalloweenClouds";
 
 /**
  * The seasonal layer that sits inside the page's existing atmosphere.
@@ -32,8 +35,8 @@ export default function SeasonalAtmosphere() {
 
   return (
     <>
+      {/* Low haze stays: it fills the gaps the cloud banks leave. */}
       <div className="rr-hw-fog" aria-hidden>
-        <span />
         <span />
         <span />
       </div>
@@ -42,7 +45,16 @@ export default function SeasonalAtmosphere() {
           them rather than washing a grey film across the light sources. */}
       <div className="rr-hw-vignette" aria-hidden />
 
-      <div className="rr-hw-moon" aria-hidden />
+      <div className="rr-hw-moon" aria-hidden>
+        <HalloweenMoon />
+      </div>
+
+      {/* Over the moon, so the banks pass in front of it — which is most of
+          what sells them as weather rather than a texture. */}
+      <HalloweenClouds />
+
+      {/* After the moon, so they cross in front of it rather than behind. */}
+      <SeasonalBats />
 
       <div className="rr-hw-embers" aria-hidden>
         {EMBERS.map((ember, i) => (

@@ -195,53 +195,69 @@ html.rr-season-halloween .rr-atmosphere-gold {
      header bar, which reads as a rendering fault rather than a moon. */
   top: clamp(7.5rem, 17vh, 12rem);
   right: clamp(1.5rem, 7vw, 7rem);
-  width: clamp(84px, 10vw, 150px);
-  height: clamp(84px, 10vw, 150px);
-  border-radius: 999px;
-  /* Centred, not offset. An off-centre highlight shades it like a billiard
-     ball; a moon is a flat lit disc with its light bleeding into the sky. */
-  background: radial-gradient(
-    circle at 50% 50%,
-    #fbfaf4 0%,
-    #ebe7dc 54%,
-    rgba(226, 222, 210, 0.55) 72%,
-    rgba(226, 222, 210, 0.12) 83%,
-    transparent 89%
-  );
-  /* The halo is most of the effect — it is what makes it a light source
-     rather than a circle sitting on top of the page. */
-  box-shadow:
-    0 0 40px rgba(255, 248, 226, 0.4),
-    0 0 110px rgba(255, 216, 150, 0.26),
-    0 0 220px rgba(255, 170, 70, 0.14);
-  opacity: 0.85;
+  width: clamp(104px, 12vw, 182px);
+  height: clamp(104px, 12vw, 182px);
   pointer-events: none;
   animation: rr-hw-moon-breathe 14s ease-in-out infinite;
 }
 
-/* Craters. Barely there — enough that it is not a plain disc, not so much
-   that it turns grey. */
-.rr-hw-moon::after {
-  content: "";
+/* The disc is a photograph; the halo around it is the only part still drawn,
+   because a real moon photographed against black has no atmosphere to glow
+   into and the page needs the light to reach the sky. */
+/* The moon and the cloud crossing it share one box so the cloud stays put
+   against the disc however the moon is sized. */
+.rr-hw-moon-stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* The cloud that eats into the disc. Sized beyond the moon so its torn edge
+   is never cut off by the element's own bounds. */
+.rr-hw-moon-shroud {
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  opacity: 0.9;
-  /* Soft falloff rather than hard stops: hard-edged circles read as flat grey
-     discs pasted on the front, and at three of them it starts to look like a
-     face. Soft and off-centre instead, so it is texture you half-notice —
-     without it the disc reads as a lightbulb rather than a moon. */
-  background:
-    radial-gradient(circle at 64% 31%, rgba(150, 142, 128, 0.42), rgba(150, 142, 128, 0.14) 45%, transparent 66%),
-    radial-gradient(circle at 34% 58%, rgba(150, 142, 128, 0.34), transparent 52%),
-    radial-gradient(circle at 70% 70%, rgba(150, 142, 128, 0.26), transparent 40%),
-    radial-gradient(circle at 44% 30%, rgba(150, 142, 128, 0.2), transparent 30%);
-  filter: blur(2px);
+  left: -22%;
+  top: -22%;
+  width: 144%;
+  height: 144%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.rr-hw-moon-shroud-drift {
+  animation: rr-hw-shroud-drift 46s ease-in-out infinite;
+}
+
+/* Coverage breathes between roughly half and two thirds of the disc. */
+@keyframes rr-hw-shroud-drift {
+  0%, 100% { transform: translate(-4%, 2%); }
+  50%      { transform: translate(7%, -5%); }
+}
+
+html.rr-motion-paused .rr-hw-moon-shroud-drift,
+html.rr-zoomed .rr-hw-moon-shroud-drift {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-hw-moon-shroud-drift {
+    animation: none !important;
+  }
+}
+
+.rr-hw-moon-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter:
+    drop-shadow(0 0 24px rgba(255, 246, 220, 0.4))
+    drop-shadow(0 0 64px rgba(255, 196, 120, 0.26))
+    drop-shadow(0 0 140px rgba(255, 150, 60, 0.14));
 }
 
 @keyframes rr-hw-moon-breathe {
-  0%, 100% { opacity: 0.78; }
-  50%      { opacity: 0.95; }
+  0%, 100% { opacity: 0.88; }
+  50%      { opacity: 1; }
 }
 
 /* A vignette pulls the corners down so the moon reads as the brightest thing
@@ -390,6 +406,28 @@ html.rr-zoomed .rr-hw-moon {
   .rr-hw-fog span:nth-child(3) {
     display: none;
   }
+
+  /* The headline runs nearly the full width on a phone, and the theme toggle
+     sits in the same corner. At the desktop size and offset the moon lands
+     behind the word BECOME — bone text on a pale disc, which does not read —
+     and under the toggle. Smaller, tighter into the corner and dropped below
+     the toggle clears both. */
+  .rr-hw-moon {
+    top: 9.5rem;
+    right: 0.625rem;
+    width: 72px;
+    height: 72px;
+  }
+}
+
+/* Between the phone and the desktop layout the headline still reaches far
+   enough right to touch the moon, so hold it in the corner a little longer. */
+@media (min-width: 641px) and (max-width: 900px) {
+  .rr-hw-moon {
+    right: 1rem;
+    width: 96px;
+    height: 96px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -408,5 +446,341 @@ html.rr-zoomed .rr-hw-moon {
 
   .rr-hw-moon {
     opacity: 0.45;
+  }
+}
+
+/* =========================================================================
+   Props: cobwebs, spider, bats
+   =========================================================================
+   Silhouettes with a thin rim light, never flat black shapes. The rim is what
+   puts a prop in the scene rather than on top of it.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   Cobwebs in the corners of the featured card
+   ------------------------------------------------------------------------- */
+
+/* The spider layer, in front of the card. */
+.rr-hw-featured-decor {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* The web layer, inside the card and under its badges. */
+.rr-hw-webs {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.rr-hw-web {
+  position: absolute;
+  width: clamp(88px, 13vw, 170px);
+  height: clamp(88px, 13vw, 170px);
+  overflow: visible;
+}
+
+/* Competition artwork is bright and busy, and fine silk simply vanishes into
+   it. A soft dark corner gives the web something to sit against — the same
+   trick a photographer uses to get a pale subject off a busy background. */
+.rr-hw-web::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.rr-hw-web--tl {
+  top: 0;
+  left: 0;
+}
+
+/* Mirrored rather than redrawn, so both corners sag the same way. */
+.rr-hw-web--tr {
+  top: 0;
+  right: 0;
+  transform: scaleX(-1);
+}
+
+/* The dark pass keeps the silk legible over bright competition artwork. */
+.rr-hw-web-shadow {
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  fill: none;
+}
+
+/* Spokes carry the web's weight and are visibly heavier than the spiral. One
+   stroke width for everything is part of what made it look drawn. */
+/* Dusty rather than white. Per-strand opacity is set inline from the web's
+   own seed, so these are the base colour the lighting varies. */
+.rr-hw-web-silk {
+  stroke: rgba(226, 221, 236, 0.9);
+  stroke-width: 1;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.rr-hw-web-silk--fine {
+  stroke: rgba(216, 211, 230, 0.75);
+  stroke-width: 0.6;
+}
+
+/* The scrim itself, behind both passes. */
+.rr-hw-web-scrim {
+  fill: rgba(5, 3, 10, 0.72);
+}
+
+/* -------------------------------------------------------------------------
+   The spider on its thread
+
+   Two nested animations: the whole thing swings from the anchor, and it also
+   creeps up and down the thread. One alone looks mechanical.
+   ------------------------------------------------------------------------- */
+
+.rr-hw-spider {
+  position: absolute;
+  top: 0;
+  left: clamp(18%, 22%, 26%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: 50% 0;
+  animation: rr-hw-swing 6.2s ease-in-out infinite;
+}
+
+.rr-hw-spider-thread {
+  display: block;
+  width: 1px;
+  height: clamp(40px, 6vw, 84px);
+  background: linear-gradient(
+    180deg,
+    rgba(228, 222, 238, 0.06),
+    rgba(228, 222, 238, 0.5)
+  );
+  /* The thread is one pixel wide; without this it disappears over artwork. */
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+.rr-hw-spider-body {
+  display: block;
+  width: clamp(58px, 6.5vw, 104px);
+  height: auto;
+  margin-top: -4px;
+  /* Grounds it against the artwork it hangs over. */
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.7));
+  animation: rr-hw-dangle 6.2s ease-in-out infinite;
+}
+
+@keyframes rr-hw-swing {
+  0%, 100% { transform: rotate(-3.4deg); }
+  50%      { transform: rotate(3.4deg); }
+}
+
+/* Creeping up and down its own thread. */
+@keyframes rr-hw-dangle {
+  0%, 100% { transform: translateY(0); }
+  35%      { transform: translateY(7px); }
+  70%      { transform: translateY(-4px); }
+}
+
+/* -------------------------------------------------------------------------
+   Bats
+   ------------------------------------------------------------------------- */
+
+.rr-hw-bats {
+  position: absolute;
+  /* Below the header: the flight path rises as well as falls, and a bat that
+     slides behind the header bar reads as a glitch rather than a bat. */
+  top: calc(var(--rr-header-h, 6rem) + 1.5rem);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rr-hw-bat {
+  position: absolute;
+  left: -14%;
+  width: clamp(38px, 4.4vw, 74px);
+  aspect-ratio: 1740 / 835;
+  transform: scale(var(--bat-scale, 1));
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: rr-hw-fly var(--bat-duration, 20s) linear infinite;
+  animation-delay: var(--bat-delay, 0s);
+}
+
+/* The three frames stack, and the beat is which one is showing. */
+.rr-hw-bat-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  animation-duration: var(--bat-flap, 0.42s);
+  animation-timing-function: steps(1, end);
+  animation-iteration-count: infinite;
+}
+
+/* down -> level -> up -> level, so level is passed through twice a beat. */
+.rr-hw-bat-frame--down { animation-name: rr-hw-beat-down; }
+.rr-hw-bat-frame--mid  { animation-name: rr-hw-beat-mid; }
+.rr-hw-bat-frame--up   { animation-name: rr-hw-beat-up; }
+
+@keyframes rr-hw-beat-down {
+  0%, 24.99%  { opacity: 1; }
+  25%, 100%   { opacity: 0; }
+}
+
+@keyframes rr-hw-beat-mid {
+  0%, 24.99%      { opacity: 0; }
+  25%, 49.99%     { opacity: 1; }
+  50%, 74.99%     { opacity: 0; }
+  75%, 100%       { opacity: 1; }
+}
+
+@keyframes rr-hw-beat-up {
+  0%, 49.99%   { opacity: 0; }
+  50%, 74.99%  { opacity: 1; }
+  75%, 100%    { opacity: 0; }
+}
+
+/* Crossing the sky, rising and dipping on the way. */
+@keyframes rr-hw-fly {
+  0%   { transform: translate3d(0, 0, 0) scale(var(--bat-scale, 1)); opacity: 0; }
+  6%   { opacity: 0.95; }
+  25%  { transform: translate3d(32vw, -6vh, 0) scale(var(--bat-scale, 1)); }
+  50%  { transform: translate3d(60vw, 3vh, 0) scale(var(--bat-scale, 1)); }
+  75%  { transform: translate3d(88vw, -5vh, 0) scale(var(--bat-scale, 1)); }
+  94%  { opacity: 0.95; }
+  100% { transform: translate3d(126vw, 2vh, 0) scale(var(--bat-scale, 1)); opacity: 0; }
+}
+
+/* -------------------------------------------------------------------------
+   Prop motion budget
+   ------------------------------------------------------------------------- */
+
+html.rr-motion-paused .rr-hw-spider,
+html.rr-motion-paused .rr-hw-spider-body,
+html.rr-motion-paused .rr-hw-bat,
+html.rr-motion-paused .rr-hw-bat-frame,
+html.rr-zoomed .rr-hw-spider,
+html.rr-zoomed .rr-hw-spider-body,
+html.rr-zoomed .rr-hw-bat,
+html.rr-zoomed .rr-hw-bat-frame {
+  animation-play-state: paused;
+}
+
+@media (max-width: 640px) {
+  /* One bat instead of three: the sky is a third of the width and three of
+     them crossing it at once is traffic, not atmosphere. */
+  .rr-hw-bat:nth-child(2),
+  .rr-hw-bat:nth-child(3) {
+    display: none;
+  }
+
+  /* The webs shrink with the card, but below this they cover the prize
+     artwork rather than framing it. */
+  .rr-hw-web {
+    width: 74px;
+    height: 74px;
+    opacity: 0.8;
+  }
+
+  .rr-hw-spider {
+    left: 20%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-hw-spider,
+  .rr-hw-spider-body,
+  .rr-hw-bat-frame {
+    animation: none !important;
+  }
+
+  /* With the beat stopped, show the level pose rather than nothing. */
+  .rr-hw-bat-frame--mid {
+    opacity: 1;
+  }
+
+  /* A bat that cannot fly is a bat sitting in the sky, so it goes entirely.
+     The spider stays: hanging still is what a real one does. */
+  .rr-hw-bats {
+    display: none;
+  }
+}
+
+
+/* =========================================================================
+   Cloud banks
+   =========================================================================
+   Parallax carries the depth: the high bank is thin and slow, the low one
+   heavy, dark and quick. Equal speeds would read as one sliding texture.
+   ========================================================================= */
+
+.rr-hw-clouds {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rr-hw-cloud {
+  position: absolute;
+  left: -55%;
+  width: 210%;
+  will-change: transform;
+}
+
+.rr-hw-cloud--high {
+  top: -4%;
+  height: 46%;
+  opacity: 0.62;
+  animation: rr-hw-cloud-drift 150s linear infinite;
+}
+
+.rr-hw-cloud--mid {
+  top: 14%;
+  height: 54%;
+  opacity: 0.8;
+  animation: rr-hw-cloud-drift 104s linear infinite;
+  animation-direction: reverse;
+}
+
+.rr-hw-cloud--low {
+  top: 46%;
+  height: 62%;
+  opacity: 0.9;
+  animation: rr-hw-cloud-drift 74s linear infinite;
+}
+
+@keyframes rr-hw-cloud-drift {
+  from { transform: translate3d(-6%, 0, 0); }
+  to   { transform: translate3d(6%, 0, 0); }
+}
+
+html.rr-motion-paused .rr-hw-cloud,
+html.rr-zoomed .rr-hw-cloud {
+  animation-play-state: paused;
+}
+
+@media (max-width: 640px) {
+  /* Two banks instead of three. Each one is a full-screen filter pass, and
+     that is the most expensive thing the season does on a phone. */
+  .rr-hw-cloud--mid {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-hw-cloud {
+    animation: none !important;
   }
 }

@@ -951,6 +951,10 @@ export const platformSettings = pgTable("platform_settings", {
   // Spins allowed from one IP per UK day; 0 disables the cap. Generous by
   // default because UK mobile networks share IPs across many customers.
   dailySpinIpLimit: integer("daily_spin_ip_limit").default(12),
+  // Which seasonal skin the public site wears: "off" (the normal theme),
+  // "auto" (follow the calendar), or a named season. Admin-controlled, so a
+  // season never appears without someone choosing it.
+  seasonalTheme: varchar("seasonal_theme").default("off"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { normaliseOverride, seasonClass, seasonFor } from "./season";
+import {
+  SEASON_SETTINGS,
+  normaliseOverride,
+  parseSeasonSetting,
+  seasonClass,
+  seasonFor,
+  seasonFromSetting,
+} from "@shared/season";
 
 const on = (iso: string) => new Date(`${iso}T12:00:00`);
 
@@ -80,5 +87,48 @@ describe("seasonClass", () => {
 
   it("is empty with no season, so nothing is added to <html>", () => {
     expect(seasonClass(null)).toBe("");
+  });
+});
+
+describe("parseSeasonSetting", () => {
+  it("accepts every value the admin panel offers", () => {
+    for (const value of SEASON_SETTINGS) {
+      expect(parseSeasonSetting(value)).toBe(value);
+    }
+  });
+
+  it("refuses anything else, so only known values reach a class name", () => {
+    expect(parseSeasonSetting("easter")).toBeNull();
+    expect(parseSeasonSetting("<script>")).toBeNull();
+    expect(parseSeasonSetting("")).toBeNull();
+    expect(parseSeasonSetting(null)).toBeNull();
+    expect(parseSeasonSetting(undefined)).toBeNull();
+    expect(parseSeasonSetting(42)).toBeNull();
+    expect(parseSeasonSetting({})).toBeNull();
+  });
+
+  it("tolerates casing and stray whitespace from a form", () => {
+    expect(parseSeasonSetting(" Halloween ")).toBe("halloween");
+    expect(parseSeasonSetting("OFF")).toBe("off");
+  });
+});
+
+describe("seasonFromSetting", () => {
+  const march = new Date("2026-03-15T12:00:00");
+  const october = new Date("2026-10-15T12:00:00");
+
+  it("shows the normal site by default", () => {
+    expect(seasonFromSetting("off", october)).toBeNull();
+  });
+
+  it("holds a chosen season even out of its window", () => {
+    // The panel is the authority: a season stays until someone changes it.
+    expect(seasonFromSetting("halloween", march)).toBe("halloween");
+    expect(seasonFromSetting("christmas", march)).toBe("christmas");
+  });
+
+  it("only consults the calendar on automatic", () => {
+    expect(seasonFromSetting("auto", october)).toBe("halloween");
+    expect(seasonFromSetting("auto", march)).toBeNull();
   });
 });

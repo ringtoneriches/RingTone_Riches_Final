@@ -1,16 +1,56 @@
 /**
  * Which seasonal skin the site is wearing.
  *
- * The owner wants the look to follow the calendar, so this decides it from the
- * date rather than anyone remembering to flip a switch. Kept pure and free of
- * React so the windows are covered by tests — getting these wrong means the
- * site is dressed for Halloween in March.
+ * Shared because the server decides this now — an admin picks the season in
+ * the panel and every visitor gets the same answer — while the client still
+ * needs the class names and the preview override. Both sides reading one file
+ * is what stops them drifting apart.
+ *
+ * Kept pure and free of React so the windows are covered by tests: getting
+ * these wrong means the site is dressed for Halloween in March.
  *
  * A season is a closed range of calendar days, compared without years so the
  * same window works every year. Ranges that cross new year are supported.
  */
 
 export type Season = "halloween" | "christmas";
+
+/**
+ * What the admin panel stores. "off" is the default and means the normal
+ * site; "auto" follows the calendar windows below, so a season arrives on its
+ * own next year without anyone remembering.
+ */
+export type SeasonSetting = "off" | "auto" | Season;
+
+export const SEASON_SETTINGS: SeasonSetting[] = ["off", "auto", "halloween", "christmas"];
+
+/** Labels for the admin panel, kept next to the values they describe. */
+export const SEASON_SETTING_LABELS: Record<SeasonSetting, string> = {
+  off: "Default theme",
+  auto: "Automatic (follow the calendar)",
+  halloween: "Halloween",
+  christmas: "Christmas",
+};
+
+/** Narrows anything stored or posted to a setting we actually support. */
+export function parseSeasonSetting(value: unknown): SeasonSetting | null {
+  const candidate = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return (SEASON_SETTINGS as string[]).includes(candidate)
+    ? (candidate as SeasonSetting)
+    : null;
+}
+
+/**
+ * The season an admin's choice produces on a given date.
+ *
+ * Only "auto" consults the calendar. A named season stays on until someone
+ * changes it, which is what makes the panel the authority rather than a hint.
+ */
+export function seasonFromSetting(setting: SeasonSetting, date: Date): Season | null {
+  if (setting === "off") return null;
+  if (setting === "auto") return seasonFor(date);
+  return setting;
+}
 
 type SeasonWindow = {
   season: Season;
