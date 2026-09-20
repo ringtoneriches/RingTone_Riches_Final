@@ -1,0 +1,24 @@
+halloween-moon.webp
+===================
+
+The Moon's near side, rendered from NASA's CGI Moon Kit.
+
+Source:  NASA Scientific Visualization Studio, "CGI Moon Kit"
+         https://svs.gsfc.nasa.gov/4720
+File:    lroc_color_2k.jpg (2048x1024 equirectangular colour map), built by
+         the LRO camera team from over 100,000 Wide Angle Camera images.
+
+Credit line NASA asks for:
+         "NASA's Scientific Visualization Studio"
+
+Licence: NASA media is generally not subject to copyright in the United
+         States and may be used for commercial purposes, provided the use
+         does not imply NASA endorsement of a product or service. We use it
+         only as scenery for a seasonal theme, which does not.
+         https://www.nasa.gov/nasa-brand-center/images-and-media/
+
+What we changed:
+         Projected orthographically from the equirectangular map onto a disc
+         (the map is the whole sphere unrolled and cannot be laid on a circle
+         without smearing the poles), given a gentle limb fall-off, warmed
+         very slightly, feathered at the edge, and saved as WebP with alpha.
