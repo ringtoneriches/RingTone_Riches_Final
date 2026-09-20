@@ -1,0 +1,27 @@
+halloween-spider.webp
+halloween-bat-down.webp / halloween-bat-mid.webp / halloween-bat-up.webp
+==========================================================================
+
+Supplied by the site owner as generated stills on a plain white background.
+
+What we did to them:
+
+  Background removed by flood-filling from the image border rather than
+  keying white globally. The bat wing membranes are translucent and nearly
+  white in places, and a global key punches holes straight through them;
+  filling only from the edge removes background that touches the border and
+  leaves light pixels inside the subject alone.
+
+  The three bat frames were cropped to ONE shared bounding box, not trimmed
+  individually. Trimming each to its own edges puts the body in a different
+  place in every frame, and the bat then jumps around inside its own wingbeat.
+
+  Graded for moonlight: brightness and warmth pulled back and a cool cast
+  added, so they read as animals at night rather than studio cut-outs. Not
+  pushed to silhouette, because the wing membrane detail is the whole reason
+  a photograph beats a drawing here.
+
+  Spider thread cropped off the top; the page draws its own, so it can be any
+  length.
+
+Sizes: spider 340px wide, bats 420px wide. Between 7 KB and 35 KB each.

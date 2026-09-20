@@ -555,7 +555,7 @@ html.rr-zoomed .rr-hw-moon {
 .rr-hw-spider-thread {
   display: block;
   width: 1px;
-  height: clamp(46px, 7vw, 92px);
+  height: clamp(40px, 6vw, 84px);
   background: linear-gradient(
     180deg,
     rgba(228, 222, 238, 0.06),
@@ -566,52 +566,13 @@ html.rr-zoomed .rr-hw-moon {
 }
 
 .rr-hw-spider-body {
-  width: clamp(44px, 5vw, 68px);
+  display: block;
+  width: clamp(58px, 6.5vw, 104px);
   height: auto;
-  margin-top: -2px;
-  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.75));
+  margin-top: -4px;
+  /* Grounds it against the artwork it hangs over. */
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.7));
   animation: rr-hw-dangle 6.2s ease-in-out infinite;
-}
-
-.rr-hw-spider-head,
-.rr-hw-spider-abdomen {
-  fill: #0a0710;
-  /* A brighter rim than the bats get: the spider hangs over prize artwork
-     rather than the night sky, so it needs more help to read as a shape. */
-  stroke: rgba(214, 206, 230, 0.75);
-  stroke-width: 1;
-}
-
-.rr-hw-spider-legs path {
-  stroke-linecap: round;
-  fill: none;
-  /* Legs flex on their own, slower beat than the swing. */
-  transform-origin: 50% 40%;
-  animation: rr-hw-legs 2.9s ease-in-out infinite;
-}
-
-.rr-hw-spider-legs--dark path {
-  stroke: #07050b;
-  stroke-width: 4.4;
-}
-
-.rr-hw-spider-legs--rim path {
-  stroke: rgba(206, 198, 224, 0.62);
-  stroke-width: 1.3;
-}
-
-.rr-hw-spider-body {
-  overflow: visible;
-}
-
-/* A second, lighter stroke would double the node count; a rim on the body
-   alone is enough to lift the whole shape off the artwork. */
-.rr-hw-spider-eye {
-  fill: var(--hw-blood-hot, #ff263d);
-  /* The one genuinely sinister detail. Small enough to be a reward for
-     looking rather than the first thing anyone sees. */
-  filter: drop-shadow(0 0 3px rgba(255, 38, 61, 0.9));
-  animation: rr-hw-eyes 5.4s ease-in-out infinite;
 }
 
 @keyframes rr-hw-swing {
@@ -624,16 +585,6 @@ html.rr-zoomed .rr-hw-moon {
   0%, 100% { transform: translateY(0); }
   35%      { transform: translateY(7px); }
   70%      { transform: translateY(-4px); }
-}
-
-@keyframes rr-hw-legs {
-  0%, 100% { transform: scaleY(1); }
-  50%      { transform: scaleY(0.9) scaleX(1.03); }
-}
-
-@keyframes rr-hw-eyes {
-  0%, 92%, 100% { opacity: 1; }
-  95%           { opacity: 0.25; }
 }
 
 /* -------------------------------------------------------------------------
@@ -654,8 +605,9 @@ html.rr-zoomed .rr-hw-moon {
 
 .rr-hw-bat {
   position: absolute;
-  left: -12%;
-  width: clamp(26px, 3vw, 46px);
+  left: -14%;
+  width: clamp(38px, 4.4vw, 74px);
+  aspect-ratio: 1740 / 835;
   transform: scale(var(--bat-scale, 1));
   opacity: 0;
   will-change: transform, opacity;
@@ -663,45 +615,51 @@ html.rr-zoomed .rr-hw-moon {
   animation-delay: var(--bat-delay, 0s);
 }
 
-.rr-hw-bat svg {
+/* The three frames stack, and the beat is which one is showing. */
+.rr-hw-bat-frame {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: auto;
-  display: block;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  animation-duration: var(--bat-flap, 0.42s);
+  animation-timing-function: steps(1, end);
+  animation-iteration-count: infinite;
 }
 
-.rr-hw-bat-body,
-.rr-hw-bat-wing path {
-  fill: #07050c;
-  stroke: rgba(180, 168, 205, 0.33);
-  stroke-width: 0.7;
+/* down -> level -> up -> level, so level is passed through twice a beat. */
+.rr-hw-bat-frame--down { animation-name: rr-hw-beat-down; }
+.rr-hw-bat-frame--mid  { animation-name: rr-hw-beat-mid; }
+.rr-hw-bat-frame--up   { animation-name: rr-hw-beat-up; }
+
+@keyframes rr-hw-beat-down {
+  0%, 24.99%  { opacity: 1; }
+  25%, 100%   { opacity: 0; }
 }
 
-/* Each wing pivots at the body rather than the middle of its own box, which
-   is what stops the flap looking like a flickering image. */
-.rr-hw-bat-wing {
-  transform-origin: 40px 20px;
-  animation: rr-hw-flap var(--bat-flap, 0.4s) ease-in-out infinite;
+@keyframes rr-hw-beat-mid {
+  0%, 24.99%      { opacity: 0; }
+  25%, 49.99%     { opacity: 1; }
+  50%, 74.99%     { opacity: 0; }
+  75%, 100%       { opacity: 1; }
 }
 
-.rr-hw-bat-wing--r {
-  /* Half a beat out, so the two wings never sit perfectly flat together. */
-  animation-delay: calc(var(--bat-flap, 0.4s) / -12);
-}
-
-@keyframes rr-hw-flap {
-  0%, 100% { transform: scaleY(1) translateY(0); }
-  50%      { transform: scaleY(0.24) translateY(3px); }
+@keyframes rr-hw-beat-up {
+  0%, 49.99%   { opacity: 0; }
+  50%, 74.99%  { opacity: 1; }
+  75%, 100%    { opacity: 0; }
 }
 
 /* Crossing the sky, rising and dipping on the way. */
 @keyframes rr-hw-fly {
   0%   { transform: translate3d(0, 0, 0) scale(var(--bat-scale, 1)); opacity: 0; }
-  6%   { opacity: 0.9; }
+  6%   { opacity: 0.95; }
   25%  { transform: translate3d(32vw, -6vh, 0) scale(var(--bat-scale, 1)); }
   50%  { transform: translate3d(60vw, 3vh, 0) scale(var(--bat-scale, 1)); }
   75%  { transform: translate3d(88vw, -5vh, 0) scale(var(--bat-scale, 1)); }
-  94%  { opacity: 0.9; }
-  100% { transform: translate3d(124vw, 2vh, 0) scale(var(--bat-scale, 1)); opacity: 0; }
+  94%  { opacity: 0.95; }
+  100% { transform: translate3d(126vw, 2vh, 0) scale(var(--bat-scale, 1)); opacity: 0; }
 }
 
 /* -------------------------------------------------------------------------
@@ -710,13 +668,12 @@ html.rr-zoomed .rr-hw-moon {
 
 html.rr-motion-paused .rr-hw-spider,
 html.rr-motion-paused .rr-hw-spider-body,
-html.rr-motion-paused .rr-hw-spider-legs path,
 html.rr-motion-paused .rr-hw-bat,
-html.rr-motion-paused .rr-hw-bat-wing,
+html.rr-motion-paused .rr-hw-bat-frame,
 html.rr-zoomed .rr-hw-spider,
 html.rr-zoomed .rr-hw-spider-body,
 html.rr-zoomed .rr-hw-bat,
-html.rr-zoomed .rr-hw-bat-wing {
+html.rr-zoomed .rr-hw-bat-frame {
   animation-play-state: paused;
 }
 
@@ -744,10 +701,13 @@ html.rr-zoomed .rr-hw-bat-wing {
 @media (prefers-reduced-motion: reduce) {
   .rr-hw-spider,
   .rr-hw-spider-body,
-  .rr-hw-spider-legs path,
-  .rr-hw-spider-eye,
-  .rr-hw-bat-wing {
+  .rr-hw-bat-frame {
     animation: none !important;
+  }
+
+  /* With the beat stopped, show the level pose rather than nothing. */
+  .rr-hw-bat-frame--mid {
+    opacity: 1;
   }
 
   /* A bat that cannot fly is a bat sitting in the sky, so it goes entirely.
