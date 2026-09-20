@@ -116,7 +116,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen text-foreground relative overflow-x-clip" style={{ backgroundColor: "#050505" }}>
-      <DigitalAtmosphere className="rr-atmosphere--page" />
+      <DigitalAtmosphere className="rr-atmosphere--page" seasonal />
       <div className="relative z-10">
       <Header />
       <BrandIntro />

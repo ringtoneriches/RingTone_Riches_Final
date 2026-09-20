@@ -1,0 +1,786 @@
+/* =========================================================================
+   Halloween season skin
+   =========================================================================
+
+   Everything here hangs off html.rr-season-halloween, so the site returns to
+   normal by removing one class — no page keeps a seasonal remnant behind.
+
+   The approach is a tilt of the existing brand rather than a costume over it.
+   Ringtone Riches is already near-black, crimson and gold, which is most of a
+   Halloween palette; what it lacks is the plum ambient and the ember warmth.
+   So gold moves toward ember orange, a deep violet is laid under the page,
+   and fog and embers are added to the atmosphere that is already there.
+
+   Deliberately absent: skulls, cobwebs, bats, novelty fonts. They read as
+   decoration stuck on top of a product. The palette does the work instead,
+   which is how the platforms that do this well handle October.
+
+   Every animation here is slow and low-contrast on purpose. This sits behind
+   a shop; it must never compete with the prizes for attention.
+   ========================================================================= */
+
+html.rr-season-halloween {
+  /* The season's palette, as a tilt of the house colours. */
+  --hw-void: #07060a;           /* near-black, faint violet cast (house: #050505) */
+  --hw-plum: #17091f;           /* the ambient that makes it read Halloween */
+  --hw-violet: #34164f;
+  --hw-ember: #ff8a1f;          /* stands in for gold on most surfaces */
+  --hw-ember-soft: #ffb65c;
+  --hw-blood: #c8102e;          /* unchanged house crimson */
+  --hw-blood-hot: #ff263d;
+  --hw-bone: #f6eedc;           /* slightly cooler than the house ivory */
+  --hw-moon: #cfd9ff;           /* the one cold colour, used only for moonlight */
+
+  /* Gold is kept for genuinely valuable things — prize amounts, VIP — so the
+     season never cheapens what the site is actually selling. */
+  --hw-gold: #f1d47a;
+}
+
+/* -------------------------------------------------------------------------
+   Atmosphere
+   The page already renders .rr-atmosphere-*; these restyle those same layers
+   rather than adding more, so the cost of the season is close to zero.
+   ------------------------------------------------------------------------- */
+
+html.rr-season-halloween .rr-atmosphere-base {
+  background:
+    /* moonlight, high and to the right */
+    radial-gradient(ellipse 45% 35% at 82% 6%, rgba(207, 217, 255, 0.10), transparent 62%),
+    /* the plum that carries the season */
+    radial-gradient(ellipse 85% 55% at 15% 18%, rgba(52, 22, 79, 0.55), transparent 65%),
+    radial-gradient(ellipse 70% 50% at 88% 72%, rgba(120, 30, 12, 0.22), transparent 60%),
+    /* embers pooling at the foot of the page */
+    radial-gradient(ellipse 60% 38% at 50% 100%, rgba(255, 138, 31, 0.16), transparent 62%),
+    linear-gradient(180deg, var(--hw-void) 0%, var(--hw-plum) 48%, var(--hw-void) 100%);
+}
+
+/* The grid reads as iron railings rather than a tech lattice once it is plum. */
+html.rr-season-halloween .rr-atmosphere-grid {
+  opacity: 0.05;
+  background-image:
+    linear-gradient(rgba(124, 58, 172, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 58, 172, 0.3) 1px, transparent 1px);
+}
+
+html.rr-season-halloween .rr-atmosphere-streaks {
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0px,
+    transparent 90px,
+    rgba(255, 138, 31, 0.05) 91px,
+    transparent 93px
+  );
+}
+
+/* The floating motes warm from gold to ember. */
+html.rr-season-halloween .rr-atmosphere-gold {
+  background: rgba(255, 138, 31, 0.6);
+  box-shadow: 0 0 6px rgba(255, 138, 31, 0.45);
+}
+
+/* -------------------------------------------------------------------------
+   Fog
+   Two very large, very soft bands drifting at different speeds. The offset
+   speeds are what stop it looking like one sliding texture.
+   ------------------------------------------------------------------------- */
+
+.rr-hw-fog {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rr-hw-fog span {
+  position: absolute;
+  left: -60%;
+  width: 220%;
+  height: 46%;
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 50%,
+    rgba(168, 134, 214, 0.22),
+    rgba(120, 90, 160, 0.09) 45%,
+    transparent 70%
+  );
+  filter: blur(46px);
+  will-change: transform;
+}
+
+.rr-hw-fog span:nth-child(1) {
+  top: 4%;
+  animation: rr-hw-drift 64s linear infinite;
+}
+
+.rr-hw-fog span:nth-child(2) {
+  top: 42%;
+  opacity: 0.75;
+  animation: rr-hw-drift 92s linear infinite reverse;
+}
+
+.rr-hw-fog span:nth-child(3) {
+  top: 72%;
+  opacity: 0.55;
+  /* Warmer down here, where the embers are. */
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 50%,
+    rgba(255, 150, 45, 0.15),
+    transparent 68%
+  );
+  animation: rr-hw-drift 78s linear infinite;
+}
+
+@keyframes rr-hw-drift {
+  from { transform: translate3d(-8%, 0, 0); }
+  to   { transform: translate3d(8%, 0, 0); }
+}
+
+/* -------------------------------------------------------------------------
+   Embers
+   Rising, not falling. Falling particles read as snow and would be the wrong
+   season; rising ones read as a fire somewhere off-screen.
+   ------------------------------------------------------------------------- */
+
+.rr-hw-embers {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rr-hw-ember {
+  position: absolute;
+  bottom: -6vh;
+  left: var(--ember-x, 50%);
+  width: var(--ember-size, 3px);
+  height: var(--ember-size, 3px);
+  border-radius: 999px;
+  background: var(--hw-ember-soft, #ffb65c);
+  box-shadow:
+    0 0 8px rgba(255, 160, 60, 1),
+    0 0 20px rgba(255, 110, 20, 0.6),
+    0 0 34px rgba(255, 80, 10, 0.3);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: rr-hw-rise var(--ember-duration, 17s) linear infinite;
+  animation-delay: var(--ember-delay, 0s);
+}
+
+/* A few drift the other way, so the field never looks like one column. */
+.rr-hw-ember--sway {
+  animation-name: rr-hw-rise-sway;
+}
+
+@keyframes rr-hw-rise {
+  0%   { transform: translate3d(0, 0, 0) scale(0.6); opacity: 0; }
+  12%  { opacity: 0.85; }
+  70%  { opacity: 0.5; }
+  100% { transform: translate3d(2vw, -108vh, 0) scale(1); opacity: 0; }
+}
+
+@keyframes rr-hw-rise-sway {
+  0%   { transform: translate3d(0, 0, 0) scale(0.5); opacity: 0; }
+  15%  { opacity: 0.7; }
+  50%  { transform: translate3d(-3vw, -54vh, 0) scale(0.9); opacity: 0.6; }
+  100% { transform: translate3d(1vw, -108vh, 0) scale(0.7); opacity: 0; }
+}
+
+/* -------------------------------------------------------------------------
+   Moon
+   One cold light source, so the warm palette has something to sit against.
+   ------------------------------------------------------------------------- */
+
+.rr-hw-moon {
+  position: absolute;
+  /* Clear of the header. Any higher and the top of it is cut off by the
+     header bar, which reads as a rendering fault rather than a moon. */
+  top: clamp(7.5rem, 17vh, 12rem);
+  right: clamp(1.5rem, 7vw, 7rem);
+  width: clamp(104px, 12vw, 182px);
+  height: clamp(104px, 12vw, 182px);
+  pointer-events: none;
+  animation: rr-hw-moon-breathe 14s ease-in-out infinite;
+}
+
+/* The disc is a photograph; the halo around it is the only part still drawn,
+   because a real moon photographed against black has no atmosphere to glow
+   into and the page needs the light to reach the sky. */
+/* The moon and the cloud crossing it share one box so the cloud stays put
+   against the disc however the moon is sized. */
+.rr-hw-moon-stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* The cloud that eats into the disc. Sized beyond the moon so its torn edge
+   is never cut off by the element's own bounds. */
+.rr-hw-moon-shroud {
+  position: absolute;
+  left: -22%;
+  top: -22%;
+  width: 144%;
+  height: 144%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.rr-hw-moon-shroud-drift {
+  animation: rr-hw-shroud-drift 46s ease-in-out infinite;
+}
+
+/* Coverage breathes between roughly half and two thirds of the disc. */
+@keyframes rr-hw-shroud-drift {
+  0%, 100% { transform: translate(-4%, 2%); }
+  50%      { transform: translate(7%, -5%); }
+}
+
+html.rr-motion-paused .rr-hw-moon-shroud-drift,
+html.rr-zoomed .rr-hw-moon-shroud-drift {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-hw-moon-shroud-drift {
+    animation: none !important;
+  }
+}
+
+.rr-hw-moon-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter:
+    drop-shadow(0 0 24px rgba(255, 246, 220, 0.4))
+    drop-shadow(0 0 64px rgba(255, 196, 120, 0.26))
+    drop-shadow(0 0 140px rgba(255, 150, 60, 0.14));
+}
+
+@keyframes rr-hw-moon-breathe {
+  0%, 100% { opacity: 0.88; }
+  50%      { opacity: 1; }
+}
+
+/* A vignette pulls the corners down so the moon reads as the brightest thing
+   on the page and the prizes sit in the pool of light below it. */
+.rr-hw-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 90% 70% at 50% 42%,
+    transparent 40%,
+    rgba(3, 2, 6, 0.45) 82%,
+    rgba(3, 2, 6, 0.7) 100%
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Hero
+   ------------------------------------------------------------------------- */
+
+html.rr-season-halloween .rr-brand-kicker {
+  color: var(--hw-ember);
+  text-shadow: 0 0 18px rgba(255, 138, 31, 0.35);
+}
+
+/* Ember gradient in place of the gold one, same glide animation.
+   The clip and transparent colour have to be restated: `background` is a
+   shorthand and resets background-clip to border-box, which turns the
+   headline into a solid orange bar instead of gradient-filled letters. */
+html.rr-season-halloween .rr-brand-title > span:not(.rr-brand-title-lead) {
+  background: linear-gradient(
+    90deg,
+    var(--hw-ember) 0%,
+    #ffd9a0 26%,
+    var(--hw-blood-hot) 56%,
+    var(--hw-ember) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html.rr-season-halloween .rr-brand-title-lead {
+  color: var(--hw-bone);
+  /* Candlelight, not a strobe: shallow, slow and irregular. */
+  animation: rr-hw-candle 6.5s ease-in-out infinite;
+}
+
+@keyframes rr-hw-candle {
+  0%, 100%      { opacity: 1;    text-shadow: 0 0 22px rgba(255, 138, 31, 0.16); }
+  41%           { opacity: 1;    text-shadow: 0 0 22px rgba(255, 138, 31, 0.16); }
+  44%           { opacity: 0.93; text-shadow: 0 0 10px rgba(255, 138, 31, 0.10); }
+  47%           { opacity: 1;    text-shadow: 0 0 26px rgba(255, 138, 31, 0.22); }
+  73%           { opacity: 1;    text-shadow: 0 0 22px rgba(255, 138, 31, 0.16); }
+  76%           { opacity: 0.95; text-shadow: 0 0 12px rgba(255, 138, 31, 0.12); }
+  79%           { opacity: 1;    text-shadow: 0 0 22px rgba(255, 138, 31, 0.16); }
+}
+
+/* The seasonal line under the hero. */
+.rr-hw-tagline {
+  margin: 0.7rem auto 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 138, 31, 0.3);
+  background: rgba(255, 138, 31, 0.08);
+  padding: 0.3rem 0.85rem;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--hw-ember-soft);
+}
+
+.rr-hw-tagline::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--hw-ember);
+  box-shadow: 0 0 10px rgba(255, 138, 31, 0.9);
+  animation: rr-hw-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes rr-hw-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
+
+/* -------------------------------------------------------------------------
+   Chrome: filters, headings, cards
+   Small shifts only. The layout does not move, so nothing has to be relearned.
+   ------------------------------------------------------------------------- */
+
+html.rr-season-halloween .rr-filter-chip.is-active {
+  border-color: rgba(255, 138, 31, 0.55);
+  background: linear-gradient(180deg, rgba(255, 138, 31, 0.2), rgba(255, 138, 31, 0.07));
+  color: var(--hw-bone);
+  box-shadow: 0 0 22px rgba(255, 138, 31, 0.2);
+}
+
+html.rr-season-halloween .rr-filter-chip.is-active .rr-filter-icon,
+html.rr-season-halloween .rr-filter-chip.is-active .rr-filter-count {
+  color: var(--hw-ember-soft);
+}
+
+html.rr-season-halloween .rr-filter-chip:hover {
+  border-color: rgba(255, 138, 31, 0.32);
+}
+
+/* The section heading gets the same ember underlight as the hero. */
+html.rr-season-halloween #competitions h2 {
+  text-shadow: 0 0 30px rgba(255, 138, 31, 0.18);
+}
+
+/* Cards lift with ember rather than gold. */
+html.rr-season-halloween .rr-comp-card:hover {
+  box-shadow: 0 18px 50px -20px rgba(255, 138, 31, 0.32);
+}
+
+/* -------------------------------------------------------------------------
+   Motion budget
+   The site already pauses its ambience when the tab is hidden or the user has
+   zoomed in. The season has to honour the same rules or it becomes the one
+   thing still animating in a backgrounded tab.
+   ------------------------------------------------------------------------- */
+
+html.rr-motion-paused .rr-hw-fog span,
+html.rr-motion-paused .rr-hw-ember,
+html.rr-motion-paused .rr-hw-moon,
+html.rr-zoomed .rr-hw-fog span,
+html.rr-zoomed .rr-hw-ember,
+html.rr-zoomed .rr-hw-moon {
+  animation-play-state: paused;
+}
+
+/* Phones carry the palette but not the particle field: it is the part with a
+   real battery cost, and the smallest screens are where it reads least. */
+@media (max-width: 640px) {
+  .rr-hw-embers {
+    display: none;
+  }
+
+  .rr-hw-fog span:nth-child(3) {
+    display: none;
+  }
+
+  /* The headline runs nearly the full width on a phone, and the theme toggle
+     sits in the same corner. At the desktop size and offset the moon lands
+     behind the word BECOME — bone text on a pale disc, which does not read —
+     and under the toggle. Smaller, tighter into the corner and dropped below
+     the toggle clears both. */
+  .rr-hw-moon {
+    top: 9.5rem;
+    right: 0.625rem;
+    width: 72px;
+    height: 72px;
+  }
+}
+
+/* Between the phone and the desktop layout the headline still reaches far
+   enough right to touch the moon, so hold it in the corner a little longer. */
+@media (min-width: 641px) and (max-width: 900px) {
+  .rr-hw-moon {
+    right: 1rem;
+    width: 96px;
+    height: 96px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-hw-fog span,
+  .rr-hw-ember,
+  .rr-hw-moon,
+  html.rr-season-halloween .rr-brand-title-lead,
+  .rr-hw-tagline::before {
+    animation: none !important;
+  }
+
+  /* The embers exist only as motion, so with motion off they are just dots. */
+  .rr-hw-embers {
+    display: none;
+  }
+
+  .rr-hw-moon {
+    opacity: 0.45;
+  }
+}
+
+/* =========================================================================
+   Props: cobwebs, spider, bats
+   =========================================================================
+   Silhouettes with a thin rim light, never flat black shapes. The rim is what
+   puts a prop in the scene rather than on top of it.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   Cobwebs in the corners of the featured card
+   ------------------------------------------------------------------------- */
+
+/* The spider layer, in front of the card. */
+.rr-hw-featured-decor {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* The web layer, inside the card and under its badges. */
+.rr-hw-webs {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.rr-hw-web {
+  position: absolute;
+  width: clamp(88px, 13vw, 170px);
+  height: clamp(88px, 13vw, 170px);
+  overflow: visible;
+}
+
+/* Competition artwork is bright and busy, and fine silk simply vanishes into
+   it. A soft dark corner gives the web something to sit against — the same
+   trick a photographer uses to get a pale subject off a busy background. */
+.rr-hw-web::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.rr-hw-web--tl {
+  top: 0;
+  left: 0;
+}
+
+/* Mirrored rather than redrawn, so both corners sag the same way. */
+.rr-hw-web--tr {
+  top: 0;
+  right: 0;
+  transform: scaleX(-1);
+}
+
+/* The dark pass keeps the silk legible over bright competition artwork. */
+.rr-hw-web-shadow {
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  fill: none;
+}
+
+/* Spokes carry the web's weight and are visibly heavier than the spiral. One
+   stroke width for everything is part of what made it look drawn. */
+/* Dusty rather than white. Per-strand opacity is set inline from the web's
+   own seed, so these are the base colour the lighting varies. */
+.rr-hw-web-silk {
+  stroke: rgba(226, 221, 236, 0.9);
+  stroke-width: 1;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.rr-hw-web-silk--fine {
+  stroke: rgba(216, 211, 230, 0.75);
+  stroke-width: 0.6;
+}
+
+/* The scrim itself, behind both passes. */
+.rr-hw-web-scrim {
+  fill: rgba(5, 3, 10, 0.72);
+}
+
+/* -------------------------------------------------------------------------
+   The spider on its thread
+
+   Two nested animations: the whole thing swings from the anchor, and it also
+   creeps up and down the thread. One alone looks mechanical.
+   ------------------------------------------------------------------------- */
+
+.rr-hw-spider {
+  position: absolute;
+  top: 0;
+  left: clamp(18%, 22%, 26%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: 50% 0;
+  animation: rr-hw-swing 6.2s ease-in-out infinite;
+}
+
+.rr-hw-spider-thread {
+  display: block;
+  width: 1px;
+  height: clamp(40px, 6vw, 84px);
+  background: linear-gradient(
+    180deg,
+    rgba(228, 222, 238, 0.06),
+    rgba(228, 222, 238, 0.5)
+  );
+  /* The thread is one pixel wide; without this it disappears over artwork. */
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+.rr-hw-spider-body {
+  display: block;
+  width: clamp(58px, 6.5vw, 104px);
+  height: auto;
+  margin-top: -4px;
+  /* Grounds it against the artwork it hangs over. */
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.7));
+  animation: rr-hw-dangle 6.2s ease-in-out infinite;
+}
+
+@keyframes rr-hw-swing {
+  0%, 100% { transform: rotate(-3.4deg); }
+  50%      { transform: rotate(3.4deg); }
+}
+
+/* Creeping up and down its own thread. */
+@keyframes rr-hw-dangle {
+  0%, 100% { transform: translateY(0); }
+  35%      { transform: translateY(7px); }
+  70%      { transform: translateY(-4px); }
+}
+
+/* -------------------------------------------------------------------------
+   Bats
+   ------------------------------------------------------------------------- */
+
+.rr-hw-bats {
+  position: absolute;
+  /* Below the header: the flight path rises as well as falls, and a bat that
+     slides behind the header bar reads as a glitch rather than a bat. */
+  top: calc(var(--rr-header-h, 6rem) + 1.5rem);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rr-hw-bat {
+  position: absolute;
+  left: -14%;
+  width: clamp(38px, 4.4vw, 74px);
+  aspect-ratio: 1740 / 835;
+  transform: scale(var(--bat-scale, 1));
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: rr-hw-fly var(--bat-duration, 20s) linear infinite;
+  animation-delay: var(--bat-delay, 0s);
+}
+
+/* The three frames stack, and the beat is which one is showing. */
+.rr-hw-bat-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  animation-duration: var(--bat-flap, 0.42s);
+  animation-timing-function: steps(1, end);
+  animation-iteration-count: infinite;
+}
+
+/* down -> level -> up -> level, so level is passed through twice a beat. */
+.rr-hw-bat-frame--down { animation-name: rr-hw-beat-down; }
+.rr-hw-bat-frame--mid  { animation-name: rr-hw-beat-mid; }
+.rr-hw-bat-frame--up   { animation-name: rr-hw-beat-up; }
+
+@keyframes rr-hw-beat-down {
+  0%, 24.99%  { opacity: 1; }
+  25%, 100%   { opacity: 0; }
+}
+
+@keyframes rr-hw-beat-mid {
+  0%, 24.99%      { opacity: 0; }
+  25%, 49.99%     { opacity: 1; }
+  50%, 74.99%     { opacity: 0; }
+  75%, 100%       { opacity: 1; }
+}
+
+@keyframes rr-hw-beat-up {
+  0%, 49.99%   { opacity: 0; }
+  50%, 74.99%  { opacity: 1; }
+  75%, 100%    { opacity: 0; }
+}
+
+/* Crossing the sky, rising and dipping on the way. */
+@keyframes rr-hw-fly {
+  0%   { transform: translate3d(0, 0, 0) scale(var(--bat-scale, 1)); opacity: 0; }
+  6%   { opacity: 0.95; }
+  25%  { transform: translate3d(32vw, -6vh, 0) scale(var(--bat-scale, 1)); }
+  50%  { transform: translate3d(60vw, 3vh, 0) scale(var(--bat-scale, 1)); }
+  75%  { transform: translate3d(88vw, -5vh, 0) scale(var(--bat-scale, 1)); }
+  94%  { opacity: 0.95; }
+  100% { transform: translate3d(126vw, 2vh, 0) scale(var(--bat-scale, 1)); opacity: 0; }
+}
+
+/* -------------------------------------------------------------------------
+   Prop motion budget
+   ------------------------------------------------------------------------- */
+
+html.rr-motion-paused .rr-hw-spider,
+html.rr-motion-paused .rr-hw-spider-body,
+html.rr-motion-paused .rr-hw-bat,
+html.rr-motion-paused .rr-hw-bat-frame,
+html.rr-zoomed .rr-hw-spider,
+html.rr-zoomed .rr-hw-spider-body,
+html.rr-zoomed .rr-hw-bat,
+html.rr-zoomed .rr-hw-bat-frame {
+  animation-play-state: paused;
+}
+
+@media (max-width: 640px) {
+  /* One bat instead of three: the sky is a third of the width and three of
+     them crossing it at once is traffic, not atmosphere. */
+  .rr-hw-bat:nth-child(2),
+  .rr-hw-bat:nth-child(3) {
+    display: none;
+  }
+
+  /* The webs shrink with the card, but below this they cover the prize
+     artwork rather than framing it. */
+  .rr-hw-web {
+    width: 74px;
+    height: 74px;
+    opacity: 0.8;
+  }
+
+  .rr-hw-spider {
+    left: 20%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-hw-spider,
+  .rr-hw-spider-body,
+  .rr-hw-bat-frame {
+    animation: none !important;
+  }
+
+  /* With the beat stopped, show the level pose rather than nothing. */
+  .rr-hw-bat-frame--mid {
+    opacity: 1;
+  }
+
+  /* A bat that cannot fly is a bat sitting in the sky, so it goes entirely.
+     The spider stays: hanging still is what a real one does. */
+  .rr-hw-bats {
+    display: none;
+  }
+}
+
+
+/* =========================================================================
+   Cloud banks
+   =========================================================================
+   Parallax carries the depth: the high bank is thin and slow, the low one
+   heavy, dark and quick. Equal speeds would read as one sliding texture.
+   ========================================================================= */
+
+.rr-hw-clouds {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rr-hw-cloud {
+  position: absolute;
+  left: -55%;
+  width: 210%;
+  will-change: transform;
+}
+
+.rr-hw-cloud--high {
+  top: -4%;
+  height: 46%;
+  opacity: 0.62;
+  animation: rr-hw-cloud-drift 150s linear infinite;
+}
+
+.rr-hw-cloud--mid {
+  top: 14%;
+  height: 54%;
+  opacity: 0.8;
+  animation: rr-hw-cloud-drift 104s linear infinite;
+  animation-direction: reverse;
+}
+
+.rr-hw-cloud--low {
+  top: 46%;
+  height: 62%;
+  opacity: 0.9;
+  animation: rr-hw-cloud-drift 74s linear infinite;
+}
+
+@keyframes rr-hw-cloud-drift {
+  from { transform: translate3d(-6%, 0, 0); }
+  to   { transform: translate3d(6%, 0, 0); }
+}
+
+html.rr-motion-paused .rr-hw-cloud,
+html.rr-zoomed .rr-hw-cloud {
+  animation-play-state: paused;
+}
+
+@media (max-width: 640px) {
+  /* Two banks instead of three. Each one is a full-screen filter pass, and
+     that is the most expensive thing the season does on a phone. */
+  .rr-hw-cloud--mid {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-hw-cloud {
+    animation: none !important;
+  }
+}
