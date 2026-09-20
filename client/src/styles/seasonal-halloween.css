@@ -390,6 +390,28 @@ html.rr-zoomed .rr-hw-moon {
   .rr-hw-fog span:nth-child(3) {
     display: none;
   }
+
+  /* The headline runs nearly the full width on a phone, and the theme toggle
+     sits in the same corner. At the desktop size and offset the moon lands
+     behind the word BECOME — bone text on a pale disc, which does not read —
+     and under the toggle. Smaller, tighter into the corner and dropped below
+     the toggle clears both. */
+  .rr-hw-moon {
+    top: 9.5rem;
+    right: 0.625rem;
+    width: 72px;
+    height: 72px;
+  }
+}
+
+/* Between the phone and the desktop layout the headline still reaches far
+   enough right to touch the moon, so hold it in the corner a little longer. */
+@media (min-width: 641px) and (max-width: 900px) {
+  .rr-hw-moon {
+    right: 1rem;
+    width: 96px;
+    height: 96px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
