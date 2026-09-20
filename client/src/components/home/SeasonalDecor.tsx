@@ -1,4 +1,8 @@
 import { useSeason } from "@/hooks/useSeason";
+import spiderImg from "@assets/halloween-spider.webp";
+import batDown from "@assets/halloween-bat-down.webp";
+import batMid from "@assets/halloween-bat-mid.webp";
+import batUp from "@assets/halloween-bat-up.webp";
 
 /**
  * The Halloween props: cobwebs, a spider on a thread, and bats.
@@ -22,43 +26,122 @@ import { useSeason } from "@/hooks/useSeason";
    single thing that makes a web look fake.
    --------------------------------------------------------------------------- */
 
-function cobwebPath(size: number, spokes = 5, rings = 4) {
-  const parts: string[] = [];
-  // Spread the spokes across the quarter turn, kept off both edges so the web
-  // reads as caught in a corner rather than taped to it.
-  const angles = Array.from({ length: spokes }, (_, i) => {
-    const t = i / (spokes - 1);
-    return (3 + t * 84) * (Math.PI / 180);
-  });
+/**
+ * A cobweb, built with the irregularity a real one has.
+ *
+ * The first version was a perfect radial lattice: evenly spaced spokes, every
+ * ring the same sag, every strand intact. That is a diagram of a web, and it
+ * is exactly why it looked drawn in Paint. A real web is spun by an animal
+ * that cannot measure, hung on anchors that are not where it wanted them, and
+ * has been damaged since it was built.
+ *
+ * So: spoke angles are jittered, each ring sags by a different amount, radii
+ * wander, strands are broken with gaps, and a few loose threads hang free.
+ * Everything comes from a fixed seed, so the shape never changes between
+ * renders — it just is not regular.
+ */
 
+/** Deterministic pseudo-random in [0,1), so the web is stable across renders. */
+function seeded(seed: number) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+type Strand = {
+  d: string;
+  /** Thinner threads for the finer silk. */
+  fine: boolean;
+  /**
+   * How brightly this strand catches the light, 0-1.
+   *
+   * Real silk is not lit evenly: a strand is bright only where it happens to
+   * face the light, and most of a web is dusty and half-there. Drawing every
+   * thread at one brightness is what keeps a web looking like line art
+   * however irregular its geometry is.
+   */
+  lit: number;
+};
+
+function cobweb(size: number, seed = 7) {
+  const rand = seeded(seed);
+  const strands: Strand[] = [];
   const at = (radius: number, angle: number) =>
     [radius * Math.cos(angle), radius * Math.sin(angle)] as const;
 
-  for (const angle of angles) {
-    const [x, y] = at(size, angle);
-    parts.push(`M0 0 L${x.toFixed(1)} ${y.toFixed(1)}`);
-  }
+  // Spokes: evenly spread, then nudged. Perfectly even spacing is the single
+  // biggest giveaway.
+  const SPOKES = 7;
+  const angles = Array.from({ length: SPOKES }, (_, i) => {
+    const base = (i / (SPOKES - 1)) * 86 + 2;
+    return (base + (rand() - 0.5) * 9) * (Math.PI / 180);
+  });
 
-  for (let ring = 1; ring <= rings; ring += 1) {
-    const radius = (size / (rings + 0.35)) * ring;
+  // Each spoke runs a slightly different length, and not all reach the edge.
+  const spokeLen = angles.map(() => size * (0.86 + rand() * 0.16));
+
+  angles.forEach((angle, i) => {
+    const [x, y] = at(spokeLen[i], angle);
+    strands.push({
+      d: `M0 0 L${x.toFixed(1)} ${y.toFixed(1)}`,
+      fine: false,
+      lit: 0.5 + rand() * 0.45,
+    });
+  });
+
+  // Rings: uneven radii, uneven sag, and gaps where strands have gone.
+  const RINGS = 5;
+  for (let ring = 1; ring <= RINGS; ring += 1) {
+    const base = (ring / (RINGS + 0.3)) * size;
     for (let i = 0; i < angles.length - 1; i += 1) {
-      const [x1, y1] = at(radius, angles[i]);
-      const [x2, y2] = at(radius, angles[i + 1]);
-      // Control point pulled toward the anchor: that is the sag.
+      // A broken strand. Real webs are full of them and they are most of what
+      // makes one look used rather than drawn.
+      if (rand() < 0.14) continue;
+
+      const rA = base * (0.9 + rand() * 0.2);
+      const rB = base * (0.9 + rand() * 0.2);
+      if (rA > spokeLen[i] || rB > spokeLen[i + 1]) continue;
+
+      const [x1, y1] = at(rA, angles[i]);
+      const [x2, y2] = at(rB, angles[i + 1]);
+      // Sag varies per strand: gravity plus however tight it was spun.
+      const sag = 0.64 + rand() * 0.26;
       const mid = (angles[i] + angles[i + 1]) / 2;
-      const [cx, cy] = at(radius * 0.82, mid);
-      parts.push(
-        `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`,
-      );
+      const [cx, cy] = at(((rA + rB) / 2) * sag, mid);
+
+      strands.push({
+        d: `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`,
+        fine: true,
+        lit: 0.22 + rand() * 0.62,
+      });
     }
   }
 
-  return parts.join(" ");
+  // Loose threads hanging off the edge, trailing where the web has torn.
+  for (let i = 0; i < 4; i += 1) {
+    const angle = angles[1 + Math.floor(rand() * (angles.length - 2))];
+    const from = size * (0.5 + rand() * 0.42);
+    const [x1, y1] = at(from, angle);
+    const drop = size * (0.1 + rand() * 0.2);
+    const sway = (rand() - 0.5) * size * 0.16;
+    strands.push({
+      d: `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${(x1 + sway * 0.5).toFixed(1)} ${(y1 + drop * 0.6).toFixed(1)} ${(x1 + sway).toFixed(1)} ${(y1 + drop).toFixed(1)}`,
+      fine: true,
+      lit: 0.3 + rand() * 0.5,
+    });
+  }
+
+  return strands;
 }
 
-const WEB_PATH = cobwebPath(120);
+// Two different webs, so the corners are not mirror images of each other.
+const WEB_TL = cobweb(120, 7);
+const WEB_TR = cobweb(120, 23);
 
 function Cobweb({ corner }: { corner: "tl" | "tr" }) {
+  const strands = corner === "tl" ? WEB_TL : WEB_TR;
   return (
     <svg
       className={`rr-hw-web rr-hw-web--${corner}`}
@@ -78,8 +161,17 @@ function Cobweb({ corner }: { corner: "tl" | "tr" }) {
         </radialGradient>
       </defs>
       <rect width="120" height="120" fill={`url(#rr-hw-web-fade-${corner})`} />
-      <path d={WEB_PATH} className="rr-hw-web-shadow" />
-      <path d={WEB_PATH} className="rr-hw-web-silk" />
+      {strands.map((strand, i) => (
+        <path key={`s${i}`} d={strand.d} className="rr-hw-web-shadow" />
+      ))}
+      {strands.map((strand, i) => (
+        <path
+          key={`k${i}`}
+          d={strand.d}
+          className={`rr-hw-web-silk${strand.fine ? " rr-hw-web-silk--fine" : ""}`}
+          style={{ opacity: strand.lit }}
+        />
+      ))}
     </svg>
   );
 }
@@ -87,48 +179,27 @@ function Cobweb({ corner }: { corner: "tl" | "tr" }) {
 /* ---------------------------------------------------------------------------
    Spider
 
-   Hangs from the top edge of the featured card on its own thread. The whole
-   thing swings from the anchor point, and the legs flex on a slightly
-   different beat, so it never looks like one rigid piece being waved about.
-   --------------------------------------------------------------------------- */
+   A photograph now, not a drawing. Hangs from the top edge of the featured
+   card on a thread the page draws, so the thread can be any length while the
+   spider itself stays a real one.
 
-const SPIDER_LEGS = [
-  // Left side
-  "M26 26 C16 20 10 14 4 6",
-  "M25 30 C14 28 8 26 1 21",
-  "M25 34 C14 36 8 39 2 44",
-  "M27 38 C19 43 15 48 11 54",
-  // Right side
-  "M38 26 C48 20 54 14 60 6",
-  "M39 30 C50 28 56 26 63 21",
-  "M39 34 C50 36 56 39 62 44",
-  "M37 38 C45 43 49 48 53 54",
-];
+   Two nested motions: the whole thing swings from where the thread is
+   anchored, and it also creeps up and down the line. Either alone looks
+   mechanical.
+   --------------------------------------------------------------------------- */
 
 function Spider() {
   return (
     <div className="rr-hw-spider" aria-hidden>
       <span className="rr-hw-spider-thread" />
-      <svg className="rr-hw-spider-body" viewBox="0 0 64 56" fill="none" focusable="false">
-        {/* Legs twice, same paths: a thick dark pass for separation from
-            bright artwork, then a thin light rim on top. Drawn once they are
-            near-black lines on a busy image and the spider loses the
-            silhouette that makes it a spider rather than a blob. */}
-        <g className="rr-hw-spider-legs rr-hw-spider-legs--dark">
-          {SPIDER_LEGS.map((d, i) => (
-            <path key={i} d={d} />
-          ))}
-        </g>
-        <g className="rr-hw-spider-legs rr-hw-spider-legs--rim">
-          {SPIDER_LEGS.map((d, i) => (
-            <path key={i} d={d} />
-          ))}
-        </g>
-        <ellipse className="rr-hw-spider-head" cx="32" cy="27" rx="7" ry="6" />
-        <ellipse className="rr-hw-spider-abdomen" cx="32" cy="37" rx="10" ry="11" />
-        <circle className="rr-hw-spider-eye" cx="29.4" cy="25.4" r="1.5" />
-        <circle className="rr-hw-spider-eye" cx="34.6" cy="25.4" r="1.5" />
-      </svg>
+      <img
+        src={spiderImg}
+        alt=""
+        aria-hidden
+        draggable={false}
+        decoding="async"
+        className="rr-hw-spider-body"
+      />
     </div>
   );
 }
@@ -136,36 +207,27 @@ function Spider() {
 /* ---------------------------------------------------------------------------
    Bats
 
-   They cross the sky rather than sitting in it. Each one gets its own path,
-   height and speed, and the wings beat on their own timing — bats flapping in
-   unison is the thing that gives a decoration away.
+   Three photographs of the same bat — wings down, level, and up — cycled as
+   down, level, up, level. Four steps from three frames, because the level
+   pose is passed through twice in every beat.
+
+   The frames were cropped together rather than individually, so the body sits
+   in the same place in all three. Trimming each one to its own edges is what
+   would make the bat jump around inside its own wingbeat.
    --------------------------------------------------------------------------- */
 
 const BATS = [
-  { top: "16%", scale: 1, duration: "19s", delay: "0s", flap: "0.42s" },
-  { top: "27%", scale: 0.62, duration: "26s", delay: "5.5s", flap: "0.33s" },
-  { top: "9%", scale: 0.78, duration: "23s", delay: "12s", flap: "0.38s" },
+  { top: "18%", scale: 1, duration: "21s", delay: "0s", flap: "0.46s" },
+  { top: "30%", scale: 0.6, duration: "29s", delay: "6.5s", flap: "0.36s" },
+  { top: "11%", scale: 0.78, duration: "25s", delay: "13s", flap: "0.41s" },
 ];
 
 function Bat({ style }: { style: React.CSSProperties }) {
   return (
     <span className="rr-hw-bat" style={style} aria-hidden>
-      <svg viewBox="0 0 80 40" fill="none" focusable="false">
-        {/* Wings are separate groups so each can pivot at the body. */}
-        <g className="rr-hw-bat-wing rr-hw-bat-wing--l">
-          <path d="M40 20 C32 10 22 6 10 8 C16 12 14 18 8 20 C16 21 20 25 22 31 C28 26 34 24 40 24 Z" />
-        </g>
-        <g className="rr-hw-bat-wing rr-hw-bat-wing--r">
-          <path d="M40 20 C48 10 58 6 70 8 C64 12 66 18 72 20 C64 21 60 25 58 31 C52 26 46 24 40 24 Z" />
-        </g>
-        <path
-          className="rr-hw-bat-body"
-          d="M40 12 C43 12 45 15 45 19 C45 24 43 29 40 32 C37 29 35 24 35 19 C35 15 37 12 40 12 Z"
-        />
-        {/* Ears, which is most of what makes a silhouette read as a bat. */}
-        <path className="rr-hw-bat-body" d="M37 13 L35 8 L39 11 Z" />
-        <path className="rr-hw-bat-body" d="M43 13 L45 8 L41 11 Z" />
-      </svg>
+      <img src={batDown} alt="" draggable={false} decoding="async" className="rr-hw-bat-frame rr-hw-bat-frame--down" />
+      <img src={batMid} alt="" draggable={false} decoding="async" className="rr-hw-bat-frame rr-hw-bat-frame--mid" />
+      <img src={batUp} alt="" draggable={false} decoding="async" className="rr-hw-bat-frame rr-hw-bat-frame--up" />
     </span>
   );
 }
