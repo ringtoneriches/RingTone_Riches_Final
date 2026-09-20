@@ -204,6 +204,47 @@ html.rr-season-halloween .rr-atmosphere-gold {
 /* The disc is a photograph; the halo around it is the only part still drawn,
    because a real moon photographed against black has no atmosphere to glow
    into and the page needs the light to reach the sky. */
+/* The moon and the cloud crossing it share one box so the cloud stays put
+   against the disc however the moon is sized. */
+.rr-hw-moon-stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* The cloud that eats into the disc. Sized beyond the moon so its torn edge
+   is never cut off by the element's own bounds. */
+.rr-hw-moon-shroud {
+  position: absolute;
+  left: -22%;
+  top: -22%;
+  width: 144%;
+  height: 144%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.rr-hw-moon-shroud-drift {
+  animation: rr-hw-shroud-drift 46s ease-in-out infinite;
+}
+
+/* Coverage breathes between roughly half and two thirds of the disc. */
+@keyframes rr-hw-shroud-drift {
+  0%, 100% { transform: translate(-4%, 2%); }
+  50%      { transform: translate(7%, -5%); }
+}
+
+html.rr-motion-paused .rr-hw-moon-shroud-drift,
+html.rr-zoomed .rr-hw-moon-shroud-drift {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-hw-moon-shroud-drift {
+    animation: none !important;
+  }
+}
+
 .rr-hw-moon-img {
   width: 100%;
   height: 100%;
@@ -466,17 +507,26 @@ html.rr-zoomed .rr-hw-moon {
 
 /* The dark pass keeps the silk legible over bright competition artwork. */
 .rr-hw-web-shadow {
-  stroke: rgba(0, 0, 0, 0.8);
-  stroke-width: 3.2;
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 2.8;
   stroke-linecap: round;
   fill: none;
 }
 
+/* Spokes carry the web's weight and are visibly heavier than the spiral. One
+   stroke width for everything is part of what made it look drawn. */
+/* Dusty rather than white. Per-strand opacity is set inline from the web's
+   own seed, so these are the base colour the lighting varies. */
 .rr-hw-web-silk {
-  stroke: rgba(236, 231, 246, 0.82);
-  stroke-width: 1.25;
+  stroke: rgba(226, 221, 236, 0.9);
+  stroke-width: 1;
   stroke-linecap: round;
   fill: none;
+}
+
+.rr-hw-web-silk--fine {
+  stroke: rgba(216, 211, 230, 0.75);
+  stroke-width: 0.6;
 }
 
 /* The scrim itself, behind both passes. */

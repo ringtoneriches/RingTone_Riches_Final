@@ -22,43 +22,122 @@ import { useSeason } from "@/hooks/useSeason";
    single thing that makes a web look fake.
    --------------------------------------------------------------------------- */
 
-function cobwebPath(size: number, spokes = 5, rings = 4) {
-  const parts: string[] = [];
-  // Spread the spokes across the quarter turn, kept off both edges so the web
-  // reads as caught in a corner rather than taped to it.
-  const angles = Array.from({ length: spokes }, (_, i) => {
-    const t = i / (spokes - 1);
-    return (3 + t * 84) * (Math.PI / 180);
-  });
+/**
+ * A cobweb, built with the irregularity a real one has.
+ *
+ * The first version was a perfect radial lattice: evenly spaced spokes, every
+ * ring the same sag, every strand intact. That is a diagram of a web, and it
+ * is exactly why it looked drawn in Paint. A real web is spun by an animal
+ * that cannot measure, hung on anchors that are not where it wanted them, and
+ * has been damaged since it was built.
+ *
+ * So: spoke angles are jittered, each ring sags by a different amount, radii
+ * wander, strands are broken with gaps, and a few loose threads hang free.
+ * Everything comes from a fixed seed, so the shape never changes between
+ * renders — it just is not regular.
+ */
 
+/** Deterministic pseudo-random in [0,1), so the web is stable across renders. */
+function seeded(seed: number) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+type Strand = {
+  d: string;
+  /** Thinner threads for the finer silk. */
+  fine: boolean;
+  /**
+   * How brightly this strand catches the light, 0-1.
+   *
+   * Real silk is not lit evenly: a strand is bright only where it happens to
+   * face the light, and most of a web is dusty and half-there. Drawing every
+   * thread at one brightness is what keeps a web looking like line art
+   * however irregular its geometry is.
+   */
+  lit: number;
+};
+
+function cobweb(size: number, seed = 7) {
+  const rand = seeded(seed);
+  const strands: Strand[] = [];
   const at = (radius: number, angle: number) =>
     [radius * Math.cos(angle), radius * Math.sin(angle)] as const;
 
-  for (const angle of angles) {
-    const [x, y] = at(size, angle);
-    parts.push(`M0 0 L${x.toFixed(1)} ${y.toFixed(1)}`);
-  }
+  // Spokes: evenly spread, then nudged. Perfectly even spacing is the single
+  // biggest giveaway.
+  const SPOKES = 7;
+  const angles = Array.from({ length: SPOKES }, (_, i) => {
+    const base = (i / (SPOKES - 1)) * 86 + 2;
+    return (base + (rand() - 0.5) * 9) * (Math.PI / 180);
+  });
 
-  for (let ring = 1; ring <= rings; ring += 1) {
-    const radius = (size / (rings + 0.35)) * ring;
+  // Each spoke runs a slightly different length, and not all reach the edge.
+  const spokeLen = angles.map(() => size * (0.86 + rand() * 0.16));
+
+  angles.forEach((angle, i) => {
+    const [x, y] = at(spokeLen[i], angle);
+    strands.push({
+      d: `M0 0 L${x.toFixed(1)} ${y.toFixed(1)}`,
+      fine: false,
+      lit: 0.5 + rand() * 0.45,
+    });
+  });
+
+  // Rings: uneven radii, uneven sag, and gaps where strands have gone.
+  const RINGS = 5;
+  for (let ring = 1; ring <= RINGS; ring += 1) {
+    const base = (ring / (RINGS + 0.3)) * size;
     for (let i = 0; i < angles.length - 1; i += 1) {
-      const [x1, y1] = at(radius, angles[i]);
-      const [x2, y2] = at(radius, angles[i + 1]);
-      // Control point pulled toward the anchor: that is the sag.
+      // A broken strand. Real webs are full of them and they are most of what
+      // makes one look used rather than drawn.
+      if (rand() < 0.14) continue;
+
+      const rA = base * (0.9 + rand() * 0.2);
+      const rB = base * (0.9 + rand() * 0.2);
+      if (rA > spokeLen[i] || rB > spokeLen[i + 1]) continue;
+
+      const [x1, y1] = at(rA, angles[i]);
+      const [x2, y2] = at(rB, angles[i + 1]);
+      // Sag varies per strand: gravity plus however tight it was spun.
+      const sag = 0.64 + rand() * 0.26;
       const mid = (angles[i] + angles[i + 1]) / 2;
-      const [cx, cy] = at(radius * 0.82, mid);
-      parts.push(
-        `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`,
-      );
+      const [cx, cy] = at(((rA + rB) / 2) * sag, mid);
+
+      strands.push({
+        d: `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`,
+        fine: true,
+        lit: 0.22 + rand() * 0.62,
+      });
     }
   }
 
-  return parts.join(" ");
+  // Loose threads hanging off the edge, trailing where the web has torn.
+  for (let i = 0; i < 4; i += 1) {
+    const angle = angles[1 + Math.floor(rand() * (angles.length - 2))];
+    const from = size * (0.5 + rand() * 0.42);
+    const [x1, y1] = at(from, angle);
+    const drop = size * (0.1 + rand() * 0.2);
+    const sway = (rand() - 0.5) * size * 0.16;
+    strands.push({
+      d: `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${(x1 + sway * 0.5).toFixed(1)} ${(y1 + drop * 0.6).toFixed(1)} ${(x1 + sway).toFixed(1)} ${(y1 + drop).toFixed(1)}`,
+      fine: true,
+      lit: 0.3 + rand() * 0.5,
+    });
+  }
+
+  return strands;
 }
 
-const WEB_PATH = cobwebPath(120);
+// Two different webs, so the corners are not mirror images of each other.
+const WEB_TL = cobweb(120, 7);
+const WEB_TR = cobweb(120, 23);
 
 function Cobweb({ corner }: { corner: "tl" | "tr" }) {
+  const strands = corner === "tl" ? WEB_TL : WEB_TR;
   return (
     <svg
       className={`rr-hw-web rr-hw-web--${corner}`}
@@ -78,8 +157,17 @@ function Cobweb({ corner }: { corner: "tl" | "tr" }) {
         </radialGradient>
       </defs>
       <rect width="120" height="120" fill={`url(#rr-hw-web-fade-${corner})`} />
-      <path d={WEB_PATH} className="rr-hw-web-shadow" />
-      <path d={WEB_PATH} className="rr-hw-web-silk" />
+      {strands.map((strand, i) => (
+        <path key={`s${i}`} d={strand.d} className="rr-hw-web-shadow" />
+      ))}
+      {strands.map((strand, i) => (
+        <path
+          key={`k${i}`}
+          d={strand.d}
+          className={`rr-hw-web-silk${strand.fine ? " rr-hw-web-silk--fine" : ""}`}
+          style={{ opacity: strand.lit }}
+        />
+      ))}
     </svg>
   );
 }
