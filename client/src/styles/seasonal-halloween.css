@@ -1,0 +1,412 @@
+/* =========================================================================
+   Halloween season skin
+   =========================================================================
+
+   Everything here hangs off html.rr-season-halloween, so the site returns to
+   normal by removing one class — no page keeps a seasonal remnant behind.
+
+   The approach is a tilt of the existing brand rather than a costume over it.
+   Ringtone Riches is already near-black, crimson and gold, which is most of a
+   Halloween palette; what it lacks is the plum ambient and the ember warmth.
+   So gold moves toward ember orange, a deep violet is laid under the page,
+   and fog and embers are added to the atmosphere that is already there.
+
+   Deliberately absent: skulls, cobwebs, bats, novelty fonts. They read as
+   decoration stuck on top of a product. The palette does the work instead,
+   which is how the platforms that do this well handle October.
+
+   Every animation here is slow and low-contrast on purpose. This sits behind
+   a shop; it must never compete with the prizes for attention.
+   ========================================================================= */
+
+html.rr-season-halloween {
+  /* The season's palette, as a tilt of the house colours. */
+  --hw-void: #07060a;           /* near-black, faint violet cast (house: #050505) */
+  --hw-plum: #17091f;           /* the ambient that makes it read Halloween */
+  --hw-violet: #34164f;
+  --hw-ember: #ff8a1f;          /* stands in for gold on most surfaces */
+  --hw-ember-soft: #ffb65c;
+  --hw-blood: #c8102e;          /* unchanged house crimson */
+  --hw-blood-hot: #ff263d;
+  --hw-bone: #f6eedc;           /* slightly cooler than the house ivory */
+  --hw-moon: #cfd9ff;           /* the one cold colour, used only for moonlight */
+
+  /* Gold is kept for genuinely valuable things — prize amounts, VIP — so the
+     season never cheapens what the site is actually selling. */
+  --hw-gold: #f1d47a;
+}
+
+/* -------------------------------------------------------------------------
+   Atmosphere
+   The page already renders .rr-atmosphere-*; these restyle those same layers
+   rather than adding more, so the cost of the season is close to zero.
+   ------------------------------------------------------------------------- */
+
+html.rr-season-halloween .rr-atmosphere-base {
+  background:
+    /* moonlight, high and to the right */
+    radial-gradient(ellipse 45% 35% at 82% 6%, rgba(207, 217, 255, 0.10), transparent 62%),
+    /* the plum that carries the season */
+    radial-gradient(ellipse 85% 55% at 15% 18%, rgba(52, 22, 79, 0.55), transparent 65%),
+    radial-gradient(ellipse 70% 50% at 88% 72%, rgba(120, 30, 12, 0.22), transparent 60%),
+    /* embers pooling at the foot of the page */
+    radial-gradient(ellipse 60% 38% at 50% 100%, rgba(255, 138, 31, 0.16), transparent 62%),
+    linear-gradient(180deg, var(--hw-void) 0%, var(--hw-plum) 48%, var(--hw-void) 100%);
+}
+
+/* The grid reads as iron railings rather than a tech lattice once it is plum. */
+html.rr-season-halloween .rr-atmosphere-grid {
+  opacity: 0.05;
+  background-image:
+    linear-gradient(rgba(124, 58, 172, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 58, 172, 0.3) 1px, transparent 1px);
+}
+
+html.rr-season-halloween .rr-atmosphere-streaks {
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0px,
+    transparent 90px,
+    rgba(255, 138, 31, 0.05) 91px,
+    transparent 93px
+  );
+}
+
+/* The floating motes warm from gold to ember. */
+html.rr-season-halloween .rr-atmosphere-gold {
+  background: rgba(255, 138, 31, 0.6);
+  box-shadow: 0 0 6px rgba(255, 138, 31, 0.45);
+}
+
+/* -------------------------------------------------------------------------
+   Fog
+   Two very large, very soft bands drifting at different speeds. The offset
+   speeds are what stop it looking like one sliding texture.
+   ------------------------------------------------------------------------- */
+
+.rr-hw-fog {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rr-hw-fog span {
+  position: absolute;
+  left: -60%;
+  width: 220%;
+  height: 46%;
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 50%,
+    rgba(168, 134, 214, 0.22),
+    rgba(120, 90, 160, 0.09) 45%,
+    transparent 70%
+  );
+  filter: blur(46px);
+  will-change: transform;
+}
+
+.rr-hw-fog span:nth-child(1) {
+  top: 4%;
+  animation: rr-hw-drift 64s linear infinite;
+}
+
+.rr-hw-fog span:nth-child(2) {
+  top: 42%;
+  opacity: 0.75;
+  animation: rr-hw-drift 92s linear infinite reverse;
+}
+
+.rr-hw-fog span:nth-child(3) {
+  top: 72%;
+  opacity: 0.55;
+  /* Warmer down here, where the embers are. */
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 50%,
+    rgba(255, 150, 45, 0.15),
+    transparent 68%
+  );
+  animation: rr-hw-drift 78s linear infinite;
+}
+
+@keyframes rr-hw-drift {
+  from { transform: translate3d(-8%, 0, 0); }
+  to   { transform: translate3d(8%, 0, 0); }
+}
+
+/* -------------------------------------------------------------------------
+   Embers
+   Rising, not falling. Falling particles read as snow and would be the wrong
+   season; rising ones read as a fire somewhere off-screen.
+   ------------------------------------------------------------------------- */
+
+.rr-hw-embers {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rr-hw-ember {
+  position: absolute;
+  bottom: -6vh;
+  left: var(--ember-x, 50%);
+  width: var(--ember-size, 3px);
+  height: var(--ember-size, 3px);
+  border-radius: 999px;
+  background: var(--hw-ember-soft, #ffb65c);
+  box-shadow:
+    0 0 8px rgba(255, 160, 60, 1),
+    0 0 20px rgba(255, 110, 20, 0.6),
+    0 0 34px rgba(255, 80, 10, 0.3);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: rr-hw-rise var(--ember-duration, 17s) linear infinite;
+  animation-delay: var(--ember-delay, 0s);
+}
+
+/* A few drift the other way, so the field never looks like one column. */
+.rr-hw-ember--sway {
+  animation-name: rr-hw-rise-sway;
+}
+
+@keyframes rr-hw-rise {
+  0%   { transform: translate3d(0, 0, 0) scale(0.6); opacity: 0; }
+  12%  { opacity: 0.85; }
+  70%  { opacity: 0.5; }
+  100% { transform: translate3d(2vw, -108vh, 0) scale(1); opacity: 0; }
+}
+
+@keyframes rr-hw-rise-sway {
+  0%   { transform: translate3d(0, 0, 0) scale(0.5); opacity: 0; }
+  15%  { opacity: 0.7; }
+  50%  { transform: translate3d(-3vw, -54vh, 0) scale(0.9); opacity: 0.6; }
+  100% { transform: translate3d(1vw, -108vh, 0) scale(0.7); opacity: 0; }
+}
+
+/* -------------------------------------------------------------------------
+   Moon
+   One cold light source, so the warm palette has something to sit against.
+   ------------------------------------------------------------------------- */
+
+.rr-hw-moon {
+  position: absolute;
+  /* Clear of the header. Any higher and the top of it is cut off by the
+     header bar, which reads as a rendering fault rather than a moon. */
+  top: clamp(7.5rem, 17vh, 12rem);
+  right: clamp(1.5rem, 7vw, 7rem);
+  width: clamp(84px, 10vw, 150px);
+  height: clamp(84px, 10vw, 150px);
+  border-radius: 999px;
+  /* Centred, not offset. An off-centre highlight shades it like a billiard
+     ball; a moon is a flat lit disc with its light bleeding into the sky. */
+  background: radial-gradient(
+    circle at 50% 50%,
+    #fbfaf4 0%,
+    #ebe7dc 54%,
+    rgba(226, 222, 210, 0.55) 72%,
+    rgba(226, 222, 210, 0.12) 83%,
+    transparent 89%
+  );
+  /* The halo is most of the effect — it is what makes it a light source
+     rather than a circle sitting on top of the page. */
+  box-shadow:
+    0 0 40px rgba(255, 248, 226, 0.4),
+    0 0 110px rgba(255, 216, 150, 0.26),
+    0 0 220px rgba(255, 170, 70, 0.14);
+  opacity: 0.85;
+  pointer-events: none;
+  animation: rr-hw-moon-breathe 14s ease-in-out infinite;
+}
+
+/* Craters. Barely there — enough that it is not a plain disc, not so much
+   that it turns grey. */
+.rr-hw-moon::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0.9;
+  /* Soft falloff rather than hard stops: hard-edged circles read as flat grey
+     discs pasted on the front, and at three of them it starts to look like a
+     face. Soft and off-centre instead, so it is texture you half-notice —
+     without it the disc reads as a lightbulb rather than a moon. */
+  background:
+    radial-gradient(circle at 64% 31%, rgba(150, 142, 128, 0.42), rgba(150, 142, 128, 0.14) 45%, transparent 66%),
+    radial-gradient(circle at 34% 58%, rgba(150, 142, 128, 0.34), transparent 52%),
+    radial-gradient(circle at 70% 70%, rgba(150, 142, 128, 0.26), transparent 40%),
+    radial-gradient(circle at 44% 30%, rgba(150, 142, 128, 0.2), transparent 30%);
+  filter: blur(2px);
+}
+
+@keyframes rr-hw-moon-breathe {
+  0%, 100% { opacity: 0.78; }
+  50%      { opacity: 0.95; }
+}
+
+/* A vignette pulls the corners down so the moon reads as the brightest thing
+   on the page and the prizes sit in the pool of light below it. */
+.rr-hw-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 90% 70% at 50% 42%,
+    transparent 40%,
+    rgba(3, 2, 6, 0.45) 82%,
+    rgba(3, 2, 6, 0.7) 100%
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Hero
+   ------------------------------------------------------------------------- */
+
+html.rr-season-halloween .rr-brand-kicker {
+  color: var(--hw-ember);
+  text-shadow: 0 0 18px rgba(255, 138, 31, 0.35);
+}
+
+/* Ember gradient in place of the gold one, same glide animation.
+   The clip and transparent colour have to be restated: `background` is a
+   shorthand and resets background-clip to border-box, which turns the
+   headline into a solid orange bar instead of gradient-filled letters. */
+html.rr-season-halloween .rr-brand-title > span:not(.rr-brand-title-lead) {
+  background: linear-gradient(
+    90deg,
+    var(--hw-ember) 0%,
+    #ffd9a0 26%,
+    var(--hw-blood-hot) 56%,
+    var(--hw-ember) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html.rr-season-halloween .rr-brand-title-lead {
+  color: var(--hw-bone);
+  /* Candlelight, not a strobe: shallow, slow and irregular. */
+  animation: rr-hw-candle 6.5s ease-in-out infinite;
+}
+
+@keyframes rr-hw-candle {
+  0%, 100%      { opacity: 1;    text-shadow: 0 0 22px rgba(255, 138, 31, 0.16); }
+  41%           { opacity: 1;    text-shadow: 0 0 22px rgba(255, 138, 31, 0.16); }
+  44%           { opacity: 0.93; text-shadow: 0 0 10px rgba(255, 138, 31, 0.10); }
+  47%           { opacity: 1;    text-shadow: 0 0 26px rgba(255, 138, 31, 0.22); }
+  73%           { opacity: 1;    text-shadow: 0 0 22px rgba(255, 138, 31, 0.16); }
+  76%           { opacity: 0.95; text-shadow: 0 0 12px rgba(255, 138, 31, 0.12); }
+  79%           { opacity: 1;    text-shadow: 0 0 22px rgba(255, 138, 31, 0.16); }
+}
+
+/* The seasonal line under the hero. */
+.rr-hw-tagline {
+  margin: 0.7rem auto 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 138, 31, 0.3);
+  background: rgba(255, 138, 31, 0.08);
+  padding: 0.3rem 0.85rem;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--hw-ember-soft);
+}
+
+.rr-hw-tagline::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--hw-ember);
+  box-shadow: 0 0 10px rgba(255, 138, 31, 0.9);
+  animation: rr-hw-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes rr-hw-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
+
+/* -------------------------------------------------------------------------
+   Chrome: filters, headings, cards
+   Small shifts only. The layout does not move, so nothing has to be relearned.
+   ------------------------------------------------------------------------- */
+
+html.rr-season-halloween .rr-filter-chip.is-active {
+  border-color: rgba(255, 138, 31, 0.55);
+  background: linear-gradient(180deg, rgba(255, 138, 31, 0.2), rgba(255, 138, 31, 0.07));
+  color: var(--hw-bone);
+  box-shadow: 0 0 22px rgba(255, 138, 31, 0.2);
+}
+
+html.rr-season-halloween .rr-filter-chip.is-active .rr-filter-icon,
+html.rr-season-halloween .rr-filter-chip.is-active .rr-filter-count {
+  color: var(--hw-ember-soft);
+}
+
+html.rr-season-halloween .rr-filter-chip:hover {
+  border-color: rgba(255, 138, 31, 0.32);
+}
+
+/* The section heading gets the same ember underlight as the hero. */
+html.rr-season-halloween #competitions h2 {
+  text-shadow: 0 0 30px rgba(255, 138, 31, 0.18);
+}
+
+/* Cards lift with ember rather than gold. */
+html.rr-season-halloween .rr-comp-card:hover {
+  box-shadow: 0 18px 50px -20px rgba(255, 138, 31, 0.32);
+}
+
+/* -------------------------------------------------------------------------
+   Motion budget
+   The site already pauses its ambience when the tab is hidden or the user has
+   zoomed in. The season has to honour the same rules or it becomes the one
+   thing still animating in a backgrounded tab.
+   ------------------------------------------------------------------------- */
+
+html.rr-motion-paused .rr-hw-fog span,
+html.rr-motion-paused .rr-hw-ember,
+html.rr-motion-paused .rr-hw-moon,
+html.rr-zoomed .rr-hw-fog span,
+html.rr-zoomed .rr-hw-ember,
+html.rr-zoomed .rr-hw-moon {
+  animation-play-state: paused;
+}
+
+/* Phones carry the palette but not the particle field: it is the part with a
+   real battery cost, and the smallest screens are where it reads least. */
+@media (max-width: 640px) {
+  .rr-hw-embers {
+    display: none;
+  }
+
+  .rr-hw-fog span:nth-child(3) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-hw-fog span,
+  .rr-hw-ember,
+  .rr-hw-moon,
+  html.rr-season-halloween .rr-brand-title-lead,
+  .rr-hw-tagline::before {
+    animation: none !important;
+  }
+
+  /* The embers exist only as motion, so with motion off they are just dots. */
+  .rr-hw-embers {
+    display: none;
+  }
+
+  .rr-hw-moon {
+    opacity: 0.45;
+  }
+}

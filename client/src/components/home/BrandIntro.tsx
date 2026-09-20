@@ -1,4 +1,14 @@
+import { useSeason } from "@/hooks/useSeason";
+
+const SEASON_TAGLINE: Record<string, string> = {
+  halloween: "Spooky season is live",
+  christmas: "It's the season to win",
+};
+
 export default function BrandIntro() {
+  const { season } = useSeason();
+  const tagline = season ? SEASON_TAGLINE[season] : null;
+
   return (
     <section className="rr-brand-intro" data-testid="section-brand-intro">
       <div className="relative z-10 mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
@@ -10,6 +20,11 @@ export default function BrandIntro() {
         <p className="rr-brand-sub">
           Prize Competitions. Instant Wins. Real Rewards.
         </p>
+        {tagline && (
+          <p className="rr-hw-tagline" data-testid="text-season-tagline">
+            {tagline}
+          </p>
+        )}
       </div>
     </section>
   );

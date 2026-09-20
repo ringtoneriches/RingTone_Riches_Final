@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useSeason } from "@/hooks/useSeason";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
@@ -312,6 +313,11 @@ function AppWithMaintenance() {
   useLayoutEffect(() => {
     document.documentElement.classList.toggle("rr-admin", isAdminRoute);
   }, [isAdminRoute]);
+
+  // The seasonal skin goes on <html> for the same reason. Admin keeps its own
+  // theme year round: a seasonal palette over the admin tables would make the
+  // people running the site read numbers against a colour that moves.
+  useSeason();
 
   // Public routes that should still be accessible during maintenance
   const publicRoutes = [

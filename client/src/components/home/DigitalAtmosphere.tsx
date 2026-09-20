@@ -12,16 +12,21 @@ const WARP_STARS = Array.from({ length: 52 }, (_, i) => {
   };
 });
 
+import SeasonalAtmosphere from "./SeasonalAtmosphere";
+
 type Props = {
   className?: string;
   stars?: boolean;
   layers?: boolean;
+  /** Draw the seasonal layer (fog, embers, moon). Page background only. */
+  seasonal?: boolean;
 };
 
 export default function DigitalAtmosphere({
   className = "",
   stars = false,
   layers = true,
+  seasonal = false,
 }: Props) {
   if (!layers && !stars) return null;
 
@@ -36,6 +41,11 @@ export default function DigitalAtmosphere({
           <span className="rr-atmosphere-gold" style={{ top: "62%", left: "78%", animationDelay: "3.2s" }} />
         </>
       )}
+      {/* After the base layers, never before: the base paints an opaque
+          gradient across the whole page and would bury the moon and the
+          embers behind it. Only the page-wide atmosphere carries the season —
+          the per-section ones would stack three moons down a single scroll. */}
+      {seasonal && <SeasonalAtmosphere />}
       {stars && (
         <div className="rr-warp">
           {WARP_STARS.map((star, i) => (
