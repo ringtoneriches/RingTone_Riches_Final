@@ -80,59 +80,12 @@ html.rr-season-halloween .rr-atmosphere-gold {
 
 /* -------------------------------------------------------------------------
    Fog
-   Two very large, very soft bands drifting at different speeds. The offset
-   speeds are what stop it looking like one sliding texture.
+
+   Removed. It was three spans each carrying a 46px blur across roughly five
+   megapixels, and once the cloud banks became real images the fog sat behind
+   them doing nothing a viewer could see. Deleting it took the last large
+   live blur off the page.
    ------------------------------------------------------------------------- */
-
-.rr-hw-fog {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.rr-hw-fog span {
-  position: absolute;
-  left: -60%;
-  width: 220%;
-  height: 46%;
-  background: radial-gradient(
-    ellipse 50% 50% at 50% 50%,
-    rgba(168, 134, 214, 0.22),
-    rgba(120, 90, 160, 0.09) 45%,
-    transparent 70%
-  );
-  filter: blur(46px);
-  will-change: transform;
-}
-
-.rr-hw-fog span:nth-child(1) {
-  top: 4%;
-  animation: rr-hw-drift 64s linear infinite;
-}
-
-.rr-hw-fog span:nth-child(2) {
-  top: 42%;
-  opacity: 0.75;
-  animation: rr-hw-drift 92s linear infinite reverse;
-}
-
-.rr-hw-fog span:nth-child(3) {
-  top: 72%;
-  opacity: 0.55;
-  /* Warmer down here, where the embers are. */
-  background: radial-gradient(
-    ellipse 50% 50% at 50% 50%,
-    rgba(255, 150, 45, 0.15),
-    transparent 68%
-  );
-  animation: rr-hw-drift 78s linear infinite;
-}
-
-@keyframes rr-hw-drift {
-  from { transform: translate3d(-8%, 0, 0); }
-  to   { transform: translate3d(8%, 0, 0); }
-}
 
 /* -------------------------------------------------------------------------
    Embers
@@ -212,6 +165,29 @@ html.rr-season-halloween .rr-atmosphere-gold {
   height: 100%;
 }
 
+/* The halo, as a gradient behind the disc rather than a drop-shadow on it.
+   A 140px shadow on a 182px element gets clipped to the element's own box,
+   which over a flat sky passed for atmosphere but over a painting drew a
+   visible rectangle around the moon. A gradient has no filter region to be
+   clipped by and costs nothing to composite. */
+.rr-hw-moon-stack::before {
+  content: "";
+  position: absolute;
+  left: -60%;
+  top: -60%;
+  width: 220%;
+  height: 220%;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 248, 226, 0.3) 0%,
+    rgba(255, 226, 170, 0.16) 26%,
+    rgba(255, 180, 90, 0.07) 42%,
+    rgba(255, 150, 60, 0) 62%
+  );
+  pointer-events: none;
+}
+
 /* The cloud that eats into the disc. Sized beyond the moon so its torn edge
    is never cut off by the element's own bounds. */
 .rr-hw-moon-shroud {
@@ -246,13 +222,13 @@ html.rr-zoomed .rr-hw-moon-shroud-drift {
 }
 
 .rr-hw-moon-img {
+  position: relative;
   width: 100%;
   height: 100%;
   display: block;
-  filter:
-    drop-shadow(0 0 24px rgba(255, 246, 220, 0.4))
-    drop-shadow(0 0 64px rgba(255, 196, 120, 0.26))
-    drop-shadow(0 0 140px rgba(255, 150, 60, 0.14));
+  /* Just enough to lift the disc off whatever is behind it. The wide halo is
+     the gradient above; anything bigger here starts clipping again. */
+  filter: drop-shadow(0 0 18px rgba(255, 246, 220, 0.38));
 }
 
 @keyframes rr-hw-moon-breathe {
@@ -480,17 +456,11 @@ html.rr-zoomed .rr-hw-moon {
 .rr-hw-web {
   position: absolute;
   width: clamp(88px, 13vw, 170px);
-  height: clamp(88px, 13vw, 170px);
-  overflow: visible;
-}
-
-/* Competition artwork is bright and busy, and fine silk simply vanishes into
-   it. A soft dark corner gives the web something to sit against — the same
-   trick a photographer uses to get a pale subject off a busy background. */
-.rr-hw-web::before {
-  content: "";
-  position: absolute;
-  inset: 0;
+  height: auto;
+  /* Dew-covered silk is bright enough to read over prize artwork on its own.
+     The old vector webs needed a dark corner painted behind them to be seen
+     at all; a photograph does not, and the scrim only dulled the card. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
 }
 
 .rr-hw-web--tl {
@@ -498,40 +468,12 @@ html.rr-zoomed .rr-hw-moon {
   left: 0;
 }
 
-/* Mirrored rather than redrawn, so both corners sag the same way. */
+/* The two corners use different photographs, so this only has to be flipped
+   to hang the right way — not mirrored to fake variety. */
 .rr-hw-web--tr {
   top: 0;
   right: 0;
   transform: scaleX(-1);
-}
-
-/* The dark pass keeps the silk legible over bright competition artwork. */
-.rr-hw-web-shadow {
-  stroke: rgba(0, 0, 0, 0.72);
-  stroke-width: 2.8;
-  stroke-linecap: round;
-  fill: none;
-}
-
-/* Spokes carry the web's weight and are visibly heavier than the spiral. One
-   stroke width for everything is part of what made it look drawn. */
-/* Dusty rather than white. Per-strand opacity is set inline from the web's
-   own seed, so these are the base colour the lighting varies. */
-.rr-hw-web-silk {
-  stroke: rgba(226, 221, 236, 0.9);
-  stroke-width: 1;
-  stroke-linecap: round;
-  fill: none;
-}
-
-.rr-hw-web-silk--fine {
-  stroke: rgba(216, 211, 230, 0.75);
-  stroke-width: 0.6;
-}
-
-/* The scrim itself, behind both passes. */
-.rr-hw-web-scrim {
-  fill: rgba(5, 3, 10, 0.72);
 }
 
 /* -------------------------------------------------------------------------
@@ -736,7 +678,11 @@ html.rr-zoomed .rr-hw-bat-frame {
   position: absolute;
   left: -55%;
   width: 210%;
+  height: auto;
+  /* Promoted to its own layer so drifting is a GPU translate and never
+     repaints the bank underneath. */
   will-change: transform;
+  transform: translateZ(0);
 }
 
 .rr-hw-cloud--high {
@@ -783,4 +729,152 @@ html.rr-zoomed .rr-hw-cloud {
   .rr-hw-cloud {
     animation: none !important;
   }
+}
+
+/* =========================================================================
+   Webs on competition cards
+   ========================================================================= */
+
+.rr-hw-card-web {
+  position: absolute;
+  top: 0;
+  width: clamp(54px, 7vw, 84px);
+  height: clamp(54px, 7vw, 84px);
+  /* Under the card's own badges, same as the featured card: a badge sitting
+     on a web reads as depth, a web over a badge is just unreadable. It is
+     the first child of the article, so leaving it unpositioned in the stack
+     puts it behind everything that follows — z-index: 1 lifted it over the
+     Live badge and made it illegible. */
+  z-index: 0;
+  pointer-events: none;
+}
+
+.rr-hw-card-web .rr-hw-web {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+}
+
+.rr-hw-card-web--a {
+  left: 0;
+}
+
+.rr-hw-card-web--b {
+  right: 0;
+}
+
+.rr-hw-card-web--b .rr-hw-web {
+  transform: scaleX(-1);
+}
+
+/* =========================================================================
+   Carrying the sky to the bottom of the page
+   =========================================================================
+   The footer was the only opaque block on the page, so the moon and the cloud
+   banks stopped dead at it and the page ended on a flat slab. Everything else
+   is already transparent; this lets the same sky run the whole way down.
+   ========================================================================= */
+
+html.rr-season-halloween .rr-footer {
+  background-color: transparent;
+  /* The sky alone is too light behind small print, so sit the footer on a
+     gradient that deepens toward the bottom of the page. */
+  background-image: linear-gradient(
+    180deg,
+    rgba(7, 5, 12, 0.55) 0%,
+    rgba(7, 5, 12, 0.82) 45%,
+    rgba(5, 3, 9, 0.94) 100%
+  );
+  border-top-color: rgba(255, 138, 31, 0.22);
+}
+
+/* =========================================================================
+   Bringing the rest of the page onto the season's palette
+   ========================================================================= */
+
+/* Buttons were still house gold, which left every call to action on the page
+   off-palette against the ember hero. */
+html.rr-season-halloween .rr-cta {
+  border-color: rgba(255, 138, 31, 0.55);
+}
+
+html.rr-season-halloween .rr-cta:hover {
+  border-color: rgba(255, 168, 80, 0.8);
+}
+
+/* Card borders were a cold blue-grey, which read as a different theme meeting
+   the plum rather than part of it. */
+html.rr-season-halloween .rr-comp-card article {
+  border-color: rgba(92, 62, 124, 0.55);
+}
+
+
+
+
+/* =========================================================================
+   Painted backdrop
+   ========================================================================= */
+
+.rr-hw-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Cover, centred. The scene is composed so the middle is empty, which is
+   where any crop takes its loss. */
+.rr-hw-backdrop-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 38%;
+}
+
+/* Content has to stay readable over paint. The middle column is pulled well
+   down; the margins, where the scene actually shows, keep their contrast. */
+.rr-hw-backdrop-scrim {
+  position: absolute;
+  inset: 0;
+  /* Light, because the painting already is. Measured across a 3x3 grid it
+     runs between 13 and 26 out of 255, and darkest exactly where the headline
+     sits — a heavy scrim on top of that crushes the art to nothing and buys
+     legibility that was already there. This only steadies the few brighter
+     patches, mainly the sky behind the house on the left. */
+  background:
+    linear-gradient(
+      90deg,
+      rgba(7, 5, 12, 0) 0%,
+      rgba(7, 5, 12, 0.24) 26%,
+      rgba(7, 5, 12, 0.34) 50%,
+      rgba(7, 5, 12, 0.24) 74%,
+      rgba(7, 5, 12, 0) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(7, 5, 12, 0.28) 0%,
+      rgba(7, 5, 12, 0.06) 34%,
+      rgba(7, 5, 12, 0.18) 72%,
+      rgba(7, 5, 12, 0.42) 100%
+    );
+}
+
+/* With a painted sky behind it, everything the season used to generate is
+   redundant and only muddies the art.
+   
+   The vignette especially: a painting of a graveyard already has its own dark
+   corners, put there by the trees framing it, and laying another vignette on
+   top crushes the whole scene to near-black. The grid and the streaks are
+   tech-lattice artefacts that have no business over paint either. */
+html.rr-season-halloween.rr-has-backdrop .rr-hw-clouds,
+html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-base,
+html.rr-season-halloween.rr-has-backdrop .rr-hw-vignette,
+html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-grid,
+html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-streaks,
+html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-gold {
+  display: none;
 }

@@ -9,6 +9,7 @@ import pop from "../../public/pop.jpeg";
 import voltz from "../../public/voltz.jpeg";
 import scratch from "../../public/scratch.jpeg";
 import ChaserBorder from "@/components/home/ChaserBorder";
+import { CardWeb, cardWebFor } from "@/components/home/SeasonalDecor";
 import QuantitySelector from "@/components/home/QuantitySelector";
 import CountdownBlocks from "@/components/home/CountdownBlocks";
 import { useCountdown } from "@/hooks/useCountdown";
@@ -33,9 +34,16 @@ import {
 interface CompetitionCardProps {
   competition: Competition;
   authenticated?: boolean;
+  /**
+   * Position in the grid. Only used to decide which cards wear a cobweb in
+   * the Halloween season, so the pattern is fixed by layout rather than
+   * changing on every render.
+   */
+  gridIndex?: number;
 }
 
-export default function CompetitionCard({ competition }: CompetitionCardProps) {
+export default function CompetitionCard({ competition, gridIndex = 0 }: CompetitionCardProps) {
+  const web = cardWebFor(gridIndex);
   const [, setLocation] = useLocation();
   const { add } = useBasket();
   const stats = getTicketStats(competition);
@@ -123,6 +131,9 @@ export default function CompetitionCard({ competition }: CompetitionCardProps) {
               loading="lazy"
               decoding="async"
             />
+            {/* After the artwork so it is seen, before the badges so they sit
+                on top of it rather than behind it. */}
+            {web && <CardWeb variant={web} />}
             <div className="absolute left-2.5 top-2.5 flex flex-wrap items-center gap-1.5">
               <span className="rr-comp-badge">
                 <TypeIcon className="h-3 w-3" />
