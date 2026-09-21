@@ -2,6 +2,7 @@ import { useSeason } from "@/hooks/useSeason";
 import { SeasonalBats } from "./SeasonalDecor";
 import HalloweenMoon from "./HalloweenMoon";
 import HalloweenClouds from "./HalloweenClouds";
+import HalloweenBackdrop from "./HalloweenBackdrop";
 
 /**
  * The seasonal layer that sits inside the page's existing atmosphere.
@@ -35,6 +36,8 @@ export default function SeasonalAtmosphere() {
 
   return (
     <>
+      {/* First, behind everything else the season draws. */}
+      <HalloweenBackdrop />
       {/* Vignette before the moon and embers, so it darkens the sky behind
           them rather than washing a grey film across the light sources. */}
       <div className="rr-hw-vignette" aria-hidden />
