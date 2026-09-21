@@ -1201,6 +1201,43 @@ async markAdminVerificationAsRead(): Promise<void> {
       .where(eq(supportMessages.ticketId, ticketId))
       .orderBy(supportMessages.createdAt);
   }
+
+  async getSupportMessage(id: string): Promise<SupportMessage | undefined> {
+    const [message] = await db
+      .select()
+      .from(supportMessages)
+      .where(eq(supportMessages.id, id))
+      .limit(1);
+    return message;
+  }
+
+  /**
+   * Correct the text of a support message.
+   *
+   * The original is kept the first time and never overwritten afterwards, so
+   * however many times a reply is corrected there is still a record of what
+   * the customer actually read.
+   */
+  async editSupportMessage(
+    id: string,
+    { message, editedBy }: { message: string; editedBy: string },
+  ): Promise<SupportMessage | undefined> {
+    const existing = await this.getSupportMessage(id);
+    if (!existing) return undefined;
+
+    const [updated] = await db
+      .update(supportMessages)
+      .set({
+        message,
+        editedAt: new Date(),
+        editedBy,
+        // Only on the first edit: after that this already holds what was sent.
+        originalMessage: existing.originalMessage ?? existing.message,
+      })
+      .where(eq(supportMessages.id, id))
+      .returning();
+    return updated;
+  }
 }
 
 export const storage = new DatabaseStorage();

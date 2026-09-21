@@ -64,6 +64,7 @@ interface SupportMessage {
   ticketId: string;
   senderId: string;
   senderType: "user" | "admin";
+  editedAt?: string | null;
   message: string;
   imageUrls: string[] | null;
   createdAt: string;
@@ -536,6 +537,15 @@ export default function Support() {
                         )}
                         <p className={`text-[10px] sm:text-xs text-gray-500 ${msg.senderType === "user" ? "text-right" : "ml-10"}`}>
                           {format(new Date(msg.createdAt), "p")}
+                          {/* Said plainly rather than hidden. A support thread
+                              is the record produced in a dispute, and a reply
+                              that quietly becomes something else after it was
+                              read is worse than the mistake it corrected. */}
+                          {msg.editedAt && (
+                            <span className="italic" data-testid={`text-edited-${msg.id}`}>
+                              {" · edited"}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
