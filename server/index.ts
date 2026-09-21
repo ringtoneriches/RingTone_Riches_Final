@@ -239,6 +239,24 @@ app.use((req, res, next) => {
 
   startCrons();
 
+  /**
+   * Unmatched API paths answer 404 JSON, not the single-page app.
+   *
+   * Everything below this falls through to Vite in development and to the
+   * static build in production, and both answer any path at all with
+   * index.html and a 200. So a call to an endpoint that does not exist — a
+   * typo, or a client newer than the server it is talking to — came back as
+   * HTML with a success status, and the only symptom was
+   * "Unexpected token '<', "<!DOCTYPE"... is not valid JSON" from whichever
+   * line tried to parse it. That tells you nothing about what is wrong.
+   *
+   * Only /api paths, and only after every route has had its turn, so nothing
+   * that works today is affected: those requests already had no handler.
+   */
+  app.use("/api", (req: Request, res: Response) => {
+    res.status(404).json({ message: `No such endpoint: ${req.method} /api${req.path}` });
+  });
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

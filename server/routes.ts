@@ -18731,6 +18731,79 @@ app.post(
     }
   );
 
+  /**
+   * Correct a support reply after it has been sent.
+   *
+   * Only messages an admin sent. Nothing in the route shape stops a PATCH
+   * naming a customer's message, and an admin quietly rewriting what a
+   * CUSTOMER said in a complaint thread is not a typo fix — it is altering
+   * the record that would be produced in a dispute. That check is the most
+   * important line here.
+   *
+   * Any admin may correct any admin reply: support cover matters more than
+   * ownership when six people share the queue. That is exactly why the edit
+   * is written to the audit log with the message id and the text it replaced.
+   */
+  app.patch(
+    "/api/admin/support/tickets/:ticketId/messages/:messageId",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { ticketId, messageId } = req.params;
+        const text = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+
+        if (!text) {
+          return res.status(400).json({ message: "Message cannot be empty" });
+        }
+
+        const existing = await storage.getSupportMessage(messageId);
+        if (!existing || existing.ticketId !== ticketId) {
+          return res.status(404).json({ message: "Message not found" });
+        }
+
+        if (existing.senderType !== "admin") {
+          return res
+            .status(403)
+            .json({ message: "Only replies sent by the team can be edited." });
+        }
+
+        // Nothing changed: leave the record and the edited marker alone.
+        if (existing.message === text) {
+          return res.json(existing);
+        }
+
+        const updated = await storage.editSupportMessage(messageId, {
+          message: text,
+          editedBy: req.user.id,
+        });
+
+        // The customer needs to see the correction, so the thread goes unread
+        // again — the same thing a new reply does.
+        await storage.updateSupportTicket(ticketId, {
+          userHasUnread: true,
+          updatedAt: new Date(),
+        });
+
+        await db.insert(auditLogs).values({
+          userId: req.user.id,
+          userName: `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "Admin",
+          email: req.user.email,
+          action: "edit_support_message",
+          description:
+            `Edited support message ${messageId} on ticket ${ticketId}. ` +
+            `Was: ${JSON.stringify(existing.message).slice(0, 500)}`,
+          createdAt: new Date(),
+        });
+
+        res.json(updated);
+      } catch (error) {
+        console.error("Error editing support message:", error);
+        res.status(500).json({ message: "Failed to edit message" });
+      }
+    }
+  );
+
   app.patch(
     "/api/admin/support/tickets/:id/mark-as-read",
     isAuthenticated,
