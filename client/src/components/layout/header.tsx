@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { User } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import BrandLogo from "@/components/layout/BrandLogo";
+import { LogoWeb } from "@/components/home/SeasonalDecor";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -216,8 +217,9 @@ export default function Header() {
 
             {/* Desktop */}
             <Link href="/" className="hidden lg:block">
-              <div className="flex cursor-pointer items-center group">
+              <div className="relative flex cursor-pointer items-center group">
                 <BrandLogo className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
+                <LogoWeb />
               </div>
             </Link>
 

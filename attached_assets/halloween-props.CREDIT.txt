@@ -25,3 +25,17 @@ What we did to them:
   length.
 
 Sizes: spider 340px wide, bats 420px wide. Between 7 KB and 35 KB each.
+
+halloween-cloud-high.webp / halloween-cloud-mid.webp / halloween-cloud-low.webp
+================================================================================
+
+Generated here with ImageMagick, not supplied.
+
+These were previously rendered live in the browser with SVG feTurbulence,
+which came to roughly five megapixels of four- and five-octave Perlin noise
+recomputed as the page ran, plus three 46px blurs over a similar area. That
+is what made staging feel sluggish.
+
+The shaping is identical — fractal noise, thresholded into banks, flat dark
+tint, faded top and bottom — but computed once, offline, so the browser only
+scales a picture and translates it. About 110 KB for all three.

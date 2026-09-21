@@ -79,9 +79,14 @@ function MoonShroud() {
       {/* The disc sits at (100,100) with a radius of about 69 in these
           coordinates, so the lobes ride along its lower left and take roughly
           a third of it — leaving about 60% of the body in the clear. */}
-      <g filter="url(#rr-hw-shroud-edge)" className="rr-hw-moon-shroud-drift">
-        <ellipse cx="28" cy="138" rx="100" ry="56" fill="url(#rr-hw-shroud-body)" />
-        <ellipse cx="96" cy="176" rx="92" ry="50" fill="url(#rr-hw-shroud-body)" />
+      {/* The drift is on the outer group and the filter on the inner one, so
+          the torn edge is rasterised once and then simply moved. With both on
+          the same element the displacement map is recomputed every frame. */}
+      <g className="rr-hw-moon-shroud-drift">
+        <g filter="url(#rr-hw-shroud-edge)">
+          <ellipse cx="28" cy="138" rx="100" ry="56" fill="url(#rr-hw-shroud-body)" />
+          <ellipse cx="96" cy="176" rx="92" ry="50" fill="url(#rr-hw-shroud-body)" />
+        </g>
       </g>
     </svg>
   );

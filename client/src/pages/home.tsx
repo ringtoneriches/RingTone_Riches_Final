@@ -183,11 +183,12 @@ export default function Home() {
               </div>
             ) : filteredCompetitions.length > 0 ? (
               <div className="rr-comp-grid grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-                {filteredCompetitions.map((competition) => (
+                {filteredCompetitions.map((competition, index) => (
                   <CompetitionCard
                     key={competition.id}
                     competition={competition}
                     authenticated={true}
+                    gridIndex={index}
                   />
                 ))}
               </div>

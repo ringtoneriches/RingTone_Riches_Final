@@ -136,12 +136,26 @@ function cobweb(size: number, seed = 7) {
   return strands;
 }
 
-// Two different webs, so the corners are not mirror images of each other.
+// Every web gets its own seed. Two of the same shape side by side is as
+// obvious as two of the same shape mirrored.
 const WEB_TL = cobweb(120, 7);
 const WEB_TR = cobweb(120, 23);
+const WEB_LOGO = cobweb(120, 51);
+const WEB_CARD_A = cobweb(120, 88);
+const WEB_CARD_B = cobweb(120, 134);
 
-function Cobweb({ corner }: { corner: "tl" | "tr" }) {
-  const strands = corner === "tl" ? WEB_TL : WEB_TR;
+const WEB_SEEDS = {
+  tl: WEB_TL,
+  tr: WEB_TR,
+  logo: WEB_LOGO,
+  "card-a": WEB_CARD_A,
+  "card-b": WEB_CARD_B,
+} as const;
+
+type WebKind = keyof typeof WEB_SEEDS;
+
+function Cobweb({ corner }: { corner: WebKind }) {
+  const strands = WEB_SEEDS[corner];
   return (
     <svg
       className={`rr-hw-web rr-hw-web--${corner}`}
@@ -294,4 +308,57 @@ export function FeaturedSpider() {
       <Spider />
     </div>
   );
+}
+
+/**
+ * The web slung across the site logo, with a spider on it.
+ *
+ * Small and in one corner rather than draped over the wordmark: the logo has
+ * to stay readable, and a web that obscures the brand is a cost the season
+ * does not get to charge.
+ */
+export function LogoWeb() {
+  const { season } = useSeason();
+  if (season !== "halloween") return null;
+
+  return (
+    <span className="rr-hw-logo-web" aria-hidden>
+      <Cobweb corner="logo" />
+      <span className="rr-hw-logo-spider">
+        <span className="rr-hw-logo-thread" />
+        <img src={spiderImg} alt="" draggable={false} decoding="async" />
+      </span>
+    </span>
+  );
+}
+
+/**
+ * A web in the corner of a competition card.
+ *
+ * Deliberately not on every card. Thirteen identical webs is wallpaper, and
+ * wallpaper is ignored; a few scattered ones are noticed. The caller decides
+ * which cards get one from its position in the grid, so the pattern is stable
+ * rather than changing on every render.
+ */
+export function CardWeb({ variant }: { variant: "a" | "b" }) {
+  const { season } = useSeason();
+  if (season !== "halloween") return null;
+
+  return (
+    <span className={`rr-hw-card-web rr-hw-card-web--${variant}`} aria-hidden>
+      <Cobweb corner={variant === "a" ? "card-a" : "card-b"} />
+    </span>
+  );
+}
+
+/**
+ * Whether a card at this position in the grid wears a web.
+ *
+ * Every fourth card, offset so the first one is not the very first card in
+ * the grid — a web on card one and then nothing for three reads as a mistake
+ * rather than a decoration.
+ */
+export function cardWebFor(index: number): "a" | "b" | null {
+  if (index % 4 !== 1) return null;
+  return index % 8 === 1 ? "a" : "b";
 }

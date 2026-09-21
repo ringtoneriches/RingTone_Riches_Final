@@ -80,59 +80,12 @@ html.rr-season-halloween .rr-atmosphere-gold {
 
 /* -------------------------------------------------------------------------
    Fog
-   Two very large, very soft bands drifting at different speeds. The offset
-   speeds are what stop it looking like one sliding texture.
+
+   Removed. It was three spans each carrying a 46px blur across roughly five
+   megapixels, and once the cloud banks became real images the fog sat behind
+   them doing nothing a viewer could see. Deleting it took the last large
+   live blur off the page.
    ------------------------------------------------------------------------- */
-
-.rr-hw-fog {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.rr-hw-fog span {
-  position: absolute;
-  left: -60%;
-  width: 220%;
-  height: 46%;
-  background: radial-gradient(
-    ellipse 50% 50% at 50% 50%,
-    rgba(168, 134, 214, 0.22),
-    rgba(120, 90, 160, 0.09) 45%,
-    transparent 70%
-  );
-  filter: blur(46px);
-  will-change: transform;
-}
-
-.rr-hw-fog span:nth-child(1) {
-  top: 4%;
-  animation: rr-hw-drift 64s linear infinite;
-}
-
-.rr-hw-fog span:nth-child(2) {
-  top: 42%;
-  opacity: 0.75;
-  animation: rr-hw-drift 92s linear infinite reverse;
-}
-
-.rr-hw-fog span:nth-child(3) {
-  top: 72%;
-  opacity: 0.55;
-  /* Warmer down here, where the embers are. */
-  background: radial-gradient(
-    ellipse 50% 50% at 50% 50%,
-    rgba(255, 150, 45, 0.15),
-    transparent 68%
-  );
-  animation: rr-hw-drift 78s linear infinite;
-}
-
-@keyframes rr-hw-drift {
-  from { transform: translate3d(-8%, 0, 0); }
-  to   { transform: translate3d(8%, 0, 0); }
-}
 
 /* -------------------------------------------------------------------------
    Embers
@@ -736,7 +689,11 @@ html.rr-zoomed .rr-hw-bat-frame {
   position: absolute;
   left: -55%;
   width: 210%;
+  height: auto;
+  /* Promoted to its own layer so drifting is a GPU translate and never
+     repaints the bank underneath. */
   will-change: transform;
+  transform: translateZ(0);
 }
 
 .rr-hw-cloud--high {
@@ -783,4 +740,160 @@ html.rr-zoomed .rr-hw-cloud {
   .rr-hw-cloud {
     animation: none !important;
   }
+}
+
+/* =========================================================================
+   Web on the logo
+   =========================================================================
+   Tucked into the corner rather than draped across the wordmark. The logo has
+   to stay readable — a web that obscures the brand is a cost the season does
+   not get to charge.
+   ========================================================================= */
+
+.rr-hw-logo-web {
+  position: absolute;
+  top: -12px;
+  /* Hangs off the end of the wordmark rather than across it. Any closer and
+     the web crosses the last letters and the spider sits on the S. */
+  right: -52px;
+  width: 58px;
+  height: 58px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.rr-hw-logo-web .rr-hw-web {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Mirrored so it hangs from the right, where it sits. */
+  transform: scaleX(-1);
+}
+
+.rr-hw-logo-spider {
+  position: absolute;
+  top: 34px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: 50% 0;
+  animation: rr-hw-logo-swing 5.4s ease-in-out infinite;
+}
+
+.rr-hw-logo-thread {
+  display: block;
+  width: 1px;
+  height: 14px;
+  background: linear-gradient(180deg, rgba(228, 222, 238, 0.1), rgba(228, 222, 238, 0.55));
+}
+
+.rr-hw-logo-spider img {
+  display: block;
+  width: 22px;
+  height: auto;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.8));
+}
+
+@keyframes rr-hw-logo-swing {
+  0%, 100% { transform: rotate(-6deg); }
+  50%      { transform: rotate(6deg); }
+}
+
+/* =========================================================================
+   Webs on competition cards
+   ========================================================================= */
+
+.rr-hw-card-web {
+  position: absolute;
+  top: 0;
+  width: clamp(54px, 7vw, 84px);
+  height: clamp(54px, 7vw, 84px);
+  /* Under the card's own badges, same as the featured card: a badge sitting
+     on a web reads as depth, a web over a badge is just unreadable. It is
+     the first child of the article, so leaving it unpositioned in the stack
+     puts it behind everything that follows — z-index: 1 lifted it over the
+     Live badge and made it illegible. */
+  z-index: 0;
+  pointer-events: none;
+}
+
+.rr-hw-card-web .rr-hw-web {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.rr-hw-card-web--a {
+  left: 0;
+}
+
+.rr-hw-card-web--b {
+  right: 0;
+}
+
+.rr-hw-card-web--b .rr-hw-web {
+  transform: scaleX(-1);
+}
+
+/* =========================================================================
+   Carrying the sky to the bottom of the page
+   =========================================================================
+   The footer was the only opaque block on the page, so the moon and the cloud
+   banks stopped dead at it and the page ended on a flat slab. Everything else
+   is already transparent; this lets the same sky run the whole way down.
+   ========================================================================= */
+
+html.rr-season-halloween .rr-footer {
+  background-color: transparent;
+  /* The sky alone is too light behind small print, so sit the footer on a
+     gradient that deepens toward the bottom of the page. */
+  background-image: linear-gradient(
+    180deg,
+    rgba(7, 5, 12, 0.55) 0%,
+    rgba(7, 5, 12, 0.82) 45%,
+    rgba(5, 3, 9, 0.94) 100%
+  );
+  border-top-color: rgba(255, 138, 31, 0.22);
+}
+
+/* =========================================================================
+   Bringing the rest of the page onto the season's palette
+   ========================================================================= */
+
+/* Buttons were still house gold, which left every call to action on the page
+   off-palette against the ember hero. */
+html.rr-season-halloween .rr-cta {
+  border-color: rgba(255, 138, 31, 0.55);
+}
+
+html.rr-season-halloween .rr-cta:hover {
+  border-color: rgba(255, 168, 80, 0.8);
+}
+
+/* Card borders were a cold blue-grey, which read as a different theme meeting
+   the plum rather than part of it. */
+html.rr-season-halloween .rr-comp-card article {
+  border-color: rgba(92, 62, 124, 0.55);
+}
+
+@media (max-width: 1024px) {
+  /* The logo is smaller and more crowded below this, and the web starts
+     crowding the nav rather than decorating it. */
+  .rr-hw-logo-web {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-hw-logo-spider {
+    animation: none !important;
+  }
+}
+
+html.rr-motion-paused .rr-hw-logo-spider,
+html.rr-zoomed .rr-hw-logo-spider {
+  animation-play-state: paused;
 }

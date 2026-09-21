@@ -35,12 +35,6 @@ export default function SeasonalAtmosphere() {
 
   return (
     <>
-      {/* Low haze stays: it fills the gaps the cloud banks leave. */}
-      <div className="rr-hw-fog" aria-hidden>
-        <span />
-        <span />
-      </div>
-
       {/* Vignette before the moon and embers, so it darkens the sky behind
           them rather than washing a grey film across the light sources. */}
       <div className="rr-hw-vignette" aria-hidden />
