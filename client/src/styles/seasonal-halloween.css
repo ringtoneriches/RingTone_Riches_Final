@@ -165,6 +165,29 @@ html.rr-season-halloween .rr-atmosphere-gold {
   height: 100%;
 }
 
+/* The halo, as a gradient behind the disc rather than a drop-shadow on it.
+   A 140px shadow on a 182px element gets clipped to the element's own box,
+   which over a flat sky passed for atmosphere but over a painting drew a
+   visible rectangle around the moon. A gradient has no filter region to be
+   clipped by and costs nothing to composite. */
+.rr-hw-moon-stack::before {
+  content: "";
+  position: absolute;
+  left: -60%;
+  top: -60%;
+  width: 220%;
+  height: 220%;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 248, 226, 0.3) 0%,
+    rgba(255, 226, 170, 0.16) 26%,
+    rgba(255, 180, 90, 0.07) 42%,
+    rgba(255, 150, 60, 0) 62%
+  );
+  pointer-events: none;
+}
+
 /* The cloud that eats into the disc. Sized beyond the moon so its torn edge
    is never cut off by the element's own bounds. */
 .rr-hw-moon-shroud {
@@ -199,13 +222,13 @@ html.rr-zoomed .rr-hw-moon-shroud-drift {
 }
 
 .rr-hw-moon-img {
+  position: relative;
   width: 100%;
   height: 100%;
   display: block;
-  filter:
-    drop-shadow(0 0 24px rgba(255, 246, 220, 0.4))
-    drop-shadow(0 0 64px rgba(255, 196, 120, 0.26))
-    drop-shadow(0 0 140px rgba(255, 150, 60, 0.14));
+  /* Just enough to lift the disc off whatever is behind it. The wide halo is
+     the gradient above; anything bigger here starts clipping again. */
+  filter: drop-shadow(0 0 18px rgba(255, 246, 220, 0.38));
 }
 
 @keyframes rr-hw-moon-breathe {
@@ -925,27 +948,41 @@ html.rr-zoomed .rr-hw-logo-spider {
 .rr-hw-backdrop-scrim {
   position: absolute;
   inset: 0;
+  /* Light, because the painting already is. Measured across a 3x3 grid it
+     runs between 13 and 26 out of 255, and darkest exactly where the headline
+     sits — a heavy scrim on top of that crushes the art to nothing and buys
+     legibility that was already there. This only steadies the few brighter
+     patches, mainly the sky behind the house on the left. */
   background:
     linear-gradient(
       90deg,
-      rgba(7, 5, 12, 0.12) 0%,
-      rgba(7, 5, 12, 0.62) 22%,
-      rgba(7, 5, 12, 0.78) 50%,
-      rgba(7, 5, 12, 0.62) 78%,
-      rgba(7, 5, 12, 0.12) 100%
+      rgba(7, 5, 12, 0) 0%,
+      rgba(7, 5, 12, 0.24) 26%,
+      rgba(7, 5, 12, 0.34) 50%,
+      rgba(7, 5, 12, 0.24) 74%,
+      rgba(7, 5, 12, 0) 100%
     ),
     linear-gradient(
       180deg,
-      rgba(7, 5, 12, 0.5) 0%,
-      rgba(7, 5, 12, 0.2) 30%,
-      rgba(7, 5, 12, 0.45) 70%,
-      rgba(7, 5, 12, 0.75) 100%
+      rgba(7, 5, 12, 0.28) 0%,
+      rgba(7, 5, 12, 0.06) 34%,
+      rgba(7, 5, 12, 0.18) 72%,
+      rgba(7, 5, 12, 0.42) 100%
     );
 }
 
-/* With a painted sky behind it, the generated one is redundant and would only
-   muddy the art. */
+/* With a painted sky behind it, everything the season used to generate is
+   redundant and only muddies the art.
+   
+   The vignette especially: a painting of a graveyard already has its own dark
+   corners, put there by the trees framing it, and laying another vignette on
+   top crushes the whole scene to near-black. The grid and the streaks are
+   tech-lattice artefacts that have no business over paint either. */
 html.rr-season-halloween.rr-has-backdrop .rr-hw-clouds,
-html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-base {
+html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-base,
+html.rr-season-halloween.rr-has-backdrop .rr-hw-vignette,
+html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-grid,
+html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-streaks,
+html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-gold {
   display: none;
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import sceneGraveyard from "@assets/halloween-scene-graveyard.webp";
 
 /**
  * The painted scene behind the page.
@@ -26,7 +27,7 @@ import { useEffect, useMemo } from "react";
  * where the headline and the prize cards sit, with the detail pushed to the
  * left and right edges and along the bottom.
  */
-const SCENES: string[] = [];
+const SCENES: string[] = [sceneGraveyard];
 
 export default function HalloweenBackdrop() {
   // Chosen once per mount. useMemo rather than picking during render, so a

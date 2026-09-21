@@ -39,3 +39,15 @@ is what made staging feel sluggish.
 The shaping is identical — fractal noise, thresholded into banks, flat dark
 tint, faded top and bottom — but computed once, offline, so the browser only
 scales a picture and translates it. About 110 KB for all three.
+
+halloween-scene-graveyard.webp
+==============================
+
+Supplied by the site owner, generated to a brief: landscape, bare trees
+framing both edges, graveyard and fence across the bottom, a house low on the
+horizon to one side, and — deliberately — NO moon and no focal point in the
+upper middle, so the real moon, bats and spider can sit on top of it and move.
+
+We only resized it to 1920 wide and encoded it as WebP, 94 KB. No grading was
+needed: measured across a 3x3 grid it already runs between 13 and 26 out of
+255, and is darkest exactly where the headline sits.
