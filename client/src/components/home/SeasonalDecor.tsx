@@ -1,4 +1,7 @@
 import { useSeason } from "@/hooks/useSeason";
+import webCorner from "@assets/halloween-web-corner.webp";
+import webTorn from "@assets/halloween-web-torn.webp";
+import webStrand from "@assets/halloween-web-strand.webp";
 import spiderImg from "@assets/halloween-spider.webp";
 import batDown from "@assets/halloween-bat-down.webp";
 import batMid from "@assets/halloween-bat-mid.webp";
@@ -18,175 +21,45 @@ import batUp from "@assets/halloween-bat-up.webp";
  */
 
 /* ---------------------------------------------------------------------------
-   Cobweb
+   Cobwebs
 
-   Generated rather than hand-drawn so the sag on every strand is consistent.
-   A web is radial spokes with threads slung between them, and the threads dip
-   toward the anchor because they hang — drawing them as straight lines is the
-   single thing that makes a web look fake.
+   Photographs, keyed by their own brightness.
+
+   These were generated: seeded spoke angles, per-strand sag, broken threads,
+   per-strand lighting — a lot of machinery to imitate irregularity, and it
+   still read as line art next to a real spider sitting on it.
+
+   A web cannot be cut out the way the spider was. The spider was solid black
+   on white, so filling from the border removed the background and left the
+   subject. A web is pale, fine and semi-transparent: the background shows
+   THROUGH it, and in most pixels the two are mixed. There is no edge to cut.
+
+   So they were shot as white silk on pure black and the brightness of each
+   pixel became its alpha. Black falls away to nothing, bright silk stays
+   solid, and every half-lit strand between the two arrives at exactly the
+   opacity it had — including threads only a tenth visible, which no cut-out
+   would have kept. It is how smoke, fire and webs have always been
+   composited, and it carries the dew with it for free.
    --------------------------------------------------------------------------- */
 
-/**
- * A cobweb, built with the irregularity a real one has.
- *
- * The first version was a perfect radial lattice: evenly spaced spokes, every
- * ring the same sag, every strand intact. That is a diagram of a web, and it
- * is exactly why it looked drawn in Paint. A real web is spun by an animal
- * that cannot measure, hung on anchors that are not where it wanted them, and
- * has been damaged since it was built.
- *
- * So: spoke angles are jittered, each ring sags by a different amount, radii
- * wander, strands are broken with gaps, and a few loose threads hang free.
- * Everything comes from a fixed seed, so the shape never changes between
- * renders — it just is not regular.
- */
-
-/** Deterministic pseudo-random in [0,1), so the web is stable across renders. */
-function seeded(seed: number) {
-  let state = seed >>> 0;
-  return () => {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    return state / 4294967296;
-  };
-}
-
-type Strand = {
-  d: string;
-  /** Thinner threads for the finer silk. */
-  fine: boolean;
-  /**
-   * How brightly this strand catches the light, 0-1.
-   *
-   * Real silk is not lit evenly: a strand is bright only where it happens to
-   * face the light, and most of a web is dusty and half-there. Drawing every
-   * thread at one brightness is what keeps a web looking like line art
-   * however irregular its geometry is.
-   */
-  lit: number;
-};
-
-function cobweb(size: number, seed = 7) {
-  const rand = seeded(seed);
-  const strands: Strand[] = [];
-  const at = (radius: number, angle: number) =>
-    [radius * Math.cos(angle), radius * Math.sin(angle)] as const;
-
-  // Spokes: evenly spread, then nudged. Perfectly even spacing is the single
-  // biggest giveaway.
-  const SPOKES = 7;
-  const angles = Array.from({ length: SPOKES }, (_, i) => {
-    const base = (i / (SPOKES - 1)) * 86 + 2;
-    return (base + (rand() - 0.5) * 9) * (Math.PI / 180);
-  });
-
-  // Each spoke runs a slightly different length, and not all reach the edge.
-  const spokeLen = angles.map(() => size * (0.86 + rand() * 0.16));
-
-  angles.forEach((angle, i) => {
-    const [x, y] = at(spokeLen[i], angle);
-    strands.push({
-      d: `M0 0 L${x.toFixed(1)} ${y.toFixed(1)}`,
-      fine: false,
-      lit: 0.5 + rand() * 0.45,
-    });
-  });
-
-  // Rings: uneven radii, uneven sag, and gaps where strands have gone.
-  const RINGS = 5;
-  for (let ring = 1; ring <= RINGS; ring += 1) {
-    const base = (ring / (RINGS + 0.3)) * size;
-    for (let i = 0; i < angles.length - 1; i += 1) {
-      // A broken strand. Real webs are full of them and they are most of what
-      // makes one look used rather than drawn.
-      if (rand() < 0.14) continue;
-
-      const rA = base * (0.9 + rand() * 0.2);
-      const rB = base * (0.9 + rand() * 0.2);
-      if (rA > spokeLen[i] || rB > spokeLen[i + 1]) continue;
-
-      const [x1, y1] = at(rA, angles[i]);
-      const [x2, y2] = at(rB, angles[i + 1]);
-      // Sag varies per strand: gravity plus however tight it was spun.
-      const sag = 0.64 + rand() * 0.26;
-      const mid = (angles[i] + angles[i + 1]) / 2;
-      const [cx, cy] = at(((rA + rB) / 2) * sag, mid);
-
-      strands.push({
-        d: `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`,
-        fine: true,
-        lit: 0.22 + rand() * 0.62,
-      });
-    }
-  }
-
-  // Loose threads hanging off the edge, trailing where the web has torn.
-  for (let i = 0; i < 4; i += 1) {
-    const angle = angles[1 + Math.floor(rand() * (angles.length - 2))];
-    const from = size * (0.5 + rand() * 0.42);
-    const [x1, y1] = at(from, angle);
-    const drop = size * (0.1 + rand() * 0.2);
-    const sway = (rand() - 0.5) * size * 0.16;
-    strands.push({
-      d: `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${(x1 + sway * 0.5).toFixed(1)} ${(y1 + drop * 0.6).toFixed(1)} ${(x1 + sway).toFixed(1)} ${(y1 + drop).toFixed(1)}`,
-      fine: true,
-      lit: 0.3 + rand() * 0.5,
-    });
-  }
-
-  return strands;
-}
-
-// Every web gets its own seed. Two of the same shape side by side is as
-// obvious as two of the same shape mirrored.
-const WEB_TL = cobweb(120, 7);
-const WEB_TR = cobweb(120, 23);
-const WEB_LOGO = cobweb(120, 51);
-const WEB_CARD_A = cobweb(120, 88);
-const WEB_CARD_B = cobweb(120, 134);
-
-const WEB_SEEDS = {
-  tl: WEB_TL,
-  tr: WEB_TR,
-  logo: WEB_LOGO,
-  "card-a": WEB_CARD_A,
-  "card-b": WEB_CARD_B,
+const WEBS = {
+  corner: webCorner,
+  torn: webTorn,
+  strand: webStrand,
 } as const;
 
-type WebKind = keyof typeof WEB_SEEDS;
+type WebKind = keyof typeof WEBS;
 
-function Cobweb({ corner }: { corner: WebKind }) {
-  const strands = WEB_SEEDS[corner];
+function Cobweb({ kind, className = "" }: { kind: WebKind; className?: string }) {
   return (
-    <svg
-      className={`rr-hw-web rr-hw-web--${corner}`}
-      viewBox="0 0 120 120"
-      fill="none"
+    <img
+      src={WEBS[kind]}
+      alt=""
       aria-hidden
-      focusable="false"
-    >
-      {/* A soft dark corner first, or fine silk disappears into bright prize
-          artwork entirely. Then the web is drawn twice: a dark pass for
-          separation, and the silk itself on top. */}
-      <defs>
-        <radialGradient id={`rr-hw-web-fade-${corner}`} cx="0" cy="0" r="1">
-          <stop offset="0%" stopColor="rgb(5,3,10)" stopOpacity="0.82" />
-          <stop offset="55%" stopColor="rgb(5,3,10)" stopOpacity="0.45" />
-          <stop offset="100%" stopColor="rgb(5,3,10)" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <rect width="120" height="120" fill={`url(#rr-hw-web-fade-${corner})`} />
-      {strands.map((strand, i) => (
-        <path key={`s${i}`} d={strand.d} className="rr-hw-web-shadow" />
-      ))}
-      {strands.map((strand, i) => (
-        <path
-          key={`k${i}`}
-          d={strand.d}
-          className={`rr-hw-web-silk${strand.fine ? " rr-hw-web-silk--fine" : ""}`}
-          style={{ opacity: strand.lit }}
-        />
-      ))}
-    </svg>
+      draggable={false}
+      decoding="async"
+      className={`rr-hw-web ${className}`}
+    />
   );
 }
 
@@ -286,8 +159,8 @@ export function FeaturedWebs() {
 
   return (
     <div className="rr-hw-webs" aria-hidden>
-      <Cobweb corner="tl" />
-      <Cobweb corner="tr" />
+      <Cobweb kind="corner" className="rr-hw-web--tl" />
+      <Cobweb kind="torn" className="rr-hw-web--tr" />
     </div>
   );
 }
@@ -323,7 +196,7 @@ export function LogoWeb() {
 
   return (
     <span className="rr-hw-logo-web" aria-hidden>
-      <Cobweb corner="logo" />
+      <Cobweb kind="strand" className="rr-hw-web--logo" />
       <span className="rr-hw-logo-spider">
         <span className="rr-hw-logo-thread" />
         <img src={spiderImg} alt="" draggable={false} decoding="async" />
@@ -346,7 +219,7 @@ export function CardWeb({ variant }: { variant: "a" | "b" }) {
 
   return (
     <span className={`rr-hw-card-web rr-hw-card-web--${variant}`} aria-hidden>
-      <Cobweb corner={variant === "a" ? "card-a" : "card-b"} />
+      <Cobweb kind={variant === "a" ? "corner" : "torn"} />
     </span>
   );
 }

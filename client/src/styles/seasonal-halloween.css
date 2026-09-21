@@ -456,17 +456,11 @@ html.rr-zoomed .rr-hw-moon {
 .rr-hw-web {
   position: absolute;
   width: clamp(88px, 13vw, 170px);
-  height: clamp(88px, 13vw, 170px);
-  overflow: visible;
-}
-
-/* Competition artwork is bright and busy, and fine silk simply vanishes into
-   it. A soft dark corner gives the web something to sit against — the same
-   trick a photographer uses to get a pale subject off a busy background. */
-.rr-hw-web::before {
-  content: "";
-  position: absolute;
-  inset: 0;
+  height: auto;
+  /* Dew-covered silk is bright enough to read over prize artwork on its own.
+     The old vector webs needed a dark corner painted behind them to be seen
+     at all; a photograph does not, and the scrim only dulled the card. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
 }
 
 .rr-hw-web--tl {
@@ -474,40 +468,12 @@ html.rr-zoomed .rr-hw-moon {
   left: 0;
 }
 
-/* Mirrored rather than redrawn, so both corners sag the same way. */
+/* The two corners use different photographs, so this only has to be flipped
+   to hang the right way — not mirrored to fake variety. */
 .rr-hw-web--tr {
   top: 0;
   right: 0;
   transform: scaleX(-1);
-}
-
-/* The dark pass keeps the silk legible over bright competition artwork. */
-.rr-hw-web-shadow {
-  stroke: rgba(0, 0, 0, 0.72);
-  stroke-width: 2.8;
-  stroke-linecap: round;
-  fill: none;
-}
-
-/* Spokes carry the web's weight and are visibly heavier than the spiral. One
-   stroke width for everything is part of what made it look drawn. */
-/* Dusty rather than white. Per-strand opacity is set inline from the web's
-   own seed, so these are the base colour the lighting varies. */
-.rr-hw-web-silk {
-  stroke: rgba(226, 221, 236, 0.9);
-  stroke-width: 1;
-  stroke-linecap: round;
-  fill: none;
-}
-
-.rr-hw-web-silk--fine {
-  stroke: rgba(216, 211, 230, 0.75);
-  stroke-width: 0.6;
-}
-
-/* The scrim itself, behind both passes. */
-.rr-hw-web-scrim {
-  fill: rgba(5, 3, 10, 0.72);
 }
 
 /* -------------------------------------------------------------------------
@@ -787,10 +753,10 @@ html.rr-zoomed .rr-hw-cloud {
 
 .rr-hw-logo-web .rr-hw-web {
   position: absolute;
-  inset: 0;
+  inset: auto 0 auto 0;
   width: 100%;
-  height: 100%;
-  /* Mirrored so it hangs from the right, where it sits. */
+  height: auto;
+  /* Flipped so the strand runs down and away from the wordmark. */
   transform: scaleX(-1);
 }
 
@@ -844,9 +810,10 @@ html.rr-zoomed .rr-hw-cloud {
 
 .rr-hw-card-web .rr-hw-web {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 100%;
+  height: auto;
 }
 
 .rr-hw-card-web--a {

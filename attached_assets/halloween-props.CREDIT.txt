@@ -51,3 +51,24 @@ upper middle, so the real moon, bats and spider can sit on top of it and move.
 We only resized it to 1920 wide and encoded it as WebP, 94 KB. No grading was
 needed: measured across a 3x3 grid it already runs between 13 and 26 out of
 255, and is darkest exactly where the headline sits.
+
+halloween-web-corner.webp / halloween-web-torn.webp / halloween-web-strand.webp
+================================================================================
+
+Supplied by the site owner as dew-covered webs shot on pure black.
+
+Keyed by luminance, not cut out. A web cannot be cut out the way the spider
+was: the spider is solid black on white, so filling from the border removes
+the background and leaves the subject, but a web is pale, fine and
+semi-transparent — the background shows THROUGH it and in most pixels the two
+are mixed. There is no edge to cut.
+
+Shooting them as white silk on black means each pixel's brightness can become
+its alpha instead. Black falls away to nothing, bright silk stays solid, and
+every half-lit strand arrives at the opacity it actually had, down to threads
+a tenth visible that no cut-out would have kept. The dew comes with it for
+free. It is how smoke, fire and webs have always been composited.
+
+Exported at 400px (corners) and 620px (strand), which covers a 2x screen at
+the sizes they are drawn. Fine silk does not compress, so there is no point
+paying for pixels nobody resolves. 136 KB for all three.
