@@ -29,6 +29,16 @@ import sceneGraveyard from "@assets/halloween-scene-graveyard.webp";
  */
 const SCENES: string[] = [sceneGraveyard];
 
+/**
+ * Whether a painted scene exists at all.
+ *
+ * The generated cloud banks are hidden by CSS when a scene is present, but
+ * hidden is not the same as absent: the browser still fetched and decoded
+ * three images to draw nothing with them. Callers use this to skip rendering
+ * them, so the bytes are never asked for.
+ */
+export const hasScene = SCENES.length > 0;
+
 export default function HalloweenBackdrop() {
   // Chosen once per mount. useMemo rather than picking during render, so a
   // re-render never swaps the scene mid-session.

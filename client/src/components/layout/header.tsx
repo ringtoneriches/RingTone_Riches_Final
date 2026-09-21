@@ -3,7 +3,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { User } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import BrandLogo from "@/components/layout/BrandLogo";
-import { LogoWeb } from "@/components/home/SeasonalDecor";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -199,13 +198,10 @@ export default function Header() {
               </div>
 
               <Link href="/" className="flex max-w-[46vw] items-center justify-center px-1">
-                <span className="relative inline-flex">
-                  <BrandLogo
-                    className="h-7 w-auto max-h-7 max-w-full object-contain sm:h-8 sm:max-h-8"
-                    testId="img-logo"
-                  />
-                  <LogoWeb />
-                </span>
+                <BrandLogo
+                  className="h-7 w-auto max-h-7 max-w-full object-contain sm:h-8 sm:max-h-8"
+                  testId="img-logo"
+                />
               </Link>
 
               <div className="rr-header-actions justify-self-end">
@@ -220,9 +216,8 @@ export default function Header() {
 
             {/* Desktop */}
             <Link href="/" className="hidden lg:block">
-              <div className="relative flex cursor-pointer items-center group">
+              <div className="flex cursor-pointer items-center group">
                 <BrandLogo className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
-                <LogoWeb />
               </div>
             </Link>
 

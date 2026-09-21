@@ -2,7 +2,7 @@ import { useSeason } from "@/hooks/useSeason";
 import { SeasonalBats } from "./SeasonalDecor";
 import HalloweenMoon from "./HalloweenMoon";
 import HalloweenClouds from "./HalloweenClouds";
-import HalloweenBackdrop from "./HalloweenBackdrop";
+import HalloweenBackdrop, { hasScene } from "./HalloweenBackdrop";
 
 /**
  * The seasonal layer that sits inside the page's existing atmosphere.
@@ -48,7 +48,10 @@ export default function SeasonalAtmosphere() {
 
       {/* Over the moon, so the banks pass in front of it — which is most of
           what sells them as weather rather than a texture. */}
-      <HalloweenClouds />
+      {/* Only when there is no painted sky. A scene covers them completely,
+          and rendering them anyway costs three image downloads to draw
+          something nobody sees. */}
+      {!hasScene && <HalloweenClouds />}
 
       {/* After the moon, so they cross in front of it rather than behind. */}
       <SeasonalBats />
