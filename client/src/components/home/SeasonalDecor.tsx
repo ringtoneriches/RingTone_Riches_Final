@@ -1,7 +1,7 @@
 import { useSeason } from "@/hooks/useSeason";
 import webCorner from "@assets/halloween-web-corner.webp";
 import webTorn from "@assets/halloween-web-torn.webp";
-import webStrand from "@assets/halloween-web-strand.webp";
+import webDrape from "@assets/halloween-web-drape.webp";
 import spiderImg from "@assets/halloween-spider.webp";
 import batDown from "@assets/halloween-bat-down.webp";
 import batMid from "@assets/halloween-bat-mid.webp";
@@ -45,7 +45,8 @@ import batUp from "@assets/halloween-bat-up.webp";
 const WEBS = {
   corner: webCorner,
   torn: webTorn,
-  strand: webStrand,
+  /* The long strand, turned flat so it can be strung between two points. */
+  drape: webDrape,
 } as const;
 
 type WebKind = keyof typeof WEBS;
@@ -184,11 +185,18 @@ export function FeaturedSpider() {
 }
 
 /**
- * The web slung across the site logo, with a spider on it.
+ * The web strung under the site logo, with a spider hanging from it.
  *
- * Small and in one corner rather than draped over the wordmark: the logo has
- * to stay readable, and a web that obscures the brand is a cost the season
- * does not get to charge.
+ * It used to hang off the end of the wordmark, which never looked like
+ * anything: a web in mid-air beside a logo rather than on it. Slung along the
+ * bottom edge instead, it reads immediately — the sign has been hanging there
+ * long enough to gather cobwebs — and it gives the spider something to hang
+ * FROM rather than beside.
+ *
+ * Under the logo is also the one place it can appear at every size. Off the
+ * end it had to be hidden below 1024px, because the logo is centred there
+ * with a menu button and a wallet chip either side and there is no room
+ * beside it. There is always room underneath.
  */
 export function LogoWeb() {
   const { season } = useSeason();
@@ -196,7 +204,7 @@ export function LogoWeb() {
 
   return (
     <span className="rr-hw-logo-web" aria-hidden>
-      <Cobweb kind="strand" className="rr-hw-web--logo" />
+      <Cobweb kind="drape" className="rr-hw-web--logo" />
       <span className="rr-hw-logo-spider">
         <span className="rr-hw-logo-thread" />
         <img src={spiderImg} alt="" draggable={false} decoding="async" />

@@ -52,8 +52,8 @@ We only resized it to 1920 wide and encoded it as WebP, 94 KB. No grading was
 needed: measured across a 3x3 grid it already runs between 13 and 26 out of
 255, and is darkest exactly where the headline sits.
 
-halloween-web-corner.webp / halloween-web-torn.webp / halloween-web-strand.webp
-================================================================================
+halloween-web-corner.webp / halloween-web-torn.webp / halloween-web-drape.webp
+===============================================================================
 
 Supplied by the site owner as dew-covered webs shot on pure black.
 
@@ -72,3 +72,9 @@ free. It is how smoke, fire and webs have always been composited.
 Exported at 400px (corners) and 620px (strand), which covers a 2x screen at
 the sizes they are drawn. Fine silk does not compress, so there is no point
 paying for pixels nobody resolves. 136 KB for all three.
+
+halloween-web-drape.webp is the long strand rotated flat and trimmed to its
+content, so the same silk runs horizontally with its dew hanging off the
+underside — which is what a web strung under a sign actually looks like. The
+original diagonal version is not shipped; nothing used it once the logo moved
+to the drape.

@@ -732,38 +732,66 @@ html.rr-zoomed .rr-hw-cloud {
 }
 
 /* =========================================================================
-   Web on the logo
+   Web under the logo
    =========================================================================
-   Tucked into the corner rather than draped across the wordmark. The logo has
-   to stay readable — a web that obscures the brand is a cost the season does
-   not get to charge.
+   Slung along the bottom edge rather than hung off the end. Off the end it
+   read as a web floating beside a logo; underneath, it reads as a sign that
+   has been there long enough to gather cobwebs — and it gives the spider
+   something to hang from.
+
+   Sized in em so it follows the logo at every breakpoint. The logo is 3.5rem
+   tall on desktop and 1.75rem on a phone, and one set of pixel values cannot
+   serve both.
    ========================================================================= */
 
 .rr-hw-logo-web {
   position: absolute;
-  top: -12px;
-  /* Hangs off the end of the wordmark rather than across it. Any closer and
-     the web crosses the last letters and the spider sits on the S. */
-  right: -52px;
-  width: 58px;
-  height: 58px;
+  /* Anchored to the logo's bottom edge, hanging below it. */
+  left: -6%;
+  right: -6%;
+  /* Level with the logo's bottom edge. Hung below it the web reads as
+     decoration stuck under the header; pulled up into it, the silk crosses
+     the wordmark and makes it hard to read. Sitting on the edge is the only
+     place it looks like a web that has gathered on a sign. */
+  bottom: 0;
+  height: 0;
   pointer-events: none;
   z-index: 2;
+
+  /* Everything below is sized in cqw — a percentage of this element's own
+     width, which is the logo's width.
+     
+     em was wrong: it resolves against the font size, not the logo, so the
+     same 18px spider hung under a 56px desktop wordmark and a 28px phone one
+     and looked twice the size on the phone. Container units track the thing
+     they are decorating, which is the only way one rule serves both. */
+  container-type: inline-size;
 }
 
-.rr-hw-logo-web .rr-hw-web {
+/* Strung across the wordmark and sagging past both ends, so it reads as
+   something hung between two points rather than a decal laid on top.
+
+   The asset is the long strand rotated flat: the same silk, but running
+   horizontally with its dew hanging off the underside, which is what a web
+   under a sign actually looks like. */
+.rr-hw-web--logo {
   position: absolute;
-  inset: auto 0 auto 0;
+  left: 0;
+  right: 0;
+  top: -5cqw;
   width: 100%;
   height: auto;
-  /* Flipped so the strand runs down and away from the wordmark. */
-  transform: scaleX(-1);
+  transform: none;
+  opacity: 0.9;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
 }
 
 .rr-hw-logo-spider {
   position: absolute;
-  top: 34px;
-  right: 14px;
+  /* Off-centre: a spider dead in the middle of the wordmark looks placed.
+     This lands it under a sagging part of the drape rather than a taut one. */
+  left: 62%;
+  top: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -774,20 +802,20 @@ html.rr-zoomed .rr-hw-cloud {
 .rr-hw-logo-thread {
   display: block;
   width: 1px;
-  height: 14px;
-  background: linear-gradient(180deg, rgba(228, 222, 238, 0.1), rgba(228, 222, 238, 0.55));
+  height: 3.5cqw;
+  background: linear-gradient(180deg, rgba(228, 222, 238, 0.15), rgba(228, 222, 238, 0.6));
 }
 
 .rr-hw-logo-spider img {
   display: block;
-  width: 22px;
+  width: 9cqw;
   height: auto;
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.8));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85));
 }
 
 @keyframes rr-hw-logo-swing {
-  0%, 100% { transform: rotate(-6deg); }
-  50%      { transform: rotate(6deg); }
+  0%, 100% { transform: rotate(-7deg); }
+  50%      { transform: rotate(7deg); }
 }
 
 /* =========================================================================
@@ -869,13 +897,8 @@ html.rr-season-halloween .rr-comp-card article {
   border-color: rgba(92, 62, 124, 0.55);
 }
 
-@media (max-width: 1024px) {
-  /* The logo is smaller and more crowded below this, and the web starts
-     crowding the nav rather than decorating it. */
-  .rr-hw-logo-web {
-    display: none;
-  }
-}
+/* No breakpoint hiding it any more. Under the logo there is room at every
+   size, which was the point of moving it. */
 
 @media (prefers-reduced-motion: reduce) {
   .rr-hw-logo-spider {

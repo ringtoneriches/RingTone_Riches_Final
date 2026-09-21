@@ -199,10 +199,13 @@ export default function Header() {
               </div>
 
               <Link href="/" className="flex max-w-[46vw] items-center justify-center px-1">
-                <BrandLogo
-                  className="h-7 w-auto max-h-7 max-w-full object-contain sm:h-8 sm:max-h-8"
-                  testId="img-logo"
-                />
+                <span className="relative inline-flex">
+                  <BrandLogo
+                    className="h-7 w-auto max-h-7 max-w-full object-contain sm:h-8 sm:max-h-8"
+                    testId="img-logo"
+                  />
+                  <LogoWeb />
+                </span>
               </Link>
 
               <div className="rr-header-actions justify-self-end">
