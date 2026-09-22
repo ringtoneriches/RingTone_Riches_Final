@@ -13220,7 +13220,7 @@ app.get("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
 
 app.post("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
   try {
-    const { firstName, lastName, competitionId, prizeDescription, prizeValue, imageUrl, createdAt } = req.body;
+    const { firstName, lastName, competitionId, prizeDescription, prizeValue, imageUrl, createdAt, isCircle } = req.body;
 
     console.log("Received request body:", req.body); // Debug log
     console.log("Received createdAt:", createdAt); // Debug log
@@ -13276,6 +13276,10 @@ app.post("/api/admin/winners", isAuthenticated, isAdmin, async (req, res) => {
       prizeValue,
       imageUrl: imageUrl || null,
       isShowcase: true,
+      // Winners added here are the curated cheque presentations, so they join
+      // the Winner's Circle by default. Auto-created instant-win rows do not:
+      // the column defaults to false.
+      isCircle: isCircle ?? true,
       createdAt: customDate, // This will be passed to the storage function
     });
 

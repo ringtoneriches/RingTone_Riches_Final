@@ -27,6 +27,7 @@ interface WinnerFormData {
   prizeValue: string;
   imageUrl: string;
   isShowcase: boolean;
+  isCircle: boolean;
   createdAt: string;
 }
 
@@ -57,6 +58,7 @@ export default function AdminAddWinner() {
     prizeValue: "",
     imageUrl: "",
     isShowcase: true,
+    isCircle: true,
     createdAt: getCurrentDateTime(),
   });
 
@@ -125,6 +127,7 @@ export default function AdminAddWinner() {
         prizeDescription,
         prizeValue,
         imageUrl: form.imageUrl || null,
+        isCircle: form.isCircle,
         createdAt: form.createdAt ? new Date(form.createdAt).toISOString() : undefined,
       };
 
@@ -162,6 +165,7 @@ export default function AdminAddWinner() {
         prizeValue: "",
         imageUrl: "",
         isShowcase: true,
+        isCircle: true,
         createdAt: getCurrentDateTime(),
       });
       
@@ -409,6 +413,30 @@ export default function AdminAddWinner() {
                       {formatDate(form.createdAt)}
                     </p>
                   )}
+                </div>
+
+                {/* Controls the homepage Winner's Circle section. Only records
+                    with a real cheque photo belong there. */}
+                <div className="rounded-lg border border-border p-3">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={form.isCircle}
+                      onChange={(e) => setForm({ ...form, isCircle: e.target.checked })}
+                      className="mt-0.5 h-4 w-4 accent-[#D4AF37]"
+                      data-testid="checkbox-winner-circle"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium">
+                        Feature in the Winner&rsquo;s Circle
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        Shows this winner in the photo section on the homepage. Needs a
+                        real photo of them with their cheque — untick it if the image
+                        above is prize artwork rather than a winner photo.
+                      </span>
+                    </span>
+                  </label>
                 </div>
 
                 {/* Quick Action Buttons for Common Dates */}
