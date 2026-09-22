@@ -34,17 +34,16 @@ type CardModel = {
   amount: number;
   caption: string;
   image: string;
-  date: string;
 };
 
 const SEED_WINNERS: CardModel[] = [
-  { id: "seed-billy", name: "Billy L.", amount: 2500, caption: "", image: "/attached_assets/winners/billy-luther.webp", date: "2026-01-01" },
-  { id: "seed-rachael", name: "Rachael M.", amount: 2500, caption: "", image: "/attached_assets/winners/rachael-metcalf.webp", date: "2026-01-01" },
-  { id: "seed-louise", name: "Louise M.", amount: 1000, caption: "", image: "/attached_assets/winners/louise-myhill.webp", date: "2026-01-09" },
-  { id: "seed-chelsea", name: "Chelsea R.", amount: 1000, caption: "Scratch Into Summer", image: "/attached_assets/winners/chelsea-robson.webp", date: "2026-06-01" },
-  { id: "seed-jackie", name: "Jackie R.", amount: 1000, caption: "", image: "/attached_assets/winners/jackie-ridge.webp", date: "2026-01-27" },
-  { id: "seed-jade", name: "Jade E.", amount: 950, caption: "", image: "/attached_assets/winners/jade-edminson.webp", date: "2026-01-09" },
-  { id: "seed-charlotte", name: "Charlotte F.", amount: 550, caption: "", image: "/attached_assets/winners/charlotte-forster.webp", date: "2026-01-27" },
+  { id: "seed-billy", name: "Billy L.", amount: 2500, caption: "", image: "/attached_assets/winners/billy-luther.webp" },
+  { id: "seed-rachael", name: "Rachael M.", amount: 2500, caption: "", image: "/attached_assets/winners/rachael-metcalf.webp" },
+  { id: "seed-louise", name: "Louise M.", amount: 1000, caption: "", image: "/attached_assets/winners/louise-myhill.webp" },
+  { id: "seed-chelsea", name: "Chelsea R.", amount: 1000, caption: "Scratch Into Summer", image: "/attached_assets/winners/chelsea-robson.webp" },
+  { id: "seed-jackie", name: "Jackie R.", amount: 1000, caption: "", image: "/attached_assets/winners/jackie-ridge.webp" },
+  { id: "seed-jade", name: "Jade E.", amount: 950, caption: "", image: "/attached_assets/winners/jade-edminson.webp" },
+  { id: "seed-charlotte", name: "Charlotte F.", amount: 550, caption: "", image: "/attached_assets/winners/charlotte-forster.webp" },
 ];
 
 /** prizeValue is free text ("£1,000", "1000", "£1000 cash"), so be forgiving. */
@@ -65,12 +64,6 @@ function publicName(first?: string | null, last?: string | null) {
 
 function money(n: number) {
   return `£${n.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
-}
-
-function shortDate(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
 export default function WinnersCircle() {
@@ -97,7 +90,6 @@ export default function WinnersCircle() {
         amount: parseAmount(w.prizeValue),
         caption: w.competition?.title || w.prizeDescription || "Prize Draw",
         image: w.imageUrl as string,
-        date: w.createdAt,
       }));
 
     // Six fills both the 2-column and 3-column grids exactly. Seven or eight
@@ -173,9 +165,6 @@ export default function WinnersCircle() {
                   {winner.caption && (
                     <p className="mt-0.5 truncate text-xs text-white/55">{winner.caption}</p>
                   )}
-                  <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#D4AF37]/80">
-                    {shortDate(winner.date)}
-                  </p>
                 </div>
               </div>
             </article>
