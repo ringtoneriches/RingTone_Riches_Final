@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import FeaturedCompetition from "@/components/home/FeaturedCompetition";
 import HallOfFame from "@/components/home/HallOfFame";
+import WinnersCircle from "@/components/home/WinnersCircle";
 import HowItWorks from "@/components/home/HowItWorks";
 import CommunitySection from "@/components/home/CommunitySection";
 import VipClub from "@/components/home/VipClub";
@@ -202,6 +203,7 @@ export default function Home() {
         </div>
       </section>
 
+      <WinnersCircle />
       <HallOfFame />
       <HowItWorks />
       <CommunitySection />
