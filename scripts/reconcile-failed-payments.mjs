@@ -17,6 +17,14 @@
  *   node scripts/reconcile-failed-payments.mjs --days=30
  *   node scripts/reconcile-failed-payments.mjs --days=90 --json > owed.json
  *
+ * Against production, from a laptop:
+ *
+ *   railway run --service RingTone_Riches_LIVE \
+ *     node scripts/reconcile-failed-payments.mjs --days=30
+ *
+ * with READONLY_DATABASE_URL exported — Railway's own DATABASE_URL is
+ * postgres.railway.internal, which resolves only inside their network.
+ *
  * Needs DATABASE_URL (read-only is ideal) plus the Cashflows credentials for
  * the SAME environment the payments were taken in — production references do
  * not resolve against the integration gateway.
@@ -45,8 +53,14 @@ if (!API_KEY || !CONFIG_ID || !BASE_URL) {
   console.error("Missing CASHFLOWS_API_KEY / CASHFLOWS_CONFIGURATION_ID / CASHFLOWS_BASE_URL");
   process.exit(1);
 }
-if (!process.env.DATABASE_URL) {
-  console.error("Missing DATABASE_URL");
+// This script only ever reads, so a read-only handle is strictly better and
+// is preferred when one exists. It also keeps the production command short:
+// `railway run` supplies the Cashflows credentials and an internal-only
+// DATABASE_URL, and READONLY_DATABASE_URL supplies a host reachable from here.
+const DATABASE_URL = process.env.READONLY_DATABASE_URL || process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error("Missing DATABASE_URL (or READONLY_DATABASE_URL)");
   process.exit(1);
 }
 
@@ -80,10 +94,10 @@ function readJob(body) {
 // a local Postgres refuses the connection outright if it is forced on.
 const needsSsl =
   process.env.NODE_ENV === "production" ||
-  /\b(railway|rlwy\.net|amazonaws|render|supabase|neon)\b/.test(process.env.DATABASE_URL);
+  /\b(railway|rlwy\.net|amazonaws|render|supabase|neon)\b/.test(DATABASE_URL);
 
 const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: DATABASE_URL,
   ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
 });
 
