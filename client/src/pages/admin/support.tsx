@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { apiErrorMessage } from "@/lib/api-error";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -76,6 +77,7 @@ interface SupportMessage {
   ticketId: string;
   senderId: string;
   senderType: "user" | "admin";
+  editedAt?: string | null;
   message: string;
   imageUrls: string[] | null;
   createdAt: string;
@@ -129,6 +131,9 @@ const getPriorityBadgeColor = (priority: string) => {
 };
 
 export default function AdminSupport() {
+  /** Which reply is open for editing, and the text being worked on. */
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
@@ -264,6 +269,34 @@ export default function AdminSupport() {
   const { data: messages = [], isLoading: messagesLoading } = useQuery<SupportMessage[]>({
     queryKey: ["/api/admin/support/tickets", selectedTicket?.id, "messages"],
     enabled: !!selectedTicket,
+  });
+
+  const editMessageMutation = useMutation({
+    mutationFn: async ({ messageId, message }: { messageId: string; message: string }) => {
+      const response = await apiRequest(
+        `/api/admin/support/tickets/${selectedTicket?.id}/messages/${messageId}`,
+        "PATCH",
+        { message }
+      );
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/support/tickets", selectedTicket?.id, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/support/tickets"] });
+      setEditingMessageId(null);
+      setEditDraft("");
+      toast({
+        title: "Reply updated",
+        description: "The customer sees the corrected message, marked as edited.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Could not edit",
+        description: apiErrorMessage(error) || "Failed to edit the message.",
+        variant: "destructive",
+      });
+    },
   });
 
   const sendMessageMutation = useMutation({
@@ -931,7 +964,51 @@ export default function AdminSupport() {
                               : "bg-blue-500/10 border border-blue-500/30 text-white rounded-bl-md ml-0 sm:ml-10"
                           }`}
                         >
-                          <p className="whitespace-pre-wrap text-sm sm:text-base">{msg.message}</p>
+                          {editingMessageId === msg.id ? (
+                            <div className="space-y-2">
+                              <Textarea
+                                value={editDraft}
+                                onChange={(e) => setEditDraft(e.target.value)}
+                                rows={3}
+                                className="w-full bg-black/20 border-black/30 text-black placeholder:text-black/50 text-sm"
+                                data-testid={`textarea-edit-message-${msg.id}`}
+                              />
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs text-black hover:bg-black/10"
+                                  onClick={() => {
+                                    setEditingMessageId(null);
+                                    setEditDraft("");
+                                  }}
+                                  data-testid={`button-cancel-edit-${msg.id}`}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-3 text-xs bg-black text-yellow-400 hover:bg-black/85"
+                                  disabled={
+                                    editMessageMutation.isPending ||
+                                    !editDraft.trim() ||
+                                    editDraft.trim() === msg.message
+                                  }
+                                  onClick={() =>
+                                    editMessageMutation.mutate({
+                                      messageId: msg.id,
+                                      message: editDraft.trim(),
+                                    })
+                                  }
+                                  data-testid={`button-save-edit-${msg.id}`}
+                                >
+                                  {editMessageMutation.isPending ? "Saving…" : "Save"}
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="whitespace-pre-wrap text-sm sm:text-base">{msg.message}</p>
+                          )}
                         </div>
                         {msg.imageUrls && msg.imageUrls.length > 0 && (
                           <div className={`flex flex-wrap gap-2 ${msg.senderType === "admin" ? "justify-end" : "ml-0 sm:ml-10"}`}>
@@ -954,9 +1031,33 @@ export default function AdminSupport() {
                             ))}
                           </div>
                         )}
-                        <p className={`text-xs text-gray-500 ${msg.senderType === "admin" ? "text-right" : "ml-0 sm:ml-10"}`}>
-                          {format(new Date(msg.createdAt), "PPp")}
-                        </p>
+                        <div
+                          className={`flex items-center gap-2 text-xs text-gray-500 ${
+                            msg.senderType === "admin" ? "justify-end" : "ml-0 sm:ml-10"
+                          }`}
+                        >
+                          <span>{format(new Date(msg.createdAt), "PPp")}</span>
+                          {msg.editedAt && (
+                            <span className="italic" data-testid={`text-edited-${msg.id}`}>
+                              · edited {format(new Date(msg.editedAt), "PPp")}
+                            </span>
+                          )}
+                          {/* Only replies the team sent. A customer's own words
+                              in a complaint thread are the record, not a draft. */}
+                          {msg.senderType === "admin" && editingMessageId !== msg.id && (
+                            <button
+                              type="button"
+                              className="underline underline-offset-2 hover:text-yellow-400"
+                              onClick={() => {
+                                setEditingMessageId(msg.id);
+                                setEditDraft(msg.message);
+                              }}
+                              data-testid={`button-edit-message-${msg.id}`}
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))

@@ -1523,12 +1523,26 @@ export const supportMessages = pgTable("support_messages", {
   senderType: varchar("sender_type", { enum: ["user", "admin"] }).notNull(),
   message: text("message").notNull(),
   imageUrls: text("image_urls").array(),
+  // Set the first time a message is corrected. Null means never edited, which
+  // is what the customer-facing thread checks before showing the marker.
+  editedAt: timestamp("edited_at"),
+  // Which admin made the correction. There is more than one of them, so
+  // "who changed this reply?" is a question that gets asked.
+  editedBy: varchar("edited_by"),
+  // What was actually sent the first time. A support thread is the record
+  // produced in a dispute, and a reply that silently becomes something else
+  // after the customer has read it is worse than the typo it fixed.
+  originalMessage: text("original_message"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertSupportMessageSchema = createInsertSchema(supportMessages).omit({
   id: true,
   createdAt: true,
+  // Only the edit route sets these; they must never arrive on a new message.
+  editedAt: true,
+  editedBy: true,
+  originalMessage: true,
 });
 
 export type SupportMessage = typeof supportMessages.$inferSelect;
