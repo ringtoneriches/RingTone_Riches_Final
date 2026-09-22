@@ -107,7 +107,7 @@ export interface IStorage {
   // Winner operations
   getRecentWinners(limit: number, showcaseOnly?: boolean): Promise<Winner[]>;
   getWinner(id: string): Promise<Winner | undefined>;
-  createWinner(winner: Omit<Winner, 'id' | 'createdAt'>): Promise<Winner>;
+  createWinner(winner: Omit<Winner, 'id' | 'createdAt' | 'isCircle'> & { isCircle?: boolean }): Promise<Winner>;
   updateWinner(id: string, data: Partial<Omit<Winner, 'id' | 'createdAt'>>): Promise<Winner>;
   deleteWinner(id: string): Promise<void>;
 
@@ -665,7 +665,7 @@ async getWinner(id: string): Promise<Winner | undefined> {
 }
 
 // FIXED: Allow custom createdAt
-async createWinner(winner: Omit<Winner, "id" | "createdAt"> & { createdAt?: Date }): Promise<Winner> {
+async createWinner(winner: Omit<Winner, "id" | "createdAt" | "isCircle"> & { createdAt?: Date; isCircle?: boolean }): Promise<Winner> {
   const now = new Date();
   const [created] = await db.insert(winners).values({
     ...winner,
