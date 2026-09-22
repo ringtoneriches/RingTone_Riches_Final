@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Camera, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 /**
  * The Winner's Circle — photographic proof that people actually get paid.
@@ -38,13 +38,13 @@ type CardModel = {
 };
 
 const SEED_WINNERS: CardModel[] = [
-  { id: "seed-billy", name: "Billy L.", amount: 2500, caption: "Live Draw", image: "/attached_assets/winners/billy-luther.webp", date: "2026-01-01" },
-  { id: "seed-rachael", name: "Rachael M.", amount: 2500, caption: "Live Draw", image: "/attached_assets/winners/rachael-metcalf.webp", date: "2026-01-01" },
-  { id: "seed-louise", name: "Louise M.", amount: 1000, caption: "Live Draw", image: "/attached_assets/winners/louise-myhill.webp", date: "2026-01-09" },
+  { id: "seed-billy", name: "Billy L.", amount: 2500, caption: "", image: "/attached_assets/winners/billy-luther.webp", date: "2026-01-01" },
+  { id: "seed-rachael", name: "Rachael M.", amount: 2500, caption: "", image: "/attached_assets/winners/rachael-metcalf.webp", date: "2026-01-01" },
+  { id: "seed-louise", name: "Louise M.", amount: 1000, caption: "", image: "/attached_assets/winners/louise-myhill.webp", date: "2026-01-09" },
   { id: "seed-chelsea", name: "Chelsea R.", amount: 1000, caption: "Scratch Into Summer", image: "/attached_assets/winners/chelsea-robson.webp", date: "2026-06-01" },
-  { id: "seed-jackie", name: "Jackie R.", amount: 1000, caption: "Live Draw", image: "/attached_assets/winners/jackie-ridge.webp", date: "2026-01-27" },
-  { id: "seed-jade", name: "Jade E.", amount: 950, caption: "Live Draw", image: "/attached_assets/winners/jade-edminson.webp", date: "2026-01-09" },
-  { id: "seed-charlotte", name: "Charlotte F.", amount: 550, caption: "Live Draw", image: "/attached_assets/winners/charlotte-forster.webp", date: "2026-01-27" },
+  { id: "seed-jackie", name: "Jackie R.", amount: 1000, caption: "", image: "/attached_assets/winners/jackie-ridge.webp", date: "2026-01-27" },
+  { id: "seed-jade", name: "Jade E.", amount: 950, caption: "", image: "/attached_assets/winners/jade-edminson.webp", date: "2026-01-09" },
+  { id: "seed-charlotte", name: "Charlotte F.", amount: 550, caption: "", image: "/attached_assets/winners/charlotte-forster.webp", date: "2026-01-27" },
 ];
 
 /** prizeValue is free text ("£1,000", "1000", "£1000 cash"), so be forgiving. */
@@ -105,12 +105,6 @@ export default function WinnersCircle() {
     return (withPhotos.length ? withPhotos : SEED_WINNERS).slice(0, 6);
   }, [data, broken]);
 
-  const stats = useMemo(() => {
-    const total = winners.reduce((sum, w) => sum + w.amount, 0);
-    const biggest = winners.reduce((max, w) => Math.max(max, w.amount), 0);
-    return { total, biggest, count: winners.length };
-  }, [winners]);
-
   if (!winners.length) return null;
 
   return (
@@ -128,39 +122,14 @@ export default function WinnersCircle() {
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <header className="text-center">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-3.5 py-1.5">
-            <Camera className="h-3.5 w-3.5 text-[#F1D47A]" strokeWidth={2.4} />
-            <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#F1D47A]">
-              Every winner photographed
-            </span>
-          </div>
-
           <h2 className="font-prize text-[2.1rem] leading-[0.95] text-white sm:text-6xl">
             THE WINNER&rsquo;S CIRCLE
           </h2>
 
           <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-white/55 sm:text-base">
-            Real people. Real cheques. Real money in the bank — these are our winners
-            on their own doorsteps.
+            Real people, real cheques. Some of the people who&rsquo;ve won with us.
           </p>
 
-          <dl className="mx-auto mt-8 grid max-w-2xl grid-cols-3 gap-2 sm:gap-4">
-            {[
-              { label: "Paid to winners", value: `${money(stats.total)}+` },
-              { label: "Biggest cheque", value: money(stats.biggest) },
-              { label: "Winners shown", value: String(stats.count) },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-xl border border-white/10 bg-white/[0.03] px-2 py-3 sm:px-4 sm:py-4"
-              >
-                <dt className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/40 sm:text-[10px]">
-                  {stat.label}
-                </dt>
-                <dd className="mt-1 font-prize text-xl text-[#F1D47A] sm:text-3xl">{stat.value}</dd>
-              </div>
-            ))}
-          </dl>
         </header>
 
         {/* Swipeable on phones, grid from sm up. */}
@@ -201,9 +170,11 @@ export default function WinnersCircle() {
                   <h3 className="text-lg font-extrabold leading-tight text-white sm:text-xl">
                     {winner.name}
                   </h3>
-                  <p className="mt-0.5 truncate text-xs text-white/55">{winner.caption}</p>
+                  {winner.caption && (
+                    <p className="mt-0.5 truncate text-xs text-white/55">{winner.caption}</p>
+                  )}
                   <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#D4AF37]/80">
-                    Paid {shortDate(winner.date)}
+                    {shortDate(winner.date)}
                   </p>
                 </div>
               </div>
