@@ -1030,14 +1030,32 @@ async function processWalletTopup(
       
       const pending = firstQueryRow<{ id: string; status: string }>(pendingResult);
 
-      if (!pending || pending.status !== "pending") {
+      // A row that is not "pending" is not necessarily finished.
+      //
+      // One payment job can hold several attempts. A customer who fails 3D
+      // Secure and then retries successfully produces two webhooks: the first
+      // marks this row "failed", and the second arrives about a minute later
+      // with the attempt that actually paid. Requiring "pending" here meant
+      // that second webhook reached this line, found a row marked failed, and
+      // returned without crediting anyone — while Cashflows had collected the
+      // money.
+      //
+      // The same rule as the webhook's own guard: "completed" is final and
+      // must never be paid twice, "failed" is not. Double-crediting is
+      // prevented by the transaction lookup above and the FOR UPDATE lock on
+      // this row, not by the status — which is where the protection belongs,
+      // because only the transaction record proves a credit actually happened.
+      if (!pending || !shouldProcessPaymentWebhook(pending.status)) {
         const [existingRef] = await tx
           .select()
           .from(transactions)
           .where(eq(transactions.paymentRef, paymentRef))
           .limit(1);
         already = Boolean(existingRef);
-        console.warn("Pending payment not found or already processed:", pendingPaymentId);
+        console.warn(
+          "Wallet top-up not credited; pending payment missing or already settled:",
+          { pendingPaymentId, status: pending?.status ?? "missing" },
+        );
         return;
       }
 
