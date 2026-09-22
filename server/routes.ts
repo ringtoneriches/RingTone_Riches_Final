@@ -199,6 +199,7 @@ import { ukDayStart } from "./services/uk-day";
 import { shouldProcessPaymentWebhook } from "./services/payment-webhook-guard";
 import { checkTicketLimit, hasPerUserLimit, ticketLimitNote, ticketsRemainingForUser } from "./services/ticket-limits";
 import { effectiveTicketPrice } from "@shared/flash-sale";
+import { parseSeasonSetting, seasonFromSetting } from "@shared/season";
 import {
   getCompletedScratchSession,
   getOpenScratchSession,
@@ -17752,7 +17753,18 @@ app.get("/api/public/max-tickets", async (req, res) => {
     isAdmin,
     async (req: any, res) => {
       try {
-        const updates = req.body;
+        const updates = { ...req.body };
+
+        // The season ends up in a class name on <html>, so only known values
+        // are stored — an unrecognised one is rejected rather than saved.
+        if (updates.seasonalTheme !== undefined) {
+          const setting = parseSeasonSetting(updates.seasonalTheme);
+          if (!setting) {
+            return res.status(400).json({ message: "Unknown seasonal theme" });
+          }
+          updates.seasonalTheme = setting;
+        }
+
         const updatedSettings = await storage.updatePlatformSettings(updates);
         res.json(updatedSettings);
       } catch (error) {
@@ -18158,6 +18170,32 @@ app.get("/api/public/max-tickets", async (req, res) => {
       }
     }
   );
+
+  /**
+   * The seasonal skin the public site should wear.
+   *
+   * Public and unauthenticated: every visitor has to get the same answer, and
+   * it is needed before anything else renders. Deliberately resolved on the
+   * server so the season cannot be decided by whatever a browser's clock
+   * happens to say.
+   */
+  app.get("/api/season", async (req, res) => {
+    try {
+      const [settings] = await db
+        .select({ seasonalTheme: platformSettings.seasonalTheme })
+        .from(platformSettings)
+        .limit(1);
+
+      // Anything unrecognised in the column falls back to the normal site
+      // rather than being trusted into a class name.
+      const setting = parseSeasonSetting(settings?.seasonalTheme) ?? "off";
+      res.json({ season: seasonFromSetting(setting, new Date()), setting });
+    } catch (error) {
+      console.error("Error resolving season:", error);
+      // The site must render if this fails, so fall back to the normal theme.
+      res.json({ season: null, setting: "off" });
+    }
+  });
 
   app.get("/api/maintenance", async (req, res) => {
     try {

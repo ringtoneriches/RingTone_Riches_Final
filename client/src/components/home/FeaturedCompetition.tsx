@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Ticket, ShoppingCart } from "lucide-react";
 import { useBasket } from "@/hooks/useBasket";
 import ChaserBorder from "./ChaserBorder";
+import { FeaturedSpider, FeaturedWebs } from "./SeasonalDecor";
 import DigitalAtmosphere from "./DigitalAtmosphere";
 import TrustStrip from "./TrustStrip";
 import QuantitySelector from "./QuantitySelector";
@@ -107,6 +108,8 @@ function FeaturedSlide({
             }}
           />
         <div className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-transparent via-transparent to-[#0A0A0D]/80 lg:block" />
+        {/* Before the badges on purpose, so they sit on top of the web. */}
+        <FeaturedWebs />
         <div className="pointer-events-none absolute top-4 left-4 z-[2]">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#C8102E] px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
             Featured
@@ -323,6 +326,13 @@ export default function FeaturedCompetition({ competitions }: Props) {
     <section ref={sectionRef} className="rr-featured relative overflow-hidden pt-8 pb-10 sm:pt-8 sm:pb-12 lg:pb-16" data-testid="section-featured-competition">
       {starsOn && <DigitalAtmosphere stars layers={false} />}
       <div className="relative z-10 mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+        {/* The props are a sibling of the card, not a child: ChaserBorder
+            clips its children to the rounded corners, and a spider has to
+            hang in front of that edge rather than be cut off by it. The
+            wrapper is what makes them line up with the card itself instead
+            of the padded column around it. */}
+        <div className="relative">
+        <FeaturedSpider />
         <ChaserBorder variant="featured" className="shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
           <div
             className="relative overflow-hidden bg-[#0A0A0D] touch-pan-y"
@@ -422,6 +432,7 @@ export default function FeaturedCompetition({ competitions }: Props) {
             )}
           </div>
         </ChaserBorder>
+        </div>
 
         <div className="mt-10 sm:mt-12 lg:mt-14">
           <TrustStrip />

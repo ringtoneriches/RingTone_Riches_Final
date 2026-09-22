@@ -116,7 +116,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen text-foreground relative overflow-x-clip" style={{ backgroundColor: "#050505" }}>
-      <DigitalAtmosphere className="rr-atmosphere--page" />
+      <DigitalAtmosphere className="rr-atmosphere--page" seasonal />
       <div className="relative z-10">
       <Header />
       <BrandIntro />
@@ -183,11 +183,12 @@ export default function Home() {
               </div>
             ) : filteredCompetitions.length > 0 ? (
               <div className="rr-comp-grid grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-2 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-                {filteredCompetitions.map((competition) => (
+                {filteredCompetitions.map((competition, index) => (
                   <CompetitionCard
                     key={competition.id}
                     competition={competition}
                     authenticated={true}
+                    gridIndex={index}
                   />
                 ))}
               </div>

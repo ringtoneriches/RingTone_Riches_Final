@@ -41,13 +41,31 @@ export function escapeHtml(value: string) {
 }
 
 export function emailCta(label: string, href: string) {
+  // Word needs an explicit pixel width; approximate it from the label.
+  const width = Math.max(170, Math.min(320, label.length * 11 + 56));
   return `
-    <table cellpadding="0" cellspacing="0" border="0" style="margin: 8px auto 0;">
+    <table cellpadding="0" cellspacing="0" border="0" style="margin: 8px auto 0;" role="presentation">
       <tr>
-        <td align="center" style="background-color: #C8102E; border-radius: 10px;">
-          <a href="${escapeHtml(href)}" style="display: inline-block; padding: 13px 28px; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 800; letter-spacing: 0.04em;">
-            ${escapeHtml(label)}
-          </a>
+        <td align="center">
+          <!--[if mso]>
+          <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+            href="${escapeHtml(href)}" style="height:44px;v-text-anchor:middle;width:${width}px;"
+            arcsize="23%" stroke="f" fillcolor="#C8102E">
+            <w:anchorlock/>
+            <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">${escapeHtml(label)}</center>
+          </v:roundrect>
+          <![endif]-->
+          <!--[if !mso]><!-- -->
+          <table cellpadding="0" cellspacing="0" border="0" role="presentation">
+            <tr>
+              <td align="center" style="background-color: #C8102E; border-radius: 10px;">
+                <a href="${escapeHtml(href)}" style="display: inline-block; padding: 13px 28px; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 800; letter-spacing: 0.04em;">
+                  ${escapeHtml(label)}
+                </a>
+              </td>
+            </tr>
+          </table>
+          <!--<![endif]-->
         </td>
       </tr>
     </table>`;
@@ -76,12 +94,15 @@ export function wrapBrandEmail(opts: {
   const preheader = escapeHtml(opts.preheader || opts.subtitle || opts.pageTitle);
   return `
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark only">
+  <meta name="supported-color-schemes" content="dark only">
   <title>${escapeHtml(opts.pageTitle)}</title>
   <style type="text/css">
+    :root { color-scheme: dark only; supported-color-schemes: dark only; }
     @media only screen and (max-width: 480px) {
       .email-shell { width: 100% !important; }
       .email-pad { padding: 22px 16px !important; }
@@ -101,7 +122,7 @@ export function wrapBrandEmail(opts: {
             </td>
           </tr>
           <tr>
-            <td style="height: 2px; background: linear-gradient(90deg, #C8102E 0%, ${GOLD} 100%); font-size: 0; line-height: 0;">&nbsp;</td>
+            <td bgcolor="#C8102E" style="height: 2px; background-color: #C8102E; background-image: linear-gradient(90deg, #C8102E 0%, ${GOLD} 100%); font-size: 0; line-height: 0;">&nbsp;</td>
           </tr>
           <tr>
             <td class="email-pad" style="padding: 28px 24px 10px; text-align: center;">

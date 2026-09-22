@@ -30,6 +30,12 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "wouter";
+import {
+  SEASON_SETTINGS,
+  SEASON_SETTING_LABELS,
+  parseSeasonSetting,
+  type SeasonSetting,
+} from "@shared/season";
 
 type PlatformSettings = {
   id: string;
@@ -40,6 +46,7 @@ type PlatformSettings = {
   signupBonusPoints: number;
   maxTicketsPerOrder: number;
   maintenanceMode: boolean;
+  seasonalTheme: string | null;
   updatedAt: Date;
 };
 
@@ -73,6 +80,37 @@ export default function AdminSettings() {
 
   const { data: popConfig } = useQuery<GameConfig>({
     queryKey: ["/api/admin/game-pop-config"],
+  });
+
+  /**
+   * The seasonal skin, saved on its own rather than with the form below.
+   * It is a toggle, not a form field — making someone press Save Changes to
+   * turn Halloween on is a worse experience and easy to forget half-done.
+   */
+  const seasonSetting = parseSeasonSetting(settings?.seasonalTheme) ?? "off";
+
+  const saveSeasonMutation = useMutation({
+    mutationFn: async (seasonalTheme: SeasonSetting) =>
+      await apiRequest("/api/admin/settings", "PUT", { seasonalTheme }),
+    onSuccess: (_data, seasonalTheme) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
+      // The public site reads its own endpoint, so that cache has to go too.
+      queryClient.invalidateQueries({ queryKey: ["/api/season"] });
+      toast({
+        title: "Theme updated",
+        description:
+          seasonalTheme === "off"
+            ? "The site is back on its normal theme."
+            : `The site is now showing the ${SEASON_SETTING_LABELS[seasonalTheme].toLowerCase()} theme.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update the theme",
+        variant: "destructive",
+      });
+    },
   });
 
   useEffect(() => {
@@ -279,6 +317,56 @@ export default function AdminSettings() {
           </TabsList>
 
           <TabsContent value="general" className="space-y-6">
+            {/* Seasonal Theme Card */}
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-yellow-400" />
+                  Seasonal Theme
+                </CardTitle>
+                <CardDescription>
+                  Change how the public site looks. Takes effect straight away — no deploy needed.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {SEASON_SETTINGS.map((option) => {
+                    const active = seasonSetting === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => saveSeasonMutation.mutate(option)}
+                        disabled={saveSeasonMutation.isPending}
+                        aria-pressed={active}
+                        className={`flex items-center justify-between rounded-lg border px-4 py-3 text-left text-sm font-semibold transition-colors disabled:opacity-60 ${
+                          active
+                            ? "border-yellow-400 bg-yellow-400/10 text-yellow-400"
+                            : "border-border bg-card text-foreground hover:border-yellow-400/40"
+                        }`}
+                        data-testid={`button-season-${option}`}
+                      >
+                        <span>{SEASON_SETTING_LABELS[option]}</span>
+                        {active && <span className="text-xs uppercase tracking-wider">Active</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">Default theme</span> is the normal site.{" "}
+                  <span className="font-semibold text-foreground">Automatic</span> turns each season on and off by
+                  the calendar — Halloween through October, Christmas through December — so you do not have to
+                  remember. Picking a season by name keeps it on until you change it back.
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  To preview a theme without changing it for customers, open the site with{" "}
+                  <code className="rounded bg-muted px-1 py-0.5">?season=halloween</code> on the end of the address.
+                </p>
+              </CardContent>
+            </Card>
+
             {/* Ticket Purchase Limits Card */}
             <Card className="border-border bg-card">
               <CardHeader>

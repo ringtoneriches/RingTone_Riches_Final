@@ -30,3 +30,4 @@ attached_assets/**/*.sql
 attached_assets/**/*.dump
 # Local Claude Code notes
 CLAUDE.md
+dist-preview/
