@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
@@ -70,6 +70,7 @@ export default function WinnersCircle() {
   // A stale or deleted image would otherwise leave a black rectangle where a
   // photo should be, which looks worse than showing one fewer winner.
   const [broken, setBroken] = useState<Set<string>>(() => new Set());
+  const trackRef = useRef<HTMLDivElement>(null);
 
   const { data } = useQuery<ApiWinner[]>({
     queryKey: ["/api/winners", "circle"],
@@ -96,6 +97,80 @@ export default function WinnersCircle() {
     // would leave a single card stranded on the last row.
     return (withPhotos.length ? withPhotos : SEED_WINNERS).slice(0, 6);
   }, [data, broken]);
+
+  // Auto-advance the phone carousel. It scrolls card to card so it keeps the
+  // swipe feel rather than drifting like a marquee, and it defers to the
+  // person: any touch or wheel pauses it, and it resumes a few seconds later.
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el || winners.length < 2) return;
+
+    // Only below Tailwind's sm breakpoint, where the track is a carousel
+    // rather than a grid.
+    const isCarousel = window.matchMedia("(max-width: 639px)");
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    let tick: number | undefined;
+    let resumeAfter: number | undefined;
+
+    /** Distance between two cards, measured rather than assumed. */
+    const stride = () => {
+      const [first, second] = [el.children[0], el.children[1]] as (HTMLElement | undefined)[];
+      if (!first) return 0;
+      return second ? second.offsetLeft - first.offsetLeft : first.offsetWidth;
+    };
+
+    const advance = () => {
+      const step = stride();
+      if (!step) return;
+      // Derive the index from scroll position so a manual swipe is respected.
+      const current = Math.round(el.scrollLeft / step);
+      // Snap-centring means the last card rests at the maximum scroll rather
+      // than at its own offset, so check the end directly. Deriving it from
+      // the index alone would stall there instead of wrapping.
+      const atEnd = el.scrollLeft >= el.scrollWidth - el.clientWidth - 8;
+      const next = atEnd || current + 1 >= winners.length ? 0 : current + 1;
+      el.scrollTo({ left: next * step, behavior: "smooth" });
+    };
+
+    const stop = () => {
+      if (tick !== undefined) window.clearInterval(tick);
+      tick = undefined;
+    };
+
+    const start = () => {
+      stop();
+      if (!isCarousel.matches || reduced.matches || document.hidden) return;
+      tick = window.setInterval(advance, 3200);
+    };
+
+    const hold = () => {
+      stop();
+      if (resumeAfter !== undefined) window.clearTimeout(resumeAfter);
+      resumeAfter = window.setTimeout(start, 6000);
+    };
+
+    start();
+    el.addEventListener("pointerdown", hold, { passive: true });
+    el.addEventListener("touchstart", hold, { passive: true });
+    el.addEventListener("wheel", hold, { passive: true });
+    document.addEventListener("visibilitychange", start);
+    isCarousel.addEventListener("change", start);
+    reduced.addEventListener("change", start);
+    window.addEventListener("resize", start);
+
+    return () => {
+      stop();
+      if (resumeAfter !== undefined) window.clearTimeout(resumeAfter);
+      el.removeEventListener("pointerdown", hold);
+      el.removeEventListener("touchstart", hold);
+      el.removeEventListener("wheel", hold);
+      document.removeEventListener("visibilitychange", start);
+      isCarousel.removeEventListener("change", start);
+      reduced.removeEventListener("change", start);
+      window.removeEventListener("resize", start);
+    };
+  }, [winners.length]);
 
   if (!winners.length) return null;
 
@@ -125,7 +200,10 @@ export default function WinnersCircle() {
         </header>
 
         {/* Swipeable on phones, grid from sm up. */}
-        <div className="mt-10 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mt-12 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-3">
+        <div
+          ref={trackRef}
+          className="mt-10 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mt-12 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-3"
+        >
           {winners.map((winner, i) => (
             <article
               key={winner.id}
