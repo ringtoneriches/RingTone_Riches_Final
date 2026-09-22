@@ -10,6 +10,7 @@ import {
   escapeHtml,
   wrapBrandEmail,
 } from "./email-chrome";
+import { renderPromotionalEmail } from "./emails/promotional-email";
 
 let resend: Resend | null = null;
 function getResend(): Resend {
@@ -376,35 +377,37 @@ export async function sendPromotionalEmail(
   to: string,
   campaign: PromotionalCampaign,
 ) {
-  let offerSection = "";
+  // The offer sits inside the template's dashed "ticket", so it supplies the
+  // contents only — no card wrapper of its own.
+  let offerHtml = "";
 
   if (campaign.offerType === "discount" && campaign.discountCode) {
-    offerSection = emailCard(`
-      <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: ${GOLD};">Discount code</div>
-      <div style="margin-top: 10px; font-size: 26px; font-weight: 800; letter-spacing: 0.08em; color: #ffffff; font-family: 'Courier New', monospace;">${escapeHtml(campaign.discountCode)}</div>
-      ${campaign.discountPercentage ? `<p style="margin: 8px 0 0; font-size: 14px; color: #d8d8de;">Save ${campaign.discountPercentage}% on your next play.</p>` : ""}
-      ${campaign.expiryDate ? `<p style="margin: 6px 0 0; font-size: 12px; color: #8b8b93;">Expires ${new Date(campaign.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>` : ""}
-    `);
+    offerHtml = `
+      <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: ${GOLD};">Discount code</div>
+      <div style="margin-top: 12px; font-size: 30px; font-weight: 800; letter-spacing: 0.12em; color: #ffffff; font-family: 'Courier New', Consolas, monospace;">${escapeHtml(campaign.discountCode)}</div>
+      ${campaign.discountPercentage ? `<p style="margin: 12px 0 0; font-size: 15px; color: #EFEAE1;">Save ${campaign.discountPercentage}% on your next play.</p>` : ""}
+      ${campaign.expiryDate ? `<p style="margin: 8px 0 0; font-size: 12px; color: #8b8b93;">Expires ${new Date(campaign.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>` : ""}
+    `;
   } else if (campaign.offerType === "bonus" && (campaign.bonusAmount || campaign.bonusPoints)) {
-    offerSection = emailCard(`
-      <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: ${GOLD};">Bonus</div>
-      ${campaign.bonusAmount ? `<div style="margin-top: 8px; font-size: 28px; font-weight: 800; color: ${GOLD};">£${escapeHtml(String(campaign.bonusAmount))}</div>` : ""}
-      ${campaign.bonusPoints ? `<p style="margin: 6px 0 0; font-size: 16px; font-weight: 700; color: #ffffff;">${campaign.bonusPoints} Ringtone Points</p>` : ""}
-      ${campaign.expiryDate ? `<p style="margin: 6px 0 0; font-size: 12px; color: #8b8b93;">Until ${new Date(campaign.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>` : ""}
-    `);
+    offerHtml = `
+      <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: ${GOLD};">Bonus</div>
+      ${campaign.bonusAmount ? `<div style="margin-top: 10px; font-size: 34px; font-weight: 800; color: ${GOLD}; line-height: 1;">£${escapeHtml(String(campaign.bonusAmount))}</div>` : ""}
+      ${campaign.bonusPoints ? `<p style="margin: 10px 0 0; font-size: 17px; font-weight: 700; color: #ffffff;">${campaign.bonusPoints} Ringtone Points</p>` : ""}
+      ${campaign.expiryDate ? `<p style="margin: 8px 0 0; font-size: 12px; color: #8b8b93;">Until ${new Date(campaign.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>` : ""}
+    `;
   }
 
-  const emailHtml = wrapBrandEmail({
-    pageTitle: campaign.subject,
-    kicker: "From the club",
-    title: campaign.title.toUpperCase().slice(0, 42),
-    subtitle: "A note from Ringtone Riches.",
-    bodyHtml: `
-      ${emailCard(`<p style="margin: 0; font-size: 14px; line-height: 1.6; color: #d8d8de;">${escapeHtml(campaign.message).replace(/\n/g, "<br/>")}</p>`)}
-      ${offerSection}
-      ${emailCta("Visit Ringtone Riches", brandSiteUrl())}
-      <p style="margin: 16px 0 0; text-align: center; font-size: 11px; color: #5c5c64;">You’re receiving this because you opted in to offers.</p>
-    `,
+  const emailHtml = renderPromotionalEmail({
+    subject: campaign.subject,
+    // Let the headline wrap instead of chopping it at 42 characters, which
+    // used to cut mid-word.
+    title: campaign.title.toUpperCase().slice(0, 90),
+    message: campaign.message,
+    offerHtml,
+    ctaLabel: campaign.offerType === "discount" || campaign.offerType === "bonus"
+      ? "Claim it now"
+      : "See what's new",
+    ctaHref: brandSiteUrl(),
   });
 
   try {
