@@ -24,6 +24,7 @@ import {
 import { Loader2, ArrowLeft, Sparkles } from "lucide-react";
 import { getCompetitionTypeConfig } from "@/lib/competition-display";
 import { usePurchaseArrivalToast } from "@/lib/purchase-toast";
+import { publishGoldenTicket, GOLDEN_TICKET_DELAYS } from "@/lib/golden-ticket";
 
 export default function PopGamePage() {
   const { competitionId, orderId } = useParams();
@@ -109,6 +110,7 @@ export default function PopGamePage() {
       }
 
       const data = await response.json();
+      publishGoldenTicket(data?.goldenTicket, GOLDEN_TICKET_DELAYS.batch);
       const results: PopRevealResult[] = Array.isArray(data.results) ? data.results : [];
       const processed = Number(data.processed ?? data.playsProcessed ?? results.length);
       const cash = Number(data.totalWon ?? data.totalCashWon ?? 0);

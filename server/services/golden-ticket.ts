@@ -17,6 +17,7 @@ import { db } from "../db";
 import {
   goldenTicketCampaigns,
   goldenTicketWins,
+  orders,
   transactions,
   users,
 } from "@shared/schema";
@@ -320,9 +321,23 @@ export async function maybeAwardGoldenTicket(
       .where(eq(goldenTicketCampaigns.status, "active"));
     if (!live.length) return null;
 
+    // Spend decides whether a play counts as free, and not every play route
+    // has the order to hand. Look it up only once a campaign is actually
+    // live, so the common case — no campaign running — costs nothing.
+    let spend = play.spend;
+    if (spend === undefined && play.orderId) {
+      const [order] = await tx
+        .select({ totalAmount: orders.totalAmount, quantity: orders.quantity })
+        .from(orders)
+        .where(eq(orders.id, play.orderId))
+        .limit(1);
+      spend = spendPerPlay(order);
+    }
+    const resolved = { ...play, spend: spend ?? 0 };
+
     for (const campaign of drawOrder<any>(live)) {
       const draw = campaign as unknown as CampaignDraw;
-      if (!isPlayEligible(draw, { ...play, userId: play.userId }).eligible) continue;
+      if (!isPlayEligible(draw, { ...resolved, userId: play.userId }).eligible) continue;
 
       // Atomic: one statement claims this play's position and locks the row,
       // so two simultaneous plays cannot be handed the same position.
@@ -340,7 +355,7 @@ export async function maybeAwardGoldenTicket(
         continue;
       }
 
-      const award = await grantTicket(tx, campaign, play, position);
+      const award = await grantTicket(tx, campaign, resolved, position);
       if (award) return award;
     }
     return null;
@@ -476,4 +491,27 @@ export async function awardGoldenTicketForPlay(
     console.error("[golden-ticket] award transaction failed:", error);
     return null;
   }
+}
+
+/**
+ * A bulk reveal is several plays at once, so each one gets its own check.
+ *
+ * Returns the first ticket only: the client shows a single takeover once the
+ * whole batch has finished animating, and two reveals stacked on top of each
+ * other would undo the moment.
+ */
+export async function awardGoldenTicketForPlays(
+  base: AwardContext,
+  plays: number,
+): Promise<GoldenTicketAward | null> {
+  let first: GoldenTicketAward | null = null;
+  const total = Math.max(0, Math.floor(plays));
+  for (let i = 0; i < total; i++) {
+    const award = await awardGoldenTicketForPlay({
+      ...base,
+      playId: `${base.playId ?? base.orderId ?? "batch"}#${i + 1}`,
+    });
+    if (award && !first) first = award;
+  }
+  return first;
 }

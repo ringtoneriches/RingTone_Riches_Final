@@ -142,6 +142,16 @@ export default function AdminGoldenTickets() {
     onError: fail,
   });
 
+  const setFulfilment = useMutation({
+    mutationFn: ({ winId, status, note }: { winId: string; status: string; note?: string }) =>
+      apiRequest(`/api/admin/golden-tickets/wins/${winId}/fulfilment`, "PATCH", { status, note }),
+    onSuccess: () => {
+      toast({ title: "Fulfilment updated" });
+      refresh();
+    },
+    onError: fail,
+  });
+
   const toggleGame = (game: string) =>
     setForm((f) => ({
       ...f,
@@ -511,7 +521,47 @@ export default function AdminGoldenTickets() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs">{w.fulfilmentStatus.replace(/_/g, " ")}</TableCell>
+                      <TableCell className="text-xs">
+                        {/* Cash and site credit are already paid, so there is
+                            nothing to chase. Physical prizes need a human. */}
+                        {w.fulfilmentStatus === "auto_credited" ? (
+                          <span className="text-emerald-400">credited</span>
+                        ) : w.fulfilmentStatus === "awaiting_fulfilment" ? (
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="text-amber-400">awaiting fulfilment</span>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 px-2 text-[10px]"
+                                onClick={() =>
+                                  setFulfilment.mutate({ winId: w.id, status: "fulfilled" })
+                                }
+                                disabled={setFulfilment.isPending}
+                                data-testid={`button-fulfil-${w.id}`}
+                              >
+                                Mark sent
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 px-2 text-[10px] text-red-400"
+                                onClick={() =>
+                                  setFulfilment.mutate({ winId: w.id, status: "cancelled" })
+                                }
+                                disabled={setFulfilment.isPending}
+                                data-testid={`button-void-${w.id}`}
+                              >
+                                Void
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className={w.fulfilmentStatus === "fulfilled" ? "text-emerald-400" : "text-gray-500"}>
+                            {w.fulfilmentStatus.replace(/_/g, " ")}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="whitespace-nowrap text-xs text-gray-400">
                         {new Date(w.awardedAt).toLocaleString("en-GB")}
                       </TableCell>
