@@ -7,6 +7,7 @@ import {
   isPlayEligible,
   isWinningPosition,
   pickDropPositions,
+  spendPerPlay,
 } from "./golden-ticket-draw";
 
 /** Deterministic stand-in for Math.random. */
@@ -174,5 +175,29 @@ describe("drawOrder", () => {
       { id: "a", activatedAt: same },
     ]);
     expect(order.map((c) => c.id)).toEqual(["a", "z"]);
+  });
+});
+
+describe("spendPerPlay", () => {
+  it("splits a bulk order across its plays", () => {
+    expect(spendPerPlay({ totalAmount: "9.90", quantity: 10 })).toBeCloseTo(0.99);
+  });
+
+  it("handles a single play", () => {
+    expect(spendPerPlay({ totalAmount: "0.99", quantity: 1 })).toBeCloseTo(0.99);
+  });
+
+  it("treats a free or zero order as a free play", () => {
+    expect(spendPerPlay({ totalAmount: "0.00", quantity: 5 })).toBe(0);
+  });
+
+  it("does not divide by zero", () => {
+    expect(spendPerPlay({ totalAmount: "9.90", quantity: 0 })).toBe(0);
+  });
+
+  it("survives missing or malformed orders", () => {
+    expect(spendPerPlay(null)).toBe(0);
+    expect(spendPerPlay(undefined)).toBe(0);
+    expect(spendPerPlay({ totalAmount: "nonsense", quantity: 2 })).toBe(0);
   });
 });

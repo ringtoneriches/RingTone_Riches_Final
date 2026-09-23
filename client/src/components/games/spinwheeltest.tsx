@@ -46,6 +46,7 @@ import PlayResultsTable, {
   type SpinHistoryRow,
 } from "@/components/games/PlayResultsTable";
 import RevealAllBatchSummary, { type RevealBatchRow } from "@/components/games/RevealAllBatchSummary";
+import { publishGoldenTicket } from "@/lib/golden-ticket";
 
 // Icon mapping for admin configuration - uses car PNG images
 const ICON_MAP: Record<string, any> = {
@@ -679,6 +680,9 @@ ctx.stroke();
     }
 
     const results = await response.json();
+    // Let the whole batch finish animating first — burying it among twenty
+    // other results would waste the surprise.
+    publishGoldenTicket(results?.goldenTicket, 2600);
     const spins = Array.isArray(results?.spins)
       ? results.spins
       : Array.isArray(results?.results)
@@ -922,6 +926,10 @@ ctx.stroke();
           
           setWinner(winnerResult.label);
           setIsSpinning(false);
+
+          // The wheel has landed and the player has seen their result, so the
+          // Golden Ticket can now arrive as a separate moment.
+          publishGoldenTicket(result.goldenTicket);
 
           onSpinComplete(
             winnerResult.index,

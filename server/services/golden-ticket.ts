@@ -29,9 +29,10 @@ import {
   isPlayEligible,
   isWinningPosition,
   pickDropPositions,
+  spendPerPlay,
 } from "./golden-ticket-draw";
 
-export { GoldenTicketError } from "./golden-ticket-draw";
+export { GoldenTicketError, spendPerPlay } from "./golden-ticket-draw";
 
 type DbTx = typeof db | any;
 
@@ -449,4 +450,30 @@ async function grantTicket(
     prizeImageUrl: campaign.prizeImageUrl ?? null,
     fulfilmentStatus: fulfilment,
   };
+}
+
+/**
+ * The entry point for play endpoints.
+ *
+ * The game routes are not themselves transactional — they are sequences of
+ * storage calls — so the award opens its own transaction. That makes the
+ * counter bump, the win row and the wallet credit atomic *with each other*: a
+ * failure rolls the whole award back rather than leaving a ticket half given.
+ * It cannot be atomic with the game result, because the game result is not
+ * written transactionally either, and forcing that would mean rewriting every
+ * play endpoint.
+ *
+ * Never throws. A promotional extra must not cost someone the result they paid
+ * for, so any failure is logged and the play stands.
+ */
+export async function awardGoldenTicketForPlay(
+  play: AwardContext,
+): Promise<GoldenTicketAward | null> {
+  if (!play.userId) return null;
+  try {
+    return await db.transaction(async (tx) => maybeAwardGoldenTicket(tx, play));
+  } catch (error) {
+    console.error("[golden-ticket] award transaction failed:", error);
+    return null;
+  }
 }

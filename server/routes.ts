@@ -198,6 +198,7 @@ import { getPromoVideoModeStatus } from "./services/promo-video-mode";
 import { getCashflowsRevenue } from "./services/cashflows-revenue";
 import { ukDayStart } from "./services/uk-day";
 import { shouldProcessPaymentWebhook } from "./services/payment-webhook-guard";
+import { awardGoldenTicketForPlay, spendPerPlay } from "./services/golden-ticket";
 import { checkTicketLimit, hasPerUserLimit, ticketLimitNote, ticketsRemainingForUser } from "./services/ticket-limits";
 import { effectiveTicketPrice } from "@shared/flash-sale";
 import { parseSeasonSetting, seasonFromSetting } from "@shared/season";
@@ -5941,7 +5942,19 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           message: "No spins remaining in this purchase",
         });
       }
-      return res.json(controlledSpin.response);
+      // Golden Ticket rides back with the result the game already decided.
+      const goldenTicket = await awardGoldenTicketForPlay({
+        userId,
+        gameType: "spin",
+        competitionId,
+        orderId,
+        spend: spendPerPlay(order),
+        originalResult:
+          (controlledSpin.response as any)?.prize?.brand ??
+          (controlledSpin.response as any)?.segment?.label ??
+          null,
+      });
+      return res.json({ ...(controlledSpin.response as any), goldenTicket });
     }
 
     // Check spins remaining
@@ -6261,6 +6274,15 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       spinsRemaining: spinsRemaining - 1,
       orderId: order.id,
       wheelType: wheelType,
+      goldenTicket: await awardGoldenTicketForPlay({
+        userId,
+        gameType: "spin",
+        competitionId,
+        orderId: order.id,
+        playId: ticketNumber ? String(ticketNumber) : null,
+        spend: spendPerPlay(order),
+        originalResult: selectedSegment.label ?? null,
+      }),
     });
   } catch (error) {
     console.error("Error playing spin wheel:", error);
@@ -6674,6 +6696,24 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
       console.error("Failed to label reveal-all spin tickets:", err);
     }
 
+    // Every revealed spin is a play, so each gets its own check. At most one
+    // ticket comes back: the client holds it until the whole batch has
+    // finished animating, which is the point of the feature.
+    let goldenTicket = null as Awaited<ReturnType<typeof awardGoldenTicketForPlay>>;
+    const perPlaySpend = spendPerPlay(order);
+    for (const row of results as any[]) {
+      const award = await awardGoldenTicketForPlay({
+        userId,
+        gameType: "spin",
+        competitionId,
+        orderId: order.id,
+        playId: row?.ticketNumber ? String(row.ticketNumber) : null,
+        spend: perPlaySpend,
+        originalResult: row?.segment?.label ?? row?.prize?.brand ?? null,
+      });
+      if (award && !goldenTicket) goldenTicket = award;
+    }
+
     res.json({
       success: true,
       spins: results,
@@ -6684,6 +6724,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
         prizesSynced: prizeSyncs.length,
       },
       spinsRemaining: spinsRemaining - results.length,
+      goldenTicket,
     });
   } catch (error) {
     console.error("Error revealing all spins:", error);
