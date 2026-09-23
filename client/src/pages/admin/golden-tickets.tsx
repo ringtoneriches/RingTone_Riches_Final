@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Ticket, Lock, Ban, Plus } from "lucide-react";
+import { Ticket, Lock, Ban, Plus, Upload } from "lucide-react";
+import { useRef } from "react";
 
 const GAME_TYPES = ["spin", "scratch", "instant", "pop", "plinko", "voltz", "slot", "royal"];
 
@@ -68,6 +69,8 @@ const emptyForm = {
   prizeType: "cash" as Campaign["prizeType"],
   prizeValue: "",
   prizeDescription: "",
+  prizeImageUrl: "",
+  eligibleCompetitionIds: [] as string[],
   eligibleGameTypes: [] as string[],
   includeFreePlays: false,
   minSpend: "",
@@ -81,6 +84,11 @@ export default function AdminGoldenTickets() {
   const { toast } = useToast();
   const [form, setForm] = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Only live competitions are worth targeting.
+  const { data: competitions = [] } = useQuery<any[]>({ queryKey: ["/api/competitions"] });
 
   const { data: campaigns = [], isLoading } = useQuery<Campaign[]>({
     queryKey: ["/api/admin/golden-tickets"],
@@ -151,6 +159,35 @@ export default function AdminGoldenTickets() {
     },
     onError: fail,
   });
+
+  const uploadImage = async (file: File) => {
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append("image", file);
+      const res = await fetch("/api/upload/competition-image", {
+        method: "POST",
+        credentials: "include",
+        body,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setForm((f) => ({ ...f, prizeImageUrl: data.imagePath || data.url || "" }));
+      toast({ title: "Image uploaded" });
+    } catch (error) {
+      fail(error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const toggleCompetition = (id: string) =>
+    setForm((f) => ({
+      ...f,
+      eligibleCompetitionIds: f.eligibleCompetitionIds.includes(id)
+        ? f.eligibleCompetitionIds.filter((c) => c !== id)
+        : [...f.eligibleCompetitionIds, id],
+    }));
 
   const toggleGame = (game: string) =>
     setForm((f) => ({
@@ -245,6 +282,83 @@ export default function AdminGoldenTickets() {
                   onChange={(e) => setForm({ ...form, prizeDescription: e.target.value })}
                   placeholder="Shown on the reveal, e.g. 55-inch 4K TV delivered to your door"
                 />
+              </div>
+
+              <div className="sm:col-span-2">
+                <Label>Prize image</Label>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadImage(file);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploading}
+                    data-testid="button-upload-prize-image"
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {uploading ? "Uploading…" : "Upload image"}
+                  </Button>
+                  {form.prizeImageUrl && (
+                    <>
+                      <img
+                        src={form.prizeImageUrl}
+                        alt=""
+                        className="h-14 w-14 rounded-lg border border-zinc-700 object-cover"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="text-xs text-red-400"
+                        onClick={() => setForm({ ...form, prizeImageUrl: "" })}
+                      >
+                        Remove
+                      </Button>
+                    </>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Shown on the winner's reveal. Optional.
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <Label>Limit to specific competitions (optional)</Label>
+                <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-y-auto">
+                  {competitions.length === 0 ? (
+                    <p className="text-xs text-gray-500">No competitions loaded.</p>
+                  ) : (
+                    competitions.map((comp: any) => {
+                      const on = form.eligibleCompetitionIds.includes(comp.id);
+                      return (
+                        <button
+                          key={comp.id}
+                          type="button"
+                          onClick={() => toggleCompetition(comp.id)}
+                          className={`max-w-full truncate rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                            on
+                              ? "border-yellow-400 bg-yellow-400/15 text-yellow-300"
+                              : "border-zinc-700 text-gray-400 hover:border-zinc-500"
+                          }`}
+                          data-testid={`chip-comp-${comp.id}`}
+                        >
+                          {comp.title}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Select none to include every competition of the chosen games.
+                </p>
               </div>
 
               <div className="sm:col-span-2">
