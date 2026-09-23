@@ -137,6 +137,7 @@ import {
 } from "./email";
 import { wsManager } from "./websocket";
 import { registerInstantWinRoutes } from "./instantWinRoutes";
+import { registerGoldenTicketRoutes } from "./goldenTicketRoutes";
 import { registerDailySpinRoutes } from "./daily-spin-routes";
 import {
   InstantWinError,
@@ -22544,6 +22545,7 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
   // ════════════════════ END ROYAL REELS ROUTES ════════════════════
 
   registerInstantWinRoutes(app);
+  registerGoldenTicketRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

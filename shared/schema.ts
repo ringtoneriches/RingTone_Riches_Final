@@ -717,6 +717,84 @@ export const winners = pgTable("winners", {
 });
 
 
+/**
+ * Golden Tickets — a promotional prize layer that sits above the games.
+ *
+ * A play gets its normal result first; a Golden Ticket may then drop on top of
+ * it, unrelated to the competition's own prize pool.
+ *
+ * The draw is committed before anyone plays. On activation the system picks
+ * distinct play positions inside a window and seals them here, so no one can
+ * decide afterwards who receives a ticket. Nothing about a live campaign is
+ * editable — it can only be cancelled.
+ */
+export const goldenTicketCampaigns = pgTable("golden_ticket_campaigns", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  prizeType: varchar("prize_type", { enum: ["cash", "credit", "physical"] }).notNull(),
+  /** Cash/credit amount. Null for a physical prize, which carries a value for reporting only. */
+  prizeValue: decimal("prize_value", { precision: 10, scale: 2 }),
+  prizeDescription: text("prize_description"),
+  prizeImageUrl: text("prize_image_url"),
+
+  // Eligibility, all admin-controlled.
+  eligibleGameTypes: jsonb("eligible_game_types").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  /** Optional narrowing to specific competitions; empty means every competition of the eligible types. */
+  eligibleCompetitionIds: jsonb("eligible_competition_ids").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  minSpend: decimal("min_spend", { precision: 10, scale: 2 }),
+  includeFreePlays: boolean("include_free_plays").notNull().default(false),
+
+  // The sealed draw.
+  ticketCount: integer("ticket_count").notNull(),
+  dropWindow: integer("drop_window").notNull(),
+  /** Play positions that win, chosen at activation. Never edited afterwards. */
+  dropPositions: jsonb("drop_positions").$type<number[]>().notNull().default(sql`'[]'::jsonb`),
+  /** Eligible plays counted since activation. Incremented atomically. */
+  playsSeen: integer("plays_seen").notNull().default(0),
+  ticketsAwarded: integer("tickets_awarded").notNull().default(0),
+
+  status: varchar("status", {
+    enum: ["draft", "scheduled", "active", "completed", "expired", "cancelled"],
+  }).notNull().default("draft"),
+  startsAt: timestamp("starts_at"),
+  endsAt: timestamp("ends_at"),
+
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  activatedBy: varchar("activated_by").references(() => users.id),
+  activatedAt: timestamp("activated_at"),
+  closedAt: timestamp("closed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+/** One row per awarded ticket. The audit trail behind every drop. */
+export const goldenTicketWins = pgTable("golden_ticket_wins", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: uuid("campaign_id").notNull().references(() => goldenTicketCampaigns.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  competitionId: uuid("competition_id").references(() => competitions.id),
+  gameType: varchar("game_type").notNull(),
+  /** The play this attached to, and what that play itself returned. */
+  playId: varchar("play_id"),
+  orderId: uuid("order_id").references(() => orders.id),
+  originalResult: text("original_result"),
+  /** The play position that matched, so a drop can be checked against the sealed list. */
+  dropPosition: integer("drop_position").notNull(),
+
+  // A snapshot, so later edits to the campaign cannot rewrite history.
+  prizeType: varchar("prize_type").notNull(),
+  prizeName: text("prize_name").notNull(),
+  prizeValue: decimal("prize_value", { precision: 10, scale: 2 }),
+
+  transactionId: uuid("transaction_id").references(() => transactions.id),
+  fulfilmentStatus: varchar("fulfilment_status", {
+    enum: ["auto_credited", "awaiting_fulfilment", "fulfilled", "cancelled"],
+  }).notNull(),
+  fulfilmentNote: text("fulfilment_note"),
+  awardedAt: timestamp("awarded_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const savedBankAccounts = pgTable("saved_bank_accounts", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
