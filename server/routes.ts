@@ -6325,7 +6325,13 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
       count,
     });
     if (controlledRevealSpins?.handled) {
-      return res.json(controlledRevealSpins.response);
+      return res.json({
+        ...(controlledRevealSpins.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "spin", competitionId, orderId },
+          Number(count) || 1,
+        ),
+      });
     }
 
     // Check spins remaining
@@ -11372,7 +11378,12 @@ app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
         return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
       }
       plinkoCooldowns.set(cooldownKey, now);
-      return res.json(controlledPlinko.response);
+      return res.json({
+        ...(controlledPlinko.response as any),
+        goldenTicket: await awardGoldenTicketForPlay({
+          userId, gameType: "plinko", competitionId, orderId,
+        }),
+      });
     }
 
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -11653,7 +11664,13 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
       count,
     });
     if (controlledRevealPlinko?.handled) {
-      return res.json(controlledRevealPlinko.response);
+      return res.json({
+        ...(controlledRevealPlinko.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "plinko", competitionId, orderId },
+          Number(count) || 1,
+        ),
+      });
     }
 
     const playsUsed = await db.select({ count: sql<number>`count(*)` })
@@ -12306,7 +12323,13 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
       count: req.body.count || order.quantity,
     });
     if (controlledRevealPlinko2?.handled) {
-      return res.json(controlledRevealPlinko2.response);
+      return res.json({
+        ...(controlledRevealPlinko2.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "plinko", competitionId, orderId },
+          Number(req.body.count) || order.quantity || 1,
+        ),
+      });
     }
 
     // Get user
@@ -15684,7 +15707,12 @@ app.post("/api/play-pop", async (req: any, res) => {
             message: "No plays remaining in this purchase",
           });
         }
-        return res.json(controlledPop.response);
+        return res.json({
+          ...(controlledPop.response as any),
+          goldenTicket: await awardGoldenTicketForPlay({
+            userId, gameType: "pop", competitionId, orderId,
+          }),
+        });
       }
 
       // Check remaining plays
@@ -16223,14 +16251,20 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    const controlledReveal = await revealAllControlledPop({
+    const controlledRevealPop = await revealAllControlledPop({
       competitionId,
       orderId,
       userId,
       count,
     });
-    if (controlledReveal?.handled) {
-      return res.json(controlledReveal.response);
+    if (controlledRevealPop?.handled) {
+      return res.json({
+        ...(controlledRevealPop.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "pop", competitionId, orderId },
+          Number(count) || 1,
+        ),
+      });
     }
 
     // Check remaining plays
@@ -18983,7 +19017,12 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
       if (controlledVoltz.noTickets) {
         return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
       }
-      return res.json(controlledVoltz.response);
+      return res.json({
+        ...(controlledVoltz.response as any),
+        goldenTicket: await awardGoldenTicketForPlay({
+          userId, gameType: "voltz", competitionId, orderId,
+        }),
+      });
     }
 
     const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
@@ -19433,7 +19472,13 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
       count,
     });
     if (controlledRevealVoltz?.handled) {
-      return res.json(controlledRevealVoltz.response);
+      return res.json({
+        ...(controlledRevealVoltz.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "voltz", competitionId, orderId },
+          Number(count) || 1,
+        ),
+      });
     }
 
     const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
@@ -21826,7 +21871,13 @@ app.post("/api/reveal-all-slot", isAuthenticated, async (req: any, res) => {
       count,
     });
     if (controlledReveal?.handled) {
-      return res.json(controlledReveal.response);
+      return res.json({
+        ...(controlledReveal.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "slot", competitionId: order.competitionId, orderId },
+          Number(count) || 1,
+        ),
+      });
     }
 
     const [slotCfg] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
