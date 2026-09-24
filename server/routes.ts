@@ -7730,7 +7730,13 @@ app.post(
         count: cardsToProcess,
       });
       if (controlledRevealScratch?.handled) {
-        return res.json(controlledRevealScratch.response);
+        return res.json({
+          ...(controlledRevealScratch.response as any),
+          goldenTicket: await awardGoldenTicketForPlays(
+            { userId, gameType: "scratch", competitionId, orderId },
+            cardsToProcess,
+          ),
+        });
       }
 
       // Get user
@@ -7999,6 +8005,10 @@ app.post(
 
       res.json({
         success: true,
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "scratch", competitionId, orderId },
+          results.length,
+        ),
         scratches: results,
         summary: {
           totalCash,
@@ -8377,6 +8387,13 @@ app.post(
           });
           return res.json({
             success: true,
+            goldenTicket: await awardGoldenTicketForPlay({
+              userId,
+              gameType: "scratch",
+              competitionId: order.competitionId,
+              orderId,
+              originalResult: body.prizeLabel ?? null,
+            }),
             prize: body.prize,
             prizeLabel: body.prizeLabel,
             remainingCards: body.remainingCards,
@@ -8572,6 +8589,14 @@ app.post(
 
         res.json({
           success: true,
+          goldenTicket: await awardGoldenTicketForPlay({
+            userId,
+            gameType: "scratch",
+            competitionId: order.competitionId,
+            orderId: order.id,
+            playId: ticketNumber ? String(ticketNumber) : null,
+            originalResult: selectedPrize.imageName ?? null,
+          }),
           prize: prizeResponse,
           prizeLabel: selectedPrize.imageName,
           remainingCards: remaining,

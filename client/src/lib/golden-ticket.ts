@@ -66,6 +66,7 @@ export const GOLDEN_TICKET_DELAYS = {
   voltz: 3400,
   slot: 3600,
   royal: 3400,
+  scratch: 2000,
   /** Bulk reveals animate a whole batch before settling. */
   batch: 2600,
 } as const;
