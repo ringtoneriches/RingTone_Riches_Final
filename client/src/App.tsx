@@ -94,6 +94,7 @@ import AdminTicketManagerPage from "./pages/admin/AdminTicketManagerPage";
 import AddPastWinnerPage from "./pages/admin/winners";
 import AdminAddWinner from "./pages/admin/winners";
 import AdminGoldenTickets from "./pages/admin/golden-tickets";
+import GoldenTicketRevealHost from "@/components/games/GoldenTicketRevealHost";
 import SlotGamePage from "./pages/slotGamePage";
 import SlotBilling from "./pages/slotBilling";
 import RoyalGamePage from "./pages/royalGamePage";
@@ -399,6 +400,9 @@ function AppWithMaintenance() {
     
 
       <Router />
+
+      {/* Mounted once so every game gets the Golden Ticket reveal. */}
+      <GoldenTicketRevealHost />
       
       {/* Only show registration source modal when not in maintenance */}
       {user && !maintenanceData?.maintenanceMode && (

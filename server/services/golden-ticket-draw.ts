@@ -176,3 +176,20 @@ export function drawOrder<T extends { activatedAt?: Date | string | null; id: st
     return at === bt ? a.id.localeCompare(b.id) : at - bt;
   });
 }
+
+/**
+ * What one play of an order cost, in pounds.
+ *
+ * Orders are bought in bulk — ten spins for £9.90 — so eligibility has to be
+ * judged per play rather than per order. A malformed or free order gives 0,
+ * which reads as a free play.
+ */
+export function spendPerPlay(
+  order?: { totalAmount?: string | number | null; quantity?: number | null } | null,
+): number {
+  const total = Number(order?.totalAmount ?? 0);
+  const quantity = Number(order?.quantity ?? 0);
+  if (!Number.isFinite(total) || !Number.isFinite(quantity) || quantity <= 0) return 0;
+  if (total <= 0) return 0;
+  return total / quantity;
+}

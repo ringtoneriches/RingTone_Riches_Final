@@ -198,6 +198,11 @@ import { getPromoVideoModeStatus } from "./services/promo-video-mode";
 import { getCashflowsRevenue } from "./services/cashflows-revenue";
 import { ukDayStart } from "./services/uk-day";
 import { shouldProcessPaymentWebhook } from "./services/payment-webhook-guard";
+import {
+  awardGoldenTicketForPlay,
+  awardGoldenTicketForPlays,
+  spendPerPlay,
+} from "./services/golden-ticket";
 import { checkTicketLimit, hasPerUserLimit, ticketLimitNote, ticketsRemainingForUser } from "./services/ticket-limits";
 import { effectiveTicketPrice } from "@shared/flash-sale";
 import { parseSeasonSetting, seasonFromSetting } from "@shared/season";
@@ -5941,7 +5946,19 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           message: "No spins remaining in this purchase",
         });
       }
-      return res.json(controlledSpin.response);
+      // Golden Ticket rides back with the result the game already decided.
+      const goldenTicket = await awardGoldenTicketForPlay({
+        userId,
+        gameType: "spin",
+        competitionId,
+        orderId,
+        spend: spendPerPlay(order),
+        originalResult:
+          (controlledSpin.response as any)?.prize?.brand ??
+          (controlledSpin.response as any)?.segment?.label ??
+          null,
+      });
+      return res.json({ ...(controlledSpin.response as any), goldenTicket });
     }
 
     // Check spins remaining
@@ -6261,6 +6278,15 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       spinsRemaining: spinsRemaining - 1,
       orderId: order.id,
       wheelType: wheelType,
+      goldenTicket: await awardGoldenTicketForPlay({
+        userId,
+        gameType: "spin",
+        competitionId,
+        orderId: order.id,
+        playId: ticketNumber ? String(ticketNumber) : null,
+        spend: spendPerPlay(order),
+        originalResult: selectedSegment.label ?? null,
+      }),
     });
   } catch (error) {
     console.error("Error playing spin wheel:", error);
@@ -6674,6 +6700,24 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
       console.error("Failed to label reveal-all spin tickets:", err);
     }
 
+    // Every revealed spin is a play, so each gets its own check. At most one
+    // ticket comes back: the client holds it until the whole batch has
+    // finished animating, which is the point of the feature.
+    let goldenTicket = null as Awaited<ReturnType<typeof awardGoldenTicketForPlay>>;
+    const perPlaySpend = spendPerPlay(order);
+    for (const row of results as any[]) {
+      const award = await awardGoldenTicketForPlay({
+        userId,
+        gameType: "spin",
+        competitionId,
+        orderId: order.id,
+        playId: row?.ticketNumber ? String(row.ticketNumber) : null,
+        spend: perPlaySpend,
+        originalResult: row?.segment?.label ?? row?.prize?.brand ?? null,
+      });
+      if (award && !goldenTicket) goldenTicket = award;
+    }
+
     res.json({
       success: true,
       spins: results,
@@ -6684,6 +6728,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
         prizesSynced: prizeSyncs.length,
       },
       spinsRemaining: spinsRemaining - results.length,
+      goldenTicket,
     });
   } catch (error) {
     console.error("Error revealing all spins:", error);
@@ -11557,6 +11602,9 @@ app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
     
     res.json({
       success: true,
+      goldenTicket: await awardGoldenTicketForPlay({
+        userId, gameType: "plinko", competitionId, orderId,
+      }),
       slotIndex,
       prizeName: prizeName,
       prizeValue: rewardValueStr,
@@ -11829,6 +11877,10 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       processed: playsToProcess,
+      goldenTicket: await awardGoldenTicketForPlays(
+        { userId, gameType: "plinko", competitionId, orderId },
+        playsToProcess,
+      ),
       results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints,
@@ -16100,6 +16152,10 @@ app.post("/api/play-pop", async (req: any, res) => {
       // Response for authenticated user
       return res.json({
         success: true,
+        goldenTicket: await awardGoldenTicketForPlay({
+          userId, gameType: "pop", competitionId, orderId,
+          playId: ticketNumber ? String(ticketNumber) : null,
+        }),
         isGuest: false,
         ticketNumber,
         result: {
@@ -16491,6 +16547,10 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       processed: playsToProcess,
+      goldenTicket: await awardGoldenTicketForPlays(
+        { userId, gameType: "pop", competitionId, orderId },
+        playsToProcess,
+      ),
       results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints: totalPoints,
@@ -19149,6 +19209,9 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
 
     res.json({
       success: true,
+      goldenTicket: await awardGoldenTicketForPlay({
+        userId, gameType: "voltz", competitionId, orderId,
+      }),
       result: resultPayload,
       playsRemaining: playsRemaining - 1,
       // Note: Free replay will add a play in the confirmation step
@@ -19676,6 +19739,10 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
     res.json({ 
       success: true, 
       processed: playsToProcess, 
+      goldenTicket: await awardGoldenTicketForPlays(
+        { userId, gameType: "voltz", competitionId, orderId },
+        playsToProcess,
+      ),
       results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints,
@@ -21703,7 +21770,12 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
       if (controlledSlot.noTickets) {
         return res.status(403).json({ message: "All spins used" });
       }
-      return res.json(controlledSlot.response);
+      return res.json({
+        ...(controlledSlot.response as any),
+        goldenTicket: await awardGoldenTicketForPlay({
+          userId, gameType: "slot", competitionId: order.competitionId, orderId,
+        }),
+      });
     }
 
     const result = await processUncontrolledSlotSpin({
@@ -21715,7 +21787,12 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
       return res.status(result.status).json(result.body);
     }
     console.log("[API] ✅ Response:", result.response);
-    res.json(result.response);
+    res.json({
+      ...(result.response as any),
+      goldenTicket: await awardGoldenTicketForPlay({
+        userId, gameType: "slot", competitionId: order.competitionId, orderId,
+      }),
+    });
 
   } catch (error) {
     console.error("[API] 💥 Error in play-slot:", error);
@@ -21780,6 +21857,10 @@ app.post("/api/reveal-all-slot", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       processed: results.length,
+      goldenTicket: await awardGoldenTicketForPlays(
+        { userId, gameType: "slot", competitionId: order.competitionId, orderId },
+        results.length,
+      ),
       results: await labelRevealAllResultTickets(orderId, results),
       winCount,
       cashWon,
@@ -22351,6 +22432,14 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
         }
         return res.json({
           success: true,
+          goldenTicket: await awardGoldenTicketForPlay({
+            userId,
+            gameType: "royal",
+            competitionId: order.competitionId,
+            orderId,
+            playId: royal.ticketNumber ? String(royal.ticketNumber) : null,
+            originalResult: royal.result?.prizeName ?? null,
+          }),
           controlledPool: true,
           creditedAtSale: true,
           isWin: royal.isWin,

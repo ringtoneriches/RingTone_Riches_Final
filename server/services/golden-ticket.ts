@@ -17,6 +17,7 @@ import { db } from "../db";
 import {
   goldenTicketCampaigns,
   goldenTicketWins,
+  orders,
   transactions,
   users,
 } from "@shared/schema";
@@ -29,9 +30,10 @@ import {
   isPlayEligible,
   isWinningPosition,
   pickDropPositions,
+  spendPerPlay,
 } from "./golden-ticket-draw";
 
-export { GoldenTicketError } from "./golden-ticket-draw";
+export { GoldenTicketError, spendPerPlay } from "./golden-ticket-draw";
 
 type DbTx = typeof db | any;
 
@@ -319,9 +321,23 @@ export async function maybeAwardGoldenTicket(
       .where(eq(goldenTicketCampaigns.status, "active"));
     if (!live.length) return null;
 
+    // Spend decides whether a play counts as free, and not every play route
+    // has the order to hand. Look it up only once a campaign is actually
+    // live, so the common case — no campaign running — costs nothing.
+    let spend = play.spend;
+    if (spend === undefined && play.orderId) {
+      const [order] = await tx
+        .select({ totalAmount: orders.totalAmount, quantity: orders.quantity })
+        .from(orders)
+        .where(eq(orders.id, play.orderId))
+        .limit(1);
+      spend = spendPerPlay(order);
+    }
+    const resolved = { ...play, spend: spend ?? 0 };
+
     for (const campaign of drawOrder<any>(live)) {
       const draw = campaign as unknown as CampaignDraw;
-      if (!isPlayEligible(draw, { ...play, userId: play.userId }).eligible) continue;
+      if (!isPlayEligible(draw, { ...resolved, userId: play.userId }).eligible) continue;
 
       // Atomic: one statement claims this play's position and locks the row,
       // so two simultaneous plays cannot be handed the same position.
@@ -339,7 +355,7 @@ export async function maybeAwardGoldenTicket(
         continue;
       }
 
-      const award = await grantTicket(tx, campaign, play, position);
+      const award = await grantTicket(tx, campaign, resolved, position);
       if (award) return award;
     }
     return null;
@@ -449,4 +465,53 @@ async function grantTicket(
     prizeImageUrl: campaign.prizeImageUrl ?? null,
     fulfilmentStatus: fulfilment,
   };
+}
+
+/**
+ * The entry point for play endpoints.
+ *
+ * The game routes are not themselves transactional — they are sequences of
+ * storage calls — so the award opens its own transaction. That makes the
+ * counter bump, the win row and the wallet credit atomic *with each other*: a
+ * failure rolls the whole award back rather than leaving a ticket half given.
+ * It cannot be atomic with the game result, because the game result is not
+ * written transactionally either, and forcing that would mean rewriting every
+ * play endpoint.
+ *
+ * Never throws. A promotional extra must not cost someone the result they paid
+ * for, so any failure is logged and the play stands.
+ */
+export async function awardGoldenTicketForPlay(
+  play: AwardContext,
+): Promise<GoldenTicketAward | null> {
+  if (!play.userId) return null;
+  try {
+    return await db.transaction(async (tx) => maybeAwardGoldenTicket(tx, play));
+  } catch (error) {
+    console.error("[golden-ticket] award transaction failed:", error);
+    return null;
+  }
+}
+
+/**
+ * A bulk reveal is several plays at once, so each one gets its own check.
+ *
+ * Returns the first ticket only: the client shows a single takeover once the
+ * whole batch has finished animating, and two reveals stacked on top of each
+ * other would undo the moment.
+ */
+export async function awardGoldenTicketForPlays(
+  base: AwardContext,
+  plays: number,
+): Promise<GoldenTicketAward | null> {
+  let first: GoldenTicketAward | null = null;
+  const total = Math.max(0, Math.floor(plays));
+  for (let i = 0; i < total; i++) {
+    const award = await awardGoldenTicketForPlay({
+      ...base,
+      playId: `${base.playId ?? base.orderId ?? "batch"}#${i + 1}`,
+    });
+    if (award && !first) first = award;
+  }
+  return first;
 }
