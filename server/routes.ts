@@ -8387,6 +8387,13 @@ app.post(
           });
           return res.json({
             success: true,
+            goldenTicket: await awardGoldenTicketForPlay({
+              userId,
+              gameType: "scratch",
+              competitionId: order.competitionId,
+              orderId,
+              originalResult: body.prizeLabel ?? null,
+            }),
             prize: body.prize,
             prizeLabel: body.prizeLabel,
             remainingCards: body.remainingCards,
@@ -8582,6 +8589,14 @@ app.post(
 
         res.json({
           success: true,
+          goldenTicket: await awardGoldenTicketForPlay({
+            userId,
+            gameType: "scratch",
+            competitionId: order.competitionId,
+            orderId: order.id,
+            playId: ticketNumber ? String(ticketNumber) : null,
+            originalResult: selectedPrize.imageName ?? null,
+          }),
           prize: prizeResponse,
           prizeLabel: selectedPrize.imageName,
           remainingCards: remaining,

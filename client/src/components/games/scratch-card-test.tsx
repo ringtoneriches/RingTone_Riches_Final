@@ -461,6 +461,7 @@ const recordPlayIfNeeded = async (): Promise<void> => {
     if (onCommitSession) {
       const saved = await onCommitSession(session.sessionId, payload);
       ticketNumber = saved?.ticketNumber;
+      publishGoldenTicket((saved as any)?.goldenTicket, GOLDEN_TICKET_DELAYS.scratch);
     } else {
       const response = await fetch(`/api/scratch-session/${session.sessionId}/complete`, {
         method: "POST",
@@ -475,6 +476,7 @@ const recordPlayIfNeeded = async (): Promise<void> => {
       }
       const body = await response.json();
       ticketNumber = body?.ticketNumber;
+      publishGoldenTicket(body?.goldenTicket, GOLDEN_TICKET_DELAYS.scratch);
     }
     hasRecordedRef.current = true;
     markHistoryRow("Scratched", { ...session.prize, ticketNumber: ticketNumber || undefined });
