@@ -7730,7 +7730,13 @@ app.post(
         count: cardsToProcess,
       });
       if (controlledRevealScratch?.handled) {
-        return res.json(controlledRevealScratch.response);
+        return res.json({
+          ...(controlledRevealScratch.response as any),
+          goldenTicket: await awardGoldenTicketForPlays(
+            { userId, gameType: "scratch", competitionId, orderId },
+            cardsToProcess,
+          ),
+        });
       }
 
       // Get user
@@ -7999,6 +8005,10 @@ app.post(
 
       res.json({
         success: true,
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "scratch", competitionId, orderId },
+          results.length,
+        ),
         scratches: results,
         summary: {
           totalCash,
