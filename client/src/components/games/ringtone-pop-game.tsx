@@ -37,6 +37,7 @@ const savePopHistory = (history: PopHistoryItem[], orderId?: string) => {
   } catch {}
 };
 import popSoundFile from "@assets/balloon-pop-sound_1766057573479.mp3";
+import { publishGoldenTicket, GOLDEN_TICKET_DELAYS } from "@/lib/golden-ticket";
 
 interface BalloonProps {
   value: string | null;
@@ -552,6 +553,7 @@ export default function RingtonePopGame({
       }
 
       const data = await response.json();
+      publishGoldenTicket(data?.goldenTicket, GOLDEN_TICKET_DELAYS.pop);
       const gameData = data.result || data;
       if (typeof data.playsRemaining === "number") {
         setLocalPlaysRemaining(data.playsRemaining);

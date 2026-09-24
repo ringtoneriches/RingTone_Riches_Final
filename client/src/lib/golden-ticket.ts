@@ -50,3 +50,22 @@ export function cancelPendingGoldenTicket() {
   if (pending) clearTimeout(pending);
   pending = undefined;
 }
+
+/**
+ * How long to wait after a game's response before revealing the ticket.
+ *
+ * Each game animates for a different length of time, and the reveal has to
+ * land after the player has seen their own result — that gap is the feature.
+ * These are deliberately generous; better a beat too late than on top of the
+ * animation.
+ */
+export const GOLDEN_TICKET_DELAYS = {
+  spin: 1600,
+  pop: 2400,
+  plinko: 4500,
+  voltz: 3400,
+  slot: 3600,
+  royal: 3400,
+  /** Bulk reveals animate a whole batch before settling. */
+  batch: 2600,
+} as const;

@@ -3,6 +3,7 @@ import cron from "node-cron";
 import { users } from "@shared/schema";
 import { and, eq, lt } from "drizzle-orm";
 import { db } from "./db";
+import { expireLapsedCampaigns } from "./services/golden-ticket";
 
 // Function to initialize all cron jobs
 export function startCrons() {
@@ -45,6 +46,20 @@ export function startCrons() {
       console.log("✅ Cleaned up expired OTPs");
     } catch (err) {
       console.error("❌ Cleanup OTPs failed:", err);
+    }
+  });
+
+  // Close Golden Ticket campaigns whose end date has passed.
+  //
+  // Without this a lapsed campaign stays "active" forever: its counter keeps
+  // advancing on every eligible play, so tickets could still drop long after
+  // the promotion was supposed to be over.
+  cron.schedule("*/15 * * * *", async () => {
+    try {
+      const closed = await expireLapsedCampaigns();
+      if (closed > 0) console.log(`🎟️ Expired ${closed} lapsed Golden Ticket campaign(s)`);
+    } catch (err) {
+      console.error("❌ Golden Ticket expiry sweep failed:", err);
     }
   });
 

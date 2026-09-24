@@ -39,7 +39,7 @@ import PlayResultsTable, {
   type SpinHistoryRow,
 } from "@/components/games/PlayResultsTable";
 import RevealAllBatchSummary, { type RevealBatchRow } from "@/components/games/RevealAllBatchSummary";
-import { publishGoldenTicket } from "@/lib/golden-ticket";
+import { publishGoldenTicket, GOLDEN_TICKET_DELAYS } from "@/lib/golden-ticket";
 
 // Bundled local assets — same-origin, no CDN round-trip on mobile
 export const ARCADE_ICON_MAP: Record<string, string> = {
@@ -597,7 +597,7 @@ ctx.stroke();
       const results = await response.json();
       // Let the whole batch finish animating first — burying it among twenty
       // other results would waste the surprise.
-      publishGoldenTicket(results?.goldenTicket, 2600);
+      publishGoldenTicket(results?.goldenTicket, GOLDEN_TICKET_DELAYS.batch);
       const spins = Array.isArray(results?.spins)
         ? results.spins
         : Array.isArray(results?.results)
@@ -826,7 +826,7 @@ ctx.stroke();
 
           // The wheel has landed and the player has seen their result, so the
           // Golden Ticket can now arrive as a separate moment.
-          publishGoldenTicket(result.goldenTicket);
+          publishGoldenTicket(result.goldenTicket, GOLDEN_TICKET_DELAYS.spin);
 
           onSpinComplete(
             winnerResult.index,
