@@ -17,6 +17,7 @@ import { useLocation, useParams } from "wouter";
 import { Sparkles } from "lucide-react";
 import { formatResultTicket, mergeScratchTicketsFromServer, prizeFromReward } from "@/components/games/PlayResultsTable";
 import RevealAllBatchSummary, { type RevealBatchRow } from "@/components/games/RevealAllBatchSummary";
+import { publishGoldenTicket, GOLDEN_TICKET_DELAYS } from "@/lib/golden-ticket";
 
 interface ScratchCardProps {
   onScratchReveal?: (prize: { type: string; value: string }) => void;
@@ -1079,6 +1080,10 @@ checkPercentRef.current = checkPercentScratched;
     }
 
     const results = await response.json();
+
+    // Let the cards finish revealing before the takeover.
+
+    publishGoldenTicket(results?.goldenTicket, GOLDEN_TICKET_DELAYS.batch);
     const scratches = Array.isArray(results?.scratches) ? results.scratches : [];
 
     // Check if there are any wins in the results
