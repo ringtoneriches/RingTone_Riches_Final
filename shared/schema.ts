@@ -795,6 +795,66 @@ export const goldenTicketWins = pgTable("golden_ticket_wins", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+/**
+ * One row per referral, holding the whole lifecycle.
+ *
+ * Before this, a referral existed only as users.referredBy plus a transaction
+ * whose description happened to contain the referred member's email — and
+ * "have we paid this already?" was answered with a LIKE against that text.
+ * This table answers it with a unique constraint instead.
+ */
+export const referrals = pgTable("referrals", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  referrerId: varchar("referrer_id").notNull().references(() => users.id),
+  /** A member can only ever be referred once — enforced by a unique index. */
+  referredUserId: varchar("referred_user_id").notNull().references(() => users.id),
+  referralCode: varchar("referral_code"),
+
+  registeredAt: timestamp("registered_at").notNull().defaultNow(),
+  signupPointsAwarded: integer("signup_points_awarded").default(0),
+
+  // Filled in when the referred member makes a qualifying top-up.
+  firstTopUpAt: timestamp("first_top_up_at"),
+  firstTopUpAmount: decimal("first_top_up_amount", { precision: 10, scale: 2 }),
+  firstTopUpRef: varchar("first_top_up_ref"),
+
+  rewardPoints: integer("reward_points").default(0),
+  rewardedAt: timestamp("rewarded_at"),
+  rewardTransactionId: uuid("reward_transaction_id").references(() => transactions.id),
+
+  /**
+   * pending   — registered, no qualifying top-up yet
+   * qualified — topped up, reward owed (transient)
+   * rewarded  — reward paid
+   * blocked   — refused, see blockedReason
+   * flagged   — paid but looks suspect, waiting on a human
+   */
+  status: varchar("status", {
+    enum: ["pending", "qualified", "rewarded", "blocked", "flagged"],
+  }).notNull().default("pending"),
+  /** Why it was blocked or flagged, in words an admin can act on. */
+  riskReason: text("risk_reason"),
+  /** The signals that fired, kept so a decision can be reviewed later. */
+  riskSignals: jsonb("risk_signals").$type<string[]>().default(sql`'[]'::jsonb`),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+/** Weekly top recruiter winners, so the prize is paid once and auditable. */
+export const referralWeeklyWinners = pgTable("referral_weekly_winners", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  /** UK week the prize is for, as an ISO Monday date: "2026-09-21". */
+  weekStart: varchar("week_start").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  referralCount: integer("referral_count").notNull(),
+  prizePoints: integer("prize_points").notNull(),
+  transactionId: uuid("transaction_id").references(() => transactions.id),
+  awardedAt: timestamp("awarded_at").notNull().defaultNow(),
+});
+
 export const savedBankAccounts = pgTable("saved_bank_accounts", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -1033,6 +1093,18 @@ export const platformSettings = pgTable("platform_settings", {
   // Spins allowed from one IP per UK day; 0 disables the cap. Generous by
   // default because UK mobile networks share IPs across many customers.
   dailySpinIpLimit: integer("daily_spin_ip_limit").default(12),
+  // Referral programme. Values live here rather than in code so they can be
+  // tuned without a deploy, and so a campaign can be turned off quickly.
+  referralsEnabled: boolean("referrals_enabled").default(true),
+  /** Points the new member gets for registering through a referral. */
+  referralSignupPoints: integer("referral_signup_points").default(100),
+  /** Points the referrer gets once that member makes a qualifying top-up. */
+  referralRewardPoints: integer("referral_reward_points").default(300),
+  /** Smallest top-up that counts. 0 means any successful top-up qualifies. */
+  referralMinTopUp: decimal("referral_min_top_up", { precision: 10, scale: 2 }).default("10.00"),
+  /** Weekly top recruiter prize, and the fewest referrals needed to win it. */
+  referralWeeklyPrizePoints: integer("referral_weekly_prize_points").default(1500),
+  referralWeeklyMinReferrals: integer("referral_weekly_min_referrals").default(1),
   // Which seasonal skin the public site wears: "off" (the normal theme),
   // "auto" (follow the calendar), or a named season. Admin-controlled, so a
   // season never appears without someone choosing it.
