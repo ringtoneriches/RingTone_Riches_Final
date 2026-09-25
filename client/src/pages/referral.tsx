@@ -140,9 +140,10 @@ export default function Referral() {
             </h1>
 
             <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-white/60 sm:text-base">
-              They get <strong className="text-[#F1D47A]">{signupPoints} points</strong> ({money(signupPoints)})
-              just for joining. You get <strong className="text-[#F1D47A]">{rewardPoints} points</strong> ({money(rewardPoints)})
-              as soon as they top up{minTopUp > 0 ? ` £${minTopUp}` : ""}.
+              They get <strong className="text-[#F1D47A]">{signupPoints} Ringtone Points</strong>{" "}
+              just for joining. You get <strong className="text-[#F1D47A]">{rewardPoints} Ringtone Points</strong>{" "}
+              as soon as they top up{minTopUp > 0 ? ` £${minTopUp}` : ""}. Points are spent on
+              site — {rewardPoints} points is worth {money(rewardPoints)} of entries.
             </p>
 
             {/* One tap. Everything else is secondary. */}
@@ -194,7 +195,8 @@ export default function Referral() {
             {
               label: "Points earned",
               value: String(stats?.pointsEarned ?? 0),
-              sub: money(stats?.pointsEarned ?? 0),
+              // "worth", not a bare £, so nobody reads it as cash to withdraw.
+              sub: `worth ${money(stats?.pointsEarned ?? 0)}`,
               icon: Trophy,
             },
           ].map((s) => (
