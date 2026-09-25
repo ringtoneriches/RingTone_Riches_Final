@@ -1843,13 +1843,17 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
 
         // 3. Referral Bonus
         try {
-          if (referrerId && referrerId !== user.id) {
+          // Turning the programme off has to stop both halves. Checked here so
+          // a disabled programme neither hands out joining points nor records
+          // a referral that could be paid later.
+          const referralSettings = await getReferralSettings(tx);
+
+          if (referrerId && referrerId !== user.id && referralSettings.enabled) {
             await storage.saveUserReferral({
               userId: user.id,
               referrerId: referrerId,
             });
 
-            const referralSettings = await getReferralSettings(tx);
             const welcomeReferralPoints = referralSettings.signupPoints;
 
             // One row per referral, carrying the whole lifecycle from here to

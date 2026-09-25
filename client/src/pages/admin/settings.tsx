@@ -1,6 +1,7 @@
 import AdminLayout from "@/components/admin/admin-layout";
 import {
   Gift,
+  Users,
   User,
   Lock,
   Gamepad2,
@@ -44,6 +45,12 @@ type PlatformSettings = {
   signupBonusEnabled: boolean;
   signupBonusCash: string;
   signupBonusPoints: number;
+  referralsEnabled: boolean;
+  referralSignupPoints: number;
+  referralRewardPoints: number;
+  referralMinTopUp: string;
+  referralWeeklyPrizePoints: number;
+  referralWeeklyMinReferrals: number;
   maxTicketsPerOrder: number;
   maintenanceMode: boolean;
   seasonalTheme: string | null;
@@ -65,6 +72,12 @@ export default function AdminSettings() {
   const [signupBonusEnabled, setSignupBonusEnabled] = useState(false);
   const [signupBonusCash, setSignupBonusCash] = useState("0.00");
   const [signupBonusPoints, setSignupBonusPoints] = useState("0");
+  const [referralsEnabled, setReferralsEnabled] = useState(true);
+  const [referralSignupPoints, setReferralSignupPoints] = useState("100");
+  const [referralRewardPoints, setReferralRewardPoints] = useState("300");
+  const [referralMinTopUp, setReferralMinTopUp] = useState("10.00");
+  const [referralWeeklyPrizePoints, setReferralWeeklyPrizePoints] = useState("1500");
+  const [referralWeeklyMinReferrals, setReferralWeeklyMinReferrals] = useState("1");
   const [maxTicketsPerOrder, setMaxTicketsPerOrder] = useState("10000");
 
   const [newUsername, setNewUsername] = useState("");
@@ -120,6 +133,12 @@ export default function AdminSettings() {
       setSignupBonusEnabled(settings.signupBonusEnabled || false);
       setSignupBonusCash(settings.signupBonusCash || "0.00");
       setSignupBonusPoints(String(settings.signupBonusPoints || 0));
+      setReferralsEnabled(settings.referralsEnabled ?? true);
+      setReferralSignupPoints(String(settings.referralSignupPoints ?? 100));
+      setReferralRewardPoints(String(settings.referralRewardPoints ?? 300));
+      setReferralMinTopUp(String(settings.referralMinTopUp ?? "10.00"));
+      setReferralWeeklyPrizePoints(String(settings.referralWeeklyPrizePoints ?? 1500));
+      setReferralWeeklyMinReferrals(String(settings.referralWeeklyMinReferrals ?? 1));
       setMaxTicketsPerOrder(String(settings.maxTicketsPerOrder || 10000));
     }
   }, [settings]);
@@ -131,6 +150,12 @@ export default function AdminSettings() {
       signupBonusEnabled: boolean;
       signupBonusCash: string;
       signupBonusPoints: number;
+      referralsEnabled: boolean;
+      referralSignupPoints: number;
+      referralRewardPoints: number;
+      referralMinTopUp: string;
+      referralWeeklyPrizePoints: number;
+      referralWeeklyMinReferrals: number;
       maxTicketsPerOrder: number;
     }) => {
       return await apiRequest("/api/admin/settings", "PUT", data);
@@ -158,6 +183,12 @@ export default function AdminSettings() {
       signupBonusEnabled,
       signupBonusCash,
       signupBonusPoints: parseInt(signupBonusPoints) || 0,
+      referralsEnabled,
+      referralSignupPoints: parseInt(referralSignupPoints) || 0,
+      referralRewardPoints: parseInt(referralRewardPoints) || 0,
+      referralMinTopUp: (parseFloat(referralMinTopUp) || 0).toFixed(2),
+      referralWeeklyPrizePoints: parseInt(referralWeeklyPrizePoints) || 0,
+      referralWeeklyMinReferrals: parseInt(referralWeeklyMinReferrals) || 1,
       maxTicketsPerOrder: parseInt(maxTicketsPerOrder) || 10000,
     });
   };
@@ -414,6 +445,107 @@ export default function AdminSettings() {
                   >
                     {saveSettingsMutation.isPending ? "Saving..." : "Save Changes"}
                   </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Referral Programme Card */}
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-yellow-400" />
+                  Referral Programme
+                </CardTitle>
+                <CardDescription>
+                  Rewards are paid in Ringtone Points. 100 points = £1. The referrer is
+                  only paid once the new member actually tops up.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between rounded-lg border border-border p-4">
+                  <div>
+                    <Label className="text-base font-semibold">Enable referrals</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Off means no joining points and no referral rewards.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={referralsEnabled}
+                    onCheckedChange={setReferralsEnabled}
+                    data-testid="switch-referrals-enabled"
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="ref-signup">New member gets (points)</Label>
+                    <Input
+                      id="ref-signup"
+                      inputMode="numeric"
+                      value={referralSignupPoints}
+                      onChange={(e) => setReferralSignupPoints(e.target.value)}
+                      data-testid="input-referral-signup-points"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Paid at registration. £{((parseInt(referralSignupPoints) || 0) / 100).toFixed(2)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="ref-reward">Referrer gets (points)</Label>
+                    <Input
+                      id="ref-reward"
+                      inputMode="numeric"
+                      value={referralRewardPoints}
+                      onChange={(e) => setReferralRewardPoints(e.target.value)}
+                      data-testid="input-referral-reward-points"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Paid on the new member's first qualifying top-up. £{((parseInt(referralRewardPoints) || 0) / 100).toFixed(2)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="ref-min">Minimum top-up to qualify (£)</Label>
+                    <Input
+                      id="ref-min"
+                      inputMode="decimal"
+                      value={referralMinTopUp}
+                      onChange={(e) => setReferralMinTopUp(e.target.value)}
+                      data-testid="input-referral-min-topup"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Set to 0 if any successful top-up should count.
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="ref-weekly">Weekly Top Recruiter prize (points)</Label>
+                    <Input
+                      id="ref-weekly"
+                      inputMode="numeric"
+                      value={referralWeeklyPrizePoints}
+                      onChange={(e) => setReferralWeeklyPrizePoints(e.target.value)}
+                      data-testid="input-referral-weekly-prize"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      £{((parseInt(referralWeeklyPrizePoints) || 0) / 100).toFixed(2)}. Set to 0 to run no weekly competition.
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="ref-weekly-min">Fewest referrals to win the week</Label>
+                    <Input
+                      id="ref-weekly-min"
+                      inputMode="numeric"
+                      value={referralWeeklyMinReferrals}
+                      onChange={(e) => setReferralWeeklyMinReferrals(e.target.value)}
+                      data-testid="input-referral-weekly-min"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Stops a quiet week paying out for a single referral.
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
