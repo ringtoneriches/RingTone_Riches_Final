@@ -172,8 +172,16 @@ const getTransactionTypeBadge = (transaction: Pick<Transaction, "type" | "descri
 
 interface ReferralStats {
   totalReferrals: number;
-  totalEarned: string;
-  referrals: Array<{
+  /** Ringtone Points, never pounds. */
+  pointsEarned: number;
+  invites: Array<{
+    id: string;
+    name: string;
+    joinedAt: string;
+    toppedUp: boolean;
+    rewardPoints: number;
+  }>;
+  referrals?: Array<{
     id: string;
     firstName: string;
     lastName: string;
@@ -2606,16 +2614,22 @@ const handleDeleteBankAccount = (
                 <Card className="rr-wallet-island bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border-yellow-500/30 hover:border-yellow-500/50 transition-all shadow-xl shadow-yellow-500/10">
                   <CardHeader className="border-b border-yellow-500/20">
                     <CardTitle className="flex items-center gap-2 text-xl text-yellow-400">
-                      <PoundSterling className="h-6 w-6" />
-                      Total Earned
+                      <Sparkles className="h-6 w-6" />
+                      Points Earned
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-6">
+                    {/* Points, said as points. Showing this as "£300" led
+                        people to think they had £300 to withdraw. */}
                     <p
-                      className="text-5xl font-bold bg-gradient-to-r from-green-400 to-green-600 bg-clip-text text-transparent"
+                      className="text-5xl font-bold bg-gradient-to-r from-yellow-300 to-yellow-500 bg-clip-text text-transparent"
                       data-testid="text-total-earned"
                     >
-                      £{referralStats?.totalEarned || "0.00"}
+                      {referralStats?.pointsEarned ?? 0}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-400">
+                      Ringtone Points — worth £
+                      {(((referralStats?.pointsEarned ?? 0) / 100)).toFixed(2)} to spend on site
                     </p>
                   </CardContent>
                 </Card>
@@ -2698,30 +2712,32 @@ const handleDeleteBankAccount = (
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  {referralStats?.referrals &&
-                  referralStats.referrals.length > 0 ? (
+                  {referralStats?.invites && referralStats.invites.length > 0 ? (
                     <div className="space-y-3">
-                      {referralStats.referrals.map((referral) => (
+                      {referralStats.invites.map((invite) => (
                         <div
-                          key={referral.id}
+                          key={invite.id}
                           className="flex items-center justify-between p-4 bg-black/30 rounded-lg border border-yellow-500/10 hover:border-yellow-500/30 transition-colors"
                         >
                           <div>
-                            <p className="font-medium text-white">
-                              {referral.firstName} {referral.lastName}
-                            </p>
+                            <p className="font-medium text-white">{invite.name}</p>
                             <p className="text-sm text-gray-400">
-                              {referral.email}
+                              Joined {format(new Date(invite.joinedAt), "dd MMM yyyy")}
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm text-gray-400">
-                              Joined{" "}
-                              {format(
-                                new Date(referral.createdAt),
-                                "dd MMM yyyy",
-                              )}
-                            </p>
+                            {invite.toppedUp ? (
+                              <>
+                                <p className="text-sm font-semibold text-emerald-400">
+                                  +{invite.rewardPoints} points
+                                </p>
+                                <p className="text-xs text-gray-500">Topped up</p>
+                              </>
+                            ) : (
+                              <p className="text-sm text-amber-400">
+                                Waiting for first top-up
+                              </p>
+                            )}
                           </div>
                         </div>
                       ))}

@@ -10424,11 +10424,11 @@ app.get(
         ]);
 
         res.json({
-          // Kept so anything still reading the old shape keeps working. The
-          // reward is points now, so "earned" is points, not pounds — the
-          // client shows the £ equivalent at 100 points = £1.
+          // Deliberately no "totalEarned": the reward is points, and a field
+          // named like money got rendered as "£300" on the wallet page. Points
+          // are always named as points here so they cannot be mistaken for
+          // withdrawable cash.
           totalReferrals: summary.signedUp,
-          totalEarned: String(summary.pointsEarned),
 
           signedUp: summary.signedUp,
           completed: summary.completed,
