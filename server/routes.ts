@@ -138,6 +138,7 @@ import {
 import { wsManager } from "./websocket";
 import { registerInstantWinRoutes } from "./instantWinRoutes";
 import { registerGoldenTicketRoutes } from "./goldenTicketRoutes";
+import { registerReferralRoutes } from "./referralRoutes";
 import { registerDailySpinRoutes } from "./daily-spin-routes";
 import {
   InstantWinError,
@@ -190,6 +191,14 @@ import { creditCardCashback } from "./services/card-cashback";
 import { isCardCashbackTx } from "@shared/card-cashback";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
+import {
+  getReferralSettings,
+  getReferrerSummary,
+  qualifyReferralOnTopUp,
+  recordReferralOnSignup,
+  weeklyCounts,
+} from "./services/referrals";
+import { weekStartFor } from "./services/referral-abuse";
 import { calculateDiscountedTotal } from "./utils/discounts";
 import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
 import { notifyPublicWinnerUpdate } from "./services/record-game-winner";
@@ -1103,7 +1112,15 @@ async function processWalletTopup(
 
       // ✅ Only check referral if shouldCheckReferral is true
       if (shouldCheckReferral) {
-        await awardReferralBonusInsideTransaction(tx, userId, amount, paymentRef);
+        // The referrals table decides whether this is the qualifying top-up and
+        // whether the referral is genuine. It replaces the old check, which
+        // asked "already paid?" with a LIKE against a transaction description.
+        const referral = await qualifyReferralOnTopUp(tx, {
+          userId,
+          amount,
+          paymentRef,
+        });
+        console.log("Referral check:", referral.outcome);
       } else {
         console.log("Skipping referral check for this topup");
       }
@@ -1124,125 +1141,6 @@ async function processWalletTopup(
   }
 }
 
-// ✅ Fixed function that runs INSIDE the transaction
-async function awardReferralBonusInsideTransaction(
-  tx: any,
-  userId: string,
-  amount: number,
-  paymentRef: string
-) {
-  try {
-    // Get user with referredBy field - Fixed SQL
-    const userResult = await tx.execute<{
-      rows: Array<{ id: string; referred_by: string | null; email: string }>
-    }>(sql`
-      SELECT id, referred_by as "referredBy", email
-      FROM users 
-      WHERE id = ${userId}
-      FOR UPDATE
-    `);
-    
-    const user = Array.isArray(userResult) ? userResult[0] : userResult.rows?.[0];
-    
-    if (!user || !user.referredBy) {
-      console.log("No referrer found for user:", userId);
-      return;
-    }
-
-    // ✅ Check if this is FIRST deposit - Fixed to work without status column
-    const transactionsCountResult = await tx.execute<{
-      rows: Array<{ count: string }>
-    }>(sql`
-      SELECT COUNT(*) as count
-      FROM transactions 
-      WHERE user_id = ${userId} 
-      AND type = 'deposit'
-      AND payment_ref != ${paymentRef}
-    `);
-    
-    const previousDeposits = Array.isArray(transactionsCountResult) 
-      ? parseInt(transactionsCountResult[0]?.count || '0')
-      : 0;
-    
-    console.log(`Previous completed deposits for user ${userId}: ${previousDeposits}`);
-    
-    // ✅ Only award if this is the FIRST deposit (previous count = 0)
-    if (previousDeposits === 0) {
-      // ✅ Check minimum deposit amount (e.g., £10 minimum for referral bonus)
-      const MIN_REFERRAL_DEPOSIT = 10;
-      
-      if (amount < MIN_REFERRAL_DEPOSIT) {
-        console.log(`Deposit amount £${amount} is less than minimum £${MIN_REFERRAL_DEPOSIT} for referral bonus`);
-        return;
-      }
-      
-      // Get referrer with FOR UPDATE lock
-      const referrerResult = await tx.execute<{
-        rows: Array<{ id: string; email: string; balance: number }>
-      }>(sql`
-        SELECT id, email, balance
-        FROM users 
-        WHERE id = ${user.referredBy}
-        FOR UPDATE
-      `);
-      
-      const referrer = Array.isArray(referrerResult) ? referrerResult[0] : referrerResult.rows?.[0];
-      
-      if (!referrer) {
-        console.warn("Referrer not found:", user.referredBy);
-        return;
-      }
-      
-      const bonusAmount = 2.0;
-      
-      // ✅ Check if referral bonus already awarded - Fixed to work without status column
-      const existingReferralBonus = await tx.execute<{
-        rows: Array<{ id: string }>
-      }>(sql`
-        SELECT id
-        FROM transactions 
-        WHERE user_id = ${referrer.id} 
-        AND type = 'referral'
-        AND description LIKE ${`%${user.email}%`}
-        LIMIT 1
-      `);
-      
-      const existingBonus = Array.isArray(existingReferralBonus) 
-        ? existingReferralBonus[0] 
-        : existingReferralBonus.rows?.[0];
-      
-      if (existingBonus) {
-        console.log(`Referral bonus already awarded for user ${user.email}`);
-        return;
-      }
-      
-      // Award bonus to referrer
-      await tx.execute(sql`
-        UPDATE users
-        SET balance = balance + ${bonusAmount}
-        WHERE id = ${referrer.id}
-      `);
-      
-      // Create referral transaction - REMOVED status field
-      await tx.insert(transactions).values({
-        userId: referrer.id,
-        amount: bonusAmount,
-        type: "referral",
-        // status: "completed", // ❌ REMOVE THIS LINE
-        description: `Referral reward: ${user.email} made their first wallet top-up of £${amount}`,
-        paymentMethod: "bonus",
-        createdAt: new Date(),
-      });
-      
-      console.log(`✅ Referral bonus awarded: £${bonusAmount} to ${referrer.email} for ${user.email}'s first top-up of £${amount}`);
-    } else {
-      console.log(`Not first deposit. User has ${previousDeposits} previous deposits.`);
-    }
-  } catch (error) {
-    console.error("Error awarding referral bonus:", error);
-    // Don't throw - we don't want to fail the deposit
-  }
-}
 
 
 // ===== SECURITY CONSTANTS =====
@@ -1951,7 +1849,17 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
               referrerId: referrerId,
             });
 
-            const welcomeReferralPoints = 100;
+            const referralSettings = await getReferralSettings(tx);
+            const welcomeReferralPoints = referralSettings.signupPoints;
+
+            // One row per referral, carrying the whole lifecycle from here to
+            // the reward. The unique index makes a repeat call a no-op.
+            await recordReferralOnSignup(tx, {
+              referrerId,
+              referredUserId: user.id,
+              referralCode: referralCode ?? null,
+              signupPoints: welcomeReferralPoints,
+            });
             await tx.update(users)
               .set({
                 ringtonePoints: sql`${users.ringtonePoints} + ${welcomeReferralPoints}`,
@@ -10506,37 +10414,28 @@ app.get(
     async (req: any, res) => {
       try {
         const userId = req.user.id;
-
-        // Get list of referred users
-        const referrals = await storage.getUserReferrals(userId);
-
-        // Get ONLY CASH referral earnings (exclude points)
-        const referralTransactions = await db
-          .select()
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.userId, userId),
-              eq(transactions.type, "referral") // true cash referral ONLY
-            )
-          );
-
-        // Sum only positive money amounts (ignore "0", ignore points)
-        const totalEarned = referralTransactions.reduce((sum, tx) => {
-          const amount = parseFloat(tx.amount || "0");
-          return amount > 0 ? sum + amount : sum;
-        }, 0);
+        const [summary, settings] = await Promise.all([
+          getReferrerSummary(userId),
+          getReferralSettings(),
+        ]);
 
         res.json({
-          totalReferrals: referrals.length,
-          totalEarned: totalEarned.toFixed(2),
-          referrals: referrals.map((r) => ({
-            id: r.id,
-            firstName: r.firstName,
-            lastName: r.lastName,
-            email: r.email,
-            createdAt: r.createdAt,
-          })),
+          // Kept so anything still reading the old shape keeps working. The
+          // reward is points now, so "earned" is points, not pounds — the
+          // client shows the £ equivalent at 100 points = £1.
+          totalReferrals: summary.signedUp,
+          totalEarned: String(summary.pointsEarned),
+
+          signedUp: summary.signedUp,
+          completed: summary.completed,
+          pointsEarned: summary.pointsEarned,
+          invites: summary.invites,
+          settings: {
+            signupPoints: settings.signupPoints,
+            rewardPoints: settings.rewardPoints,
+            minTopUp: settings.minTopUp,
+            weeklyPrizePoints: settings.weeklyPrizePoints,
+          },
         });
       } catch (error) {
         console.error("Error fetching referral stats:", error);
@@ -10544,6 +10443,31 @@ app.get(
       }
     }
   );
+
+  // This week's top recruiters, and where the caller sits in it.
+  app.get("/api/referrals/leaderboard", isAuthenticated, async (req: any, res) => {
+    try {
+      const weekStart = weekStartFor(new Date());
+      const counts = await weeklyCounts(weekStart);
+      const me = counts.findIndex((c) => c.userId === req.user.id);
+      res.json({
+        weekStart,
+        leaderboard: counts.slice(0, 10).map((c, i) => ({
+          position: i + 1,
+          name: c.name,
+          referrals: c.referrals,
+          isMe: c.userId === req.user.id,
+        })),
+        me: me === -1
+          ? { position: null, referrals: 0 }
+          : { position: me + 1, referrals: counts[me].referrals },
+        leaderReferrals: counts[0]?.referrals ?? 0,
+      });
+    } catch (error) {
+      console.error("Error fetching referral leaderboard:", error);
+      res.status(500).json({ message: "Failed to fetch leaderboard" });
+    }
+  });
 
   // Newsletter subscription endpoint
   app.post(
@@ -22711,6 +22635,7 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
 
   registerInstantWinRoutes(app);
   registerGoldenTicketRoutes(app);
+  registerReferralRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

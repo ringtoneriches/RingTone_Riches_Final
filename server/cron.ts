@@ -4,6 +4,7 @@ import { users } from "@shared/schema";
 import { and, eq, lt } from "drizzle-orm";
 import { db } from "./db";
 import { expireLapsedCampaigns } from "./services/golden-ticket";
+import { awardWeeklyPrize } from "./services/referrals";
 
 // Function to initialize all cron jobs
 export function startCrons() {
@@ -46,6 +47,20 @@ export function startCrons() {
       console.log("✅ Cleaned up expired OTPs");
     } catch (err) {
       console.error("❌ Cleanup OTPs failed:", err);
+    }
+  });
+
+  // Weekly top recruiter prize. Runs a little after UK midnight on Monday,
+  // and again hourly that day in case the first run was missed — the unique
+  // index on (week_start, user_id) means nobody is paid twice.
+  cron.schedule("7 0-6 * * 1", async () => {
+    try {
+      const result = await awardWeeklyPrize();
+      if (result.awarded > 0) {
+        console.log(`🏆 Top Recruiter: paid ${result.awarded} winner(s) for ${result.weekStart}`);
+      }
+    } catch (err) {
+      console.error("❌ Weekly referral prize failed:", err);
     }
   });
 

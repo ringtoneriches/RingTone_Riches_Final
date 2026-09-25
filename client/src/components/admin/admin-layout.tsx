@@ -96,6 +96,7 @@ const sidebarGroups = [
       { name: "Flash Sales", path: "/admin/flash-sales", icon: TicketPercent },
       { name: "Daily Spin", path: "/admin/daily-spin", icon: Sparkles },
       { name: "Golden Tickets", path: "/admin/golden-tickets", icon: Ticket },
+      { name: "Referrals", path: "/admin/referrals", icon: Users },
       { name: "Redeem Code", path: "/admin/redeem", icon: FileDigit },
       { name: "Intelligence", path: "/admin/intelligence", icon: Brain },
       { name: "Notification", path: "/admin/notification", icon: Send },

@@ -94,6 +94,8 @@ import AdminTicketManagerPage from "./pages/admin/AdminTicketManagerPage";
 import AddPastWinnerPage from "./pages/admin/winners";
 import AdminAddWinner from "./pages/admin/winners";
 import AdminGoldenTickets from "./pages/admin/golden-tickets";
+import ReferralPage from "@/pages/referral";
+import AdminReferrals from "./pages/admin/referrals";
 import GoldenTicketRevealHost from "@/components/games/GoldenTicketRevealHost";
 import SlotGamePage from "./pages/slotGamePage";
 import SlotBilling from "./pages/slotBilling";
@@ -138,6 +140,7 @@ function Router() {
       <Route path="/competition/:id" component={Competition} />
       <Route path="/play/:id" component={PlayGame} />
       <Route path="/winners" component={PastWinners} />
+      <Route path="/referral" component={ReferralPage} />
       <Route path="/notifications" component={UserNotifications} />
 
       {/* Game routes - always registered */}
@@ -217,6 +220,7 @@ function Router() {
       <Route path="/admin/tickets" component={AdminTicketManagerPage} />
       <Route path="/admin/winners" component={AdminAddWinner} />
       <Route path="/admin/golden-tickets" component={AdminGoldenTickets} />
+      <Route path="/admin/referrals" component={AdminReferrals} />
       <Route path="/admin/slot" component={AdminSlotGame} />
       <Route path="/admin/slot-game/settings" component={AdminSlotMachine} />
       {/* Royal Reels admin hidden until UI is fixed — use Ringtone Slot instead */}
