@@ -3,6 +3,8 @@ import cron from "node-cron";
 import { users } from "@shared/schema";
 import { and, eq, lt } from "drizzle-orm";
 import { db } from "./db";
+import { expireLapsedCampaigns } from "./services/golden-ticket";
+import { awardWeeklyPrize } from "./services/referrals";
 
 // Function to initialize all cron jobs
 export function startCrons() {
@@ -45,6 +47,34 @@ export function startCrons() {
       console.log("✅ Cleaned up expired OTPs");
     } catch (err) {
       console.error("❌ Cleanup OTPs failed:", err);
+    }
+  });
+
+  // Weekly top recruiter prize. Runs a little after UK midnight on Monday,
+  // and again hourly that day in case the first run was missed — the unique
+  // index on (week_start, user_id) means nobody is paid twice.
+  cron.schedule("7 0-6 * * 1", async () => {
+    try {
+      const result = await awardWeeklyPrize();
+      if (result.awarded > 0) {
+        console.log(`🏆 Top Recruiter: paid ${result.awarded} winner(s) for ${result.weekStart}`);
+      }
+    } catch (err) {
+      console.error("❌ Weekly referral prize failed:", err);
+    }
+  });
+
+  // Close Golden Ticket campaigns whose end date has passed.
+  //
+  // Without this a lapsed campaign stays "active" forever: its counter keeps
+  // advancing on every eligible play, so tickets could still drop long after
+  // the promotion was supposed to be over.
+  cron.schedule("*/15 * * * *", async () => {
+    try {
+      const closed = await expireLapsedCampaigns();
+      if (closed > 0) console.log(`🎟️ Expired ${closed} lapsed Golden Ticket campaign(s)`);
+    } catch (err) {
+      console.error("❌ Golden Ticket expiry sweep failed:", err);
     }
   });
 

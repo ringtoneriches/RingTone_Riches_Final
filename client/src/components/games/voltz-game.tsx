@@ -10,6 +10,7 @@ import { useLocation } from "wouter";
 import GameResultOverlay from "@/components/games/GameResultOverlay";
 import { formatVoltzPrizeHeadline, formatVoltzSwitchCompact } from "@/lib/voltz-display";
 import RevealAllBatchSummary, { batchRowsFromRewards } from "@/components/games/RevealAllBatchSummary";
+import { publishGoldenTicket, GOLDEN_TICKET_DELAYS } from "@/lib/golden-ticket";
 
 interface VoltzGameProps {
   orderId: string;
@@ -191,6 +192,7 @@ const [showRevealAllSummary, setShowRevealAllSummary] = useState(false);
       });
 
       const data = await res.json();
+      publishGoldenTicket(data?.goldenTicket, GOLDEN_TICKET_DELAYS.voltz);
 
       if (!data.success) {
         try { if (surgeAudioRef.current) { surgeAudioRef.current.pause(); surgeAudioRef.current.currentTime = 0; } } catch (e) {}
@@ -285,6 +287,7 @@ const [showRevealAllSummary, setShowRevealAllSummary] = useState(false);
     });
     
     const data = await res.json();
+    publishGoldenTicket(data?.goldenTicket, GOLDEN_TICKET_DELAYS.batch);
     
     if (!data.success) {
       toastRef.current({

@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, ArrowLeft, Crown, Trophy, RefreshCw } from "lucide-react";
 import { usePurchaseArrivalToast } from "@/lib/purchase-toast";
+import { publishGoldenTicket, GOLDEN_TICKET_DELAYS } from "@/lib/golden-ticket";
 
 const GOLD = "#F1D47A";
 
@@ -87,6 +88,7 @@ export default function RoyalGamePage() {
         isRoyalReplay: false,
       });
       const body = await res.json();
+      publishGoldenTicket(body?.goldenTicket, GOLDEN_TICKET_DELAYS.royal);
       if (!body.success) return;
       applySpinResult(body);
       iframeRef.current?.contentWindow?.postMessage(
@@ -125,6 +127,7 @@ export default function RoyalGamePage() {
         isRoyalReplay,
       });
       const body = await res.json();
+      publishGoldenTicket(body?.goldenTicket, GOLDEN_TICKET_DELAYS.royal);
       const serverWin = body.controlledPool ? Boolean(body.isWin) : isWin;
       const serverCoins = body.controlledPool ? Number(body.coinsWon || 0) : coinsWon;
       const serverReplay = body.controlledPool ? false : isRoyalReplay;

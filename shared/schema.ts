@@ -717,6 +717,145 @@ export const winners = pgTable("winners", {
 });
 
 
+/**
+ * Golden Tickets — a promotional prize layer that sits above the games.
+ *
+ * A play gets its normal result first; a Golden Ticket may then drop on top of
+ * it, unrelated to the competition's own prize pool.
+ *
+ * The draw is committed before anyone plays. On activation the system picks
+ * distinct play positions inside a window and seals them here, so no one can
+ * decide afterwards who receives a ticket. Nothing about a live campaign is
+ * editable — it can only be cancelled.
+ */
+export const goldenTicketCampaigns = pgTable("golden_ticket_campaigns", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  prizeType: varchar("prize_type", { enum: ["cash", "credit", "physical"] }).notNull(),
+  /** Cash/credit amount. Null for a physical prize, which carries a value for reporting only. */
+  prizeValue: decimal("prize_value", { precision: 10, scale: 2 }),
+  prizeDescription: text("prize_description"),
+  prizeImageUrl: text("prize_image_url"),
+
+  // Eligibility, all admin-controlled.
+  eligibleGameTypes: jsonb("eligible_game_types").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  /** Optional narrowing to specific competitions; empty means every competition of the eligible types. */
+  eligibleCompetitionIds: jsonb("eligible_competition_ids").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  minSpend: decimal("min_spend", { precision: 10, scale: 2 }),
+  includeFreePlays: boolean("include_free_plays").notNull().default(false),
+
+  // The sealed draw.
+  ticketCount: integer("ticket_count").notNull(),
+  dropWindow: integer("drop_window").notNull(),
+  /** Play positions that win, chosen at activation. Never edited afterwards. */
+  dropPositions: jsonb("drop_positions").$type<number[]>().notNull().default(sql`'[]'::jsonb`),
+  /** Eligible plays counted since activation. Incremented atomically. */
+  playsSeen: integer("plays_seen").notNull().default(0),
+  ticketsAwarded: integer("tickets_awarded").notNull().default(0),
+
+  status: varchar("status", {
+    enum: ["draft", "scheduled", "active", "completed", "expired", "cancelled"],
+  }).notNull().default("draft"),
+  startsAt: timestamp("starts_at"),
+  endsAt: timestamp("ends_at"),
+
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  activatedBy: varchar("activated_by").references(() => users.id),
+  activatedAt: timestamp("activated_at"),
+  closedAt: timestamp("closed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+/** One row per awarded ticket. The audit trail behind every drop. */
+export const goldenTicketWins = pgTable("golden_ticket_wins", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: uuid("campaign_id").notNull().references(() => goldenTicketCampaigns.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  competitionId: uuid("competition_id").references(() => competitions.id),
+  gameType: varchar("game_type").notNull(),
+  /** The play this attached to, and what that play itself returned. */
+  playId: varchar("play_id"),
+  orderId: uuid("order_id").references(() => orders.id),
+  originalResult: text("original_result"),
+  /** The play position that matched, so a drop can be checked against the sealed list. */
+  dropPosition: integer("drop_position").notNull(),
+
+  // A snapshot, so later edits to the campaign cannot rewrite history.
+  prizeType: varchar("prize_type").notNull(),
+  prizeName: text("prize_name").notNull(),
+  prizeValue: decimal("prize_value", { precision: 10, scale: 2 }),
+
+  transactionId: uuid("transaction_id").references(() => transactions.id),
+  fulfilmentStatus: varchar("fulfilment_status", {
+    enum: ["auto_credited", "awaiting_fulfilment", "fulfilled", "cancelled"],
+  }).notNull(),
+  fulfilmentNote: text("fulfilment_note"),
+  awardedAt: timestamp("awarded_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+/**
+ * One row per referral, holding the whole lifecycle.
+ *
+ * Before this, a referral existed only as users.referredBy plus a transaction
+ * whose description happened to contain the referred member's email — and
+ * "have we paid this already?" was answered with a LIKE against that text.
+ * This table answers it with a unique constraint instead.
+ */
+export const referrals = pgTable("referrals", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  referrerId: varchar("referrer_id").notNull().references(() => users.id),
+  /** A member can only ever be referred once — enforced by a unique index. */
+  referredUserId: varchar("referred_user_id").notNull().references(() => users.id),
+  referralCode: varchar("referral_code"),
+
+  registeredAt: timestamp("registered_at").notNull().defaultNow(),
+  signupPointsAwarded: integer("signup_points_awarded").default(0),
+
+  // Filled in when the referred member makes a qualifying top-up.
+  firstTopUpAt: timestamp("first_top_up_at"),
+  firstTopUpAmount: decimal("first_top_up_amount", { precision: 10, scale: 2 }),
+  firstTopUpRef: varchar("first_top_up_ref"),
+
+  rewardPoints: integer("reward_points").default(0),
+  rewardedAt: timestamp("rewarded_at"),
+  rewardTransactionId: uuid("reward_transaction_id").references(() => transactions.id),
+
+  /**
+   * pending   — registered, no qualifying top-up yet
+   * qualified — topped up, reward owed (transient)
+   * rewarded  — reward paid
+   * blocked   — refused, see riskReason
+   * flagged   — paid but looks suspect, waiting on a human
+   * reversed  — was paid, then taken back after a refund or chargeback
+   */
+  status: varchar("status", {
+    enum: ["pending", "qualified", "rewarded", "blocked", "flagged", "reversed"],
+  }).notNull().default("pending"),
+  /** Why it was blocked or flagged, in words an admin can act on. */
+  riskReason: text("risk_reason"),
+  /** The signals that fired, kept so a decision can be reviewed later. */
+  riskSignals: jsonb("risk_signals").$type<string[]>().default(sql`'[]'::jsonb`),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+/** Weekly top recruiter winners, so the prize is paid once and auditable. */
+export const referralWeeklyWinners = pgTable("referral_weekly_winners", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  /** UK week the prize is for, as an ISO Monday date: "2026-09-21". */
+  weekStart: varchar("week_start").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  referralCount: integer("referral_count").notNull(),
+  prizePoints: integer("prize_points").notNull(),
+  transactionId: uuid("transaction_id").references(() => transactions.id),
+  awardedAt: timestamp("awarded_at").notNull().defaultNow(),
+});
+
 export const savedBankAccounts = pgTable("saved_bank_accounts", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -955,6 +1094,18 @@ export const platformSettings = pgTable("platform_settings", {
   // Spins allowed from one IP per UK day; 0 disables the cap. Generous by
   // default because UK mobile networks share IPs across many customers.
   dailySpinIpLimit: integer("daily_spin_ip_limit").default(12),
+  // Referral programme. Values live here rather than in code so they can be
+  // tuned without a deploy, and so a campaign can be turned off quickly.
+  referralsEnabled: boolean("referrals_enabled").default(true),
+  /** Points the new member gets for registering through a referral. */
+  referralSignupPoints: integer("referral_signup_points").default(100),
+  /** Points the referrer gets once that member makes a qualifying top-up. */
+  referralRewardPoints: integer("referral_reward_points").default(300),
+  /** Smallest top-up that counts. 0 means any successful top-up qualifies. */
+  referralMinTopUp: decimal("referral_min_top_up", { precision: 10, scale: 2 }).default("10.00"),
+  /** Weekly top recruiter prize, and the fewest referrals needed to win it. */
+  referralWeeklyPrizePoints: integer("referral_weekly_prize_points").default(1500),
+  referralWeeklyMinReferrals: integer("referral_weekly_min_referrals").default(3),
   // Which seasonal skin the public site wears: "off" (the normal theme),
   // "auto" (follow the calendar), or a named season. Admin-controlled, so a
   // season never appears without someone choosing it.

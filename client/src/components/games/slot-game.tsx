@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { publishGoldenTicket, GOLDEN_TICKET_DELAYS } from "@/lib/golden-ticket";
 
 export interface SlotSpinResult {
   isWin: boolean;
@@ -115,6 +116,7 @@ export default function SlotGameComponent({
     console.log("[SPIN] Response status:", res.status, res.statusText);
 
     const data = await res.json();
+    publishGoldenTicket(data?.goldenTicket, GOLDEN_TICKET_DELAYS.slot);
     console.log("[SPIN] 📦 Response data:", JSON.stringify(data, null, 2));
 
     console.log("[SPIN] ✅ API request successful");

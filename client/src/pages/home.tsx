@@ -16,6 +16,8 @@ import {
 import FeaturedCompetition from "@/components/home/FeaturedCompetition";
 import HallOfFame from "@/components/home/HallOfFame";
 import WinnersCircle from "@/components/home/WinnersCircle";
+import HalloweenSky from "@/components/home/HalloweenSky";
+import SeamBats from "@/components/home/SeamBats";
 import HowItWorks from "@/components/home/HowItWorks";
 import CommunitySection from "@/components/home/CommunitySection";
 import VipClub from "@/components/home/VipClub";
@@ -118,7 +120,10 @@ export default function Home() {
   return (
     <div className="min-h-screen text-foreground relative overflow-x-clip" style={{ backgroundColor: "#050505" }}>
       <DigitalAtmosphere className="rr-atmosphere--page" seasonal />
-      <div className="relative z-10">
+      {/* Anchored to the page rather than the viewport, so it scrolls away. */}
+      <HalloweenSky />
+      <div className="relative z-10 rr-page-sections">
+        <SeamBats />
       <Header />
       <BrandIntro />
 

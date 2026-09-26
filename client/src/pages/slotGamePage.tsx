@@ -21,6 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { publishGoldenTicket, GOLDEN_TICKET_DELAYS } from "@/lib/golden-ticket";
 
 interface SlotSpinResult {
   isWin: boolean;
@@ -564,6 +565,7 @@ export default function SlotGamePage() {
         count: spinsRemaining,
       });
       const data = await res.json();
+      publishGoldenTicket(data?.goldenTicket, GOLDEN_TICKET_DELAYS.batch);
       const results: RevealAllResult[] = Array.isArray(data.results) ? data.results : [];
 
       setRevealAllResults(results);

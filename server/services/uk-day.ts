@@ -67,3 +67,40 @@ export function ukDateString(now: Date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${c.year}-${pad(c.month)}-${pad(c.day)}`;
 }
+
+/**
+ * The instant the current UK week began — Monday 00:00 Europe/London — as a
+ * UTC Date.
+ *
+ * A UTC week boundary is not good enough here. During British Summer Time,
+ * Monday 00:00 in London is 23:00 on Sunday UTC, so a referral that qualified
+ * in that hour would be counted in the previous week and could hand the
+ * weekly prize to the wrong person.
+ *
+ * Stepping back a day at a time and re-reading the UK weekday keeps this
+ * correct across clock changes, where a day is 23 or 25 hours long.
+ */
+export function ukWeekStart(now: Date = new Date()): Date {
+  let start = ukDayStart(now);
+  // Monday = 1 … Sunday = 0 in UTC terms, read at UK midnight.
+  for (let i = 0; i < 7; i++) {
+    const c = ukWallClock(start);
+    const weekday = new Date(Date.UTC(c.year, c.month - 1, c.day)).getUTCDay();
+    if (weekday === 1) return start;
+    // Back up well past midnight, then snap to that day's UK start.
+    start = ukDayStart(new Date(start.getTime() - 12 * 60 * 60 * 1000));
+  }
+  return start;
+}
+
+/** The instant the NEXT UK week begins, as a UTC Date. */
+export function ukNextWeekStart(now: Date = new Date()): Date {
+  const start = ukWeekStart(now);
+  // 7 days plus slack, then snap back — a week can be 167 or 169 hours.
+  return ukWeekStart(new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000 + 12 * 60 * 60 * 1000));
+}
+
+/** The UK Monday that `instant` belongs to, as YYYY-MM-DD. */
+export function ukWeekKey(now: Date = new Date()): string {
+  return ukDateString(ukWeekStart(now));
+}

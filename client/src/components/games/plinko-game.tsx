@@ -9,6 +9,7 @@ import hitSoundFile from "@assets/hitsound_1769687506654.mp3";
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogAction, AlertDialogCancel } from "../ui/alert-dialog";
 import { useLocation } from "wouter";
 import GameResultOverlay from "@/components/games/GameResultOverlay";
+import { publishGoldenTicket, GOLDEN_TICKET_DELAYS } from "@/lib/golden-ticket";
 
 interface Prize {
   slotIndex: number;
@@ -858,6 +859,7 @@ export function PlinkoGame({ orderId, competitionId, playsRemaining, onPlayCompl
       result = JSON.parse(responseText);
       console.log("✅ [FETCH] JSON parsed successfully!");
       console.log("📊 [FETCH] Result:", JSON.stringify(result, null, 2));
+      publishGoldenTicket(result?.goldenTicket, GOLDEN_TICKET_DELAYS.plinko);
     } catch (parseError) {
       console.error("🔴 [FETCH] Failed to parse JSON!");
       console.error("🔴 [FETCH] Parse error:", parseError);

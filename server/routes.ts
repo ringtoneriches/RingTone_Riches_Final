@@ -137,6 +137,8 @@ import {
 } from "./email";
 import { wsManager } from "./websocket";
 import { registerInstantWinRoutes } from "./instantWinRoutes";
+import { registerGoldenTicketRoutes } from "./goldenTicketRoutes";
+import { registerReferralRoutes } from "./referralRoutes";
 import { registerDailySpinRoutes } from "./daily-spin-routes";
 import {
   InstantWinError,
@@ -189,6 +191,15 @@ import { creditCardCashback } from "./services/card-cashback";
 import { isCardCashbackTx } from "@shared/card-cashback";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
+import { CSV_BOM, csvRow } from "./services/csv";
+import {
+  getReferralSettings,
+  getReferrerSummary,
+  qualifyReferralOnTopUp,
+  recordReferralOnSignup,
+  weeklyCounts,
+} from "./services/referrals";
+import { ukWeekKey } from "./services/uk-day";
 import { calculateDiscountedTotal } from "./utils/discounts";
 import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
 import { notifyPublicWinnerUpdate } from "./services/record-game-winner";
@@ -197,6 +208,11 @@ import { getPromoVideoModeStatus } from "./services/promo-video-mode";
 import { getCashflowsRevenue } from "./services/cashflows-revenue";
 import { ukDayStart } from "./services/uk-day";
 import { shouldProcessPaymentWebhook } from "./services/payment-webhook-guard";
+import {
+  awardGoldenTicketForPlay,
+  awardGoldenTicketForPlays,
+  spendPerPlay,
+} from "./services/golden-ticket";
 import { checkTicketLimit, hasPerUserLimit, ticketLimitNote, ticketsRemainingForUser } from "./services/ticket-limits";
 import { effectiveTicketPrice } from "@shared/flash-sale";
 import { parseSeasonSetting, seasonFromSetting } from "@shared/season";
@@ -1097,7 +1113,15 @@ async function processWalletTopup(
 
       // ✅ Only check referral if shouldCheckReferral is true
       if (shouldCheckReferral) {
-        await awardReferralBonusInsideTransaction(tx, userId, amount, paymentRef);
+        // The referrals table decides whether this is the qualifying top-up and
+        // whether the referral is genuine. It replaces the old check, which
+        // asked "already paid?" with a LIKE against a transaction description.
+        const referral = await qualifyReferralOnTopUp(tx, {
+          userId,
+          amount,
+          paymentRef,
+        });
+        console.log("Referral check:", referral.outcome);
       } else {
         console.log("Skipping referral check for this topup");
       }
@@ -1118,125 +1142,6 @@ async function processWalletTopup(
   }
 }
 
-// ✅ Fixed function that runs INSIDE the transaction
-async function awardReferralBonusInsideTransaction(
-  tx: any,
-  userId: string,
-  amount: number,
-  paymentRef: string
-) {
-  try {
-    // Get user with referredBy field - Fixed SQL
-    const userResult = await tx.execute<{
-      rows: Array<{ id: string; referred_by: string | null; email: string }>
-    }>(sql`
-      SELECT id, referred_by as "referredBy", email
-      FROM users 
-      WHERE id = ${userId}
-      FOR UPDATE
-    `);
-    
-    const user = Array.isArray(userResult) ? userResult[0] : userResult.rows?.[0];
-    
-    if (!user || !user.referredBy) {
-      console.log("No referrer found for user:", userId);
-      return;
-    }
-
-    // ✅ Check if this is FIRST deposit - Fixed to work without status column
-    const transactionsCountResult = await tx.execute<{
-      rows: Array<{ count: string }>
-    }>(sql`
-      SELECT COUNT(*) as count
-      FROM transactions 
-      WHERE user_id = ${userId} 
-      AND type = 'deposit'
-      AND payment_ref != ${paymentRef}
-    `);
-    
-    const previousDeposits = Array.isArray(transactionsCountResult) 
-      ? parseInt(transactionsCountResult[0]?.count || '0')
-      : 0;
-    
-    console.log(`Previous completed deposits for user ${userId}: ${previousDeposits}`);
-    
-    // ✅ Only award if this is the FIRST deposit (previous count = 0)
-    if (previousDeposits === 0) {
-      // ✅ Check minimum deposit amount (e.g., £10 minimum for referral bonus)
-      const MIN_REFERRAL_DEPOSIT = 10;
-      
-      if (amount < MIN_REFERRAL_DEPOSIT) {
-        console.log(`Deposit amount £${amount} is less than minimum £${MIN_REFERRAL_DEPOSIT} for referral bonus`);
-        return;
-      }
-      
-      // Get referrer with FOR UPDATE lock
-      const referrerResult = await tx.execute<{
-        rows: Array<{ id: string; email: string; balance: number }>
-      }>(sql`
-        SELECT id, email, balance
-        FROM users 
-        WHERE id = ${user.referredBy}
-        FOR UPDATE
-      `);
-      
-      const referrer = Array.isArray(referrerResult) ? referrerResult[0] : referrerResult.rows?.[0];
-      
-      if (!referrer) {
-        console.warn("Referrer not found:", user.referredBy);
-        return;
-      }
-      
-      const bonusAmount = 2.0;
-      
-      // ✅ Check if referral bonus already awarded - Fixed to work without status column
-      const existingReferralBonus = await tx.execute<{
-        rows: Array<{ id: string }>
-      }>(sql`
-        SELECT id
-        FROM transactions 
-        WHERE user_id = ${referrer.id} 
-        AND type = 'referral'
-        AND description LIKE ${`%${user.email}%`}
-        LIMIT 1
-      `);
-      
-      const existingBonus = Array.isArray(existingReferralBonus) 
-        ? existingReferralBonus[0] 
-        : existingReferralBonus.rows?.[0];
-      
-      if (existingBonus) {
-        console.log(`Referral bonus already awarded for user ${user.email}`);
-        return;
-      }
-      
-      // Award bonus to referrer
-      await tx.execute(sql`
-        UPDATE users
-        SET balance = balance + ${bonusAmount}
-        WHERE id = ${referrer.id}
-      `);
-      
-      // Create referral transaction - REMOVED status field
-      await tx.insert(transactions).values({
-        userId: referrer.id,
-        amount: bonusAmount,
-        type: "referral",
-        // status: "completed", // ❌ REMOVE THIS LINE
-        description: `Referral reward: ${user.email} made their first wallet top-up of £${amount}`,
-        paymentMethod: "bonus",
-        createdAt: new Date(),
-      });
-      
-      console.log(`✅ Referral bonus awarded: £${bonusAmount} to ${referrer.email} for ${user.email}'s first top-up of £${amount}`);
-    } else {
-      console.log(`Not first deposit. User has ${previousDeposits} previous deposits.`);
-    }
-  } catch (error) {
-    console.error("Error awarding referral bonus:", error);
-    // Don't throw - we don't want to fail the deposit
-  }
-}
 
 
 // ===== SECURITY CONSTANTS =====
@@ -1939,13 +1844,27 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
 
         // 3. Referral Bonus
         try {
-          if (referrerId && referrerId !== user.id) {
+          // Turning the programme off has to stop both halves. Checked here so
+          // a disabled programme neither hands out joining points nor records
+          // a referral that could be paid later.
+          const referralSettings = await getReferralSettings(tx);
+
+          if (referrerId && referrerId !== user.id && referralSettings.enabled) {
             await storage.saveUserReferral({
               userId: user.id,
               referrerId: referrerId,
             });
 
-            const welcomeReferralPoints = 100;
+            const welcomeReferralPoints = referralSettings.signupPoints;
+
+            // One row per referral, carrying the whole lifecycle from here to
+            // the reward. The unique index makes a repeat call a no-op.
+            await recordReferralOnSignup(tx, {
+              referrerId,
+              referredUserId: user.id,
+              referralCode: referralCode ?? null,
+              signupPoints: welcomeReferralPoints,
+            });
             await tx.update(users)
               .set({
                 ringtonePoints: sql`${users.ringtonePoints} + ${welcomeReferralPoints}`,
@@ -5940,7 +5859,19 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
           message: "No spins remaining in this purchase",
         });
       }
-      return res.json(controlledSpin.response);
+      // Golden Ticket rides back with the result the game already decided.
+      const goldenTicket = await awardGoldenTicketForPlay({
+        userId,
+        gameType: "spin",
+        competitionId,
+        orderId,
+        spend: spendPerPlay(order),
+        originalResult:
+          (controlledSpin.response as any)?.prize?.brand ??
+          (controlledSpin.response as any)?.segment?.label ??
+          null,
+      });
+      return res.json({ ...(controlledSpin.response as any), goldenTicket });
     }
 
     // Check spins remaining
@@ -6260,6 +6191,15 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
       spinsRemaining: spinsRemaining - 1,
       orderId: order.id,
       wheelType: wheelType,
+      goldenTicket: await awardGoldenTicketForPlay({
+        userId,
+        gameType: "spin",
+        competitionId,
+        orderId: order.id,
+        playId: ticketNumber ? String(ticketNumber) : null,
+        spend: spendPerPlay(order),
+        originalResult: selectedSegment.label ?? null,
+      }),
     });
   } catch (error) {
     console.error("Error playing spin wheel:", error);
@@ -6298,7 +6238,13 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
       count,
     });
     if (controlledRevealSpins?.handled) {
-      return res.json(controlledRevealSpins.response);
+      return res.json({
+        ...(controlledRevealSpins.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "spin", competitionId, orderId },
+          Number(count) || 1,
+        ),
+      });
     }
 
     // Check spins remaining
@@ -6673,6 +6619,24 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
       console.error("Failed to label reveal-all spin tickets:", err);
     }
 
+    // Every revealed spin is a play, so each gets its own check. At most one
+    // ticket comes back: the client holds it until the whole batch has
+    // finished animating, which is the point of the feature.
+    let goldenTicket = null as Awaited<ReturnType<typeof awardGoldenTicketForPlay>>;
+    const perPlaySpend = spendPerPlay(order);
+    for (const row of results as any[]) {
+      const award = await awardGoldenTicketForPlay({
+        userId,
+        gameType: "spin",
+        competitionId,
+        orderId: order.id,
+        playId: row?.ticketNumber ? String(row.ticketNumber) : null,
+        spend: perPlaySpend,
+        originalResult: row?.segment?.label ?? row?.prize?.brand ?? null,
+      });
+      if (award && !goldenTicket) goldenTicket = award;
+    }
+
     res.json({
       success: true,
       spins: results,
@@ -6683,6 +6647,7 @@ app.post("/api/reveal-all-spins", isAuthenticated, async (req: any, res) => {
         prizesSynced: prizeSyncs.length,
       },
       spinsRemaining: spinsRemaining - results.length,
+      goldenTicket,
     });
   } catch (error) {
     console.error("Error revealing all spins:", error);
@@ -7678,7 +7643,13 @@ app.post(
         count: cardsToProcess,
       });
       if (controlledRevealScratch?.handled) {
-        return res.json(controlledRevealScratch.response);
+        return res.json({
+          ...(controlledRevealScratch.response as any),
+          goldenTicket: await awardGoldenTicketForPlays(
+            { userId, gameType: "scratch", competitionId, orderId },
+            cardsToProcess,
+          ),
+        });
       }
 
       // Get user
@@ -7947,6 +7918,10 @@ app.post(
 
       res.json({
         success: true,
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "scratch", competitionId, orderId },
+          results.length,
+        ),
         scratches: results,
         summary: {
           totalCash,
@@ -8325,6 +8300,13 @@ app.post(
           });
           return res.json({
             success: true,
+            goldenTicket: await awardGoldenTicketForPlay({
+              userId,
+              gameType: "scratch",
+              competitionId: order.competitionId,
+              orderId,
+              originalResult: body.prizeLabel ?? null,
+            }),
             prize: body.prize,
             prizeLabel: body.prizeLabel,
             remainingCards: body.remainingCards,
@@ -8520,6 +8502,14 @@ app.post(
 
         res.json({
           success: true,
+          goldenTicket: await awardGoldenTicketForPlay({
+            userId,
+            gameType: "scratch",
+            competitionId: order.competitionId,
+            orderId: order.id,
+            playId: ticketNumber ? String(ticketNumber) : null,
+            originalResult: selectedPrize.imageName ?? null,
+          }),
           prize: prizeResponse,
           prizeLabel: selectedPrize.imageName,
           remainingCards: remaining,
@@ -10238,6 +10228,145 @@ function formatAdminCashflowTx<T extends { type?: string; amount?: unknown; desc
   return { ...tx, amount, type };
 }
 
+/**
+ * Export the cashflow transactions the admin screen shows, as CSV.
+ *
+ * The screen had an Export button pointing at this path, but the route was
+ * never written — so it fell through to the /api 404 handler and opened a tab
+ * containing the error.
+ *
+ * It repeats the list endpoint's selection and filtering rather than sharing
+ * it, deliberately: an export that quietly disagrees with the screen it was
+ * taken from is worse than a little duplication. Change one, change both.
+ *
+ * Streamed row by row. All time is about 27,000 rows today and grows with the
+ * business; building one string for it would mean holding the whole file in
+ * memory before sending a byte of it.
+ */
+app.get(
+  "/api/admin/cashflow-transactions/export",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const { dateFrom, dateTo, search } = req.query;
+
+      const rows = await db
+        .select({
+          id: transactions.id,
+          userId: transactions.userId,
+          userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+          userEmail: users.email,
+          type: transactions.type,
+          amount: transactions.amount,
+          description: transactions.description,
+          createdAt: transactions.createdAt,
+          paymentRef: transactions.paymentRef,
+        })
+        .from(transactions)
+        .leftJoin(users, eq(transactions.userId, users.id))
+        .where(
+          sql`(
+            ${transactions.type} = 'deposit'
+          ) OR (
+            ${transactions.type} = 'purchase'
+            AND ${transactions.paymentRef} IS NOT NULL
+            AND ${transactions.paymentRef} != ''
+            AND ${transactions.paymentRef} != 'N/A'
+            AND ${transactions.description} LIKE '%Instant play purchase%'
+          ) OR (
+            ${transactions.paymentRef} LIKE '260%'
+          )`,
+        );
+
+      let filtered = [...rows];
+      if (dateFrom) {
+        const from = new Date(dateFrom as string);
+        filtered = filtered.filter((tx) => new Date(tx.createdAt as any) >= from);
+      }
+      if (dateTo) {
+        const to = new Date(dateTo as string);
+        to.setHours(23, 59, 59, 999);
+        filtered = filtered.filter((tx) => new Date(tx.createdAt as any) <= to);
+      }
+      if (search) {
+        const needle = String(search).toLowerCase();
+        filtered = filtered.filter(
+          (tx) =>
+            String(tx.userName || "").toLowerCase().includes(needle) ||
+            String(tx.userEmail || "").toLowerCase().includes(needle) ||
+            String(tx.description || "").toLowerCase().includes(needle) ||
+            String(tx.paymentRef || "").toLowerCase().includes(needle) ||
+            String(Math.abs(parseFloat(String(tx.amount)) || 0)).includes(needle),
+        );
+      }
+      filtered.sort(
+        (a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime(),
+      );
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      const scope = dateFrom || dateTo ? `${dateFrom || "start"}_to_${dateTo || "today"}` : "all-time";
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="cashflow-transactions-${scope}-${stamp}.csv"`,
+      );
+
+      // Excel assumes the system codepage without this, which turns £ and any
+      // accented name into mojibake.
+      res.write(CSV_BOM);
+      res.write(
+        csvRow([
+          "Date",
+          "Time",
+          "Type",
+          "Amount (GBP)",
+          "Customer",
+          "Email",
+          "Description",
+          "Payment reference",
+          "Transaction ID",
+          "User ID",
+        ]),
+      );
+
+      for (const tx of filtered) {
+        // Only the label comes from the shared formatter; its generic return
+        // type widens the amount, so that is computed here the same way.
+        const label = formatAdminCashflowTx(tx).type;
+        const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
+        const when = new Date(tx.createdAt as any);
+        res.write(
+          csvRow([
+            when.toISOString().slice(0, 10),
+            when.toISOString().slice(11, 19),
+            label,
+            amount.toFixed(2),
+            tx.userName,
+            tx.userEmail,
+            tx.description,
+            tx.paymentRef,
+            tx.id,
+            tx.userId,
+          ]),
+        );
+      }
+
+      res.end();
+    } catch (error) {
+      console.error("Error exporting cashflow transactions:", error);
+      // Only safe before anything has been written; once the stream has
+      // started the client already has a partial file and a status change
+      // would be ignored.
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Failed to export transactions" });
+      } else {
+        res.end();
+      }
+    }
+  },
+);
+
 // API endpoint: /api/admin/cashflow-transactions
 app.get(
   "/api/admin/cashflow-transactions",
@@ -10429,37 +10558,28 @@ app.get(
     async (req: any, res) => {
       try {
         const userId = req.user.id;
-
-        // Get list of referred users
-        const referrals = await storage.getUserReferrals(userId);
-
-        // Get ONLY CASH referral earnings (exclude points)
-        const referralTransactions = await db
-          .select()
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.userId, userId),
-              eq(transactions.type, "referral") // true cash referral ONLY
-            )
-          );
-
-        // Sum only positive money amounts (ignore "0", ignore points)
-        const totalEarned = referralTransactions.reduce((sum, tx) => {
-          const amount = parseFloat(tx.amount || "0");
-          return amount > 0 ? sum + amount : sum;
-        }, 0);
+        const [summary, settings] = await Promise.all([
+          getReferrerSummary(userId),
+          getReferralSettings(),
+        ]);
 
         res.json({
-          totalReferrals: referrals.length,
-          totalEarned: totalEarned.toFixed(2),
-          referrals: referrals.map((r) => ({
-            id: r.id,
-            firstName: r.firstName,
-            lastName: r.lastName,
-            email: r.email,
-            createdAt: r.createdAt,
-          })),
+          // Deliberately no "totalEarned": the reward is points, and a field
+          // named like money got rendered as "£300" on the wallet page. Points
+          // are always named as points here so they cannot be mistaken for
+          // withdrawable cash.
+          totalReferrals: summary.signedUp,
+
+          signedUp: summary.signedUp,
+          completed: summary.completed,
+          pointsEarned: summary.pointsEarned,
+          invites: summary.invites,
+          settings: {
+            signupPoints: settings.signupPoints,
+            rewardPoints: settings.rewardPoints,
+            minTopUp: settings.minTopUp,
+            weeklyPrizePoints: settings.weeklyPrizePoints,
+          },
         });
       } catch (error) {
         console.error("Error fetching referral stats:", error);
@@ -10467,6 +10587,31 @@ app.get(
       }
     }
   );
+
+  // This week's top recruiters, and where the caller sits in it.
+  app.get("/api/referrals/leaderboard", isAuthenticated, async (req: any, res) => {
+    try {
+      const weekStart = ukWeekKey();
+      const counts = await weeklyCounts(weekStart);
+      const me = counts.findIndex((c) => c.userId === req.user.id);
+      res.json({
+        weekStart,
+        leaderboard: counts.slice(0, 10).map((c, i) => ({
+          position: i + 1,
+          name: c.name,
+          referrals: c.referrals,
+          isMe: c.userId === req.user.id,
+        })),
+        me: me === -1
+          ? { position: null, referrals: 0 }
+          : { position: me + 1, referrals: counts[me].referrals },
+        leaderReferrals: counts[0]?.referrals ?? 0,
+      });
+    } catch (error) {
+      console.error("Error fetching referral leaderboard:", error);
+      res.status(500).json({ message: "Failed to fetch leaderboard" });
+    }
+  });
 
   // Newsletter subscription endpoint
   app.post(
@@ -11326,7 +11471,12 @@ app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
         return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
       }
       plinkoCooldowns.set(cooldownKey, now);
-      return res.json(controlledPlinko.response);
+      return res.json({
+        ...(controlledPlinko.response as any),
+        goldenTicket: await awardGoldenTicketForPlay({
+          userId, gameType: "plinko", competitionId, orderId,
+        }),
+      });
     }
 
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -11556,6 +11706,9 @@ app.post("/api/play-plinko", isAuthenticated, async (req: any, res) => {
     
     res.json({
       success: true,
+      goldenTicket: await awardGoldenTicketForPlay({
+        userId, gameType: "plinko", competitionId, orderId,
+      }),
       slotIndex,
       prizeName: prizeName,
       prizeValue: rewardValueStr,
@@ -11604,7 +11757,13 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
       count,
     });
     if (controlledRevealPlinko?.handled) {
-      return res.json(controlledRevealPlinko.response);
+      return res.json({
+        ...(controlledRevealPlinko.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "plinko", competitionId, orderId },
+          Number(count) || 1,
+        ),
+      });
     }
 
     const playsUsed = await db.select({ count: sql<number>`count(*)` })
@@ -11828,6 +11987,10 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       processed: playsToProcess,
+      goldenTicket: await awardGoldenTicketForPlays(
+        { userId, gameType: "plinko", competitionId, orderId },
+        playsToProcess,
+      ),
       results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints,
@@ -12253,7 +12416,13 @@ app.post("/api/reveal-all-plinko", isAuthenticated, async (req: any, res) => {
       count: req.body.count || order.quantity,
     });
     if (controlledRevealPlinko2?.handled) {
-      return res.json(controlledRevealPlinko2.response);
+      return res.json({
+        ...(controlledRevealPlinko2.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "plinko", competitionId, orderId },
+          Number(req.body.count) || order.quantity || 1,
+        ),
+      });
     }
 
     // Get user
@@ -15631,7 +15800,12 @@ app.post("/api/play-pop", async (req: any, res) => {
             message: "No plays remaining in this purchase",
           });
         }
-        return res.json(controlledPop.response);
+        return res.json({
+          ...(controlledPop.response as any),
+          goldenTicket: await awardGoldenTicketForPlay({
+            userId, gameType: "pop", competitionId, orderId,
+          }),
+        });
       }
 
       // Check remaining plays
@@ -16099,6 +16273,10 @@ app.post("/api/play-pop", async (req: any, res) => {
       // Response for authenticated user
       return res.json({
         success: true,
+        goldenTicket: await awardGoldenTicketForPlay({
+          userId, gameType: "pop", competitionId, orderId,
+          playId: ticketNumber ? String(ticketNumber) : null,
+        }),
         isGuest: false,
         ticketNumber,
         result: {
@@ -16166,14 +16344,20 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
       });
     }
 
-    const controlledReveal = await revealAllControlledPop({
+    const controlledRevealPop = await revealAllControlledPop({
       competitionId,
       orderId,
       userId,
       count,
     });
-    if (controlledReveal?.handled) {
-      return res.json(controlledReveal.response);
+    if (controlledRevealPop?.handled) {
+      return res.json({
+        ...(controlledRevealPop.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "pop", competitionId, orderId },
+          Number(count) || 1,
+        ),
+      });
     }
 
     // Check remaining plays
@@ -16490,6 +16674,10 @@ app.post("/api/reveal-all-pop", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       processed: playsToProcess,
+      goldenTicket: await awardGoldenTicketForPlays(
+        { userId, gameType: "pop", competitionId, orderId },
+        playsToProcess,
+      ),
       results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints: totalPoints,
@@ -18922,7 +19110,12 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
       if (controlledVoltz.noTickets) {
         return res.status(400).json({ success: false, message: "No plays remaining in this purchase" });
       }
-      return res.json(controlledVoltz.response);
+      return res.json({
+        ...(controlledVoltz.response as any),
+        goldenTicket: await awardGoldenTicketForPlay({
+          userId, gameType: "voltz", competitionId, orderId,
+        }),
+      });
     }
 
     const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
@@ -19148,6 +19341,9 @@ app.post("/api/play-voltz", isAuthenticated, async (req: any, res) => {
 
     res.json({
       success: true,
+      goldenTicket: await awardGoldenTicketForPlay({
+        userId, gameType: "voltz", competitionId, orderId,
+      }),
       result: resultPayload,
       playsRemaining: playsRemaining - 1,
       // Note: Free replay will add a play in the confirmation step
@@ -19369,7 +19565,13 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
       count,
     });
     if (controlledRevealVoltz?.handled) {
-      return res.json(controlledRevealVoltz.response);
+      return res.json({
+        ...(controlledRevealVoltz.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "voltz", competitionId, orderId },
+          Number(count) || 1,
+        ),
+      });
     }
 
     const playsUsed = await db.select({ count: sql<number>`count(*)` }).from(voltzUsage).where(eq(voltzUsage.orderId, orderId));
@@ -19675,6 +19877,10 @@ app.post("/api/reveal-all-voltz", isAuthenticated, async (req: any, res) => {
     res.json({ 
       success: true, 
       processed: playsToProcess, 
+      goldenTicket: await awardGoldenTicketForPlays(
+        { userId, gameType: "voltz", competitionId, orderId },
+        playsToProcess,
+      ),
       results: await labelRevealAllResultTickets(orderId, results),
       totalWon: totalCash,
       totalPoints,
@@ -21702,7 +21908,12 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
       if (controlledSlot.noTickets) {
         return res.status(403).json({ message: "All spins used" });
       }
-      return res.json(controlledSlot.response);
+      return res.json({
+        ...(controlledSlot.response as any),
+        goldenTicket: await awardGoldenTicketForPlay({
+          userId, gameType: "slot", competitionId: order.competitionId, orderId,
+        }),
+      });
     }
 
     const result = await processUncontrolledSlotSpin({
@@ -21714,7 +21925,12 @@ app.post("/api/play-slot", isAuthenticated, async (req: any, res) => {
       return res.status(result.status).json(result.body);
     }
     console.log("[API] ✅ Response:", result.response);
-    res.json(result.response);
+    res.json({
+      ...(result.response as any),
+      goldenTicket: await awardGoldenTicketForPlay({
+        userId, gameType: "slot", competitionId: order.competitionId, orderId,
+      }),
+    });
 
   } catch (error) {
     console.error("[API] 💥 Error in play-slot:", error);
@@ -21748,7 +21964,13 @@ app.post("/api/reveal-all-slot", isAuthenticated, async (req: any, res) => {
       count,
     });
     if (controlledReveal?.handled) {
-      return res.json(controlledReveal.response);
+      return res.json({
+        ...(controlledReveal.response as any),
+        goldenTicket: await awardGoldenTicketForPlays(
+          { userId, gameType: "slot", competitionId: order.competitionId, orderId },
+          Number(count) || 1,
+        ),
+      });
     }
 
     const [slotCfg] = await db.select().from(gameSlotConfig).where(eq(gameSlotConfig.id, "active"));
@@ -21779,6 +22001,10 @@ app.post("/api/reveal-all-slot", isAuthenticated, async (req: any, res) => {
     res.json({
       success: true,
       processed: results.length,
+      goldenTicket: await awardGoldenTicketForPlays(
+        { userId, gameType: "slot", competitionId: order.competitionId, orderId },
+        results.length,
+      ),
       results: await labelRevealAllResultTickets(orderId, results),
       winCount,
       cashWon,
@@ -22350,6 +22576,14 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
         }
         return res.json({
           success: true,
+          goldenTicket: await awardGoldenTicketForPlay({
+            userId,
+            gameType: "royal",
+            competitionId: order.competitionId,
+            orderId,
+            playId: royal.ticketNumber ? String(royal.ticketNumber) : null,
+            originalResult: royal.result?.prizeName ?? null,
+          }),
           controlledPool: true,
           creditedAtSale: true,
           isWin: royal.isWin,
@@ -22544,6 +22778,8 @@ app.post("/api/record-slot-spin", isAuthenticated, async (req: any, res) => {
   // ════════════════════ END ROYAL REELS ROUTES ════════════════════
 
   registerInstantWinRoutes(app);
+  registerGoldenTicketRoutes(app);
+  registerReferralRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

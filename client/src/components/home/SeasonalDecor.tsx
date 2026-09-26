@@ -107,7 +107,7 @@ const BATS = [
   { top: "11%", scale: 0.78, duration: "25s", delay: "13s", flap: "0.41s" },
 ];
 
-function Bat({ style }: { style: React.CSSProperties }) {
+export function Bat({ style }: { style: React.CSSProperties }) {
   return (
     <span className="rr-hw-bat" style={style} aria-hidden>
       <img src={batDown} alt="" draggable={false} decoding="async" className="rr-hw-bat-frame rr-hw-bat-frame--down" />

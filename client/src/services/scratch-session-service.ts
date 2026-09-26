@@ -24,6 +24,8 @@ export interface CompleteSessionPayload {
 }
 
 export interface CompleteSessionResponse {
+  /** A Golden Ticket, when this card happened to land on one. */
+  goldenTicket?: unknown;
   success: boolean;
   prize: {
     type: string;
