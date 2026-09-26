@@ -1236,3 +1236,132 @@ html.rr-season-halloween .rr-header-line {
     animation: none;
   }
 }
+
+/* =========================================================================
+   The street
+   =========================================================================
+
+   A long page is a scroll; a street is a journey, and the difference is
+   knowing where you are on it. Each section gets a house on the verge, and
+   the path between them lights up behind the reader as they pass.
+
+   It stays a shop. The houses sit in the outer margin behind everything, the
+   path is a hairline, and nothing gates the content or asks to be played.
+   ========================================================================= */
+
+.rr-hw-street-path {
+  position: absolute;
+  left: clamp(1.25rem, 3.2vw, 3.25rem);
+  width: 2px;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(241, 212, 122, 0) 0%,
+    rgba(241, 212, 122, 0.13) 6%,
+    rgba(241, 212, 122, 0.13) 94%,
+    rgba(241, 212, 122, 0) 100%
+  );
+}
+
+/* The lit part behind you, scaled by a custom property written on scroll.
+   Transform scaling composites, so filling it costs nothing per frame. */
+.rr-hw-street-path::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: scaleY(var(--rr-street-progress, 0));
+  transform-origin: top center;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 177, 59, 0.5) 0%,
+    rgba(255, 138, 46, 0.35) 70%,
+    rgba(255, 138, 46, 0) 100%
+  );
+  box-shadow: 0 0 14px rgba(255, 150, 40, 0.35);
+}
+
+.rr-hw-street-stop {
+  position: absolute;
+  left: clamp(1.25rem, 3.2vw, 3.25rem);
+  transform: translate(-50%, -55%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rr-hw-house-shell {
+  fill: #07070A;
+  stroke: rgba(241, 212, 122, 0.22);
+  stroke-width: 1.2;
+}
+
+/* Dark until you reach it. The window coming on is the whole reward. */
+.rr-hw-house-window {
+  fill: #1a1a20;
+  transition: fill 700ms ease-out;
+}
+
+.rr-hw-house {
+  transition: filter 700ms ease-out;
+}
+
+.rr-hw-house.is-lit .rr-hw-house-window {
+  fill: #ffb13b;
+}
+
+.rr-hw-house.is-lit {
+  filter: drop-shadow(0 0 12px rgba(255, 177, 59, 0.45));
+}
+
+/* Where you are on the street. Bottom left, because the right already carries
+   the cart, plays and daily spin. */
+.rr-hw-street-marker {
+  position: fixed;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(241, 212, 122, 0.25);
+  background: rgba(8, 8, 10, 0.82);
+  backdrop-filter: blur(6px);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(241, 212, 122, 0.8);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 400ms ease-out, transform 400ms ease-out;
+}
+
+/* Only once the walk has started, so it does not greet people on arrival. */
+.rr-hw-street-marker.is-walking {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.rr-hw-street-marker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #ffb13b;
+  box-shadow: 0 0 8px rgba(255, 177, 59, 0.9);
+}
+
+@media (max-width: 639px) {
+  /* A phone has no verge — the lane would run through the cards. */
+  .rr-hw-street-path,
+  .rr-hw-street-stop {
+    display: none;
+  }
+
+  .rr-hw-street-marker {
+    left: 0.75rem;
+    bottom: 0.75rem;
+  }
+}
