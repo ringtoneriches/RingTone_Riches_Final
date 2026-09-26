@@ -878,3 +878,148 @@ html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-streaks,
 html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-gold {
   display: none;
 }
+
+/* =========================================================================
+   Carrying the season down the page
+   =========================================================================
+
+   The atmosphere layer is fixed, so it does follow the scroll — but the
+   content below the hero is dense and edge to edge, and covers it. Past the
+   first screen the page was effectively the normal site with a faintly purple
+   edge, which is what the owner was reacting to.
+
+   Adding more full-page layers would not have fixed that: they would be
+   hidden by the same content, and this page is over 9,000px tall, so anything
+   that animates repaints for the whole of every scroll. That is what made the
+   theme feel heavy the first time.
+
+   So the work happens in the seams between sections instead. Those gaps are
+   the one place the background is genuinely visible, and they are generous.
+   Everything here is a static gradient: no images, no animation, no
+   requests.
+   ========================================================================= */
+
+/* The moon, anchored to the page rather than the viewport. */
+.rr-hw-sky {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+html.rr-season-halloween .rr-hw-moon--anchored {
+  position: absolute;
+}
+
+/* A warm pool where each section begins, as though something is burning just
+   out of frame. Laid on the section itself rather than inserted between them,
+   so no markup moves and nothing can shift the layout. */
+html.rr-season-halloween .rr-page-sections > section {
+  position: relative;
+}
+
+html.rr-season-halloween .rr-page-sections > section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: min(1200px, 130%);
+  height: 260px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 0%,
+    rgba(255, 138, 46, 0.09) 0%,
+    rgba(200, 16, 46, 0.05) 38%,
+    rgba(255, 138, 46, 0) 72%
+  );
+}
+
+/* Alternate the tint so the page does not read as the same glow repeated:
+   ember orange, then a colder moonlight, then back. */
+html.rr-season-halloween .rr-page-sections > section:nth-of-type(even)::before {
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 0%,
+    rgba(198, 176, 255, 0.07) 0%,
+    rgba(120, 90, 200, 0.045) 40%,
+    rgba(198, 176, 255, 0) 74%
+  );
+}
+
+/* A band of fog sitting in the seam itself. Static: a drifting version costs
+   a repaint for the entire scroll, and in a screen recording the difference
+   is not visible anyway. */
+html.rr-season-halloween .rr-page-sections > section::after {
+  content: "";
+  position: absolute;
+  top: -70px;
+  left: 0;
+  right: 0;
+  height: 150px;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(214, 205, 235, 0) 0%,
+    rgba(214, 205, 235, 0.035) 45%,
+    rgba(190, 180, 215, 0.02) 70%,
+    rgba(190, 180, 215, 0) 100%
+  );
+  filter: blur(1px);
+}
+
+/* The first section needs neither: it sits under the hero, where the painted
+   sky is already doing this. */
+html.rr-season-halloween .rr-page-sections > section:first-of-type::before,
+html.rr-season-halloween .rr-page-sections > section:first-of-type::after {
+  display: none;
+}
+
+/* Keep the section's own contents above its glow. */
+html.rr-season-halloween .rr-page-sections > section > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* A little ember warmth behind the big section headings, so the season
+   touches the content and not only the background. */
+html.rr-season-halloween .rr-page-sections .font-prize {
+  text-shadow: 0 0 26px rgba(255, 138, 46, 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Nothing here moves, but soften it for anyone asking for a calmer page. */
+  html.rr-season-halloween .rr-page-sections > section::after {
+    opacity: 0.5;
+  }
+}
+
+/* A bat crossing one of the seams. Positioned against the page rather than
+   the viewport, so it belongs to a place on the page instead of following the
+   reader down it. Behind the content, and unable to take a tap. */
+.rr-hw-seam-bat {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 120px;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+html.rr-season-halloween .rr-hw-seam-bat .rr-hw-bat {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Same reasoning as the other bats: one that cannot fly is just a bat
+     sitting in mid-air. */
+  .rr-hw-seam-bat {
+    display: none;
+  }
+}

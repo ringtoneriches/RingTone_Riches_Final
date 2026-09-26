@@ -1,6 +1,5 @@
 import { useSeason } from "@/hooks/useSeason";
 import { SeasonalBats } from "./SeasonalDecor";
-import HalloweenMoon from "./HalloweenMoon";
 import HalloweenClouds from "./HalloweenClouds";
 import HalloweenBackdrop, { hasScene } from "./HalloweenBackdrop";
 
@@ -42,9 +41,9 @@ export default function SeasonalAtmosphere() {
           them rather than washing a grey film across the light sources. */}
       <div className="rr-hw-vignette" aria-hidden />
 
-      <div className="rr-hw-moon" aria-hidden>
-        <HalloweenMoon />
-      </div>
+      {/* The moon lives in HalloweenSky, anchored to the top of the page.
+          Here it would be fixed to the viewport and would follow the scroll
+          down over the content. */}
 
       {/* Over the moon, so the banks pass in front of it — which is most of
           what sells them as weather rather than a texture. */}
