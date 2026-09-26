@@ -18,6 +18,7 @@ import HallOfFame from "@/components/home/HallOfFame";
 import WinnersCircle from "@/components/home/WinnersCircle";
 import HalloweenSky from "@/components/home/HalloweenSky";
 import SeamBats from "@/components/home/SeamBats";
+import SectionLurkers from "@/components/home/SectionLurkers";
 import HowItWorks from "@/components/home/HowItWorks";
 import CommunitySection from "@/components/home/CommunitySection";
 import VipClub from "@/components/home/VipClub";
@@ -124,6 +125,7 @@ export default function Home() {
       <HalloweenSky />
       <div className="relative z-10 rr-page-sections">
         <SeamBats />
+        <SectionLurkers />
       <Header />
       <BrandIntro />
 
