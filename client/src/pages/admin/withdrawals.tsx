@@ -17,7 +17,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowDownCircle, CheckCircle, XCircle, Clock, Search, User, Mail, Phone, Wallet, Coins, ChevronLeft, ChevronRight, Trash2, AlertTriangle } from "lucide-react";
+import { ArrowDownCircle, CheckCircle, XCircle, Clock, Search, User, Mail, Phone, Wallet, Coins, ChevronLeft, ChevronRight, Trash2, AlertTriangle, Check, X } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -28,6 +28,13 @@ import {
 
 const DEFAULT_APPROVAL_NOTE =
   "🎉 Congratulations on your win! Your withdrawal has been approved. We’d love it if you shared your win in our Facebook group to celebrate with the Ringtoners and inspire others. ❤️🏆";
+
+/** UK sort codes are read in pairs: 202743 becomes 20-27-43. */
+function formatSortCode(sortCode?: string | null) {
+  const digits = String(sortCode ?? "").replace(/\D/g, "");
+  if (digits.length !== 6) return sortCode ?? "—";
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 6)}`;
+}
 
 export default function AdminWithdrawals() {
   const { toast } = useToast();
@@ -313,103 +320,109 @@ useEffect(() => {
                     className="bg-black/50 rounded-lg p-5 border border-yellow-500/20 hover:border-yellow-500/40 transition-colors"
                     data-testid={`admin-withdrawal-${request.id}`}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-4">
-                        {/* Header with Status and Amount */}
-                        <div className="flex items-center gap-3">
-                          {statusBadge(request.status)}
-                          <span className="text-3xl font-bold text-yellow-400">
-                            £{parseFloat(request.amount).toFixed(2)}
+                    {/* Header: amount leads, because it is what the decision
+                        is about. */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        {statusBadge(request.status)}
+                        <span className="text-2xl font-bold text-yellow-400 sm:text-3xl">
+                          £{parseFloat(request.amount).toFixed(2)}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {format(new Date(request.createdAt), "dd MMM yyyy 'at' HH:mm")}
+                      </span>
+                    </div>
+
+                    {/* Who is asking, and what they hold. */}
+                    {request.user && (
+                      <div className="mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 shrink-0 text-yellow-400" />
+                          <span className="truncate font-semibold text-white">
+                            {request.user.firstName} {request.user.lastName}
                           </span>
                         </div>
-
-                        {/* User Information */}
-                        {request.user && (
-                          <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <User className="h-4 w-4 text-yellow-400" />
-                              <span className="text-lg font-semibold text-white">
-                                {request.user.firstName} {request.user.lastName}
-                              </span>
-                            </div>
-                            <div className="grid md:grid-cols-2 gap-2 text-sm">
-                              <div className="flex items-center gap-2">
-                                <Mail className="h-3 w-3 text-gray-400" />
-                                <span className="text-gray-300">{request.user.email}</span>
-                              </div>
-                              {request.user.phone && (
-                                <div className="flex items-center gap-2">
-                                  <Phone className="h-3 w-3 text-gray-400" />
-                                  <span className="text-gray-300">{request.user.phone}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2">
-                                <Wallet className="h-3 w-3 text-green-400" />
-                                <span className="text-green-400 font-semibold">
-                                  Balance: £{parseFloat(request.user.balance || '0').toFixed(2)}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Coins className="h-3 w-3 text-yellow-400" />
-                                <span className="text-yellow-400 font-semibold">
-                                  Points: {request.user.ringtonePoints || 0}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Bank Account Details */}
-                        <div className="grid md:grid-cols-2 gap-3 text-sm">
-                          <div className="bg-zinc-800/50 rounded p-2">
-                            <p className="text-gray-500 text-xs">Account Name</p>
-                            <p className="text-white font-medium">{request.accountName}</p>
-                          </div>
-                          <div className="bg-zinc-800/50 rounded p-2">
-                            <p className="text-gray-500 text-xs">Bank Details</p>
-                            <p className="text-white font-mono text-xs">
-                              Sort: {request.sortCode} | Acc: {request.accountNumber}
-                            </p>
-                          </div>
-                          <div className="bg-zinc-800/50 rounded p-2">
-                            <p className="text-gray-500 text-xs">Requested Date</p>
-                            <p className="text-white">
-                              {format(
-                                new Date(request.createdAt),
-                                "dd MMM yyyy 'at' HH:mm",
-                              )}
-                            </p>
-                          </div>
-                          <div className="bg-zinc-800/50 rounded p-2">
-                            <p className="text-gray-500 text-xs">User ID</p>
-                            <p className="text-white font-mono text-xs truncate">
-                              {request.userId}
-                            </p>
-                          </div>
+                        <div className="mt-1 flex items-center gap-2 text-sm text-gray-400">
+                          <Mail className="h-3 w-3 shrink-0" />
+                          {/* Long addresses were pushing the card wider than
+                              the screen and taking the buttons with them. */}
+                          <span className="truncate" title={request.user.email}>
+                            {request.user.email}
+                          </span>
+                        </div>
+                        <div className="mt-2.5 flex flex-wrap gap-2">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-green-500/25 bg-green-500/10 px-2.5 py-1 text-xs font-semibold text-green-400">
+                            <Wallet className="h-3 w-3" />
+                            £{parseFloat(request.user.balance || "0").toFixed(2)}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-500/25 bg-yellow-500/10 px-2.5 py-1 text-xs font-semibold text-yellow-400">
+                            <Coins className="h-3 w-3" />
+                            {request.user.ringtonePoints || 0} points
+                          </span>
+                          {request.user.phone && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-gray-300">
+                              <Phone className="h-3 w-3" />
+                              {request.user.phone}
+                            </span>
+                          )}
                         </div>
                       </div>
+                    )}
 
-                      {/* Action Buttons */}
-                      <div className="flex flex-col gap-2 min-w-[120px]">
-                        <Button
-                          size="sm"
-                          onClick={() => handleAction(request, "approved")}
-                          className="bg-green-600 hover:bg-green-500 w-full"
-                          data-testid={`button-approve-${request.id}`}
+                    {/* Where the money is going. Laid out as label and value
+                        rows rather than boxes, so it reads like a statement
+                        and the numbers line up. */}
+                    <dl className="mt-4 divide-y divide-white/5 overflow-hidden rounded-lg border border-white/10">
+                      {[
+                        { label: "Account name", value: request.accountName },
+                        { label: "Sort code", value: formatSortCode(request.sortCode), mono: true },
+                        { label: "Account number", value: request.accountNumber, mono: true },
+                      ].map((row) => (
+                        <div
+                          key={row.label}
+                          className="flex items-baseline justify-between gap-3 px-3 py-2.5"
                         >
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleAction(request, "rejected")}
-                          className="w-full"
-                          data-testid={`button-reject-${request.id}`}
-                        >
-                          Reject
-                        </Button>
-                      </div>
+                          <dt className="shrink-0 text-xs uppercase tracking-wide text-gray-500">
+                            {row.label}
+                          </dt>
+                          <dd
+                            className={`min-w-0 truncate text-right text-sm text-white ${
+                              row.mono ? "font-mono tracking-wide" : "font-medium"
+                            }`}
+                          >
+                            {row.value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+
+                    {/* Full width on a phone, side by side once there is room.
+                        They used to sit in a fixed-width column beside the
+                        details, which pushed them off the right of the screen. */}
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        onClick={() => handleAction(request, "approved")}
+                        className="h-11 flex-1 bg-green-600 font-semibold hover:bg-green-500"
+                        data-testid={`button-approve-${request.id}`}
+                      >
+                        <Check className="mr-2 h-4 w-4" />
+                        Approve
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => handleAction(request, "rejected")}
+                        className="h-11 flex-1 font-semibold"
+                        data-testid={`button-reject-${request.id}`}
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Reject
+                      </Button>
                     </div>
+
+                    <p className="mt-3 truncate text-[10px] text-gray-600" title={request.userId}>
+                      User {request.userId}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -478,7 +491,7 @@ useEffect(() => {
                     data-testid={`processed-withdrawal-${request.id}`}
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-3">
+                      <div className="min-w-0 flex-1 space-y-3">
                         {/* Header */}
                         <div className="flex items-center gap-3">
                           {statusBadge(request.status)}
@@ -497,9 +510,11 @@ useEffect(() => {
                               </span>
                             </div>
                             <div className="flex flex-wrap gap-3 text-xs">
-                              <div className="flex items-center gap-1">
-                                <Mail className="h-3 w-3 text-gray-400" />
-                                <span className="text-gray-300">{request.user.email}</span>
+                              <div className="flex min-w-0 items-center gap-1">
+                                <Mail className="h-3 w-3 shrink-0 text-gray-400" />
+                                <span className="truncate text-gray-300" title={request.user.email}>
+                                  {request.user.email}
+                                </span>
                               </div>
                               {request.user.phone && (
                                 <div className="flex items-center gap-1">
