@@ -826,11 +826,12 @@ export const referrals = pgTable("referrals", {
    * pending   — registered, no qualifying top-up yet
    * qualified — topped up, reward owed (transient)
    * rewarded  — reward paid
-   * blocked   — refused, see blockedReason
+   * blocked   — refused, see riskReason
    * flagged   — paid but looks suspect, waiting on a human
+   * reversed  — was paid, then taken back after a refund or chargeback
    */
   status: varchar("status", {
-    enum: ["pending", "qualified", "rewarded", "blocked", "flagged"],
+    enum: ["pending", "qualified", "rewarded", "blocked", "flagged", "reversed"],
   }).notNull().default("pending"),
   /** Why it was blocked or flagged, in words an admin can act on. */
   riskReason: text("risk_reason"),
@@ -1104,7 +1105,7 @@ export const platformSettings = pgTable("platform_settings", {
   referralMinTopUp: decimal("referral_min_top_up", { precision: 10, scale: 2 }).default("10.00"),
   /** Weekly top recruiter prize, and the fewest referrals needed to win it. */
   referralWeeklyPrizePoints: integer("referral_weekly_prize_points").default(1500),
-  referralWeeklyMinReferrals: integer("referral_weekly_min_referrals").default(1),
+  referralWeeklyMinReferrals: integer("referral_weekly_min_referrals").default(3),
   // Which seasonal skin the public site wears: "off" (the normal theme),
   // "auto" (follow the calendar), or a named season. Admin-controlled, so a
   // season never appears without someone choosing it.

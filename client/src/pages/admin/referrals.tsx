@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Users, Trophy, ShieldAlert, Check, Ban, Download } from "lucide-react";
+import { Users, Trophy, ShieldAlert, Check, Ban, Download, Undo2 } from "lucide-react";
 
 type Row = {
   id: string;
@@ -46,6 +46,7 @@ const TABS = [
 
 const STATUS_TONE: Record<string, string> = {
   pending: "bg-amber-900/40 text-amber-200",
+  reversed: "bg-zinc-800 text-gray-400",
   rewarded: "bg-emerald-900/40 text-emerald-200",
   flagged: "bg-orange-900/50 text-orange-200",
   blocked: "bg-red-900/40 text-red-200",
@@ -53,6 +54,9 @@ const STATUS_TONE: Record<string, string> = {
 
 const name = (first?: string | null, last?: string | null) =>
   [first, last].filter(Boolean).join(" ") || "—";
+
+const fullDate = (iso?: string | null) =>
+  iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—";
 
 const date = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—";
@@ -72,11 +76,31 @@ export default function AdminReferrals() {
     },
   });
 
-  const { data: board } = useQuery<{ weekStart: string; leaderboard: Array<{ name: string; referrals: number }> }>({
-    queryKey: ["/api/admin/referrals/leaderboard"],
-  });
+  const { data: board } = useQuery<{
+    weekStart: string;
+    weekEnd: string;
+    leaderboard: Array<{ name: string; referrals: number; reachedAt: string | null }>;
+  }>({ queryKey: ["/api/admin/referrals/leaderboard"] });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["/api/admin/referrals"] });
+
+  const reverse = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/admin/referrals/${id}/reverse`, "POST", {
+        reason: "Top-up refunded or charged back",
+      }),
+    onSuccess: (r: any) => {
+      toast({
+        title: "Reward reversed",
+        description: r?.shortfall
+          ? `${r.reversed} points taken back; ${r.shortfall} had already been spent.`
+          : `${r?.reversed ?? 0} points taken back.`,
+      });
+      refresh();
+    },
+    onError: (e: any) =>
+      toast({ title: "That didn't work", description: String(e?.message), variant: "destructive" }),
+  });
 
   const review = useMutation({
     mutationFn: ({ id, decision }: { id: string; decision: "approve" | "block" }) =>
@@ -169,19 +193,37 @@ export default function AdminReferrals() {
         </div>
 
         <Card className="p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Trophy className="h-4 w-4 text-yellow-400" />
-            Top recruiters — week of {board?.weekStart ?? "—"}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Trophy className="h-4 w-4 text-yellow-400" />
+              Top recruiters
+            </div>
+            <div className="text-xs text-gray-400">
+              {board
+                ? `Monday ${fullDate(board.weekStart)} 00:00 – Sunday ${fullDate(board.weekEnd)} 23:59 (UK)`
+                : "—"}
+            </div>
           </div>
+          <p className="mt-1 text-xs text-gray-500">
+            The prize needs the configured minimum of qualifying referrals. On a tie, the
+            member who reached the total first wins.
+          </p>
           {board?.leaderboard.length ? (
             <ol className="mt-3 space-y-1">
               {board.leaderboard.slice(0, 5).map((row, i) => (
-                <li key={i} className="flex justify-between text-sm">
+                <li key={i} className="flex items-center justify-between text-sm">
                   <span className="text-gray-300">
                     <span className="mr-2 text-yellow-500">{i + 1}</span>
                     {row.name}
                   </span>
-                  <span className="font-semibold">{row.referrals}</span>
+                  <span className="flex items-center gap-3">
+                    {row.reachedAt && (
+                      <span className="text-[10px] text-gray-500">
+                        reached {new Date(row.reachedAt).toLocaleString("en-GB")}
+                      </span>
+                    )}
+                    <span className="font-semibold">{row.referrals}</span>
+                  </span>
                 </li>
               ))}
             </ol>
@@ -281,6 +323,19 @@ export default function AdminReferrals() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
+                        {(r.status === "rewarded" || r.status === "flagged") && (
+                          <Button
+                            size="sm" variant="ghost"
+                            className="h-7 px-2 text-[10px] text-orange-300"
+                            onClick={() => reverse.mutate(r.id)}
+                            disabled={reverse.isPending}
+                            title="Take the points back after a refund or chargeback"
+                            data-testid={`button-reverse-${r.id}`}
+                          >
+                            <Undo2 className="mr-1 h-3 w-3" />
+                            Reverse
+                          </Button>
+                        )}
                         {r.status === "flagged" && (
                           <div className="flex justify-end gap-1">
                             <Button

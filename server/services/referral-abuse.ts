@@ -69,6 +69,12 @@ export function normalisePhone(phone?: string | null): string {
   return digits;
 }
 
+function toTime(value?: Date | string | null): number | null {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.getTime();
+}
+
 function overlap(a: string[] = [], b: string[] = []) {
   const set = new Set(a.filter(Boolean));
   return b.filter((v) => v && set.has(v));
@@ -150,27 +156,37 @@ export function assessReferral(
   return { decision: "allow", signals };
 }
 
-/** The Monday of the UK week a date falls in, as "YYYY-MM-DD". */
-export function weekStartFor(date: Date): string {
-  const d = new Date(date.getTime());
-  const day = (d.getUTCDay() + 6) % 7; // Monday = 0
-  d.setUTCDate(d.getUTCDate() - day);
-  return d.toISOString().slice(0, 10);
-}
-
 /**
  * Who wins the weekly prize.
  *
- * Ties are all paid. Splitting points invites arguments over rounding, and the
- * amounts are small enough that paying two people is cheaper than the support
- * conversation about why someone got half.
+ * Highest number of qualifying referrals takes it. On a tie, the member who
+ * reached that total first wins — so the prize rewards getting there quickly
+ * rather than being split, and there is exactly one winner to announce.
+ *
+ * `reachedAt` is when that member's Nth qualifying referral landed, where N is
+ * their total for the week. Comparing the moment each of them hit the same
+ * number is the only fair reading of "first to reach that total": comparing
+ * their last referral overall would punish someone who kept going.
  */
 export function pickWeeklyWinners(
-  counts: Array<{ userId: string; referrals: number }>,
+  counts: Array<{ userId: string; referrals: number; reachedAt?: Date | string | null }>,
   minReferrals: number,
 ): Array<{ userId: string; referrals: number }> {
-  const eligible = counts.filter((c) => c.referrals >= Math.max(1, minReferrals));
+  const floor = Math.max(1, minReferrals);
+  const eligible = counts.filter((c) => c.referrals >= floor);
   if (!eligible.length) return [];
+
   const top = Math.max(...eligible.map((c) => c.referrals));
-  return eligible.filter((c) => c.referrals === top);
+  const tied = eligible.filter((c) => c.referrals === top);
+  if (tied.length === 1) return [{ userId: tied[0].userId, referrals: top }];
+
+  // Earliest to reach the total wins. A missing timestamp sorts last rather
+  // than winning by accident.
+  const sorted = [...tied].sort((a, b) => {
+    const at = toTime(a.reachedAt) ?? Number.POSITIVE_INFINITY;
+    const bt = toTime(b.reachedAt) ?? Number.POSITIVE_INFINITY;
+    if (at !== bt) return at - bt;
+    return a.userId.localeCompare(b.userId);
+  });
+  return [{ userId: sorted[0].userId, referrals: top }];
 }

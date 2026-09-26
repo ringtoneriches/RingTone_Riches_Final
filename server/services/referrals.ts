@@ -24,8 +24,8 @@ import {
   type Identity,
   assessReferral,
   pickWeeklyWinners,
-  weekStartFor,
 } from "./referral-abuse";
+import { ukWeekKey, ukWeekStart } from "./uk-day";
 
 type DbTx = typeof db | any;
 
@@ -268,6 +268,10 @@ export async function weeklyCounts(weekStart: string) {
     .select({
       userId: referrals.referrerId,
       referrals: sql<number>`count(*)::int`,
+      // When this member reached their total for the week — the moment their
+      // last qualifying referral landed. On a tie, the earliest wins, so this
+      // is what decides the prize.
+      reachedAt: sql<string>`max(${referrals.rewardedAt})`,
       firstName: users.firstName,
       lastName: users.lastName,
     })
@@ -281,11 +285,13 @@ export async function weeklyCounts(weekStart: string) {
       ),
     )
     .groupBy(referrals.referrerId, users.firstName, users.lastName)
-    .orderBy(desc(sql`count(*)`));
+    // Most referrals first; ties broken by who got there first.
+    .orderBy(desc(sql`count(*)`), sql`max(${referrals.rewardedAt}) asc`);
 
   return rows.map((r: any) => ({
     userId: r.userId,
     referrals: Number(r.referrals),
+    reachedAt: r.reachedAt ?? null,
     name:
       [r.firstName, r.lastName ? `${String(r.lastName).charAt(0).toUpperCase()}.` : ""]
         .filter(Boolean)
@@ -303,9 +309,9 @@ export async function awardWeeklyPrize(forWeekStart?: string) {
   const settings = await getReferralSettings();
   if (!settings.enabled || settings.weeklyPrizePoints <= 0) return { awarded: 0 };
 
-  const lastWeek = new Date();
-  lastWeek.setUTCDate(lastWeek.getUTCDate() - 7);
-  const weekStart = forWeekStart ?? weekStartFor(lastWeek);
+  // Default to the week that has just finished, in UK time.
+  const lastWeek = new Date(ukWeekStart().getTime() - 24 * 60 * 60 * 1000);
+  const weekStart = forWeekStart ?? ukWeekKey(lastWeek);
 
   const counts = await weeklyCounts(weekStart);
   const winners = pickWeeklyWinners(counts, settings.weeklyMinReferrals);
@@ -412,4 +418,86 @@ export async function reviewReferral(
     .where(eq(referrals.id, referralId))
     .returning();
   return updated;
+}
+
+/**
+ * Undo a referral reward.
+ *
+ * Needed when the top-up that qualified it is refunded or charged back: the
+ * member never really became a depositing customer, so the referrer should not
+ * keep the points.
+ *
+ * Points already spent cannot be clawed back from thin air, so the balance is
+ * clamped at zero and the shortfall recorded. Leaving someone with a negative
+ * points balance would block them from playing and generate a support ticket
+ * for something they did nothing wrong in.
+ */
+export async function reverseReferralReward(
+  referralId: string,
+  reason: string,
+  adminId?: string,
+) {
+  return db.transaction(async (tx) => {
+    const [referral] = await tx
+      .select()
+      .from(referrals)
+      .where(eq(referrals.id, referralId))
+      .limit(1);
+    if (!referral) throw new Error("Referral not found");
+    if (referral.status === "reversed") return { alreadyReversed: true, referral };
+    if (!referral.rewardPoints) {
+      // Nothing was paid, so there is nothing to take back — just close it off.
+      const [closed] = await tx
+        .update(referrals)
+        .set({
+          status: "reversed",
+          riskReason: reason,
+          reviewedBy: adminId ?? null,
+          reviewedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(referrals.id, referralId))
+        .returning();
+      return { reversed: 0, shortfall: 0, referral: closed };
+    }
+
+    const [referrer] = await tx
+      .select({ points: users.ringtonePoints })
+      .from(users)
+      .where(eq(users.id, referral.referrerId))
+      .limit(1);
+
+    const held = referrer?.points ?? 0;
+    const owed = referral.rewardPoints;
+    const taken = Math.min(held, owed);
+    const shortfall = owed - taken;
+
+    await tx
+      .update(users)
+      .set({ ringtonePoints: held - taken })
+      .where(eq(users.id, referral.referrerId));
+
+    await tx.insert(transactions).values({
+      userId: referral.referrerId,
+      type: "refund",
+      amount: String(-taken),
+      description:
+        `Referral reward reversed (${reason})` +
+        (shortfall ? ` — ${shortfall} of ${owed} points had already been spent` : ""),
+    });
+
+    const [updated] = await tx
+      .update(referrals)
+      .set({
+        status: "reversed",
+        riskReason: reason,
+        reviewedBy: adminId ?? null,
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(referrals.id, referralId))
+      .returning();
+
+    return { reversed: taken, shortfall, referral: updated };
+  });
 }

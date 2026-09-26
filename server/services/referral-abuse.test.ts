@@ -4,8 +4,8 @@ import {
   normaliseEmail,
   normalisePhone,
   pickWeeklyWinners,
-  weekStartFor,
 } from "./referral-abuse";
+import { ukWeekKey, ukWeekStart } from "./uk-day";
 
 const person = (over: Partial<Parameters<typeof assessReferral>[0]> = {}) => ({
   id: "u1",
@@ -121,38 +121,94 @@ describe("assessReferral — things that can", () => {
   });
 });
 
-describe("weekStartFor", () => {
-  it("returns the Monday of that week", () => {
-    expect(weekStartFor(new Date("2026-09-24T12:00:00Z"))).toBe("2026-09-21");
-    expect(weekStartFor(new Date("2026-09-21T00:00:00Z"))).toBe("2026-09-21");
+describe("ukWeekKey — the week must be UK, not UTC", () => {
+  it("puts a Thursday in the Monday of that week", () => {
+    expect(ukWeekKey(new Date("2026-09-24T12:00:00Z"))).toBe("2026-09-21");
   });
 
-  it("puts Sunday in the week that started the Monday before", () => {
-    expect(weekStartFor(new Date("2026-09-27T23:59:00Z"))).toBe("2026-09-21");
-    expect(weekStartFor(new Date("2026-09-28T00:00:00Z"))).toBe("2026-09-28");
+  it("keeps Sunday night in the week that started the Monday before", () => {
+    expect(ukWeekKey(new Date("2026-09-27T22:00:00Z"))).toBe("2026-09-21");
+  });
+
+  it("counts the first hour of UK Monday as the new week, not the old one", () => {
+    // 23:30 Sunday UTC is 00:30 Monday in London during BST. A UTC week would
+    // put this in the week just gone and pay the wrong person.
+    expect(ukWeekKey(new Date("2026-09-27T23:30:00Z"))).toBe("2026-09-28");
+  });
+
+  it("starts the week at UK midnight", () => {
+    const start = ukWeekStart(new Date("2026-09-24T12:00:00Z"));
+    // During BST that is 23:00 UTC on the Sunday.
+    expect(start.toISOString()).toBe("2026-09-20T23:00:00.000Z");
+  });
+
+  it("works in winter too, when UK time is UTC", () => {
+    expect(ukWeekStart(new Date("2026-01-15T12:00:00Z")).toISOString())
+      .toBe("2026-01-12T00:00:00.000Z");
   });
 });
 
 describe("pickWeeklyWinners", () => {
-  const counts = [
-    { userId: "a", referrals: 5 },
-    { userId: "b", referrals: 5 },
-    { userId: "c", referrals: 2 },
-  ];
+  const at = (iso: string) => new Date(iso);
 
-  it("pays everyone on the top score, rather than splitting it", () => {
-    expect(pickWeeklyWinners(counts, 1).map((w) => w.userId)).toEqual(["a", "b"]);
+  it("pays the highest total", () => {
+    const winners = pickWeeklyWinners(
+      [
+        { userId: "a", referrals: 5, reachedAt: at("2026-09-24T10:00:00Z") },
+        { userId: "b", referrals: 3, reachedAt: at("2026-09-22T10:00:00Z") },
+      ],
+      3,
+    );
+    expect(winners).toEqual([{ userId: "a", referrals: 5 }]);
   });
 
-  it("respects the minimum, so a quiet week pays nobody", () => {
-    expect(pickWeeklyWinners([{ userId: "c", referrals: 2 }], 3)).toEqual([]);
+  it("on a tie, the first to reach that total wins", () => {
+    const winners = pickWeeklyWinners(
+      [
+        { userId: "late", referrals: 5, reachedAt: at("2026-09-24T18:00:00Z") },
+        { userId: "early", referrals: 5, reachedAt: at("2026-09-23T09:00:00Z") },
+      ],
+      3,
+    );
+    expect(winners).toEqual([{ userId: "early", referrals: 5 }]);
   });
 
-  it("returns nothing when there were no referrals at all", () => {
-    expect(pickWeeklyWinners([], 1)).toEqual([]);
+  it("never returns two winners", () => {
+    const winners = pickWeeklyWinners(
+      [
+        { userId: "a", referrals: 4, reachedAt: at("2026-09-24T10:00:00Z") },
+        { userId: "b", referrals: 4, reachedAt: at("2026-09-24T10:00:00Z") },
+        { userId: "c", referrals: 4, reachedAt: at("2026-09-24T10:00:00Z") },
+      ],
+      3,
+    );
+    expect(winners).toHaveLength(1);
+  });
+
+  it("pays nobody when the minimum of three is not reached", () => {
+    const winners = pickWeeklyWinners(
+      [{ userId: "a", referrals: 2, reachedAt: at("2026-09-24T10:00:00Z") }],
+      3,
+    );
+    expect(winners).toEqual([]);
+  });
+
+  it("pays nobody in a week with no referrals", () => {
+    expect(pickWeeklyWinners([], 3)).toEqual([]);
   });
 
   it("never pays on zero, whatever the minimum is set to", () => {
     expect(pickWeeklyWinners([{ userId: "a", referrals: 0 }], 0)).toEqual([]);
+  });
+
+  it("does not let a missing timestamp win a tie by accident", () => {
+    const winners = pickWeeklyWinners(
+      [
+        { userId: "unknown", referrals: 4, reachedAt: null },
+        { userId: "known", referrals: 4, reachedAt: at("2026-09-24T10:00:00Z") },
+      ],
+      3,
+    );
+    expect(winners).toEqual([{ userId: "known", referrals: 4 }]);
   });
 });
