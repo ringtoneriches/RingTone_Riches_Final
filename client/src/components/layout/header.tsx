@@ -15,6 +15,7 @@ import MyPlaysDock from "@/components/layout/MyPlaysDock";
 import DailySpinPrompt from "@/components/layout/DailySpinPrompt";
 import CartDock from "@/components/layout/CartDock";
 import { useBasket } from "@/hooks/useBasket";
+import HeaderAtmosphere from "@/components/home/HeaderAtmosphere";
 
 // Helper function to safely parse balance
 function getValidBalance(balance: string | null | undefined): number {
@@ -176,6 +177,7 @@ export default function Header() {
             </Link>
           </div>
         )}
+        <HeaderAtmosphere />
         <div className="rr-header-line" aria-hidden />
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
           <nav className="flex h-16 items-center justify-between lg:h-[4.5rem]">
