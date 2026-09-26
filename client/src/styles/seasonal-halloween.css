@@ -881,124 +881,147 @@ html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-gold {
   display: none;
 }
 
-
 /* =========================================================================
-   Header atmosphere
+   Carrying the season down the page
    =========================================================================
 
-   Fills the space either side of the logo. See HeaderAtmosphere.tsx for why
-   this lights the whole bar rather than decorating the two gaps: on a phone
-   the right-hand gap is about 3px once the wallet chip is in, and none at all
-   with a larger balance.
+   The atmosphere layer is fixed, so it does follow the scroll — but the
+   content below the hero is dense and edge to edge, and covers it. Past the
+   first screen the page was effectively the normal site with a faintly purple
+   edge, which is what the owner was reacting to.
 
-   Everything is behind the controls and cannot take a tap. Nothing animates —
-   the header is fixed and on every page, so a moving layer here repaints for
-   the whole of every scroll.
+   Adding more full-page layers would not have fixed that: they would be
+   hidden by the same content, and this page is over 9,000px tall, so anything
+   that animates repaints for the whole of every scroll. That is what made the
+   theme feel heavy the first time.
+
+   So the work happens in the seams between sections instead. Those gaps are
+   the one place the background is genuinely visible, and they are generous.
+   Everything here is a static gradient: no images, no animation, no
+   requests.
    ========================================================================= */
 
-/* Anchored to the bottom of the bar so it covers the logo row only. Spanning
-   the whole header put the webs across the announcement ticker, where they
-   read as scratches over the text rather than as cobwebs. */
-.rr-header-atmos {
+/* The moon, anchored to the page rather than the viewport. */
+.rr-hw-sky {
   position: absolute;
-  inset: auto 0 0 0;
-  height: 4rem;
-  overflow: hidden;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
   pointer-events: none;
   z-index: 0;
+  overflow: hidden;
 }
 
-@media (min-width: 1024px) {
-  .rr-header-atmos {
-    height: 4.5rem;
-  }
+html.rr-season-halloween .rr-hw-moon--anchored {
+  position: absolute;
 }
 
-/* The bar's own contents sit above the atmosphere. */
-html.rr-season-halloween .rr-header nav,
-html.rr-season-halloween .rr-header-line {
+/* A warm pool where each section begins, as though something is burning just
+   out of frame. Laid on the section itself rather than inserted between them,
+   so no markup moves and nothing can shift the layout. */
+html.rr-season-halloween .rr-page-sections > section {
+  position: relative;
+}
+
+html.rr-season-halloween .rr-page-sections > section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: min(1200px, 130%);
+  height: 260px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 0%,
+    rgba(255, 138, 46, 0.09) 0%,
+    rgba(200, 16, 46, 0.05) 38%,
+    rgba(255, 138, 46, 0) 72%
+  );
+}
+
+/* Alternate the tint so the page does not read as the same glow repeated:
+   ember orange, then a colder moonlight, then back. */
+html.rr-season-halloween .rr-page-sections > section:nth-of-type(even)::before {
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 0%,
+    rgba(198, 176, 255, 0.07) 0%,
+    rgba(120, 90, 200, 0.045) 40%,
+    rgba(198, 176, 255, 0) 74%
+  );
+}
+
+/* A band of fog sitting in the seam itself. Static: a drifting version costs
+   a repaint for the entire scroll, and in a screen recording the difference
+   is not visible anyway. */
+html.rr-season-halloween .rr-page-sections > section::after {
+  content: "";
+  position: absolute;
+  top: -70px;
+  left: 0;
+  right: 0;
+  height: 150px;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(214, 205, 235, 0) 0%,
+    rgba(214, 205, 235, 0.035) 45%,
+    rgba(190, 180, 215, 0.02) 70%,
+    rgba(190, 180, 215, 0) 100%
+  );
+  filter: blur(1px);
+}
+
+/* The first section needs neither: it sits under the hero, where the painted
+   sky is already doing this. */
+html.rr-season-halloween .rr-page-sections > section:first-of-type::before,
+html.rr-season-halloween .rr-page-sections > section:first-of-type::after {
+  display: none;
+}
+
+/* Keep the section's own contents above its glow. */
+html.rr-season-halloween .rr-page-sections > section > * {
   position: relative;
   z-index: 1;
 }
 
-/* Soft pools of moonlight either side, brightest at the top edge and fading
-   down — light through a window rather than a stage beam. Rotated shafts were
-   tried first and read as a dark wedge behind the logo, because lifting the
-   edges only made the middle look dimmer by contrast. */
-.rr-header-beam {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 42%;
-}
-
-.rr-header-beam--left {
-  left: 0;
-  background: radial-gradient(
-    ellipse 120% 150% at 22% -30%,
-    rgba(255, 246, 224, 0.2) 0%,
-    rgba(255, 238, 205, 0.07) 45%,
-    rgba(255, 238, 205, 0) 75%
-  );
-}
-
-.rr-header-beam--right {
-  right: 0;
-  background: radial-gradient(
-    ellipse 120% 150% at 78% -30%,
-    rgba(255, 246, 224, 0.18) 0%,
-    rgba(255, 238, 205, 0.06) 45%,
-    rgba(255, 238, 205, 0) 75%
-  );
-}
-
-/* A web in each far corner — the one place with room at every width. The
-   asset is a light web on black, so luminance doubles as its own mask and it
-   sits on the bar without a visible rectangle. */
-.rr-header-web {
-  position: absolute;
-  top: -14px;
-  width: 72px;
-  height: auto;
-  opacity: 0.38;
-  mix-blend-mode: screen;
-  user-select: none;
-}
-
-.rr-header-web--left {
-  left: 0;
-}
-
-.rr-header-web--right {
-  right: 0;
-  transform: scaleX(-1);
-}
-
-@media (min-width: 640px) {
-  .rr-header-web {
-    width: 104px;
-    opacity: 0.34;
-  }
-}
-
-/* From lg the layout changes: the logo moves to the far left and the buttons
-   to the far right, so a corner web would sit behind the wordmark — which the
-   owner has already said he does not want. The light does the work at that
-   width, where there is plenty of room for it. */
-@media (min-width: 1024px) {
-  .rr-header-web {
-    display: none;
-  }
-
-  .rr-header-beam {
-    width: 34%;
-  }
+/* A little ember warmth behind the big section headings, so the season
+   touches the content and not only the background. */
+html.rr-season-halloween .rr-page-sections .font-prize {
+  text-shadow: 0 0 26px rgba(255, 138, 46, 0.16);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Nothing moves here, but keep the contrast down for anyone who has asked
-     for a calmer page. */
-  .rr-header-beam {
+  /* Nothing here moves, but soften it for anyone asking for a calmer page. */
+  html.rr-season-halloween .rr-page-sections > section::after {
     opacity: 0.5;
+  }
+}
+
+/* A bat crossing one of the seams. Positioned against the page rather than
+   the viewport, so it belongs to a place on the page instead of following the
+   reader down it. Behind the content, and unable to take a tap. */
+.rr-hw-seam-bat {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 120px;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+html.rr-season-halloween .rr-hw-seam-bat .rr-hw-bat {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Same reasoning as the other bats: one that cannot fly is just a bat
+     sitting in mid-air. */
+  .rr-hw-seam-bat {
+    display: none;
   }
 }
