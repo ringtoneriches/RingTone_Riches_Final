@@ -191,6 +191,7 @@ import { creditCardCashback } from "./services/card-cashback";
 import { isCardCashbackTx } from "@shared/card-cashback";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
+import { CSV_BOM, csvRow } from "./services/csv";
 import {
   getReferralSettings,
   getReferrerSummary,
@@ -10226,6 +10227,145 @@ function formatAdminCashflowTx<T extends { type?: string; amount?: unknown; desc
   const type = isCardCashbackTx(tx) ? "cashback" : tx.type === "deposit" ? "deposit" : "purchase";
   return { ...tx, amount, type };
 }
+
+/**
+ * Export the cashflow transactions the admin screen shows, as CSV.
+ *
+ * The screen had an Export button pointing at this path, but the route was
+ * never written — so it fell through to the /api 404 handler and opened a tab
+ * containing the error.
+ *
+ * It repeats the list endpoint's selection and filtering rather than sharing
+ * it, deliberately: an export that quietly disagrees with the screen it was
+ * taken from is worse than a little duplication. Change one, change both.
+ *
+ * Streamed row by row. All time is about 27,000 rows today and grows with the
+ * business; building one string for it would mean holding the whole file in
+ * memory before sending a byte of it.
+ */
+app.get(
+  "/api/admin/cashflow-transactions/export",
+  isAuthenticated,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const { dateFrom, dateTo, search } = req.query;
+
+      const rows = await db
+        .select({
+          id: transactions.id,
+          userId: transactions.userId,
+          userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+          userEmail: users.email,
+          type: transactions.type,
+          amount: transactions.amount,
+          description: transactions.description,
+          createdAt: transactions.createdAt,
+          paymentRef: transactions.paymentRef,
+        })
+        .from(transactions)
+        .leftJoin(users, eq(transactions.userId, users.id))
+        .where(
+          sql`(
+            ${transactions.type} = 'deposit'
+          ) OR (
+            ${transactions.type} = 'purchase'
+            AND ${transactions.paymentRef} IS NOT NULL
+            AND ${transactions.paymentRef} != ''
+            AND ${transactions.paymentRef} != 'N/A'
+            AND ${transactions.description} LIKE '%Instant play purchase%'
+          ) OR (
+            ${transactions.paymentRef} LIKE '260%'
+          )`,
+        );
+
+      let filtered = [...rows];
+      if (dateFrom) {
+        const from = new Date(dateFrom as string);
+        filtered = filtered.filter((tx) => new Date(tx.createdAt as any) >= from);
+      }
+      if (dateTo) {
+        const to = new Date(dateTo as string);
+        to.setHours(23, 59, 59, 999);
+        filtered = filtered.filter((tx) => new Date(tx.createdAt as any) <= to);
+      }
+      if (search) {
+        const needle = String(search).toLowerCase();
+        filtered = filtered.filter(
+          (tx) =>
+            String(tx.userName || "").toLowerCase().includes(needle) ||
+            String(tx.userEmail || "").toLowerCase().includes(needle) ||
+            String(tx.description || "").toLowerCase().includes(needle) ||
+            String(tx.paymentRef || "").toLowerCase().includes(needle) ||
+            String(Math.abs(parseFloat(String(tx.amount)) || 0)).includes(needle),
+        );
+      }
+      filtered.sort(
+        (a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime(),
+      );
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      const scope = dateFrom || dateTo ? `${dateFrom || "start"}_to_${dateTo || "today"}` : "all-time";
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="cashflow-transactions-${scope}-${stamp}.csv"`,
+      );
+
+      // Excel assumes the system codepage without this, which turns £ and any
+      // accented name into mojibake.
+      res.write(CSV_BOM);
+      res.write(
+        csvRow([
+          "Date",
+          "Time",
+          "Type",
+          "Amount (GBP)",
+          "Customer",
+          "Email",
+          "Description",
+          "Payment reference",
+          "Transaction ID",
+          "User ID",
+        ]),
+      );
+
+      for (const tx of filtered) {
+        // Only the label comes from the shared formatter; its generic return
+        // type widens the amount, so that is computed here the same way.
+        const label = formatAdminCashflowTx(tx).type;
+        const amount = Math.abs(parseFloat(String(tx.amount)) || 0);
+        const when = new Date(tx.createdAt as any);
+        res.write(
+          csvRow([
+            when.toISOString().slice(0, 10),
+            when.toISOString().slice(11, 19),
+            label,
+            amount.toFixed(2),
+            tx.userName,
+            tx.userEmail,
+            tx.description,
+            tx.paymentRef,
+            tx.id,
+            tx.userId,
+          ]),
+        );
+      }
+
+      res.end();
+    } catch (error) {
+      console.error("Error exporting cashflow transactions:", error);
+      // Only safe before anything has been written; once the stream has
+      // started the client already has a partial file and a status change
+      // would be ignored.
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Failed to export transactions" });
+      } else {
+        res.end();
+      }
+    }
+  },
+);
 
 // API endpoint: /api/admin/cashflow-transactions
 app.get(

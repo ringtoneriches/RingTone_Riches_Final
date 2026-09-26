@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 interface CashflowTx {
   id: string;
@@ -295,6 +296,8 @@ function AdvancedDateRangePicker({
 }
 
 export default function AdminTransactions() {
+  const { toast } = useToast();
+  const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
@@ -433,14 +436,55 @@ export default function AdminTransactions() {
     transactionCount: 0,
   };
 
-  // Export function
+  /**
+   * Download the export.
+   *
+   * This used to be window.open, which a popup blocker can stop and which has
+   * no way to notice a failure — when the endpoint was missing it simply
+   * opened a tab containing the error text. Fetching it means a failure can be
+   * reported properly, and the file arrives without leaving the page.
+   */
   const handleExportCSV = async () => {
     const url = new URL("/api/admin/cashflow-transactions/export", window.location.origin);
     if (dateFrom) url.searchParams.append("dateFrom", dateFrom);
     if (dateTo) url.searchParams.append("dateTo", dateTo);
     if (debouncedSearch) url.searchParams.append("search", debouncedSearch);
-    
-    window.open(url.toString(), '_blank');
+
+    setExporting(true);
+    try {
+      const res = await fetch(url.toString(), { credentials: "include" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || `Export failed (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      // Prefer the filename the server chose, so the date range is in it.
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const named = /filename="([^"]+)"/.exec(disposition)?.[1];
+
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = named || `cashflow-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(href);
+
+      toast({
+        title: "Export ready",
+        description: `${(blob.size / 1024 / 1024).toFixed(1)} MB downloaded.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Export failed",
+        description: String(error?.message || error),
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (isLoading || statsLoading) {
@@ -467,9 +511,14 @@ export default function AdminTransactions() {
               Wallet top-ups & cashflow usage analytics
             </p>
           </div>
-          <Button onClick={handleExportCSV} disabled={!totalTransactions} className="w-full sm:w-auto">
+          <Button
+            onClick={handleExportCSV}
+            disabled={!totalTransactions || exporting}
+            className="w-full sm:w-auto"
+            data-testid="button-export-transactions"
+          >
             <Download className="w-4 h-4 mr-2" />
-            Export CSV
+            {exporting ? "Preparing…" : "Export CSV"}
           </Button>
         </div>
 
