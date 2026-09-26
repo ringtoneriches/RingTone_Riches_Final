@@ -77,7 +77,7 @@ export default function AdminSettings() {
   const [referralRewardPoints, setReferralRewardPoints] = useState("300");
   const [referralMinTopUp, setReferralMinTopUp] = useState("10.00");
   const [referralWeeklyPrizePoints, setReferralWeeklyPrizePoints] = useState("1500");
-  const [referralWeeklyMinReferrals, setReferralWeeklyMinReferrals] = useState("1");
+  const [referralWeeklyMinReferrals, setReferralWeeklyMinReferrals] = useState("3");
   const [maxTicketsPerOrder, setMaxTicketsPerOrder] = useState("10000");
 
   const [newUsername, setNewUsername] = useState("");
@@ -138,7 +138,7 @@ export default function AdminSettings() {
       setReferralRewardPoints(String(settings.referralRewardPoints ?? 300));
       setReferralMinTopUp(String(settings.referralMinTopUp ?? "10.00"));
       setReferralWeeklyPrizePoints(String(settings.referralWeeklyPrizePoints ?? 1500));
-      setReferralWeeklyMinReferrals(String(settings.referralWeeklyMinReferrals ?? 1));
+      setReferralWeeklyMinReferrals(String(settings.referralWeeklyMinReferrals ?? 3));
       setMaxTicketsPerOrder(String(settings.maxTicketsPerOrder || 10000));
     }
   }, [settings]);
@@ -188,7 +188,7 @@ export default function AdminSettings() {
       referralRewardPoints: parseInt(referralRewardPoints) || 0,
       referralMinTopUp: (parseFloat(referralMinTopUp) || 0).toFixed(2),
       referralWeeklyPrizePoints: parseInt(referralWeeklyPrizePoints) || 0,
-      referralWeeklyMinReferrals: parseInt(referralWeeklyMinReferrals) || 1,
+      referralWeeklyMinReferrals: parseInt(referralWeeklyMinReferrals) || 3,
       maxTicketsPerOrder: parseInt(maxTicketsPerOrder) || 10000,
     });
   };
@@ -487,7 +487,8 @@ export default function AdminSettings() {
                       data-testid="input-referral-signup-points"
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Paid at registration. £{((parseInt(referralSignupPoints) || 0) / 100).toFixed(2)}
+                      {parseInt(referralSignupPoints) || 0} points = £
+                      {((parseInt(referralSignupPoints) || 0) / 100).toFixed(2)}. Paid at registration.
                     </p>
                   </div>
 
@@ -501,7 +502,9 @@ export default function AdminSettings() {
                       data-testid="input-referral-reward-points"
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Paid on the new member's first qualifying top-up. £{((parseInt(referralRewardPoints) || 0) / 100).toFixed(2)}
+                      {parseInt(referralRewardPoints) || 0} points = £
+                      {((parseInt(referralRewardPoints) || 0) / 100).toFixed(2)}. Reward paid after
+                      the new member completes their first qualifying top-up.
                     </p>
                   </div>
 
@@ -529,12 +532,15 @@ export default function AdminSettings() {
                       data-testid="input-referral-weekly-prize"
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      £{((parseInt(referralWeeklyPrizePoints) || 0) / 100).toFixed(2)}. Set to 0 to run no weekly competition.
+                      {parseInt(referralWeeklyPrizePoints) || 0} points = £
+                      {((parseInt(referralWeeklyPrizePoints) || 0) / 100).toFixed(2)}. Week runs
+                      Monday 00:00 – Sunday 23:59 UK time. On a tie, the first member to reach
+                      the total wins. Set to 0 to run no weekly competition.
                     </p>
                   </div>
 
                   <div>
-                    <Label htmlFor="ref-weekly-min">Fewest referrals to win the week</Label>
+                    <Label htmlFor="ref-weekly-min">Minimum referrals required to win</Label>
                     <Input
                       id="ref-weekly-min"
                       inputMode="numeric"
@@ -543,7 +549,8 @@ export default function AdminSettings() {
                       data-testid="input-referral-weekly-min"
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Stops a quiet week paying out for a single referral.
+                      No prize is issued unless someone reaches this many qualifying referrals
+                      in the week.
                     </p>
                   </div>
                 </div>

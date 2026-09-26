@@ -4,10 +4,11 @@ import {
   awardWeeklyPrize,
   listReferralsForAdmin,
   referralTotals,
+  reverseReferralReward,
   reviewReferral,
   weeklyCounts,
 } from "./services/referrals";
-import { weekStartFor } from "./services/referral-abuse";
+import { ukDateString, ukWeekKey, ukWeekStart } from "./services/uk-day";
 
 // Local, to avoid a circular import back into routes.ts.
 const isAdmin = (req: any, res: any, next: any) => {
@@ -39,8 +40,12 @@ export function registerReferralRoutes(app: Express) {
     try {
       const weekStart = req.query.weekStart
         ? String(req.query.weekStart)
-        : weekStartFor(new Date());
-      res.json({ weekStart, leaderboard: await weeklyCounts(weekStart) });
+        : ukWeekKey();
+      res.json({
+        weekStart,
+        weekEnd: ukDateString(new Date(ukWeekStart(new Date(`${weekStart}T12:00:00Z`)).getTime() + 6 * 24 * 60 * 60 * 1000)),
+        leaderboard: await weeklyCounts(weekStart),
+      });
     } catch (error) {
       fail(res, error, "Failed to load leaderboard");
     }
@@ -57,6 +62,21 @@ export function registerReferralRoutes(app: Express) {
         res.json(await reviewReferral(req.params.id, decision, req.user.id));
       } catch (error) {
         fail(res, error, "Failed to review referral");
+      }
+    },
+  );
+
+  // Undo a reward after a refunded or charged-back top-up.
+  app.post(
+    "/api/admin/referrals/:id/reverse",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const reason = String(req.body?.reason || "Top-up refunded or charged back");
+        res.json(await reverseReferralReward(req.params.id, reason, req.user.id));
+      } catch (error) {
+        fail(res, error, "Failed to reverse referral reward");
       }
     },
   );

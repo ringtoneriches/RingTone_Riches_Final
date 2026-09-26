@@ -198,7 +198,7 @@ import {
   recordReferralOnSignup,
   weeklyCounts,
 } from "./services/referrals";
-import { weekStartFor } from "./services/referral-abuse";
+import { ukWeekKey } from "./services/uk-day";
 import { calculateDiscountedTotal } from "./utils/discounts";
 import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
 import { notifyPublicWinnerUpdate } from "./services/record-game-winner";
@@ -10451,7 +10451,7 @@ app.get(
   // This week's top recruiters, and where the caller sits in it.
   app.get("/api/referrals/leaderboard", isAuthenticated, async (req: any, res) => {
     try {
-      const weekStart = weekStartFor(new Date());
+      const weekStart = ukWeekKey();
       const counts = await weeklyCounts(weekStart);
       const me = counts.findIndex((c) => c.userId === req.user.id);
       res.json({
