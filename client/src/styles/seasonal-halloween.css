@@ -1236,3 +1236,308 @@ html.rr-season-halloween .rr-header-line {
     animation: none;
   }
 }
+
+/* =========================================================================
+   The trail
+   =========================================================================
+
+   A straight line down one margin read as a progress bar. A track wanders,
+   so this crosses the page: down beside one section, banking across above
+   the next, down the other side. Every turn is a curve — nothing you would
+   walk at night has right angles.
+
+   One SVG path over the whole page. The lit part is the same path with a
+   dash offset, which is how you animate a line being drawn: one property per
+   frame, no geometry recalculated.
+   ========================================================================= */
+
+.rr-hw-trail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible;
+}
+
+.rr-hw-trail-base {
+  stroke: rgba(241, 212, 122, 0.12);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 9 11;
+}
+
+.rr-hw-trail-lit {
+  stroke: rgba(255, 168, 56, 0.55);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 7px rgba(255, 150, 40, 0.55));
+}
+
+.rr-hw-trail-stop {
+  position: absolute;
+  transform: translate(-50%, -62%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* --- the houses --- */
+
+.rr-hw-house-shell {
+  fill: #06060A;
+  stroke: rgba(241, 212, 122, 0.26);
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+}
+
+.rr-hw-house-fence {
+  stroke: rgba(241, 212, 122, 0.22);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+/* Dark until you draw level. The windows coming on is the whole reward, and
+   they come on one after another rather than together, which reads as
+   somebody moving through the house. */
+.rr-hw-house-window {
+  fill: #15151b;
+  transition: fill 600ms ease-out var(--win-delay, 0ms);
+}
+
+.rr-hw-house.is-lit .rr-hw-house-window {
+  fill: #ffae3a;
+}
+
+.rr-hw-house.is-lit .rr-hw-house-window.is-small {
+  fill: #ffd085;
+}
+
+.rr-hw-house-pool {
+  fill: rgba(255, 168, 56, 0);
+  transition: fill 700ms ease-out;
+}
+
+.rr-hw-house.is-lit .rr-hw-house-pool {
+  fill: rgba(255, 150, 40, 0.1);
+}
+
+.rr-hw-house {
+  transition: filter 700ms ease-out;
+}
+
+.rr-hw-house.is-lit {
+  filter: drop-shadow(0 0 14px rgba(255, 168, 56, 0.35));
+}
+
+/* --- where you are on the trail --- */
+
+.rr-hw-street-marker {
+  position: fixed;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(241, 212, 122, 0.25);
+  background: rgba(8, 8, 10, 0.82);
+  backdrop-filter: blur(6px);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(241, 212, 122, 0.8);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 400ms ease-out, transform 400ms ease-out;
+}
+
+.rr-hw-street-marker.is-walking {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.rr-hw-street-marker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #ffae3a;
+  box-shadow: 0 0 8px rgba(255, 174, 58, 0.9);
+}
+
+/* The trail is wanted on a phone too — it was hidden before, which is why it
+   vanished when the window narrowed. It runs behind the content, so crossing
+   the page is fine; the houses just need to be smaller. */
+@media (max-width: 639px) {
+  .rr-hw-trail-stop .rr-hw-house {
+    width: 62px;
+    height: 65px;
+  }
+
+  .rr-hw-street-marker {
+    left: 0.75rem;
+    bottom: 0.75rem;
+    font-size: 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The line still draws — it follows the scroll rather than animating on its
+     own — but the windows stop staggering. */
+  .rr-hw-house-window {
+    transition-delay: 0ms;
+  }
+}
+
+/* =========================================================================
+   Variants
+   =========================================================================
+
+   Four treatments to compare, chosen from the URL (?hw=v1 … v4). Not an
+   admin setting: these are alternatives to argue about, not four things to
+   ship. Once one is chosen the others come out.
+
+     v1  the trail over the painted graveyard — what we have, done properly
+     v2  the trail over a drawn sky, no photograph at all
+     v3  lanterns instead of a trail, warmer and less literal
+     v4  no props — the descent, told entirely in colour
+   ========================================================================= */
+
+/* --- v2: no photograph ---------------------------------------------------
+   The painted graveyard is doing a lot of work and fighting the cards for
+   attention. This replaces it with a sky: a deep gradient, the existing
+   starfield showing through, and fog banked at the horizon. Cleaner, and it
+   lets the prizes sit on something quiet. */
+
+html.rr-hw-v2 .rr-hw-backdrop {
+  display: none;
+}
+
+html.rr-hw-v2 body,
+html.rr-hw-v2 .rr-atmosphere-base {
+  background:
+    radial-gradient(ellipse 120% 70% at 50% 0%, rgba(72, 44, 104, 0.55) 0%, rgba(8, 6, 14, 0) 60%),
+    linear-gradient(180deg, #0b0816 0%, #0a0710 45%, #050408 100%);
+}
+
+/* Fog banked low, so the page has a horizon rather than just a dark bottom. */
+html.rr-hw-v2 .rr-page-sections > section::after {
+  height: 220px;
+  top: -110px;
+  background: linear-gradient(
+    to bottom,
+    rgba(198, 186, 224, 0) 0%,
+    rgba(198, 186, 224, 0.06) 40%,
+    rgba(160, 148, 196, 0.035) 68%,
+    rgba(160, 148, 196, 0) 100%
+  );
+  filter: blur(3px);
+}
+
+html.rr-hw-v2 .rr-hw-trail-lit {
+  stroke: rgba(198, 176, 255, 0.6);
+  filter: drop-shadow(0 0 8px rgba(160, 130, 255, 0.5));
+}
+
+html.rr-hw-v2 .rr-hw-house-shell {
+  stroke: rgba(198, 176, 255, 0.28);
+}
+
+/* --- v3: lanterns --------------------------------------------------------
+   No track. Lanterns hung down both margins instead, lighting as you pass —
+   the same checkpoint idea without drawing a line across the product. */
+
+html.rr-hw-v3 .rr-hw-trail-base,
+html.rr-hw-v3 .rr-hw-trail-lit {
+  display: none;
+}
+
+html.rr-hw-v3 .rr-hw-trail-stop .rr-hw-house-shell {
+  fill: #07070b;
+  stroke: rgba(255, 168, 56, 0.16);
+}
+
+/* The house becomes a lamp: body dimmed right back, windows burning. */
+html.rr-hw-v3 .rr-hw-house.is-lit {
+  filter: drop-shadow(0 0 26px rgba(255, 150, 40, 0.55));
+}
+
+html.rr-hw-v3 .rr-hw-house.is-lit .rr-hw-house-window {
+  fill: #ffc266;
+}
+
+html.rr-hw-v3 .rr-hw-house.is-lit .rr-hw-house-pool {
+  fill: rgba(255, 150, 40, 0.16);
+}
+
+/* Warmer seams to match. */
+html.rr-hw-v3 .rr-page-sections > section::before {
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 0%,
+    rgba(255, 150, 40, 0.13) 0%,
+    rgba(200, 60, 20, 0.06) 40%,
+    rgba(255, 138, 46, 0) 74%
+  );
+}
+
+html.rr-hw-v3 .rr-page-sections > section:nth-of-type(even)::before {
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 0%,
+    rgba(255, 190, 90, 0.1) 0%,
+    rgba(190, 90, 30, 0.05) 42%,
+    rgba(255, 190, 90, 0) 76%
+  );
+}
+
+/* --- v4: the descent -----------------------------------------------------
+   Nothing hung on the page at all. The season is told entirely in colour:
+   the seams cool at the top and burn by the bottom, so scrolling feels like
+   going somewhere rather than past something. The most restrained of the
+   four, and the one that will still look right in November. */
+
+html.rr-hw-v4 .rr-hw-trail,
+html.rr-hw-v4 .rr-hw-trail-stop,
+html.rr-hw-v4 .rr-hw-lurker-slot,
+html.rr-hw-v4 .rr-hw-seam-bat,
+html.rr-hw-v4 .rr-hw-street-marker {
+  display: none;
+}
+
+html.rr-hw-v4 .rr-hw-backdrop-img {
+  opacity: 0.35;
+  filter: saturate(0.5) brightness(0.75);
+}
+
+/* Cold at the top of the page, ember by the foot of it. */
+html.rr-hw-v4 .rr-page-sections > section:nth-of-type(1)::before,
+html.rr-hw-v4 .rr-page-sections > section:nth-of-type(2)::before {
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 0%,
+    rgba(150, 190, 255, 0.08) 0%,
+    rgba(90, 120, 200, 0.04) 42%,
+    rgba(150, 190, 255, 0) 74%
+  );
+}
+
+html.rr-hw-v4 .rr-page-sections > section:nth-of-type(3)::before,
+html.rr-hw-v4 .rr-page-sections > section:nth-of-type(4)::before {
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 0%,
+    rgba(186, 150, 255, 0.09) 0%,
+    rgba(120, 80, 200, 0.05) 42%,
+    rgba(186, 150, 255, 0) 74%
+  );
+}
+
+html.rr-hw-v4 .rr-page-sections > section:nth-of-type(n + 5)::before {
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 0%,
+    rgba(255, 138, 46, 0.12) 0%,
+    rgba(200, 16, 46, 0.06) 40%,
+    rgba(255, 138, 46, 0) 74%
+  );
+  height: 320px;
+}
