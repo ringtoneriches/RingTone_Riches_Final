@@ -18,8 +18,9 @@ import HallOfFame from "@/components/home/HallOfFame";
 import WinnersCircle from "@/components/home/WinnersCircle";
 import HalloweenSky from "@/components/home/HalloweenSky";
 import SeamBats from "@/components/home/SeamBats";
+import { useHalloweenVariant } from "@/hooks/useHalloweenVariant";
 import SectionLurkers from "@/components/home/SectionLurkers";
-import HalloweenStreet from "@/components/home/HalloweenStreet";
+import HalloweenTrail from "@/components/home/HalloweenTrail";
 import HowItWorks from "@/components/home/HowItWorks";
 import CommunitySection from "@/components/home/CommunitySection";
 import VipClub from "@/components/home/VipClub";
@@ -81,6 +82,9 @@ export default function Home() {
     [filterCounts],
   );
 
+  // Applies rr-hw-v1…v4 from ?hw=, so the treatments can be compared.
+  useHalloweenVariant();
+
   useEffect(() => {
     if (!visibleFilters.some((filter) => filter.id === activeFilter)) {
       setActiveFilter("all");
@@ -127,7 +131,7 @@ export default function Home() {
       <div className="relative z-10 rr-page-sections">
         <SeamBats />
         <SectionLurkers />
-        <HalloweenStreet />
+        <HalloweenTrail />
       <Header />
       <BrandIntro />
 
