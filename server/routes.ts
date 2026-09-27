@@ -192,6 +192,7 @@ import { isCardCashbackTx } from "@shared/card-cashback";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { CSV_BOM, csvRow } from "./services/csv";
+import { canApplyCode, refusalMessage, summariseUsages, type ApplyRefusal } from "./services/discount-usage";
 import {
   getReferralSettings,
   getReferrerSummary,
@@ -9403,9 +9404,42 @@ app.post(
         const codes = await db
           .select()
           .from(discountCodes)
-          .orderBy(desc(discountCodes.createdAt)); 
-  
-        res.json(codes);
+          .orderBy(desc(discountCodes.createdAt));
+
+        // uses_count on the row is a legacy cache from when applying a code
+        // spent it. The real figure is counted from the orders the code was
+        // put on, so what an admin sees is what was actually paid for.
+        const usageRows = await db
+          .select({
+            discountCodeId: discountCodeUsages.discountCodeId,
+            userId: discountCodeUsages.userId,
+            orderId: discountCodeUsages.orderId,
+            usedAt: discountCodeUsages.usedAt,
+            orderStatus: orders.status,
+          })
+          .from(discountCodeUsages)
+          .leftJoin(orders, eq(discountCodeUsages.orderId, orders.id));
+
+        const byCode = new Map<string, typeof usageRows>();
+        for (const row of usageRows) {
+          const list = byCode.get(row.discountCodeId);
+          if (list) list.push(row);
+          else byCode.set(row.discountCodeId, [row]);
+        }
+
+        const now = new Date();
+        res.json(
+          codes.map((code) => {
+            const summary = summariseUsages(byCode.get(code.id) ?? [], now);
+            return {
+              ...code,
+              usesCount: summary.confirmed,
+              // Checkouts holding the code right now. Shown separately so a
+              // code that looks busy is not mistaken for one that sold.
+              heldCount: summary.reserved,
+            };
+          }),
+        );
       } catch (err) {
         console.error("Error fetching discount codes:", err);
         res.status(500).json({ error: "Failed to fetch discount codes" });
@@ -9548,19 +9582,31 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
 
     if (!discount) return res.status(400).json({ error: "Invalid or expired code" });
 
-    // Check usage
-    const usage = await db
-      .select()
+    // What counts as a use is read back from the orders the code was put on,
+    // not from a counter bumped here. See services/discount-usage.ts: applying
+    // a code only holds it for the length of a checkout, and a checkout that
+    // was never paid for hands it straight back.
+    const usageRows = await db
+      .select({
+        userId: discountCodeUsages.userId,
+        orderId: discountCodeUsages.orderId,
+        usedAt: discountCodeUsages.usedAt,
+        orderStatus: orders.status,
+      })
       .from(discountCodeUsages)
-      .where(
-        and(
-          eq(discountCodeUsages.discountCodeId, discount.id),
-          eq(discountCodeUsages.userId, userId)
-        )
-      );
+      .leftJoin(orders, eq(discountCodeUsages.orderId, orders.id))
+      .where(eq(discountCodeUsages.discountCodeId, discount.id));
 
-    if (usage.length > 0) return res.status(400).json({ error: "Code already used" });
-    if (discount.usesCount >= discount.maxUses) return res.status(400).json({ error: "Usage limit reached" });
+    const decision = canApplyCode({
+      userId,
+      maxUses: discount.maxUses ?? null,
+      rows: usageRows,
+      now: new Date(),
+    });
+
+    if (!decision.ok && decision.reason) {
+      return res.status(400).json({ error: refusalMessage(decision.reason) });
+    }
 
     // Fetch order
     const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
@@ -9624,15 +9670,45 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
         break;
     }
 
-    // Apply discount in a transaction
+    // Apply discount in a transaction.
+    //
+    // Note what is deliberately absent: the code's uses_count is not touched
+    // and the code is not switched off. Applying is not spending. The row
+    // written below holds the code against this order, and the order's own
+    // status decides later whether that hold became a real use. Incrementing
+    // here is what let four people take a code that one person paid with, and
+    // what switched codes off on the strength of checkouts nobody completed.
+    let refusedUnderLock: ApplyRefusal | null = null;
+
     await db.transaction(async (tx) => {
-      // Update discount code usage count
-      await tx.update(discountCodes)
-        .set({
-          usesCount: discount.usesCount + 1,
-          isActive: discount.usesCount + 1 >= discount.maxUses ? false : discount.isActive,
+      // Take the code's row before deciding, so two people reaching for the
+      // last use of a limited code queue up rather than both being told yes.
+      await tx.execute(
+        sql`SELECT id FROM discount_codes WHERE id = ${discount.id} FOR UPDATE`
+      );
+
+      const freshRows = await tx
+        .select({
+          userId: discountCodeUsages.userId,
+          orderId: discountCodeUsages.orderId,
+          usedAt: discountCodeUsages.usedAt,
+          orderStatus: orders.status,
         })
-        .where(eq(discountCodes.id, discount.id));
+        .from(discountCodeUsages)
+        .leftJoin(orders, eq(discountCodeUsages.orderId, orders.id))
+        .where(eq(discountCodeUsages.discountCodeId, discount.id));
+
+      const fresh = canApplyCode({
+        userId,
+        maxUses: discount.maxUses ?? null,
+        rows: freshRows,
+        now: new Date(),
+      });
+
+      if (!fresh.ok && fresh.reason) {
+        refusedUnderLock = fresh.reason;
+        return;
+      }
 
       // Update order
       await tx.update(orders)
@@ -9646,13 +9722,18 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
         })
         .where(eq(orders.id, orderId));
 
-      // Record usage
+      // Hold the code against this order. Whether the hold ever becomes a
+      // use is decided by whether this order gets paid.
       await tx.insert(discountCodeUsages).values({
         discountCodeId: discount.id,
         userId,
         orderId,
       });
     });
+
+    if (refusedUnderLock) {
+      return res.status(400).json({ error: refusalMessage(refusedUnderLock) });
+    }
 
     let message = "";
     switch (discount.type) {
@@ -9725,16 +9806,12 @@ app.post(
         return res.status(404).json({ error: "Discount code not found" });
       }
 
-      // Remove discount using transaction
+      // Remove discount using transaction.
+      //
+      // Nothing to revert on the code itself: applying never spent it. Deleting
+      // the hold below is the whole of it, and that only brings forward what
+      // would have happened anyway once the hold went stale.
       await db.transaction(async (tx) => {
-        // Revert discount code usage count
-        await tx.update(discountCodes)
-          .set({
-            usesCount: discount.usesCount - 1,
-            isActive: discount.usesCount - 1 < discount.maxUses ? true : discount.isActive,
-          })
-          .where(eq(discountCodes.id, discount.id));
-
         // Get original order amount (before discount)
         const competitionId = order.competitionId;
         const [competition] = await tx.select()
