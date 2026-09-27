@@ -40,7 +40,10 @@ interface DiscountCode {
   type: "cash" | "points" | "percentage";
   value: number;
   maxUses: number;
+  /** Uses that were actually paid for. */
   usesCount: number;
+  /** Checkouts holding the code right now, which may never be paid. */
+  heldCount?: number;
   expiresAt: string | null;
   isActive: boolean;
   createdAt: string;
@@ -886,7 +889,7 @@ const handleBulkGenerate = async () => {
           <Card className="p-3 sm:p-4">
             <CardHeader className="pb-1 sm:pb-2 p-0">
               <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
-                Total Uses
+                Paid Uses
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0 pt-2">
@@ -984,10 +987,18 @@ const handleBulkGenerate = async () => {
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground mb-1">Uses</div>
+                      <div className="text-xs text-muted-foreground mb-1">Paid uses</div>
                       <div className="font-medium">
                         {code.usesCount}/{code.maxUses}
                       </div>
+                      {!!code.heldCount && (
+                        <div
+                          className="text-xs text-muted-foreground"
+                          title="Checkouts with this code applied that haven't been paid for yet. They hold the code for 30 minutes, then release it."
+                        >
+                          +{code.heldCount} held
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground mb-1">Created</div>
