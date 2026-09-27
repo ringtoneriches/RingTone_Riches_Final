@@ -44,7 +44,10 @@ const DEFAULTS: ReferralSettings = {
   rewardPoints: 300,
   minTopUp: 10,
   weeklyPrizePoints: 1500,
-  weeklyMinReferrals: 1,
+  // Matches migration 0025, which set the column default to 3 and lifted every
+  // existing row to it. Left at 1 here, a missing settings row would have made
+  // the site advertise a threshold it does not apply.
+  weeklyMinReferrals: 3,
 };
 
 export async function getReferralSettings(tx: DbTx = db): Promise<ReferralSettings> {
