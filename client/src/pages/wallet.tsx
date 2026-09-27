@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { pointsAsPounds } from "@/lib/referral-copy";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -188,6 +189,21 @@ interface ReferralStats {
     email: string;
     createdAt: Date;
   }>;
+  /**
+   * What the programme actually pays, straight from the admin panel.
+   *
+   * The rules used to be written into this page by hand, which is how it came
+   * to promise numbers the site had never paid and never mention the minimum
+   * top-up at all -- a customer topped up £5, got nothing, and had no way of
+   * knowing why. Read them from the server so the page cannot drift again.
+   */
+  settings?: {
+    signupPoints: number;
+    rewardPoints: number;
+    minTopUp: number;
+    weeklyPrizePoints: number;
+    weeklyMinReferrals: number;
+  };
 }
 
 interface GroupedEntry {
@@ -499,6 +515,10 @@ const [visibleIncompleteGames, setVisibleIncompleteGames] = useState(6);
     queryKey: ["/api/user/referral-stats"],
     enabled: isAuthenticated,
   });
+
+  // What the programme pays, as configured. Undefined until the server answers,
+  // and the copy below says nothing numeric until it has.
+  const referralRules = referralStats?.settings;
 
   const { data: orders = [] } = useQuery<OrderWithCompetition[]>({
     queryKey: ["/api/user/orders"],
@@ -2675,19 +2695,60 @@ const handleDeleteBankAccount = (
                         Share your unique referral link with friends
                       </span>
                     </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-500">•</span>
-                      <span>
-                        They sign up using your link and make their first wallet top-up
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-500">•</span>
-                      <span>
-                        Your friend gets 100 Ringtone Points as a welcome bonus, and you
-                        receive 200 Ringtone Points
-                      </span>
-                    </li>
+                    {referralRules ? (
+                      <>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500">•</span>
+                          <span>
+                            They sign up using your link and get{" "}
+                            <span className="text-yellow-400 font-semibold">
+                              {referralRules.signupPoints} Ringtone Points
+                            </span>{" "}
+                            ({pointsAsPounds(referralRules.signupPoints)}) straight away
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500">•</span>
+                          <span>
+                            When they top up{" "}
+                            <span className="text-yellow-400 font-semibold">
+                              £{referralRules.minTopUp.toFixed(2)} or more
+                            </span>{" "}
+                            for the first time, you get{" "}
+                            <span className="text-yellow-400 font-semibold">
+                              {referralRules.rewardPoints} Ringtone Points
+                            </span>{" "}
+                            ({pointsAsPounds(referralRules.rewardPoints)})
+                          </span>
+                        </li>
+                        {referralRules.weeklyPrizePoints > 0 && (
+                          <li className="flex items-start gap-2">
+                            <span className="text-yellow-500">•</span>
+                            <span>
+                              Top the weekly table and win{" "}
+                              <span className="text-yellow-400 font-semibold">
+                                {referralRules.weeklyPrizePoints} Ringtone Points
+                              </span>{" "}
+                              ({pointsAsPounds(referralRules.weeklyPrizePoints)}) — minimum{" "}
+                              {referralRules.weeklyMinReferrals} qualifying{" "}
+                              {referralRules.weeklyMinReferrals === 1
+                                ? "referral"
+                                : "referrals"}
+                            </span>
+                          </li>
+                        )}
+                      </>
+                    ) : (
+                      // Never print a figure the server has not sent. Inventing a
+                      // plausible one here is how the old copy came to advertise
+                      // rewards the site does not pay.
+                      <li className="flex items-start gap-2">
+                        <span className="text-yellow-500">•</span>
+                        <span>
+                          They sign up using your link and make their first wallet top-up
+                        </span>
+                      </li>
+                    )}
                     <li className="flex items-start gap-2">
                       <span className="text-yellow-500">•</span>
                       <span>
