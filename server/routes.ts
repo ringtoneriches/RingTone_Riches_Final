@@ -10656,6 +10656,7 @@ app.get(
             rewardPoints: settings.rewardPoints,
             minTopUp: settings.minTopUp,
             weeklyPrizePoints: settings.weeklyPrizePoints,
+            weeklyMinReferrals: settings.weeklyMinReferrals,
           },
         });
       } catch (error) {
