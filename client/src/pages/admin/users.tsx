@@ -71,6 +71,19 @@ type DateFilter = "all" | "24h" | "7d" | "30d" | "custom";
 type SortField = "email" | "firstName" | "lastName" | "phoneNumber" | "balance" | "ringtonePoints" | "createdAt" | "disabled" | "lastIpAddress";
 type SortDirection = "asc" | "desc";
 
+/** One row of /api/admin/users/cashflow-transactions. */
+interface UserFinancialsRow {
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  /** Cashflows deposits, excluding cashback and the signup bonus. */
+  totalCashflow: string;
+  /** Cash spent on the instant win games. */
+  instantPlaySpend: number;
+  /** Cash spent on games and ticketed competitions together. */
+  totalSpend: number;
+}
+
 export default function AdminUsers() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth() as { user: User | null };
@@ -175,8 +188,14 @@ export default function AdminUsers() {
     return { dateFrom, dateTo };
   }, [dateFilter, customDateFrom, customDateTo]);
 
-  // Fetch cashflow transactions
-  const { data: cashflowTransactions = [] } = useQuery<Transaction[]>({
+  /**
+   * Per-user money in and money out.
+   *
+   * Despite the endpoint's name it returns one aggregate row per user, not
+   * transactions -- it was typed as Transaction[] and every read of it had to
+   * be cast. Spend comes from paid orders; see server/services/user-spend.ts.
+   */
+  const { data: cashflowTransactions = [] } = useQuery<UserFinancialsRow[]>({
     queryKey: ["/api/admin/users/cashflow-transactions"],
   });
 
@@ -292,6 +311,17 @@ export default function AdminUsers() {
     return userTx ? parseFloat(userTx.totalCashflow).toFixed(2) : "0.00";
   };
 
+  // Cash actually spent, from paid orders. Points-funded play is excluded:
+  // points were given away rather than paid in, so counting them would
+  // overstate what the customer is worth.
+  const getSpend = (userId: string) => {
+    const row = cashflowTransactions.find(tx => tx.userId === userId);
+    return {
+      instantPlay: (row?.instantPlaySpend ?? 0).toFixed(2),
+      total: (row?.totalSpend ?? 0).toFixed(2),
+    };
+  };
+
   // Handle sort click
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -360,6 +390,8 @@ const handleExportCSV = useCallback(async () => {
       'Balance',
       'Ringtone Points',
       'Cashflow Total',
+      'Instant Play Spend',
+      'Total Spend',
       'Role',
       'Status',
       'Joined Date',
@@ -380,6 +412,8 @@ const handleExportCSV = useCallback(async () => {
       // Calculate cashflow for each user
       const userTx = cashflowTransactions.find((tx: any) => tx.userId === user.id);
       const cashflowTotal = userTx ? parseFloat(userTx.totalCashflow).toFixed(2) : "0.00";
+      const instantPlaySpend = (userTx?.instantPlaySpend ?? 0).toFixed(2);
+      const totalSpend = (userTx?.totalSpend ?? 0).toFixed(2);
 
       return [
         user.email || '',
@@ -389,6 +423,8 @@ const handleExportCSV = useCallback(async () => {
         parseFloat(user.balance || '0').toFixed(2),
         (user.ringtonePoints || 0).toString(),
         cashflowTotal,
+        instantPlaySpend,
+        totalSpend,
         user.isAdmin ? 'Admin' : 'User',
         user.disabled ? 'Disabled' : 'Active',
         user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '',
@@ -937,6 +973,14 @@ const handleExportCSV = useCallback(async () => {
                       <div className="text-xs text-muted-foreground mb-1">Points</div>
                       <div className="font-medium">{user.ringtonePoints}</div>
                     </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Instant Play Spend</div>
+                      <div className="font-medium">£{getSpend(user.id).instantPlay}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Total Spend</div>
+                      <div className="font-medium">£{getSpend(user.id).total}</div>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2 pt-2">
@@ -1041,6 +1085,12 @@ const handleExportCSV = useCallback(async () => {
                   <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground">
                     Cashflow
                   </th>
+                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground whitespace-nowrap">
+                    Instant Play Spend
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs sm:text-sm font-medium text-muted-foreground whitespace-nowrap">
+                    Total Spend
+                  </th>
                   <SortableHeader field="balance" label="Balance" />
                   <SortableHeader field="ringtonePoints" label="Points" />
                   <SortableHeader field="lastIpAddress" label="IP Address" />
@@ -1069,6 +1119,12 @@ const handleExportCSV = useCallback(async () => {
                       </td>
                       <td className="py-3 px-4 text-sm text-foreground">
                         £{getCashflowTotal(user.id)}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-foreground whitespace-nowrap">
+                        £{getSpend(user.id).instantPlay}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-foreground whitespace-nowrap">
+                        £{getSpend(user.id).total}
                       </td>
                       <td className="py-3 px-4 text-sm text-primary font-medium">
                         £{parseFloat(user.balance).toFixed(2)}
