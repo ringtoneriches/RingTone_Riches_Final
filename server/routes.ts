@@ -193,6 +193,7 @@ import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { CSV_BOM, csvRow } from "./services/csv";
 import { canApplyCode, refusalMessage, summariseUsages, type ApplyRefusal } from "./services/discount-usage";
+import { buildUserFinancials, INSTANT_WIN_TYPES } from "./services/user-spend";
 import {
   getReferralSettings,
   getReferrerSummary,
@@ -9218,7 +9219,10 @@ app.post(
     isAdmin,
     async (req, res) => {
       try {
-        // 1️⃣ Get all users with their cashflow deposits
+        // Money in. Cashback and the signup bonus are both written as
+        // deposits, so both are excluded -- neither is money the customer put
+        // in, and counting them made this figure larger than what Cashflows
+        // actually took.
         const usersCashflow = await db
           .select({
             userId: users.id,
@@ -9234,11 +9238,39 @@ app.post(
               eq(transactions.type, "deposit"),
               sql`COALESCE(${transactions.paymentRef}, '') NOT LIKE 'cb_%'`,
               sql`COALESCE(${transactions.description}, '') NOT ILIKE '%card cashback%'`,
+              sql`COALESCE(${transactions.description}, '') NOT ILIKE '%signup bonus%'`,
             )
           )
           .groupBy(users.id);
 
-        res.json(usersCashflow);
+        // Money out, from orders rather than transactions -- see
+        // services/user-spend.ts for why the transactions table cannot answer
+        // this. Only paid orders count, so refunds, failed cards and abandoned
+        // checkouts are all excluded by the status filter.
+        const gameTypes = INSTANT_WIN_TYPES as readonly string[];
+        const usersSpend = await db
+          .select({
+            userId: orders.userId,
+            totalValue: sql<string>`COALESCE(SUM(${orders.totalAmount}), 0)`,
+            totalPoints: sql<string>`COALESCE(SUM(COALESCE(${orders.pointsAmount}, 0)), 0)`,
+            gameValue: sql<string>`COALESCE(SUM(${orders.totalAmount}) FILTER (WHERE ${competitions.type} IN ${gameTypes}), 0)`,
+            gamePoints: sql<string>`COALESCE(SUM(COALESCE(${orders.pointsAmount}, 0)) FILTER (WHERE ${competitions.type} IN ${gameTypes}), 0)`,
+          })
+          .from(orders)
+          .innerJoin(competitions, eq(competitions.id, orders.competitionId))
+          .where(eq(orders.status, "completed"))
+          .groupBy(orders.userId);
+
+        const financials = buildUserFinancials(usersCashflow as any, usersSpend as any);
+        const byUser = new Map(financials.map((f) => [f.userId, f]));
+
+        res.json(
+          usersCashflow.map((row) => ({
+            ...row,
+            instantPlaySpend: byUser.get(row.userId)?.instantPlaySpend ?? 0,
+            totalSpend: byUser.get(row.userId)?.totalSpend ?? 0,
+          })),
+        );
       } catch (error) {
         console.error("Error fetching users cashflow transactions:", error);
         res
