@@ -16,6 +16,8 @@ export async function startCartCardCheckout(opts: {
   orderIds?: string[];
   fromCart?: boolean;
   onProgress?: (progress: CartCheckoutProgress) => void;
+  /** A basket code, applied across the orders once they all exist. */
+  discountCode?: string;
 }) {
   const startedAt = Date.now();
   const orderIds = [...(opts.orderIds || [])];
@@ -45,6 +47,16 @@ export async function startCartCardCheckout(opts: {
       }
       orderIds.push(orderId);
     }
+  }
+
+  // The code goes on after every order exists and before the payment is
+  // raised, so the amount sent to Cashflows is the discounted one.
+  if (opts.discountCode && orderIds.length) {
+    const res = await apiRequest("/api/cart/apply-discount", "POST", {
+      orderIds,
+      code: opts.discountCode,
+    });
+    await res.json();
   }
 
   opts.onProgress?.({
