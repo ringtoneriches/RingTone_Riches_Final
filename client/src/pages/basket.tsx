@@ -24,6 +24,7 @@ import CheckoutLaunch from "@/components/cart/CheckoutLaunch";
 import CheckoutBoostModal from "@/components/cart/CheckoutBoostModal";
 import { readBasket, type BasketItem } from "@/lib/basket";
 import { buildCheckoutBoostOffers, cartPayTotal, type CheckoutBoostOffer } from "@/lib/checkout-boost";
+import { quoteCartDiscount, poundsToPence, penceToPounds, type CartDiscountType } from "@shared/cart-discount";
 import { waitConfirmScreen } from "@/lib/confirm-screen";
 import { MIN_PURCHASE, validateMinimumPurchase } from "@/components/unified-billing";
 import { User } from "@shared/schema";
@@ -142,6 +143,60 @@ export default function BasketPage() {
   const instaplayBlocked = methods.instaplay && totals.pay < MIN_PURCHASE;
   const walletShort = hasSelectedMethod && !methods.instaplay && remainingAmount > 0.009;
 
+  // Basket discount code.
+  //
+  // The code is checked as soon as it is typed in, but nothing is reserved
+  // until checkout: there are no orders to attach it to until then. The saving
+  // shown here is worked out with the same shared function the server uses on
+  // the real order totals, so the preview and the charge cannot drift apart.
+  const [discountInput, setDiscountInput] = useState("");
+  const [appliedCode, setAppliedCode] = useState<
+    { code: string; type: CartDiscountType; value: number } | null
+  >(null);
+  const [discountError, setDiscountError] = useState("");
+
+  const discountPreview = useMemo(() => {
+    if (!appliedCode || !items.length) return null;
+    return quoteCartDiscount({
+      type: appliedCode.type,
+      value: appliedCode.value,
+      lines: items.map((item) => ({
+        orderId: item.competitionId,
+        amountPence: poundsToPence(
+          lineTotal(item.ticketPrice, item.quantity, item.type).discountedPrice,
+        ),
+      })),
+    });
+  }, [appliedCode, items]);
+
+  const discountSaving = discountPreview ? penceToPounds(discountPreview.discountPence) : 0;
+  const payableTotal = Math.max(0, totals.pay - discountSaving);
+
+  const applyDiscount = useMutation({
+    mutationFn: async (code: string) => {
+      const res = await apiRequest("/api/cart/validate-discount", "POST", { code });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      setAppliedCode({ code: data.code, type: data.type, value: Number(data.value) });
+      setDiscountError("");
+      setDiscountInput("");
+    },
+    onError: (error: any) => {
+      setAppliedCode(null);
+      // apiRequest throws "<status>: <body>"; show only what the server said.
+      const raw = String(error?.message || "");
+      let message = raw.replace(/^\d+:\s*/, "");
+      try {
+        const parsed = JSON.parse(message);
+        message = parsed.error || parsed.message || message;
+      } catch {
+        /* Not JSON; use it as it came. */
+      }
+      setDiscountError(message || "That code could not be applied");
+    },
+  });
+
   const checkout = useMutation({
     mutationFn: async () => {
       const snapshot = readBasket();
@@ -182,18 +237,25 @@ export default function BasketPage() {
           items: snapshot,
           fromCart: true,
           onProgress: setProgress,
+          discountCode: appliedCode?.code,
         });
         return { paid: snapshot.length, redirected: true, orderType: undefined as string | undefined, wheelType: undefined as string | undefined };
       }
 
-      let paid = 0;
-      for (const item of snapshot) {
+      // Every order is created before anything is paid for. A basket discount
+      // comes off the basket total and is then shared across the orders, so
+      // they all have to exist before the code can be applied -- and none of
+      // them can be paid for until it has been, or the first line would be
+      // charged full price.
+      const createdOrders: Array<{ item: typeof snapshot[number]; orderId: string }> = [];
+      for (let i = 0; i < snapshot.length; i += 1) {
+        const item = snapshot[i];
         setProgress({
-          phase: "paying",
-          step: paid + 1,
+          phase: "adding",
+          step: i + 1,
           total: snapshot.length,
           title: item.title,
-          message: `Paying ${paid + 1} of ${snapshot.length}…`,
+          message: snapshot.length === 1 ? "Preparing…" : `Adding ${i + 1} of ${snapshot.length}…`,
         });
         const createRes = await apiRequest(createOrderEndpoint(item.type), "POST", {
           competitionId: item.competitionId,
@@ -203,6 +265,26 @@ export default function BasketPage() {
         const created = await createRes.json();
         const orderId = created.orderId || created.id;
         if (!orderId) throw new Error("Could not create that order.");
+        createdOrders.push({ item, orderId });
+      }
+
+      if (appliedCode) {
+        const res = await apiRequest("/api/cart/apply-discount", "POST", {
+          orderIds: createdOrders.map((o) => o.orderId),
+          code: appliedCode.code,
+        });
+        await res.json();
+      }
+
+      let paid = 0;
+      for (const { item, orderId } of createdOrders) {
+        setProgress({
+          phase: "paying",
+          step: paid + 1,
+          total: createdOrders.length,
+          title: item.title,
+          message: `Paying ${paid + 1} of ${createdOrders.length}…`,
+        });
 
         const isGame = ["spin", "scratch", "pop", "plinko", "voltz", "slot", "royal"].includes(item.type);
         const payRes = await apiRequest(processPaymentEndpoint(item.type), "POST", {
@@ -554,10 +636,72 @@ export default function BasketPage() {
                             <span>−£{totals.savings.toFixed(2)}</span>
                           </div>
                         )}
+                        {discountSaving > 0 && appliedCode && (
+                          <div className="flex justify-between text-[#F1D47A]">
+                            <span className="inline-flex items-center gap-1">
+                              <Sparkles className="h-3.5 w-3.5" /> Code {appliedCode.code}
+                            </span>
+                            <span>−£{discountSaving.toFixed(2)}</span>
+                          </div>
+                        )}
                         <div className="flex items-end justify-between gap-3 border-t border-white/10 pt-3">
                           <span className="text-xs font-black uppercase tracking-widest text-white/40">Total</span>
-                          <span className="font-prize text-3xl leading-none text-[#F1D47A] sm:text-4xl">£{totals.pay.toFixed(2)}</span>
+                          <span className="font-prize text-3xl leading-none text-[#F1D47A] sm:text-4xl">£{payableTotal.toFixed(2)}</span>
                         </div>
+                      </div>
+
+                      {/* Discount code. One code comes off the basket total. */}
+                      <div className="mt-4">
+                        {appliedCode ? (
+                          <div className="flex items-center justify-between gap-2 rounded-lg border border-[#F1D47A]/30 bg-[#F1D47A]/[0.06] px-3 py-2">
+                            <span className="text-xs font-semibold text-[#F1D47A]">
+                              {appliedCode.code} applied
+                            </span>
+                            <button
+                              type="button"
+                              className="text-xs text-white/50 underline hover:text-white"
+                              onClick={() => {
+                                setAppliedCode(null);
+                                setDiscountError("");
+                              }}
+                              data-testid="button-remove-cart-discount"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <input
+                              value={discountInput}
+                              onChange={(e) => {
+                                setDiscountInput(e.target.value);
+                                setDiscountError("");
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && discountInput.trim()) {
+                                  applyDiscount.mutate(discountInput.trim().toUpperCase());
+                                }
+                              }}
+                              placeholder="Discount code"
+                              className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm uppercase text-white placeholder:normal-case placeholder:text-white/30 focus:border-[#F1D47A]/50 focus:outline-none"
+                              data-testid="input-cart-discount"
+                            />
+                            <button
+                              type="button"
+                              disabled={!discountInput.trim() || applyDiscount.isPending}
+                              onClick={() => applyDiscount.mutate(discountInput.trim().toUpperCase())}
+                              className="shrink-0 rounded-lg border border-[#F1D47A]/40 px-3 py-2 text-xs font-black uppercase tracking-wider text-[#F1D47A] disabled:opacity-40"
+                              data-testid="button-apply-cart-discount"
+                            >
+                              {applyDiscount.isPending ? "…" : "Apply"}
+                            </button>
+                          </div>
+                        )}
+                        {discountError && (
+                          <p className="mt-1.5 text-xs text-red-400" data-testid="text-cart-discount-error">
+                            {discountError}
+                          </p>
+                        )}
                       </div>
 
                       <div className="mt-5 space-y-2">

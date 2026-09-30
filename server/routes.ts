@@ -193,6 +193,7 @@ import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { CSV_BOM, csvRow } from "./services/csv";
 import { canApplyCode, refusalMessage, summariseUsages, type ApplyRefusal } from "./services/discount-usage";
+import { quoteCartDiscount, poundsToPence, penceToPounds, type CartDiscountType, type CartDiscountQuote } from "@shared/cart-discount";
 import { buildUserFinancials, INSTANT_WIN_TYPES } from "./services/user-spend";
 import {
   getReferralSettings,
@@ -9591,6 +9592,332 @@ app.delete(
 
 
 // In your apply-discount endpoint, update the discount logic:
+// ---------------------------------------------------------------------------
+// Basket discount codes
+//
+// A code used to belong to one order, because the only place to type one was a
+// billing page that was looking at a single order. The basket had no field at
+// all. Here a code comes off the basket TOTAL -- three items adding up to £20
+// with a 30% code is charged £14 -- and the discount is then shared back
+// across the orders in proportion to their value.
+//
+// Sharing it back matters: the card checkout sums order totals to decide what
+// to take, revenue reporting reads order totals, and the spend figures on a
+// user card come from them. A discount held only at basket level would leave
+// every one of those disagreeing with what was actually charged.
+//
+// Both basket paths create all their orders before paying -- the card path
+// hands the ids to /api/cart/process-card-payment, the wallet path pays each
+// in turn -- so this sits in the gap between the two and works for both.
+// ---------------------------------------------------------------------------
+
+// Checks a code and hands back its terms so the basket can show what it would
+// save, before any orders exist. Nothing is written and nothing is held: the
+// real apply happens at checkout, once there are orders to attach it to, and
+// the server recomputes the figures from those orders rather than trusting
+// anything worked out here.
+app.post("/api/cart/validate-discount", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const code = typeof req.body?.code === "string" ? req.body.code.trim().toUpperCase() : "";
+    if (!code) return res.status(400).json({ error: "Enter a discount code" });
+
+    const [discount] = await db
+      .select()
+      .from(discountCodes)
+      .where(
+        and(
+          eq(discountCodes.code, code),
+          eq(discountCodes.isActive, true),
+          sql`(discount_codes.expires_at IS NULL OR discount_codes.expires_at > NOW())`
+        )
+      );
+
+    if (!discount) return res.status(400).json({ error: "Invalid or expired code" });
+
+    const usageRows = await db
+      .select({
+        userId: discountCodeUsages.userId,
+        orderId: discountCodeUsages.orderId,
+        usedAt: discountCodeUsages.usedAt,
+        orderStatus: orders.status,
+      })
+      .from(discountCodeUsages)
+      .leftJoin(orders, eq(discountCodeUsages.orderId, orders.id))
+      .where(eq(discountCodeUsages.discountCodeId, discount.id));
+
+    const decision = canApplyCode({
+      userId,
+      maxUses: discount.maxUses ?? null,
+      rows: usageRows,
+      now: new Date(),
+    });
+
+    if (!decision.ok && decision.reason) {
+      return res.status(400).json({ error: refusalMessage(decision.reason) });
+    }
+
+    res.json({
+      valid: true,
+      code: discount.code,
+      type: discount.type,
+      value: Number(discount.value),
+    });
+  } catch (err) {
+    console.error("Error validating basket discount:", err);
+    res.status(500).json({ error: "Failed to check that code" });
+  }
+});
+
+app.post("/api/cart/apply-discount", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const code = typeof req.body?.code === "string" ? req.body.code.trim().toUpperCase() : "";
+    const orderIds: string[] = Array.isArray(req.body?.orderIds)
+      ? req.body.orderIds.filter((id: unknown): id is string => typeof id === "string")
+      : [];
+
+    if (!code) return res.status(400).json({ error: "Enter a discount code" });
+    if (!orderIds.length) return res.status(400).json({ error: "Your basket is empty" });
+    if (new Set(orderIds).size !== orderIds.length) {
+      return res.status(400).json({ error: "Duplicate items in your basket" });
+    }
+
+    const [discount] = await db
+      .select()
+      .from(discountCodes)
+      .where(
+        and(
+          eq(discountCodes.code, code),
+          eq(discountCodes.isActive, true),
+          sql`(discount_codes.expires_at IS NULL OR discount_codes.expires_at > NOW())`
+        )
+      );
+
+    if (!discount) return res.status(400).json({ error: "Invalid or expired code" });
+
+    const orderRows = await db.select().from(orders).where(inArray(orders.id, orderIds));
+    if (orderRows.length !== orderIds.length) {
+      return res.status(404).json({ error: "One of those items could not be found" });
+    }
+    for (const order of orderRows) {
+      if (order.userId !== userId) return res.status(404).json({ error: "Order not found" });
+      if (order.status !== "pending") {
+        return res.status(400).json({ error: "One of those items was already paid for" });
+      }
+      if (order.discountCodeId) {
+        return res.status(400).json({ error: "A discount is already applied" });
+      }
+    }
+
+    const user = await storage.getUser(userId);
+    let refusal: ApplyRefusal | null = null;
+    // Typed explicitly because TypeScript narrows a let that is only ever
+    // assigned inside a closure down to its initial value.
+    let quote: CartDiscountQuote | null = null;
+
+    await db.transaction(async (tx) => {
+      // Same lock as the single-order path: two people reaching for the last
+      // use of a limited code queue up rather than both being told yes.
+      await tx.execute(
+        sql`SELECT id FROM discount_codes WHERE id = ${discount.id} FOR UPDATE`
+      );
+
+      const usageRows = await tx
+        .select({
+          userId: discountCodeUsages.userId,
+          orderId: discountCodeUsages.orderId,
+          usedAt: discountCodeUsages.usedAt,
+          orderStatus: orders.status,
+        })
+        .from(discountCodeUsages)
+        .leftJoin(orders, eq(discountCodeUsages.orderId, orders.id))
+        .where(eq(discountCodeUsages.discountCodeId, discount.id));
+
+      const decision = canApplyCode({
+        userId,
+        maxUses: discount.maxUses ?? null,
+        rows: usageRows,
+        now: new Date(),
+      });
+
+      if (!decision.ok && decision.reason) {
+        refusal = decision.reason;
+        return;
+      }
+
+      const ordered = orderIds.map((id) => orderRows.find((row) => row.id === id)!);
+      quote = quoteCartDiscount({
+        type: discount.type as CartDiscountType,
+        value: Number(discount.value),
+        lines: ordered.map((order) => ({
+          orderId: order.id,
+          amountPence: poundsToPence(order.totalAmount),
+        })),
+      });
+
+      for (const line of quote.lines) {
+        await tx
+          .update(orders)
+          .set({
+            totalAmount: String(penceToPounds(line.payPence)),
+            discountCodeId: discount.id,
+            // Each order carries its own share, so the per-order figures the
+            // rest of the system reads stay truthful.
+            discountAmount: String(penceToPounds(line.discountPence)),
+            discountType: discount.type,
+            pointsDiscountAmount: discount.type === "points" ? String(Number(discount.value)) : null,
+            percentageDiscount: discount.type === "percentage" ? String(Number(discount.value)) : null,
+          })
+          .where(eq(orders.id, line.orderId));
+      }
+
+      // One hold for one basket, against the first order. Whether it becomes a
+      // real use is decided by whether that order gets paid -- see
+      // services/discount-usage.ts.
+      await tx.insert(discountCodeUsages).values({
+        discountCodeId: discount.id,
+        userId,
+        orderId: orderIds[0],
+      });
+    });
+
+    if (refusal) {
+      return res.status(400).json({ error: refusalMessage(refusal) });
+    }
+    if (!quote) {
+      return res.status(500).json({ error: "Could not apply that code" });
+    }
+
+    const applied: CartDiscountQuote = quote;
+
+    // Traceability: one line that says what was taken off, which code did it,
+    // and how it was split, so a basket discount can be reconstructed later
+    // from the audit trail alone.
+    await db.insert(auditLogs).values({
+      userId,
+      userName: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "Customer",
+      email: user?.email || "",
+      action: "cart_discount_applied",
+      description:
+        `Code ${discount.code} (${discount.type} ${discount.value}) applied to basket of ` +
+        `${applied.lines.length} item(s). Subtotal £${penceToPounds(applied.subtotalPence).toFixed(2)}, ` +
+        `discount £${penceToPounds(applied.discountPence).toFixed(2)}, ` +
+        `total £${penceToPounds(applied.totalPence).toFixed(2)}. Split: ` +
+        applied.lines
+          .map((l) => `${l.orderId}:-£${penceToPounds(l.discountPence).toFixed(2)}`)
+          .join(", "),
+      // Decimal columns come back from Drizzle as strings and want strings.
+      startBalance: user?.balance ?? null,
+      endBalance: user?.balance ?? null,
+      createdAt: new Date(),
+    });
+
+    console.log(
+      `🎟️ Basket discount ${discount.code} for user ${userId}: ` +
+      `£${penceToPounds(applied.subtotalPence).toFixed(2)} → £${penceToPounds(applied.totalPence).toFixed(2)}`
+    );
+
+    res.json({
+      success: true,
+      code: discount.code,
+      discountType: discount.type,
+      subtotal: penceToPounds(applied.subtotalPence),
+      discountAmount: penceToPounds(applied.discountPence),
+      newTotal: penceToPounds(applied.totalPence),
+      lines: applied.lines.map((l) => ({
+        orderId: l.orderId,
+        discountAmount: penceToPounds(l.discountPence),
+        payAmount: penceToPounds(l.payPence),
+      })),
+      message:
+        discount.type === "percentage"
+          ? `${Number(discount.value)}% off your basket — you saved £${penceToPounds(applied.discountPence).toFixed(2)}`
+          : `£${penceToPounds(applied.discountPence).toFixed(2)} off your basket`,
+    });
+  } catch (err) {
+    console.error("Error applying basket discount:", err);
+    res.status(500).json({ error: "Failed to apply discount code" });
+  }
+});
+
+app.post("/api/cart/remove-discount", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const orderIds: string[] = Array.isArray(req.body?.orderIds)
+      ? req.body.orderIds.filter((id: unknown): id is string => typeof id === "string")
+      : [];
+
+    if (!orderIds.length) return res.status(400).json({ error: "Your basket is empty" });
+
+    const orderRows = await db.select().from(orders).where(inArray(orders.id, orderIds));
+    const mine = orderRows.filter((row) => row.userId === userId && row.status === "pending");
+    const discounted = mine.filter((row) => row.discountCodeId);
+    if (!discounted.length) {
+      return res.status(400).json({ error: "No discount to remove" });
+    }
+
+    const comps = await db
+      .select()
+      .from(competitions)
+      .where(inArray(competitions.id, discounted.map((row) => row.competitionId)));
+    const compById = new Map(comps.map((row) => [row.id, row]));
+
+    const codeId = discounted[0].discountCodeId!;
+
+    await db.transaction(async (tx) => {
+      for (const order of discounted) {
+        const competition = compById.get(order.competitionId);
+        // Back to what the line costs on its own, at today's price.
+        const original = competition
+          ? effectiveTicketPrice(competition) * order.quantity
+          : Number(order.totalAmount) + Number(order.discountAmount || 0);
+
+        await tx
+          .update(orders)
+          .set({
+            totalAmount: String(Math.round(original * 100) / 100),
+            discountCodeId: null,
+            discountAmount: null,
+            discountType: null,
+            pointsDiscountAmount: null,
+            percentageDiscount: null,
+          })
+          .where(eq(orders.id, order.id));
+      }
+
+      // Drop the hold. Nothing to give back on the code itself: applying never
+      // spent it.
+      await tx
+        .delete(discountCodeUsages)
+        .where(
+          and(
+            eq(discountCodeUsages.discountCodeId, codeId),
+            inArray(discountCodeUsages.orderId, discounted.map((row) => row.id)),
+          )
+        );
+    });
+
+    const user = await storage.getUser(userId);
+    await db.insert(auditLogs).values({
+      userId,
+      userName: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "Customer",
+      email: user?.email || "",
+      action: "cart_discount_removed",
+      description: `Basket discount removed from ${discounted.length} item(s): ${discounted.map((o) => o.id).join(", ")}`,
+      // Decimal columns come back from Drizzle as strings and want strings.
+      startBalance: user?.balance ?? null,
+      endBalance: user?.balance ?? null,
+      createdAt: new Date(),
+    });
+
+    res.json({ success: true, removed: discounted.length });
+  } catch (err) {
+    console.error("Error removing basket discount:", err);
+    res.status(500).json({ error: "Failed to remove discount code" });
+  }
+});
+
 app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
   try {
     const { orderId, code } = req.body;
