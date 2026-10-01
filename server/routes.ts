@@ -205,7 +205,7 @@ import {
 import { ukWeekKey } from "./services/uk-day";
 import { calculateDiscountedTotal } from "./utils/discounts";
 import { syncPlinkoPrize, syncPopPrize, syncScratchPrize, syncSlotPrize, syncSpinPrize, syncVoltzPrize } from "./services/prize-sync";
-import { notifyPublicWinnerUpdate } from "./services/record-game-winner";
+import { notifyPublicWinnerUpdate, stampWinningTicket } from "./services/record-game-winner";
 import { processUncontrolledSlotSpin, revealAllUncontrolledSlot } from "./services/slot-play";
 import { getPromoVideoModeStatus } from "./services/promo-video-mode";
 import { getCashflowsRevenue } from "./services/cashflows-revenue";
@@ -5977,6 +5977,9 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
     }
 
     let random = Math.random() * totalWeight;
+    // Winner rows are written before the play's ticket is claimed, so their
+    // ids are held here and the ticket stamped on once it is known.
+    const spinWinnerIds: string[] = [];
     let selectedSegment = eligibleSegments[0];
 
     for (const segment of eligibleSegments) {
@@ -6027,7 +6030,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         description: `Spin Wheel ${wheelType} Prize - £${amount}`,
       });
 
-      await storage.createWinner({
+      const spinCashWinner = await storage.createWinner({
         userId,
         competitionId,
         prizeDescription: selectedSegment.label,
@@ -6035,6 +6038,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         imageUrl: null,
         isShowcase: true,
       });
+      if (spinCashWinner?.id) spinWinnerIds.push(spinCashWinner.id);
 
       // 🚀 AUTO-SYNC PRIZE TO PRIZE TABLE
       const maxWins = selectedSegment.maxWins !== undefined && 
@@ -6078,7 +6082,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         description: `Spin Wheel ${wheelType} Prize - ${points} Ringtones`,
       });
 
-      await storage.createWinner({
+      const spinPointsWinner = await storage.createWinner({
         userId,
         competitionId,
         prizeDescription: selectedSegment.label,
@@ -6086,6 +6090,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         imageUrl: null,
         isShowcase: true,
       });
+      if (spinPointsWinner?.id) spinWinnerIds.push(spinPointsWinner.id);
 
       // 🚀 AUTO-SYNC PRIZE TO PRIZE TABLE
       const maxWins = selectedSegment.maxWins !== undefined && 
@@ -6114,7 +6119,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         description: `Physical Prize Won: ${selectedSegment.label} - Contact support`,
       });
 
-      await storage.createWinner({
+      const spinPhysicalWinner = await storage.createWinner({
         userId,
         competitionId,
         prizeDescription: `Physical Prize: ${selectedSegment.label}`,
@@ -6122,6 +6127,7 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
         imageUrl: null,
         isShowcase: true,
       });
+      if (spinPhysicalWinner?.id) spinWinnerIds.push(spinPhysicalWinner.id);
 
       const maxWins = selectedSegment.maxWins !== undefined && 
                       selectedSegment.maxWins !== null && 
@@ -6161,6 +6167,9 @@ app.post("/api/play-spin-wheel", isAuthenticated, async (req: any, res) => {
     } catch (err) {
       console.error("Failed to record spin play ticket:", err);
     }
+
+    // The winner rows above were written before the ticket existed.
+    await stampWinningTicket(db, spinWinnerIds, ticketNumber);
 
     // Return full segment payload for frontend animation
     res.json({
@@ -16416,6 +16425,9 @@ app.post("/api/play-pop", async (req: any, res) => {
     // 7. RESULT LOGIC
     // ============================================
     let balloonValues: number[] = [];
+    // Winner rows are written before the play's ticket is claimed, so their
+    // ids are kept here and the ticket stamped on once it is known.
+    const popWinnerIds: string[] = [];
     const rewardType = selectedSegment.rewardType || "lose";
     const prizeName = selectedSegment.label ||
                       selectedSegment.prizeName ||
@@ -16589,7 +16601,7 @@ app.post("/api/play-pop", async (req: any, res) => {
           prizeValueText = prizeName;
         }
 
-        await db.insert(winners).values({
+        const [popWinnerRow] = await db.insert(winners).values({
           userId,
           competitionId,
           prizeDescription: prizeDescriptionText,
@@ -16598,7 +16610,8 @@ app.post("/api/play-pop", async (req: any, res) => {
           isShowcase: true,
           createdAt: new Date(),
           updatedAt: new Date(),
-        });
+        }).returning({ id: winners.id });
+        if (popWinnerRow?.id) popWinnerIds.push(popWinnerRow.id);
       }
     }
     // LOSE
@@ -16704,6 +16717,9 @@ app.post("/api/play-pop", async (req: any, res) => {
           wonAt: new Date(),
         } as any);
       });
+
+      // The winner row was written before the ticket existed; label it now.
+      await stampWinningTicket(db, popWinnerIds, ticketNumber);
 
       const newPlaysRemaining = isRPrize ? playsRemaining : playsRemaining - 1;
 
