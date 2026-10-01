@@ -784,6 +784,9 @@ async function creditFrozenWin(
           ? `${Math.floor(valueNum)} Points`
           : opts.prize.name,
       isShowcase: true,
+      // A controlled pool prize is seeded onto a ticket sequence number, so the
+      // ticket that won is known here exactly rather than inferred.
+      winningTicketNumber: opts.ticketSeq != null ? String(opts.ticketSeq) : null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

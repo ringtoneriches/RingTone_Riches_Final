@@ -13,6 +13,7 @@ import {
   Clock,
   Coins,
   Share2,
+  Ticket,
   TrendingUp,
   SortAsc,
 } from "lucide-react";
@@ -25,13 +26,14 @@ interface Winner {
   prizeValue: string;
   imageUrl: string | null;
   isShowcase: boolean;
+  /** Set only for wins recorded since the ticket number was captured. */
+  winningTicketNumber?: string | null;
   createdAt: string;
   updatedAt: string;
   user: {
     id: string;
     firstName: string;
     lastName: string;
-    email: string;
   } | null;
   competition: {
     id: string;
@@ -106,6 +108,7 @@ export default function PastWinners() {
         prizeValue: item.prizeValue || "0",
         imageUrl: item.imageUrl || "",
         createdAt: item.createdAt,
+        winningTicketNumber: item.winningTicketNumber ?? null,
         updatedAt: item.updatedAt || item.createdAt,
         isShowcase: item.isShowcase ?? true,
         userId: item.userId,
@@ -115,7 +118,6 @@ export default function PastWinners() {
               id: item.user.id,
               firstName: item.user.firstName || "",
               lastName: item.user.lastName || "",
-              email: item.user.email || "",
             }
           : null,
         competition: item.competition
@@ -319,15 +321,37 @@ export default function PastWinners() {
                           </button>
                         </div>
 
-                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/35">Won</p>
-                        <p className="rr-winner-prize mt-1">
-                          {prizeHeadline}
-                          {prizeUnit ? (
-                            <span className="ml-2 align-middle text-base font-black uppercase tracking-widest text-[#F1D47A]/70">
-                              {prizeUnit}
-                            </span>
-                          ) : null}
-                        </p>
+                        {/* Prize and ticket share the hero row. The right of this
+                            row was dead space, and a screenshot cropped to the
+                            prize keeps the ticket in frame -- anything in the
+                            footer gets cut off. */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/35">Won</p>
+                            <p className="rr-winner-prize mt-1">
+                              {prizeHeadline}
+                              {prizeUnit ? (
+                                <span className="ml-2 align-middle text-base font-black uppercase tracking-widest text-[#F1D47A]/70">
+                                  {prizeUnit}
+                                </span>
+                              ) : null}
+                            </p>
+                          </div>
+                          {winner.winningTicketNumber && (
+                            <div
+                              className="shrink-0 rounded-xl border border-[#F1D47A]/30 bg-[#F1D47A]/[0.08] px-3 py-2 text-right"
+                              data-testid="winner-ticket-stub"
+                            >
+                              <p className="flex items-center justify-end gap-1 text-[8px] font-black uppercase tracking-[0.16em] text-white/45">
+                                <Ticket className="h-2.5 w-2.5" />
+                                Ticket
+                              </p>
+                              <p className="mt-0.5 font-prize text-lg leading-none text-[#F1D47A]">
+                                #{winner.winningTicketNumber}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                         <h3 className="mt-3 text-base font-semibold leading-snug text-white sm:text-lg">
                           {winner.prizeDescription}
                         </h3>
@@ -356,6 +380,15 @@ export default function PastWinners() {
                                 day: "numeric",
                                 month: "short",
                                 year: "numeric",
+                              })}
+                            </p>
+                            {/* The exact time, so a shared screenshot carries it. */}
+                            <p className="text-[11px] font-semibold text-white/45">
+                              Won at{" "}
+                              {new Date(winner.createdAt).toLocaleTimeString("en-GB", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                timeZone: "Europe/London",
                               })}
                             </p>
                           </div>

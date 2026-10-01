@@ -191,6 +191,29 @@ export async function processUncontrolledSlotSpin(opts: {
   let prizeType: string | null = null;
   let prizeImage: string | null = null;
 
+  // The play's ticket is claimed and recorded before the prize is handled, so
+  // a winning row can carry the ticket that won it. It used to be claimed
+  // afterwards, which left the winner card with no ticket number to show.
+  let ticketNumber: string | null = null;
+  try {
+    await db.transaction(async (tx) => {
+      ticketNumber = await claimNextPlayTicket(tx, orderId);
+      await tx.insert(slotUsage).values({
+        orderId,
+        userId,
+        isWin,
+        coinsWon,
+        coinsSpent: coinsSpent || 0,
+        spinNumber,
+        prizeId: selectedPrize?.id ?? null,
+        prizeName: selectedPrize?.symbol ?? null,
+        ticketNumber,
+      });
+    });
+  } catch (dbError) {
+    console.error("[API] ❌ Error recording spin:", dbError);
+  }
+
   if (isWin && selectedPrize) {
     prizeId = selectedPrize.id;
     prizeName = selectedPrize.symbol;
@@ -268,6 +291,7 @@ export async function processUncontrolledSlotSpin(opts: {
         prizeValue: prizeValueText,
         imageUrl: selectedPrize.image || null,
         isShowcase: true,
+        winningTicketNumber: ticketNumber,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -275,26 +299,6 @@ export async function processUncontrolledSlotSpin(opts: {
     } catch (prizeError) {
       console.error("[API] ❌ Error processing prize:", prizeError);
     }
-  }
-
-  let ticketNumber: string | null = null;
-  try {
-    await db.transaction(async (tx) => {
-      ticketNumber = await claimNextPlayTicket(tx, orderId);
-      await tx.insert(slotUsage).values({
-        orderId,
-        userId,
-        isWin,
-        coinsWon,
-        coinsSpent: coinsSpent || 0,
-        spinNumber,
-        prizeId: prizeId || null,
-        prizeName: prizeName || null,
-        ticketNumber,
-      });
-    });
-  } catch (dbError) {
-    console.error("[API] ❌ Error recording spin:", dbError);
   }
 
   return {
