@@ -13,6 +13,7 @@ import {
   Clock,
   Coins,
   Share2,
+  Ticket,
   TrendingUp,
   SortAsc,
 } from "lucide-react";
@@ -25,13 +26,14 @@ interface Winner {
   prizeValue: string;
   imageUrl: string | null;
   isShowcase: boolean;
+  /** Set only for wins recorded since the ticket number was captured. */
+  winningTicketNumber?: string | null;
   createdAt: string;
   updatedAt: string;
   user: {
     id: string;
     firstName: string;
     lastName: string;
-    email: string;
   } | null;
   competition: {
     id: string;
@@ -106,6 +108,7 @@ export default function PastWinners() {
         prizeValue: item.prizeValue || "0",
         imageUrl: item.imageUrl || "",
         createdAt: item.createdAt,
+        winningTicketNumber: item.winningTicketNumber ?? null,
         updatedAt: item.updatedAt || item.createdAt,
         isShowcase: item.isShowcase ?? true,
         userId: item.userId,
@@ -115,7 +118,6 @@ export default function PastWinners() {
               id: item.user.id,
               firstName: item.user.firstName || "",
               lastName: item.user.lastName || "",
-              email: item.user.email || "",
             }
           : null,
         competition: item.competition
@@ -338,6 +340,15 @@ export default function PastWinners() {
                           </p>
                         )}
 
+                        {/* Only shown when the win recorded a ticket. Winners from
+                            before the number was captured simply omit the line. */}
+                        {winner.winningTicketNumber && (
+                          <p className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-[#F1D47A]/80">
+                            <Ticket className="h-3 w-3 shrink-0" />
+                            <span>Winning ticket #{winner.winningTicketNumber}</span>
+                          </p>
+                        )}
+
                         <div className="mt-auto flex items-center justify-between gap-3 border-t border-white/10 pt-5">
                           <div className="flex min-w-0 items-center gap-2.5">
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#C8102E] to-[#8e0b20] text-[11px] font-black text-white">
@@ -356,6 +367,15 @@ export default function PastWinners() {
                                 day: "numeric",
                                 month: "short",
                                 year: "numeric",
+                              })}
+                            </p>
+                            {/* The exact time, so a shared screenshot carries it. */}
+                            <p className="text-[11px] font-semibold text-white/45">
+                              Won at{" "}
+                              {new Date(winner.createdAt).toLocaleTimeString("en-GB", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                timeZone: "Europe/London",
                               })}
                             </p>
                           </div>

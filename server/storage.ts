@@ -608,11 +608,13 @@ async getRecentWinners(limit?: number, showcaseOnly = false): Promise<Winner[]> 
     let query = db
       .select({
         winners: winners,
+        // No email. This feeds the public, unauthenticated /api/winners, so
+        // every address was being handed to anyone who fetched the JSON. The
+        // winner cards only ever showed a name.
         users: {
           id: users.id,
           firstName: users.firstName,
           lastName: users.lastName,
-          email: users.email
         },
         competitions: {
           id: competitions.id,
@@ -642,7 +644,6 @@ async getRecentWinners(limit?: number, showcaseOnly = false): Promise<Winner[]> 
         id: row.users.id,
         firstName: row.users.firstName,
         lastName: row.users.lastName,
-        email: row.users.email
       } : null,
       competition: row.competitions ? {
         id: row.competitions.id,
