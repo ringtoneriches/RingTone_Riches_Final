@@ -584,6 +584,25 @@ export const discountCodes = pgTable("discount_codes", {
   usesCount: integer("uses_count").default(0), 
   expiresAt: timestamp("expires_at"), 
   isActive: boolean("is_active").default(true),
+  /**
+   * Whose code this is, when it belongs to one person.
+   *
+   * Codes were all shared: a code was a string anyone could type. That is fine
+   * for a campaign, but a prize won on the daily spin has to belong to the
+   * person who won it, or the first screenshot in the group chat hands it to
+   * everybody. Null means shared, as before.
+   */
+  assignedUserId: varchar("assigned_user_id").references(() => users.id),
+  /**
+   * The most this code can take off, in pounds.
+   *
+   * A percentage comes off the basket total, so half off a £1 play is 50p but
+   * half off a £60 basket is £30. Null means uncapped, which is what every
+   * existing code is.
+   */
+  maxDiscountAmount: decimal("max_discount_amount", { precision: 10, scale: 2 }),
+  /** Where the code came from, so spin prizes can be told from campaigns. */
+  source: varchar("source", { enum: ["admin", "daily_spin"] }).default("admin"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1746,6 +1765,22 @@ export const dailySpinCycles = pgTable("daily_spin_cycles", {
 export const dailySpinPrizes = pgTable("daily_spin_prizes", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   cycleId: uuid("cycle_id").notNull().references(() => dailySpinCycles.id, { onDelete: "cascade" }),
+  /**
+   * What this slice of the wheel pays.
+   *
+   * "points" is everything that existed before and stays the default, so no
+   * cycle changes behaviour by being migrated. "discount" mints a one-time
+   * code belonging to the winner instead.
+   */
+  rewardKind: varchar("reward_kind", { enum: ["points", "discount"] }).default("points").notNull(),
+  /** Percentage or cash, for a discount slice. */
+  discountType: varchar("discount_type", { enum: ["percentage", "cash"] }),
+  /** 20 for 20% off, or 5 for £5 off. */
+  discountValue: decimal("discount_value", { precision: 10, scale: 2 }),
+  /** The cap carried onto the code it mints. */
+  discountMaxAmount: decimal("discount_max_amount", { precision: 10, scale: 2 }),
+  /** How long the winner has to spend it. */
+  discountHours: integer("discount_hours").default(48),
   pointsValue: integer("points_value").notNull(),
   quantity: integer("quantity").notNull(),
   remaining: integer("remaining").notNull(),
@@ -1766,6 +1801,8 @@ export const dailySpinResults = pgTable("daily_spin_results", {
   prizeId: uuid("prize_id").notNull().references(() => dailySpinPrizes.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   pointsAwarded: integer("points_awarded").notNull(),
+  /** The code minted for this spin, when the slice paid a discount. */
+  discountCodeId: uuid("discount_code_id").references(() => discountCodes.id),
   segmentIndex: integer("segment_index").notNull(),
   spinDate: date("spin_date").notNull(), // UK calendar day, see services/uk-day.ts
   ipAddress: varchar("ip_address"), // for abuse detection, see daily-spin-eligibility.ts

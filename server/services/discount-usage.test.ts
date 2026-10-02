@@ -184,9 +184,34 @@ describe("canApplyCode", () => {
   });
 });
 
+describe("codes that belong to one person", () => {
+  it("lets the owner use their own prize code", () => {
+    const d = canApplyCode({ userId: "winner", maxUses: 1, rows: [], now: NOW, assignedUserId: "winner" });
+    expect(d.ok).toBe(true);
+  });
+
+  it("refuses anyone else, even with uses left", () => {
+    const d = canApplyCode({ userId: "someone-else", maxUses: 1, rows: [], now: NOW, assignedUserId: "winner" });
+    expect(d).toMatchObject({ ok: false, reason: "not_yours" });
+  });
+
+  it("leaves shared codes alone", () => {
+    for (const assigned of [null, undefined]) {
+      const d = canApplyCode({ userId: "anyone", maxUses: 5, rows: [], now: NOW, assignedUserId: assigned });
+      expect(d.ok).toBe(true);
+    }
+  });
+
+  it("checks ownership before the usage limit, so a shared screenshot cannot even reserve it", () => {
+    const rows = [row({ userId: "winner", usedAt: minutesAgo(1) })];
+    const d = canApplyCode({ userId: "thief", maxUses: 1, rows, now: NOW, assignedUserId: "winner" });
+    expect(d.reason).toBe("not_yours");
+  });
+});
+
 describe("refusalMessage", () => {
   it("has wording for every refusal", () => {
-    for (const reason of ["already_used", "already_applied", "limit_reached"] as const) {
+    for (const reason of ["already_used", "already_applied", "limit_reached", "not_yours"] as const) {
       expect(refusalMessage(reason).length).toBeGreaterThan(0);
     }
   });

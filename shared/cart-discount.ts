@@ -67,6 +67,15 @@ export function discountForCart(opts: {
   /** The code's stored value: pounds for cash, points for points, 0-100 for percentage. */
   value: number;
   subtotalPence: number;
+  /**
+   * The most this code may take off, in pence.
+   *
+   * A percentage comes off the basket total, so half off a £1 play is 50p but
+   * half off a £60 basket is £30. A prize won on the wheel carries a cap so the
+   * exposure on its biggest slice is a known number. Null is uncapped, which is
+   * every code written before prizes existed.
+   */
+  maxDiscountPence?: number | null;
 }): number {
   const { type, value, subtotalPence } = opts;
   if (!Number.isFinite(value) || value <= 0 || subtotalPence <= 0) return 0;
@@ -85,6 +94,11 @@ export function discountForCart(opts: {
       break;
     default:
       return 0;
+  }
+
+  const cap = opts.maxDiscountPence;
+  if (typeof cap === "number" && Number.isFinite(cap) && cap > 0) {
+    pence = Math.min(pence, Math.round(cap));
   }
 
   return Math.max(0, Math.min(pence, subtotalPence));
@@ -149,6 +163,7 @@ export function quoteCartDiscount(opts: {
   type: CartDiscountType;
   value: number;
   lines: CartLineInput[];
+  maxDiscountPence?: number | null;
 }): CartDiscountQuote {
   const lines = opts.lines.map((l) => ({
     orderId: l.orderId,
@@ -159,6 +174,7 @@ export function quoteCartDiscount(opts: {
     type: opts.type,
     value: opts.value,
     subtotalPence,
+    maxDiscountPence: opts.maxDiscountPence,
   });
   const shares = apportionDiscount(discountPence, lines);
 
