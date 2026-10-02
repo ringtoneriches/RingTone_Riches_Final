@@ -25,9 +25,14 @@ type SpinState = {
   nextSpinAt: string;
 };
 
+/** A code won on the wheel, which belongs to the person who won it. */
+type SpinDiscount = { code: string; label: string; expiresAt: string };
+
 type SpinResult = {
   alreadySpun: boolean;
   pointsValue: number;
+  /** Present only when the slice paid a discount instead of points. */
+  discount?: SpinDiscount | null;
   segmentIndex: number;
   nextSpinAt: string;
 };
@@ -65,6 +70,7 @@ export default function DailySpinPage() {
   const [spinning, setSpinning] = useState(false);
   const [landOn, setLandOn] = useState<number | null>(null);
   const [won, setWon] = useState<number | null>(null);
+  const [wonDiscount, setWonDiscount] = useState<SpinDiscount | null>(null);
   const [showResult, setShowResult] = useState(false);
 
   const { data, isLoading } = useQuery<SpinState>({
@@ -93,9 +99,13 @@ export default function DailySpinPage() {
 
   const handleSettled = useCallback(() => {
     setSpinning(false);
+    const discount = spin.data?.discount ?? null;
     const points = spin.data?.pointsValue ?? null;
+    setWonDiscount(discount);
     setWon(points);
-    if (points !== null) {
+    // A discount win pays no points, so the result screen has to open on the
+    // code rather than on a zero.
+    if (points !== null || discount) {
       setShowResult(true);
       // Same celebration the games use, so a win feels like a win.
       if (!spin.data?.alreadySpun) celebrateWin();
@@ -201,7 +211,9 @@ export default function DailySpinPage() {
                       </div>
                       {(won ?? data.lastResult?.pointsValue) != null && (
                         <p className="mt-2 text-xs text-white/45">
-                          Today you won {won ?? data.lastResult?.pointsValue} points.
+                          {wonDiscount
+                            ? `Today you won ${wonDiscount.label} — code ${wonDiscount.code}.`
+                            : `Today you won ${won ?? data.lastResult?.pointsValue} points.`}
                         </p>
                       )}
                     </div>
@@ -219,14 +231,29 @@ export default function DailySpinPage() {
                 </div>
 
                 <GameResultOverlay
-                  open={showResult && won !== null}
+                  open={showResult && (won !== null || wonDiscount !== null)}
                   kind="win"
                   kicker="Daily Spin"
                   title="You won!"
-                  prizeText={`${won ?? 0} pts`}
-                  prizeSub="Ringtone Points added to your account"
-                  body="Spend them on any game. Your next free spin unlocks at midnight."
-                  primaryLabel="Browse games"
+                  prizeText={wonDiscount ? wonDiscount.label : `${won ?? 0} pts`}
+                  prizeSub={
+                    wonDiscount
+                      ? `Your code: ${wonDiscount.code}`
+                      : "Ringtone Points added to your account"
+                  }
+                  body={
+                    wonDiscount
+                      ? `It is yours alone and works at checkout until ${new Date(
+                          wonDiscount.expiresAt,
+                        ).toLocaleString("en-GB", {
+                          weekday: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          timeZone: "Europe/London",
+                        })}. You can find it again under My Codes.`
+                      : "Spend them on any game. Your next free spin unlocks at midnight."
+                  }
+                  primaryLabel={wonDiscount ? "Use it now" : "Browse games"}
                   onPrimary={() => setLocation("/")}
                   secondaryLabel="Stay here"
                   onSecondary={() => setShowResult(false)}

@@ -9521,6 +9521,66 @@ app.delete(
 // real apply happens at checkout, once there are orders to attach it to, and
 // the server recomputes the figures from those orders rather than trusting
 // anything worked out here.
+// A customer's own codes, newest first.
+//
+// Codes used to be campaign strings an admin handed out, so there was nowhere
+// to look one up -- no endpoint and no screen. A code won on the daily spin is
+// a prize, and a prize the winner cannot find again is a support ticket, so
+// this exists for them to come back to.
+app.get("/api/user/discount-codes", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const now = new Date();
+
+    const rows = await db
+      .select()
+      .from(discountCodes)
+      .where(eq(discountCodes.assignedUserId, userId))
+      .orderBy(desc(discountCodes.createdAt))
+      .limit(50);
+
+    const usageRows = await db
+      .select({
+        discountCodeId: discountCodeUsages.discountCodeId,
+        userId: discountCodeUsages.userId,
+        orderId: discountCodeUsages.orderId,
+        usedAt: discountCodeUsages.usedAt,
+        orderStatus: orders.status,
+      })
+      .from(discountCodeUsages)
+      .leftJoin(orders, eq(discountCodeUsages.orderId, orders.id))
+      .where(eq(discountCodeUsages.userId, userId));
+
+    const byCode = new Map<string, typeof usageRows>();
+    for (const row of usageRows) {
+      const list = byCode.get(row.discountCodeId);
+      if (list) list.push(row);
+      else byCode.set(row.discountCodeId, [row]);
+    }
+
+    res.json(
+      rows.map((code) => {
+        const summary = summariseUsages(byCode.get(code.id) ?? [], now);
+        const expired = Boolean(code.expiresAt && code.expiresAt <= now);
+        const spent = summary.confirmed > 0;
+        return {
+          code: code.code,
+          type: code.type,
+          value: Number(code.value),
+          maxDiscountAmount: code.maxDiscountAmount ? Number(code.maxDiscountAmount) : null,
+          expiresAt: code.expiresAt,
+          source: code.source,
+          // One of three things, so the screen never has to work it out.
+          status: spent ? "used" : expired ? "expired" : "ready",
+        };
+      }),
+    );
+  } catch (err) {
+    console.error("Error listing a member's discount codes:", err);
+    res.status(500).json({ error: "Failed to load your codes" });
+  }
+});
+
 app.post("/api/cart/validate-discount", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.id;
@@ -9556,6 +9616,8 @@ app.post("/api/cart/validate-discount", isAuthenticated, async (req: any, res) =
       maxUses: discount.maxUses ?? null,
       rows: usageRows,
       now: new Date(),
+      // A prize code belongs to the person who won it.
+      assignedUserId: discount.assignedUserId ?? null,
     });
 
     if (!decision.ok && decision.reason) {
@@ -9644,6 +9706,8 @@ app.post("/api/cart/apply-discount", isAuthenticated, async (req: any, res) => {
         maxUses: discount.maxUses ?? null,
         rows: usageRows,
         now: new Date(),
+        // A prize code belongs to the person who won it.
+        assignedUserId: discount.assignedUserId ?? null,
       });
 
       if (!decision.ok && decision.reason) {
@@ -9655,6 +9719,9 @@ app.post("/api/cart/apply-discount", isAuthenticated, async (req: any, res) => {
       quote = quoteCartDiscount({
         type: discount.type as CartDiscountType,
         value: Number(discount.value),
+        maxDiscountPence: discount.maxDiscountAmount
+          ? poundsToPence(discount.maxDiscountAmount)
+          : null,
         lines: ordered.map((order) => ({
           orderId: order.id,
           amountPence: poundsToPence(order.totalAmount),
@@ -9866,6 +9933,8 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
       maxUses: discount.maxUses ?? null,
       rows: usageRows,
       now: new Date(),
+      // A prize code belongs to the person who won it.
+      assignedUserId: discount.assignedUserId ?? null,
     });
 
     if (!decision.ok && decision.reason) {
@@ -9934,6 +10003,16 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
         break;
     }
 
+    // A prize code carries a ceiling, because a percentage of a big order is a
+    // bigger giveaway than the slice of the wheel was ever worth. Applied after
+    // the type-specific maths so it works the same whichever kind of code it is.
+    const singleCap = discount.maxDiscountAmount ? Number(discount.maxDiscountAmount) : null;
+    if (singleCap != null && Number.isFinite(singleCap) && singleCap > 0 && discountValue > singleCap) {
+      newTotalAmount += discountValue - singleCap;
+      discountValue = singleCap;
+      pointsDiscountCashValue = Math.min(pointsDiscountCashValue, singleCap);
+    }
+
     // Apply discount in a transaction.
     //
     // Note what is deliberately absent: the code's uses_count is not touched
@@ -9967,6 +10046,7 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
         maxUses: discount.maxUses ?? null,
         rows: freshRows,
         now: new Date(),
+        assignedUserId: discount.assignedUserId ?? null,
       });
 
       if (!fresh.ok && fresh.reason) {

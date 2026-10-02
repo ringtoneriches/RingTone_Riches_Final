@@ -16,10 +16,17 @@ import {
   dailySpinCycles,
   dailySpinPrizes,
   dailySpinResults,
+  discountCodes,
   platformSettings,
   transactions,
   users,
 } from "@shared/schema";
+import {
+  codeExpiryFrom,
+  describeSpinDiscount,
+  discountFromSlice,
+  generateSpinCode,
+} from "./services/spin-discount-code";
 import {
   buildCyclePrizes,
   pickPrize,
@@ -278,30 +285,86 @@ export function registerDailySpinRoutes(app: Express) {
 
         if (!claimed) return { exhausted: true as const };
 
+        // A slice can pay a discount instead of points. Read first, because a
+        // slice marked "discount" but never configured falls back to its points
+        // value rather than minting a code worth nothing.
+        const discount = discountFromSlice(claimed as any);
+        let mintedCode: { id: string; code: string; label: string; expiresAt: Date } | null = null;
+
+        if (discount) {
+          // The code belongs to the winner. Retried on the unique index rather
+          // than pre-checking, because the check would race anyway.
+          for (let attempt = 0; attempt < 5 && !mintedCode; attempt += 1) {
+            const code = generateSpinCode();
+            const expiresAt = codeExpiryFrom(new Date(), discount.hours);
+            try {
+              const [row] = await tx
+                .insert(discountCodes)
+                .values({
+                  code,
+                  type: discount.type,
+                  value: String(discount.value),
+                  maxUses: 1,
+                  usesCount: 0,
+                  expiresAt,
+                  isActive: true,
+                  assignedUserId: userId,
+                  maxDiscountAmount:
+                    discount.maxAmount != null ? String(discount.maxAmount) : null,
+                  source: "daily_spin",
+                })
+                .returning({ id: discountCodes.id, code: discountCodes.code });
+              mintedCode = {
+                id: row.id,
+                code: row.code,
+                label: describeSpinDiscount(discount),
+                expiresAt,
+              };
+            } catch (err: any) {
+              // 23505 is the unique index on code. Anything else is real.
+              if (err?.code !== "23505") throw err;
+            }
+          }
+          if (!mintedCode) {
+            throw new Error("Could not mint a unique discount code for the daily spin");
+          }
+        }
+
         // Claims the day. Throws 23505 if another request got in first.
         await tx.insert(dailySpinResults).values({
           cycleId: cycle.id,
           prizeId: claimed.id,
           userId,
-          pointsAwarded: claimed.pointsValue,
+          pointsAwarded: discount ? 0 : claimed.pointsValue,
+          discountCodeId: mintedCode?.id ?? null,
           segmentIndex: claimed.segmentIndex,
           spinDate,
           ipAddress: ip,
         });
 
-        await tx
-          .update(users)
-          .set({ ringtonePoints: sql`COALESCE(${users.ringtonePoints}, 0) + ${claimed.pointsValue}` })
-          .where(eq(users.id, userId));
+        if (discount) {
+          await tx.insert(transactions).values({
+            userId,
+            type: "ringtone_points",
+            amount: "0",
+            description: `Daily Spin — ${mintedCode!.label} (code ${mintedCode!.code})`,
+            createdAt: new Date(),
+          });
+        } else {
+          await tx
+            .update(users)
+            .set({ ringtonePoints: sql`COALESCE(${users.ringtonePoints}, 0) + ${claimed.pointsValue}` })
+            .where(eq(users.id, userId));
 
-        // Recorded as ringtone_points so the wallet renders "50 pts", not "£50".
-        await tx.insert(transactions).values({
-          userId,
-          type: "ringtone_points",
-          amount: String(claimed.pointsValue),
-          description: `Daily Spin — ${claimed.pointsValue} points`,
-          createdAt: new Date(),
-        });
+          // Recorded as ringtone_points so the wallet renders "50 pts", not "£50".
+          await tx.insert(transactions).values({
+            userId,
+            type: "ringtone_points",
+            amount: String(claimed.pointsValue),
+            description: `Daily Spin — ${claimed.pointsValue} points`,
+            createdAt: new Date(),
+          });
+        }
 
         // Last prize gone: close the cycle so admins know to start the next.
         const left = await tx
@@ -316,7 +379,7 @@ export function registerDailySpinRoutes(app: Express) {
             .where(eq(dailySpinCycles.id, cycle.id));
         }
 
-        return { exhausted: false as const, prize: claimed };
+        return { exhausted: false as const, prize: claimed, discount: mintedCode };
       });
 
       if (outcome.exhausted) {
@@ -325,7 +388,16 @@ export function registerDailySpinRoutes(app: Express) {
 
       res.json({
         alreadySpun: false,
-        pointsValue: outcome.prize.pointsValue,
+        pointsValue: outcome.discount ? 0 : outcome.prize.pointsValue,
+        // Present only when the slice paid a discount, so the wheel can show
+        // the code rather than a points figure.
+        discount: outcome.discount
+          ? {
+              code: outcome.discount.code,
+              label: outcome.discount.label,
+              expiresAt: outcome.discount.expiresAt,
+            }
+          : null,
         segmentIndex: outcome.prize.segmentIndex,
         nextSpinAt,
       });

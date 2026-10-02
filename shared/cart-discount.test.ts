@@ -44,6 +44,42 @@ describe("discountForCart", () => {
   });
 });
 
+describe("the discount cap", () => {
+  it("stops a percentage running away on a big basket", () => {
+    // 50% of £60 is £30; the prize was only ever meant to be worth £5.
+    expect(discountForCart({ type: "percentage", value: 50, subtotalPence: 6000, maxDiscountPence: 500 })).toBe(500);
+  });
+
+  it("leaves a small basket alone, where the percentage is under the cap", () => {
+    // 50% of £1 is 50p, nowhere near the £5 ceiling.
+    expect(discountForCart({ type: "percentage", value: 50, subtotalPence: 100, maxDiscountPence: 500 })).toBe(50);
+  });
+
+  it("caps a cash code too", () => {
+    expect(discountForCart({ type: "cash", value: 10, subtotalPence: 6000, maxDiscountPence: 300 })).toBe(300);
+  });
+
+  it("is uncapped when no cap is set, as every older code is", () => {
+    for (const cap of [null, undefined, 0, -1]) {
+      expect(discountForCart({ type: "percentage", value: 50, subtotalPence: 6000, maxDiscountPence: cap as any })).toBe(3000);
+    }
+  });
+
+  it("never lets the cap push the discount above the basket", () => {
+    expect(discountForCart({ type: "cash", value: 50, subtotalPence: 200, maxDiscountPence: 5000 })).toBe(200);
+  });
+
+  it("carries the cap through a whole basket quote", () => {
+    const q = quoteCartDiscount({
+      type: "percentage", value: 50, maxDiscountPence: 500,
+      lines: [{ orderId: "a", amountPence: 4000 }, { orderId: "b", amountPence: 2000 }],
+    });
+    expect(q.discountPence).toBe(500);
+    expect(q.totalPence).toBe(5500);
+    expect(q.lines.reduce((s, l) => s + l.discountPence, 0)).toBe(500);
+  });
+});
+
 describe("apportionDiscount", () => {
   const lines = [
     { orderId: "a", amountPence: 1000 },
