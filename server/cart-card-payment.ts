@@ -80,17 +80,29 @@ function ticketPrefix(gameType: string) {
   }
 }
 
+/** The transaction handle Drizzle hands a db.transaction callback. */
+type CartFulfilTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export async function fulfillCartCardPayment(opts: {
   userId: string;
   orderIds: string[];
   pendingPaymentId: string;
   paymentRef: string;
   paidAmount: number;
+  /**
+   * Run inside a transaction the caller already opened.
+   *
+   * The success page settles a payment under an advisory lock so that only one
+   * settler can ever run at a time, and that lock only lasts as long as the
+   * transaction holding it -- so the fulfilment has to happen inside the same
+   * one. Left out, this opens its own as before.
+   */
+  tx?: CartFulfilTx;
 }) {
   const uniqueIds = Array.from(new Set(opts.orderIds));
   if (!uniqueIds.length) return [];
 
-  const generatedByOrder = await db.transaction(async (tx) => {
+  const run = async (tx: CartFulfilTx) => {
     const [existing] = await tx
       .select()
       .from(transactions)
@@ -180,7 +192,9 @@ export async function fulfillCartCardPayment(opts: {
     }
 
     return { issued, newlyIssued };
-  });
+  };
+
+  const generatedByOrder = opts.tx ? await run(opts.tx) : await db.transaction(run);
 
   const [user] = await db.select().from(users).where(eq(users.id, opts.userId)).limit(1);
   const rowsToEmail = generatedByOrder.newlyIssued;

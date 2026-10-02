@@ -4196,7 +4196,128 @@ res.json({
           settledOrders.every((row) => row.status === "completed");
 
         if (!allSettled) {
-          // Nothing to do but wait. Cheap enough for the page to ask often.
+          // Not settled yet. Rather than make the customer wait on Cashflows'
+          // webhook -- which the figures say lands within 18 seconds only about
+          // a quarter of the time -- settle it here, the same way a wallet
+          // top-up does: ask Cashflows whether it was paid, and if so, fulfil.
+          //
+          // The reason this used to be a disaster is that EVERY poll did it,
+          // and fulfilment locks the competition row, so a dozen attempts piled
+          // up behind each other and behind the webhook. Two things stop that
+          // now. The page only asks for it on some of its attempts, and the
+          // work happens under an advisory lock keyed on the payment, taken
+          // with pg_try_advisory_xact_lock -- so a caller that finds someone
+          // else already settling gives up instantly instead of queueing.
+          //
+          // Cashflows is asked outside the transaction, so no lock is ever held
+          // across a network call.
+          const mayVerify = req.body?.verify === true;
+          if (!mayVerify) {
+            return res.status(202).json({
+              success: false,
+              waitingForWebhook: true,
+              message: "Payment is still confirming.",
+            });
+          }
+
+          const pendingForSettle =
+            pendingAny ??
+            (await db.query.pendingPayments.findFirst({
+              where: (p, { eq }) => eq(p.paymentJobReference, paymentJobRef),
+            }));
+
+          if (pendingForSettle && pendingForSettle.status === "pending") {
+            // A failure here means we simply do not know yet. Keep waiting
+            // rather than showing an error over a payment that is probably
+            // fine -- the webhook and the recovery job are both still coming.
+            let liveStatus: string | null = null;
+            let livePaid: unknown = null;
+            try {
+              const payment = await cashflows.getPaymentStatus(paymentJobRef, paymentRef);
+              const normalised = normalizeCashflowsStatus(payment);
+              liveStatus = normalised.status;
+              livePaid = normalised.paidAmount;
+            } catch (verifyError) {
+              console.warn(
+                `Could not reach Cashflows to settle ${paymentJobRef}; waiting for the webhook`,
+                verifyError,
+              );
+            }
+
+            if (liveStatus === "PAID") {
+              await db.transaction(async (tx) => {
+                const guard = await tx.execute(
+                  sql`SELECT pg_try_advisory_xact_lock(hashtext(${paymentJobRef})) AS ok`,
+                );
+                const gotLock = Boolean(firstQueryRow<{ ok: boolean }>(guard)?.ok);
+                // Someone else -- most likely the webhook -- is already on it.
+                if (!gotLock) return;
+
+                // Re-read under the lock: it may have settled while we asked
+                // Cashflows.
+                const [fresh] = await tx
+                  .select()
+                  .from(pendingPayments)
+                  .where(eq(pendingPayments.id, pendingForSettle.id))
+                  .limit(1);
+                if (!fresh || fresh.status !== "pending") return;
+
+                await fulfillCartCardPayment({
+                  userId,
+                  orderIds: settledOrderIds,
+                  pendingPaymentId: pendingForSettle.id,
+                  paymentRef,
+                  paidAmount:
+                    Number(pendingForSettle.amount || order.totalAmount) ||
+                    Number(livePaid) ||
+                    0,
+                  tx,
+                });
+
+                await tx
+                  .update(pendingPayments)
+                  .set({
+                    status: "completed",
+                    paymentReference: paymentRef,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(pendingPayments.id, pendingForSettle.id));
+              });
+
+              // Report on what the settlement actually produced.
+              const after = await db
+                .select()
+                .from(orders)
+                .where(inArray(orders.id, settledOrderIds));
+              if (after.length && after.every((row) => row.status === "completed")) {
+                const head = after.find((row) => row.id === settledOrderIds[0]) || order;
+                const comp = await storage.getCompetition(head.competitionId);
+                const issuedTickets = await db
+                  .select()
+                  .from(tickets)
+                  .where(eq(tickets.orderId, head.id));
+                return res.json({
+                  success: true,
+                  cart: settledOrderIds.length > 1,
+                  orderIds: settledOrderIds,
+                  orderId: head.id,
+                  competitionId: head.competitionId,
+                  competitionType: comp?.type || "competition",
+                  tickets: issuedTickets.map((t) => ({ ticketNumber: t.ticketNumber })),
+                  cardsPurchased: head.quantity,
+                  quantity: head.quantity,
+                  totalAmount: pendingForSettle.amount || head.totalAmount,
+                  cardSpend: parseCashAmount(
+                    pendingForSettle.amount,
+                    head.cashflowsAmount,
+                    head.totalAmount,
+                  ),
+                  generatedImmediately: true,
+                });
+              }
+            }
+          }
+
           return res.status(202).json({
             success: false,
             waitingForWebhook: true,

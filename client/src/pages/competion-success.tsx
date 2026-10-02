@@ -85,12 +85,25 @@ export default function CheckoutSuccess() {
         setTimeout(() => setLocation(isCartCombo ? "/my-plays" : redirectUrl), creditedBack >= 0.01 ? 3200 : 1400);
       };
 
-      for (let attempt = 0; attempt < 12; attempt += 1) {
+      // The old loop was 12 attempts 1.5s apart -- about 18 seconds -- back when
+      // every attempt made the server call Cashflows and try to fulfil the
+      // order. It is now a cheap read, so it can afford to wait properly:
+      // production says only about a quarter of payments settle inside 18
+      // seconds, so that window was failing people whose money had been taken.
+      //
+      // `verify` asks the server to settle the payment itself rather than wait
+      // for the webhook. Sent on the first attempt and then occasionally, so a
+      // customer is not left waiting on Cashflows' webhook, without going back
+      // to every poll doing it -- which is what caused the pile-up.
+      const MAX_ATTEMPTS = 60;
+      const POLL_MS = 1500;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
         try {
           const res = await apiRequest("/api/payment-success/competition", "POST", {
             paymentJobRef,
             paymentRef,
             orderId,
+            verify: attempt === 0 || attempt % 4 === 0,
           });
           const data = await res.json();
           if (res.status === 200 && data.success && !data.waitingForWebhook) {
@@ -138,7 +151,7 @@ export default function CheckoutSuccess() {
             return;
           }
         }
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
       }
 
       setFailed(true);
