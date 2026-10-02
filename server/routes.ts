@@ -4153,70 +4153,23 @@ res.json({
             .json({ message: "Missing paymentJobRef, paymentRef or orderId" });
         }
   
-        console.log("🔍 Confirming Cashflows payment:", {
-          paymentJobRef,
-          paymentRef,
-          orderId,
-        });
-  
-        // Verify payment with Cashflows
-        const payment = await cashflows.getPaymentStatus(
-          paymentJobRef,
-          paymentRef
-        );
-  
-        const { status: paymentStatus, paidAmount } = normalizeCashflowsStatus(payment);
-  
-        console.log("📊 Payment Status:", paymentStatus);
-  
-        const user = await storage.getUser(userId);
-        const balance = parseFloat(user?.balance || "0");
-  
-        if (paymentStatus === "FAILED") {
-          await db.insert(auditLogs).values({
-            userId,
-            userName:
-              `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-              "Customer",
-            email: user?.email || "",
-            action: "payment_failed",
-            description: `Payment failed for order ${orderId}. Status: ${paymentStatus}`,
-            startBalance: balance,
-            endBalance: balance,
-            createdAt: new Date(),
-          });
-  
-          return res.status(400).json({
-            success: false,
-            message: `Payment not completed. Status: ${paymentStatus}`,
-          });
-        }
-
-        if (paymentStatus !== "PAID") {
-          return res.status(202).json({
-            success: false,
-            waitingForWebhook: true,
-            message: "Payment is still confirming.",
-          });
-        }
-  
-        // Get order
+        // Read-only. This endpoint used to verify the payment with Cashflows
+        // and then fulfil the order itself, which meant it raced the webhook to
+        // do identical work. Issuing tickets takes `SELECT ... FOR UPDATE` on
+        // the competition row (services/instant-win-pool.ts), one row shared by
+        // everyone buying that competition, so the page and the webhook blocked
+        // each other and every retry stacked another waiting transaction behind
+        // them. One customer sat on "Confirming your payment" for 170 seconds
+        // while Cashflows had already reported PAID within 20.
+        //
+        // Settlement is now the webhook's job alone. This only reports whether
+        // it has happened. That is safe because an order only ever reaches
+        // "completed" after money actually moved -- the webhook checks
+        // Cashflows for card payments, and the wallet/points routes complete an
+        // order only when the balance covered it in full, returning a redirect
+        // and leaving the order pending otherwise.
         const order = await storage.getOrder(orderId);
-        console.log(order)
         if (!order || order.userId !== userId) {
-          await db.insert(auditLogs).values({
-            userId,
-            userName:
-              `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-              "Customer",
-            email: user?.email || "",
-            action: "order_not_found",
-            description: `Order ${orderId} not found or belongs to wrong user`,
-            startBalance: balance,
-            endBalance: balance,
-            createdAt: new Date(),
-          });
-  
           return res
             .status(404)
             .json({ message: "Order not found or belongs to wrong user" });
@@ -4227,231 +4180,174 @@ res.json({
         });
         const cartOrderIds = cartOrderIdsFromMetadata(pendingAny?.metadata);
 
-        if (pendingAny && cartOrderIds.length) {
-          if (!cartOrderIds.includes(orderId)) {
-            return res.status(404).json({ message: "Order not found for this payment" });
-          }
-          const issued = await fulfillCartCardPayment({
-            userId,
-            orderIds: cartOrderIds,
-            pendingPaymentId: pendingAny.id,
-            paymentRef,
-            paidAmount: Number(pendingAny.amount || order.totalAmount) || 0,
-          });
-
-          if (pendingAny.status === "pending") {
-            await db
-              .update(pendingPayments)
-              .set({
-                status: "completed",
-                paymentReference: paymentRef,
-                updatedAt: new Date(),
-              })
-              .where(eq(pendingPayments.id, pendingAny.id));
-          }
-
-          const firstIssued = issued[0];
-          const firstOrder = await storage.getOrder(cartOrderIds[0]);
-          const firstCompetition = firstOrder
-            ? await storage.getCompetition(firstOrder.competitionId)
-            : null;
-
-          return res.json({
-            success: true,
-            cart: cartOrderIds.length > 1,
-            orderIds: cartOrderIds,
-            orderId: cartOrderIds[0],
-            competitionId: firstOrder?.competitionId || order.competitionId,
-            competitionType: firstCompetition?.type || "competition",
-            tickets: firstIssued?.tickets || [],
-            cardsPurchased: firstOrder?.quantity || order.quantity,
-            quantity: firstOrder?.quantity || order.quantity,
-            totalAmount: pendingAny.amount || order.totalAmount,
-            cardSpend: parseCashAmount(pendingAny.amount, paidAmount),
-            generatedImmediately: true,
-          });
+        if (pendingAny && cartOrderIds.length && !cartOrderIds.includes(orderId)) {
+          return res.status(404).json({ message: "Order not found for this payment" });
         }
-  
-        // Get competition
-        const competition = await storage.getCompetition(order.competitionId);
-  
-        // Check if order is already completed
-        if (order.status === "completed") {
-          console.log("⚠️ Order already completed");
-          
-          // Get the tickets for this order
-          const orderTickets = await db
-            .select()
-            .from(tickets)
-            .where(eq(tickets.orderId, orderId));
-  
-          return res.json({
-            success: true,
-            orderId,
-            competitionId: order.competitionId,
-            competitionType: competition?.type || "competition",
-            tickets: orderTickets.map(t => ({ ticketNumber: t.ticketNumber })),
-            cardsPurchased: order.quantity,
-            quantity: order.quantity,
-            totalAmount: order.totalAmount,
-            cardSpend: parseCashAmount(order.cashflowsAmount, pendingAny?.amount, paidAmount),
-          });
-        }
-  
-        // For instant play payments, generate tickets immediately
-        if (order.paymentMethod === "instaplay" || String(order.paymentMethod || "").includes("Cashflow")) {
-          // Check if there's a pending payment record or create one
-          let pending = await db.query.pendingPayments.findFirst({
-            where: (p, { eq, and }) => and(
-              eq(p.paymentJobReference, paymentJobRef),
-              eq(p.status, "pending")
-            ),
-          });
-  
-          // Create pending payment if it doesn't exist
-          // if (!pending) {
-          //   const [newPending] = await db.insert(pendingPayments).values({
-          //     userId,
-          //     orderId,
-          //     paymentType: "instant_play",
-          //     paymentJobReference: paymentJobRef,
-          //     paymentReference: paymentRef,
-          //     amount: parseFloat(order.totalAmount),
-          //     status: "pending",
-          //     metadata: {
-          //       gameType: competition?.type || 'scratch',
-          //       competitionType: competition?.type,
-          //     },
-          //     createdAt: new Date(),
-          //   }).returning();
-            
-          //   pending = newPending;
-          // }
 
-          if (!pending) {
-            const [anyPending] = await db
-              .select()
-              .from(pendingPayments)
-              .where(eq(pendingPayments.paymentJobReference, paymentJobRef))
-              .limit(1);
-            if (anyPending) {
-              pending = anyPending;
-            } else {
-              const [created] = await db
-                .insert(pendingPayments)
-                .values({
+        // A basket settles as one unit, so report on the order the customer
+        // arrived with and treat the basket as done when its orders are.
+        const settledOrderIds = cartOrderIds.length ? cartOrderIds : [orderId];
+        const settledOrders = await db
+          .select()
+          .from(orders)
+          .where(inArray(orders.id, settledOrderIds));
+        const allSettled =
+          settledOrders.length > 0 &&
+          settledOrders.every((row) => row.status === "completed");
+
+        if (!allSettled) {
+          // Not settled yet. Rather than make the customer wait on Cashflows'
+          // webhook -- which the figures say lands within 18 seconds only about
+          // a quarter of the time -- settle it here, the same way a wallet
+          // top-up does: ask Cashflows whether it was paid, and if so, fulfil.
+          //
+          // The reason this used to be a disaster is that EVERY poll did it,
+          // and fulfilment locks the competition row, so a dozen attempts piled
+          // up behind each other and behind the webhook. Two things stop that
+          // now. The page only asks for it on some of its attempts, and the
+          // work happens under an advisory lock keyed on the payment, taken
+          // with pg_try_advisory_xact_lock -- so a caller that finds someone
+          // else already settling gives up instantly instead of queueing.
+          //
+          // Cashflows is asked outside the transaction, so no lock is ever held
+          // across a network call.
+          const mayVerify = req.body?.verify === true;
+          if (!mayVerify) {
+            return res.status(202).json({
+              success: false,
+              waitingForWebhook: true,
+              message: "Payment is still confirming.",
+            });
+          }
+
+          const pendingForSettle =
+            pendingAny ??
+            (await db.query.pendingPayments.findFirst({
+              where: (p, { eq }) => eq(p.paymentJobReference, paymentJobRef),
+            }));
+
+          if (pendingForSettle && pendingForSettle.status === "pending") {
+            // A failure here means we simply do not know yet. Keep waiting
+            // rather than showing an error over a payment that is probably
+            // fine -- the webhook and the recovery job are both still coming.
+            let liveStatus: string | null = null;
+            let livePaid: unknown = null;
+            try {
+              const payment = await cashflows.getPaymentStatus(paymentJobRef, paymentRef);
+              const normalised = normalizeCashflowsStatus(payment);
+              liveStatus = normalised.status;
+              livePaid = normalised.paidAmount;
+            } catch (verifyError) {
+              console.warn(
+                `Could not reach Cashflows to settle ${paymentJobRef}; waiting for the webhook`,
+                verifyError,
+              );
+            }
+
+            if (liveStatus === "PAID") {
+              await db.transaction(async (tx) => {
+                const guard = await tx.execute(
+                  sql`SELECT pg_try_advisory_xact_lock(hashtext(${paymentJobRef})) AS ok`,
+                );
+                const gotLock = Boolean(firstQueryRow<{ ok: boolean }>(guard)?.ok);
+                // Someone else -- most likely the webhook -- is already on it.
+                if (!gotLock) return;
+
+                // Re-read under the lock: it may have settled while we asked
+                // Cashflows.
+                const [fresh] = await tx
+                  .select()
+                  .from(pendingPayments)
+                  .where(eq(pendingPayments.id, pendingForSettle.id))
+                  .limit(1);
+                if (!fresh || fresh.status !== "pending") return;
+
+                await fulfillCartCardPayment({
                   userId,
-                  orderId,
-                  paymentType: "instant_play",
-                  paymentJobReference: paymentJobRef,
-                  paymentReference: paymentRef,
-                  amount: String(parseCashAmount(paidAmount, order.totalAmount)),
-                  status: "pending",
-                  metadata: {
-                    gameType: competition?.type || "scratch",
-                    competitionType: competition?.type,
-                    recovered: true,
-                  },
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                })
-                .returning();
-              pending = created;
+                  orderIds: settledOrderIds,
+                  pendingPaymentId: pendingForSettle.id,
+                  paymentRef,
+                  paidAmount:
+                    Number(pendingForSettle.amount || order.totalAmount) ||
+                    Number(livePaid) ||
+                    0,
+                  tx,
+                });
+
+                await tx
+                  .update(pendingPayments)
+                  .set({
+                    status: "completed",
+                    paymentReference: paymentRef,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(pendingPayments.id, pendingForSettle.id));
+              });
+
+              // Report on what the settlement actually produced.
+              const after = await db
+                .select()
+                .from(orders)
+                .where(inArray(orders.id, settledOrderIds));
+              if (after.length && after.every((row) => row.status === "completed")) {
+                const head = after.find((row) => row.id === settledOrderIds[0]) || order;
+                const comp = await storage.getCompetition(head.competitionId);
+                const issuedTickets = await db
+                  .select()
+                  .from(tickets)
+                  .where(eq(tickets.orderId, head.id));
+                return res.json({
+                  success: true,
+                  cart: settledOrderIds.length > 1,
+                  orderIds: settledOrderIds,
+                  orderId: head.id,
+                  competitionId: head.competitionId,
+                  competitionType: comp?.type || "competition",
+                  tickets: issuedTickets.map((t) => ({ ticketNumber: t.ticketNumber })),
+                  cardsPurchased: head.quantity,
+                  quantity: head.quantity,
+                  totalAmount: pendingForSettle.amount || head.totalAmount,
+                  cardSpend: parseCashAmount(
+                    pendingForSettle.amount,
+                    head.cashflowsAmount,
+                    head.totalAmount,
+                  ),
+                  generatedImmediately: true,
+                });
+              }
             }
           }
-  
-          if (pending) {
-            // Process the instant play purchase IMMEDIATELY
-            // This creates tickets right away without waiting for webhook
-            const tickets = await processInstantPlayPurchase(
-              userId,
-              orderId,
-              pending.id,
-              paymentRef,
-              order.quantity,
-              parseFloat(order.totalAmount),
-              competition?.type || 'scratch'
-            );
-  
-            // Update pending payment status to completed
-            await db.update(pendingPayments)
-              .set({ 
-                status: "completed",
-                updatedAt: new Date()
-              })
-              .where(eq(pendingPayments.id, pending.id));
-  
-            // Log success
-            await db.insert(auditLogs).values({
-              userId,
-              userName:
-                `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-                "Customer",
-              email: user?.email || "",
-              action: "instant_play_completed",
-              competitionId: order.competitionId,
-              description: `Instant play purchase completed immediately: ${order.quantity} tickets for £${order.totalAmount}`,
-              startBalance: balance,
-              endBalance: balance,
-              createdAt: new Date(),
-            });
-  
-            console.log("✅ Instant play tickets generated immediately:", {
-              orderId,
-              ticketCount: tickets.length,
-              gameType: competition?.type
-            });
-  
-            return res.json({
-              success: true,
-              orderId,
-              competitionId: order.competitionId,
-              competitionType: competition?.type || "competition",
-              tickets: tickets.map(t => ({ ticketNumber: t.ticketNumber })),
-              cardsPurchased: order.quantity,
-              quantity: order.quantity,
-              totalAmount: order.totalAmount,
-              cardSpend: parseCashAmount(pending.amount, paidAmount),
-              generatedImmediately: true
-            });
-          }
+
+          return res.status(202).json({
+            success: false,
+            waitingForWebhook: true,
+            message: "Payment is still confirming.",
+          });
         }
-  
-        // For non-instant play or fallback, wait for webhook
-        await db.insert(auditLogs).values({
-          userId,
-          userName:
-            `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-            "Customer",
-          email: user?.email || "",
-          action: "payment_verified_waiting_webhook",
-          competitionId: order.competitionId,
-          description: `Payment verified for order ${orderId}, waiting for webhook processing`,
-          startBalance: balance,
-          endBalance: balance,
-          createdAt: new Date(),
-        });
-  
-        const recoveredPending = await db.query.pendingPayments.findFirst({
-          where: (p, { eq }) => eq(p.paymentJobReference, paymentJobRef),
-        });
-        const tickets = await processInstantPlayPurchase(
-          userId,
-          orderId,
-          recoveredPending?.id || pendingAny?.id,
-          paymentRef,
-          order.quantity,
-          parseCashAmount(paidAmount, recoveredPending?.amount, order.totalAmount),
-          competition?.type || "competition",
-        );
+
+        const headOrder = settledOrders.find((row) => row.id === settledOrderIds[0]) || order;
+        const competition = await storage.getCompetition(headOrder.competitionId);
+        const orderTickets = await db
+          .select()
+          .from(tickets)
+          .where(eq(tickets.orderId, headOrder.id));
 
         return res.json({
           success: true,
-          orderId,
-          competitionId: order.competitionId,
+          cart: settledOrderIds.length > 1,
+          orderIds: settledOrderIds,
+          orderId: headOrder.id,
+          competitionId: headOrder.competitionId,
           competitionType: competition?.type || "competition",
-          tickets: tickets.map((t: any) => ({ ticketNumber: t.ticketNumber })),
-          cardSpend: parseCashAmount(paidAmount, recoveredPending?.amount),
+          tickets: orderTickets.map((t) => ({ ticketNumber: t.ticketNumber })),
+          cardsPurchased: headOrder.quantity,
+          quantity: headOrder.quantity,
+          totalAmount: pendingAny?.amount || headOrder.totalAmount,
+          cardSpend: parseCashAmount(
+            pendingAny?.amount,
+            headOrder.cashflowsAmount,
+            headOrder.totalAmount,
+          ),
           generatedImmediately: true,
         });
       } catch (error: any) {
