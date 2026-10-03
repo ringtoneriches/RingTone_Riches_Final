@@ -15,6 +15,12 @@ export type SpinPrize = {
   quantity: number;
   remaining: number;
   segmentIndex: number;
+  /** What this slice pays. Absent on older callers, which means points. */
+  rewardKind?: string | null;
+  discountType?: string | null;
+  discountValue?: string | number | null;
+  discountMaxAmount?: string | number | null;
+  discountHours?: number | null;
 };
 
 /**
