@@ -110,6 +110,11 @@ async function getCyclePrizes(cycleId: string): Promise<SpinPrize[]> {
     quantity: r.quantity,
     remaining: r.remaining,
     segmentIndex: r.segmentIndex,
+    rewardKind: r.rewardKind,
+    discountType: r.discountType,
+    discountValue: r.discountValue,
+    discountMaxAmount: r.discountMaxAmount,
+    discountHours: r.discountHours,
   }));
 }
 
@@ -170,10 +175,15 @@ export function registerDailySpinRoutes(app: Express) {
       res.json({
         enabled: true,
         eligible: true,
-        segments: prizes.map((p) => ({
-          segmentIndex: p.segmentIndex,
-          pointsValue: p.pointsValue,
-        })),
+        segments: prizes.map((p) => {
+          const d = discountFromSlice(p as any);
+          return {
+            segmentIndex: p.segmentIndex,
+            pointsValue: d ? 0 : p.pointsValue,
+            // What to print on the slice. Null means points, as before.
+            discountLabel: d ? describeSpinDiscount(d) : null,
+          };
+        }),
         hasSpunToday: Boolean(todays),
         lastResult: todays
           ? { pointsValue: todays.pointsAwarded, segmentIndex: todays.segmentIndex }
@@ -558,12 +568,49 @@ export function registerDailySpinRoutes(app: Express) {
           .json({ message: `${awarded} of these have already gone out; quantity cannot be lower` });
       }
 
+      // What this slice pays. Left alone unless the admin actually sent it, so
+      // the existing quantity-only save keeps working untouched.
+      const rewardKind = req.body?.rewardKind;
+      let rewardPatch: Record<string, unknown> = {};
+      if (rewardKind === "points") {
+        rewardPatch = {
+          rewardKind: "points",
+          discountType: null,
+          discountValue: null,
+          discountMaxAmount: null,
+        };
+      } else if (rewardKind === "discount") {
+        const type = req.body?.discountType;
+        const value = Number(req.body?.discountValue);
+        if (type !== "percentage" && type !== "cash") {
+          return res.status(400).json({ message: "Choose a percentage or a cash discount" });
+        }
+        if (!Number.isFinite(value) || value <= 0) {
+          return res.status(400).json({ message: "The discount needs a value above zero" });
+        }
+        if (type === "percentage" && value > 100) {
+          return res.status(400).json({ message: "A percentage cannot be more than 100" });
+        }
+        const cap = Number(req.body?.discountMaxAmount);
+        const hours = Number(req.body?.discountHours);
+        rewardPatch = {
+          rewardKind: "discount",
+          discountType: type,
+          discountValue: String(value),
+          // No cap means uncapped, which on a percentage is an open cheque
+          // against the basket total. Allowed, but it has to be deliberate.
+          discountMaxAmount: Number.isFinite(cap) && cap > 0 ? String(cap) : null,
+          discountHours: Number.isFinite(hours) && hours > 0 ? Math.round(hours) : 48,
+        };
+      }
+
       const [updated] = await db
         .update(dailySpinPrizes)
         .set({
           quantity,
           remaining: quantity - awarded,
           ...(pointsValue && pointsValue > 0 ? { pointsValue } : {}),
+          ...rewardPatch,
           updatedAt: new Date(),
         })
         .where(eq(dailySpinPrizes.id, prize.id))
