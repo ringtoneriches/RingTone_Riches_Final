@@ -90,27 +90,65 @@ describe("summarisePool", () => {
 });
 
 describe("buildCyclePrizes", () => {
-  it("maps the agreed tiers onto the wheel's 8 segments", () => {
+  it("maps the wheel's 8 segments to what the artwork says", () => {
     const rows = buildCyclePrizes();
     expect(rows).toHaveLength(8);
     expect(rows.map((r) => r.segmentIndex)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
-    // Clockwise from the top, matching the wheel artwork. This is the mapping
-    // that decides which wedge the pointer stops on, so it is asserted exactly.
-    expect(rows.map((r) => r.pointsValue)).toEqual([10, 500, 25, 150, 75, 100, 50, 250]);
+
+    // Clockwise from the top, exactly as painted on
+    // attached_assets/daily-spin-wheel.svg. This is the mapping that decides
+    // which wedge the pointer stops on, so if it ever drifts the member is
+    // credited one prize while the wheel shows another.
+    //
+    //   0  10 POINTS      1  50% DISCOUNT   2  25 POINTS     3  10% DISCOUNT
+    //   4  75 POINTS      5   5% DISCOUNT   6  50 POINTS     7  20% DISCOUNT
+    expect(rows.map((r) => r.rewardKind)).toEqual([
+      "points", "discount", "points", "discount",
+      "points", "discount", "points", "discount",
+    ]);
+    expect(rows.map((r) => r.pointsValue)).toEqual([10, 0, 25, 0, 75, 0, 50, 0]);
+    expect(rows.map((r) => r.discountValue)).toEqual([
+      null, "50", null, "10", null, "5", null, "20",
+    ]);
+
     // A fresh cycle starts with everything in stock.
     expect(rows.every((r) => r.remaining === r.quantity)).toBe(true);
   });
 
-  it("the default cycle costs what we expect", () => {
+  it("caps every discount slice, so a percentage cannot run away on a big basket", () => {
+    const discounts = buildCyclePrizes().filter((r) => r.rewardKind === "discount");
+    expect(discounts).toHaveLength(4);
+    for (const d of discounts) {
+      expect(Number(d.discountMaxAmount)).toBeGreaterThan(0);
+      // Nothing on a free daily spin should be worth more than a few pounds.
+      expect(Number(d.discountMaxAmount)).toBeLessThanOrEqual(5);
+      expect(d.discountHours).toBe(48);
+    }
+  });
+
+  it("the default cycle costs what we expect in points", () => {
     const s = summarisePool(buildCyclePrizes().map((r, i) => ({ ...r, id: String(i) })));
-    expect(s.totalSpins).toBe(5000);
-    expect(s.totalPoints).toBe(166750);
-    expect(s.liabilityGbp).toBeCloseTo(1667.5, 2);
+    expect(s.totalSpins).toBe(6125);
+    // Only the four points slices carry a points liability; the discount
+    // slices cost nothing until someone actually spends the code.
+    expect(s.totalPoints).toBe(10 * 2000 + 25 * 1500 + 75 * 400 + 50 * 800);
+    expect(s.liabilityGbp).toBeCloseTo(1275, 2);
+  });
+
+  it("the worst case on the discount slices is a number we can state", () => {
+    const rows = buildCyclePrizes();
+    const exposure = rows
+      .filter((r) => r.rewardKind === "discount")
+      .reduce((sum, r) => sum + r.quantity * Number(r.discountMaxAmount), 0);
+    // 25x£5 + 400x£2 + 800x£1 + 200x£3 — every code won and spent to its cap.
+    expect(exposure).toBe(2325);
   });
 
   it("accepts custom tiers so each cycle can be rebalanced", () => {
     const rows = buildCyclePrizes([{ pointsValue: 20, quantity: 3 }]);
-    expect(rows).toEqual([{ pointsValue: 20, quantity: 3, remaining: 3, segmentIndex: 0 }]);
+    expect(rows[0]).toMatchObject({
+      pointsValue: 20, quantity: 3, remaining: 3, segmentIndex: 0, rewardKind: "points",
+    });
   });
 });
 
