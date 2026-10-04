@@ -129,7 +129,7 @@ export default function DailySpinPrompt({ hidden = false }: { hidden?: boolean }
             <p className="rr-spin-modal-kicker">Members only · free every day</p>
             <h2 className="rr-spin-modal-title">YOUR FREE SPIN IS READY</h2>
             <p className="rr-spin-modal-text">
-              Win up to 500 Ringtone Points to spend on games. No purchase, one spin a day.
+              Win Ringtone Points or money off your next order. No purchase, one spin a day.
             </p>
 
             <Link href="/daily-spin">

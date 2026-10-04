@@ -16,6 +16,12 @@ type Prize = {
   quantity: number;
   remaining: number;
   segmentIndex: number;
+  /** "points" or "discount". Missing on older rows, which means points. */
+  rewardKind?: string | null;
+  discountType?: string | null;
+  discountValue?: string | number | null;
+  discountMaxAmount?: string | number | null;
+  discountHours?: number | null;
 };
 
 type Cycle = {
@@ -69,23 +75,50 @@ function cleanError(error: any, fallback: string) {
 /** One prize tier. Quantity is editable while the cycle is not running. */
 function PrizeRow({ prize, locked }: { prize: Prize; locked: boolean }) {
   const [quantity, setQuantity] = useState(String(prize.quantity));
+  const [kind, setKind] = useState(prize.rewardKind === "discount" ? "discount" : "points");
+  const [dType, setDType] = useState(prize.discountType === "cash" ? "cash" : "percentage");
+  const [dValue, setDValue] = useState(prize.discountValue != null ? String(prize.discountValue) : "");
+  const [dCap, setDCap] = useState(prize.discountMaxAmount != null ? String(prize.discountMaxAmount) : "");
+  const [dHours, setDHours] = useState(String(prize.discountHours ?? 48));
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const awarded = prize.quantity - prize.remaining;
 
-  // Keep the field in step when the cycle is reloaded or replaced.
+  // Keep the fields in step when the cycle is reloaded or replaced.
   useEffect(() => setQuantity(String(prize.quantity)), [prize.quantity]);
+  useEffect(() => {
+    setKind(prize.rewardKind === "discount" ? "discount" : "points");
+    setDType(prize.discountType === "cash" ? "cash" : "percentage");
+    setDValue(prize.discountValue != null ? String(prize.discountValue) : "");
+    setDCap(prize.discountMaxAmount != null ? String(prize.discountMaxAmount) : "");
+    setDHours(String(prize.discountHours ?? 48));
+  }, [prize.rewardKind, prize.discountType, prize.discountValue, prize.discountMaxAmount, prize.discountHours]);
 
   const save = useMutation({
     mutationFn: async () => {
       const res = await apiRequest(`/api/admin/daily-spin/prizes/${prize.id}`, "PATCH", {
         quantity: Number(quantity),
+        rewardKind: kind,
+        ...(kind === "discount"
+          ? {
+              discountType: dType,
+              discountValue: Number(dValue),
+              discountMaxAmount: dCap.trim() === "" ? null : Number(dCap),
+              discountHours: Number(dHours),
+            }
+          : {}),
       });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/daily-spin"] });
-      toast({ title: "Quantity updated", description: `${prize.pointsValue} points` });
+      toast({
+        title: "Segment updated",
+        description:
+          kind === "discount"
+            ? `${dValue}${dType === "percentage" ? "% off" : " off"}${dCap ? `, up to £${dCap}` : ""}`
+            : `${prize.pointsValue} points`,
+      });
     },
     onError: (error: any) =>
       toast({
@@ -96,14 +129,83 @@ function PrizeRow({ prize, locked }: { prize: Prize; locked: boolean }) {
   });
 
   const pct = prize.quantity > 0 ? Math.round((prize.remaining / prize.quantity) * 100) : 0;
-  const changed = quantity !== String(prize.quantity);
+  const changed =
+    quantity !== String(prize.quantity) ||
+    kind !== (prize.rewardKind === "discount" ? "discount" : "points") ||
+    (kind === "discount" &&
+      (dType !== (prize.discountType === "cash" ? "cash" : "percentage") ||
+        dValue !== (prize.discountValue != null ? String(prize.discountValue) : "") ||
+        dCap !== (prize.discountMaxAmount != null ? String(prize.discountMaxAmount) : "") ||
+        dHours !== String(prize.discountHours ?? 48)));
   const invalid = !Number.isFinite(Number(quantity)) || Number(quantity) < awarded;
 
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-white/5 px-4 py-3 last:border-b-0">
       <div className="w-20 shrink-0">
         <p className="rr-admin-kicker">Segment {prize.segmentIndex + 1}</p>
-        <p className="font-prize text-xl text-[#F1D47A]">{prize.pointsValue}</p>
+        <p className="font-prize text-xl text-[#F1D47A]">
+          {kind === "discount"
+            ? dValue
+              ? `${dValue}${dType === "percentage" ? "%" : "£"}`
+              : "—"
+            : prize.pointsValue}
+        </p>
+      </div>
+
+      {/* What this slice pays. Points unless told otherwise, so an untouched
+          cycle keeps paying exactly what it paid before. */}
+      <div className="flex min-w-[260px] flex-wrap items-center gap-2">
+        <select
+          value={kind}
+          onChange={(e) => setKind(e.target.value)}
+          disabled={locked}
+          className="h-9 rounded-md border border-white/15 bg-black/40 px-2 text-sm text-white disabled:opacity-40"
+          data-testid={`select-reward-kind-${prize.segmentIndex}`}
+        >
+          <option value="points">Points</option>
+          <option value="discount">Discount code</option>
+        </select>
+
+        {kind === "discount" && (
+          <>
+            <select
+              value={dType}
+              onChange={(e) => setDType(e.target.value)}
+              disabled={locked}
+              className="h-9 rounded-md border border-white/15 bg-black/40 px-2 text-sm text-white disabled:opacity-40"
+              data-testid={`select-discount-type-${prize.segmentIndex}`}
+            >
+              <option value="percentage">% off</option>
+              <option value="cash">£ off</option>
+            </select>
+            <Input
+              value={dValue}
+              onChange={(e) => setDValue(e.target.value)}
+              disabled={locked}
+              placeholder={dType === "percentage" ? "20" : "5"}
+              className="h-9 w-20"
+              data-testid={`input-discount-value-${prize.segmentIndex}`}
+            />
+            <Input
+              value={dCap}
+              onChange={(e) => setDCap(e.target.value)}
+              disabled={locked}
+              placeholder="cap £"
+              title="The most this code can take off. Leave empty for no cap."
+              className="h-9 w-24"
+              data-testid={`input-discount-cap-${prize.segmentIndex}`}
+            />
+            <Input
+              value={dHours}
+              onChange={(e) => setDHours(e.target.value)}
+              disabled={locked}
+              placeholder="48"
+              title="Hours the winner has to spend it."
+              className="h-9 w-20"
+              data-testid={`input-discount-hours-${prize.segmentIndex}`}
+            />
+          </>
+        )}
       </div>
 
       <div className="min-w-[140px] flex-1">
