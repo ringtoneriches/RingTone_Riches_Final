@@ -5712,6 +5712,7 @@ html.rr-day [role="dialog"] .text-white\/55,
 html.rr-day [data-radix-dialog-content] .text-white\/55 {
   color: rgba(255, 255, 255, 0.55) !important;
 }
+html.rr-day .bg-\[\#0A0A0D\] .text-white\/50,
 html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/50,
 html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/50,
 html.rr-day .bg-\[\#0A0A0D\]\/75 .text-white\/50,
@@ -5742,6 +5743,37 @@ html.rr-day .bg-zinc-900 .text-white\/35,
 html.rr-day .rr-billing .rr-chaser .text-white\/35,
 html.rr-day [role="dialog"] .text-white\/35 {
   color: rgba(255, 255, 255, 0.35) !important;
+}
+
+/* The faintest variants, which the run above stopped short of.
+ *
+ * A dark panel keeps its dark background in day mode, so any white text inside
+ * it has to stay white. The global day rules flip .text-white/NN to dark ink,
+ * and these panel-scoped rules put it back -- but they covered 35, 40, 45, 55,
+ * 60, 70 and 80 and skipped 50 and 30. The results table after a game writes
+ * its ticket column at /50 and its "Lose" label at /30, so both rendered
+ * near-black on a near-black card: a measured contrast of 11 out of 255, which
+ * reads as an empty column. The gold prize beside them was unaffected, so a
+ * winning row looked like it had simply lost its ticket number. */
+html.rr-day .bg-\[\#0A0A0D\] .text-white\/30,
+html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/30,
+html.rr-day .bg-\[\#0A0A0D\]\/80 .text-white\/30,
+html.rr-day .bg-zinc-900 .text-white\/30,
+html.rr-day [role="dialog"] .text-white\/30,
+html.rr-day [data-radix-dialog-content] .text-white\/30 {
+  color: rgba(255, 255, 255, 0.34) !important;
+}
+html.rr-day .bg-\[\#0A0A0D\] .text-white\/25,
+html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/25,
+html.rr-day .bg-zinc-900 .text-white\/25,
+html.rr-day [role="dialog"] .text-white\/25 {
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+html.rr-day .bg-\[\#0A0A0D\] .text-white\/20,
+html.rr-day .bg-\[\#0A0A0D\]\/90 .text-white\/20,
+html.rr-day .bg-zinc-900 .text-white\/20,
+html.rr-day [role="dialog"] .text-white\/20 {
+  color: rgba(255, 255, 255, 0.26) !important;
 }
 
 html.rr-day .bg-\[\#0A0A0D\] .text-gray-100,
