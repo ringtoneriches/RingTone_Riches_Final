@@ -133,7 +133,7 @@ export default function DailySpinPage() {
                 DAILY SPIN
               </h1>
               <p className="mx-auto mt-3 max-w-lg text-sm text-white/50 sm:text-base">
-                One free spin every day. Win Ringtone Points to spend on games — no purchase, no catch.
+                One free spin every day. Win Ringtone Points or money off your next order — no purchase, no catch.
               </p>
             </div>
 
