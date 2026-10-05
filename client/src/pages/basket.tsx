@@ -151,15 +151,50 @@ export default function BasketPage() {
   // the real order totals, so the preview and the charge cannot drift apart.
   const [discountInput, setDiscountInput] = useState("");
   const [appliedCode, setAppliedCode] = useState<
-    { code: string; type: CartDiscountType; value: number } | null
+    { code: string; type: CartDiscountType; value: number; maxDiscountAmount?: number | null; label?: string } | null
   >(null);
   const [discountError, setDiscountError] = useState("");
+  // Set when the code was put on automatically rather than typed, so the
+  // basket can say where it came from instead of showing a code to copy.
+  const [autoApplied, setAutoApplied] = useState(false);
+  // Remembered for this visit so removing a prize does not have it reappear on
+  // the next render.
+  const [autoDeclined, setAutoDeclined] = useState(false);
+
+  /**
+   * A discount won on the daily spin belongs to this account already, so there
+   * is nothing to type. It goes on by itself and can be taken off again if
+   * they would rather save it for a bigger order.
+   */
+  const { data: autoDiscount } = useQuery<{
+    discount: { code: string; type: CartDiscountType; value: number; maxDiscountAmount: number | null; label: string } | null;
+  }>({
+    queryKey: ["/api/user/auto-discount"],
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (appliedCode || autoDeclined || !items.length) return;
+    const d = autoDiscount?.discount;
+    if (!d) return;
+    setAppliedCode({
+      code: d.code,
+      type: d.type,
+      value: Number(d.value),
+      maxDiscountAmount: d.maxDiscountAmount,
+      label: d.label,
+    });
+    setAutoApplied(true);
+  }, [autoDiscount, appliedCode, autoDeclined, items.length]);
 
   const discountPreview = useMemo(() => {
     if (!appliedCode || !items.length) return null;
     return quoteCartDiscount({
       type: appliedCode.type,
       value: appliedCode.value,
+      maxDiscountPence:
+        appliedCode.maxDiscountAmount != null ? poundsToPence(appliedCode.maxDiscountAmount) : null,
       lines: items.map((item) => ({
         orderId: item.competitionId,
         amountPence: poundsToPence(
@@ -178,7 +213,13 @@ export default function BasketPage() {
       return res.json();
     },
     onSuccess: (data: any) => {
-      setAppliedCode({ code: data.code, type: data.type, value: Number(data.value) });
+      setAppliedCode({
+        code: data.code,
+        type: data.type,
+        value: Number(data.value),
+        maxDiscountAmount: data.maxDiscountAmount ?? null,
+      });
+      setAutoApplied(false);
       setDiscountError("");
       setDiscountInput("");
     },
@@ -639,7 +680,8 @@ export default function BasketPage() {
                         {discountSaving > 0 && appliedCode && (
                           <div className="flex justify-between text-[#F1D47A]">
                             <span className="inline-flex items-center gap-1">
-                              <Sparkles className="h-3.5 w-3.5" /> Code {appliedCode.code}
+                              <Sparkles className="h-3.5 w-3.5" />
+                              {autoApplied ? appliedCode.label || "Daily spin win" : `Code ${appliedCode.code}`}
                             </span>
                             <span>−£{discountSaving.toFixed(2)}</span>
                           </div>
@@ -655,15 +697,23 @@ export default function BasketPage() {
                         {appliedCode ? (
                           <div className="flex items-center justify-between gap-2 rounded-lg border border-[#F1D47A]/30 bg-[#F1D47A]/[0.06] px-3 py-2">
                             <span className="text-xs font-semibold text-[#F1D47A]">
-                              {appliedCode.code} applied
+                              {autoApplied
+                                ? appliedCode.label || "Daily spin win applied"
+                                : `${appliedCode.code} applied`}
                             </span>
                             <button
                               type="button"
-                              className="text-xs text-white/50 underline hover:text-white"
+                              className="shrink-0 text-xs text-white/50 underline hover:text-white"
                               onClick={() => {
                                 setAppliedCode(null);
                                 setDiscountError("");
+                                // Only for this visit. Keeping it off until they
+                                // leave means removing it to save for a bigger
+                                // order actually sticks.
+                                if (autoApplied) setAutoDeclined(true);
+                                setAutoApplied(false);
                               }}
+                              title={autoApplied ? "Save it for a bigger order" : undefined}
                               data-testid="button-remove-cart-discount"
                             >
                               Remove
