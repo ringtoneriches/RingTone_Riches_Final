@@ -193,6 +193,7 @@ import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { CSV_BOM, csvRow } from "./services/csv";
 import { canApplyCode, refusalMessage, summariseUsages, type ApplyRefusal } from "./services/discount-usage";
+import { pickAutoDiscount, autoDiscountLabel } from "./services/auto-discount";
 import { quoteCartDiscount, poundsToPence, penceToPounds, type CartDiscountType, type CartDiscountQuote } from "@shared/cart-discount";
 import { buildUserFinancials, INSTANT_WIN_TYPES } from "./services/user-spend";
 import {
@@ -9521,6 +9522,86 @@ app.delete(
 // real apply happens at checkout, once there are orders to attach it to, and
 // the server recomputes the figures from those orders rather than trusting
 // anything worked out here.
+// The prize to put on this customer's next order, if they have one waiting.
+//
+// A discount won on the daily spin already belongs to them, so making them
+// type a code was only ever ceremony. The checkout asks for this and applies
+// it on their behalf, saying where it came from.
+//
+// Campaign codes are deliberately not returned: spending a limited admin code
+// on an order nobody asked to use it on would give it away.
+app.get("/api/user/auto-discount", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const now = new Date();
+
+    const rows = await db
+      .select()
+      .from(discountCodes)
+      .where(
+        and(
+          eq(discountCodes.assignedUserId, userId),
+          eq(discountCodes.isActive, true),
+        ),
+      )
+      .orderBy(desc(discountCodes.createdAt))
+      .limit(50);
+
+    if (!rows.length) return res.json({ discount: null });
+
+    const usageRows = await db
+      .select({
+        discountCodeId: discountCodeUsages.discountCodeId,
+        userId: discountCodeUsages.userId,
+        orderId: discountCodeUsages.orderId,
+        usedAt: discountCodeUsages.usedAt,
+        orderStatus: orders.status,
+      })
+      .from(discountCodeUsages)
+      .leftJoin(orders, eq(discountCodeUsages.orderId, orders.id))
+      .where(eq(discountCodeUsages.userId, userId));
+
+    const byCode = new Map<string, typeof usageRows>();
+    for (const row of usageRows) {
+      const list = byCode.get(row.discountCodeId);
+      if (list) list.push(row);
+      else byCode.set(row.discountCodeId, [row]);
+    }
+
+    const picked = pickAutoDiscount(
+      rows.map((row) => ({
+        code: row.code,
+        type: row.type,
+        value: row.value,
+        maxDiscountAmount: row.maxDiscountAmount,
+        expiresAt: row.expiresAt,
+        source: row.source,
+        // A hold that has not been paid for yet does not count as spent, so a
+        // customer who abandoned a checkout still has their prize.
+        used: summariseUsages(byCode.get(row.id) ?? [], now).confirmed > 0,
+      })),
+      now,
+    );
+
+    if (!picked) return res.json({ discount: null });
+
+    res.json({
+      discount: {
+        code: picked.code,
+        type: picked.type,
+        value: Number(picked.value),
+        maxDiscountAmount: picked.maxDiscountAmount != null ? Number(picked.maxDiscountAmount) : null,
+        expiresAt: picked.expiresAt,
+        label: autoDiscountLabel(picked),
+      },
+    });
+  } catch (err) {
+    console.error("Error finding an automatic discount:", err);
+    // Never block a checkout over this: no prize is a fine answer.
+    res.json({ discount: null });
+  }
+});
+
 // A customer's own codes, newest first.
 //
 // Codes used to be campaign strings an admin handed out, so there was nowhere
@@ -9594,7 +9675,7 @@ app.post("/api/cart/validate-discount", isAuthenticated, async (req: any, res) =
         and(
           eq(discountCodes.code, code),
           eq(discountCodes.isActive, true),
-          sql`(discount_codes.expires_at IS NULL OR discount_codes.expires_at > NOW())`
+          sql`(discount_codes.expires_at IS NULL OR discount_codes.expires_at > (NOW() AT TIME ZONE 'UTC'))`
         )
       );
 
@@ -9629,6 +9710,9 @@ app.post("/api/cart/validate-discount", isAuthenticated, async (req: any, res) =
       code: discount.code,
       type: discount.type,
       value: Number(discount.value),
+      // The basket shows a live saving before checkout, so it needs the cap
+      // too or it would promise more than the server will hand over.
+      maxDiscountAmount: discount.maxDiscountAmount ? Number(discount.maxDiscountAmount) : null,
     });
   } catch (err) {
     console.error("Error validating basket discount:", err);
@@ -9657,7 +9741,7 @@ app.post("/api/cart/apply-discount", isAuthenticated, async (req: any, res) => {
         and(
           eq(discountCodes.code, code),
           eq(discountCodes.isActive, true),
-          sql`(discount_codes.expires_at IS NULL OR discount_codes.expires_at > NOW())`
+          sql`(discount_codes.expires_at IS NULL OR discount_codes.expires_at > (NOW() AT TIME ZONE 'UTC'))`
         )
       );
 
@@ -9907,7 +9991,7 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
         and(
           eq(discountCodes.code, code.toUpperCase()),
           eq(discountCodes.isActive, true),
-          sql`(discount_codes.expires_at IS NULL OR discount_codes.expires_at > NOW())`
+          sql`(discount_codes.expires_at IS NULL OR discount_codes.expires_at > (NOW() AT TIME ZONE 'UTC'))`
         )
       );
 

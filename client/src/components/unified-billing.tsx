@@ -371,9 +371,41 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
       if (!res.ok) throw new Error(data.error || "Failed to apply discount");
       return data;
     },
-    onSuccess: (data) => { toast({ title: "Discount Applied 🎉", description: data.message }); setShowDiscountDialog(false); setDiscountCode(""); refetchOrder(); },
+    onSuccess: (data) => {
+      const auto = data.discountCode && data.discountCode === autoDiscount?.discount?.code;
+      toast({
+        title: auto ? "Daily spin win applied 🎉" : "Discount Applied 🎉",
+        description: auto ? autoDiscount?.discount?.label || data.message : data.message,
+      });
+      setShowDiscountDialog(false);
+      setDiscountCode("");
+      refetchOrder();
+    },
     onError:   (error: any) => { toast({ title: "Discount Failed", description: error.message, variant: "destructive" }); },
   });
+
+  /**
+   * Put a daily spin prize on without being asked.
+   *
+   * The reward already belongs to this account, so typing a code was only
+   * ceremony. Runs once, and only when the order has no discount yet, so it
+   * never fights a code the customer entered themselves or one already on the
+   * order from a previous visit.
+   */
+  const autoDiscountTried = useRef(false);
+  const { data: autoDiscount } = useQuery<{ discount: { code: string; label: string } | null }>({
+    queryKey: ["/api/user/auto-discount"],
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (autoDiscountTried.current) return;
+    if (!order || order.discountCodeId) return;
+    const code = autoDiscount?.discount?.code;
+    if (!code) return;
+    autoDiscountTried.current = true;
+    applyDiscountMutation.mutate(code);
+  }, [autoDiscount, order]);
 
   const removeDiscountMutation = useMutation({
     mutationFn: async () => { const res = await apiRequest("/api/checkout/remove-discount", "POST", { orderId }); return res.json(); },

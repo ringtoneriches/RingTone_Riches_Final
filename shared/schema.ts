@@ -582,6 +582,13 @@ export const discountCodes = pgTable("discount_codes", {
   value: decimal("value", { precision: 10, scale: 2 }).notNull(), 
   maxUses: integer("max_uses").default(1), 
   usesCount: integer("uses_count").default(0), 
+  /**
+   * Stored as a naive timestamp holding UTC, so SQL must compare it against
+   * `NOW() AT TIME ZONE 'UTC'` and not bare `NOW()`. A plain NOW() is the
+   * session's local time, which silently expires codes early on any database
+   * not running in UTC -- it reads correct on production and wrong everywhere
+   * else, which is the worst way for a bug to behave.
+   */
   expiresAt: timestamp("expires_at"), 
   isActive: boolean("is_active").default(true),
   /**
