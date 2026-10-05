@@ -89,7 +89,7 @@ export function summariseUsages(
   return { confirmed, reserved };
 }
 
-export type ApplyRefusal = "already_used" | "already_applied" | "limit_reached";
+export type ApplyRefusal = "already_used" | "already_applied" | "limit_reached" | "not_yours";
 
 export interface ApplyDecision {
   ok: boolean;
@@ -111,9 +111,21 @@ export function canApplyCode(opts: {
   rows: UsageRow[];
   now: Date;
   holdMinutes?: number;
+  /**
+   * Set when the code belongs to one person, as a daily spin prize does.
+   * Null or undefined is a shared code, which is every code that existed
+   * before prizes were minted.
+   */
+  assignedUserId?: string | null;
 }): ApplyDecision {
   const hold = opts.holdMinutes ?? RESERVATION_HOLD_MINUTES;
   const summary = summariseUsages(opts.rows, opts.now, hold);
+
+  // Someone else's prize. Checked before anything else so a shared screenshot
+  // cannot even reserve the code, let alone spend it.
+  if (opts.assignedUserId && opts.assignedUserId !== opts.userId) {
+    return { ok: false, reason: "not_yours", summary };
+  }
 
   for (const row of opts.rows) {
     if (row.userId !== opts.userId) continue;
@@ -138,5 +150,7 @@ export function refusalMessage(reason: ApplyRefusal): string {
       return "This code is already on another order you haven't paid for yet";
     case "limit_reached":
       return "Usage limit reached";
+    case "not_yours":
+      return "That code belongs to another account";
   }
 }
