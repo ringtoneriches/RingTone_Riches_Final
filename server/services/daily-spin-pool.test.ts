@@ -206,3 +206,51 @@ describe("summarisePool with discount slices", () => {
     expect(summarisePool(legacy).pointsRemaining).toBe(500);
   });
 });
+
+describe("the default wheel can actually be created", () => {
+  // The admin "New cycle" button rejected any slice with pointsValue <= 0, a
+  // rule written before a slice could pay anything but points. The four
+  // discount slices carry none, so the new wheel could not be created at all.
+  // This is that rule, as the endpoint now applies it.
+  const rejects = (r: any) => {
+    if (!Number.isFinite(r.quantity) || r.quantity < 0) return true;
+    if (r.rewardKind === "discount") {
+      const value = Number(r.discountValue);
+      if (r.discountType !== "percentage" && r.discountType !== "cash") return true;
+      if (!Number.isFinite(value) || value <= 0) return true;
+      if (r.discountType === "percentage" && value > 100) return true;
+      return false;
+    }
+    return !Number.isFinite(r.pointsValue) || r.pointsValue <= 0;
+  };
+
+  it("accepts every slice of the shipped wheel", () => {
+    const bad = buildCyclePrizes().filter(rejects);
+    expect(bad).toEqual([]);
+  });
+
+  it("would have been rejected by the old rule, which is the bug", () => {
+    const oldRule = (r: any) => !Number.isFinite(r.pointsValue) || r.pointsValue <= 0 || r.quantity < 0;
+    const rejectedBefore = buildCyclePrizes().filter(oldRule);
+    expect(rejectedBefore).toHaveLength(4);
+    expect(rejectedBefore.map((r) => r.segmentIndex)).toEqual([1, 3, 5, 7]);
+  });
+
+  it("still refuses a points slice worth nothing", () => {
+    expect(buildCyclePrizes([{ pointsValue: 0, quantity: 10 }]).filter(rejects)).toHaveLength(1);
+  });
+
+  it("refuses a discount slice that was never configured", () => {
+    const rows = buildCyclePrizes([
+      { pointsValue: 0, quantity: 10, rewardKind: "discount" } as any,
+    ]);
+    expect(rows.filter(rejects)).toHaveLength(1);
+  });
+
+  it("refuses a percentage over 100", () => {
+    const rows = buildCyclePrizes([
+      { pointsValue: 0, quantity: 10, rewardKind: "discount", discountType: "percentage", discountValue: 150 } as any,
+    ]);
+    expect(rows.filter(rejects)).toHaveLength(1);
+  });
+});
