@@ -77,11 +77,39 @@ describe("winnerPrizeValue", () => {
 });
 
 describe("winnerPrizeDescription", () => {
-  it("uses the campaign name, which is what the player was told", () => {
-    expect(winnerPrizeDescription({ prizeType: "cash", prizeName: "£50 Cash", prizeValue: "50" })).toBe("£50 Cash");
+  const describeOf = (prizeName: string) =>
+    winnerPrizeDescription({ prizeType: "cash", prizeName, prizeValue: "50" });
+
+  // Admins name campaigns after the prize, so without the label a Golden
+  // Ticket read exactly like an ordinary game win on the wall.
+  it("says Golden Ticket, keeping what the player was told they won", () => {
+    expect(describeOf("£50 Cash")).toBe("Golden Ticket — £50 Cash");
+    expect(describeOf("£30 Takeaway Spend")).toBe("Golden Ticket — £30 Takeaway Spend");
+    expect(describeOf("1000 Ringtone Points")).toBe("Golden Ticket — 1000 Ringtone Points");
+  });
+
+  it("does not make a campaign already named after the ticket stutter", () => {
+    expect(describeOf("£10 Golden Ticket")).toBe("£10 Golden Ticket");
+    expect(describeOf("Golden Ticket")).toBe("Golden Ticket");
+    expect(describeOf("GOLDEN TICKET £25")).toBe("GOLDEN TICKET £25");
+    expect(describeOf("goldenticket bonus")).toBe("goldenticket bonus");
   });
 
   it("never leaves the card blank", () => {
-    expect(winnerPrizeDescription({ prizeType: "cash", prizeName: "   ", prizeValue: "50" })).toBe("Golden Ticket");
+    expect(describeOf("   ")).toBe("Golden Ticket");
+  });
+
+  it("labels every campaign currently live in production", () => {
+    expect(describeOf("£50 Cash")).toBe("Golden Ticket — £50 Cash");
+    expect(describeOf("£30 Takeaway Spend")).toBe("Golden Ticket — £30 Takeaway Spend");
+    expect(describeOf("£50 CASH!")).toBe("Golden Ticket — £50 CASH!");
+    expect(describeOf("1000 Ringtone Points")).toBe("Golden Ticket — 1000 Ringtone Points");
+    expect(describeOf("£10 Golden Ticket")).toBe("£10 Golden Ticket");
+  });
+
+  it("every result names the ticket one way or another", () => {
+    for (const name of ["£50 Cash", "£10 Golden Ticket", "   ", "Nintendo Switch"]) {
+      expect(describeOf(name).toLowerCase()).toContain("golden");
+    }
   });
 });
