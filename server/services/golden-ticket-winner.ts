@@ -45,8 +45,28 @@ export function winnerPrizeValue(prize: GoldenTicketPrize): string {
   return prize.prizeName;
 }
 
-/** What goes in `winners.prize_description` -- what the player was told. */
+/**
+ * Words that already say "Golden Ticket", in any spelling an admin might use.
+ * Matched loosely because the campaign name is free text typed by a person.
+ */
+const ALREADY_SAYS_IT = /golden\s*ticket/i;
+
+/**
+ * What goes in `winners.prize_description`.
+ *
+ * The campaign name alone is not enough. Admins name campaigns after the prize
+ * -- "£50 Cash", "£30 Takeaway Spend" -- so on the winners wall a Golden Ticket
+ * read exactly like an ordinary game win, which defeats the point of putting
+ * them there. The name is kept, because it is what the player was told they had
+ * won, and the label goes in front of it.
+ *
+ * A campaign already named after the ticket keeps its own name rather than
+ * being made to stutter: "£10 Golden Ticket", never
+ * "Golden Ticket — £10 Golden Ticket".
+ */
 export function winnerPrizeDescription(prize: GoldenTicketPrize): string {
   const name = prize.prizeName?.trim();
-  return name ? name : "Golden Ticket";
+  if (!name) return "Golden Ticket";
+  if (ALREADY_SAYS_IT.test(name)) return name;
+  return `Golden Ticket — ${name}`;
 }
