@@ -167,9 +167,24 @@ async function loadPopDecoyCashValues(tx: DbTx, competitionId: string): Promise<
   return values;
 }
 
-export async function getMaxTicketsPerOrder(): Promise<number> {
+/**
+ * The per-order ticket cap from platform settings.
+ *
+ * Takes the caller's transaction when there is one. It used to always read
+ * through the global `db`, which asks the pool for its own connection -- and
+ * one of its callers runs inside a transaction, so that call was asking for a
+ * second connection while already holding one. Ten of those at once emptied
+ * the pool and every one of them then waited, for ever, for a connection only
+ * they could release. The site could not reach the database at all until it
+ * was restarted.
+ *
+ * Reading through `tx` keeps the whole thing on the connection the caller
+ * already holds, so there is nothing to wait for.
+ */
+export async function getMaxTicketsPerOrder(tx?: DbTx): Promise<number> {
   try {
-    const [settings] = await db.select().from(platformSettings).limit(1);
+    const runner = tx ?? db;
+    const [settings] = await runner.select().from(platformSettings).limit(1);
     return Number(settings?.maxTicketsPerOrder || 250);
   } catch {
     return 250;
@@ -970,7 +985,7 @@ async function issuePlayTicketsInner(tx: DbTx, opts: IssueTicketsOpts) {
     if (quantity > Math.max(0, maxTickets - sold - reservedUnsold)) {
       throw new InstantWinError("This competition is sold out", 400, "sold_out");
     }
-    const maxPerOrder = await getMaxTicketsPerOrder();
+    const maxPerOrder = await getMaxTicketsPerOrder(tx);
     if (quantity > maxPerOrder) {
       throw new InstantWinError(
         `You can buy at most ${maxPerOrder} tickets per order`,
