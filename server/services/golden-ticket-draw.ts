@@ -43,16 +43,14 @@ export class GoldenTicketError extends Error {
 }
 
 /**
- * Choose the winning play positions for a campaign, in [1, dropWindow].
+ * Whether these numbers describe a campaign that can be drawn at all.
  *
- * Returned sorted, which makes a sealed campaign readable by a human auditor
- * without changing what it means.
+ * Separate from the draw itself because the admin form needs to say "that
+ * won't work" without drawing anything. It used to check by calling
+ * pickDropPositions with a stubbed random, which is what hung the server --
+ * see the rejection-sampling note below.
  */
-export function pickDropPositions(
-  ticketCount: number,
-  dropWindow: number,
-  random: () => number = Math.random,
-): number[] {
+export function assertDrawSize(ticketCount: number, dropWindow: number): void {
   if (!Number.isInteger(ticketCount) || ticketCount < 1) {
     throw new GoldenTicketError("A campaign needs at least one ticket.");
   }
@@ -64,23 +62,49 @@ export function pickDropPositions(
       `The drop window (${dropWindow} plays) has to be at least as large as the ticket count (${ticketCount}).`,
     );
   }
+}
 
-  // Rejection sampling is fine while the tickets are sparse in the window, and
-  // degenerates badly when they are not — so shuffle instead once they are
-  // dense. Both produce a uniform choice of distinct positions.
-  if (ticketCount * 2 > dropWindow) {
+/**
+ * Choose the winning play positions for a campaign, in [1, dropWindow].
+ *
+ * Returned sorted, which makes a sealed campaign readable by a human auditor
+ * without changing what it means.
+ */
+export function pickDropPositions(
+  ticketCount: number,
+  dropWindow: number,
+  random: () => number = Math.random,
+): number[] {
+  assertDrawSize(ticketCount, dropWindow);
+
+  // Shuffling is the safe way to take a dense selection, and the only way that
+  // terminates in a fixed number of steps. Used whenever the tickets are dense
+  // in the window, and as the fallback below.
+  const shuffle = () => {
     const all = Array.from({ length: dropWindow }, (_, i) => i + 1);
     for (let i = all.length - 1; i > 0; i--) {
       const j = Math.floor(random() * (i + 1));
       [all[i], all[j]] = [all[j], all[i]];
     }
     return all.slice(0, ticketCount).sort((a, b) => a - b);
-  }
+  };
 
+  if (ticketCount * 2 > dropWindow) return shuffle();
+
+  // Rejection sampling, which is cheaper than building the whole window while
+  // the tickets are sparse in it. The attempt cap is not an optimisation: a
+  // random() that keeps returning the same number -- a stub, a seeded sequence
+  // with a short period, a broken polyfill -- would otherwise spin here
+  // forever, and this runs on the only thread the server has, so the whole site
+  // stops answering. Bounded, it falls back to a shuffle and still returns a
+  // uniform choice.
+  const maxAttempts = 20 * ticketCount + 100;
   const picked = new Set<number>();
-  while (picked.size < ticketCount) {
+  for (let attempt = 0; attempt < maxAttempts && picked.size < ticketCount; attempt++) {
     picked.add(Math.floor(random() * dropWindow) + 1);
   }
+  if (picked.size < ticketCount) return shuffle();
+
   return [...picked].sort((a, b) => a - b);
 }
 
