@@ -40,7 +40,36 @@ type Props = {
   onClose: () => void;
 };
 
-const INK = "#050505";
+/** The dark behind the ticket. Kept dark on purpose: a gold ticket on a pale
+ *  backdrop stops looking like foil and starts looking like paper. */
+const BACKDROP = "#050505";
+
+/**
+ * Warm near-black rather than pure black.
+ *
+ * Pure black on gold reads as printed-on rather than stamped-into, and at small
+ * sizes it buzzes against the warm background. This sits where the shadows in
+ * the foil already are, so the type looks part of the ticket.
+ */
+const INK = "#1E1403";
+const INK_SOFT = "rgba(30, 20, 3, 0.74)";
+const INK_FAINT = "rgba(30, 20, 3, 0.66)";
+
+/** Lowercased and stripped of punctuation, for comparing two bits of copy. */
+function normalise(text: string) {
+  return text.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Words that say nothing the amount hasn't already said.
+ *
+ * A cash prize is usually named after its own value -- "£10 Golden Ticket" --
+ * so printing the name under a £10 headline states the figure twice before the
+ * description states it a third time. When the name is only the amount plus
+ * one of these, it is dropped and the headline carries it alone. A name with
+ * real content in it ("£10 Amazon Voucher") still shows.
+ */
+const EMPTY_LABEL = /^(golden ticket|cash|credit|cash prize|prize|wallet credit|bonus|voucher)?$/;
 
 export default function GoldenTicketReveal({ award, onClose }: Props) {
   const playedFor = useRef<string | null>(null);
@@ -91,13 +120,19 @@ export default function GoldenTicketReveal({ award, onClose }: Props) {
       ? `£${Number(award.prizeValue).toLocaleString("en-GB", { maximumFractionDigits: 2 })}`
       : null;
 
+  // Drop the label when it is only the headline figure wearing a hat.
+  const labelRemainder = amount
+    ? normalise(award.prizeName).replace(normalise(amount), "").trim()
+    : normalise(award.prizeName);
+  const showPrizeName = !EMPTY_LABEL.test(labelRemainder);
+
   const notch = (side: "left" | "right") => (
     <span
       aria-hidden
       className="absolute top-1/2 z-10 h-8 w-8 -translate-y-1/2 rounded-full"
       style={{
-        background: INK,
-        boxShadow: "inset 0 0 0 1px rgba(241,212,122,0.30)",
+        background: BACKDROP,
+        boxShadow: "inset 0 0 0 1px rgba(30,20,3,0.35)",
         [side]: "-16px",
       } as React.CSSProperties}
     />
@@ -122,12 +157,51 @@ export default function GoldenTicketReveal({ award, onClose }: Props) {
         .rr-gt-root {
           animation: rr-gt-fade .35s ease-out both;
           background:
-            radial-gradient(ellipse 70% 50% at 50% 44%, rgba(70,52,8,.40) 0%, rgba(5,5,5,1) 62%),
-            ${INK};
+            radial-gradient(ellipse 70% 50% at 50% 44%, rgba(90,66,10,.46) 0%, rgba(5,5,5,1) 62%),
+            ${BACKDROP};
         }
         .rr-gt-line { animation: rr-gt-fade .5s ease-out both; }
         .rr-gt-ticket { animation: rr-gt-rise .6s cubic-bezier(.2,.9,.3,1.05) both; }
         .rr-gt-sheen { animation: rr-gt-sheen 3s ease-in-out .7s infinite; }
+
+        /* Foil. Several stops rather than two, because real gold leaf changes
+           hue across its surface -- a flat gradient reads as yellow plastic. */
+        .rr-gt-foil {
+          background:
+            /* A pool of light over the middle. The copy sits here, and it needs
+               an even field -- banding behind small text reads as a dirty
+               print, not as foil. */
+            radial-gradient(115% 78% at 50% 40%, rgba(255,250,222,.52) 0%, rgba(255,247,214,0) 62%),
+            linear-gradient(118deg,
+              #E2BD52 0%, #F6E6A6 15%, #FCF4CF 30%, #EACB6B 47%,
+              #FAEFBE 63%, #DCB443 81%, #F3DF95 100%);
+        }
+        /* Engine-turning, the fine lathe pattern on share certificates and old
+           tickets. Almost invisible on its own; it stops the foil looking flat. */
+        .rr-gt-guilloche::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          pointer-events: none;
+          opacity: .13;
+          background:
+            repeating-linear-gradient(58deg, rgba(30,20,3,.5) 0 1px, transparent 1px 7px),
+            repeating-linear-gradient(-58deg, rgba(30,20,3,.4) 0 1px, transparent 1px 7px);
+        }
+        /* The punched edge. A mask rather than drawn circles, so the holes are
+           actually missing from the ticket and the backdrop shows through. */
+        .rr-gt-scallop {
+          --rr-gt-hole: 11px;
+          -webkit-mask-image:
+            radial-gradient(var(--rr-gt-hole) at left  center, transparent 97%, #000 100%),
+            radial-gradient(var(--rr-gt-hole) at right center, transparent 97%, #000 100%);
+          -webkit-mask-composite: source-in;
+          mask-image:
+            radial-gradient(var(--rr-gt-hole) at left  center, transparent 97%, #000 100%),
+            radial-gradient(var(--rr-gt-hole) at right center, transparent 97%, #000 100%);
+          mask-composite: intersect;
+        }
         @media (prefers-reduced-motion: reduce) {
           .rr-gt-root, .rr-gt-line, .rr-gt-ticket { animation: rr-gt-fade .2s ease-out both }
           .rr-gt-sheen { animation: none; opacity: 0 }
@@ -136,7 +210,7 @@ export default function GoldenTicketReveal({ award, onClose }: Props) {
 
       {/* Beat one: say where this came from, before showing what it is. */}
       <p
-        className="rr-gt-line mb-7 text-center text-[11px] font-black uppercase tracking-[0.34em] text-[#D4AF37]"
+        className="rr-gt-line mb-7 max-w-[22rem] text-center text-[10px] font-black uppercase tracking-[0.26em] text-[#D4AF37] [text-wrap:balance] sm:text-[11px] sm:tracking-[0.34em]"
         data-testid="golden-ticket-kicker"
       >
         Ringtone Riches has something for you
@@ -145,82 +219,144 @@ export default function GoldenTicketReveal({ award, onClose }: Props) {
       {stage === "ticket" && (
         <div className="rr-gt-ticket relative w-full max-w-[430px]">
           <div
-            className="relative rounded-[14px] p-[1.5px]"
-            style={{ background: "linear-gradient(135deg,#FFF3C4 0%,#C9A227 28%,#FFF0BC 52%,#8a6b1f 100%)" }}
+            className="rr-gt-scallop relative rounded-[14px] p-[2px]"
+            style={{
+              // The rim: darker than the face, so the ticket has an edge rather
+              // than fading into the backdrop.
+              background:
+                "linear-gradient(135deg,#8A6B1F 0%,#E8CD79 26%,#7A5B14 52%,#F0DE9E 76%,#6E5311 100%)",
+            }}
           >
-            <div className="relative rounded-[12px]" style={{ backgroundColor: "#0B0B0D" }}>
+            <div className="rr-gt-foil rr-gt-guilloche relative overflow-hidden rounded-[12px]">
               <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[12px]">
                 <div
                   className="rr-gt-sheen absolute inset-y-0 -left-1/3 w-1/3 skew-x-12"
-                  style={{ background: "linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,248,238,.16) 50%,rgba(255,255,255,0) 100%)" }}
+                  style={{ background: "linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.55) 50%,rgba(255,255,255,0) 100%)" }}
                 />
               </div>
 
               {/* Stub: who issued this. */}
-              <div className="flex items-center justify-between px-5 py-3">
-                <span className="font-prize text-[13px] leading-none tracking-wide text-[#F1D47A]">
-                  RINGTONE RICHES
+              {/* An engraved double rule, the way a real ticket is bordered.
+                  Inset from the edge so the foil shows outside it. */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-[7px] rounded-[7px]"
+                style={{ border: `1.5px solid ${INK}`, opacity: 0.5 }}
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-[11px] rounded-[5px]"
+                style={{ border: `0.5px solid ${INK}`, opacity: 0.32 }}
+              />
+
+              <div className="relative flex items-center justify-between px-7 pt-5">
+                <span
+                  className="text-[11px] font-black uppercase leading-none tracking-[0.2em]"
+                  style={{ color: INK }}
+                >
+                  Ringtone Riches
                 </span>
-                <span className="text-[9px] font-bold uppercase tracking-[0.26em] text-[#D4AF37]/70">
-                  Golden Ticket
+                <span
+                  className="text-[9px] font-bold uppercase tracking-[0.26em]"
+                  style={{ color: INK_FAINT }}
+                >
+                  Admit one
                 </span>
               </div>
+
+              {/* The title, in the serif the reference tickets use. */}
+              <p
+                className="relative mt-3 text-center font-serif text-[clamp(1.6rem,7vw,2.3rem)] font-bold leading-none tracking-[0.02em]"
+                style={{ color: INK, textShadow: "0 1px 0 rgba(255,245,210,.55)" }}
+              >
+                GOLDEN TICKET
+              </p>
 
               {/* Perforation, with notches punched out of the edges. */}
               <div className="relative">
                 {notch("left")}
                 {notch("right")}
-                <div className="mx-5 border-t border-dashed border-[#F1D47A]/35" />
+                <div className="mx-7 border-t border-dashed" style={{ borderColor: INK_FAINT }} />
               </div>
 
-              <div className="px-6 pb-7 pt-7 text-center sm:px-8">
-                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#D4AF37]">
+              <div className="relative px-7 pb-6 pt-5 text-center sm:px-9">
+                <p
+                  className="text-[10px] font-black uppercase tracking-[0.28em]"
+                  style={{ color: INK_SOFT }}
+                >
                   {isCash ? "Awarded to you" : "You've won"}
                 </p>
 
-                <h2 className="font-prize mt-3 text-[2.5rem] leading-[0.98] text-white sm:text-[3rem]">
+                <h2
+                  className="font-prize mt-2 text-[clamp(2.4rem,11vw,3.4rem)] leading-[0.95]"
+                  style={{ color: INK, textShadow: "0 1px 0 rgba(255,246,214,.6)" }}
+                >
                   {isCash && amount ? amount : award.prizeName}
                 </h2>
 
-                {isCash ? (
-                  <p className="mt-2 text-sm font-bold text-[#F1D47A]">{award.prizeName}</p>
+                {isCash && showPrizeName ? (
+                  <p className="mt-1.5 text-sm font-bold" style={{ color: INK_SOFT }}>
+                    {award.prizeName}
+                  </p>
                 ) : null}
 
                 {award.prizeImageUrl && (
                   <img
                     src={award.prizeImageUrl}
                     alt=""
-                    className="mx-auto mt-5 max-h-36 w-auto rounded-lg border border-[#F1D47A]/25"
+                    className="mx-auto mt-5 max-h-36 w-auto rounded-lg"
+                    style={{ border: `1px solid ${INK_FAINT}` }}
                     loading="lazy"
                   />
                 )}
 
                 {award.prizeDescription && (
-                  <p className="mx-auto mt-4 max-w-[19rem] text-sm leading-relaxed text-white/60">
+                  <p
+                    className="mx-auto mt-3 max-w-[19rem] text-sm leading-relaxed"
+                    style={{ color: INK_SOFT }}
+                  >
                     {award.prizeDescription}
                   </p>
                 )}
 
                 {/* The point of the whole design. */}
-                <div className="mx-auto mt-6 max-w-[20rem] rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3">
-                  <p className="text-xs leading-relaxed text-white/65">
-                    This is a <strong className="font-bold text-white/85">separate prize from Ringtone Riches</strong>
+                <div
+                  className="mx-auto mt-5 max-w-[20rem] rounded-lg px-4 py-3"
+                  style={{
+                    // Pressed into the foil rather than sitting on it. The fill
+                    // is lighter than the foil, not darker: a dark translucent
+                    // panel picks up whatever band of the gradient is behind it
+                    // and reads as a smudge.
+                    background:
+                      "linear-gradient(180deg, rgba(255,252,236,.60), rgba(255,247,219,.34))",
+                    border: "1px solid rgba(30,20,3,.20)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,.55)",
+                  }}
+                >
+                  <p className="text-xs leading-relaxed" style={{ color: INK_SOFT }}>
+                    This is a <strong className="font-bold" style={{ color: INK }}>separate prize from Ringtone Riches</strong>
                     {" "}— nothing to do with the game you just played, and it doesn&rsquo;t affect that result.
                   </p>
                 </div>
 
-                <p className="mt-4 text-xs leading-relaxed text-white/45">
+                <p className="mt-3.5 text-xs leading-relaxed" style={{ color: INK_FAINT }}>
                   {award.fulfilmentStatus === "auto_credited"
                     ? "It's already in your wallet. Nothing else to do."
                     : "We'll be in touch to arrange it with you."}
                 </p>
               </div>
 
-              <div className="border-t border-[#F1D47A]/15 px-5 py-4">
+              <div className="relative px-7 pb-6 pt-1">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-full rounded-lg bg-[#F1D47A] px-8 py-3.5 text-sm font-black uppercase tracking-[0.16em] text-[#050505] transition-transform duration-200 hover:-translate-y-0.5"
+                  className="w-full rounded-lg px-8 py-3.5 text-sm font-black uppercase tracking-[0.16em] transition-transform duration-200 hover:-translate-y-0.5"
+                  style={{
+                    // Inverted: a gold button on a gold ticket disappears.
+                    background: INK,
+                    color: "#F1D47A",
+                    boxShadow: "0 2px 0 rgba(30,20,3,.35)",
+                  }}
                   data-testid="button-golden-ticket-close"
                 >
                   Back to the game
