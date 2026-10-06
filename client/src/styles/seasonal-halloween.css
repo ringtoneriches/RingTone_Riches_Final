@@ -902,8 +902,12 @@ html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-gold {
    ========================================================================= */
 
 /* The moon, anchored to the page rather than the viewport. */
+/* Fixed, not anchored to the page: a moon does not slide up past the header
+   with the content in front of it. It fades away over the first screen
+   instead, so it is gone before it can sit over anything. --rr-moon-fade is
+   written by HalloweenSky on scroll. */
 .rr-hw-sky {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
@@ -911,6 +915,9 @@ html.rr-season-halloween.rr-has-backdrop .rr-atmosphere-gold {
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
+  opacity: var(--rr-moon-fade, 1);
+  /* No transition: the value already follows the scroll, and easing it would
+     make it lag behind the page. */
 }
 
 html.rr-season-halloween .rr-hw-moon--anchored {
@@ -1144,5 +1151,88 @@ html.rr-season-halloween .rr-header-line {
      for a calmer page. */
   .rr-header-beam {
     opacity: 0.5;
+  }
+}
+
+/* =========================================================================
+   Watchers
+   =========================================================================
+
+   Something looking out of the dark at the edge of a few sections. Drawn
+   rather than photographed: a stock grinning pumpkin needs a licence, weighs
+   a few hundred kilobytes and looks like clip art on a dark page.
+
+   They sit against the page, so they travel with the section they belong to
+   rather than following the reader. Behind the content, and unable to take a
+   tap.
+   ========================================================================= */
+
+.rr-hw-lurker-slot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rr-hw-lurker {
+  position: absolute;
+  opacity: 0;
+  transition: opacity 900ms ease-out;
+  filter: drop-shadow(0 0 22px var(--lurk-glow)) drop-shadow(0 0 44px var(--lurk-glow));
+}
+
+/* Never fully present. Half seen is the whole idea; at full opacity it stops
+   being something in the dark and becomes a graphic. */
+.rr-hw-lurker.is-awake {
+  opacity: 0.78;
+}
+
+/* Leaning out of the edge of the page, mostly still in it. */
+.rr-hw-lurker--left {
+  left: clamp(0.25rem, 1.5vw, 2rem);
+  transform: rotate(-4deg);
+}
+
+.rr-hw-lurker--right {
+  right: clamp(0.25rem, 1.5vw, 2rem);
+  transform: rotate(4deg);
+}
+
+/* Blinking, and a slow breath so it is never quite still. Both run only while
+   the thing is on screen — is-awake is set by an observer. */
+.rr-hw-lurker.is-awake .rr-hw-lurker-eyes {
+  animation: rr-hw-blink 7s ease-in-out var(--lurk-delay, 0s) infinite;
+  transform-origin: 60px 26px;
+}
+
+.rr-hw-lurker.is-awake .rr-hw-lurker-grin {
+  animation: rr-hw-grin 11s ease-in-out var(--lurk-delay, 0s) infinite;
+}
+
+@keyframes rr-hw-blink {
+  /* Open almost all the time. A regular blink reads as a machine. */
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.08); }
+  97% { transform: scaleY(1); }
+}
+
+@keyframes rr-hw-grin {
+  0%, 60%, 100% { opacity: 0.25; }
+  75% { opacity: 0.7; }
+}
+
+@media (max-width: 639px) {
+  /* A phone has no spare width at the edges; a watcher there would sit on the
+     cards rather than beside them. */
+  .rr-hw-lurker-slot {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-hw-lurker.is-awake .rr-hw-lurker-eyes,
+  .rr-hw-lurker.is-awake .rr-hw-lurker-grin {
+    animation: none;
   }
 }
