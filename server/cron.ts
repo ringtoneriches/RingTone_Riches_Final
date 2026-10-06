@@ -2,12 +2,31 @@ import cron from "node-cron";
 import { recoverStalePayments } from "./services/payment-recovery";
 import { users } from "@shared/schema";
 import { and, eq, lt } from "drizzle-orm";
-import { db } from "./db";
+import { db, poolStats } from "./db";
+import { describePool, poolIsSaturated } from "./services/db-pool-safety";
 import { expireLapsedCampaigns } from "./services/golden-ticket";
 import { awardWeeklyPrize } from "./services/referrals";
 
 // Function to initialize all cron jobs
 export function startCrons() {
+  // Say so when the connection pool is running out.
+  //
+  // When the site went down on 6 October 2026 it was still answering anything
+  // that did not need the database, so from the outside it looked healthy and
+  // from the logs it looked quiet. The one place it was visible was the pool,
+  // and nothing was watching it. Now a saturated pool says so, every minute,
+  // in the logs someone will actually be reading at the time.
+  cron.schedule("* * * * *", () => {
+    try {
+      const stats = poolStats();
+      if (poolIsSaturated(stats)) {
+        console.error(`🚨 DATABASE ${describePool(stats)} — requests are queueing for a connection`);
+      }
+    } catch {
+      /* Never let the watcher be the thing that breaks. */
+    }
+  });
+
   // Catch payments whose webhook never arrived.
   //
   // This used to exist, was commented out, and the function it called was then
