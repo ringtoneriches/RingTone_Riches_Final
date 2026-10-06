@@ -192,6 +192,7 @@ import { isCardCashbackTx } from "@shared/card-cashback";
 import { createPrizeSchema, updatePrizeSchema } from "./validators/prizeSchema";
 import { SMSService } from "./services/sms.service";
 import { CSV_BOM, csvRow } from "./services/csv";
+import { cashflowsTransactionWhere } from "./services/cashflows-transactions";
 import { canApplyCode, refusalMessage, summariseUsages, type ApplyRefusal } from "./services/discount-usage";
 import { pickAutoDiscount, autoDiscountLabel } from "./services/auto-discount";
 import { quoteCartDiscount, poundsToPence, penceToPounds, type CartDiscountType, type CartDiscountQuote } from "@shared/cart-discount";
@@ -10771,17 +10772,7 @@ app.get(
         .from(transactions)
         .leftJoin(users, eq(transactions.userId, users.id))
         .where(
-          sql`(
-            ${transactions.type} = 'deposit'
-          ) OR (
-            ${transactions.type} = 'purchase'
-            AND ${transactions.paymentRef} IS NOT NULL
-            AND ${transactions.paymentRef} != ''
-            AND ${transactions.paymentRef} != 'N/A'
-            AND ${transactions.description} LIKE '%Instant play purchase%'
-          ) OR (
-            ${transactions.paymentRef} LIKE '260%'
-          )`,
+          cashflowsTransactionWhere(),
         );
 
       let filtered = [...rows];
@@ -10905,17 +10896,7 @@ app.get(
         .from(transactions)
         .leftJoin(users, eq(transactions.userId, users.id))
         .where(
-          sql`(
-            ${transactions.type} = 'deposit'
-          ) OR (
-            ${transactions.type} = 'purchase' 
-            AND ${transactions.paymentRef} IS NOT NULL 
-            AND ${transactions.paymentRef} != '' 
-            AND ${transactions.paymentRef} != 'N/A'
-            AND ${transactions.description} LIKE '%Instant play purchase%'
-          ) OR (
-            ${transactions.paymentRef} LIKE '260%'
-          )`
+          cashflowsTransactionWhere()
         );
       
       // Apply filters in JavaScript
