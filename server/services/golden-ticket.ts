@@ -24,6 +24,7 @@ import {
 import {
   GoldenTicketError,
   type CampaignDraw,
+  assertDrawSize,
   closureAfterPlay,
   drawOrder,
   fulfilmentFor,
@@ -74,9 +75,12 @@ function validate(input: CreateCampaignInput) {
   if (input.prizeType !== "physical" && money(input.prizeValue) === null) {
     throw new GoldenTicketError("A cash or site credit prize needs an amount.");
   }
-  // pickDropPositions enforces the ticket/window relationship; call it here so
-  // the error surfaces at creation rather than at activation.
-  pickDropPositions(Number(input.ticketCount), Number(input.dropWindow), () => 0.5);
+  // Check the ticket/window relationship here so the error surfaces at
+  // creation rather than at activation. This used to call pickDropPositions
+  // with a stubbed random to do that, which hung the whole server on any
+  // campaign of two or more tickets: a constant random can never produce a
+  // second distinct position, so the draw never finished.
+  assertDrawSize(Number(input.ticketCount), Number(input.dropWindow));
   if (input.startsAt && input.endsAt && input.startsAt >= input.endsAt) {
     throw new GoldenTicketError("The end date has to be after the start date.");
   }
