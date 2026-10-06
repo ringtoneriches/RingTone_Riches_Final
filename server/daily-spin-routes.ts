@@ -505,8 +505,29 @@ export function registerDailySpinRoutes(app: Express) {
       const { name, tiers, notes } = req.body || {};
       const rows = buildCyclePrizes(Array.isArray(tiers) && tiers.length ? tiers : undefined);
 
-      if (rows.some((r) => !Number.isFinite(r.pointsValue) || r.pointsValue <= 0 || r.quantity < 0)) {
-        return res.status(400).json({ message: "Prize values must be positive and quantities cannot be negative" });
+      // A slice has to be worth something, but what "something" means now
+      // depends on what it pays. This check predated discount slices and asked
+      // every slice for a positive points value, so the new wheel -- whose four
+      // discount slices carry no points at all -- could not be created at all.
+      const badRow = rows.find((r) => {
+        if (!Number.isFinite(r.quantity) || r.quantity < 0) return true;
+        if (r.rewardKind === "discount") {
+          const value = Number(r.discountValue);
+          if (r.discountType !== "percentage" && r.discountType !== "cash") return true;
+          if (!Number.isFinite(value) || value <= 0) return true;
+          if (r.discountType === "percentage" && value > 100) return true;
+          return false;
+        }
+        return !Number.isFinite(r.pointsValue) || r.pointsValue <= 0;
+      });
+
+      if (badRow) {
+        return res.status(400).json({
+          message:
+            badRow.rewardKind === "discount"
+              ? `Segment ${badRow.segmentIndex + 1} is set to a discount but has no usable value`
+              : `Segment ${badRow.segmentIndex + 1} needs a points value above zero`,
+        });
       }
 
       const created = await db.transaction(async (tx) => {
