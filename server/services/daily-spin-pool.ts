@@ -118,13 +118,27 @@ export type PoolSummary = {
   exhausted: boolean;
 };
 
-/** The figures the admin page shows for a cycle. */
+/**
+ * The figures the admin page shows for a cycle.
+ *
+ * Only points slices count toward the points figures. A slice switched over to
+ * a discount keeps whatever points value it had before -- nothing clears it,
+ * and nothing reads it -- so counting it here made the liability read far
+ * higher than anything the business could actually owe. The live wheel, whose
+ * four discount slices still carry 500, 150, 100 and 250 from their previous
+ * lives, was overstated by thousands of points.
+ */
 export function summarisePool(prizes: readonly SpinPrize[]): PoolSummary {
+  const paysPoints = (p: SpinPrize) => (p.rewardKind ?? "points") !== "discount";
+
   const totalSpins = prizes.reduce((n, p) => n + p.quantity, 0);
   const spinsRemaining = prizes.reduce((n, p) => n + Math.max(0, p.remaining), 0);
-  const totalPoints = prizes.reduce((n, p) => n + p.quantity * p.pointsValue, 0);
+  const totalPoints = prizes.reduce(
+    (n, p) => n + (paysPoints(p) ? p.quantity * p.pointsValue : 0),
+    0,
+  );
   const pointsRemaining = prizes.reduce(
-    (n, p) => n + Math.max(0, p.remaining) * p.pointsValue,
+    (n, p) => n + (paysPoints(p) ? Math.max(0, p.remaining) * p.pointsValue : 0),
     0,
   );
 

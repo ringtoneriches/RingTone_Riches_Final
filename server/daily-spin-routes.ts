@@ -682,6 +682,9 @@ export function registerDailySpinRoutes(app: Express) {
       const limit = Math.min(Number(req.query.limit) || 50, 200);
       const offset = Math.max(Number(req.query.offset) || 0, 0);
 
+      // A discount win awards no points, so reading pointsAwarded alone made
+      // every one of them look like "0 pts" -- which is what the history showed
+      // for the thirty people who won a discount on its first day.
       const rows = await db
         .select({
           id: dailySpinResults.id,
@@ -691,9 +694,15 @@ export function registerDailySpinRoutes(app: Express) {
           email: users.email,
           firstName: users.firstName,
           lastName: users.lastName,
+          discountCode: discountCodes.code,
+          discountType: discountCodes.type,
+          discountValue: discountCodes.value,
+          discountMaxAmount: discountCodes.maxDiscountAmount,
+          discountExpiresAt: discountCodes.expiresAt,
         })
         .from(dailySpinResults)
         .leftJoin(users, eq(users.id, dailySpinResults.userId))
+        .leftJoin(discountCodes, eq(discountCodes.id, dailySpinResults.discountCodeId))
         .orderBy(desc(dailySpinResults.createdAt))
         .limit(limit)
         .offset(offset);
@@ -702,7 +711,22 @@ export function registerDailySpinRoutes(app: Express) {
         .select({ total: sql<number>`COUNT(*)::int` })
         .from(dailySpinResults);
 
-      res.json({ rows, total, limit, offset });
+      res.json({
+        rows: rows.map((row) => ({
+          ...row,
+          // One field the screen can print without working anything out.
+          prizeLabel: row.discountCode
+            ? describeSpinDiscount({
+                type: row.discountType === "cash" ? "cash" : "percentage",
+                value: Number(row.discountValue),
+                maxAmount: row.discountMaxAmount != null ? Number(row.discountMaxAmount) : null,
+              })
+            : `${row.pointsAwarded} pts`,
+        })),
+        total,
+        limit,
+        offset,
+      });
     } catch (error) {
       console.error("[daily-spin] history failed:", error);
       res.status(500).json({ message: "Could not load the spin history" });

@@ -168,3 +168,41 @@ describe("ukDateString (the daily lock key)", () => {
     expect(ukDateString(new Date("2026-06-15T23:00:00Z"))).toBe("2026-06-16");
   });
 });
+
+describe("summarisePool with discount slices", () => {
+  // A slice switched to a discount keeps its old points value; nothing clears
+  // it and nothing reads it. Counting it made the admin liability read far
+  // higher than anything that could actually be owed.
+  const liveWheel = [
+    { id: "0", segmentIndex: 0, rewardKind: "points",   pointsValue: 10,  quantity: 2001, remaining: 1156 },
+    { id: "1", segmentIndex: 1, rewardKind: "discount", pointsValue: 500, quantity: 25,   remaining: 22 },
+    { id: "2", segmentIndex: 2, rewardKind: "points",   pointsValue: 25,  quantity: 1500, remaining: 810 },
+    { id: "3", segmentIndex: 3, rewardKind: "discount", pointsValue: 150, quantity: 400,  remaining: 397 },
+    { id: "4", segmentIndex: 4, rewardKind: "points",   pointsValue: 75,  quantity: 400,  remaining: 219 },
+    { id: "5", segmentIndex: 5, rewardKind: "discount", pointsValue: 100, quantity: 800,  remaining: 792 },
+    { id: "6", segmentIndex: 6, rewardKind: "points",   pointsValue: 50,  quantity: 800,  remaining: 444 },
+    { id: "7", segmentIndex: 7, rewardKind: "discount", pointsValue: 250, quantity: 200,  remaining: 198 },
+  ] as any;
+
+  it("counts points only where points are actually paid", () => {
+    const s = summarisePool(liveWheel);
+    expect(s.pointsRemaining).toBe(1156 * 10 + 810 * 25 + 219 * 75 + 444 * 50);
+  });
+
+  it("no longer inflates the liability with slices that pay no points", () => {
+    const s = summarisePool(liveWheel);
+    const ifDiscountsCounted =
+      s.pointsRemaining + 22 * 500 + 397 * 150 + 792 * 100 + 198 * 250;
+    // The old figure was more than three times the real one.
+    expect(ifDiscountsCounted).toBeGreaterThan(s.pointsRemaining * 3);
+  });
+
+  it("still counts every slice as a spin, whatever it pays", () => {
+    expect(summarisePool(liveWheel).totalSpins).toBe(6126);
+  });
+
+  it("treats a slice with no rewardKind as points, as older cycles are", () => {
+    const legacy = [{ id: "0", segmentIndex: 0, pointsValue: 50, quantity: 10, remaining: 10 }] as any;
+    expect(summarisePool(legacy).pointsRemaining).toBe(500);
+  });
+});

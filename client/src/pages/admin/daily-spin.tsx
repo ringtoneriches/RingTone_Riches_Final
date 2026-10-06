@@ -54,6 +54,9 @@ type AdminState = {
 type HistoryRow = {
   id: string;
   pointsAwarded: number;
+  /** What they won, already written out: "50 pts" or "10% off, up to £2.00". */
+  prizeLabel?: string | null;
+  discountCode?: string | null;
   spinDate: string;
   createdAt: string;
   email: string | null;
@@ -566,7 +569,14 @@ export default function AdminDailySpin() {
                               </span>
                               <span className="block text-xs text-white/35">{row.email}</span>
                             </td>
-                            <td className="py-2 pr-3 font-prize text-[#F1D47A]">{row.pointsAwarded} pts</td>
+                            <td className="py-2 pr-3 font-prize text-[#F1D47A]">
+                              {row.prizeLabel || `${row.pointsAwarded} pts`}
+                              {row.discountCode && (
+                                <span className="ml-2 font-sans text-[10px] font-semibold uppercase tracking-wider text-white/35">
+                                  {row.discountCode}
+                                </span>
+                              )}
+                            </td>
                             <td className="py-2 pr-3 text-white/55">{row.spinDate}</td>
                             <td className="py-2 text-white/40">
                               {new Date(row.createdAt).toLocaleString("en-GB")}
