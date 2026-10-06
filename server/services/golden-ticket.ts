@@ -36,6 +36,9 @@ import {
 
 export { GoldenTicketError, spendPerPlay } from "./golden-ticket-draw";
 
+import { recordGameWinner } from "./record-game-winner";
+import { winnerPrizeDescription, winnerPrizeValue } from "./golden-ticket-winner";
+
 type DbTx = typeof db | any;
 
 const EDITABLE_STATUSES = ["draft", "scheduled"] as const;
@@ -445,6 +448,32 @@ async function grantTicket(
       fulfilmentStatus: fulfilment,
     })
     .returning();
+
+  // Put it on the public Past Winners wall.
+  //
+  // Every game records its winners through this helper; a Golden Ticket is
+  // handed out by Ringtone Riches rather than won from a game, so nothing was
+  // recording these and real cash winners never appeared. The competition is
+  // carried so the card can say which game they were playing when it landed.
+  //
+  // Inside the same transaction as the award: a winner on the wall who was
+  // never paid would be worse than one who was paid but not shown.
+  await recordGameWinner(tx, {
+    userId: play.userId as string,
+    competitionId: play.competitionId ?? null,
+    prizeDescription: winnerPrizeDescription({
+      prizeType: campaign.prizeType,
+      prizeName: campaign.name,
+      prizeValue: amount,
+    }),
+    prizeValue: winnerPrizeValue({
+      prizeType: campaign.prizeType,
+      prizeName: campaign.name,
+      prizeValue: amount,
+    }),
+    imageUrl: campaign.prizeImageUrl ?? null,
+    createdAt: win?.awardedAt ?? new Date(),
+  });
 
   const awarded = Number(campaign.ticketsAwarded ?? 0) + 1;
   const closure = closureAfterPlay(campaign as unknown as CampaignDraw, position, awarded);
