@@ -7,6 +7,7 @@ import {
   isPlayEligible,
   isWinningPosition,
   pickDropPositions,
+  assertDrawSize,
   spendPerPlay,
 } from "./golden-ticket-draw";
 
@@ -65,8 +66,56 @@ describe("pickDropPositions", () => {
     expect(() => pickDropPositions(11, 10)).toThrow(GoldenTicketError);
   });
 
+  // The admin "create campaign" form hung the entire site on any campaign of
+  // two or more tickets. Validation checked the numbers by running the draw
+  // with a stubbed random that always returned 0.5, and a constant random can
+  // never produce a second distinct position, so the loop never finished --
+  // on the server's only thread, which took the whole site down with it.
+  it("terminates even when random never changes, which hung the site", () => {
+    const stuck = () => 0.5;
+    const positions = pickDropPositions(2, 20, stuck);
+    expect(positions).toHaveLength(2);
+    expect(new Set(positions).size).toBe(2);
+  });
+
+  it("terminates for a thin draw in a wide window on a constant random", () => {
+    const positions = pickDropPositions(3, 5000, () => 0.5);
+    expect(positions).toHaveLength(3);
+    expect(new Set(positions).size).toBe(3);
+  });
+
+  it("still picks uniformly when the random is healthy", () => {
+    // The fallback must not kick in for an ordinary draw, or the sparse path
+    // would quietly become a full shuffle of a very large window.
+    const positions = pickDropPositions(4, 1000, seeded(99));
+    expect(positions).toHaveLength(4);
+    expect(new Set(positions).size).toBe(4);
+    expect(Math.max(...positions)).toBeLessThanOrEqual(1000);
+  });
+
   it("refuses a campaign with no tickets", () => {
     expect(() => pickDropPositions(0, 10)).toThrow(GoldenTicketError);
+  });
+});
+
+describe("assertDrawSize", () => {
+  // What the admin form calls. It must decide without drawing anything: the
+  // draw is what hung the server.
+  it("accepts the shape that used to hang the site", () => {
+    expect(() => assertDrawSize(2, 20)).not.toThrow();
+  });
+
+  it("refuses more tickets than the window can hold", () => {
+    expect(() => assertDrawSize(10, 5)).toThrow(GoldenTicketError);
+  });
+
+  it("refuses a window of nothing", () => {
+    expect(() => assertDrawSize(1, 0)).toThrow(GoldenTicketError);
+  });
+
+  it("refuses fractional counts, which cannot be positions", () => {
+    expect(() => assertDrawSize(1.5, 20)).toThrow(GoldenTicketError);
+    expect(() => assertDrawSize(2, 20.5)).toThrow(GoldenTicketError);
   });
 });
 
