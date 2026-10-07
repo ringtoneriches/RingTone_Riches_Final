@@ -573,7 +573,7 @@ export default function CompetitionPage() {
 
                 {isGameType && (
                   <div className="mt-4 rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/8 px-3 py-2.5 text-sm text-white/70">
-                    <span className="font-black text-[#F1D47A]">£100 cash draw every month.</span>{" "}
+                    <span className="font-black text-[#F1D47A]">£200 cash end prize.</span>{" "}
                     Every entry is in automatically.
                         </div>
                 )}
