@@ -179,6 +179,7 @@ import {
 import { OTPGenerator } from "./otp";
 import { sendVerificationEmail } from "./emails/verification-email";
 import { issueEmailVerificationOtp } from "./email-otp";
+import { phoneMatchKey } from "./services/phone-identity";
 import {
   applyReservedTender,
   beginReservedCardCheckout,
@@ -1495,6 +1496,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   //   }
   // );
 
+/**
+ * The full account already using this phone number, if there is one.
+ *
+ * Accounts were being created in batches on a single handset -- three on one
+ * number, two more on the number next to it -- each taking the signup bonus
+ * and then farming the free daily spin. Registration only ever checked the
+ * email address, so nothing about that looked irregular to the server.
+ *
+ * Numbers are compared on their last nine digits rather than as typed: the
+ * signup field accepts '+', spaces, dashes and brackets, so one line can be
+ * stored as '07359126899' or as '+44 7359 126899'. A string comparison would
+ * miss that, and anyone who noticed the check could step around it just by
+ * typing the other form.
+ *
+ * Guest accounts are deliberately ignored. Guest checkout creates one with
+ * whatever phone number was typed at the till, and it gets neither the signup
+ * bonus nor the daily spin, so it is not a way in. Counting it would instead
+ * lock a real customer out of registering properly after they had checked out
+ * as a guest once, which is a far more common story than the abuse.
+ *
+ * Disabled accounts are deliberately included. Re-registering after a ban is
+ * the behaviour this is here to stop.
+ *
+ * The expression must stay spelled exactly as PHONE_MATCH_KEY_SQL, which is
+ * what migrations/0031_users_phone_match_key.sql indexes; otherwise every
+ * signup falls back to a sequential scan of users.
+ */
+async function findFullAccountByPhone(raw: string, exceptUserId?: string) {
+  const key = phoneMatchKey(raw);
+  if (!key) return null;
+  const rows = await db
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(
+      and(
+        sql`${users.phoneNumber} IS NOT NULL`,
+        sql`${users.phoneNumber} <> ''`,
+        sql`RIGHT(REGEXP_REPLACE(${users.phoneNumber}, '[^0-9]', '', 'g'), 9) = ${key}`,
+        eq(users.isGuestAccount, false)
+      )
+    )
+    .limit(5);
+  return rows.find((r) => r.id !== exceptUserId) ?? null;
+}
+
 app.post("/api/auth/register", registerLimiter, async (req, res) => {
   const startTime = Date.now();
   const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
@@ -1583,6 +1629,22 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
     if (existingUser && !existingUser.isGuestAccount) {
       console.log(`❌ [register] User already exists: ${normalizedEmail}`);
       return res.status(400).json({ message: "User already exists with this email" });
+    }
+
+    // Same check for the phone number. Placed here so it covers both a brand
+    // new signup and a guest account being upgraded below.
+    const phoneOwner = await findFullAccountByPhone(phoneNumber, existingUser?.id);
+    if (phoneOwner) {
+      console.log(`❌ [register] Phone already in use: ${phoneOwner.email}`);
+      await logSuspiciousActivity(
+        clientIp as string,
+        userAgent,
+        `Duplicate phone at signup (already on ${phoneOwner.email})`,
+        normalizedEmail
+      );
+      return res.status(400).json({
+        message: "An account already exists with this phone number.",
+      });
     }
 
     if (existingUser?.isGuestAccount) {
@@ -2481,6 +2543,18 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       if (password) {
         updateData.password = await hashPassword(password);
         updateData.passwordChangedAt = new Date();
+      }
+
+      // The same rule as at signup, so a number cannot be moved onto a second
+      // account afterwards. The owner themselves is excluded, otherwise saving
+      // the form without changing the number would refuse itself.
+      if (phoneNumber) {
+        const phoneOwner = await findFullAccountByPhone(phoneNumber, userId);
+        if (phoneOwner) {
+          return res
+            .status(400)
+            .json({ message: "An account already exists with this phone number." });
+        }
       }
 
       if (email) {
