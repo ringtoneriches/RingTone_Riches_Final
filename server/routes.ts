@@ -181,6 +181,11 @@ import { sendVerificationEmail } from "./emails/verification-email";
 import { issueEmailVerificationOtp } from "./email-otp";
 import { phoneMatchKey } from "./services/phone-identity";
 import {
+  SIGNUP_BONUS_IP_LIMIT,
+  bonusWindowStart,
+  signupBonusDecision,
+} from "./services/signup-bonus-guard";
+import {
   applyReservedTender,
   beginReservedCardCheckout,
   firstQueryRow,
@@ -1766,7 +1771,11 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
       phoneNumber: phoneNumber.trim(),
       howDidYouFindUs,
       receiveNewsletter: receiveNewsletter || false,
-      emailVerified: true,
+      // Not verified yet. Registration used to set this true and never send an
+      // email, so the address was never proven -- and the daily spin's
+      // "verified members only" rule had nothing to test. The OTP goes out
+      // below and /api/auth/verify-email flips it.
+      emailVerified: false,
       referredBy: referrerId,
       pendingRedeemCode: pendingRedeemCode,
       pendingRedeemAmount: pendingRedeemAmount,
@@ -1783,57 +1792,27 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
       createdAt: new Date(),
     });
 
+    // ===== SEND VERIFICATION EMAIL =====
+    // Same OTP flow a guest account already goes through when it is upgraded.
+    await issueEmailVerificationOtp({
+      id: user.id,
+      email: user.email,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+    });
+
     // ===== APPLY BONUSES =====
-    let bonusCashCredited = 0;
-    let bonusPointsCredited = 0;
+    // The signup bonus is NOT paid here any more -- it is paid once the email
+    // has been verified, in /api/auth/verify-email. Paying it at registration
+    // meant an address nobody owned still earned it, which is how one person
+    // collected it repeatedly under invented names.
     let redeemAmountCredited = 0;
 
     try {
       await db.transaction(async (tx) => {
-        // 1. Signup Bonus
-        try {
-          const settings = await storage.getPlatformSettings();
-          if (settings?.signupBonusEnabled) {
-            const bonusCash = parseFloat(settings.signupBonusCash || "0");
-            const bonusPoints = settings.signupBonusPoints || 0;
-
-            if (bonusCash > 0) {
-              await tx.update(users)
-                .set({
-                  balance: sql`${users.balance} + ${bonusCash}`,
-                })
-                .where(eq(users.id, user.id));
-              bonusCashCredited = bonusCash;
-
-              await tx.insert(transactions).values({
-                userId: user.id,
-                amount: bonusCash.toFixed(2),
-                type: "deposit",
-                status: "completed",
-                description: "🎉 Signup bonus - Welcome cash",
-              });
-            }
-
-            if (bonusPoints > 0) {
-              await tx.update(users)
-                .set({
-                  ringtonePoints: sql`${users.ringtonePoints} + ${bonusPoints}`,
-                })
-                .where(eq(users.id, user.id));
-              bonusPointsCredited = bonusPoints;
-
-              await tx.insert(transactions).values({
-                userId: user.id,
-                amount: "0.00",
-                type: "deposit",
-                status: "completed",
-                description: `🎉 Signup bonus - ${bonusPoints} RingTone Points`,
-              });
-            }
-          }
-        } catch (bonusError) {
-          console.error("Signup bonus error:", bonusError);
-        }
+        // 1. Signup Bonus -- moved to /api/auth/verify-email, so that it is
+        //    paid only once the address has been proven, and only within the
+        //    per-IP limit in services/signup-bonus-guard.ts.
 
         // 2. Redeem Code
         if (pendingRedeemCode && pendingRedeemAmount) {
@@ -1978,7 +1957,8 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
     console.log(`✅ Registration complete for ${email} in ${Date.now() - startTime}ms`);
 
     res.status(201).json({
-      message: "Registration successful! Welcome to RingTone Riches!",
+      message: "Account created. Check your email for your verification code.",
+      needsVerification: true,
       user: {
         id: updatedUser?.id,
         email: updatedUser?.email,
@@ -1987,11 +1967,12 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
         balance: updatedUser?.balance,
         ringtonePoints: updatedUser?.ringtonePoints,
         isAdmin: updatedUser?.isAdmin || false,
-        emailVerified: true,
+        emailVerified: false,
       },
       bonusesApplied: {
-        cash: bonusCashCredited,
-        points: bonusPointsCredited,
+        // Nothing yet -- the signup bonus lands on verification.
+        cash: 0,
+        points: 0,
         referral: !!referrerId,
         redeemCode: redeemAmountCredited > 0 ? `£${redeemAmountCredited.toFixed(2)}` : null,
       },
@@ -2255,28 +2236,113 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         .where(eq(tickets.userId, user.id))
         .limit(1);
 
+      // ===== SIGNUP BONUS =====
+      // This is the only place the signup bonus is paid. It used to be paid at
+      // registration with no check of any kind, to an address that had never
+      // been proven -- so invented inboxes earned it, repeatedly, from one
+      // handset. Paying it here means the address has at least been read.
       let bonusCashCredited = 0;
       let bonusPointsCredited = 0;
       if (!existingTicket.length) {
         try {
           const settings = await storage.getPlatformSettings();
-          if (settings?.signupBonusEnabled) {
-            const bonusCash = parseFloat(settings.signupBonusCash || "0");
-            const bonusPoints = settings.signupBonusPoints || 0;
-            if (bonusCash > 0) {
-              await db
+
+          // The address the account was registered from. `users` has no IP
+          // column -- registration passes `ipAddress` to createUser and it is
+          // silently dropped, because nothing by that name exists on the
+          // table -- so the real record is the user_ip_logs row written on the
+          // same request.
+          const [signupIp] = await db
+            .select({ ip: userIpLogs.ipAddress })
+            .from(userIpLogs)
+            .where(eq(userIpLogs.userId, user.id))
+            .orderBy(asc(userIpLogs.createdAt))
+            .limit(1);
+
+          // Bonuses already paid to other accounts opened from that address
+          // inside the window. Counted where the account was opened rather
+          // than where it is being verified from, which is the thing a person
+          // farming accounts cannot vary without actually moving.
+          let priorGrantsFromIp = 0;
+          if (signupIp?.ip) {
+            const [row] = await db
+              .select({ n: count(sql`DISTINCT ${users.id}`) })
+              .from(users)
+              .innerJoin(userIpLogs, eq(userIpLogs.userId, users.id))
+              .where(
+                and(
+                  eq(userIpLogs.ipAddress, signupIp.ip),
+                  ne(users.id, user.id),
+                  gte(users.signupBonusGrantedAt, bonusWindowStart())
+                )
+              );
+            priorGrantsFromIp = Number(row?.n || 0);
+          }
+
+          const decision = signupBonusDecision({
+            enabled: Boolean(settings?.signupBonusEnabled),
+            cash: parseFloat(settings?.signupBonusCash || "0"),
+            points: settings?.signupBonusPoints || 0,
+            alreadyGrantedAt: user.signupBonusGrantedAt,
+            priorGrantsFromIp,
+            ipLimit: SIGNUP_BONUS_IP_LIMIT,
+          });
+
+          if (decision.grant) {
+            const bonusCash = parseFloat(settings?.signupBonusCash || "0");
+            const bonusPoints = settings?.signupBonusPoints || 0;
+
+            // One transaction, so the credits and the marker that records them
+            // cannot come apart and pay twice.
+            await db.transaction(async (tx) => {
+              if (bonusCash > 0) {
+                await tx
+                  .update(users)
+                  .set({ balance: sql`${users.balance} + ${bonusCash}` })
+                  .where(eq(users.id, user.id));
+                await tx.insert(transactions).values({
+                  userId: user.id,
+                  amount: bonusCash.toFixed(2),
+                  type: "deposit",
+                  status: "completed",
+                  description: "\u{1F389} Signup bonus - Welcome cash",
+                });
+                bonusCashCredited = bonusCash;
+              }
+              if (bonusPoints > 0) {
+                await tx
+                  .update(users)
+                  .set({ ringtonePoints: sql`${users.ringtonePoints} + ${bonusPoints}` })
+                  .where(eq(users.id, user.id));
+                await tx.insert(transactions).values({
+                  userId: user.id,
+                  amount: "0.00",
+                  type: "deposit",
+                  status: "completed",
+                  description: `\u{1F389} Signup bonus - ${bonusPoints} RingTone Points`,
+                });
+                bonusPointsCredited = bonusPoints;
+              }
+              await tx
                 .update(users)
-                .set({ balance: sql`${users.balance} + ${bonusCash}` })
+                .set({ signupBonusGrantedAt: new Date(), updatedAt: new Date() })
                 .where(eq(users.id, user.id));
-              bonusCashCredited = bonusCash;
-            }
-            if (bonusPoints > 0) {
-              await db
-                .update(users)
-                .set({ ringtonePoints: sql`${users.ringtonePoints} + ${bonusPoints}` })
-                .where(eq(users.id, user.id));
-              bonusPointsCredited = bonusPoints;
-            }
+            });
+          } else if (decision.reason === "ip_limit") {
+            // The account is still created and still verified -- only the
+            // bonus is withheld. Households share a connection, so refusing
+            // the account here would cost more than the bonus is worth.
+            console.warn("[signup-bonus] withheld, IP over limit", {
+              userId: user.id,
+              ip: signupIp?.ip,
+              priorGrantsFromIp,
+            });
+            await logSuspiciousActivity(
+              String(signupIp?.ip || "unknown"),
+              String(req.headers["user-agent"] || "unknown"),
+              `Signup bonus withheld: ${priorGrantsFromIp} already paid from this IP in ${SIGNUP_BONUS_IP_LIMIT > 0 ? "the window" : "all time"}`,
+              user.email
+            );
           }
         } catch (bonusError) {
           console.error("Signup bonus on verify error:", bonusError);

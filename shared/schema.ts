@@ -51,6 +51,14 @@ export const users = pgTable("users", {
   verificationSentAt: timestamp("verification_sent_at"),
   emailVerificationOtp: varchar("email_verification_otp"),
   emailVerificationOtpExpiresAt: timestamp("email_verification_otp_expires_at"), 
+  /**
+   * When the signup bonus was paid, or null if it never was.
+   *
+   * Makes the grant idempotent, and is what the per-IP count is built from --
+   * the bonus previously left no mark on the account at all, so there was no
+   * way to ask how many had been paid to one address.
+   */
+  signupBonusGrantedAt: timestamp("signup_bonus_granted_at"),
   ringtonePoints: integer("ringtone_points").default(0),
   receiveNewsletter: boolean("receive_newsletter").default(false),
   dailyLimitLastUpdatedAt: timestamp("daily_limit_last_updated_at"),

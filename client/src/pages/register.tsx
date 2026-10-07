@@ -272,9 +272,15 @@ const registerMutation = useMutation({
     return res.json();
   },
   onSuccess: (data) => {
-    if (data?.claimedGuest) {
+    // Both routes through registration now end at the same place: a code has
+    // been emailed and has to be entered before the account can be used.
+    // `claimedGuest` is a guest account being upgraded; `needsVerification` is
+    // an ordinary new signup, which used to be marked verified on the spot
+    // without any email ever being sent. Sending this case to /login instead
+    // would dead-end it, since login refuses an unverified account.
+    if (data?.claimedGuest || data?.needsVerification) {
       toast({
-        title: "Account saved",
+        title: data?.claimedGuest ? "Account saved" : "Account created",
         description: "Check your email for a 6-digit verification code.",
       });
       const email = encodeURIComponent(data.email || data.user?.email || "");
