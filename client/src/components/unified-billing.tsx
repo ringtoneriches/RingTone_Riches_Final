@@ -356,6 +356,33 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
 
   const { walletUsed, pointsUsed, pointsNeeded, remainingAmount, hasSufficientFunds } = calculatePaymentBreakdown();
   const hasSelectedMethod = selectedMethods.walletBalance || selectedMethods.ringtonePoints || (isGame && selectedMethods.instaplay);
+
+  /**
+   * Open on card, where card is a real option.
+   *
+   * Nothing was selected before, so the pay button was dead until someone
+   * chose a method -- a required tap on every checkout that told us nothing we
+   * could not infer. Card is the one that brings money in: points are a
+   * stockpile the site gave away, and over half of all purchases are now paid
+   * with them.
+   *
+   * Only for game types, because hasSelectedMethod above does not count
+   * instaplay for anything else, and selecting it on a prize draw would leave
+   * the button dead with no explanation. Runs once: after that the choice
+   * belongs to the customer, including changing it back.
+   */
+  const defaultMethodSet = useRef(false);
+  useEffect(() => {
+    if (defaultMethodSet.current) return;
+    if (!order || !isGame) return;
+    defaultMethodSet.current = true;
+    setSelectedMethods((prev) =>
+      prev.walletBalance || prev.ringtonePoints || prev.instaplay
+        ? prev
+        : { walletBalance: false, ringtonePoints: false, instaplay: true },
+    );
+  }, [order, isGame]);
+
   const bonusPoints = Math.round(totalAmount * 10);
 
   const handleMethodToggle = (method: "walletBalance" | "ringtonePoints" | "instaplay") => {
