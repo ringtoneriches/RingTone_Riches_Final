@@ -4,7 +4,11 @@ import { nanoid } from "nanoid";
 import { db } from "./db";
 import { cashflows } from "./cashflows";
 import { isAuthenticated } from "./customAuth";
-import { countCommittedTickets, issuePlayTickets } from "./services/instant-win-pool";
+import {
+  countCommittedTickets,
+  issuePlayTickets,
+  runAutoActivationAfterCommit,
+} from "./services/instant-win-pool";
 import { checkTicketLimit, hasPerUserLimit } from "./services/ticket-limits";
 import { creditCardCashback } from "./services/card-cashback";
 import { sendOrderConfirmationEmail, type OrderConfirmationPayload } from "./email";
@@ -113,6 +117,7 @@ export async function fulfillCartCardPayment(opts: {
     const byId = new Map(orderRows.map((row) => [row.id, row]));
     const issued: { orderId: string; tickets: { ticketNumber: string }[]; gameType: string; title: string; quantity: number; amount: string }[] = [];
     const newlyIssued: typeof issued = [];
+    const autoActivate: string[] = [];
 
     for (const orderId of uniqueIds) {
       const order = byId.get(orderId);
@@ -152,6 +157,10 @@ export async function fulfillCartCardPayment(opts: {
         });
         orderTickets = issuedTickets.tickets;
         didIssue = true;
+        // Started after this transaction commits, never inside it: auto-
+        // activation takes a connection of its own, and asking the pool for a
+        // second one from inside the first is what emptied it in October.
+        if (issuedTickets.needsAutoActivation) autoActivate.push(order.competitionId);
       }
 
       const row = {
@@ -191,10 +200,15 @@ export async function fulfillCartCardPayment(opts: {
       });
     }
 
-    return { issued, newlyIssued };
+    return { issued, newlyIssued, autoActivate };
   };
 
   const generatedByOrder = opts.tx ? await run(opts.tx) : await db.transaction(run);
+
+  // Safe here: when we opened the transaction it has committed, and when the
+  // caller owns it they are responsible for their own commit before this
+  // resolves. Either way nothing is holding a connection open any more.
+  runAutoActivationAfterCommit(generatedByOrder.autoActivate);
 
   const [user] = await db.select().from(users).where(eq(users.id, opts.userId)).limit(1);
   const rowsToEmail = generatedByOrder.newlyIssued;

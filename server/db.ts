@@ -77,6 +77,32 @@ pool.on("error", (err) => {
   console.error("[db] idle client error (connection will be replaced):", err.message);
 });
 
+/**
+ * The same protection for a client that is CHECKED OUT.
+ *
+ * pool.on("error") only covers clients sitting idle in the pool. A client being
+ * used emits its errors on itself, and when there is no query in flight to
+ * reject -- a transaction that is open but running nothing -- the event has
+ * nowhere to go. Node ends the process on an unhandled "error" event.
+ *
+ * That is not hypothetical. On 8 October a settlement on staging left a
+ * transaction idle past idle_in_transaction_session_timeout; Postgres closed
+ * the connection with a FATAL, the event was unhandled, and the container
+ * restarted mid-purchase. The order rolled back and was retried twice, so the
+ * customer waited two and a half minutes and got three confirmation emails for
+ * one order.
+ *
+ * The timeouts above are deliberate and stay: a transaction nobody is driving
+ * should be cut loose. What must not happen is the whole process going with
+ * it. Every connection gets a listener as it is created, so the error is
+ * logged and the pool quietly replaces the connection.
+ */
+pool.on("connect", (client) => {
+  client.on("error", (err: Error) => {
+    console.error("[db] client error (connection will be replaced):", err.message);
+  });
+});
+
 export const db = drizzle(pool, { schema });
 
 /** Exposed for the health check, so pool exhaustion is visible before it bites. */
