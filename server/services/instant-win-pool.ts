@@ -3,6 +3,8 @@ import { planGroupActivation } from "@shared/instant-win-groups";
 import {
   allocateTicketSeqsInBlocks,
   generateLosingBalloonValues,
+  decoyValuesFromPrizeRows,
+  decoyValuesFromTableRows,
   pickDistinctRandom,
 } from "./controlled-pool-allocation";
 import {
@@ -126,44 +128,59 @@ function displayNameFromUser(user?: {
   return name || user?.email || "Winner";
 }
 
-async function loadPopDecoyCashValues(tx: DbTx, competitionId: string): Promise<number[]> {
+/**
+ * The decoy amounts a losing ticket is shown, for this competition.
+ *
+ * One query. The version this replaced ran a separate SELECT for every points
+ * prize -- about 930 of them per ticket on a thousand-prize pool -- and did it
+ * again for every ticket in the order, inside the purchase transaction. A
+ * ten-play Pop order fired roughly 9,300 queries while holding a connection,
+ * which is what put "Confirming your payment" on screen for a minute and a
+ * half.
+ *
+ * The parent prize-table row is joined in instead, so a points prize's real
+ * count arrives with it. The shaping lives in decoyValuesFromPrizeRows() where
+ * it can be tested.
+ *
+ * `cache` holds the answer for the life of one order. The prize list cannot
+ * change midway through issuing tickets -- the competition row is locked FOR
+ * UPDATE first -- so every ticket in an order would otherwise be asking the
+ * same question and getting the same answer.
+ */
+async function loadPopDecoyCashValues(
+  tx: DbTx,
+  competitionId: string,
+  cache?: Map<string, number[]>,
+): Promise<number[]> {
+  const cached = cache?.get(competitionId);
+  if (cached) return cached;
+
   const prizeRows = await tx
     .select({
       value: instantWinPrizes.value,
       rewardType: instantWinPrizes.rewardType,
-      competitionPrizeId: instantWinPrizes.competitionPrizeId,
+      parentPoints: competitionPrizes.ringtonePoints,
     })
     .from(instantWinPrizes)
+    .leftJoin(competitionPrizes, eq(competitionPrizes.id, instantWinPrizes.competitionPrizeId))
     .where(eq(instantWinPrizes.competitionId, competitionId));
 
-  const values: number[] = [];
-  for (const row of prizeRows) {
-    if (row.rewardType === "cash") {
-      const n = Number(row.value);
-      if (Number.isFinite(n) && n > 0) values.push(Math.round(n * 100) / 100);
-    } else if (row.rewardType === "points") {
-      const pts = await resolveInstantWinValueNum(row, tx);
-      if (pts > 0) values.push(Math.round((pts / 100) * 100) / 100);
-    }
+  const values = decoyValuesFromPrizeRows(prizeRows);
+
+  // Two is the fewest generateLosingBalloonValues() can work from before it
+  // falls back to its own hardcoded amounts.
+  if (values.length < 2) {
+    const tableRows = await tx
+      .select({
+        prizeValue: competitionPrizes.prizeValue,
+        ringtonePoints: competitionPrizes.ringtonePoints,
+      })
+      .from(competitionPrizes)
+      .where(eq(competitionPrizes.competitionId, competitionId));
+    values.push(...decoyValuesFromTableRows(tableRows));
   }
 
-  if (values.length >= 2) return values;
-
-  const tableRows = await tx
-    .select({
-      prizeValue: competitionPrizes.prizeValue,
-      ringtonePoints: competitionPrizes.ringtonePoints,
-    })
-    .from(competitionPrizes)
-    .where(eq(competitionPrizes.competitionId, competitionId));
-
-  for (const row of tableRows) {
-    const cash = Number(row.prizeValue || 0);
-    if (cash > 0) values.push(Math.round(cash * 100) / 100);
-    const pts = Number(row.ringtonePoints || 0);
-    if (pts > 0) values.push(Math.round((pts / 100) * 100) / 100);
-  }
-
+  cache?.set(competitionId, values);
   return values;
 }
 
@@ -845,6 +862,12 @@ async function freezeIssuedTicket(
     guestOrderId?: string;
     isGuest?: boolean;
     ticketId: string;
+    /**
+     * Decoy amounts already worked out for this order, keyed by competition.
+     * Every ticket in an order asks the same question of the same prize list,
+     * so without this the lookup is repeated per ticket.
+     */
+    decoyCache?: Map<string, number[]>;
   }
 ) {
   if (isPromoVideoModeEnabled()) {
@@ -887,7 +910,9 @@ async function freezeIssuedTicket(
     )
     .limit(1);
 
-  const decoyCashValues = matchingPrize ? [] : await loadPopDecoyCashValues(tx, opts.competitionId);
+  const decoyCashValues = matchingPrize
+    ? []
+    : await loadPopDecoyCashValues(tx, opts.competitionId, opts.decoyCache);
   const details = matchingPrize
     ? buildPrizeDetails(matchingPrize, await resolveInstantWinValueNum(matchingPrize, tx))
     : buildPrizeDetails(null, undefined, generateLosingBalloonValues(decoyCashValues));
@@ -1068,8 +1093,12 @@ async function issuePlayTicketsInner(tx: DbTx, opts: IssueTicketsOpts) {
     .where(eq(competitions.id, opts.competitionId));
 
   if (controlled) {
+    // Shared across every ticket in this order: the prize list cannot change
+    // while it is being issued, since the competition row is locked above.
+    const decoyCache = new Map<string, number[]>();
     for (const ticket of issued) {
       await freezeIssuedTicket(tx, {
+        decoyCache,
         competitionId: opts.competitionId,
         ticketSeq: Number(ticket.ticketSeq),
         userId: opts.userId,
