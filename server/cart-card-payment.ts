@@ -205,12 +205,18 @@ export async function fulfillCartCardPayment(opts: {
 
   const generatedByOrder = opts.tx ? await run(opts.tx) : await db.transaction(run);
 
-  // Safe here: when we opened the transaction it has committed, and when the
-  // caller owns it they are responsible for their own commit before this
-  // resolves. Either way nothing is holding a connection open any more.
-  runAutoActivationAfterCommit(generatedByOrder.autoActivate);
+  // Only when this function opened the transaction. If the CALLER passed one
+  // in, theirs is still open on this line -- awaiting run() does not commit it
+  // -- so starting work that wants its own connection here is the reentrancy
+  // that leaves their transaction idle until Postgres closes it. They get the
+  // list back and start it after they commit.
+  if (!opts.tx) runAutoActivationAfterCommit(generatedByOrder.autoActivate);
 
-  const [user] = await db.select().from(users).where(eq(users.id, opts.userId)).limit(1);
+  // Read through the caller's transaction when there is one, for the same
+  // reason: this lookup is only here to address the confirmation email, and it
+  // is not worth a second connection taken from inside the first.
+  const runner = opts.tx ?? db;
+  const [user] = await runner.select().from(users).where(eq(users.id, opts.userId)).limit(1);
   const rowsToEmail = generatedByOrder.newlyIssued;
   if (user?.email && rowsToEmail.length) {
     const displayName =
@@ -258,7 +264,11 @@ export async function fulfillCartCardPayment(opts: {
     orderId: uniqueIds[0],
   });
 
-  return generatedByOrder.issued;
+  // The caller needs autoActivate when it owns the transaction: it is the only
+  // one that knows when its commit lands.
+  return Object.assign(generatedByOrder.issued, {
+    autoActivate: generatedByOrder.autoActivate,
+  });
 }
 
 export async function failCartCardPayment(orderIds: string[]) {
