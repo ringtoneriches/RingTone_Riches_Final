@@ -133,9 +133,8 @@ export default function CompetitionPage() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { isAuthenticated, user } = useAuth() as {
+  const { isAuthenticated } = useAuth() as {
     isAuthenticated: boolean;
-    user: User | null;
   };
 
   const [quantity, setQuantity] = useState(DEFAULT_QUANTITY);
@@ -803,15 +802,6 @@ export default function CompetitionPage() {
                   >
                     More quantities
                   </button>
-                )}
-
-                {isAuthenticated && user && (
-                  <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-4 py-3">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Wallet</span>
-                    <span className="font-prize text-xl text-white">
-                      £{parseFloat(user.balance || "0").toFixed(2)}
-                    </span>
-                  </div>
                 )}
 
                 <div className="mt-4 flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
