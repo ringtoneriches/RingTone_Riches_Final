@@ -143,6 +143,7 @@ import { registerDailySpinRoutes } from "./daily-spin-routes";
 import {
   InstantWinError,
   assertCanPurchaseTickets,
+
   issuePlayTickets,
   runAutoActivationAfterCommit,
   tryRevealControlledPop,
@@ -181,6 +182,11 @@ import { OTPGenerator } from "./otp";
 import { sendVerificationEmail } from "./emails/verification-email";
 import { issueEmailVerificationOtp } from "./email-otp";
 import { phoneMatchKey } from "./services/phone-identity";
+import {
+  canChangeOrderQuantity,
+  editRefusalMessage,
+  editRefusalStatus,
+} from "./services/order-quantity-change";
 import {
   decidePercentageDiscount,
   nothingToSaveMessage,
@@ -10526,6 +10532,108 @@ app.post(
     }
   }
 );
+
+/**
+ * Change the quantity on an order that has not been paid for.
+ *
+ * The checkout had no quantity control -- the number was printed as text and
+ * the only way to change it was the browser back button, which created a
+ * second order. 71% of "abandoned" orders were that: the same customer's
+ * discarded first attempt. 61% of them came back with FEWER plays, an average
+ * of 5.7 down to 2.1, so the round trip was costing two thirds of the basket.
+ *
+ * Nothing about what the competition will sell is decided here.
+ * assertCanPurchaseTickets settles that, exactly as it does for a fresh
+ * purchase, so the two can never disagree. The price is recalculated through
+ * calculateDiscountedTotal for the same reason -- it is the rule that priced
+ * the order in the first place.
+ */
+app.post("/api/checkout/update-quantity", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id as string;
+    const { orderId, quantity } = req.body ?? {};
+
+    if (typeof orderId !== "string" || !orderId) {
+      return res.status(400).json({ message: "Order ID is required" });
+    }
+
+    const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+
+    // A payment already under way. The customer may be on the card page now,
+    // and settlement matches on the amount it was started with.
+    const [inFlight] = order
+      ? await db
+          .select({ id: pendingPayments.id })
+          .from(pendingPayments)
+          .where(and(eq(pendingPayments.orderId, orderId), eq(pendingPayments.status, "pending")))
+          .limit(1)
+      : [];
+
+    const [anyTicket] = order
+      ? await db.select({ id: tickets.id }).from(tickets).where(eq(tickets.orderId, orderId)).limit(1)
+      : [];
+
+    const decision = canChangeOrderQuantity(
+      {
+        exists: Boolean(order),
+        ownedByRequester: order?.userId === userId,
+        status: order?.status ?? null,
+        hasDiscountCode: Boolean(order?.discountCodeId),
+        paymentInFlight: Boolean(inFlight),
+        alreadyIssued: Boolean(anyTicket),
+        currentQuantity: Number(order?.quantity ?? 0),
+      },
+      quantity,
+    );
+
+    if (!decision.ok) {
+      return res
+        .status(editRefusalStatus(decision.reason))
+        .json({ message: editRefusalMessage(decision.reason), code: decision.reason });
+    }
+
+    // The competition's own rules, unchanged from a fresh purchase.
+    try {
+      await assertCanPurchaseTickets(order!.competitionId, decision.quantity, { userId });
+    } catch (err: any) {
+      if (err instanceof InstantWinError) {
+        return res.status(err.status).json({ message: err.message, code: err.code });
+      }
+      throw err;
+    }
+
+    const [competition] = await db
+      .select()
+      .from(competitions)
+      .where(eq(competitions.id, order!.competitionId))
+      .limit(1);
+    if (!competition) return res.status(404).json({ message: "Competition not found" });
+
+    const { discountedTotal, originalTotal, savings, discountPercent } =
+      calculateDiscountedTotal(effectiveTicketPrice(competition), decision.quantity);
+
+    await db
+      .update(orders)
+      .set({
+        quantity: decision.quantity,
+        totalAmount: String(discountedTotal),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(orders.id, orderId), eq(orders.status, "pending")));
+
+    res.json({
+      success: true,
+      quantity: decision.quantity,
+      totalAmount: discountedTotal,
+      originalAmount: originalTotal,
+      savings,
+      discountPercent,
+    });
+  } catch (error) {
+    console.error("Error updating order quantity:", error);
+    res.status(500).json({ message: "Failed to update quantity" });
+  }
+});
 
 // Get user's used discount codes
 app.get(
