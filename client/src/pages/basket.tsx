@@ -78,6 +78,25 @@ export default function BasketPage() {
     points: false,
     instaplay: false,
   });
+  /**
+   * Open on card, as the game checkout does.
+   *
+   * Nothing was selected, so the pay button was dead until a method was
+   * chosen. Card is the one that brings money in: points are a stockpile the
+   * site gave away and are now over half of all purchases.
+   *
+   * Runs once, and only when there is something to pay for. After that the
+   * choice belongs to the customer.
+   */
+  const defaultMethodSet = useRef(false);
+  useEffect(() => {
+    if (defaultMethodSet.current || !items.length) return;
+    defaultMethodSet.current = true;
+    setMethods((prev) =>
+      prev.wallet || prev.points || prev.instaplay ? prev : { wallet: false, points: false, instaplay: true },
+    );
+  }, [items.length]);
+
   const [progress, setProgress] = useState<CartCheckoutProgress | null>(null);
   const [checkoutItems, setCheckoutItems] = useState<BasketItem[]>([]);
   const [guestLaunch, setGuestLaunch] = useState(false);
@@ -317,7 +336,28 @@ export default function BasketPage() {
         await res.json();
       }
 
+      // Nothing is charged until the whole basket is known to be payable.
+      // This loop pays a line at a time, so stopping partway leaves the lines
+      // before it charged -- which is how one customer lost three games out of
+      // five. The page's own balance is stale by then; this asks the server.
+      if (!methods.instaplay) {
+        setProgress({
+          phase: "paying",
+          step: 0,
+          total: createdOrders.length,
+          title: "",
+          message: "Checking your balance…",
+        });
+        const pre = await apiRequest("/api/cart/preflight", "POST", {
+          orderIds: createdOrders.map((o) => o.orderId),
+          useWallet: methods.wallet,
+          usePoints: methods.points && pointsAllowed,
+        });
+        await pre.json();
+      }
+
       let paid = 0;
+      const paidTitles: string[] = [];
       for (const { item, orderId } of createdOrders) {
         setProgress({
           phase: "paying",
@@ -338,12 +378,18 @@ export default function BasketPage() {
         });
         const paidOrder = await payRes.json();
         if (paidOrder.redirectUrl || Number(paidOrder.remainingAmount || 0) > 0) {
+          // Should not happen now the basket is checked first, but if it does
+          // the customer is told what they already own rather than left to
+          // work it out from their wallet.
           throw new Error(
-            "This cart still needs a card payment. Select Instant Play, or top up your wallet."
+            paid > 0
+              ? `Paid for ${paidTitles.join(", ")}. The rest still needs a card payment or a top up.`
+              : "This cart still needs a card payment. Select Instant Play, or top up your wallet.",
           );
         }
 
         remove(item.competitionId);
+        paidTitles.push(item.title);
         paid += 1;
       }
 
@@ -688,8 +734,28 @@ export default function BasketPage() {
                         )}
                         <div className="flex items-end justify-between gap-3 border-t border-white/10 pt-3">
                           <span className="text-xs font-black uppercase tracking-widest text-white/40">Total</span>
-                          <span className="font-prize text-3xl leading-none text-[#F1D47A] sm:text-4xl">£{payableTotal.toFixed(2)}</span>
+                          <div className="text-right">
+                            {totals.savings + discountSaving > 0 && (
+                              <div className="text-xs text-white/30 line-through">
+                                £{(payableTotal + totals.savings + discountSaving).toFixed(2)}
+                              </div>
+                            )}
+                            <span className="font-prize text-3xl leading-none text-[#F1D47A] sm:text-4xl">
+                              £{payableTotal.toFixed(2)}
+                            </span>
+                          </div>
                         </div>
+
+                        {/* The saving, said once and plainly. It was two muted
+                            rows above the total that read as line items. */}
+                        {totals.savings + discountSaving > 0 && (
+                          <div className="!mt-3 flex items-center justify-center gap-2 rounded-xl border border-[#F1D47A]/35 bg-gradient-to-r from-[#D4AF37]/18 to-transparent px-3 py-2.5">
+                            <Sparkles className="h-4 w-4 shrink-0 text-[#F1D47A]" />
+                            <span className="text-[11px] font-black uppercase tracking-wider text-[#F1D47A]">
+                              You save £{(totals.savings + discountSaving).toFixed(2)}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Discount code. One code comes off the basket total. */}
