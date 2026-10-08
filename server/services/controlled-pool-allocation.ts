@@ -108,3 +108,70 @@ export function assertSeqsWithinBlock(
   const end = Math.min(start + blockSize - 1, maxTickets);
   return seqs.every((n) => n >= start && n <= end);
 }
+
+/**
+ * Turning a competition's prize rows into the pool of decoy amounts a losing
+ * ticket is shown -- the three Pop balloons, the Voltz switch labels, and so
+ * on. They are drawn from the real prize list so a near miss looks like
+ * something that could genuinely have been won.
+ *
+ * Pure, so the shaping is covered by tests and so the caller can fetch every
+ * row it needs in ONE query.
+ *
+ * What this replaced ran a separate SELECT for every points prize in the
+ * competition, on every losing ticket issued, inside the purchase
+ * transaction. A thousand-prize pool meant ~930 round trips per ticket -- a
+ * ten-play order fired about 9,300 -- and those ~930 queries only ever reached
+ * ten distinct parent prizes, asking the same ten questions ninety-odd times
+ * each, to end up picking three numbers. Pop purchases averaged 97 seconds.
+ *
+ * Points are shown at the platform rate of 100 points to £1, so a decoy reads
+ * as money next to the cash amounts.
+ */
+export type DecoyPrizeRow = {
+  value: string | number | null;
+  rewardType: string | null;
+  /**
+   * ringtonePoints from the parent prize-table row, joined in by the caller.
+   * A points prize's own `value` is not authoritative; the parent's count wins
+   * when it has one. Mirrors resolveInstantWinValueNum.
+   */
+  parentPoints?: string | number | null;
+};
+
+export function decoyValuesFromPrizeRows(rows: DecoyPrizeRow[]): number[] {
+  const values: number[] = [];
+  for (const row of rows) {
+    if (row.rewardType === "cash") {
+      const n = Number(row.value);
+      if (Number.isFinite(n) && n > 0) values.push(Math.round(n * 100) / 100);
+    } else if (row.rewardType === "points") {
+      const parent = Math.max(0, Number(row.parentPoints || 0));
+      const pts = parent > 0 ? parent : Number(row.value || 0);
+      if (Number.isFinite(pts) && pts > 0) values.push(Math.round((pts / 100) * 100) / 100);
+    }
+  }
+  return values;
+}
+
+export type DecoyTableRow = {
+  prizeValue: string | number | null;
+  ringtonePoints: string | number | null;
+};
+
+/**
+ * Fallback decoys taken straight from the prize table.
+ *
+ * Only reached when the pool yields fewer than two usable values, which is a
+ * competition whose prizes are all non-cash or not yet configured.
+ */
+export function decoyValuesFromTableRows(rows: DecoyTableRow[]): number[] {
+  const values: number[] = [];
+  for (const row of rows) {
+    const cash = Number(row.prizeValue || 0);
+    if (cash > 0) values.push(Math.round(cash * 100) / 100);
+    const pts = Number(row.ringtonePoints || 0);
+    if (pts > 0) values.push(Math.round((pts / 100) * 100) / 100);
+  }
+  return values;
+}
