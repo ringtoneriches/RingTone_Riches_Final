@@ -144,6 +144,7 @@ import {
   InstantWinError,
   assertCanPurchaseTickets,
   issuePlayTickets,
+  runAutoActivationAfterCommit,
   tryRevealControlledPop,
   revealAllControlledPop,
   tryRevealControlledSlot,
@@ -21256,7 +21257,12 @@ async function processGuestOrder(
   paymentRef: string, 
   paidAmount: number
 ) {
-  return await db.transaction(async (tx) => {
+  // Competitions whose auto-activation is started once the transaction below
+  // has committed. Starting it inside asks the pool for a second connection
+  // while this one holds the first, which is the shape that emptied the pool
+  // in October.
+  const autoActivate: string[] = [];
+  const settled = await db.transaction(async (tx) => {
     // Get guest order
     const [guestOrder] = await tx
       .select()
@@ -21297,7 +21303,7 @@ async function processGuestOrder(
       .where(eq(competitions.id, guestOrder.competitionId));
 
     // Generate GUEST tickets from the shared pool
-    const { tickets: issuedGuestTickets } = await issuePlayTickets({
+    const { tickets: issuedGuestTickets, needsAutoActivation } = await issuePlayTickets({
       tx,
       competitionId: guestOrder.competitionId,
       quantity: guestOrder.quantity,
@@ -21355,8 +21361,15 @@ async function processGuestOrder(
       );
     }
 
+    if (needsAutoActivation) autoActivate.push(guestOrder.competitionId);
+
     return { success: true, ticketNumbers };
   });
+
+  // The transaction above has committed, so nothing is holding a connection.
+  runAutoActivationAfterCommit(autoActivate);
+
+  return settled;
 }
 
 async function sendGuestOrderConfirmation(email: string, orderDetails: any) {
