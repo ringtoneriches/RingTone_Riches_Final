@@ -181,6 +181,10 @@ import { sendVerificationEmail } from "./emails/verification-email";
 import { issueEmailVerificationOtp } from "./email-otp";
 import { phoneMatchKey } from "./services/phone-identity";
 import {
+  decidePercentageDiscount,
+  nothingToSaveMessage,
+} from "./services/best-discount";
+import {
   SIGNUP_BONUS_IP_LIMIT,
   bonusWindowStart,
   signupBonusDecision,
@@ -10065,9 +10069,11 @@ app.post("/api/cart/remove-discount", isAuthenticated, async (req: any, res) => 
     await db.transaction(async (tx) => {
       for (const order of discounted) {
         const competition = compById.get(order.competitionId);
-        // Back to what the line costs on its own, at today's price.
+        // Back to what the line costs on its own, at today's price -- still
+        // including the automatic bulk discount the order was created with.
         const original = competition
-          ? effectiveTicketPrice(competition) * order.quantity
+          ? calculateDiscountedTotal(effectiveTicketPrice(competition), order.quantity)
+              .discountedTotal
           : Number(order.totalAmount) + Number(order.discountAmount || 0);
 
         await tx
@@ -10162,7 +10168,19 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
       assignedUserId: discount.assignedUserId ?? null,
     });
 
-    if (!decision.ok && decision.reason) {
+    // "already_applied" means this same person put the code on an order they
+    // have not paid for. Refusing that locks someone out of their own prize
+    // for the length of the hold, which is what happened to the first 50%
+    // winner: the code went onto a basket automatically, she rebuilt her
+    // basket two minutes later, and her own abandoned order held the prize
+    // until it went stale. She paid full price with the code still unspent.
+    //
+    // The hold exists to stop two PEOPLE taking the last use of a shared code,
+    // not to stop one person moving their own code to their current basket, so
+    // the earlier unpaid order gives it up below, inside the lock.
+    const handOffFromOwnOrder = !decision.ok && decision.reason === "already_applied";
+
+    if (!decision.ok && decision.reason && !handOffFromOwnOrder) {
       return res.status(400).json({ error: refusalMessage(decision.reason) });
     }
 
@@ -10171,7 +10189,9 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
     if (!order) return res.status(404).json({ error: "Order not found" });
     if (order.discountCodeId) return res.status(400).json({ error: "Discount already applied" });
 
-    // Get competition details for original price calculation
+    // The order must still point at a live competition. The price itself is
+    // no longer read here: every kind of code now comes off the order total,
+    // which already carries the automatic bulk discount.
     const [competition] = await db
       .select()
       .from(competitions)
@@ -10179,8 +10199,6 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
 
     if (!competition) return res.status(404).json({ error: "Competition not found" });
 
-    // Calculate original amount (flash sale price when one is running)
-    const originalAmount = effectiveTicketPrice(competition) * order.quantity;
     
     // Prepare discount values
     let discountAmount = Number(discount.value);
@@ -10204,28 +10222,39 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
         if (newTotalAmount < 0) newTotalAmount = 0;
         break;
         
-      case "percentage":
-        // Percentage discount: calculate percentage of original amount
-        // Ensure percentage is between 0 and 100
+      case "percentage": {
         if (discountAmount < 0 || discountAmount > 100) {
           return res.status(400).json({ error: "Invalid percentage value" });
         }
-        
+
         percentageDiscount = discountAmount;
-        // FIX: Use a different variable name or don't redeclare
-        const calculatedDiscount = (originalAmount * discountAmount) / 100;
-        
-        // Apply minimum cash flow requirement (e.g., £1.50 for 2 spins)
-        const minimumAmount = 1.50; // Minimum amount after discount
-        newTotalAmount = originalAmount - calculatedDiscount;
-        
-        if (newTotalAmount < minimumAmount) {
-          newTotalAmount = minimumAmount;
+
+        // Comes off the order total, which already carries the automatic bulk
+        // discount -- the same way the cash and points branches above work,
+        // and the same way the basket quotes a percentage. This branch used to
+        // recalculate from the undiscounted price instead, which threw the
+        // bulk saving away and made the same plays cost more here than in the
+        // basket.
+        const outcome = decidePercentageDiscount({
+          bulkTotal: Number(order.totalAmount),
+          percent: discountAmount,
+          cap: discount.maxDiscountAmount ? Number(discount.maxDiscountAmount) : null,
+          minimumTotal: 1.5,
+        });
+
+        if (!outcome.apply) {
+          return res.status(400).json({
+            error: nothingToSaveMessage(),
+            keptCode: true,
+          });
         }
-        
-        // Store the actual discount applied
-        discountValue = originalAmount - newTotalAmount;
+
+        newTotalAmount = outcome.total;
+        // Already capped by decidePercentageDiscount, so the shared ceiling
+        // below is a no-op for this branch.
+        discountValue = outcome.discountValue;
         break;
+      }
     }
 
     // A prize code carries a ceiling, because a percentage of a big order is a
@@ -10254,6 +10283,60 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
       await tx.execute(
         sql`SELECT id FROM discount_codes WHERE id = ${discount.id} FOR UPDATE`
       );
+
+      // Hand the code over from this person's own unpaid orders. Only ever
+      // their own, and only ever orders still pending -- a paid order keeps
+      // its discount and still counts as a use, so "already_used" is
+      // unaffected by this.
+      if (handOffFromOwnOrder) {
+        const stale = await tx
+          .select()
+          .from(orders)
+          .where(
+            and(
+              eq(orders.discountCodeId, discount.id),
+              eq(orders.userId, userId),
+              eq(orders.status, "pending"),
+              ne(orders.id, orderId)
+            )
+          );
+
+        for (const row of stale) {
+          const [comp] = await tx
+            .select()
+            .from(competitions)
+            .where(eq(competitions.id, row.competitionId));
+          // Back to what that basket costs without the code -- which still
+          // includes the automatic bulk discount it was created with.
+          const restored = comp
+            ? calculateDiscountedTotal(effectiveTicketPrice(comp), row.quantity).discountedTotal
+            : Number(row.totalAmount) + Number(row.discountAmount || 0);
+
+          await tx
+            .update(orders)
+            .set({
+              totalAmount: String(restored),
+              discountCodeId: null,
+              discountAmount: null,
+              discountType: null,
+              pointsDiscountAmount: null,
+              percentageDiscount: null,
+            })
+            .where(eq(orders.id, row.id));
+        }
+
+        if (stale.length) {
+          await tx
+            .delete(discountCodeUsages)
+            .where(
+              and(
+                eq(discountCodeUsages.discountCodeId, discount.id),
+                eq(discountCodeUsages.userId, userId),
+                inArray(discountCodeUsages.orderId, stale.map((r) => r.id))
+              )
+            );
+        }
+      }
 
       const freshRows = await tx
         .select({
@@ -10387,7 +10470,15 @@ app.post(
           .from(competitions)
           .where(eq(competitions.id, competitionId));
 
-        const originalAmount = effectiveTicketPrice(competition) * order.quantity;
+        // What the order cost before the code went on, which is the price
+        // create-<game>-order set: the automatic bulk discount included.
+        // Restoring the undiscounted price instead left the customer paying
+        // MORE for removing a discount than they would have paid without
+        // ever applying one.
+        const originalAmount = calculateDiscountedTotal(
+          effectiveTicketPrice(competition),
+          order.quantity,
+        ).discountedTotal;
 
         // Update order to remove discount
         await tx.update(orders)

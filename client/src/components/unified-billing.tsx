@@ -368,7 +368,13 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
     mutationFn: async (code: string) => {
       const res = await fetch("/api/checkout/apply-discount", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, code }) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to apply discount");
+      if (!res.ok) {
+        const err: any = new Error(data.error || "Failed to apply discount");
+        // The server refused because the bulk discount already beats this
+        // code, and left the code unspent. That is good news, not a failure.
+        err.keptCode = Boolean(data.keptCode);
+        throw err;
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -381,7 +387,15 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
       setDiscountCode("");
       refetchOrder();
     },
-    onError:   (error: any) => { toast({ title: "Discount Failed", description: error.message, variant: "destructive" }); },
+    onError: (error: any) => {
+      if (error?.keptCode) {
+        // Nothing went wrong: the code could not take anything off this order
+        // and is still theirs to use. Said plainly, and never in red.
+        toast({ title: "Code saved for next time", description: error.message });
+        return;
+      }
+      toast({ title: "Discount Failed", description: error.message, variant: "destructive" });
+    },
   });
 
   /**
@@ -404,7 +418,14 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
     const code = autoDiscount?.discount?.code;
     if (!code) return;
     autoDiscountTried.current = true;
-    applyDiscountMutation.mutate(code);
+    // Fired on the customer's behalf, so a refusal is not theirs to see as an
+    // error. A code worth less than the bulk discount simply stays unspent.
+    applyDiscountMutation.mutate(code, {
+      onError: (err: any) => {
+        if (err?.keptCode) return;
+        toast({ title: "Discount Failed", description: err?.message, variant: "destructive" });
+      },
+    });
   }, [autoDiscount, order]);
 
   const removeDiscountMutation = useMutation({
