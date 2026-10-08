@@ -220,3 +220,79 @@ describe("refusalMessage", () => {
     expect(refusalMessage("already_applied")).not.toMatch(/already used/i);
   });
 });
+
+/**
+ * The boundary the checkout's hand-off depends on.
+ *
+ * /api/checkout/apply-discount treats exactly one refusal -- "already_applied"
+ * -- as permission to take the code off the person's own unpaid order and put
+ * it on the one they are looking at now. Without that, winning a prize and
+ * then rebuilding your basket locks you out of it for the length of the hold,
+ * which is how the first 50% winner came to pay full price with her prize
+ * still unspent.
+ *
+ * Everything below pins the cases that must NOT be read that way. If a paid
+ * order ever started reporting "already_applied", the checkout would hand back
+ * a code that had already been spent.
+ */
+describe("the hand-off boundary at checkout", () => {
+  const me = "user-1";
+  const them = "user-2";
+  const now = new Date("2026-10-08T12:00:00Z");
+  const minsAgo = (n: number) => new Date(now.getTime() - n * 60_000);
+
+  it("says already_applied for my own unpaid order, which is safe to hand off", () => {
+    const d = canApplyCode({
+      userId: me,
+      maxUses: 1,
+      rows: [{ userId: me, orderId: "order-a", usedAt: minsAgo(2), orderStatus: "pending" }],
+      now,
+    });
+    expect(d.ok).toBe(false);
+    expect(d.reason).toBe("already_applied");
+  });
+
+  it("says already_used for my own PAID order, which must never be handed off", () => {
+    const d = canApplyCode({
+      userId: me,
+      maxUses: 1,
+      rows: [{ userId: me, orderId: "order-a", usedAt: minsAgo(2), orderStatus: "completed" }],
+      now,
+    });
+    expect(d.ok).toBe(false);
+    expect(d.reason).toBe("already_used");
+  });
+
+  it("never says already_applied because of somebody else's checkout", () => {
+    // Would otherwise let one person strip another's reservation.
+    const d = canApplyCode({
+      userId: me,
+      maxUses: 1,
+      rows: [{ userId: them, orderId: "order-b", usedAt: minsAgo(2), orderStatus: "pending" }],
+      now,
+    });
+    expect(d.reason).not.toBe("already_applied");
+  });
+
+  it("refuses a prize that belongs to someone else before anything else", () => {
+    const d = canApplyCode({
+      userId: me,
+      maxUses: 1,
+      rows: [{ userId: them, orderId: "order-b", usedAt: minsAgo(2), orderStatus: "pending" }],
+      now,
+      assignedUserId: them,
+    });
+    expect(d.reason).toBe("not_yours");
+  });
+
+  it("lets my own stale order go without needing the hand-off at all", () => {
+    // Past the hold, the existing release already frees it.
+    const d = canApplyCode({
+      userId: me,
+      maxUses: 1,
+      rows: [{ userId: me, orderId: "order-a", usedAt: minsAgo(45), orderStatus: "pending" }],
+      now,
+    });
+    expect(d.ok).toBe(true);
+  });
+});
