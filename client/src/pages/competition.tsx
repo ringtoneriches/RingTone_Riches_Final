@@ -41,6 +41,7 @@ import {
   isInstantWinGame,
   quantityCapFor,
 } from "@/lib/competition-display";
+import { nextBundleTier } from "@/lib/ticket-price";
 
 function playNoun(type: string, quantity: number, mode: "cta" | "label" = "label") {
   const many = quantity !== 1;
@@ -108,6 +109,25 @@ function calculateDiscountedPrice(basePrice: number, quantity: number) {
   };
 }
 
+/**
+ * Bundles offered on the buy box, biggest-first in value terms.
+ *
+ * 1 and 5 were deliberately dropped. The page used to open on a quantity of 1
+ * and keep the bundles below the fold, and single-play purchases doubled to
+ * 37.6% of orders while baskets of 15+ halved. Median quantity went from 5 to
+ * 2 and the average order from £5.99 to £3.42.
+ */
+const QUANTITY_PRESETS = [10, 15, 20, 30, 40, 60];
+
+/**
+ * What the box opens on.
+ *
+ * 15 rather than 1: it is the quantity the pricing rewards most (the bulk
+ * discount reaches its maximum there), so it is both the best deal to offer
+ * and an honest default.
+ */
+const DEFAULT_QUANTITY = 15;
+
 export default function CompetitionPage() {
   const rangeRef = useRef<HTMLDivElement | null>(null);
   const { id } = useParams();
@@ -117,7 +137,8 @@ export default function CompetitionPage() {
     isAuthenticated: boolean;
     user: User | null;
   };
-  const [quantity, setQuantity] = useState(1);
+
+  const [quantity, setQuantity] = useState(DEFAULT_QUANTITY);
   const { add: addToBasket } = useBasket();
   const [isPostalModalOpen, setIsPostalModalOpen] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -474,6 +495,9 @@ export default function CompetitionPage() {
     { originalPrice: pricePerTicket * quantity, discountPercent: 0, discountedPrice: pricePerTicket * quantity, savings: 0 };
 
   const displayTotal = isGameType ? discountedPrice : pricePerTicket * quantity;
+
+  // The next tier worth mentioning, or null once they have run out.
+  const upsell = isGameType ? nextBundleTier(quantity, pricePerTicket) : null;
   const purchaseLocked = isSoldOut || purchaseTicketMutation.isPending || (isFreeGiveaway && !canBuyMore);
   const ctaLabel = isSoldOut
     ? "SOLD OUT"
@@ -594,12 +618,38 @@ export default function CompetitionPage() {
                             </div>
                           </div>
 
-                          {isGameType && discountPercent > 0 && (
-                  <div className="mt-2 inline-flex items-center gap-1.5 self-start rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-[#F1D47A]">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {discountPercent}% bundle off · save £{savings.toFixed(2)}
-                            </div>
-                          )}
+                {/* The saving, stated plainly where the price is read --
+                    it used to be a small pill that never appeared at all,
+                    because the box opened on a quantity of 1. */}
+                {isGameType && discountPercent > 0 && (
+                  <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-[#F1D47A]/35 bg-gradient-to-r from-[#D4AF37]/18 to-transparent px-3 py-2.5">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[#F1D47A]">
+                      <Sparkles className="h-4 w-4 shrink-0" />
+                      {discountPercent}% bundle discount
+                    </span>
+                    <span className="font-prize text-lg leading-none text-[#F1D47A]">
+                      −£{savings.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+
+                {/* One step up, when there is a truthful one to offer. */}
+                {isGameType && upsell && (
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(upsell.at)}
+                    data-testid="button-upsell-next-tier"
+                    className="mt-2 flex w-full items-center justify-between gap-2 rounded-xl border border-dashed border-[#F1D47A]/35 bg-[#F1D47A]/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-[#F1D47A]/[0.12]"
+                  >
+                    <span className="text-[11px] font-bold text-white/75">
+                      Add {upsell.add} more to unlock{" "}
+                      <span className="font-black text-[#F1D47A]">{upsell.percent}% off</span>
+                    </span>
+                    <span className="shrink-0 rounded-lg bg-[#F1D47A] px-2 py-1 text-[10px] font-black uppercase tracking-wide text-black">
+                      Save £{upsell.saves.toFixed(2)}
+                    </span>
+                  </button>
+                )}
 
                 {/* The per-person limit, stated before checkout rather than sprung
                     at it. Sits quietly under the picker, and lifts for a moment
@@ -623,8 +673,75 @@ export default function CompetitionPage() {
                   </div>
                 )}
 
+                {/* Bundles, on the buy box rather than below the fold.
+                    Each card prices itself from the live pricing rule, so the
+                    moment the tiers change these follow. */}
+                {!isFreeGiveaway && isGameType && !isSoldOut && (
+                  <div className="mt-5">
+                    <div className="mb-2 flex items-baseline justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/40">
+                        Choose your entries
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#F1D47A]/70">
+                        More entries, more chances
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {QUANTITY_PRESETS.map((num) => {
+                        const pill = calculateDiscountedPrice(pricePerTicket, num);
+                        const selected = quantity === num;
+                        const best = num === DEFAULT_QUANTITY;
+                        const over = effectiveMax > 0 && num > effectiveMax;
+                        return (
+                          <button
+                            key={num}
+                            type="button"
+                            disabled={over}
+                            onClick={() => setQuantity(num)}
+                            aria-pressed={selected}
+                            aria-label={`${num} entries for £${pill.discountedPrice.toFixed(2)}`}
+                            data-testid={`button-bundle-${num}`}
+                            className={`relative overflow-hidden rounded-xl border px-2 py-3 text-center transition-all ${
+                              over
+                                ? "cursor-not-allowed border-white/5 bg-white/[0.02] opacity-40"
+                                : selected
+                                  ? "border-[#F1D47A] bg-[#C8102E] text-white shadow-[0_10px_30px_rgba(200,16,46,0.45)]"
+                                  : "border-white/10 bg-white/[0.03] text-white hover:border-[#C8102E]/50 hover:bg-white/[0.06]"
+                            }`}
+                          >
+                            {best && !selected && (
+                              <span className="absolute inset-x-0 top-0 bg-[#F1D47A] py-[2px] text-[8px] font-black uppercase tracking-wider text-black">
+                                Best value
+                              </span>
+                            )}
+                            <div className={`font-prize text-2xl leading-none ${best ? "mt-2.5" : ""}`}>
+                              {num}
+                            </div>
+                            <div
+                              className={`mt-1 text-[11px] font-bold ${
+                                selected ? "text-white" : "text-white/70"
+                              }`}
+                            >
+                              £{pill.discountedPrice.toFixed(2)}
+                            </div>
+                            {pill.savings > 0 && (
+                              <div
+                                className={`mt-0.5 text-[9px] font-black uppercase tracking-wide ${
+                                  selected ? "text-[#F1D47A]" : "text-[#F1D47A]/80"
+                                }`}
+                              >
+                                Save £{pill.savings.toFixed(2)}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {!isFreeGiveaway && (
-                  <div className="mt-5 flex items-stretch gap-2">
+                  <div className="mt-4 flex items-stretch gap-2">
                     <QuantitySelector
                       value={quantity}
                       min={1}
