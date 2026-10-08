@@ -40,3 +40,37 @@ export function lineTotal(ticketPrice: string | number, quantity: number, type?:
     savings: parseFloat((originalPrice - discountedPrice).toFixed(2)),
   };
 }
+
+/**
+ * The next bundle tier worth nudging someone towards, or null.
+ *
+ * The buy box used to open on a single play with the bundles hidden below the
+ * fold, and single-play purchases doubled to 37.6% of orders while baskets of
+ * 15+ halved. Telling someone they are two entries away from a better rate is
+ * worth more than a discount they never see.
+ *
+ * Returns null once the tiers run out, which currently means any quantity at
+ * or above the largest tier -- there is nothing truthful left to offer.
+ */
+export function nextBundleTier(
+  quantity: number,
+  pricePerTicket: number,
+): { at: number; add: number; percent: number; saves: number } | null {
+  const qty = Math.max(0, Math.floor(Number(quantity) || 0));
+  const price = Number(pricePerTicket) || 0;
+  if (price <= 0) return null;
+
+  const tiers = Object.keys(TICKET_DISCOUNTS)
+    .map(Number)
+    .sort((a, b) => a - b);
+
+  const next = tiers.find((t) => t > qty);
+  if (next === undefined) return null;
+
+  // What they would save at the tier, against paying full price for it.
+  const percent = TICKET_DISCOUNTS[next] * 100;
+  const saves = Math.round(price * next * TICKET_DISCOUNTS[next] * 100) / 100;
+  if (saves <= 0) return null;
+
+  return { at: next, add: next - qty, percent, saves };
+}
