@@ -133,9 +133,8 @@ export default function CompetitionPage() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { isAuthenticated, user } = useAuth() as {
+  const { isAuthenticated } = useAuth() as {
     isAuthenticated: boolean;
-    user: User | null;
   };
 
   const [quantity, setQuantity] = useState(DEFAULT_QUANTITY);
@@ -752,19 +751,6 @@ export default function CompetitionPage() {
                       className="rr-qty shrink-0"
                       onLimitHit={limitNote ? announceLimit : undefined}
                     />
-                    {!isSoldOut && (
-                      <button
-                        type="button"
-                        onClick={handleAddToBasket}
-                        className="rr-add-cart-btn"
-                        data-testid="button-add-basket"
-                      >
-                        <ShoppingCart className="h-4 w-4 shrink-0" />
-                        <span>
-                          Add<span className="rr-add-cart-btn-extra"> to cart</span>
-                        </span>
-                      </button>
-                    )}
                         </div>
                 )}
 
@@ -793,21 +779,29 @@ export default function CompetitionPage() {
                   )}
                 </button>
 
-                          <button
-                  type="button"
-                            onClick={scrollToRange}
-                  className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.16em] text-white/40 transition-colors hover:text-[#F1D47A]"
-                >
-                  More quantities
-                          </button>
+                {!isSoldOut && !isFreeGiveaway && (
+                  <button
+                    type="button"
+                    onClick={handleAddToBasket}
+                    data-testid="button-add-basket"
+                    className="mt-2.5 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.03] text-xs font-bold uppercase tracking-[0.14em] text-white/60 transition-colors hover:border-white/25 hover:text-white"
+                  >
+                    <ShoppingCart className="h-4 w-4 shrink-0" />
+                    Add to cart · pay for several at once
+                  </button>
+                )}
 
-                {isAuthenticated && user && (
-                  <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-4 py-3">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Wallet</span>
-                    <span className="font-prize text-xl text-white">
-                      £{parseFloat(user.balance || "0").toFixed(2)}
-                    </span>
-                  </div>
+                {/* Only where the section it scrolls to still exists. For a
+                    game the bundles are on this box now, so there is nothing
+                    further down to send anyone to. */}
+                {(!isGameType || isFreeGiveaway) && (
+                  <button
+                    type="button"
+                    onClick={scrollToRange}
+                    className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.16em] text-white/40 transition-colors hover:text-[#F1D47A]"
+                  >
+                    More quantities
+                  </button>
                 )}
 
                 <div className="mt-4 flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
@@ -833,6 +827,12 @@ export default function CompetitionPage() {
         </section>
       )}
 
+      {/* The same buy flow used to appear twice: this whole section repeated
+          the quantity picker, the presets, the total and the call to action
+          that are now on the buy box at the top. It is kept only where it is
+          not a duplicate -- free giveaways and prize draws, which the buy box
+          deliberately does not offer bundles for. */}
+      {(!isGameType || isFreeGiveaway) && (
       <section className="relative z-10 py-10 sm:py-14">
         <div ref={rangeRef} className="mx-auto max-w-3xl px-4 sm:px-6">
           <div className="text-center">
@@ -1041,6 +1041,7 @@ export default function CompetitionPage() {
           </button>
         </div>
       </section>
+      )}
 
       <section className="relative z-10 py-6">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

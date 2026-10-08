@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { lineTotal } from "@/lib/ticket-price";
 import { useLocation } from "wouter";
 import {
   CreditCard, Wallet, Coins, Lock, AlertCircle,
@@ -355,6 +356,33 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
 
   const { walletUsed, pointsUsed, pointsNeeded, remainingAmount, hasSufficientFunds } = calculatePaymentBreakdown();
   const hasSelectedMethod = selectedMethods.walletBalance || selectedMethods.ringtonePoints || (isGame && selectedMethods.instaplay);
+
+  /**
+   * Open on card, where card is a real option.
+   *
+   * Nothing was selected before, so the pay button was dead until someone
+   * chose a method -- a required tap on every checkout that told us nothing we
+   * could not infer. Card is the one that brings money in: points are a
+   * stockpile the site gave away, and over half of all purchases are now paid
+   * with them.
+   *
+   * Only for game types, because hasSelectedMethod above does not count
+   * instaplay for anything else, and selecting it on a prize draw would leave
+   * the button dead with no explanation. Runs once: after that the choice
+   * belongs to the customer, including changing it back.
+   */
+  const defaultMethodSet = useRef(false);
+  useEffect(() => {
+    if (defaultMethodSet.current) return;
+    if (!order || !isGame) return;
+    defaultMethodSet.current = true;
+    setSelectedMethods((prev) =>
+      prev.walletBalance || prev.ringtonePoints || prev.instaplay
+        ? prev
+        : { walletBalance: false, ringtonePoints: false, instaplay: true },
+    );
+  }, [order, isGame]);
+
   const bonusPoints = Math.round(totalAmount * 10);
 
   const handleMethodToggle = (method: "walletBalance" | "ringtonePoints" | "instaplay") => {
@@ -438,8 +466,22 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
    * only way to change it was the browser back button -- which created a
    * second order and left this one pending. 61% of the people who did that
    * came back with FEWER plays, an average of 5.7 down to 2.1.
+   *
+   * The first version of this control sent a request per press and blocked
+   * the buttons until it came back, so going from 15 to 20 meant five round
+   * trips in a row. Worse, the figure it compared against was the server's,
+   * which only caught up after a refetch -- press twice quickly and the
+   * second request carried a quantity the order already had, which the server
+   * correctly refused and the page reported as "Could not change quantity".
+   *
+   * So the presses are local and instant, and one request goes out once they
+   * stop. The total is priced locally in the meantime, by the same rule the
+   * server uses, so the figure does not sit stale while it saves.
    */
-  const [pendingQty, setPendingQty] = useState<number | null>(null);
+  const serverQty = Number(order?.quantity || 1);
+  const [draftQty, setDraftQty] = useState<number | null>(null);
+  const shownQty = draftQty ?? serverQty;
+
   const updateQuantityMutation = useMutation({
     mutationFn: async (next: number) => {
       const res = await apiRequest("/api/checkout/update-quantity", "POST", {
@@ -448,25 +490,44 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
       });
       return res.json();
     },
-    onSuccess: () => {
-      setPendingQty(null);
-      refetchOrder();
-    },
+    onSuccess: () => refetchOrder(),
     onError: (error: any) => {
-      setPendingQty(null);
+      // The order already had that quantity -- nothing went wrong and nothing
+      // needs saying. Any other refusal is worth showing.
+      const message = String(error?.message || "");
+      setDraftQty(null);
+      if (/already the quantity/i.test(message)) return;
       toast({
         title: "Could not change quantity",
-        description: error?.message || "Please try again",
+        description: message || "Please try again",
         variant: "destructive",
       });
     },
   });
 
+  // Clear the draft once the order comes back agreeing with it.
+  useEffect(() => {
+    if (draftQty !== null && draftQty === serverQty) setDraftQty(null);
+  }, [draftQty, serverQty]);
+
+  // One request once the pressing stops.
+  useEffect(() => {
+    if (draftQty === null || draftQty === serverQty) return;
+    const timer = setTimeout(() => updateQuantityMutation.mutate(draftQty), 450);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftQty, serverQty]);
+
   const changeQuantity = (next: number) => {
-    if (next < 1 || next === qty || updateQuantityMutation.isPending) return;
-    setPendingQty(next);
-    updateQuantityMutation.mutate(next);
+    if (next < 1 || hasDiscount) return;
+    setDraftQty(next);
   };
+
+  /** Priced locally while a change is in flight, so the total never sits stale. */
+  const optimisticTotal =
+    draftQty !== null && !hasDiscount
+      ? lineTotal(itemCost, shownQty, competition?.type).discountedPrice
+      : null;
 
   const removeDiscountMutation = useMutation({
     mutationFn: async () => { const res = await apiRequest("/api/checkout/remove-discount", "POST", { orderId }); return res.json(); },
@@ -767,22 +828,21 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                     type="button"
                     aria-label="One fewer entry"
                     data-testid="button-checkout-qty-minus"
-                    disabled={qty <= 1 || updateQuantityMutation.isPending || hasDiscount}
-                    onClick={() => changeQuantity(qty - 1)}
+                    disabled={shownQty <= 1 || hasDiscount}
+                    onClick={() => changeQuantity(shownQty - 1)}
                     className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/12 bg-white/[0.04] text-white transition-colors hover:border-[#F1D47A]/40 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     −
                   </button>
                   <span className="min-w-[4.5rem] text-center text-sm font-semibold text-white/80">
-                    {updateQuantityMutation.isPending ? (pendingQty ?? qty) : qty} Entr
-                    {(updateQuantityMutation.isPending ? (pendingQty ?? qty) : qty) === 1 ? "y" : "ies"}
+                    {shownQty} Entr{shownQty === 1 ? "y" : "ies"}
                   </span>
                   <button
                     type="button"
                     aria-label="One more entry"
                     data-testid="button-checkout-qty-plus"
-                    disabled={updateQuantityMutation.isPending || hasDiscount}
-                    onClick={() => changeQuantity(qty + 1)}
+                    disabled={hasDiscount}
+                    onClick={() => changeQuantity(shownQty + 1)}
                     className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/12 bg-white/[0.04] text-white transition-colors hover:border-[#F1D47A]/40 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     +
@@ -816,8 +876,15 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
                   {(appliedDiscount > 0 || percentageDiscount > 0) && (
                     <div className="mb-0.5 text-xs text-white/30 line-through">£{originalTotalAmount.toFixed(2)}</div>
                   )}
-                  <div className="font-prize text-[2rem] leading-none text-[#F1D47A] sm:text-[2.25rem]">
-                    £{totalAmount.toFixed(2)}
+                  {/* While a quantity change is saving, this is priced by the
+                      same rule the server uses, so the figure never sits
+                      stale behind the entry count. */}
+                  <div
+                    className={`font-prize text-[2rem] leading-none text-[#F1D47A] transition-opacity sm:text-[2.25rem] ${
+                      optimisticTotal !== null ? "opacity-60" : ""
+                    }`}
+                  >
+                    £{(optimisticTotal ?? totalAmount).toFixed(2)}
                   </div>
                 </div>
               </div>
