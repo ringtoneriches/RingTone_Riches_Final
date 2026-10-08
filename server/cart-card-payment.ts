@@ -257,11 +257,16 @@ export async function fulfillCartCardPayment(opts: {
     }).catch((err) => console.error("Cart confirmation email failed:", err));
   }
 
+  // Through the caller's transaction when there is one. Letting this open its
+  // own meant a second connection taken from inside the first, which then
+  // waited on a row the first was holding: the settlement sat idle until
+  // Postgres closed it sixty seconds later.
   await creditCardCashback({
     userId: opts.userId,
     cardAmount: opts.paidAmount,
     paymentRef: opts.paymentRef,
     orderId: uniqueIds[0],
+    tx: opts.tx,
   });
 
   // The caller needs autoActivate when it owns the transaction: it is the only

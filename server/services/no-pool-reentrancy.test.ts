@@ -189,6 +189,43 @@ describe("no connection-pool reentrancy", () => {
     expect(CART).toMatch(/if \(!opts\.tx\) runAutoActivationAfterCommit/);
   });
 
+  /**
+   * Every helper the card-settlement transaction awaits must be able to run
+   * inside it.
+   *
+   * creditCardCashback opened a transaction of its own unconditionally. Cart
+   * settlement awaits it while holding the caller's transaction, so a second
+   * connection was taken from inside the first, and it then went for a row the
+   * first was holding. The settlement sat idle until Postgres closed it sixty
+   * seconds later: "Confirming your payment" for a full minute, a 500, and a
+   * duplicate confirmation email when the retry finally worked.
+   */
+  it("every helper in the settlement path can take a caller's transaction", () => {
+    const SETTLEMENT_HELPERS = [
+      ["server/services/card-cashback.ts", "creditCardCashback"],
+      ["server/cart-card-payment.ts", "fulfillCartCardPayment"],
+      ["server/services/instant-win-pool.ts", "issuePlayTickets"],
+    ] as const;
+
+    const offences: string[] = [];
+    for (const [rel, name] of SETTLEMENT_HELPERS) {
+      const src = readFileSync(join(process.cwd(), rel), "utf8");
+      const from = src.indexOf(`export async function ${name}`);
+      expect(from, `${name} not found in ${rel}`).toBeGreaterThan(-1);
+      // To the next top-level export, not a fixed window: fulfillCartCardPayment
+      // is long enough that a window truncated the part that matters.
+      const after = src.slice(from + 10).search(/\nexport (async )?function /);
+      const body = after === -1 ? src.slice(from) : src.slice(from, from + 10 + after);
+      // It must honour a transaction it is handed...
+      if (!/opts\.tx/.test(body)) offences.push(`${name} ignores opts.tx`);
+      // ...and must not open one regardless of being given one.
+      const opens = /(?<![.\w])db\s*\.\s*transaction\s*\(/.test(body);
+      const conditional = /opts\.tx\s*\?|if \(opts\.tx\)/.test(body);
+      if (opens && !conditional) offences.push(`${name} always opens its own transaction`);
+    }
+    expect(offences).toEqual([]);
+  });
+
   it("getMaxTicketsPerOrder can read through a caller's transaction", () => {
     // The specific fix: the call site inside issuePlayTicketsInner passes tx.
     const fn = fns.find((f) => f.name === "getMaxTicketsPerOrder");
