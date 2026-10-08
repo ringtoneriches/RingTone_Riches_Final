@@ -1116,15 +1116,44 @@ export async function issuePlayTickets(opts: IssueTicketsOpts) {
   const run = async (tx: DbTx) => issuePlayTicketsInner(tx, opts);
   const result = opts.tx ? await run(opts.tx) : await db.transaction((tx) => run(tx));
 
-  if (isControlledMode(result.competition?.instantWinMode)) {
-    setImmediate(() => {
-      evaluateAutoActivation(opts.competitionId).catch((err) =>
-        console.error("[instant-win] auto-activate after sale failed", err)
-      );
-    });
+  const needsAutoActivation = isControlledMode(result.competition?.instantWinMode);
+
+  // Auto-activation reads through the global `db`, so it takes a connection of
+  // its own. Starting it while a transaction is still open asks the pool for a
+  // second connection from inside the first -- the shape that emptied the pool
+  // and took the site down in October.
+  //
+  // When this function opened the transaction itself, it has committed by the
+  // line above and there is nothing left holding a connection, so the work can
+  // start here. When the CALLER passed its transaction in, theirs is still
+  // open: deferring with setImmediate does not help, because the callback runs
+  // while they are still inside it. Those callers get the flag back and start
+  // it once they have committed -- see runAutoActivationAfterCommit().
+  if (needsAutoActivation && !opts.tx) {
+    scheduleAutoActivation(opts.competitionId);
   }
 
-  return result;
+  return { ...result, needsAutoActivation };
+}
+
+/** Start auto-activation off the current call stack, never inside a transaction. */
+function scheduleAutoActivation(competitionId: string) {
+  setImmediate(() => {
+    evaluateAutoActivation(competitionId).catch((err) =>
+      console.error("[instant-win] auto-activate after sale failed", err)
+    );
+  });
+}
+
+/**
+ * For callers that own the transaction: run this after theirs has committed.
+ *
+ * Takes the competition ids that issuePlayTickets reported as needing it, so a
+ * caller settling several games in one transaction starts one pass per
+ * competition and no more.
+ */
+export function runAutoActivationAfterCommit(competitionIds: Iterable<string>) {
+  for (const id of new Set(competitionIds)) scheduleAutoActivation(id);
 }
 
 export async function createInstantWinPrize(input: {

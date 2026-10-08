@@ -22,6 +22,11 @@ const FILE = join(process.cwd(), "server/services/instant-win-pool.ts");
 
 type Fn = { name: string; start: number; end: number; takesTx: boolean; body: string };
 
+/** Line index for a character offset, so a match can be attributed to a function. */
+function lineOf(src: string, index: number): number {
+  return src.slice(0, index).split("\n").length - 1;
+}
+
 function parseFunctions(src: string): Fn[] {
   const lines = src.split("\n");
   const re = /^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/;
@@ -36,8 +41,16 @@ function parseFunctions(src: string): Fn[] {
   });
 }
 
-/** Uses the module-level `db` rather than a passed-in transaction. */
-const USES_GLOBAL_DB = /(?<![.\w])db\.(select|insert|update|delete|execute)\b/;
+/**
+ * Uses the module-level `db` rather than a passed-in transaction.
+ *
+ * The whitespace matters. Drizzle calls are usually written broken over lines
+ * -- `db\n  .select()` -- and an earlier version of this pattern required
+ * `db.select` to be adjacent, so it silently skipped most of the file.
+ * evaluateAutoActivation was one of the functions it missed, which is how the
+ * deferred-call bug reached production.
+ */
+const USES_GLOBAL_DB = /(?<![.\w])db\s*\.\s*(select|insert|update|delete|execute|transaction|query)\b/;
 
 describe("no connection-pool reentrancy", () => {
   const fns = parseFunctions(readFileSync(FILE, "utf8"));
@@ -68,6 +81,62 @@ describe("no connection-pool reentrancy", () => {
     }
 
     expect(offences).toEqual([]);
+  });
+
+  /**
+   * The shape this test missed the first time.
+   *
+   * The rule above looks for a direct call. Deferring the same call does not
+   * make it safe: setImmediate runs on the next tick, and when the caller
+   * passed its own transaction in, that transaction is still open on the next
+   * tick. issuePlayTickets did exactly this with evaluateAutoActivation, and
+   * on 8 October a settlement left a transaction idle past
+   * idle_in_transaction_session_timeout, Postgres closed the connection, and
+   * the container restarted mid-purchase.
+   */
+  /**
+   * The shape this file missed the first time.
+   *
+   * The rule above looks for a direct call. Deferring the same call does not
+   * make it safe: setImmediate runs on the next tick, and when the caller
+   * passed its own transaction in, that transaction is still open then.
+   * issuePlayTickets did exactly this with evaluateAutoActivation, and on
+   * 8 October a settlement left a transaction idle past
+   * idle_in_transaction_session_timeout. Postgres closed the connection and
+   * the container restarted mid-purchase: one order, three confirmation
+   * emails, two and a half minutes on "Confirming your payment".
+   *
+   * Deferring is allowed only from the named helpers, which exist to be called
+   * after a commit.
+   */
+  it("does not defer a self-connecting helper from transaction-holding code", () => {
+    const src = readFileSync(FILE, "utf8");
+    const selfConnecting = new Set(
+      fns.filter((f) => USES_GLOBAL_DB.test(f.body)).map((f) => f.name),
+    );
+    const SCHEDULERS = ["scheduleAutoActivation", "runAutoActivationAfterCommit"];
+
+    const offences: string[] = [];
+    const defer = /(setImmediate|setTimeout|queueMicrotask)\s*\(/g;
+    let m: RegExpExecArray | null;
+    while ((m = defer.exec(src))) {
+      const window = src.slice(m.index, m.index + 300);
+      for (const name of selfConnecting) {
+        if (!window.includes(`${name}(`)) continue;
+        const owner = fns.filter((f) => f.start <= lineOf(src, m!.index)).pop();
+        if (owner && SCHEDULERS.includes(owner.name)) continue;
+        offences.push(`${name}() deferred from ${owner?.name ?? "top level"}`);
+      }
+    }
+
+    expect(offences).toEqual([]);
+  });
+
+  it("only starts auto-activation when it owns the transaction", () => {
+    // When the caller passes tx, the flag goes back to them instead.
+    const fn = fns.find((f) => f.name === "issuePlayTickets");
+    expect(fn?.body).toMatch(/needsAutoActivation\s*&&\s*!opts\.tx/);
+    expect(fn?.body).toContain("needsAutoActivation");
   });
 
   it("getMaxTicketsPerOrder can read through a caller's transaction", () => {
