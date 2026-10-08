@@ -181,6 +181,7 @@ import {
 import { OTPGenerator } from "./otp";
 import { sendVerificationEmail } from "./emails/verification-email";
 import { issueEmailVerificationOtp } from "./email-otp";
+import { canCoverBasket, shortfallMessage } from "./services/cart-affordability";
 import {
   canChangeOrderQuantity,
   editRefusalMessage,
@@ -9673,6 +9674,69 @@ app.get("/api/user/discount-codes", isAuthenticated, async (req: any, res) => {
   } catch (err) {
     console.error("Error listing a member's discount codes:", err);
     res.status(500).json({ error: "Failed to load your codes" });
+  }
+});
+
+/**
+ * Can this basket be paid for at all, before any of it is charged?
+ *
+ * The basket pays its lines one at a time and used to throw partway when the
+ * money ran out, leaving everything already charged charged. One customer lost
+ * three games out of five that way -- £16.33 taken from a £22.19 basket -- and
+ * hit it twice more within four minutes.
+ *
+ * The page did guard against it, but against a balance it was holding, which
+ * is stale by the time the loop is halfway down the basket, and worse after
+ * each partial payment. This reads the real balance and the real order totals.
+ */
+app.post("/api/cart/preflight", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.id as string;
+    const ids: string[] = Array.isArray(req.body?.orderIds)
+      ? req.body.orderIds.filter((v: unknown): v is string => typeof v === "string")
+      : [];
+    if (!ids.length) return res.status(400).json({ message: "Your basket is empty" });
+
+    const rows = await db
+      .select({ id: orders.id, total: orders.totalAmount, status: orders.status, owner: orders.userId })
+      .from(orders)
+      .where(inArray(orders.id, ids));
+
+    const mine = rows.filter((r) => r.owner === userId && r.status === "pending");
+    const total = mine.reduce((sum, r) => sum + Number(r.total || 0), 0);
+
+    const [user] = await db
+      .select({ balance: users.balance, points: users.ringtonePoints })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    const verdict = canCoverBasket({
+      total,
+      walletBalance: Number(user?.balance || 0),
+      ringtonePoints: Number(user?.points || 0),
+      useWallet: req.body?.useWallet === true,
+      usePoints: req.body?.usePoints === true,
+    });
+
+    if (!verdict.ok) {
+      return res.status(400).json({
+        ok: false,
+        message: shortfallMessage(verdict),
+        shortfall: verdict.shortfall,
+        total: Math.round(total * 100) / 100,
+      });
+    }
+
+    res.json({
+      ok: true,
+      total: Math.round(total * 100) / 100,
+      wallet: verdict.wallet,
+      points: verdict.points,
+    });
+  } catch (error) {
+    console.error("Cart preflight failed:", error);
+    res.status(500).json({ message: "Could not check your basket" });
   }
 });
 
