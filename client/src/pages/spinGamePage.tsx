@@ -47,7 +47,23 @@ export default function SpinGamePage() {
       queryKey: ["/api/competitions", competitionId],
     });
 
-      const wheelType = competition?.wheelType || "wheel1";
+      /**
+       * Which wheel to draw, once we actually know.
+       *
+       * This used to fall back to "wheel1" while the competition was still
+       * loading, so a slow first load drew the wheel1 artwork and then swapped
+       * to the right one when the fetch landed. wheel1's configuration still
+       * holds the Luxury Car Spin's symbols -- Ferrari, Bentley, Rolls Royce --
+       * because the config is global per wheel rather than per competition, so
+       * a Retro Spin player saw car badges spin past before it corrected
+       * itself. Reported on 9 October by a customer who thought she was going
+       * mad; she was not.
+       *
+       * Null until the fetch resolves, and the page shows a loader rather than
+       * guessing. The result was never affected -- it is decided server side --
+       * but the wheel she watched was the wrong game's.
+       */
+      const wheelType = competitionFetched ? competition?.wheelType || "wheel1" : null;
       const [retroReady, setRetroReady] = useState(false);
       const toastReady = !competitionFetched
         ? false
@@ -132,6 +148,18 @@ export default function SpinGamePage() {
   };
 
    const getWheelComponent = () => {
+    // Nothing until the competition says which wheel this is. Drawing a guess
+    // means drawing another game's symbols.
+    if (!wheelType) {
+      return (
+        <div
+          className="flex min-h-[360px] items-center justify-center"
+          data-testid="wheel-loading"
+        >
+          <span className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-[#F1D47A]" />
+        </div>
+      );
+    }
     if (wheelType === "wheel2") {
       return (
         <SpinWheel2 // You need to create this component
