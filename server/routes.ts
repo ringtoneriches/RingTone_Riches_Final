@@ -182,7 +182,7 @@ import { issueEmailVerificationOtp } from "./email-otp";
 import { phoneMatchKey } from "./services/phone-identity";
 import {
   decidePercentageDiscount,
-  worseThanBulkMessage,
+  nothingToSaveMessage,
 } from "./services/best-discount";
 import {
   SIGNUP_BONUS_IP_LIMIT,
@@ -10069,9 +10069,11 @@ app.post("/api/cart/remove-discount", isAuthenticated, async (req: any, res) => 
     await db.transaction(async (tx) => {
       for (const order of discounted) {
         const competition = compById.get(order.competitionId);
-        // Back to what the line costs on its own, at today's price.
+        // Back to what the line costs on its own, at today's price -- still
+        // including the automatic bulk discount the order was created with.
         const original = competition
-          ? effectiveTicketPrice(competition) * order.quantity
+          ? calculateDiscountedTotal(effectiveTicketPrice(competition), order.quantity)
+              .discountedTotal
           : Number(order.totalAmount) + Number(order.discountAmount || 0);
 
         await tx
@@ -10187,7 +10189,9 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
     if (!order) return res.status(404).json({ error: "Order not found" });
     if (order.discountCodeId) return res.status(400).json({ error: "Discount already applied" });
 
-    // Get competition details for original price calculation
+    // The order must still point at a live competition. The price itself is
+    // no longer read here: every kind of code now comes off the order total,
+    // which already carries the automatic bulk discount.
     const [competition] = await db
       .select()
       .from(competitions)
@@ -10195,8 +10199,6 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
 
     if (!competition) return res.status(404).json({ error: "Competition not found" });
 
-    // Calculate original amount (flash sale price when one is running)
-    const originalAmount = effectiveTicketPrice(competition) * order.quantity;
     
     // Prepare discount values
     let discountAmount = Number(discount.value);
@@ -10227,14 +10229,13 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
 
         percentageDiscount = discountAmount;
 
-        // A percentage code is worked out from the undiscounted price, which
-        // discards the automatic bulk discount the order already carries. On a
-        // big basket a small code is worth less than the bulk saving it
-        // replaces, so applying it would charge MORE and spend the prize to do
-        // it. decidePercentageDiscount() refuses in that case and leaves both
-        // the order and the code alone.
+        // Comes off the order total, which already carries the automatic bulk
+        // discount -- the same way the cash and points branches above work,
+        // and the same way the basket quotes a percentage. This branch used to
+        // recalculate from the undiscounted price instead, which threw the
+        // bulk saving away and made the same plays cost more here than in the
+        // basket.
         const outcome = decidePercentageDiscount({
-          fullTotal: originalAmount,
           bulkTotal: Number(order.totalAmount),
           percent: discountAmount,
           cap: discount.maxDiscountAmount ? Number(discount.maxDiscountAmount) : null,
@@ -10243,7 +10244,7 @@ app.post("/api/checkout/apply-discount", isAuthenticated, async (req, res) => {
 
         if (!outcome.apply) {
           return res.status(400).json({
-            error: worseThanBulkMessage(outcome.bulkTotal, outcome.codeTotal),
+            error: nothingToSaveMessage(),
             keptCode: true,
           });
         }
@@ -10469,7 +10470,15 @@ app.post(
           .from(competitions)
           .where(eq(competitions.id, competitionId));
 
-        const originalAmount = effectiveTicketPrice(competition) * order.quantity;
+        // What the order cost before the code went on, which is the price
+        // create-<game>-order set: the automatic bulk discount included.
+        // Restoring the undiscounted price instead left the customer paying
+        // MORE for removing a discount than they would have paid without
+        // ever applying one.
+        const originalAmount = calculateDiscountedTotal(
+          effectiveTicketPrice(competition),
+          order.quantity,
+        ).discountedTotal;
 
         // Update order to remove discount
         await tx.update(orders)

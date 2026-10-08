@@ -389,9 +389,9 @@ export default function UnifiedBilling({ orderId, orderType, wheelType, competit
     },
     onError: (error: any) => {
       if (error?.keptCode) {
-        // Nothing went wrong: they are already getting the better price and
-        // still hold the prize. Said plainly, and never in red.
-        toast({ title: "You're already getting a better deal", description: error.message });
+        // Nothing went wrong: the code could not take anything off this order
+        // and is still theirs to use. Said plainly, and never in red.
+        toast({ title: "Code saved for next time", description: error.message });
         return;
       }
       toast({ title: "Discount Failed", description: error.message, variant: "destructive" });
