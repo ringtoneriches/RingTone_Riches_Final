@@ -144,6 +144,7 @@ import {
   InstantWinError,
   assertCanPurchaseTickets,
   issuePlayTickets,
+  runAutoActivationAfterCommit,
   tryRevealControlledPop,
   revealAllControlledPop,
   tryRevealControlledSlot,
@@ -4391,6 +4392,8 @@ res.json({
             }
 
             if (liveStatus === "PAID") {
+              // Started after the transaction below commits, never inside it.
+              const settleAutoActivate: string[] = [];
               await db.transaction(async (tx) => {
                 const guard = await tx.execute(
                   sql`SELECT pg_try_advisory_xact_lock(hashtext(${paymentJobRef})) AS ok`,
@@ -4408,7 +4411,7 @@ res.json({
                   .limit(1);
                 if (!fresh || fresh.status !== "pending") return;
 
-                await fulfillCartCardPayment({
+                const settled = await fulfillCartCardPayment({
                   userId,
                   orderIds: settledOrderIds,
                   pendingPaymentId: pendingForSettle.id,
@@ -4419,6 +4422,7 @@ res.json({
                     0,
                   tx,
                 });
+                settleAutoActivate.push(...((settled as any)?.autoActivate ?? []));
 
                 await tx
                   .update(pendingPayments)
@@ -4429,6 +4433,9 @@ res.json({
                   })
                   .where(eq(pendingPayments.id, pendingForSettle.id));
               });
+
+              // Committed now, so nothing is holding a connection.
+              runAutoActivationAfterCommit(settleAutoActivate);
 
               // Report on what the settlement actually produced.
               const after = await db
@@ -21256,7 +21263,12 @@ async function processGuestOrder(
   paymentRef: string, 
   paidAmount: number
 ) {
-  return await db.transaction(async (tx) => {
+  // Competitions whose auto-activation is started once the transaction below
+  // has committed. Starting it inside asks the pool for a second connection
+  // while this one holds the first, which is the shape that emptied the pool
+  // in October.
+  const autoActivate: string[] = [];
+  const settled = await db.transaction(async (tx) => {
     // Get guest order
     const [guestOrder] = await tx
       .select()
@@ -21297,7 +21309,7 @@ async function processGuestOrder(
       .where(eq(competitions.id, guestOrder.competitionId));
 
     // Generate GUEST tickets from the shared pool
-    const { tickets: issuedGuestTickets } = await issuePlayTickets({
+    const { tickets: issuedGuestTickets, needsAutoActivation } = await issuePlayTickets({
       tx,
       competitionId: guestOrder.competitionId,
       quantity: guestOrder.quantity,
@@ -21355,8 +21367,15 @@ async function processGuestOrder(
       );
     }
 
+    if (needsAutoActivation) autoActivate.push(guestOrder.competitionId);
+
     return { success: true, ticketNumbers };
   });
+
+  // The transaction above has committed, so nothing is holding a connection.
+  runAutoActivationAfterCommit(autoActivate);
+
+  return settled;
 }
 
 async function sendGuestOrderConfirmation(email: string, orderDetails: any) {

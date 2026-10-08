@@ -4,7 +4,11 @@ import { nanoid } from "nanoid";
 import { db } from "./db";
 import { cashflows } from "./cashflows";
 import { isAuthenticated } from "./customAuth";
-import { countCommittedTickets, issuePlayTickets } from "./services/instant-win-pool";
+import {
+  countCommittedTickets,
+  issuePlayTickets,
+  runAutoActivationAfterCommit,
+} from "./services/instant-win-pool";
 import { checkTicketLimit, hasPerUserLimit } from "./services/ticket-limits";
 import { creditCardCashback } from "./services/card-cashback";
 import { sendOrderConfirmationEmail, type OrderConfirmationPayload } from "./email";
@@ -113,6 +117,7 @@ export async function fulfillCartCardPayment(opts: {
     const byId = new Map(orderRows.map((row) => [row.id, row]));
     const issued: { orderId: string; tickets: { ticketNumber: string }[]; gameType: string; title: string; quantity: number; amount: string }[] = [];
     const newlyIssued: typeof issued = [];
+    const autoActivate: string[] = [];
 
     for (const orderId of uniqueIds) {
       const order = byId.get(orderId);
@@ -152,6 +157,10 @@ export async function fulfillCartCardPayment(opts: {
         });
         orderTickets = issuedTickets.tickets;
         didIssue = true;
+        // Started after this transaction commits, never inside it: auto-
+        // activation takes a connection of its own, and asking the pool for a
+        // second one from inside the first is what emptied it in October.
+        if (issuedTickets.needsAutoActivation) autoActivate.push(order.competitionId);
       }
 
       const row = {
@@ -191,12 +200,23 @@ export async function fulfillCartCardPayment(opts: {
       });
     }
 
-    return { issued, newlyIssued };
+    return { issued, newlyIssued, autoActivate };
   };
 
   const generatedByOrder = opts.tx ? await run(opts.tx) : await db.transaction(run);
 
-  const [user] = await db.select().from(users).where(eq(users.id, opts.userId)).limit(1);
+  // Only when this function opened the transaction. If the CALLER passed one
+  // in, theirs is still open on this line -- awaiting run() does not commit it
+  // -- so starting work that wants its own connection here is the reentrancy
+  // that leaves their transaction idle until Postgres closes it. They get the
+  // list back and start it after they commit.
+  if (!opts.tx) runAutoActivationAfterCommit(generatedByOrder.autoActivate);
+
+  // Read through the caller's transaction when there is one, for the same
+  // reason: this lookup is only here to address the confirmation email, and it
+  // is not worth a second connection taken from inside the first.
+  const runner = opts.tx ?? db;
+  const [user] = await runner.select().from(users).where(eq(users.id, opts.userId)).limit(1);
   const rowsToEmail = generatedByOrder.newlyIssued;
   if (user?.email && rowsToEmail.length) {
     const displayName =
@@ -237,14 +257,23 @@ export async function fulfillCartCardPayment(opts: {
     }).catch((err) => console.error("Cart confirmation email failed:", err));
   }
 
+  // Through the caller's transaction when there is one. Letting this open its
+  // own meant a second connection taken from inside the first, which then
+  // waited on a row the first was holding: the settlement sat idle until
+  // Postgres closed it sixty seconds later.
   await creditCardCashback({
     userId: opts.userId,
     cardAmount: opts.paidAmount,
     paymentRef: opts.paymentRef,
     orderId: uniqueIds[0],
+    tx: opts.tx,
   });
 
-  return generatedByOrder.issued;
+  // The caller needs autoActivate when it owns the transaction: it is the only
+  // one that knows when its commit lands.
+  return Object.assign(generatedByOrder.issued, {
+    autoActivate: generatedByOrder.autoActivate,
+  });
 }
 
 export async function failCartCardPayment(orderIds: string[]) {
