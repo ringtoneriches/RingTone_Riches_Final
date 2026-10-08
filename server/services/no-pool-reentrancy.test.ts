@@ -20,6 +20,22 @@ import { join } from "path";
 
 const FILE = join(process.cwd(), "server/services/instant-win-pool.ts");
 
+/**
+ * Files that run inside a caller's transaction and must not reach for a second
+ * connection while it is open.
+ *
+ * cart-card-payment.ts was not listed here until it caused the thing this file
+ * exists to prevent: it took the caller's transaction, then looked the user up
+ * through the global `db` to address a confirmation email. On 8 October that
+ * left the settlement transaction idle for sixty seconds until Postgres closed
+ * it, and the request died at 60,430ms with the customer still watching
+ * "Confirming your payment".
+ */
+const TX_AWARE_FILES = [
+  "server/services/instant-win-pool.ts",
+  "server/cart-card-payment.ts",
+];
+
 type Fn = { name: string; start: number; end: number; takesTx: boolean; body: string };
 
 /** Line index for a character offset, so a match can be attributed to a function. */
@@ -137,6 +153,40 @@ describe("no connection-pool reentrancy", () => {
     const fn = fns.find((f) => f.name === "issuePlayTickets");
     expect(fn?.body).toMatch(/needsAutoActivation\s*&&\s*!opts\.tx/);
     expect(fn?.body).toContain("needsAutoActivation");
+  });
+
+  /**
+   * cart-card-payment.ts, which is where this went wrong on 8 October.
+   *
+   * fulfillCartCardPayment accepts the caller's transaction. It then looked
+   * the user up through the global `db` to address a confirmation email --
+   * a second connection asked for from inside the first. The settlement
+   * transaction sat idle for sixty seconds until Postgres closed it, and the
+   * request died at 60,430ms with the customer watching "Confirming your
+   * payment".
+   *
+   * A broad scan of the file was tried first and flagged every ordinary
+   * db.transaction() call, so this checks the two specific things instead.
+   */
+  const CART = readFileSync(join(process.cwd(), "server/cart-card-payment.ts"), "utf8");
+
+  /** Just fulfillCartCardPayment: the route handlers below it hold no caller tx. */
+  const FULFIL = CART.slice(
+    CART.indexOf("export async function fulfillCartCardPayment"),
+    CART.indexOf("export function registerCartCardPaymentRoutes"),
+  );
+
+  it("reads the email address through the caller's transaction", () => {
+    expect(FULFIL).toMatch(/const runner = opts\.tx \?\? db;/);
+    expect(FULFIL).toContain("runner.select().from(users)");
+    // The form that caused it.
+    expect(FULFIL).not.toMatch(/const \[user\] = await db\.select\(\)\.from\(users\)/);
+  });
+
+  it("only starts auto-activation when it opened the transaction itself", () => {
+    // Awaiting run(opts.tx) does not commit the caller's transaction, so
+    // deferring the work to the next tick still lands inside it.
+    expect(CART).toMatch(/if \(!opts\.tx\) runAutoActivationAfterCommit/);
   });
 
   it("getMaxTicketsPerOrder can read through a caller's transaction", () => {

@@ -4392,6 +4392,8 @@ res.json({
             }
 
             if (liveStatus === "PAID") {
+              // Started after the transaction below commits, never inside it.
+              const settleAutoActivate: string[] = [];
               await db.transaction(async (tx) => {
                 const guard = await tx.execute(
                   sql`SELECT pg_try_advisory_xact_lock(hashtext(${paymentJobRef})) AS ok`,
@@ -4409,7 +4411,7 @@ res.json({
                   .limit(1);
                 if (!fresh || fresh.status !== "pending") return;
 
-                await fulfillCartCardPayment({
+                const settled = await fulfillCartCardPayment({
                   userId,
                   orderIds: settledOrderIds,
                   pendingPaymentId: pendingForSettle.id,
@@ -4420,6 +4422,7 @@ res.json({
                     0,
                   tx,
                 });
+                settleAutoActivate.push(...((settled as any)?.autoActivate ?? []));
 
                 await tx
                   .update(pendingPayments)
@@ -4430,6 +4433,9 @@ res.json({
                   })
                   .where(eq(pendingPayments.id, pendingForSettle.id));
               });
+
+              // Committed now, so nothing is holding a connection.
+              runAutoActivationAfterCommit(settleAutoActivate);
 
               // Report on what the settlement actually produced.
               const after = await db
